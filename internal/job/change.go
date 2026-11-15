@@ -114,6 +114,11 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		if err := tc.Character.ApplyJobChange(targetJobID, targetSPValue); err != nil {
 			return err
 		}
+		if s.costume != nil {
+			if err := s.costume.ResetCostume(tc.Context, characterID); err != nil {
+				return err
+			}
+		}
 		if err := s.repository.Save(tc.Context, currentState); err != nil {
 			return err
 		}
@@ -136,10 +141,6 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		}
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
-	if s.costume != nil {
-		//lint:ignore error-swallow best-effort costume rental return on job change
-		_ = s.costume.ResetCostume(ctx, characterID)
-	}
 	return updated, updatedState, nil
 }
 
@@ -149,27 +150,34 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 // but applies no eligibility, item, guild-point, weekly-ranking or completion
 // effects; the next ChangeJob departure evaluates completion.
 func (s *Service) ApplyGrantedJobChange(ctx context.Context, char *corecharacter.Character, targetJobID string) error {
-	targetDef, err := s.GetDefinition(targetJobID)
-	if err != nil {
-		return err
-	}
-	state, err := s.loadState(ctx, *char)
-	if err != nil {
-		return err
-	}
-	if err := s.recordDeparture(ctx, &state, char.SP); err != nil {
-		return err
-	}
-	if err := state.Grant(targetDef); err != nil {
-		return err
-	}
-	if err := s.recordPopularity(ctx, *char); err != nil {
-		return err
-	}
-	if err := char.ApplyJobChange(targetJobID, targetSP(state, *char, targetJobID)); err != nil {
-		return err
-	}
-	return s.repository.Save(ctx, state)
+	return economy.WithRollbackScope(ctx, func(txCtx context.Context) error {
+		targetDef, err := s.GetDefinition(targetJobID)
+		if err != nil {
+			return err
+		}
+		state, err := s.loadState(txCtx, *char)
+		if err != nil {
+			return err
+		}
+		if err := s.recordDeparture(txCtx, &state, char.SP); err != nil {
+			return err
+		}
+		if err := state.Grant(targetDef); err != nil {
+			return err
+		}
+		if err := s.recordPopularity(txCtx, *char); err != nil {
+			return err
+		}
+		if err := char.ApplyJobChange(targetJobID, targetSP(state, *char, targetJobID)); err != nil {
+			return err
+		}
+		if s.costume != nil {
+			if err := s.costume.ResetCostume(txCtx, char.ID); err != nil {
+				return err
+			}
+		}
+		return s.repository.Save(txCtx, state)
+	})
 }
 
 // recordDeparture stores the leaving job's latest SP and first-time mastery.

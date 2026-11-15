@@ -46,7 +46,12 @@ helper. A callback error prevents successful transaction completion.
 
 Repositories obtain the executor from the context. `database.RunInTx` reuses
 an ambient transaction; nested calls are not independent commits or savepoints.
-Root transactions use `READ COMMITTED` (`sql.LevelReadCommitted`) to avoid
+External compensations register on the transaction context via
+[`economy.OnRollback`](../../internal/economy/runner.go) within a
+[`WithRollbackScope`](../../internal/economy/runner.go): succeeding nested
+scopes promote their hooks to the enclosing scope so failures (including root
+commit errors) run compensations in LIFO order before SQL rollback releases row
+locks. Root transactions use `READ COMMITTED` (`sql.LevelReadCommitted`) to avoid
 secondary index range gap locks and stale snapshots under MariaDB InnoDB.
 Rank order applies to acquiring new locks, not merely the textual order of
 updates to rows already locked. The complete hierarchy is owned by

@@ -75,6 +75,52 @@ type TransactionResult struct {
 // TransactionCallback is invoked within the exclusive row-lock boundary.
 type TransactionCallback func(tc *TxContext) error
 
+type rollbackScopeKey struct{}
+
+type rollbackScope struct {
+	hooks []func(context.Context) error
+}
+
+// WithRollbackScope runs fn inside a rollback scope. If fn returns an error,
+// registered hooks run in LIFO order before returning so compensations finish
+// while any enclosing transaction lock is held; on nil error, hooks promote to
+// an enclosing scope if one is present.
+func WithRollbackScope(ctx context.Context, fn func(context.Context) error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	parent, _ := ctx.Value(rollbackScopeKey{}).(*rollbackScope)
+	scope := &rollbackScope{}
+	scopedCtx := context.WithValue(ctx, rollbackScopeKey{}, scope)
+
+	err := fn(scopedCtx)
+	if err != nil {
+		rbCtx := context.WithoutCancel(scopedCtx)
+		errs := make([]error, 0, 1+len(scope.hooks))
+		errs = append(errs, err)
+		for i := len(scope.hooks) - 1; i >= 0; i-- {
+			if rbErr := scope.hooks[i](rbCtx); rbErr != nil {
+				errs = append(errs, rbErr)
+			}
+		}
+		return errors.Join(errs...)
+	}
+	if parent != nil && len(scope.hooks) > 0 {
+		parent.hooks = append(parent.hooks, scope.hooks...)
+	}
+	return nil
+}
+
+// OnRollback registers hook on the active rollback scope in ctx, if any.
+func OnRollback(ctx context.Context, hook func(context.Context) error) {
+	if ctx == nil || hook == nil {
+		return
+	}
+	if scope, ok := ctx.Value(rollbackScopeKey{}).(*rollbackScope); ok && scope != nil {
+		scope.hooks = append(scope.hooks, hook)
+	}
+}
+
 // TransactionRunner defines the standard interface for executing cross-domain transactional operations.
 type TransactionRunner interface {
 	ExecuteTransaction(ctx context.Context, req TransactionRequest, fn TransactionCallback) (*TransactionResult, error)

@@ -60,6 +60,30 @@ func restoreContract(t *testing.T, repo costume.Repository) {
 	if ok, err := repo.RestoreActiveCostume(ctx, applied, &prev); err != nil || ok || get() != nil {
 		t.Fatalf("a reset must not be revived: %v %v", ok, err)
 	}
+
+	// Undoing a reset: restores previous only while still absent.
+	cleared := costume.ActiveCostume{CharacterID: char}
+	save(prev)
+	if err := repo.ClearActiveCostume(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := repo.RestoreActiveCostume(ctx, cleared, &prev); err != nil || !ok {
+		t.Fatalf("restore cleared: %v %v", ok, err)
+	}
+	if got := get(); got == nil || got.ItemNo != prev.ItemNo || got.Icon != prev.Icon {
+		t.Fatalf("previous not restored after reset: %+v", got)
+	}
+
+	if err := repo.ClearActiveCostume(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	save(newer) // a later writer after reset
+	if ok, err := repo.RestoreActiveCostume(ctx, cleared, &prev); err != nil || ok {
+		t.Fatalf("restore reset over newer: %v %v", ok, err)
+	}
+	if got := get(); got == nil || got.ItemNo != newer.ItemNo {
+		t.Fatalf("newer overwritten by reset undo: %+v", got)
+	}
 }
 
 func TestMemoryCostumeRepository_RestoreActiveCostume(t *testing.T) {

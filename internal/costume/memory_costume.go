@@ -2,6 +2,8 @@ package costume
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"sync"
 	"time"
 )
@@ -80,15 +82,24 @@ func (r *MemoryCostumeRepository) ClearActiveCostumeWithClaim(ctx context.Contex
 	})
 }
 
-// RestoreActiveCostume restores previous only while applied is still stored.
+// RestoreActiveCostume restores previous only while applied is still stored
+// (or absent when applied carries only CharacterID, undoing a reset).
 func (r *MemoryCostumeRepository) RestoreActiveCostume(_ context.Context, applied ActiveCostume, previous *ActiveCostume) (bool, error) {
+	if strings.TrimSpace(applied.CharacterID) == "" {
+		return false, errors.New("character id cannot be empty")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	now := time.Now().UTC()
 	current, ok := r.costumes[applied.CharacterID]
-	if !ok || current != applied {
+	if applied == (ActiveCostume{CharacterID: applied.CharacterID}) {
+		if ok && current.IsActive(now) {
+			return false, nil
+		}
+	} else if !ok || current != applied {
 		return false, nil
 	}
-	if previous == nil {
+	if previous == nil || !previous.IsActive(now) {
 		delete(r.costumes, applied.CharacterID)
 	} else {
 		r.costumes[applied.CharacterID] = *previous

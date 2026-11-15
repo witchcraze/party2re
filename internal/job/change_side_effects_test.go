@@ -462,3 +462,151 @@ func TestChangeJob_StalePreflight_ActiveJobMemoryUnderLock(t *testing.T) {
 		})
 	}
 }
+
+type failingCostumeResetter struct {
+	calledFor string
+	err       error
+	onReset   func(ctx context.Context, characterID string)
+}
+
+func (f *failingCostumeResetter) ResetCostume(ctx context.Context, characterID string) error {
+	f.calledFor = characterID
+	if f.onReset != nil {
+		f.onReset(ctx, characterID)
+	}
+	return f.err
+}
+
+func TestChangeJob_CostumeResetError_RollsBackAndSkipsSideEffects(t *testing.T) {
+	ctx := context.Background()
+	charID := "char-costume-reset-err"
+	char := corecharacter.Character{
+		ID:        charID,
+		Name:      "ResetFailHero",
+		JobID:     "job-01",
+		OldJobID:  "job-04",
+		Level:     50,
+		Gender:    "male",
+		SP:        1000,
+		OverLevel: true,
+	}
+
+	charRepo := &stalePreflightCharRepoStub{preflightChar: char, lockedChar: char}
+	inv, _ := coreinventory.New(charID)
+	fireArmor, _ := item.NewInstance("armor-29", 1)
+	_ = inv.Add(fireArmor)
+	invRepo := &errInventoryRepoStub{inv: inv}
+
+	equip, _ := coreequipment.New(charID)
+	equip.Slots[item.SlotBody] = fireArmor.ID
+	equipRepo := &equipmentRepoStub{equipment: equip}
+
+	ecoSvc, err := economy.NewService(charRepo, invRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tracker := &jobTrackerStub{}
+	guildAwarder := &guildAwarderStub{points: make(map[string]int)}
+	resetSentinel := errors.New("costume reset unavailable")
+	costumeResetter := &failingCostumeResetter{err: resetSentinel}
+	jobRepo := &trackingJobRepoStub{}
+
+	svc, err := NewService(
+		jobRepo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(invRepo),
+		WithEquipmentRepository(equipRepo),
+		WithEconomy(ecoSvc),
+		WithJobChangeTracker(tracker),
+		WithGuildPointAwarder(guildAwarder),
+		WithCostumeResetter(costumeResetter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jobRepo.state = setupNearCompleteState(svc, charID, char.JobID)
+
+	_, _, err = svc.ChangeJob(ctx, charID, "job-84")
+	if !errors.Is(err, resetSentinel) {
+		t.Fatalf("expected resetSentinel, got %v", err)
+	}
+	if costumeResetter.calledFor != charID {
+		t.Fatalf("expected ResetCostume called for %s, got %q", charID, costumeResetter.calledFor)
+	}
+	if charRepo.updateCount != 0 || jobRepo.saveCount != 0 {
+		t.Fatalf("expected 0 char updates and 0 job saves, got update=%d save=%d", charRepo.updateCount, jobRepo.saveCount)
+	}
+	if tracker.calledFor != "" || guildAwarder.points[charID] != 0 {
+		t.Fatalf("post-reset side effects emitted: tracker=%q points=%d", tracker.calledFor, guildAwarder.points[charID])
+	}
+}
+
+func TestApplyGrantedJobChange_CostumeResetAndRollbackScope(t *testing.T) {
+	ctx := context.Background()
+	catalog, err := corejob.NewCatalog([]corejob.Definition{
+		{ID: "job-01", Name: "First", CMPTier: 1, MasterySP: 80},
+		{ID: "job-70", Name: "Celestial", CMPTier: 1, MasterySP: 80, RequiredJobIDs: []string{"job-70"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("success resets costume", func(t *testing.T) {
+		char := corecharacter.Character{ID: "grant-ok", JobID: "job-01", Level: 5, SP: 10}
+		state, _ := corejob.NewCharacterJob(char.ID, "job-01")
+		jobRepo := &trackingJobRepoStub{state: state}
+		resetter := &failingCostumeResetter{}
+		svc, err := NewService(jobRepo, WithCatalog(catalog), WithCostumeResetter(resetter))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyGrantedJobChange(ctx, &char, "job-70"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resetter.calledFor != char.ID || jobRepo.saveCount != 1 {
+			t.Fatalf("calledFor=%q saveCount=%d", resetter.calledFor, jobRepo.saveCount)
+		}
+	})
+
+	t.Run("reset error skips job save", func(t *testing.T) {
+		char := corecharacter.Character{ID: "grant-reset-err", JobID: "job-01", Level: 5, SP: 10}
+		state, _ := corejob.NewCharacterJob(char.ID, "job-01")
+		jobRepo := &trackingJobRepoStub{state: state}
+		resetSentinel := errors.New("grant reset failed")
+		resetter := &failingCostumeResetter{err: resetSentinel}
+		svc, err := NewService(jobRepo, WithCatalog(catalog), WithCostumeResetter(resetter))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = svc.ApplyGrantedJobChange(ctx, &char, "job-70")
+		if !errors.Is(err, resetSentinel) || jobRepo.saveCount != 0 {
+			t.Fatalf("err=%v saveCount=%d", err, jobRepo.saveCount)
+		}
+	})
+
+	t.Run("save failure invokes registered rollback hook", func(t *testing.T) {
+		char := corecharacter.Character{ID: "grant-save-err", JobID: "job-01", Level: 5, SP: 10}
+		state, _ := corejob.NewCharacterJob(char.ID, "job-01")
+		saveErr := errors.New("save failed")
+		jobRepo := &errRepoStub{value: state, saveErr: saveErr}
+		rolledBack := false
+		resetter := &failingCostumeResetter{
+			onReset: func(txCtx context.Context, _ string) {
+				economy.OnRollback(txCtx, func(context.Context) error {
+					rolledBack = true
+					return nil
+				})
+			},
+		}
+		svc, err := NewService(jobRepo, WithCatalog(catalog), WithCostumeResetter(resetter))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = svc.ApplyGrantedJobChange(ctx, &char, "job-70")
+		if !errors.Is(err, saveErr) || !rolledBack {
+			t.Fatalf("err=%v rolledBack=%v", err, rolledBack)
+		}
+	})
+}

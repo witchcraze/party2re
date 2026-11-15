@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type txKey struct{}
@@ -25,7 +27,7 @@ func RunInTx(ctx context.Context, db *sql.DB, fn func(ctx context.Context) error
 // A changed character-deletion row set restarts only the root callback, up to three attempts.
 func RunInTxWithOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
 	if TxFromContext(ctx) != nil {
-		return fn(ctx)
+		return economy.WithRollbackScope(ctx, fn)
 	}
 
 	if opts == nil {
@@ -55,15 +57,16 @@ func runInNewTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ct
 	}()
 
 	txCtx := context.WithValue(ctx, txKey{}, tx)
-	if err := fn(txCtx); err != nil {
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+	return economy.WithRollbackScope(txCtx, func(scopedCtx context.Context) error {
+		if err := fn(scopedCtx); err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		committed = true
+		return nil
+	})
 }
 
 // ExecutorFromContext returns the transaction from the context if it exists,

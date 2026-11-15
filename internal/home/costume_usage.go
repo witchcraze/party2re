@@ -2,13 +2,13 @@ package home
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 // CostumeApplier applies active costume state for a character.
@@ -42,7 +42,7 @@ func isCostumeItem(name string) bool {
 	}
 }
 
-func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacter.Character, itemName string, look *appearanceUndo) (string, bool, error) {
+func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacter.Character, itemName string) (string, bool, error) {
 	if !isCostumeItem(itemName) {
 		return "", false, nil
 	}
@@ -141,20 +141,13 @@ func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacte
 		msg = fmt.Sprintf("%sは%sを読んだ！", char.Name, itemName)
 	}
 
-	if err := s.wearAppearance(ctx, char.ID, itemNo, itemName, icon, look); err != nil {
+	if err := s.wearAppearance(ctx, char.ID, itemNo, itemName, icon); err != nil {
 		return "", false, err
 	}
 	return msg, true, nil
 }
 
-// appearanceUndo collects compensations for appearance writes made inside an
-// item transaction. Appearance lives in Valkey, so it is written under the
-// character lock (keeping DB commit order) and undone if the transaction fails.
-type appearanceUndo struct {
-	undo func(context.Context) error
-}
-
-func (s *Service) wearAppearance(ctx context.Context, characterID string, itemNo int, itemName, icon string, look *appearanceUndo) error {
+func (s *Service) wearAppearance(ctx context.Context, characterID string, itemNo int, itemName, icon string) error {
 	if s.costumeApplier == nil {
 		return nil
 	}
@@ -162,21 +155,6 @@ func (s *Service) wearAppearance(ctx context.Context, characterID string, itemNo
 	if err != nil {
 		return err
 	}
-	// A retried callback undoes its own write before the earlier attempt's.
-	if prev := look.undo; prev != nil {
-		look.undo = func(ctx context.Context) error { return errors.Join(undo(ctx), prev(ctx)) }
-	} else {
-		look.undo = undo
-	}
+	economy.OnRollback(ctx, undo)
 	return nil
-}
-
-// rollback runs the compensation even if the request was cancelled.
-func (l *appearanceUndo) rollback(ctx context.Context) error {
-	if l.undo == nil {
-		return nil
-	}
-	err := l.undo(context.WithoutCancel(ctx))
-	l.undo = nil
-	return err
 }

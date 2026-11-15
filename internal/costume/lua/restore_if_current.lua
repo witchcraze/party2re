@@ -1,4 +1,5 @@
-if redis.call("GET", KEYS[1]) ~= ARGV[1] then
+local cur = redis.call("GET", KEYS[1]) or ""
+if cur ~= ARGV[1] then
     return 0
 end
 if ARGV[2] == "" then
