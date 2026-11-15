@@ -306,8 +306,11 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 		if res.IsWin {
 			// Wish 5 bonus: 25% chance of +50% payout bonus (party2/lib/casino.cgi:565-568, 577-580)
 			if s.blessingProvider != nil {
-				hasWish5, bErr := s.blessingProvider.HasCasinoBlessing(txCtx, characterID)
-				if bErr == nil && hasWish5 {
+				hasWish5, err := s.blessingProvider.HasCasinoBlessing(txCtx, characterID)
+				if err != nil {
+					return err
+				}
+				if hasWish5 {
 					isWish5Win := false
 					if s.wish5Roller != nil {
 						isWish5Win = s.wish5Roller()
@@ -322,7 +325,6 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 						res.PayoutCoins += bonus
 						res.NetCoins += bonus
 						res.BonusCoins = bonus
-						res.Message += " (Wish 5 bonus: extra coins awarded!)"
 					}
 				}
 			}

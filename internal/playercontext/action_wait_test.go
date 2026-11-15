@@ -60,6 +60,10 @@ func TestCatalogWaitDispositions(t *testing.T) {
 			if def.WaitExempt != WaitPrivate {
 				t.Errorf("%s: legacy shiraberu answers with a private $mes", def.ID)
 			}
+		case def.ID == "casino_slot":
+			if def.WaitExempt != WaitPrivate {
+				t.Errorf("%s: suroto answers with $mes and a tenth of the wait (casino.cgi:552-554)", def.ID)
+			}
 		case def.ID == "place_say":
 			if def.WaitExempt != WaitSpeech {
 				t.Errorf("%s: plain speech is not a ＠ action", def.ID)

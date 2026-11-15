@@ -24,9 +24,10 @@ import (
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
+// casinoSceneAccounts starts every character with 1000 coins.
 type casinoSceneAccounts struct {
-	casino.Repository
-	err error
+	err   error
+	coins map[string]int64
 }
 
 type casinoActivityProjection struct {
@@ -40,8 +41,30 @@ func (r *casinoActivityProjection) GetRoomView(context.Context, string, string, 
 func (r *casinoActivityProjection) GetAccount(context.Context, string) (casino.Account, error) {
 	return casino.Account{}, nil
 }
-func (r *casinoSceneAccounts) GetAccount(context.Context, string) (casino.Account, error) {
-	return casino.Account{CharacterID: "hero", Coins: 1000}, r.err
+func (r *casinoSceneAccounts) GetAccount(_ context.Context, id string) (casino.Account, error) {
+	if r.coins == nil {
+		r.coins = map[string]int64{}
+	}
+	if _, ok := r.coins[id]; !ok {
+		r.coins[id] = 1000
+	}
+	return casino.Account{CharacterID: id, Coins: r.coins[id]}, r.err
+}
+func (r *casinoSceneAccounts) GetAccountForUpdate(ctx context.Context, id string) (casino.Account, error) {
+	return r.GetAccount(ctx, id)
+}
+func (r *casinoSceneAccounts) AdjustCoins(ctx context.Context, id string, delta int64) (casino.Account, error) {
+	if _, err := r.GetAccount(ctx, id); err != nil {
+		return casino.Account{}, err
+	}
+	if r.coins[id]+delta < 0 {
+		return casino.Account{}, casino.ErrInsufficientCoins
+	}
+	r.coins[id] += delta
+	return casino.Account{CharacterID: id, Coins: r.coins[id]}, nil
+}
+func (r *casinoSceneAccounts) DeductBetAndCreditPayout(ctx context.Context, id string, bet, payout int64) (casino.Account, error) {
+	return r.AdjustCoins(ctx, id, payout-bet)
 }
 
 type casinoSceneCharacters struct {
@@ -71,9 +94,31 @@ func (r *casinoSceneCharacters) Update(_ context.Context, c corecharacter.Charac
 
 type casinoSceneReads struct {
 	CasinoService
-	f       *gatewayFixture
-	err     error
-	viewErr error
+	f        *gatewayFixture
+	err      error
+	viewErr  error
+	mutated  func()
+	mutation int
+}
+
+// Room mutations count executions and may fail the observations that follow.
+func (r *casinoSceneReads) afterMutation(err error) error {
+	r.mutation++
+	if err == nil && r.mutated != nil {
+		r.mutated()
+	}
+	return err
+}
+func (r *casinoSceneReads) JoinRoom(ctx context.Context, room, actor, password string, fatigue int) (*casino.RoomDetail, error) {
+	detail, err := r.CasinoService.JoinRoom(ctx, room, actor, password, fatigue)
+	return detail, r.afterMutation(err)
+}
+func (r *casinoSceneReads) StartGame(ctx context.Context, room, actor string) (*casino.RoomDetail, error) {
+	detail, err := r.CasinoService.StartGame(ctx, room, actor)
+	return detail, r.afterMutation(err)
+}
+func (r *casinoSceneReads) LeaveRoom(ctx context.Context, room, actor string) error {
+	return r.afterMutation(r.CasinoService.LeaveRoom(ctx, room, actor))
 }
 
 func (r *casinoSceneReads) ListRooms(ctx context.Context) ([]casino.RoomSummary, error) {
@@ -294,10 +339,17 @@ func TestCasinoActualRoomMaskingRolesAndConflicts(t *testing.T) {
 				if status != 200 || !reflect.DeepEqual(refreshed.Scene, response.Scene) {
 					t.Fatalf("active GET/refresh differs: %d %s", status, raw)
 				}
-				for _, a := range response.Scene.Support.Actions {
-					if a.Connected && strings.HasPrefix(a.Action, "casino_") {
-						t.Fatalf("observation connected mutation: %+v", a)
+				var offered []string
+				for _, a := range response.AvailableActions {
+					if strings.HasPrefix(a.Action, "casino_") {
+						if a.ParamsTemplate["room_id"] != "active" {
+							t.Fatalf("room not bound: %+v", a)
+						}
+						offered = append(offered, a.Action)
 					}
+				}
+				if !reflect.DeepEqual(offered, actions) {
+					t.Fatalf("offered %v, want %v", offered, actions)
 				}
 				f.facts = append(f.facts, playercontext.Activity{Kind: "pvp", ID: "conflict", Role: "member", Phase: "recruiting", Actions: []string{}})
 				status, response = navigationGET(t, router)

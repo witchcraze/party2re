@@ -144,4 +144,11 @@ var casinoFacility = facility{
 		}
 		return scenePresentation{}
 	},
+	npc: &npcProfile{name: "@バニー", words: casinoWords, inspect: "@バニー「きゃぁッ☆エッチィ〜☆」"},
+}
+
+// casino.cgi @words.
+var casinoWords = []string{
+	"コインは１枚20Gです☆", "ゴールドをコインに両替してね☆", "賞品は他ではなかなか手に入れることができないレアなアイテムばかりよ☆",
+	"スロットの絵柄を３つそろえるとコインが増えて幸せになれるわよ☆", "ゆっくりしていってね☆",
 }

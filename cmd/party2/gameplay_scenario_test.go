@@ -213,7 +213,8 @@ func (a *scenarioApp) registerAccount(autoCleanup bool) (playerID, name, token, 
 
 type scenarioContext struct {
 	Character struct {
-		Gold int `json:"gold"`
+		Gold  int `json:"gold"`
+		Tired int `json:"tired"`
 	} `json:"character"`
 	Scene struct {
 		LocationID string `json:"location_id"`
@@ -243,6 +244,22 @@ type scenarioContext struct {
 			DrawDate  time.Time                     `json:"draw_date"`
 			Purchased bool                          `json:"purchased"`
 			Prizes    []lottery.TakarakujiPrizeItem `json:"prizes"`
+			// Casino lobby, selected room and room activity.
+			Menu struct {
+				Coins int64 `json:"coins"`
+			} `json:"menu"`
+			Rooms []struct {
+				ID           string          `json:"id"`
+				SelectParams json.RawMessage `json:"select_params"`
+			} `json:"rooms"`
+			JoinParams json.RawMessage `json:"join_params"`
+			Casino     *struct {
+				Coins    int64 `json:"coins"`
+				Controls struct {
+					Role    string   `json:"role"`
+					Actions []string `json:"actions"`
+				} `json:"controls"`
+			} `json:"casino"`
 		} `json:"data"`
 	} `json:"scene"`
 	AvailableActions []struct {
@@ -252,12 +269,22 @@ type scenarioContext struct {
 }
 
 func (c scenarioContext) offers(action string) bool {
+	_, ok := c.template(action)
+	return ok
+}
+
+// template returns the inputs the observation fixes for an offered command.
+func (c scenarioContext) template(action string) (map[string]any, bool) {
 	for _, a := range c.AvailableActions {
 		if a.Action == action {
-			return true
+			params := map[string]any{}
+			for k, v := range a.ParamsTemplate {
+				params[k] = v
+			}
+			return params, true
 		}
 	}
-	return false
+	return nil, false
 }
 
 type scenarioOutcome struct {
@@ -284,6 +311,20 @@ func (a *scenarioApp) command(token, characterID, action string, params any, wan
 	var out scenarioOutcome
 	a.call(token, http.MethodPost, "/api/v1/characters/"+characterID+"/actions", string(body), wantStatus, &out)
 	return out
+}
+
+// offered issues a command the observation offers, with its fixed inputs and
+// the caller's remaining ones.
+func (a *scenarioApp) offered(token, characterID string, observed scenarioContext, action string, inputs map[string]any, wantStatus int) scenarioOutcome {
+	a.t.Helper()
+	params, ok := observed.template(action)
+	if !ok {
+		a.t.Fatalf("%s is not offered: %+v", action, observed.AvailableActions)
+	}
+	for k, v := range inputs {
+		params[k] = v
+	}
+	return a.command(token, characterID, action, params, wantStatus)
 }
 
 // elapseActionWait expires the legacy action wait without a wall-clock sleep.

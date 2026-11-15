@@ -1,6 +1,5 @@
 package playercontext
 
-// Entry candidates remain unconnected until the Casino mutation migration.
 var casinoCatalog = []ActionDefinition{
 	{ID: "casino_exchange", Label: "コインに両替する", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"coins"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "casino_prize_exchange", Label: "賞品を交換する", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"cost_coins", "count"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},

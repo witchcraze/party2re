@@ -9,22 +9,9 @@ import (
 	"testing"
 
 	gamehttp "github.com/witchcraze/party2re/internal/api/http"
-	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 )
-
-type openAPICasinoService struct{ stubCasinoService }
-
-func (s *openAPICasinoService) GetRoomView(_ context.Context, roomID, _, characterID string) (*casino.RoomView, error) {
-	return &casino.RoomView{
-		Room: casino.RoomObservation{RoomSummary: casino.RoomSummary{
-			ID: roomID, Name: "Test", GameType: casino.GameTypeIndian, Speed: casino.SpeedNormal,
-			MaxPlayers: 8, Rate: 10, Status: casino.RoomStatusWaiting,
-		}},
-		Members: []casino.MemberObservation{{CharacterID: characterID, Card: -1}},
-	}, nil
-}
 
 func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 	var root map[string]any
@@ -40,7 +27,7 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		&stubPlayerService{authenticateFn: alwaysAuthPlayer(coreplayer.Player{ID: "p1"})},
 		&stubCharacterService{getFn: func(context.Context, string) (corecharacter.Character, error) { return char, nil }},
 		&stubAdventureService{}, &stubShopService{},
-		gamehttp.WithCasino(&openAPICasinoService{}), gamehttp.WithBank(&stubBankService{}),
+		gamehttp.WithBank(&stubBankService{}),
 		gamehttp.WithDepot(&stubDepotService{}), gamehttp.WithBlacksmith(&stubBlacksmithService{}),
 		gamehttp.WithPvP(&stubColosseumPvPService{}), gamehttp.WithGvG(&stubGvGService{}),
 		gamehttp.WithHome(&mockHomeService{}),
@@ -55,13 +42,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		status                    int
 	}{
 		{"GET", "/health", "", "", 200},
-		{"GET", "/casino/prizes", "", "", 200},
-		{"GET", "/casino/rooms", "", "", 200},
-		{"GET", "/casino/rooms/{roomId}", "", "session", 200},
-		{"GET", "/characters/{id}/casino", "", "session", 200},
-		{"POST", "/characters/{id}/casino/exchange", `{"coins":10}`, "session", 200},
-		{"POST", "/characters/{id}/casino/slot", `{"bet":1}`, "session", 200},
-		{"POST", "/characters/{id}/casino/rooms", `{"name":"Test","game_type":"indian","rate":10,"speed":18,"max_players":8}`, "session", 201},
 		{"GET", "/pvp/rooms", "", "", 200},
 		{"GET", "/pvp/rooms/{room_id}", "", "", 200},
 		{"GET", "/gvg/rooms", "", "", 200},
@@ -72,19 +52,14 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		{"POST", "/towns/{town_id}/houses", `{"character_id":"c1","house_style":"001"}`, "session", 201},
 		{"POST", "/characters/{id}/home/wake", "", "session", 200},
 		{"GET", "/homes/{id}", "", "", 200},
-		{"GET", "/characters/{id}/casino", "", "", 401},
-		{"POST", "/characters/{id}/casino/exchange", `{"coins":0}`, "session", 400},
 		{"DELETE", "/letters/{id}", "", "session", 204},
 	} {
 		t.Run(tc.method+" "+tc.path+"/"+strconv.Itoa(tc.status), func(t *testing.T) {
-			url := strings.NewReplacer("{id}", "c1", "{town_id}", "town1", "{room_id}", "room-1", "{roomId}", "r1").Replace(tc.path)
+			url := strings.NewReplacer("{id}", "c1", "{town_id}", "town1", "{room_id}", "room-1").Replace(tc.path)
 			if strings.HasPrefix(url, "/gvg/") {
 				url = strings.ReplaceAll(url, "room-1", "gvg-room-1")
 			}
 			if tc.path == "/letters/{id}" {
-				url += "?character_id=c1"
-			}
-			if tc.path == "/casino/rooms/{roomId}" {
 				url += "?character_id=c1"
 			}
 			req := httptest.NewRequest(tc.method, url, strings.NewReader(tc.body))
@@ -118,14 +93,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 			if err := checkOpenAPIPayload(schemas, schema, payload); err != nil {
 				t.Fatal(err)
 			}
-			if tc.path == "/casino/rooms/{roomId}" {
-				room := payload.(map[string]any)["room"].(map[string]any)["room"].(map[string]any)
-				room["password_hash"] = "secret"
-				if checkOpenAPIPayload(schemas, schema, payload) == nil {
-					t.Fatal("viewer schema accepted a private room field")
-				}
-				delete(room, "password_hash")
-			}
 			if ref, ok := schema["$ref"].(string); ok {
 				schema = schemas[strings.TrimPrefix(ref, "#/components/schemas/")].(map[string]any)
 			}
@@ -152,20 +119,11 @@ func TestOpenAPIConstraintBoundaries(t *testing.T) {
 		schema, field, payload string
 		valid                  bool
 	}{
-		{"CasinoAccount", "coins", `9223372036854775807`, true},
-		{"CasinoAccount", "coins", `9223372036854775808`, false},
-		{"CasinoAccount", "coins", `-1`, false},
-		{"CasinoAccount", "coins", `0.5`, false},
-		{"CasinoSpinResult", "reels", `["Cherry","Note","Seven"]`, true},
-		{"CasinoSpinResult", "reels", `["Cherry","Note"]`, false},
-		{"CasinoSpinResult", "reels", `["Cherry","Note","unknown"]`, false},
-		{"CasinoSpinResult", "reels", `null`, false},
 		{"AlchemyCompendium", "entries", `null`, true},
 		{"AlchemyCompendium", "entries", `[]`, true},
 		{"AlchemyCompendium", "entries", `[{}]`, false},
 		{"CasinoRoomView", "room", `{"password_hash":"secret"}`, false},
 		{"UseHomeItemRequest", "", `{"instance_id":"item-1"}`, true},
-		{"CasinoRoomActionRequest", "", `{"mark":"0"}`, true},
 	} {
 		t.Run(tc.schema+"/"+tc.field+"/"+tc.payload, func(t *testing.T) {
 			schema := schemas[tc.schema].(map[string]any)
@@ -185,7 +143,7 @@ func TestOpenAPIConstraintBoundaries(t *testing.T) {
 	}
 }
 
-func TestOpenAPILetterAndCasinoRequestContracts(t *testing.T) {
+func TestOpenAPILetterRequestContracts(t *testing.T) {
 	var root map[string]any
 	decoder := json.NewDecoder(strings.NewReader(string(gamehttp.OpenAPISpec())))
 	decoder.UseNumber()
@@ -212,17 +170,6 @@ func TestOpenAPILetterAndCasinoRequestContracts(t *testing.T) {
 		{"blank recipient", "/letters", strings.Replace(letter, `"c2"`, `"\u0085\u00a0"`, 1), false},
 		{"empty content", "/letters", strings.Replace(letter, `"こんにちは\nHello"`, `""`, 1), false},
 		{"blank content", "/letters", strings.Replace(letter, `"こんにちは\nHello"`, `" \t\r\n\u3000"`, 1), false},
-		{"omitted direction", "/characters/{id}/casino/exchange", `{"coins":10}`, true},
-		{"empty direction", "/characters/{id}/casino/exchange", `{"direction":"","coins":10}`, true},
-		{"gold to coins", "/characters/{id}/casino/exchange", `{"direction":"gold_to_coins","coins":10}`, true},
-		{"reverse direction", "/characters/{id}/casino/exchange", `{"direction":"coins_to_gold","coins":10}`, false},
-		{"unknown direction", "/characters/{id}/casino/exchange", `{"direction":"other","coins":10}`, false},
-		{"missing coins", "/characters/{id}/casino/exchange", `{}`, false},
-		{"zero coins", "/characters/{id}/casino/exchange", `{"coins":0}`, false},
-		{"negative coins", "/characters/{id}/casino/exchange", `{"coins":-1}`, false},
-		{"fractional coins", "/characters/{id}/casino/exchange", `{"coins":0.5}`, false},
-		{"maximum coins", "/characters/{id}/casino/exchange", `{"coins":` + strconv.FormatInt(int64(casino.MaxExchangeCoins), 10) + `}`, true},
-		{"overflowing coins", "/characters/{id}/casino/exchange", `{"coins":` + strconv.FormatInt(int64(casino.MaxExchangeCoins)+1, 10) + `}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			schema := paths[tc.path].(map[string]any)["post"].(map[string]any)["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)

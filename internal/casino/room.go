@@ -387,13 +387,9 @@ func (s *Service) StartGame(ctx context.Context, roomID string, leaderID string)
 	}
 }
 
-type RoomActionRequest struct {
-	Action string `json:"action"`         // "call", "high", "low", "fold", "showdown"
-	Mark   string `json:"mark,omitempty"` // For doppel: "★".."▼" or "0".."7"
-}
-
 // PlayRoomAction routes a player's action according to the room's GameType.
-func (s *Service) PlayRoomAction(ctx context.Context, roomID string, characterID string, req RoomActionRequest) (*RoomDetail, error) {
+// action is an Indian or High & Low action, or a Doppel mark.
+func (s *Service) PlayRoomAction(ctx context.Context, roomID string, characterID string, action string) (*RoomDetail, error) {
 	if s.roomRepo == nil {
 		return nil, errors.New("room repository is required")
 	}
@@ -406,23 +402,19 @@ func (s *Service) PlayRoomAction(ctx context.Context, roomID string, characterID
 	}
 	switch room.GameType {
 	case GameTypeIndian:
-		act := Action(req.Action)
+		act := Action(action)
 		if !act.Valid() {
 			return nil, ErrInvalidAction
 		}
 		return s.PlayIndianPokerAction(ctx, roomID, characterID, act)
 	case GameTypeHighLow:
-		act, err := ParseHighLowAction(req.Action)
+		act, err := ParseHighLowAction(action)
 		if err != nil {
 			return nil, err
 		}
 		return s.PlayHighLowAction(ctx, roomID, characterID, act)
 	case GameTypeDoppel:
-		input := req.Mark
-		if input == "" {
-			input = req.Action
-		}
-		markIdx, err := ParseDoppelMark(input)
+		markIdx, err := ParseDoppelMark(action)
 		if err != nil {
 			return nil, err
 		}

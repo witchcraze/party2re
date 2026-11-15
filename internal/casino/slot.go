@@ -59,7 +59,6 @@ type SpinResult struct {
 	Multiplier  int           `json:"multiplier"`
 	PayoutCoins int64         `json:"payout_coins"`
 	NetCoins    int64         `json:"net_coins"`
-	Message     string        `json:"message"`
 	BonusCoins  int64         `json:"bonus_coins,omitempty"`
 }
 
@@ -76,19 +75,14 @@ func EvaluateSpin(bet int64, reels [3]SlotSymbol) SpinResult {
 		switch reels[0] {
 		case SymbolSeven:
 			res.Multiplier = 100
-			res.Message = "JACKPOT! Three Sevens (777)!"
 		case SymbolStar:
 			res.Multiplier = 70
-			res.Message = "Super Win! Three Stars (★★★)!"
 		case SymbolDagger:
 			res.Multiplier = 50
-			res.Message = "Big Win! Three Daggers (†††)!"
 		case SymbolNote:
 			res.Multiplier = 20
-			res.Message = "Win! Three Music Notes (♪♪♪)!"
 		case SymbolCherry:
 			res.Multiplier = 10
-			res.Message = "Win! Three Cherries (∞∞∞)!"
 		}
 		res.PayoutCoins = bet * int64(res.Multiplier)
 		res.NetCoins = res.PayoutCoins - bet
@@ -99,7 +93,6 @@ func EvaluateSpin(bet int64, reels [3]SlotSymbol) SpinResult {
 	if reels[0] == SymbolCherry && reels[1] == SymbolCherry {
 		res.IsWin = true
 		res.Multiplier = 3
-		res.Message = "Nice! Two Cherries on the first reels!"
 		res.PayoutCoins = bet * int64(res.Multiplier)
 		res.NetCoins = res.PayoutCoins - bet
 		return res
@@ -110,7 +103,6 @@ func EvaluateSpin(bet int64, reels [3]SlotSymbol) SpinResult {
 	res.Multiplier = 0
 	res.PayoutCoins = 0
 	res.NetCoins = -bet
-	res.Message = "Miss. Better luck next spin!"
 	return res
 }
 

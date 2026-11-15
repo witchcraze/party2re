@@ -30,8 +30,9 @@ Gateway entry eligibility uses six gates evaluated in order: dead → fatigue �
      | `recovery` (never blocked) | `home_wake`, `rescue_request` | `sleep.cgi` and `rescue.cgi` run outside the `party.cgi` action path. |
      | `speech` (never blocked) | `place_say` | Plain input skips `action` and is written by `write_comment` (`party.cgi:20-26`). |
      | `reload` (never blocked) | `presence_refresh` | A request without input only reloads the page; `read_member` still runs (`party.cgi:19-21`). |
+     | `private` | `npc_inspect`, `player_inspect`, `casino_slot` | A private `$mes` reply writes no log and starts no wait (`lib/system.cgi:651`); `＄すろっと` sets only a tenth of `$act_time` itself (`casino.cgi:552–554`). |
      | `whisper` | `place_whisper` | `sasayaki` sets `act_time = 0` (`lib/system.cgi:261`); it is still blocked while a wait runs. |
-     | `activity_pacing` | Party, PvP, GvG, dungeon, challenge and casino-room continuations | Battle and room turns keep their own pacing (`lib/_battle.cgi:1175`, `lib/casino.cgi:555`), owned by the combat and room migrations (#948, #949). They are still blocked while a wait runs. |
+     | `activity_pacing` | Party, PvP, GvG, dungeon, challenge and casino-room continuations | Battle and room turns keep their own pacing (`lib/_battle.cgi:1175`, `lib/_casino.cgi:57,114`), owned by the combat migration (#948) and, for Casino rooms, #2251. They are still blocked while a wait runs. |
 
 5. **Currency gate.** Entry requires positive wallet gold; exact prices and alternate currencies stay service checks.
 6. **Location gate.** Actual activity blocks new entries and ordinary navigation; continuations require owning membership/role/phase; conflicts keep only verified leave/recovery choices. In legacy Party2 only combat quests (`lib/quest.cgi:479,902`) require living HP; town actions (`lib/system.cgi:639–655`) run regardless of HP. Every facility action implicitly checks location except `rescue_request`.
