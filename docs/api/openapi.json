@@ -4213,6 +4213,7 @@
                         "shop_accessory",
                         "home_inbox",
                         "home_outbox",
+                        "home_notices",
                         "casino",
                         "secretshop",
                         "town1",
@@ -4302,7 +4303,7 @@
               "properties": {
                 "params": {
                   "additionalProperties": false,
-                  "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox; empty cursor starts the existing keyset reader.",
+                  "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox/notices; empty cursor starts the existing keyset reader.",
                   "oneOf": [
                     {
                       "not": {
@@ -4355,6 +4356,7 @@
                         "shop_accessory",
                         "home_inbox",
                         "home_outbox",
+                        "home_notices",
                         "casino",
                         "secretshop",
                         "town1",
@@ -11188,6 +11190,30 @@
         ],
         "type": "object"
       },
+      "HomeNoticesSceneData": {
+        "additionalProperties": false,
+        "properties": {
+          "notices": {
+            "items": {
+              "$ref": "#/components/schemas/HomeDeliveryNotice"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "parent": {
+            "const": "home"
+          }
+        },
+        "required": [
+          "parent",
+          "notices",
+          "page"
+        ],
+        "type": "object"
+      },
       "HomeOwner": {
         "additionalProperties": false,
         "properties": {
@@ -14752,6 +14778,7 @@
                   "shop_accessory",
                   "home_inbox",
                   "home_outbox",
+                  "home_notices",
                   "casino",
                   "secretshop",
                   "town1",
@@ -14897,7 +14924,7 @@
       },
       "ScenePageInput": {
         "additionalProperties": false,
-        "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox; empty cursor starts the existing keyset reader.",
+        "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox/notices; empty cursor starts the existing keyset reader.",
         "oneOf": [
           {
             "not": {
@@ -14950,6 +14977,7 @@
               "shop_accessory",
               "home_inbox",
               "home_outbox",
+              "home_notices",
               "casino",
               "secretshop",
               "town1",
@@ -15045,6 +15073,9 @@
                       "$ref": "#/components/schemas/HomeMailboxSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/HomeNoticesSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/ShopCatalogSceneData"
                     },
                     {
@@ -15135,6 +15166,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeMailboxSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeNoticesSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/ShopProductSceneData"
@@ -15253,6 +15287,29 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeMailboxSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "home_notices"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeNoticesSceneData"
                 }
               }
             }
