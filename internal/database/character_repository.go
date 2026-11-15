@@ -282,8 +282,8 @@ func (r *CharacterRepository) deleteLockedCharacter(ctx context.Context, id stri
 // hideDeletedCharacterLetters hides the deleted character's copies and purges rows neither
 // owner keeps. It runs after the character row is deleted and locked, as CreateLetter locks
 // both characters, so no letter arrives unflagged. A letter belongs to two characters, so
-// rows are updated in ascending ID order, like evictOverflowLetters, to avoid deadlocking
-// with the counterpart's concurrent deletion.
+// rows are updated in ascending ID order, like evictOverflowLetters. Multi-character
+// deletion must first hold the complete letter set through LockDeletionLetters.
 func hideDeletedCharacterLetters(ctx context.Context, exec sqlContextExecutor, id string) error {
 	ids, err := letterIDs(ctx, exec, `
 		SELECT id FROM character_letters WHERE sender_character_id = ?
