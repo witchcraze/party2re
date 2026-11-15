@@ -33,15 +33,16 @@ func WithPlaceMembers(members PlaceMembers) Option {
 	return func(h *Handler) { h.placeMembers = members }
 }
 
-func (h *Handler) readPlaceMembers(ctx context.Context, destination string) ([]PlaceMember, error) {
+func (h *Handler) readPlaceMembers(ctx context.Context, current playercontext.Result, residents []PlaceMember) ([]PlaceMember, error) {
 	out := []PlaceMember{}
-	if npc := h.sceneAdapters[destination].npc; npc != nil {
+	if npc := h.sceneAdapters[current.Snapshot.LocationID].npc; npc != nil && npc.name != "" {
 		out = append(out, PlaceMember{Kind: "npc", Name: npc.name, Color: npcColor})
 	}
+	out = append(out, residents...)
 	if h.placeMembers == nil {
 		return out, nil
 	}
-	rows, err := h.placeMembers.Read(ctx, placelog.Place{Kind: placelog.KindFacility, ID: destination}, time.Now())
+	rows, err := h.placeMembers.Read(ctx, h.scenePlace(current), time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +54,8 @@ func (h *Handler) readPlaceMembers(ctx context.Context, destination string) ([]P
 
 // refreshPlaceMember lists the actor in its current place before a command
 // runs, as legacy read_member precedes the action (party.cgi:19-20).
-func (h *Handler) refreshPlaceMember(ctx context.Context, characterID, location string) error {
+func (h *Handler) refreshPlaceMember(ctx context.Context, current playercontext.Result) error {
+	characterID, location := current.Snapshot.Character.ID, current.Snapshot.LocationID
 	if h.placeMembers == nil || !h.sceneAdapters[location].placeLog {
 		return nil
 	}
@@ -61,7 +63,7 @@ func (h *Handler) refreshPlaceMember(ctx context.Context, characterID, location 
 	if err != nil {
 		return err
 	}
-	return h.placeMembers.Refresh(ctx, placelog.Place{Kind: placelog.KindFacility, ID: location}, placelog.Member{
+	return h.placeMembers.Refresh(ctx, h.scenePlace(current), placelog.Member{
 		CharacterID: characterID, Name: profile.Character.Name, Color: profile.Character.Color,
 		IconURL: profile.Profile.AvatarURL, AuraEffect: profile.Profile.AuraEffect,
 	}, time.Now())

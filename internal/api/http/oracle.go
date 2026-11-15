@@ -116,7 +116,7 @@ func (h *Handler) registerOracleBlackMarket(service *playercontext.Service) {
 	if service == nil || !service.NavigationConfigured() {
 		return
 	}
-	navigationCommand(h, "oracle_blackmarket", func(ctx context.Context, owner, actor string, _ struct{}) (OracleBlackMarketResult, error) {
+	navigationCommand(h, "oracle_blackmarket", func(ctx context.Context, owner, actor string, _ struct{}, _ playercontext.Result) (OracleBlackMarketResult, error) {
 		selection, err := service.Enter(ctx, owner, actor, "blackmarket")
 		if err != nil {
 			return OracleBlackMarketResult{}, err

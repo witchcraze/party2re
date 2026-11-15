@@ -23,6 +23,7 @@ type homeSceneFixture struct {
 	living      []string // owner-command calls as "action actor arg"
 	livingErr   error
 	talk        map[string]home.CompanionTalkResult // by home owner; absent means nobody is home
+	pets        map[string][]home.HomePet
 }
 
 type homeSceneRepository struct {
@@ -95,14 +96,18 @@ func (f *homeSceneFixture) ListOutboxByCursor(ctx context.Context, actor string,
 	return f.viewService.ListOutboxByCursor(ctx, actor, limit, cursor)
 }
 
-func homeSceneRouter(t *testing.T) (*homeSceneFixture, *gatewayNavigationStore, http.Handler) {
+func (f *homeSceneFixture) ListHomePets(_ context.Context, owner string) ([]home.HomePet, error) {
+	return f.pets[owner], nil
+}
+
+func homeSceneRouter(t *testing.T, options ...Option) (*homeSceneFixture, *gatewayNavigationStore, http.Handler) {
 	f := &homeSceneFixture{homeGatewayFixture: newHomeGatewayFixture(t)}
 	f.expectedContext = nil
 	f.repo = &homeSceneRepository{homeGatewayRepository: homeGatewayRepository{fixture: f.homeGatewayFixture}, letters: []home.Letter{
 		{ID: "letter-2", Content: "private letter", CreatedAt: time.Unix(2, 0)}, {ID: "letter-1", Content: "older letter", CreatedAt: time.Unix(1, 0)},
 	}}
 	var err error
-	f.viewService, err = home.NewService(f.repo, f.homeGatewayFixture)
+	f.viewService, err = home.NewService(f.repo, f.homeGatewayFixture, home.WithHomePetReader(f))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +124,7 @@ func homeSceneRouter(t *testing.T) (*homeSceneFixture, *gatewayNavigationStore, 
 		playercontext.SceneDefinition{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
 		playercontext.SceneDefinition{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
 	))
-	h, err := NewHandler(f.gatewayFixture, f.homeGatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithHome(f), WithPlayerContext(service))
+	h, err := NewHandler(f.gatewayFixture, f.homeGatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, append([]Option{WithHome(f), WithPlayerContext(service)}, options...)...)
 	if err != nil {
 		t.Fatal(err)
 	}

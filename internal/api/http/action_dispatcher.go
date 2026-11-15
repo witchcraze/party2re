@@ -125,7 +125,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
 			return
 		}
-		if err := h.refreshPlaceMember(r.Context(), char.ID, current.Snapshot.LocationID); err != nil {
+		if err := h.refreshPlaceMember(r.Context(), current); err != nil {
 			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to refresh the place member list.")
 			return
 		}

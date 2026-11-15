@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/town"
@@ -32,7 +33,9 @@ type facility struct {
 	controlsOnly bool
 	// placeLog marks facilities with a shared legacy log (docs/architecture/place-log.md).
 	placeLog bool
-	npc      *npcProfile
+	// place overrides the fixed-facility identity for owner-scoped scenes.
+	place func(playercontext.Result) placelog.Place
+	npc   *npcProfile
 }
 
 type scenePresentation struct {
@@ -261,20 +264,12 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			scene.Dialogue = "操作を選んでください。"
 		}
 		scene.Data = data
-		if adapter.placeLog {
-			var err error
-			if scene.PlaceLog, err = h.readPlaceLog(ctx, n.Destination, result.Snapshot.Character.ID); err != nil {
-				return err
-			}
-			if scene.Members, err = h.readPlaceMembers(ctx, n.Destination); err != nil {
-				return err
-			}
-		}
 		if adapter.facility.read != nil && !adapter.controlsOnly {
 			scene.Support.Observation = "details"
 		}
+		var presentation scenePresentation
 		if adapter.present != nil {
-			presentation := adapter.present(h, result, data)
+			presentation = adapter.present(h, result, data)
 			if presentation.title != nil {
 				scene.Title = *presentation.title
 			}
@@ -295,8 +290,14 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 					templates["scene_page"]["offset"] = p.Offset
 				}
 			}
-			if adapter.placeLog {
-				scene.Members = append(scene.Members, presentation.members...)
+		}
+		if adapter.placeLog {
+			var err error
+			if scene.PlaceLog, err = h.readPlaceLog(ctx, result); err != nil {
+				return err
+			}
+			if scene.Members, err = h.readPlaceMembers(ctx, result, presentation.members); err != nil {
+				return err
 			}
 		}
 		if templates["scene_page"] == nil {

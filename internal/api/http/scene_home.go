@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -110,10 +111,18 @@ var (
 	// Legacy ＠ねる rests in the home being visited ($m{home}); only one's own
 	// home registers the living actions (home.cgi:26-42,73-105).
 	homeFacility = facility{title: "自宅", commands: homeOwnerCommands, subjectCommands: []string{"home_sleep"}, ownedSubjectCommands: homeOwnerCommands,
-		read: (*Handler).homeSceneData, npc: &npcProfile{talk: homeTalk},
+		read: (*Handler).homeSceneData, npc: &npcProfile{talk: homeTalk}, placeLog: true,
+		place: func(r playercontext.Result) placelog.Place {
+			return placelog.Place{Kind: "home", ID: homeOwner(r.Navigation, r.Snapshot.Character.ID)}
+		},
 		present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
-			title := data.(HomeSceneData).View.Owner.Name + "の家"
-			return scenePresentation{title: &title}
+			view := data.(HomeSceneData).View
+			title := view.Owner.Name + "の家"
+			p := scenePresentation{title: &title}
+			for _, pet := range view.ResidentPets {
+				p.members = append(p.members, PlaceMember{Kind: "npc", Name: pet.DisplayName(), Color: npcColor})
+			}
+			return p
 		},
 		bind: func(n playercontext.Selection, actorID string) map[string]map[string]any {
 			return map[string]map[string]any{"home_sleep": {"target_home_id": homeOwner(&playercontext.NavigationObservation{Selection: n}, actorID)}}

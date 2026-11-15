@@ -117,7 +117,7 @@ func (h *Handler) registerSpeech() {
 // name makes it a whisper, visible only to the sender and the recipient. The
 // row is the command's only effect, so an append failure is not swallowed.
 func (h *Handler) speak(ctx context.Context, current playercontext.Result, text, recipientName string) (SpeechResult, error) {
-	destination, char := current.Snapshot.LocationID, current.Snapshot.Character
+	char := current.Snapshot.Character
 	recipientID := ""
 	if recipientName != "" {
 		recipient, err := h.characterNames.FindByName(ctx, recipientName)
@@ -131,7 +131,7 @@ func (h *Handler) speak(ctx context.Context, current playercontext.Result, text,
 	}
 	row := placelog.Entry{OccurredAt: time.Now().UTC(), SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: char.ID,
 		Name: char.Name, Color: char.Color, Text: text, RecipientCharacterID: recipientID}
-	if err := h.placeLog.Append(ctx, placelog.Place{Kind: placelog.KindFacility, ID: destination}, row); err != nil {
+	if err := h.placeLog.Append(ctx, h.scenePlace(current), row); err != nil {
 		return SpeechResult{}, err
 	}
 	return SpeechResult{Text: row.Text, Private: recipientID != ""}, nil

@@ -16,7 +16,7 @@ type sceneEnterParams struct {
 }
 
 // navigationCommand supplies the authenticated owner separately from typed params.
-func navigationCommand[P, R any](h *Handler, id string, execute func(context.Context, string, string, P) (R, error)) {
+func navigationCommand[P, R any](h *Handler, id string, execute func(context.Context, string, string, P, playercontext.Result) (R, error)) {
 	def, ok := playercontext.GetAction(id)
 	if !ok {
 		panic("unregistered navigation command: " + id)
@@ -61,8 +61,8 @@ func navigationCommand[P, R any](h *Handler, id string, execute func(context.Con
 					}
 				}
 			}
-			return func(ctx context.Context, playerID, actorID string, _ playercontext.Result) (any, error) {
-				return execute(ctx, playerID, actorID, p)
+			return func(ctx context.Context, playerID, actorID string, current playercontext.Result) (any, error) {
+				return execute(ctx, playerID, actorID, p, current)
 			}, nil
 		},
 	}
@@ -72,7 +72,7 @@ func (h *Handler) registerNavigation(service *playercontext.Service) {
 	if service == nil || !service.NavigationConfigured() {
 		return
 	}
-	navigationCommand(h, "scene_enter", func(ctx context.Context, owner, actor string, p sceneEnterParams) (sceneEnterResult, error) {
+	navigationCommand(h, "scene_enter", func(ctx context.Context, owner, actor string, p sceneEnterParams, _ playercontext.Result) (sceneEnterResult, error) {
 		selection, err := service.Enter(ctx, owner, actor, p.Destination)
 		if err != nil {
 			return sceneEnterResult{}, err
@@ -80,9 +80,21 @@ func (h *Handler) registerNavigation(service *playercontext.Service) {
 		h.leavePlace(ctx, actor)
 		return h.deliverOnEntry(ctx, actor, selection)
 	})
-	navigationCommand(h, "scene_select", service.Select)
-	navigationCommand(h, "scene_page", service.Page)
-	navigationCommand(h, "scene_back", func(ctx context.Context, owner, actor string, _ struct{}) (playercontext.Selection, error) {
+	navigationCommand(h, "scene_select", func(ctx context.Context, owner, actor string, p playercontext.Subject, current playercontext.Result) (playercontext.Selection, error) {
+		selection, err := service.Select(ctx, owner, actor, p)
+		if err == nil {
+			next := current
+			next.Navigation = &playercontext.NavigationObservation{Selection: selection}
+			if h.scenePlace(current) != h.scenePlace(next) {
+				h.leavePlace(ctx, actor)
+			}
+		}
+		return selection, err
+	})
+	navigationCommand(h, "scene_page", func(ctx context.Context, owner, actor string, p playercontext.PageParams, _ playercontext.Result) (playercontext.Selection, error) {
+		return service.Page(ctx, owner, actor, p)
+	})
+	navigationCommand(h, "scene_back", func(ctx context.Context, owner, actor string, _ struct{}, _ playercontext.Result) (playercontext.Selection, error) {
 		selection, err := service.Back(ctx, owner, actor)
 		if err == nil {
 			h.leavePlace(ctx, actor)

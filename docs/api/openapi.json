@@ -16142,7 +16142,7 @@
             "type": "string"
           },
           "members": {
-            "description": "Who is in the current place: the facility NPC first, then characters in arrival order whose last command was within the member window (docs/architecture/place-log.md#members). Empty outside places with a log; a required read failure fails the observation.",
+            "description": "Who is in the current place: facility NPCs or the observed home's residents first, then characters in arrival order whose last command was within the member window (docs/architecture/place-log.md#members). Empty outside places with a log; a required read failure fails the observation.",
             "items": {
               "$ref": "#/components/schemas/PlaceMember"
             },

@@ -35,7 +35,7 @@ logs stay with their own features.
 ### Place log
 
 - **Storage**
-  - A place is identified by kind and ID. A fixed facility uses its scene destination. Owner-scoped places use the owner ID.
+  - A place is identified by kind and ID. A fixed facility uses its scene destination; an owner-scoped scene uses its place kind and observed owner ID for all log and member reads and writes, including visitors.
   - Each place has one Valkey Master list ([keyspace](valkey-keyspace.md)). An append prepends the new rows and trims the list to the cap in one atomic step.
   - The cap defaults to 30 and the idle TTL to 7 days. Both are configurable. Every append refreshes the TTL.
   - Memory therefore grows with the number of recently active places, not with the number of players.
@@ -49,7 +49,6 @@ logs stay with their own features.
   - Facility scenes with a legacy log, the town hub and the four towns expose `scene.place_log`, viewer-filtered and newest first. It is `[]` for other scenes. Rows carry no character IDs; `private` marks a whisper the viewer sent or received.
   - A store failure fails the observation.
   - A GET never writes.
-  - Owner-scoped places (home, store, guild) are observed once those scenes connect.
 
 ### Writers
 
@@ -92,7 +91,7 @@ Command echoes (the actor and NPC rows of facility commands) are open in [#1941]
 ### NPC interaction
 
 - Each facility's HTTP registration, keyed by scene destination, may name its NPC with the legacy `@words` and `shiraberu_npc` text; the NPC colour is the legacy `$npc_color` `#FF69B4`. Facilities with an NPC offer both commands; the facility comes from the current scene, and the scene's qualification is rechecked.
-- **Talk**: `npc_talk` logs the actor row `＠はなす` and a random word as the NPC row, and starts the wait. A facility without words would answer privately with `返事がない、ただのしかばねのようだ…`.
+- **Talk**: `npc_talk` logs the actor row `＠はなす` and a random word as the NPC row, and starts the wait. A facility without words would answer privately with `返事がない、ただのしかばねのようだ…`. In Home, the observed home's resident replies; a resident without a phrase leaves only the actor row, while an empty home answers privately.
 - **Inspect**: `npc_inspect` returns the facility's `shiraberu_npc` text, or the default `しかし何も見つからなかった…`, to the actor only (`private: true`). It writes no row and starts no wait (`WaitPrivate`).
   The park (town hub) is the exception: its `shiraberu_npc` swaps `@words` and calls `&hanasu` (`lib/park.cgi`), so the line is a logged `$npc_com` with the actor row `＠しらべる>@町娘`, and it starts the wait.
 - Legacy word lines that embed live facts (Gem Store and Accessory item recommendations, Depot capacity) are omitted until those facts are wired.
@@ -109,11 +108,11 @@ Command echoes (the actor and NPC rows of facility commands) are open in [#1941]
   - `presence_refresh` stands in for the legacy page reload, including auto-reload. Its only effect is this refresh. A reload is not a `＠` action, so the wait never blocks it and it starts no wait, and it stays available while sleeping, dead or in an activity. [#1804](https://github.com/witchcraze/party2re/issues/1804) adds the saved-sample effect to the same command.
   - GET never refreshes, as for global presence.
 - **Leave**
-  - A successful `scene_enter` or `scene_back` removes the actor, as legacy moves call `leave_member`. The actor appears in the new place with its next command.
+  - A successful `scene_enter` or `scene_back`, or a `scene_select` that changes the resolved place, removes the actor, as legacy moves call `leave_member`. The actor appears in the new place with its next command.
   - Logout (`DELETE /sessions`) removes every character of the account, because it replaces the per-character `ろぐあうと`.
   - A failed removal is logged and the entry expires.
 - **Observation**
-  - The scenes with a place log expose `scene.members`: the facility NPC first when the facility has one, then characters in arrival order. Rows carry no character IDs.
+  - The scenes with a place log expose `scene.members`: facility NPCs or the observed home's residents first, then characters in arrival order. Rows carry no character IDs.
   - A store failure fails the observation.
 
 ## Alternatives rejected

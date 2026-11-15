@@ -44,13 +44,16 @@ func newHomeGatewayFixture(t *testing.T) *homeGatewayFixture {
 
 func (f *homeGatewayFixture) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
 	f.checkContext(ctx)
+	if id == f.char.ID {
+		return f.char, nil
+	}
 	if id == "other" {
 		return corecharacter.Character{ID: id, PlayerID: "other-owner"}, nil
 	}
 	if id != "hero" {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
-	return f.char, nil
+	return corecharacter.Character{ID: "hero", PlayerID: "owner", Name: "Hero"}, nil
 }
 
 func (f *homeGatewayFixture) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
