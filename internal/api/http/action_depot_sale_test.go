@@ -306,9 +306,8 @@ func TestDepotItemGatewayGuardsAndDiscovery(t *testing.T) {
 			if action == "depot_send_item" && schema.Properties["recipient_character_id"].Type != "string" {
 				t.Fatalf("recipient must be a string: %s", a.ParamsSchema)
 			}
-			resolved := NewActionURLResolver().Resolve("hero", action, "", "")
-			if resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" || f.executions != 0 || store.writes != 0 {
-				t.Fatal("incorrect sale link or GET mutation")
+			if f.executions != 0 || store.writes != 0 {
+				t.Fatal("sale GET mutation")
 			}
 		})
 		t.Run(action+"unconfigured", func(t *testing.T) {

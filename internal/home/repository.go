@@ -12,7 +12,6 @@ import (
 type EstateRepository interface {
 	GetHome(ctx context.Context, characterID string) (CharacterHome, error)
 	SaveHome(ctx context.Context, home CharacterHome) error
-	UpdateCompanionName(ctx context.Context, characterID, companionName string, updatedAt time.Time) (CharacterHome, error)
 	// LockTownHouseCapacityForUpdate serializes house construction in one town (Rank 0).
 	LockTownHouseCapacityForUpdate(ctx context.Context, townID string) error
 	CountActiveTownHouses(ctx context.Context, townID string, now time.Time) (int, error)
@@ -45,7 +44,7 @@ type DeliveryNoticeRepository interface {
 	// HasUnclearedDeliveryNotice locks matching uncleared notices so a concurrent clear is not missed.
 	HasUnclearedDeliveryNotice(ctx context.Context, characterID, noticeType string) (bool, error)
 	ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]DeliveryNotice, error)
-	ClearDeliveryNotices(ctx context.Context, characterID string) error
+	ClearDeliveryNotices(ctx context.Context, characterID string, noticeIDs []string) error
 }
 
 type Repository interface {

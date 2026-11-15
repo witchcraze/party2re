@@ -92,8 +92,7 @@ func TestBuildHouseTownCapacitySerializesBuilders(t *testing.T) {
 		if i == t1.MaxHouses-1 {
 			expires = now.Add(-time.Hour)
 		}
-		if err := homes.SaveHome(ctx, home.CharacterHome{CharacterID: c.ID, TownID: "town1", HouseStyle: "001", ExpiresAt: &expires,
-			CompanionName: home.DefaultCompanionName, UpdatedAt: now}); err != nil {
+		if err := homes.SaveHome(ctx, home.CharacterHome{CharacterID: c.ID, TownID: "town1", HouseStyle: "001", ExpiresAt: &expires, UpdatedAt: now}); err != nil {
 			t.Fatal(err)
 		}
 	}

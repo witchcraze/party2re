@@ -701,13 +701,12 @@ func TestBuildHouse_Transactional(t *testing.T) {
 		repo := newMockHomeRepo(chars)
 		exp := fixedTime.Add(72 * time.Hour)
 		repo.homes["tx-read-fail"] = CharacterHome{
-			CharacterID:   "tx-read-fail",
-			TownID:        "town2",
-			HouseStyle:    "005",
-			ExpiresAt:     &exp,
-			CompanionName: "Saved companion",
-			BgImg:         "saved-wallpaper",
-			UpdatedAt:     fixedTime,
+			CharacterID: "tx-read-fail",
+			TownID:      "town2",
+			HouseStyle:  "005",
+			ExpiresAt:   &exp,
+			BgImg:       "saved-wallpaper",
+			UpdatedAt:   fixedTime,
 		}
 		readErr := errors.New("database read error on get home")
 		repo.getHomeErr = readErr
@@ -735,7 +734,7 @@ func TestBuildHouse_Transactional(t *testing.T) {
 			t.Errorf("expected money to remain 10000, got %d", chars["tx-read-fail"].Money)
 		}
 		saved := repo.homes["tx-read-fail"]
-		if saved.TownID != "town2" || saved.HouseStyle != "005" || saved.CompanionName != "Saved companion" || saved.BgImg != "saved-wallpaper" {
+		if saved.TownID != "town2" || saved.HouseStyle != "005" || saved.BgImg != "saved-wallpaper" {
 			t.Errorf("existing home was overwritten: %+v", saved)
 		}
 		if gp.points["tx-read-fail"] != 0 {

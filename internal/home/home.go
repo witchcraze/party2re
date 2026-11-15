@@ -60,9 +60,8 @@ type CompanionTalkResult struct {
 }
 
 const (
-	DefaultCompanionName   = "ペット"
-	MaxPhraseLength        = 120
-	MaxCompanionNameLength = 64
+	DefaultCompanionName = "ペット"
+	MaxPhraseLength      = 120
 	// DefaultCompanionPhraseLimit is the number of phrases kept per character.
 	DefaultCompanionPhraseLimit = 30
 	// DefaultLetterMaxLength is the maximum letter body length, counted after legacy HTML escaping.
@@ -82,13 +81,12 @@ func IsLetterThrottled(senderID, latestSenderID string, latestAt, now time.Time)
 
 // CharacterHome represents private home estate settings for a character.
 type CharacterHome struct {
-	CharacterID   string     `json:"character_id"`
-	TownID        string     `json:"town_id"`
-	HouseStyle    string     `json:"house_style"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-	CompanionName string     `json:"companion_name"`
-	BgImg         string     `json:"bgimg,omitempty"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	CharacterID string     `json:"character_id"`
+	TownID      string     `json:"town_id"`
+	HouseStyle  string     `json:"house_style"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	BgImg       string     `json:"bgimg,omitempty"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // IsActive returns whether the house is currently active and unexpired.
@@ -137,10 +135,13 @@ type HomeOwner struct {
 	Color string `json:"color"`
 }
 
+// OwnedHomeDetails is what only the owner sees in their own home: taught
+// phrases, uncleared delivery notices and the items ＠つかう can choose.
 type OwnedHomeDetails struct {
-	UnreadLetterCount    int `json:"unread_letter_count"`
-	CompanionPhraseCount int `json:"companion_phrase_count"`
-	RecentDeliveryCount  int `json:"recent_delivery_count"`
+	UnreadLetterCount int               `json:"unread_letter_count"`
+	Phrases           []CompanionPhrase `json:"phrases"`
+	Notices           []DeliveryNotice  `json:"notices"`
+	Items             []HomeUsableItem  `json:"items"`
 }
 
 // HomeView separates public facts from authenticated owner-only enrichment.

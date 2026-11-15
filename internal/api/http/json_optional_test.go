@@ -14,7 +14,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/gvg"
-	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/pvp"
 )
 
@@ -328,35 +327,6 @@ func TestOptionalJSONEndpoints_RejectsInvalidJSON_ZeroDomainMutations(t *testing
 
 				req := httptest.NewRequest(http.MethodPost, "/contest/settle", strings.NewReader(tc.body))
 				req.Header.Set("X-Admin-Key", "test-admin-key")
-				req.Header.Set("Content-Type", tc.contentType)
-
-				rec := httptest.NewRecorder()
-				router.ServeHTTP(rec, req)
-
-				if rec.Code != tc.wantStatus {
-					t.Errorf("status = %d, want %d", rec.Code, tc.wantStatus)
-				}
-				if got := atomic.LoadInt32(&calls); got != 0 {
-					t.Errorf("expected 0 domain calls on rejected input, got %d", got)
-				}
-			})
-		}
-	})
-
-	t.Run("POST /characters/{id}/home/sleep", func(t *testing.T) {
-		for _, tc := range invalidCases {
-			t.Run(tc.name, func(t *testing.T) {
-				var calls int32
-				homeSvc := &mockHomeService{
-					sleepFn: func(_ context.Context, _, _ string) (home.SleepResult, error) {
-						atomic.AddInt32(&calls, 1)
-						return home.SleepResult{}, nil
-					},
-				}
-				router := setupAuthenticatedHandler(t, apihttp.WithHome(homeSvc))
-
-				req := httptest.NewRequest(http.MethodPost, "/characters/c1/home/sleep", strings.NewReader(tc.body))
-				req.Header.Set("Authorization", "Bearer valid-session")
 				req.Header.Set("Content-Type", tc.contentType)
 
 				rec := httptest.NewRecorder()

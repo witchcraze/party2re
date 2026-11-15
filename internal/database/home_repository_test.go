@@ -78,8 +78,8 @@ func TestHomeRepository_Database(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetHome failed: %v", err)
 		}
-		if h.CompanionName != home.DefaultCompanionName {
-			t.Errorf("expected default companion name, got %s", h.CompanionName)
+		if h.TownID != "" || h.ExpiresAt != nil {
+			t.Errorf("expected default home, got %+v", h)
 		}
 
 		now := time.Now().UTC().Truncate(time.Microsecond)
@@ -89,14 +89,13 @@ func TestHomeRepository_Database(t *testing.T) {
 		h.TownID = testTown
 		h.HouseStyle = "001"
 		h.ExpiresAt = &expires
-		h.CompanionName = "モモンガ"
 		err = repo.SaveHome(ctx, h)
 		if err != nil {
 			t.Fatalf("SaveHome failed: %v", err)
 		}
 
 		h, err = repo.GetHome(ctx, char1.ID)
-		if err != nil || h.TownID != testTown || h.HouseStyle != "001" || h.CompanionName != "モモンガ" {
+		if err != nil || h.TownID != testTown || h.HouseStyle != "001" {
 			t.Fatalf("unexpected home settings: %+v, err=%v", h, err)
 		}
 
@@ -289,6 +288,10 @@ func TestHomeRepository_Database(t *testing.T) {
 			t.Fatalf("expected 1 phrase, got %d, err=%v", len(phrases), err)
 		}
 
+		// Another character's phrase is indistinguishable from a missing one.
+		if err := repo.DeleteCompanionPhrase(ctx, phraseID, char2.ID); !errors.Is(err, home.ErrPhraseNotFound) {
+			t.Fatalf("foreign DeleteCompanionPhrase = %v, want ErrPhraseNotFound", err)
+		}
 		err = repo.DeleteCompanionPhrase(ctx, phraseID, char1.ID)
 		if err != nil {
 			t.Fatalf("DeleteCompanionPhrase failed: %v", err)
@@ -317,141 +320,30 @@ func TestHomeRepository_Database(t *testing.T) {
 			CreatedAt:   now,
 		}
 
-		err = repo.AddDeliveryNotice(ctx, n)
-		if err != nil {
-			t.Fatalf("AddDeliveryNotice failed: %v", err)
+		later := n
+		later.ID, later.CreatedAt = noticeID[:len(noticeID)-1]+"x", now.Add(time.Second)
+		for _, notice := range []home.DeliveryNotice{n, later} {
+			if err := repo.AddDeliveryNotice(ctx, notice); err != nil {
+				t.Fatalf("AddDeliveryNotice failed: %v", err)
+			}
 		}
 
 		notices, err := repo.ListDeliveryNotices(ctx, char1.ID, true)
-		if err != nil || len(notices) != 1 {
-			t.Fatalf("expected 1 notice, got %d, err=%v", len(notices), err)
+		if err != nil || len(notices) != 2 {
+			t.Fatalf("expected 2 notices, got %d, err=%v", len(notices), err)
 		}
 
-		err = repo.ClearDeliveryNotices(ctx, char1.ID)
-		if err != nil {
+		// Another character cannot acknowledge them; the owner clears only listed IDs.
+		if err := repo.ClearDeliveryNotices(ctx, char2.ID, []string{n.ID, later.ID}); err != nil {
+			t.Fatalf("foreign ClearDeliveryNotices failed: %v", err)
+		}
+		if err := repo.ClearDeliveryNotices(ctx, char1.ID, []string{n.ID}); err != nil {
 			t.Fatalf("ClearDeliveryNotices failed: %v", err)
 		}
 
 		notices, _ = repo.ListDeliveryNotices(ctx, char1.ID, true)
-		if len(notices) != 0 {
-			t.Errorf("expected 0 uncleared notices, got %d", len(notices))
-		}
-	})
-}
-
-func TestHomeRepository_UpdateCompanionName_Database(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	ctx := context.Background()
-	repo, err := database.NewHomeRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Run("keeps house contract when a house exists", func(t *testing.T) {
-		char, err := database.CreateTestCharacter(ctx, db, id.New()[:corecharacter.MaxNameLength])
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", char.ID); err != nil {
-				t.Errorf("cleanup character_homes for %s failed: %v", char.ID, err)
-			}
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID); err != nil {
-				t.Errorf("cleanup character_depots for %s failed: %v", char.ID, err)
-			}
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID); err != nil {
-				t.Errorf("cleanup characters for %s failed: %v", char.ID, err)
-			}
-			if char.PlayerID != "" {
-				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID); err != nil {
-					t.Errorf("cleanup players for %s failed: %v", char.PlayerID, err)
-				}
-			}
-		})
-		now := time.Now().UTC().Truncate(time.Microsecond)
-		expires := now.Add(5 * 24 * time.Hour)
-		if err := repo.SaveHome(ctx, home.CharacterHome{
-			CharacterID:   char.ID,
-			TownID:        "town1",
-			HouseStyle:    "001",
-			ExpiresAt:     &expires,
-			CompanionName: home.DefaultCompanionName,
-			BgImg:         "bg01",
-			UpdatedAt:     now,
-		}); err != nil {
-			t.Fatalf("SaveHome failed: %v", err)
-		}
-
-		got, err := repo.UpdateCompanionName(ctx, char.ID, "スライム", now.Add(time.Second))
-		if err != nil {
-			t.Fatalf("UpdateCompanionName failed: %v", err)
-		}
-		if got.CompanionName != "スライム" || got.TownID != "town1" || got.HouseStyle != "001" || got.BgImg != "bg01" {
-			t.Errorf("returned home = %+v, want companion updated and estate kept", got)
-		}
-		if got.ExpiresAt == nil || !got.ExpiresAt.Equal(expires) {
-			t.Errorf("expiry = %v, want %v", got.ExpiresAt, expires)
-		}
-
-		active, err := repo.FindActiveHomeByCharacterID(ctx, char.ID, now)
-		if err != nil {
-			t.Fatalf("FindActiveHomeByCharacterID failed: %v", err)
-		}
-		if active.TownID != "town1" || active.HouseStyle != "001" || active.CompanionName != "スライム" {
-			t.Errorf("stored home = %+v, want town1/001 with companion スライム", active)
-		}
-	})
-
-	t.Run("creates a settings-only row without an active house", func(t *testing.T) {
-		char, err := database.CreateTestCharacter(ctx, db, id.New()[:corecharacter.MaxNameLength])
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", char.ID); err != nil {
-				t.Errorf("cleanup character_homes for %s failed: %v", char.ID, err)
-			}
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID); err != nil {
-				t.Errorf("cleanup character_depots for %s failed: %v", char.ID, err)
-			}
-			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID); err != nil {
-				t.Errorf("cleanup characters for %s failed: %v", char.ID, err)
-			}
-			if char.PlayerID != "" {
-				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID); err != nil {
-					t.Errorf("cleanup players for %s failed: %v", char.PlayerID, err)
-				}
-			}
-		})
-		now := time.Now().UTC()
-
-		got, err := repo.UpdateCompanionName(ctx, char.ID, "モモンガ", now)
-		if err != nil {
-			t.Fatalf("UpdateCompanionName failed: %v", err)
-		}
-		if got.CompanionName != "モモンガ" || got.TownID != "" || got.HouseStyle != "" || got.ExpiresAt != nil || got.BgImg != "" {
-			t.Errorf("returned home = %+v, want settings only", got)
-		}
-
-		if _, err := repo.FindActiveHomeByCharacterID(ctx, char.ID, now); !errors.Is(err, home.ErrHouseNotFound) {
-			t.Errorf("FindActiveHomeByCharacterID err = %v, want ErrHouseNotFound", err)
+		if len(notices) != 1 || notices[0].ID != later.ID {
+			t.Errorf("expected only the unacknowledged notice, got %+v", notices)
 		}
 	})
 }

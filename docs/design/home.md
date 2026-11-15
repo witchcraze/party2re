@@ -6,17 +6,17 @@ The Home module (`internal/home`) covers the private home (`home.cgi`), town hou
 
 ## Observation, visibility and navigation
 
-`home` observes the owned actor by default; `scene_select` with `target_kind:home` observes another character's home while the authenticated character stays the viewer and mutation actor. Public owner identity is limited to ID, name and color, never the wallet, account or private notices. Only an exact actor/target match adds private unread-letter, phrase and delivery counts, and public reads never fetch those collections. Required read failures fail the observation. A character without a home row gets defaults; observation never creates the row. A town estate lease is distinct from private Home existence.
+`home` observes the owned actor by default; `scene_select` with `target_kind:home` observes another character's home while the authenticated character stays the viewer and mutation actor. Public owner identity is limited to ID, name and color, never the wallet, account or private notices. Only an exact actor/target match adds the owner's unread-letter count, taught phrases, uncleared delivery notices and usable items, and public reads never fetch them. Required read failures fail the observation. A character without a home row gets defaults; observation never creates the row. A town estate lease is distinct from private Home existence.
 
-Own Home offers `home_inbox` and `home_outbox`, which always read the owned actor's mailbox. Selecting or observing never reads/clears a letter, acknowledges a notice or wakes the character. **Departure:** legacy rendering clears letter/money/item notices (`lib/home.cgi:45–67`); observation here never does, as the Gateway read contract requires. Home Sleep templates carry the observed target ID, and a submitted command keeps that ID even if selection changes before submission.
+Own Home offers `home_inbox` and `home_outbox`, which always read the owned actor's mailbox. Selecting or observing never reads/clears a letter, acknowledges a notice or wakes the character. **Departure:** legacy rendering clears letter/money/item notices (`lib/home.cgi:45–67`); observation here never does, as the Gateway read contract requires. The owner acknowledges observed notices with `home_notice_ack`, which clears only the submitted IDs, so a notice arriving after the observation stays. Home Sleep templates carry the observed target ID, and a submitted command keeps that ID even if selection changes before submission.
 
 ### Scoped legacy action reconciliation
 
-Active registration: `lib/home.cgi:26–39,73–105` (call paths `138–201,237–265,379–507,591–604`). **Decision (#646/#1012):** explicit `home_wake` replaces the implicit recovery on GET in `sleep.cgi:18–42`. The other actions (reference views, item use, letters, color, phrases, custom skill, image, talk) still run through REST; their Gateway migration is open (#949). Commented avatar/upload registrations are not active dispatch.
+Active registration: `lib/home.cgi:26–39,73–105` (call paths `138–201,237–265,379–507,591–604`); only one's own home registers the living actions. **Decision (#646/#1012):** explicit `home_wake` replaces the implicit recovery on GET in `sleep.cgi:18–42`. Own Home connects `からー`, `つかう`, `ことばをおしえる` and `ことばをわすれさせる` as Gateway commands and resident talk as `npc_talk` in any home. Commented avatar/upload registrations are not active dispatch.
 
 ### Retained REST and deferred detail ownership
 
-Home and estate REST routes remain until their replacements are verified: command migration is #949, route removal #950.
+Letters (#2162), reference views and custom skill (#2160), and estate (#2163) still use REST, as do the public view and the profile, adventure record and image links tracked by #949; route removal is #950.
 
 ## Domain rules
 
@@ -43,12 +43,12 @@ Each box's copy belongs to its owner, not to the counterpart's identity (legacy 
 
 ### 3. Companion Greeting Phrases & Resident Companions (`character_companion_phrases`, `home_members`)
 
-Resident companions combine ranch monsters at home and Heaven Wish NPC companions; both share the ranch operations and home capacity ([Monster](monster.md)). Talking or teaching with no resident companion is rejected, as in legacy (“教える相手がいません”). External Home cards use a [separate member/phrase contract](player-and-character.md#213-external-character-and-home-cards-adopted-not-implemented).
+Resident companions combine ranch monsters at home and Heaven Wish NPC companions; both share the ranch operations and home capacity ([Monster](monster.md)). Teaching with no resident is rejected, as in legacy (“教える相手がいません”). External Home cards use a [separate member/phrase contract](player-and-character.md#213-external-character-and-home-cards-adopted-not-implemented).
 
 - **Legacy rule** (`lib/home.cgi:443–477`): the phrase list belongs to the character, not a pet. A new phrase goes to the head, duplicates are separate entries, and the list keeps at most `$max_log`, so teaching is never rejected for capacity. Removal by text removes only the first match (the newest duplicate).
 - **Capacity provenance:** the `config.cgi` tracked until commit `0713fcc` (2023-03-09) sets `$max_log = 30`. That commit added the template `config.cgi_origin`, which changes only `max_entry`, `max_login` and `max_log` to 999, so 999 is treated as a distribution default. The live value is unverified.
 - **Decision (#1125):** keep at most N phrases per character (default 30, `PARTY2_HOME_COMPANION_PHRASE_LIMIT`; an invalid value means 30 and does not stop startup). At capacity, teaching succeeds and removes the oldest in the same serialized transaction. Lowering N shortens the list on the next teach; there is no startup trim.
-- **Talking** (`lib/home.cgi:422–439`) picks a random resident speaker and a uniformly random retained entry, so duplicates weigh by count.
+- **Talking** (`lib/home.cgi:422–438`) in any home picks a random resident of that home and a uniformly random entry of its list, so duplicates weigh by count. With no resident it answers privately “しかし、誰もいなかった…”; with no phrase the resident says nothing. The home's own log, where legacy writes the reply, is open in #2254.
 
 ### 4. Remote Depot & Inventory Item Usage (`＠つかう`)
 

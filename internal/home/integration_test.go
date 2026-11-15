@@ -204,14 +204,7 @@ func TestHomeServiceIntegration(t *testing.T) {
 		t.Errorf("expected owner ID %s, got %s", char1.ID, view.Owner.ID)
 	}
 
-	// 2. Custom companion settings & character color
-	updatedHome, err := svc.UpdateHome(ctx, char1.ID, "ドラキー")
-	if err != nil {
-		t.Fatalf("UpdateHome failed: %v", err)
-	}
-	if updatedHome.CompanionName != "ドラキー" {
-		t.Errorf("expected companion ドラキー, got %s", updatedHome.CompanionName)
-	}
+	// 2. Character color
 
 	if err := svc.SetCharacterColor(ctx, char1.ID, "#123456"); err != nil {
 		t.Fatalf("SetCharacterColor failed: %v", err)
@@ -273,7 +266,7 @@ func TestHomeServiceIntegration(t *testing.T) {
 		if err != nil || len(notices) != 1 {
 			t.Fatalf("deduplicated flag = %+v, %v", notices, err)
 		}
-		if err := svc.ClearDeliveryNotices(ctx, char1.ID); err != nil {
+		if err := svc.ClearDeliveryNotices(ctx, char1.ID, []string{notices[0].ID}); err != nil {
 			t.Fatal(err)
 		}
 		if err := svc.AddDeliveryFlag(ctx, char1.ID, "money_transfer", "flag"); err != nil {

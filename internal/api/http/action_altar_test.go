@@ -115,10 +115,6 @@ func TestFaithGatewayForwardsExplicitInputs(t *testing.T) {
 				} else {
 					assertGatewayContext(t, got)
 				}
-				resolved := NewActionURLResolver().Resolve("hero", input.action, "", "")
-				if resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" {
-					t.Fatalf("obsolete resolver: %+v", resolved)
-				}
 			})
 		}
 	}

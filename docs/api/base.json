@@ -3800,6 +3800,192 @@
               "type": "object",
               "properties": {
                 "action": {
+                  "type": "string",
+                  "const": "home_color"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "color": {
+                      "type": "string",
+                      "description": "#RRGGBB colour code; color_samples lists the palette."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "color"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "home_item_use"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "instance_id": {
+                      "type": "string",
+                      "description": "One of the owned observation's items."
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "inventory",
+                        "depot"
+                      ],
+                      "description": "The item's source; defaults to inventory."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "instance_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "home_phrase_teach"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "phrase": {
+                      "type": "string",
+                      "description": "One line of up to 120 characters for the residents to say."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "phrase"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "home_phrase_forget"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "phrase_id": {
+                      "type": "string",
+                      "description": "One of the owned observation's phrases."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "phrase_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "home_notice_ack"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "notice_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Observed notice IDs to clear; unknown or already cleared IDs are ignored, so a notice that arrives later stays."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "notice_ids"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
                   "const": "scene_enter"
                 }
               },
@@ -8031,10 +8217,6 @@
             "type": "string",
             "format": "date-time"
           },
-          "companion_name": {
-            "type": "string",
-            "maxLength": 64
-          },
           "bgimg": {
             "type": "string"
           },
@@ -8047,7 +8229,6 @@
           "character_id",
           "town_id",
           "house_style",
-          "companion_name",
           "updated_at"
         ]
       },
@@ -8075,24 +8256,40 @@
       "OwnedHomeDetails": {
         "type": "object",
         "additionalProperties": false,
+        "description": "Owner-only facts; public reads never fetch them.",
         "properties": {
           "unread_letter_count": {
             "type": "integer",
             "minimum": 0
           },
-          "companion_phrase_count": {
-            "type": "integer",
-            "minimum": 0
+          "phrases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeCompanionPhrase"
+            },
+            "description": "Taught phrases, newest first; home_phrase_forget takes one of these IDs."
           },
-          "recent_delivery_count": {
-            "type": "integer",
-            "minimum": 0
+          "notices": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/HomeDeliveryNotice"
+            },
+            "description": "Uncleared delivery notices, newest first. Observation never clears them; home_notice_ack does."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeUsableItem"
+            },
+            "description": "Held and Depot items home_item_use can inspect or use."
           }
         },
         "required": [
           "unread_letter_count",
-          "companion_phrase_count",
-          "recent_delivery_count"
+          "phrases",
+          "notices",
+          "items"
         ]
       },
       "HomeView": {
@@ -8178,12 +8375,34 @@
               "$ref": "#/components/schemas/SceneDestination"
             },
             "maxItems": 2
+          },
+          "color_samples": {
+            "type": "array",
+            "description": "The colour sample palette, offered only in the owner's home; empty otherwise.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9A-Fa-f]{6}$"
+                }
+              },
+              "required": [
+                "name",
+                "color"
+              ]
+            }
           }
         },
         "required": [
           "parent",
           "view",
-          "destinations"
+          "destinations",
+          "color_samples"
         ]
       },
       "HomeMailboxSceneData": {
@@ -11703,15 +11922,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "SetCharacterColorRequest": {
-        "properties": {
-          "color": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
       "GuildCharacterResponse": {
         "properties": {
           "guild": {
@@ -12136,44 +12346,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "HomeUseHomeItemResult": {
-        "properties": {
-          "action": {
-            "type": "string"
-          },
-          "character": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CoreCharacter"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "consumed": {
-            "type": "boolean"
-          },
-          "item_name": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "action",
-          "message",
-          "item_name",
-          "kind",
-          "consumed"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "CoreCharacter": {
         "properties": {
           "ArmorCustomName": {
@@ -12395,22 +12567,6 @@
           "Agility"
         ],
         "type": "object",
-        "additionalProperties": false
-      },
-      "UseHomeItemRequest": {
-        "properties": {
-          "instance_id": {
-            "type": "string"
-          },
-          "source": {
-            "type": "string",
-            "default": "inventory"
-          }
-        },
-        "type": "object",
-        "required": [
-          "instance_id"
-        ],
         "additionalProperties": false
       },
       "PlantationFertilizer": {
@@ -14356,78 +14512,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "SleepStatusResponse": {
-        "properties": {
-          "can_wake": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string"
-          },
-          "remaining_seconds": {
-            "type": "integer"
-          },
-          "sleeping": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "sleeping",
-          "remaining_seconds",
-          "can_wake",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "SleepResponse": {
-        "properties": {
-          "duration_seconds": {
-            "type": "integer"
-          },
-          "home_character_id": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "remaining_seconds": {
-            "type": "integer"
-          },
-          "sleeping": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "sleeping",
-          "duration_seconds",
-          "remaining_seconds",
-          "home_character_id",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "WakeResponse": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "message": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success",
-          "message",
-          "character"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "HomeCompanionPhrase": {
         "properties": {
           "character_id": {
@@ -14449,21 +14533,6 @@
           "character_id",
           "phrase",
           "created_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CompanionTalkResponse": {
-        "properties": {
-          "dialogue": {
-            "type": "string"
-          },
-          "pet_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dialogue"
         ],
         "type": "object",
         "additionalProperties": false
@@ -14497,45 +14566,6 @@
           "message",
           "is_cleared",
           "created_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "HomeCharacterHome": {
-        "properties": {
-          "bgimg": {
-            "type": "string"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "companion_name": {
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "house_style": {
-            "type": "string"
-          },
-          "town_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "town_id",
-          "house_style",
-          "companion_name",
-          "updated_at"
         ],
         "type": "object",
         "additionalProperties": false

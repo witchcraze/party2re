@@ -140,9 +140,6 @@ func TestChapelGatewayNavigationDoesNotPray(t *testing.T) {
 	if status != 200 || store.selection.Destination != "town" || store.writes != 2 || f.executions != 0 {
 		t.Fatalf("back changed gameplay: %d %s", status, got)
 	}
-	if _, exists := defaultActionEndpoints()["chapel_bless"]; exists {
-		t.Fatal("nonexistent bless route is still advertised")
-	}
 }
 
 func TestChapelGatewayInputsAndGuards(t *testing.T) {

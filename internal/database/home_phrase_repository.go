@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/witchcraze/party2re/internal/home"
 )
@@ -58,17 +59,8 @@ func (r *HomeRepository) DeleteCompanionPhrase(ctx context.Context, id, characte
 		return err
 	}
 	if rowsAffected == 0 {
-		var actualOwner string
-		err = executor.QueryRowContext(ctx, `SELECT character_id FROM character_companion_phrases WHERE id = ?`, id).Scan(&actualOwner)
-		if errors.Is(err, sql.ErrNoRows) {
-			return home.ErrPhraseNotFound
-		}
-		if err != nil {
-			return err
-		}
-		if actualOwner != characterID {
-			return home.ErrForbidden
-		}
+		// Another character's phrase is indistinguishable from a missing one.
+		return home.ErrPhraseNotFound
 	}
 	return nil
 }
@@ -153,12 +145,20 @@ func (r *HomeRepository) ListDeliveryNotices(ctx context.Context, characterID st
 	return notices, rows.Err()
 }
 
-// ClearDeliveryNotices marks all active delivery notices as cleared for a character.
-func (r *HomeRepository) ClearDeliveryNotices(ctx context.Context, characterID string) error {
+// ClearDeliveryNotices marks the character's listed active notices as cleared.
+func (r *HomeRepository) ClearDeliveryNotices(ctx context.Context, characterID string, noticeIDs []string) error {
+	if len(noticeIDs) == 0 {
+		return nil
+	}
+	args := make([]any, 0, len(noticeIDs)+1)
+	args = append(args, characterID)
+	for _, id := range noticeIDs {
+		args = append(args, id)
+	}
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		UPDATE character_delivery_notices
 		SET is_cleared = TRUE
-		WHERE character_id = ? AND is_cleared = FALSE
-	`, characterID)
+		WHERE character_id = ? AND is_cleared = FALSE AND id IN (?`+strings.Repeat(",?", len(noticeIDs)-1)+`)
+	`, args...)
 	return err
 }

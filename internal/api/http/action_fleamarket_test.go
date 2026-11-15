@@ -234,10 +234,6 @@ func TestFleaMarketGatewayGuardsAndDiscovery(t *testing.T) {
 		}) || f.executions != 0 {
 			t.Fatalf("missing discovery: %d %+v", status, observation)
 		}
-		resolved := NewActionURLResolver().Resolve("hero", input.action, "", "")
-		if resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" {
-			t.Fatalf("obsolete resolver: %+v", resolved)
-		}
 		for _, option := range []Option{WithFleaMarket(nil), func(*Handler) {}} {
 			g := newGatewayFixture(t)
 			h, err := NewHandler(g, g, &struct{ AdventureService }{}, &struct{ ShopService }{}, option, WithPlayerContext(playercontext.NewService(g, g, timer.NewService(nil))))

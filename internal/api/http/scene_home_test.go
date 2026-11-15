@@ -20,6 +20,9 @@ type homeSceneFixture struct {
 	*homeGatewayFixture
 	viewService *home.Service
 	repo        *homeSceneRepository
+	living      []string // owner-command calls as "action actor arg"
+	livingErr   error
+	talk        map[string]home.CompanionTalkResult // by home owner; absent means nobody is home
 }
 
 type homeSceneRepository struct {
@@ -27,13 +30,16 @@ type homeSceneRepository struct {
 	readErr      error
 	privateReads int
 	letters      []home.Letter
+	phrases      []home.CompanionPhrase
+	notices      []home.DeliveryNotice
+	privateErr   error
 }
 
 func (r *homeSceneRepository) GetHome(ctx context.Context, id string) (home.CharacterHome, error) {
 	if r.readErr != nil {
 		return home.CharacterHome{}, r.readErr
 	}
-	return home.CharacterHome{CharacterID: id, CompanionName: "ペット"}, nil
+	return home.CharacterHome{CharacterID: id}, nil
 }
 func (r *homeSceneRepository) GetUnreadLetterCount(context.Context, string) (int, error) {
 	r.privateReads++
@@ -41,11 +47,11 @@ func (r *homeSceneRepository) GetUnreadLetterCount(context.Context, string) (int
 }
 func (r *homeSceneRepository) ListCompanionPhrases(context.Context, string) ([]home.CompanionPhrase, error) {
 	r.privateReads++
-	return nil, nil
+	return r.phrases, r.privateErr
 }
 func (r *homeSceneRepository) ListDeliveryNotices(context.Context, string, bool) ([]home.DeliveryNotice, error) {
 	r.privateReads++
-	return nil, nil
+	return r.notices, nil
 }
 func (r *homeSceneRepository) ListInboxLetters(ctx context.Context, actor string, limit, offset int) ([]home.Letter, int, error) {
 	if actor != "hero" {
@@ -109,7 +115,7 @@ func homeSceneRouter(t *testing.T) (*homeSceneFixture, *gatewayNavigationStore, 
 				return false, nil
 			}
 			return err == nil, err
-		}},
+		}, SubjectOwned: func(_ context.Context, actorID, target string) (bool, error) { return actorID == target, nil }},
 		playercontext.SceneDefinition{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
 		playercontext.SceneDefinition{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
 	))

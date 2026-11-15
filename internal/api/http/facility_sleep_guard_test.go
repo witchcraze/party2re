@@ -137,15 +137,9 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"medal_claim_achievement", http.MethodPost, "/characters/char-1/achievements/ach-1/claim", `{}`},
 		// Home
 		{"home_build_house", http.MethodPost, "/towns/town1/houses", `{"character_id":"char-1","house_style":"001"}`},
-		{"home_set_character_color", http.MethodPost, "/characters/char-1/color", `{"color":"#ffffff"}`},
-		{"home_use_item", http.MethodPost, "/characters/char-1/home/items/use", `{"instance_id":"item-1","source":"inventory"}`},
-		{"home_settings", http.MethodPost, "/homes/char-1/settings", `{"companion_name":"ペット"}`},
 		{"home_send_letter", http.MethodPost, "/letters", `{"sender_character_id":"char-1","recipient_character_id":"char-2","content":"hello"}`},
 		{"home_read_letter", http.MethodPost, "/letters/letter-1/read", `{"character_id":"char-1"}`},
 		{"home_delete_letter", http.MethodDelete, "/letters/letter-1?character_id=char-1", ``},
-		{"home_teach_phrase", http.MethodPost, "/homes/char-1/companion/phrases", `{"phrase":"hello"}`},
-		{"home_forget_phrase", http.MethodDelete, "/homes/char-1/companion/phrases/phrase-1", ``},
-		{"home_clear_notices", http.MethodPost, "/homes/char-1/notices/clear", `{}`},
 		// Store
 		{"store_build", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_build","params":{"town_id":"town1","house_style":"001"}}`},
 		{"store_list_gold", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_list_gold","params":{"item_id":"inst-1","price":1000}}`},
@@ -596,7 +590,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		}
 	})
 
-	t.Run("home estate mutations never invoke service when sleeping, can_wake, or sleep lookup fails", func(t *testing.T) {
+	t.Run("house construction never invokes service when sleeping, can_wake, or sleep lookup fails", func(t *testing.T) {
 		conditions := []struct {
 			name         string
 			sleepStatus  home.SleepStatus
@@ -615,8 +609,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			body   string
 		}{
 			{"build_house", http.MethodPost, "/towns/town1/houses", `{"character_id":"char-1","house_style":"001"}`},
-			{"set_character_color", http.MethodPost, "/characters/char-1/color", `{"color":"#ffffff"}`},
-			{"use_home_item", http.MethodPost, "/characters/char-1/home/items/use", `{"instance_id":"item-1","source":"inventory"}`},
 		}
 
 		for _, cond := range conditions {
@@ -629,14 +621,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 					buildHouseFn: func(_ context.Context, _, _, _ string) (*home.HomeCheckResult, error) {
 						called = true
 						return &home.HomeCheckResult{}, nil
-					},
-					setCharacterColorFn: func(_ context.Context, _, _ string) error {
-						called = true
-						return nil
-					},
-					useHomeItemFn: func(_ context.Context, _, _, _ string) (*home.UseHomeItemResult, error) {
-						called = true
-						return &home.UseHomeItemResult{}, nil
 					},
 				}
 
@@ -698,7 +682,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		}{
 			{http.MethodGet, "/towns/town1/houses"},
 			{http.MethodGet, "/houses/check?target=Hero"},
-			{http.MethodGet, "/characters/char-1/home/items"},
 		}
 
 		for _, route := range readRoutes {

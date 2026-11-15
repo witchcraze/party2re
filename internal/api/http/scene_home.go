@@ -11,6 +11,28 @@ type HomeSceneData struct {
 	Parent       string             `json:"parent"`
 	View         home.HomeView      `json:"view"`
 	Destinations []SceneDestination `json:"destinations"`
+	// ColorSamples are the ＠からー sample palette, offered in the owner's home.
+	ColorSamples []HomeColorSample `json:"color_samples"`
+}
+
+type HomeColorSample struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// homeColorSamples is the ＠からー sample palette (home.cgi color).
+var homeColorSamples = []HomeColorSample{
+	{"レッド", "#FF3333"}, {"ピンク", "#FF33CC"}, {"オレンジ", "#FF9933"}, {"イエロー", "#FFFF33"},
+	{"グリーン", "#33FF33"}, {"アクア", "#33CCFF"}, {"ブルー", "#6666FF"}, {"パープル", "#CC66FF"},
+	{"グレイ", "#CCCCFF"}, {"ホワイト", "#FFFFFF"}, {"エメラルド", "#33FF99"},
+}
+
+// homeOwner is the home being observed: the selected subject, otherwise the actor's own.
+func homeOwner(n *playercontext.NavigationObservation, actorID string) string {
+	if n != nil && n.Selection.Subject != (playercontext.Subject{}) {
+		return n.Selection.Subject.ID
+	}
+	return actorID
 }
 
 type HomeMailboxSceneData struct {
@@ -25,16 +47,13 @@ func (h *Handler) homeSceneData(ctx context.Context, r playercontext.Result) (an
 		return nil, errSceneNotConfigured
 	}
 	actor := r.Snapshot.Character
-	target := actor.ID
-	if r.Navigation != nil && r.Navigation.Selection.Subject != (playercontext.Subject{}) {
-		target = r.Navigation.Selection.Subject.ID
-	}
-	view, err := h.homes.GetHomeView(ctx, target, actor.ID, actor.PlayerID)
+	view, err := h.homes.GetHomeView(ctx, homeOwner(r.Navigation, actor.ID), actor.ID, actor.PlayerID)
 	if err != nil {
 		return nil, err
 	}
-	data := HomeSceneData{Parent: "town", View: view, Destinations: []SceneDestination{}}
+	data := HomeSceneData{Parent: "town", View: view, Destinations: []SceneDestination{}, ColorSamples: []HomeColorSample{}}
 	if view.IsOwner {
+		data.ColorSamples = homeColorSamples
 		for _, id := range []string{"home_inbox", "home_outbox"} {
 			if adapter, ok := h.sceneAdapters[id]; ok {
 				data.Destinations = append(data.Destinations, SceneDestination{ID: id, Title: adapter.title, Supported: adapter.read != nil, EnterParams: sceneEnterParams{Destination: id}})
@@ -88,19 +107,18 @@ func (h *Handler) homeMailboxSceneData(ctx context.Context, r playercontext.Resu
 }
 
 var (
-	// Legacy ＠ねる rests in the home being visited ($m{home}).
-	homeFacility = facility{title: "自宅", commands: []string{"home_sleep"}, read: (*Handler).homeSceneData,
+	// Legacy ＠ねる rests in the home being visited ($m{home}); only one's own
+	// home registers the living actions (home.cgi:26-42,73-105).
+	homeFacility = facility{title: "自宅", commands: homeOwnerCommands, subjectCommands: []string{"home_sleep"}, ownedSubjectCommands: homeOwnerCommands,
+		read: (*Handler).homeSceneData, npc: &npcProfile{talk: homeTalk},
 		present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
 			title := data.(HomeSceneData).View.Owner.Name + "の家"
 			return scenePresentation{title: &title}
 		},
 		bind: func(n playercontext.Selection, actorID string) map[string]map[string]any {
-			target := actorID
-			if n.Subject != (playercontext.Subject{}) {
-				target = n.Subject.ID
-			}
-			return map[string]map[string]any{"home_sleep": {"target_home_id": target}}
+			return map[string]map[string]any{"home_sleep": {"target_home_id": homeOwner(&playercontext.NavigationObservation{Selection: n}, actorID)}}
 		}}
+	homeOwnerCommands  = []string{"home_sleep", "home_color", "home_item_use", "home_phrase_teach", "home_phrase_forget", "home_notice_ack"}
 	homeInboxFacility  = facility{title: "受信箱", read: (*Handler).homeMailboxSceneData, present: homeMailboxPresentation}
 	homeOutboxFacility = facility{title: "送信箱", read: (*Handler).homeMailboxSceneData, present: homeMailboxPresentation}
 )

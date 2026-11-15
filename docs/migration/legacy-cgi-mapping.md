@@ -76,17 +76,17 @@ owns the approved lifecycle and delivery policies.
 #### CL-02A: Home & Mail
 
 - **Scope / Legacy**: `lib/home.cgi`の公開/本人表示、Home設定、`てがみをかく` / `てがみをよむ`、`からー`、`ことばをおしえる` / `ことばをわすれさせる`、ペット表示/会話、配送通知。共有`lib/system.cgi`の手紙・ログ処理まで追う。
-- **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/api/http/home.go`、`internal/api/http/home_estate.go`の設定/色関連。
-- **Contracts**: [design/home.md](../design/home.md)、[api/paths/home.json](../api/paths/home.json)、[api/paths/letter.json](../api/paths/letter.json)、[api/paths/character.json](../api/paths/character.json) (色設定)。
-- **Open follow-ups**: [#1094](https://github.com/witchcraze/party2re/issues/1094) (mailbox所有)、[#1115](https://github.com/witchcraze/party2re/issues/1115) (設定更新)、[#1116](https://github.com/witchcraze/party2re/issues/1116) (色更新)。
+- **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/api/http/scene_home.go`・`action_home.go` (Homeシーンと本人コマンド)、`internal/api/http/home.go` (手紙・公開表示)。
+- **Contracts**: [design/home.md](../design/home.md)、[api/paths/home.json](../api/paths/home.json)、[api/paths/letter.json](../api/paths/letter.json)。
+- **Open follow-ups**: [#2162](https://github.com/witchcraze/party2re/issues/2162) (手紙のGateway移行)、[#2254](https://github.com/witchcraze/party2re/issues/2254) (家ごとのログ・住人member)。
 - **Boundary**: Homeからの図鑑・ジョブマスター・プロフィール・冒険記録・特技設定・画像設定は遷移先と対象identityを確認する。遷移先の全仕様はCL-01/04/06/07の担当範囲。壁紙等の表示はここ、使用による変更はCL-02E。
 
 #### CL-02B: Sleep & Recovery
 
 - **Scope / Legacy**: `lib/home.cgi`の`ねる`、`lib/sleep.cgi`、共有dispatchの睡眠中操作制限。睡眠時間、訪問先の前提、起床回復、各機能のreset/完了と長期不在・再試行を追う。
-- **Go / HTTP**: `internal/home/sleep.go`、`internal/core/timer/`、`internal/api/http/home_sleep.go`、`internal/api/http/action_home.go`、`internal/api/http/auth_helper.go`、`cmd/party2/wire.go`の回復連動配線。
+- **Go / HTTP**: `internal/home/sleep.go`、`internal/core/timer/`、`internal/api/http/action_home.go`、`internal/api/http/auth_helper.go`、`cmd/party2/wire.go`の回復連動配線。
 - **Contracts**: [design/home.md](../design/home.md)、[design/action-preconditions.md](../design/action-preconditions.md)、[api/paths/home.json](../api/paths/home.json)。
-- **Open follow-ups**: [#1117](https://github.com/witchcraze/party2re/issues/1117) (更新guard)、[#1118](https://github.com/witchcraze/party2re/issues/1118) (起床義務の寿命)、[#1119](https://github.com/witchcraze/party2re/issues/1119) (私有Home条件)、[#1822](https://github.com/witchcraze/party2re/issues/1822) (時間設定/人数consumerの実装)。採用した時間・取得/障害方針は[Home契約](../design/home.md#5-resting--sleeping-sleepcgi-homecgi)、人数のidentity・時間窓は[公開presence契約](../design/player-and-character.md#212-public-presence-and-login-message)を参照する。
+- **Open follow-ups**: [#1822](https://github.com/witchcraze/party2re/issues/1822) (時間設定/人数consumerの実装)。採用した時間・取得/障害方針は[Home契約](../design/home.md#5-resting--sleeping-sleepcgi-homecgi)、人数のidentity・時間窓は[公開presence契約](../design/player-and-character.md#212-public-presence-and-login-message)を参照する。
 - **Boundary**: 満腹・祝福・錬金等は睡眠からの呼出し/失敗時整合を確認し、各機能全体の監査へ広げない。explicit Wakeとread-only GETの承認済み契約を維持する。
 
 #### CL-02C: Depot & Transfers
@@ -101,14 +101,13 @@ owns the approved lifecycle and delivery policies.
 - **Scope / Legacy**: `lib/town1.cgi`〜`lib/town4.cgi`、`lib/_town.cgi`の`たてる` / `ちぇっく` / `みせ` / `はいる`。町の探索、住宅/商店の建設、容量、価格、所有期限、GP連動、所有者への遷移を確認する。
 - **Go / HTTP**: `internal/town/`、`internal/home/estate.go`の住宅建設/期限確認、`internal/store/service.go`の商店建設、`internal/api/http/home_estate.go`、`internal/api/http/scene_store.go`・`action_store.go`（町シーンと商店コマンド）。
 - **Contracts**: [design/home.md](../design/home.md)、[design/store.md](../design/store.md)、[api/paths/towns.json](../api/paths/towns.json)、[api/paths/houses.json](../api/paths/houses.json)。
-- **Open follow-ups**: [#1113](https://github.com/witchcraze/party2re/issues/1113) (住宅上限)、[#1114](https://github.com/witchcraze/party2re/issues/1114) (商店上限)、[#1122](https://github.com/witchcraze/party2re/issues/1122) (住宅GP)。
 - **Boundary**: 商店の建設・入店までが本単位で、出品/購入/内装販売はCL-03。私有Homeへの訪問・睡眠と有料の町住宅契約を同一条件にしない。
 
 #### CL-02E: Home Item Use
 
 - **Scope / Legacy**: `lib/home.cgi`の`つかう`と到達する`lib/_data.cgi`の効果。手持ち/Depotの両source、装備inspect、usage category、効果・前提・乱数・消費順・容量不足/失敗時をアイテムごとに確認する。
-- **Go / HTTP**: `internal/home/item_listing.go`、`internal/home/item_usage.go`、`internal/home/recipe_usage.go`、`internal/home/costume_usage.go`、`internal/api/http/home_estate.go`のitem一覧/使用。
-- **Contracts**: [Home dispatch reconciliation](../design/home.md#legacy-dispatch-and-consumption-contract) (全56 usage2/4 callback・両source・消費順・満杯境界と実装owner)、[design/blacksmith.md](../design/blacksmith.md)、[api/paths/character.json](../api/paths/character.json) (Home item一覧/使用)。
+- **Go / HTTP**: `internal/home/item_listing.go`、`internal/home/item_usage.go`、`internal/home/recipe_usage.go`、`internal/home/costume_usage.go`、`internal/api/http/action_home.go`の`home_item_use`。
+- **Contracts**: [Home dispatch reconciliation](../design/home.md#legacy-dispatch-and-consumption-contract) (全56 usage2/4 callback・両source・消費順・満杯境界と実装owner)、[design/blacksmith.md](../design/blacksmith.md)。
 - **Remaining work**: 未対応dispatchはHomeの所有表から各実装Issueへ辿る。
 - **Boundary**: 名前がrecipe poolにあるだけで対応済みとは数えない。レシピ・衣装・祭壇等への呼出しは効果/消費の境界まで追い、CL-03/04/05の全機能監査と分ける。未確定callbackや稼働config不在を仕様推測で埋めない。
 

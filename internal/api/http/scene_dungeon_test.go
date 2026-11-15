@@ -187,9 +187,4 @@ func TestDungeonMapRetirementPreservesRemainingRoutes(t *testing.T) {
 			t.Errorf("retained route missing: %s %s", route.method, route.path)
 		}
 	}
-	for _, endpoint := range defaultActionEndpoints() {
-		if endpoint.PathPattern == "/characters/%s/dungeons/map" {
-			t.Fatal("retired resolver entry")
-		}
-	}
 }

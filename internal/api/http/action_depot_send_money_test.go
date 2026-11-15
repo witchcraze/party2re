@@ -153,9 +153,6 @@ func TestDepotSendMoneyGatewayGuardsAndDiscovery(t *testing.T) {
 		schema.Properties["amount"].Type != "integer" || schema.Properties["recipient_character_id"].Type != "string" || len(a.ParamsTemplate) != 0 {
 		t.Fatalf("incorrect params: %+v %s", a, a.ParamsSchema)
 	}
-	if resolved := NewActionURLResolver().Resolve("hero", "depot_send_money", "", ""); resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" {
-		t.Fatalf("link: %+v", resolved)
-	}
 	f.char.Money = 0
 	if _, got := navigationGET(t, f.router); slices.ContainsFunc(got.AvailableActions, func(a ContextAction) bool { return a.Action == "depot_send_money" }) {
 		t.Fatal("empty wallet offered a remittance")

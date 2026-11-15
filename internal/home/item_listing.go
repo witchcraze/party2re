@@ -6,101 +6,49 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 )
 
-// ListHomeItems retrieves all usable and inspectable items from inventory and depot.
+// ListHomeItems lists the held and Depot items ＠つかう can inspect or use.
+// A failed inventory or Depot read fails the listing.
 func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]HomeUsableItem, error) {
-	var results []HomeUsableItem
-
+	results := []HomeUsableItem{}
 	if s.invMgr != nil {
 		inv, err := s.invMgr.FindByCharacterID(ctx, characterID)
-		if err == nil {
-			for _, inst := range inv.Items {
-				def, err := s.catalog.FindByID(inst.DefinitionID)
-				name := inst.DefinitionID
-				var slot item.Slot
-				price := 0
-				kind := 3
-				if err == nil {
-					name = def.Name
-					slot = def.Slot
-					price = def.Price
-					kind = def.Kind()
-				}
-				attack := 0
-				defense := 0
-				weight := 0
-				if kind == 1 {
-					attack, weight = def.Power, def.Weight
-					if attack == 0 && weight == 0 {
-						attack, weight = item.NominalWeaponStats(inst.DefinitionID)
-					}
-				} else if kind == 2 {
-					defense, weight = def.Power, def.Weight
-					if defense == 0 && weight == 0 {
-						defense, weight = item.NominalArmorStats(inst.DefinitionID)
-					}
-				}
-				results = append(results, HomeUsableItem{
-					InstanceID:   inst.ID,
-					DefinitionID: inst.DefinitionID,
-					Name:         name,
-					Kind:         kind,
-					Slot:         slot,
-					Attack:       attack,
-					Defense:      defense,
-					Weight:       weight,
-					Price:        price,
-					Quantity:     inst.Quantity,
-					Source:       "inventory",
-				})
-			}
+		if err != nil {
+			return nil, err
+		}
+		for _, inst := range inv.Items {
+			results = append(results, s.homeUsableItem(inst, "inventory"))
 		}
 	}
-
 	if s.depotMgr != nil {
 		dp, err := s.depotMgr.FindByCharacterID(ctx, characterID)
-		if err == nil {
-			for _, inst := range dp.Items {
-				def, err := s.catalog.FindByID(inst.DefinitionID)
-				name := inst.DefinitionID
-				var slot item.Slot
-				price := 0
-				kind := 3
-				if err == nil {
-					name = def.Name
-					slot = def.Slot
-					price = def.Price
-					kind = def.Kind()
-				}
-				attack := 0
-				defense := 0
-				weight := 0
-				if kind == 1 {
-					attack, weight = def.Power, def.Weight
-					if attack == 0 && weight == 0 {
-						attack, weight = item.NominalWeaponStats(inst.DefinitionID)
-					}
-				} else if kind == 2 {
-					defense, weight = def.Power, def.Weight
-					if defense == 0 && weight == 0 {
-						defense, weight = item.NominalArmorStats(inst.DefinitionID)
-					}
-				}
-				results = append(results, HomeUsableItem{
-					InstanceID:   inst.ID,
-					DefinitionID: inst.DefinitionID,
-					Name:         name,
-					Kind:         kind,
-					Slot:         slot,
-					Attack:       attack,
-					Defense:      defense,
-					Weight:       weight,
-					Price:        price,
-					Quantity:     inst.Quantity,
-					Source:       "depot",
-				})
-			}
+		if err != nil {
+			return nil, err
+		}
+		for _, inst := range dp.Items {
+			results = append(results, s.homeUsableItem(inst, "depot"))
 		}
 	}
-
 	return results, nil
+}
+
+func (s *Service) homeUsableItem(inst item.Instance, source string) HomeUsableItem {
+	out := HomeUsableItem{InstanceID: inst.ID, DefinitionID: inst.DefinitionID, Name: inst.DefinitionID, Kind: 3, Quantity: inst.Quantity, Source: source}
+	def, err := s.catalog.FindByID(inst.DefinitionID)
+	if err != nil {
+		return out
+	}
+	out.Name, out.Slot, out.Price, out.Kind = def.Name, def.Slot, def.Price, def.Kind()
+	switch out.Kind {
+	case 1:
+		out.Attack, out.Weight = def.Power, def.Weight
+		if out.Attack == 0 && out.Weight == 0 {
+			out.Attack, out.Weight = item.NominalWeaponStats(inst.DefinitionID)
+		}
+	case 2:
+		out.Defense, out.Weight = def.Power, def.Weight
+		if out.Defense == 0 && out.Weight == 0 {
+			out.Defense, out.Weight = item.NominalArmorStats(inst.DefinitionID)
+		}
+	}
+	return out
 }

@@ -257,9 +257,8 @@ func TestDepotExpansionQuoteAndDiscovery(t *testing.T) {
 			if len(a.RequiredParams) != 0 || len(a.ParamsTemplate) != 0 || !strings.Contains(string(a.ParamsSchema), `"additionalProperties":false`) {
 				t.Fatalf("wrong strict discovery: %+v", a)
 			}
-			resolved := NewActionURLResolver().Resolve("hero", "depot_expand", "", "")
-			if resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" || f.executions != 0 || store.writes != 0 {
-				t.Fatalf("GET or resolver: %+v", resolved)
+			if f.executions != 0 || store.writes != 0 {
+				t.Fatal("GET mutated")
 			}
 		})
 	}

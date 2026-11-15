@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -20,31 +19,19 @@ import (
 )
 
 type mockHomeService struct {
-	getHomeViewFn           func(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error)
-	updateHomeFn            func(ctx context.Context, characterID, companionName string) (home.CharacterHome, error)
-	buildHouseFn            func(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
-	checkHouseFn            func(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
-	listTownHousesFn        func(ctx context.Context, townID string) ([]home.HomeCheckResult, error)
-	setCharacterColorFn     func(ctx context.Context, characterID, color string) error
-	listHomeItemsFn         func(ctx context.Context, characterID string) ([]home.HomeUsableItem, error)
-	useHomeItemFn           func(ctx context.Context, characterID, instanceID, source string) (*home.UseHomeItemResult, error)
-	sendLetterFn            func(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error)
-	readLetterFn            func(ctx context.Context, letterID, recipientID string) error
-	listInboxFn             func(ctx context.Context, recipientID string, limit, offset int) (home.LetterListResult, error)
-	listInboxByCursorFn     func(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
-	listOutboxFn            func(ctx context.Context, senderID string, limit, offset int) (home.LetterListResult, error)
-	listOutboxByCursorFn    func(ctx context.Context, senderID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
-	getUnreadLetterCountFn  func(ctx context.Context, recipientID string) (int, error)
-	deleteLetterFn          func(ctx context.Context, letterID, characterID string) error
-	teachCompanionPhraseFn  func(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error)
-	forgetCompanionPhraseFn func(ctx context.Context, phraseID, characterID string) error
-	listCompanionPhrasesFn  func(ctx context.Context, characterID string) ([]home.CompanionPhrase, error)
-	talkToCompanionFn       func(ctx context.Context, characterID string) (home.CompanionTalkResult, error)
-	listDeliveryNoticesFn   func(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error)
-	clearDeliveryNoticesFn  func(ctx context.Context, characterID string) error
-	sleepFn                 func(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error)
-	getSleepStatusFn        func(ctx context.Context, characterID string) (home.SleepStatus, error)
-	wakeFn                  func(ctx context.Context, characterID string) (home.WakeResult, error)
+	getHomeViewFn          func(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error)
+	buildHouseFn           func(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
+	checkHouseFn           func(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
+	listTownHousesFn       func(ctx context.Context, townID string) ([]home.HomeCheckResult, error)
+	sendLetterFn           func(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error)
+	readLetterFn           func(ctx context.Context, letterID, recipientID string) error
+	listInboxFn            func(ctx context.Context, recipientID string, limit, offset int) (home.LetterListResult, error)
+	listInboxByCursorFn    func(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
+	listOutboxFn           func(ctx context.Context, senderID string, limit, offset int) (home.LetterListResult, error)
+	listOutboxByCursorFn   func(ctx context.Context, senderID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
+	getUnreadLetterCountFn func(ctx context.Context, recipientID string) (int, error)
+	getSleepStatusFn       func(ctx context.Context, characterID string) (home.SleepStatus, error)
+	deleteLetterFn         func(ctx context.Context, letterID, characterID string) error
 }
 
 func (m *mockHomeService) GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error) {
@@ -57,21 +44,9 @@ func (m *mockHomeService) GetHomeView(ctx context.Context, homeCharacterID, visi
 	return home.HomeView{
 		Owner: home.HomeOwner{ID: homeCharacterID, Name: "Hero"},
 		Home: home.CharacterHome{
-			CharacterID:   homeCharacterID,
-			CompanionName: "ペット",
+			CharacterID: homeCharacterID,
 		},
 		IsOwner: (homeCharacterID == visitorCharacterID),
-	}, nil
-}
-
-func (m *mockHomeService) UpdateHome(ctx context.Context, characterID, companionName string) (home.CharacterHome, error) {
-	if m.updateHomeFn != nil {
-		return m.updateHomeFn(ctx, characterID, companionName)
-	}
-	return home.CharacterHome{
-		CharacterID:   characterID,
-		CompanionName: companionName,
-		UpdatedAt:     time.Now().UTC(),
 	}, nil
 }
 
@@ -96,25 +71,14 @@ func (m *mockHomeService) ListTownHouses(ctx context.Context, townID string) ([]
 	return []home.HomeCheckResult{{CharacterID: "char-1", TownID: townID}}, nil
 }
 
-func (m *mockHomeService) SetCharacterColor(ctx context.Context, characterID, color string) error {
-	if m.setCharacterColorFn != nil {
-		return m.setCharacterColorFn(ctx, characterID, color)
-	}
-	return nil
+func (m *mockHomeService) SetCharacterColor(context.Context, string, string) error { return nil }
+
+func (m *mockHomeService) ListHomeItems(context.Context, string) ([]home.HomeUsableItem, error) {
+	return nil, nil
 }
 
-func (m *mockHomeService) ListHomeItems(ctx context.Context, characterID string) ([]home.HomeUsableItem, error) {
-	if m.listHomeItemsFn != nil {
-		return m.listHomeItemsFn(ctx, characterID)
-	}
-	return []home.HomeUsableItem{{InstanceID: "inst-1", Name: "薬草"}}, nil
-}
-
-func (m *mockHomeService) UseHomeItem(ctx context.Context, characterID, instanceID, source string) (*home.UseHomeItemResult, error) {
-	if m.useHomeItemFn != nil {
-		return m.useHomeItemFn(ctx, characterID, instanceID, source)
-	}
-	return &home.UseHomeItemResult{Action: "consumed", Message: "薬草を使いました", Consumed: true}, nil
+func (m *mockHomeService) UseHomeItem(context.Context, string, string, string) (*home.UseHomeItemResult, error) {
+	return &home.UseHomeItemResult{}, nil
 }
 
 func (m *mockHomeService) SendLetter(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error) {
@@ -183,72 +147,31 @@ func (m *mockHomeService) DeleteLetter(ctx context.Context, letterID, characterI
 	return nil
 }
 
-func (m *mockHomeService) TeachCompanionPhrase(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error) {
-	if m.teachCompanionPhraseFn != nil {
-		return m.teachCompanionPhraseFn(ctx, characterID, phrase)
-	}
-	return home.CompanionPhrase{
-		ID:          "phrase-1",
-		CharacterID: characterID,
-		Phrase:      phrase,
-		CreatedAt:   time.Now().UTC(),
-	}, nil
+func (m *mockHomeService) TeachCompanionPhrase(context.Context, string, string) (home.CompanionPhrase, error) {
+	return home.CompanionPhrase{}, nil
 }
 
-func (m *mockHomeService) ForgetCompanionPhrase(ctx context.Context, phraseID, characterID string) error {
-	if m.forgetCompanionPhraseFn != nil {
-		return m.forgetCompanionPhraseFn(ctx, phraseID, characterID)
-	}
-	return nil
+func (m *mockHomeService) ForgetCompanionPhrase(context.Context, string, string) error { return nil }
+
+func (m *mockHomeService) TalkToCompanion(context.Context, string) (home.CompanionTalkResult, error) {
+	return home.CompanionTalkResult{}, nil
 }
 
-func (m *mockHomeService) ListCompanionPhrases(ctx context.Context, characterID string) ([]home.CompanionPhrase, error) {
-	if m.listCompanionPhrasesFn != nil {
-		return m.listCompanionPhrasesFn(ctx, characterID)
-	}
-	return []home.CompanionPhrase{{ID: "phrase-1", CharacterID: characterID, Phrase: "Hi"}}, nil
-}
+func (m *mockHomeService) ClearDeliveryNotices(context.Context, string, []string) error { return nil }
 
-func (m *mockHomeService) TalkToCompanion(ctx context.Context, characterID string) (home.CompanionTalkResult, error) {
-	if m.talkToCompanionFn != nil {
-		return m.talkToCompanionFn(ctx, characterID)
-	}
-	return home.CompanionTalkResult{PetName: "ポチ", Phrase: "クエッ！"}, nil
-}
-
-func (m *mockHomeService) ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error) {
-	if m.listDeliveryNoticesFn != nil {
-		return m.listDeliveryNoticesFn(ctx, characterID, unclearedOnly)
-	}
-	return []home.DeliveryNotice{{ID: "notice-1", CharacterID: characterID, Message: "Gold received"}}, nil
-}
-
-func (m *mockHomeService) ClearDeliveryNotices(ctx context.Context, characterID string) error {
-	if m.clearDeliveryNoticesFn != nil {
-		return m.clearDeliveryNoticesFn(ctx, characterID)
-	}
-	return nil
-}
-
-func (m *mockHomeService) Sleep(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error) {
-	if m.sleepFn != nil {
-		return m.sleepFn(ctx, characterID, targetHomeID)
-	}
-	return home.SleepResult{Sleeping: true, DurationSeconds: 60, RemainingSeconds: 60, HomeCharacterID: targetHomeID, Message: "おやすみ"}, nil
+func (m *mockHomeService) Sleep(context.Context, string, string) (home.SleepResult, error) {
+	return home.SleepResult{}, nil
 }
 
 func (m *mockHomeService) GetSleepStatus(ctx context.Context, characterID string) (home.SleepStatus, error) {
 	if m.getSleepStatusFn != nil {
 		return m.getSleepStatusFn(ctx, characterID)
 	}
-	return home.SleepStatus{Sleeping: false, RemainingSeconds: 0, CanWake: false, Message: "起きています"}, nil
+	return home.SleepStatus{}, nil
 }
 
-func (m *mockHomeService) Wake(ctx context.Context, characterID string) (home.WakeResult, error) {
-	if m.wakeFn != nil {
-		return m.wakeFn(ctx, characterID)
-	}
-	return home.WakeResult{Success: true, Message: "目覚めました", Character: corecharacter.Character{ID: characterID, Name: "Hero"}}, nil
+func (m *mockHomeService) Wake(context.Context, string) (home.WakeResult, error) {
+	return home.WakeResult{}, nil
 }
 
 func TestHomeEndpoints(t *testing.T) {
@@ -305,69 +228,6 @@ func TestHomeEndpoints(t *testing.T) {
 		}
 		if res.Owner.ID != "char-1" {
 			t.Errorf("unexpected home owner: %+v", res.Owner)
-		}
-	})
-
-	t.Run("POST /homes/{id}/settings - success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{
-			"companion_name": "スライム",
-			"color":          "#123456",
-		})
-		req := httptest.NewRequest(http.MethodPost, "/homes/char-1/settings", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("GET /homes/{id}/companion/talk - 422 ErrNoPetsAtHome", func(t *testing.T) {
-		noPetsSvc := &mockHomeService{
-			talkToCompanionFn: func(ctx context.Context, characterID string) (home.CompanionTalkResult, error) {
-				return home.CompanionTalkResult{}, home.ErrNoPetsAtHome
-			},
-		}
-		noPetsHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(noPetsSvc))
-		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/talk", nil)
-		rec := httptest.NewRecorder()
-		noPetsHandler.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusUnprocessableEntity {
-			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("GET /homes/{id}/companion/talk - 404 ErrCharacterNotFound", func(t *testing.T) {
-		notFoundSvc := &mockHomeService{
-			talkToCompanionFn: func(ctx context.Context, characterID string) (home.CompanionTalkResult, error) {
-				return home.CompanionTalkResult{}, home.ErrCharacterNotFound
-			},
-		}
-		notFoundHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(notFoundSvc))
-		req := httptest.NewRequest(http.MethodGet, "/homes/non-existent/companion/talk", nil)
-		rec := httptest.NewRecorder()
-		notFoundHandler.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 Not Found, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /homes/{id}/settings - forbidden other player", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{
-			"companion_name": "スライム",
-		})
-		req := httptest.NewRequest(http.MethodPost, "/homes/char-2/settings", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 Forbidden, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 
@@ -486,163 +346,6 @@ func TestHomeEndpoints(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/letters/letter-1/read", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-session")
 		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("expected 204 No Content, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("GET /homes/{id}/companion/phrases - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/phrases", nil)
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var res []home.CompanionPhrase
-		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if len(res) != 1 || res[0].Phrase != "Hi" {
-			t.Errorf("unexpected phrases: %+v", res)
-		}
-	})
-
-	t.Run("GET /homes/{id}/companion/phrases - empty array when no phrases", func(t *testing.T) {
-		emptyPhrasesSvc := &mockHomeService{
-			listCompanionPhrasesFn: func(ctx context.Context, characterID string) ([]home.CompanionPhrase, error) {
-				return nil, nil
-			},
-		}
-		emptyHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(emptyPhrasesSvc))
-		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/phrases", nil)
-		rec := httptest.NewRecorder()
-		emptyHandler.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-		bodyStr := strings.TrimSpace(rec.Body.String())
-		if bodyStr != "[]" {
-			t.Errorf("expected empty JSON array '[]', got %q", bodyStr)
-		}
-	})
-
-	t.Run("GET /homes/{id}/companion/phrases - 404 ErrCharacterNotFound", func(t *testing.T) {
-		notFoundSvc := &mockHomeService{
-			listCompanionPhrasesFn: func(ctx context.Context, characterID string) ([]home.CompanionPhrase, error) {
-				return nil, home.ErrCharacterNotFound
-			},
-		}
-		notFoundHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(notFoundSvc))
-		req := httptest.NewRequest(http.MethodGet, "/homes/non-existent/companion/phrases", nil)
-		rec := httptest.NewRecorder()
-		notFoundHandler.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 Not Found, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /homes/{id}/companion/phrases - success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{
-			"phrase": "おかえり！",
-		})
-		req := httptest.NewRequest(http.MethodPost, "/homes/char-1/companion/phrases", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("expected 201 Created, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /homes/{id}/companion/phrases - invalid text rejection returns 422", func(t *testing.T) {
-		invalidSvc := &mockHomeService{
-			teachCompanionPhraseFn: func(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error) {
-				return home.CompanionPhrase{}, validation.ErrControlCharacter
-			},
-		}
-		h, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(invalidSvc))
-		body, _ := json.Marshal(map[string]string{
-			"phrase": "Hello\nWorld",
-		})
-		req := httptest.NewRequest(http.MethodPost, "/homes/char-1/companion/phrases", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		h.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusUnprocessableEntity {
-			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("GET /homes/{id}/companion/talk - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/talk", nil)
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var resp struct {
-			PetName  string `json:"pet_name"`
-			Dialogue string `json:"dialogue"`
-		}
-		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if resp.PetName != "ポチ" || resp.Dialogue != "クエッ！" {
-			t.Errorf("unexpected response: %+v", resp)
-		}
-	})
-
-	t.Run("GET /homes/{id}/companion/talk - default dialogue fallback", func(t *testing.T) {
-		fallbackSvc := &mockHomeService{
-			talkToCompanionFn: func(ctx context.Context, characterID string) (home.CompanionTalkResult, error) {
-				return home.CompanionTalkResult{PetName: "ポチ", Phrase: ""}, nil
-			},
-		}
-		fallbackHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(fallbackSvc))
-		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/talk", nil)
-		rec := httptest.NewRecorder()
-		fallbackHandler.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var resp struct {
-			PetName  string `json:"pet_name"`
-			Dialogue string `json:"dialogue"`
-		}
-		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if resp.Dialogue != "クエッ？（何か言いたそうにこちらを見つめている）" {
-			t.Errorf("expected fallback dialogue, got %q", resp.Dialogue)
-		}
-	})
-
-	t.Run("GET /homes/{id}/notices - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/notices", nil)
-		req.Header.Set("Authorization", "Bearer valid-session")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /homes/{id}/notices/clear - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/homes/char-1/notices/clear", nil)
-		req.Header.Set("Authorization", "Bearer valid-session")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
