@@ -14210,11 +14210,22 @@
               "array",
               "null"
             ]
+          },
+          "decorations": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/GuildDecoration"
+            },
+            "description": "Guild-owned display records, excluded from player membership and authority."
           }
         },
         "required": [
           "guild",
-          "members"
+          "members",
+          "decorations"
         ],
         "type": "object",
         "additionalProperties": false
@@ -17836,6 +17847,35 @@
           "parent",
           "notices",
           "page"
+        ]
+      },
+      "GuildDecoration": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "gold_medal"
+            ]
+          },
+          "icon": {
+            "type": "string",
+            "description": "Appearance identity reference; resolve via the asset catalog or its placeholder, not a legacy image URL."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "icon",
+          "created_at"
         ]
       }
     },

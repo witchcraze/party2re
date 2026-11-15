@@ -130,6 +130,14 @@ overrides. Missing art uses an available placeholder rather than a broken URL.
   Preserve the `job-08-m` and `job-08-f` fragments or provide resolver aliases.
 - Follow-up: The image catalog/manifest/resolver (#140, #654, #729).
 
+### IMG-007: Guild — Gold Medal Decoration
+
+- File: `assets/images/placeholders/guild/gold-medal.svg` (64×64, transparent SVG).
+- Used by: Guild decoration from the gorgeous Heaven wish.
+- Provenance: Original geometric drawing authored in this repository; no legacy artwork reused.
+- License status: Project-created development placeholder, not final artwork.
+- Replacement contract: Stored `Icon` values are appearance identities; preserve this reference or supply an alias when the manifest/resolver (#654, #729) replaces the placeholder.
+
 ## Integration and final assets
 
 These files are original development placeholders, not completed production

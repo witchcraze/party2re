@@ -289,6 +289,29 @@
           "note": "Update guild wallpaper and last_active_at."
         }
       ]
+    },
+    {
+      "method": "MakeGorgeous",
+      "source_ref": "internal/guild/decoration.go#Service.MakeGorgeous",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT FOR UPDATE"
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE"
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Revalidate active membership under the guild lock; background and decoration writes join the admitted wish transaction."
+        }
+      ]
     }
   ]
 }

@@ -146,7 +146,7 @@ func (s *Service) GetWishes(ctx context.Context, characterID string, realm Realm
 	case RealmHeaven:
 		inGuild := false
 		if s.guilds != nil {
-			_, _, err := s.guilds.GetGuildByCharacter(ctx, characterID)
+			_, _, err := s.guilds.GetByCharacter(ctx, characterID)
 			if err != nil && !errors.Is(err, guild.ErrCharacterNotInGuild) {
 				return nil, fmt.Errorf("read guild: %w", err)
 			}

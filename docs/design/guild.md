@@ -27,6 +27,10 @@ Any active member may call out; letters go to every roster row in order, **inclu
 
 Dissolution happens on removal from a roster of at most one row, on manual disbandment and after 20 days of inactivity; the last active member leaving does not by itself dissolve a guild with pending rows. Dissolution news (`ギルド『<GuildName>』が解散しました`) appears only if the dissolution commits: removal writes it in the same transaction, and manual or inactivity disbandment publishes it after commit.
 
+## Decorations
+
+**Reconstruction decision:** decorative NPC entries belong to guild display storage, separately from the player roster, because legacy `log_member.cgi` mixes players and display objects. Decorations confer no affiliation or authority and do not participate in player capacity or leadership succession.
+
 ## Inactivity and point decay
 
 - Guilds with no member activity for 20 days (`auto_delete_guild_day = 20`) are disbanded; inactivity is rechecked under the guild lock before deletion.

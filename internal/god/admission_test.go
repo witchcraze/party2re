@@ -162,8 +162,12 @@ type failingGuilds struct{ mockGuildRepo }
 
 var errGuildRead = errors.New("guild read failed")
 
-func (failingGuilds) GetGuildByCharacter(context.Context, string) (guild.Guild, guild.Member, error) {
+func (failingGuilds) GetByCharacter(context.Context, string) (guild.Guild, guild.Member, error) {
 	return guild.Guild{}, guild.Member{}, errGuildRead
+}
+
+func (failingGuilds) MakeGorgeous(context.Context, string) error {
+	return errGuildRead
 }
 
 func TestGod_GuildReadFailureIsNotNoGuild(t *testing.T) {

@@ -16,6 +16,7 @@ type GuildReader interface {
 	IsColorTaken(ctx context.Context, color string, excludeGuildID string) (bool, error)
 	ListInactiveGuilds(ctx context.Context, cutoff time.Time, limit int) ([]Guild, error)
 	LockCharacterForUpdate(ctx context.Context, characterID string) error
+	ListDecorations(ctx context.Context, guildID string) ([]Decoration, error)
 }
 
 // GuildMemberWriter defines mutation operations on guild memberships and role titles.
@@ -51,6 +52,7 @@ type GuildWriter interface {
 	GuildMemberWriter
 	GuildStateWriter
 	GuildPointsWriter
+	AddDecoration(ctx context.Context, guildID string, decoration Decoration) error
 }
 
 // Repository composes read and write operations for guild persistence.
