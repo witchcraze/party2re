@@ -675,6 +675,10 @@ func (r *scenarioZeroRollReader) Read(p []byte) (int, error) {
 }
 
 func TestGameplayScenario_TakarakujiDraw(t *testing.T) {
+	origReader := rand.Reader
+	rand.Reader = &scenarioZeroRollReader{orig: origReader}
+	defer func() { rand.Reader = origReader }()
+
 	a := newIsolatedScenarioApp(t)
 	ctx := context.Background()
 
@@ -683,10 +687,6 @@ func TestGameplayScenario_TakarakujiDraw(t *testing.T) {
 	if _, err := a.db.ExecContext(ctx, `UPDATE characters SET money = ? WHERE id = ?`, lottery.TakarakujiCostGold, hero); err != nil {
 		t.Fatal(err)
 	}
-
-	origReader := rand.Reader
-	rand.Reader = &scenarioZeroRollReader{orig: origReader}
-	defer func() { rand.Reader = origReader }()
 
 	town := a.context(token, hero)
 	takScene := a.enter(token, hero, town, "takarakuji")

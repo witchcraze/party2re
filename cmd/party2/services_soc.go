@@ -230,7 +230,9 @@ func (s *socServices) registerWorkerHandlers(activityService *activity.Service, 
 			s.worker.RegisterHandler(chapel.ActionTypeChapelReset, chapel.NewResetHandler(chapelService, chapel.WithScheduler(s.sched)))
 		}
 		if lotteryService != nil {
-			s.worker.RegisterHandler(lottery.ActionTypeTakarakujiDraw, lottery.NewDrawHandler(lotteryService, lottery.WithScheduler(s.sched)))
+			draw := lottery.NewDrawHandler(lotteryService, lottery.WithScheduler(s.sched))
+			s.worker.RegisterHandler(lottery.ActionTypeTakarakujiDraw, draw)
+			s.worker.RegisterReconciler(lottery.ActionTypeTakarakujiDraw, draw.Reconcile)
 		}
 		if s.guild != nil {
 			s.worker.RegisterHandler(guild.ActionTypeGuildInactivityCheck, guild.NewInactivityCheckHandler(s.guild, guild.WithScheduler(s.sched)))

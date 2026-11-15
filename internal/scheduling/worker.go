@@ -11,23 +11,30 @@ import (
 )
 
 type Worker struct {
-	repo     core_scheduling.ScheduledActionRepository
-	handlers map[string]ActionHandler
-	interval time.Duration
-	logger   logging.Logger
+	repo        core_scheduling.ScheduledActionRepository
+	handlers    map[string]ActionHandler
+	reconcilers map[string]func(context.Context) error
+	interval    time.Duration
+	logger      logging.Logger
 }
 
 func NewWorker(repo core_scheduling.ScheduledActionRepository, interval time.Duration, logger logging.Logger) *Worker {
 	return &Worker{
-		repo:     repo,
-		handlers: make(map[string]ActionHandler),
-		interval: interval,
-		logger:   logger,
+		repo:        repo,
+		handlers:    make(map[string]ActionHandler),
+		reconcilers: make(map[string]func(context.Context) error),
+		interval:    interval,
+		logger:      logger,
 	}
 }
 
 func (w *Worker) RegisterHandler(actionType string, handler ActionHandler) {
 	w.handlers[actionType] = handler
+}
+
+// RegisterReconciler opts a feature into periodic repair of its own reservations.
+func (w *Worker) RegisterReconciler(actionType string, reconcile func(context.Context) error) {
+	w.reconcilers[actionType] = reconcile
 }
 
 func (w *Worker) Run(ctx context.Context) {
@@ -50,6 +57,11 @@ func (w *Worker) Run(ctx context.Context) {
 const defaultFetchLimit = 50
 
 func (w *Worker) processActions(ctx context.Context) {
+	for actionType, reconcile := range w.reconcilers {
+		if err := reconcile(ctx); err != nil {
+			w.logger.Error(ctx, "Failed to reconcile scheduled actions", err, slog.String("type", actionType))
+		}
+	}
 	// Fetch actions due up to now
 	actions, err := w.repo.FetchDue(ctx, time.Now(), defaultFetchLimit)
 	if err != nil {
