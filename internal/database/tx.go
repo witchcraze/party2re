@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type txKey struct{}
@@ -25,7 +27,7 @@ func RunInTx(ctx context.Context, db *sql.DB, fn func(ctx context.Context) error
 // A changed character-deletion row set restarts only the root callback, up to three attempts.
 func RunInTxWithOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
 	if TxFromContext(ctx) != nil {
-		return fn(ctx)
+		return economy.WithRollbackScope(ctx, fn)
 	}
 
 	if opts == nil {
@@ -43,7 +45,20 @@ func RunInTxWithOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn
 }
 
 func runInNewTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
-	tx, err := db.BeginTx(ctx, opts)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	tx, err := conn.BeginTx(context.WithoutCancel(ctx), opts)
 	if err != nil {
 		return err
 	}
@@ -55,10 +70,14 @@ func runInNewTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ct
 	}()
 
 	txCtx := context.WithValue(ctx, txKey{}, tx)
-	if err := fn(txCtx); err != nil {
+	if err := economy.WithRollbackScope(txCtx, func(scopedCtx context.Context) error {
+		if err := fn(scopedCtx); err != nil {
+			return err
+		}
+		return scopedCtx.Err()
+	}); err != nil {
 		return err
 	}
-
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -66,11 +85,42 @@ func runInNewTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ct
 	return nil
 }
 
+type txExecutor struct {
+	tx *sql.Tx
+}
+
+func (e txExecutor) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if economy.HasRollbackHooks(ctx) {
+		ctx = context.WithoutCancel(ctx)
+	}
+	return e.tx.ExecContext(ctx, query, args...)
+}
+
+func (e txExecutor) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	if ctx.Err() == nil && economy.HasRollbackHooks(ctx) {
+		ctx = context.WithoutCancel(ctx)
+	}
+	return e.tx.QueryRowContext(ctx, query, args...)
+}
+
+func (e txExecutor) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if economy.HasRollbackHooks(ctx) {
+		ctx = context.WithoutCancel(ctx)
+	}
+	return e.tx.QueryContext(ctx, query, args...)
+}
+
 // ExecutorFromContext returns the transaction from the context if it exists,
 // otherwise it returns the provided fallback executor (usually *sql.DB).
 func ExecutorFromContext(ctx context.Context, fallback sqlContextExecutor) sqlContextExecutor {
 	if tx := TxFromContext(ctx); tx != nil {
-		return tx
+		return txExecutor{tx: tx}
 	}
 	return fallback
 }

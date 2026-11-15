@@ -29,7 +29,7 @@ func (s *Service) SetPersonalityRecorder(r PersonalityRecorder) { s.personality 
 
 // applyPersonalityBook changes the login message, profile personality (with its
 // news) and appearance inside the item transaction.
-func (s *Service) applyPersonalityBook(ctx context.Context, char *corecharacter.Character, look *appearanceUndo) (string, error) {
+func (s *Service) applyPersonalityBook(ctx context.Context, char *corecharacter.Character) (string, error) {
 	if s.personality == nil {
 		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, personalityBookName)
 	}
@@ -41,7 +41,7 @@ func (s *Service) applyPersonalityBook(ctx context.Context, char *corecharacter.
 	}
 	// shortcut: placeholder job-08 art until production job images exist (IMG-006).
 	icon := "assets/images/placeholders/job/appearance.svg#job-08-" + appearanceGender(char.Gender)
-	if err := s.wearAppearance(ctx, char.ID, personalityBookItemNo, personalityBookName, icon, look); err != nil {
+	if err := s.wearAppearance(ctx, char.ID, personalityBookItemNo, personalityBookName, icon); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%sはエッチな本をじっくり読んだ………%sの性格がムッツリスケベになった！", char.Name, char.Name), nil

@@ -60,7 +60,7 @@ func (s *Service) randomSource() corecharacter.RandomSource {
 }
 
 // UseHomeItem inspects or consumes an item from either the character's inventory or depot.
-func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, source string) (_ *UseHomeItemResult, retErr error) {
+func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, source string) (*UseHomeItemResult, error) {
 	char, err := s.charReader.FindByID(ctx, characterID)
 	if err != nil {
 		return nil, err
@@ -163,14 +163,6 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		}
 	}
 
-	// Appearance is written inside the transaction; undo it unless the use committed.
-	var look appearanceUndo
-	committed := false
-	defer func() {
-		if !committed {
-			retErr = errors.Join(retErr, look.rollback(ctx))
-		}
-	}()
 	if s.runner != nil {
 		var resMsg string
 		var kept bool
@@ -191,7 +183,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 						return ErrItemNotFound
 					}
 				}
-				msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def, &look)
+				msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
 				resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
 				if err != nil {
 					return err
@@ -218,7 +210,6 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 				}
 				return nil, err
 			}
-			committed = true
 			return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 		}
 
@@ -242,7 +233,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			}
 			// Apply effect before consuming so that a no-effect sentinel aborts
 			// the transaction without touching the depot.
-			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def, &look)
+			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
 			resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
 			if err != nil {
 				return err
@@ -279,14 +270,35 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			}
 			return nil, err
 		}
-		committed = true
 		return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 	}
 
 	// Fallback path for unit test mocks without runner configured.
 	// Decide consumption before the effect mutates the character.
 	kept := homeItemKept(def, char)
-	msg, err := s.applyConsumableEffect(ctx, &char, def, &look)
+	var msg string
+	err = economy.WithRollbackScope(ctx, func(scopedCtx context.Context) error {
+		var applyErr error
+		msg, applyErr = s.applyConsumableEffect(scopedCtx, &char, def)
+		if applyErr != nil {
+			return applyErr
+		}
+		if !kept && source == "inventory" && s.invMgr != nil {
+			if _, err := s.invMgr.Consume(scopedCtx, characterID, instanceID, 1); err != nil {
+				return err
+			}
+		} else if !kept && source == "depot" && s.depotMgr != nil {
+			if err := s.depotMgr.ConsumeOne(scopedCtx, characterID, instanceID); err != nil {
+				return err
+			}
+		}
+		if s.charUpdater != nil {
+			if err := s.charUpdater.Update(scopedCtx, char); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		if errors.Is(err, errNoEffect) {
 			// Item had no effect; skip consumption and return early.
@@ -302,24 +314,6 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		return nil, err
 	}
 
-	if !kept && source == "inventory" && s.invMgr != nil {
-		if _, err := s.invMgr.Consume(ctx, characterID, instanceID, 1); err != nil {
-			return nil, err
-		}
-	} else if !kept && source == "depot" && s.depotMgr != nil {
-		if err := s.depotMgr.ConsumeOne(ctx, characterID, instanceID); err != nil {
-			return nil, err
-		}
-	}
-
-	// Update character state
-	if s.charUpdater != nil {
-		if err := s.charUpdater.Update(ctx, char); err != nil {
-			return nil, err
-		}
-	}
-
-	committed = true
 	return committedHomeItemResult(def, msg, kept, &char), nil
 }
 
@@ -340,14 +334,14 @@ func committedHomeItemResult(def item.Definition, msg string, kept bool, char *c
 	}
 }
 
-func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition, look *appearanceUndo) (string, error) {
+func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error) {
 	if isRecipeScrollItem(def.Name) {
 		return s.applyRecipeScrollConsumable(ctx, char, def.Name)
 	}
 	if bag, ok := rewardBags[def.Name]; ok {
 		return s.applyRewardBag(ctx, char, bag)
 	}
-	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name, look); ok {
+	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name); ok {
 		return costumeMsg, err
 	}
 
@@ -452,7 +446,7 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 	case veteranRewardName:
 		return s.applyVeteranReward(char)
 	case personalityBookName:
-		return s.applyPersonalityBook(ctx, char, look)
+		return s.applyPersonalityBook(ctx, char)
 	default:
 		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}

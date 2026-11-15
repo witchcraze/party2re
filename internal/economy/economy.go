@@ -115,18 +115,23 @@ func NewService(characters CharacterRepository, inventories InventoryRepository,
 type txContextKey struct{}
 
 func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if ctx.Value(txContextKey{}) != nil {
-		return fn(ctx)
+		return WithRollbackScope(ctx, fn)
 	}
 	if s.txProvider != nil {
 		return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
-			if txCtx.Value(txContextKey{}) != nil {
-				return fn(txCtx)
-			}
-			return fn(context.WithValue(txCtx, txContextKey{}, struct{}{}))
+			return WithRollbackScope(txCtx, func(scopedCtx context.Context) error {
+				if scopedCtx.Value(txContextKey{}) != nil {
+					return fn(scopedCtx)
+				}
+				return fn(context.WithValue(scopedCtx, txContextKey{}, struct{}{}))
+			})
 		})
 	}
-	return fn(context.WithValue(ctx, txContextKey{}, struct{}{}))
+	return WithRollbackScope(context.WithValue(ctx, txContextKey{}, struct{}{}), fn)
 }
 
 func (s *Service) findCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {

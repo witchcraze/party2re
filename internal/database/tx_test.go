@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -264,6 +266,215 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 		}
 		if nestCount != 2 {
 			t.Fatalf("expected nestCount 2, got %d", nestCount)
+		}
+	})
+}
+
+func TestRunInTx_ContextCancelAndCommitErrorRollbackScopeContract(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	chars, err := NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	players, err := NewPlayerRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newChar := func(t *testing.T, suffix string) corecharacter.Character {
+		t.Helper()
+		c, err := CreateTestCharacterWithFunds(context.Background(), db, suffix, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := chars.Delete(context.Background(), c.ID); err != nil {
+				t.Error(err)
+			}
+			if err := players.Delete(context.Background(), c.PlayerID); err != nil {
+				t.Error(err)
+			}
+		})
+		return c
+	}
+
+	t.Run("context cancel keeps row lock held through OnRollback and rolls back SQL", func(t *testing.T) {
+		for _, tc := range []struct {
+			name            string
+			execAfterCancel bool
+		}{
+			{"cancel before subsequent SQL", true},
+			{"cancel right before commit", false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				c := newChar(t, "TxCancel")
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				var hookCalls atomic.Int32
+				var hookSawLock atomic.Bool
+				var hookCtxErr error
+
+				err := RunInTx(ctx, db, func(txCtx context.Context) error {
+					if _, err := ExecutorFromContext(txCtx, db).ExecContext(txCtx,
+						`SELECT id FROM characters WHERE id = ? FOR UPDATE`, c.ID); err != nil {
+						return err
+					}
+					economy.OnRollback(txCtx, func(rbCtx context.Context) error {
+						hookCalls.Add(1)
+						hookCtxErr = rbCtx.Err()
+						_, lockErr := db.ExecContext(context.Background(),
+							`SELECT id FROM characters WHERE id = ? FOR UPDATE NOWAIT`, c.ID)
+						hookSawLock.Store(lockErr != nil)
+						return nil
+					})
+					if _, err := ExecutorFromContext(txCtx, db).ExecContext(txCtx,
+						`UPDATE characters SET money = money - 10 WHERE id = ?`, c.ID); err != nil {
+						return err
+					}
+					cancel()
+					if tc.execAfterCancel {
+						_, err := ExecutorFromContext(txCtx, db).ExecContext(txCtx,
+							`UPDATE characters SET money = money - 10 WHERE id = ?`, c.ID)
+						return err
+					}
+					return nil
+				})
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("want context.Canceled, got %v", err)
+				}
+				if hookCalls.Load() != 1 || !hookSawLock.Load() || hookCtxErr != nil {
+					t.Fatalf("hookCalls=%d hookSawLock=%v hookCtxErr=%v; want 1, true, nil",
+						hookCalls.Load(), hookSawLock.Load(), hookCtxErr)
+				}
+				reloaded, err := chars.FindByID(context.Background(), c.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if reloaded.Money != c.Money {
+					t.Fatalf("SQL not rolled back: money=%d want=%d", reloaded.Money, c.Money)
+				}
+			})
+		}
+	})
+
+	t.Run("commit error skips OnRollback and propagates directly", func(t *testing.T) {
+		c := newChar(t, "TxCommitErr")
+		var hookCalls atomic.Int32
+
+		err := RunInTx(context.Background(), db, func(txCtx context.Context) error {
+			if _, err := ExecutorFromContext(txCtx, db).ExecContext(txCtx,
+				`SELECT id FROM characters WHERE id = ? FOR UPDATE`, c.ID); err != nil {
+				return err
+			}
+			economy.OnRollback(txCtx, func(context.Context) error {
+				hookCalls.Add(1)
+				return nil
+			})
+			if _, err := ExecutorFromContext(txCtx, db).ExecContext(txCtx,
+				`UPDATE characters SET money = money - 25 WHERE id = ?`, c.ID); err != nil {
+				return err
+			}
+			// Simulate SQL committing right as runInNewTx reaches tx.Commit(), causing tx.Commit() to return an error.
+			return TxFromContext(txCtx).Commit()
+		})
+		if !errors.Is(err, sql.ErrTxDone) {
+			t.Fatalf("want sql.ErrTxDone on commit error, got %v", err)
+		}
+		if hookCalls.Load() != 0 {
+			t.Fatalf("OnRollback ran %d times on commit error; want 0", hookCalls.Load())
+		}
+		reloaded, err := chars.FindByID(context.Background(), c.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reloaded.Money != c.Money-25 {
+			t.Fatalf("committed SQL state unexpected: money=%d want=%d", reloaded.Money, c.Money-25)
+		}
+	})
+
+	t.Run("pool wait respects context cancel while active tx holds row lock through OnRollback and returns conn", func(t *testing.T) {
+		limitedDB, err := OpenFromEnvironment()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = limitedDB.Close() })
+		limitedDB.SetMaxOpenConns(1)
+
+		c := newChar(t, "TxPoolWait")
+		ctx1, cancel1 := context.WithCancel(context.Background())
+		defer cancel1()
+
+		tx1Locked := make(chan struct{})
+		releaseTx1 := make(chan struct{})
+		var hookCalls atomic.Int32
+		var hookSawLock atomic.Bool
+		err1Ch := make(chan error, 1)
+
+		go func() {
+			err1Ch <- RunInTx(ctx1, limitedDB, func(txCtx context.Context) error {
+				if _, err := ExecutorFromContext(txCtx, limitedDB).ExecContext(txCtx,
+					`SELECT id FROM characters WHERE id = ? FOR UPDATE`, c.ID); err != nil {
+					close(tx1Locked)
+					return err
+				}
+				economy.OnRollback(txCtx, func(rbCtx context.Context) error {
+					hookCalls.Add(1)
+					if rbCtx.Err() != nil {
+						return rbCtx.Err()
+					}
+					_, lockErr := db.ExecContext(context.Background(),
+						`SELECT id FROM characters WHERE id = ? FOR UPDATE NOWAIT`, c.ID)
+					hookSawLock.Store(lockErr != nil)
+					return nil
+				})
+				close(tx1Locked)
+				<-releaseTx1
+				return nil
+			})
+		}()
+
+		<-tx1Locked
+
+		// Exhausted MaxOpenConns(1) pool: second caller waiting for a connection must unblock when its ctx expires.
+		waitCtx, cancelWait := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancelWait()
+		waitErr := RunInTx(waitCtx, limitedDB, func(txCtx context.Context) error {
+			return errors.New("waiter callback should not run while pool is exhausted")
+		})
+		if !errors.Is(waitErr, context.DeadlineExceeded) {
+			close(releaseTx1)
+			<-err1Ch
+			t.Fatalf("want context.DeadlineExceeded during pool wait, got %v", waitErr)
+		}
+
+		// Canceling tx1 after releasing it must still keep the SQL row lock through OnRollback.
+		cancel1()
+		close(releaseTx1)
+		if err1 := <-err1Ch; !errors.Is(err1, context.Canceled) {
+			t.Fatalf("want tx1 error context.Canceled, got %v", err1)
+		}
+		if hookCalls.Load() != 1 || !hookSawLock.Load() {
+			t.Fatalf("hookCalls=%d hookSawLock=%v; want 1, true", hookCalls.Load(), hookSawLock.Load())
+		}
+
+		// Confirm the single pooled connection was returned after rollback and close.
+		followCtx, cancelFollow := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancelFollow()
+		if err := RunInTx(followCtx, limitedDB, func(txCtx context.Context) error {
+			_, err := ExecutorFromContext(txCtx, limitedDB).ExecContext(txCtx, `SELECT 1`)
+			return err
+		}); err != nil {
+			t.Fatalf("single-conn pool failed after rollback (conn leak?): %v", err)
 		}
 	})
 }

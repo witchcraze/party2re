@@ -135,14 +135,23 @@ func (r *ValkeyCostumeRepository) ClearActiveCostumeWithClaim(ctx context.Contex
 }
 
 // RestoreActiveCostume atomically restores previous (or deletes) only while the
-// stored value is exactly applied, so a newer save or a reset is never undone.
+// stored value matches applied (or is absent when applied carries only CharacterID,
+// undoing a reset), so a newer save or reset is never undone.
 func (r *ValkeyCostumeRepository) RestoreActiveCostume(ctx context.Context, applied ActiveCostume, previous *ActiveCostume) (bool, error) {
 	if r.client == nil {
 		return false, nil
 	}
-	appliedRaw, err := json.Marshal(applied)
-	if err != nil {
-		return false, err
+	characterID := strings.TrimSpace(applied.CharacterID)
+	if characterID == "" {
+		return false, errors.New("character id cannot be empty")
+	}
+	var appliedRaw string
+	if applied != (ActiveCostume{CharacterID: applied.CharacterID}) {
+		raw, err := json.Marshal(applied)
+		if err != nil {
+			return false, err
+		}
+		appliedRaw = string(raw)
 	}
 	previousRaw, ttl := "", int64(0)
 	if previous != nil {
@@ -155,8 +164,8 @@ func (r *ValkeyCostumeRepository) RestoreActiveCostume(ctx context.Context, appl
 			previousRaw = string(raw)
 		}
 	}
-	res := restoreIfCurrentScript.Exec(ctx, r.client, []string{valkeyCostumeKeyPrefix + applied.CharacterID},
-		[]string{string(appliedRaw), previousRaw, strconv.FormatInt(ttl, 10)})
+	res := restoreIfCurrentScript.Exec(ctx, r.client, []string{valkeyCostumeKeyPrefix + characterID},
+		[]string{appliedRaw, previousRaw, strconv.FormatInt(ttl, 10)})
 	if err := res.Error(); err != nil {
 		return false, err
 	}

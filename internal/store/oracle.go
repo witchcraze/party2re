@@ -13,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 var (
@@ -327,7 +328,22 @@ func (s *Service) ResetCostume(ctx context.Context, characterID string) error {
 	if s.costumeRepo == nil {
 		return nil
 	}
-	return s.costumeRepo.ClearActiveCostume(ctx, characterID)
+	previous, err := s.costumeRepo.GetActiveCostume(ctx, characterID)
+	if err != nil {
+		return fmt.Errorf("failed to read previous active costume: %w", err)
+	}
+	if err := s.costumeRepo.ClearActiveCostume(ctx, characterID); err != nil {
+		return fmt.Errorf("failed to clear active costume: %w", err)
+	}
+	if previous != nil {
+		prevCopy := *previous
+		appliedEmpty := ActiveCostume{CharacterID: characterID}
+		economy.OnRollback(ctx, func(rbCtx context.Context) error {
+			_, err := s.costumeRepo.RestoreActiveCostume(rbCtx, appliedEmpty, &prevCopy)
+			return err
+		})
+	}
+	return nil
 }
 
 // ResetCostumeWithClaim implements CostumeClaimResetter, resetting costume on rest with atomic claim verification.
