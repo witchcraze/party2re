@@ -190,17 +190,22 @@ func calculateCrystalMultiplier(elapsed time.Duration) float64 {
 	return 1.0
 }
 
-func calculateTotalCrystals(stage BossStage, allies []corecharacter.Character, elapsed time.Duration) int {
-	base := 0
-	if stage.ID == "king99" {
-		base = len(allies) * 20
-	} else {
-		for _, b := range stage.Bosses {
-			base += b.GetCrystal
-		}
+func calculateTotalCrystals(stage BossStage, allies []corecharacter.Character, unsealedAt *time.Time, now time.Time) int {
+	mult := 1.0
+	if unsealedAt != nil {
+		elapsed := max(now.Sub(*unsealedAt), 0)
+		mult = calculateCrystalMultiplier(elapsed)
 	}
-	mult := calculateCrystalMultiplier(elapsed)
-	return int(float64(base) * mult)
+
+	if stage.ID == "king99" {
+		perClone := int(float64(20) * mult)
+		return len(allies) * perClone
+	}
+	total := 0
+	for _, b := range stage.Bosses {
+		total += int(float64(b.GetCrystal) * mult)
+	}
+	return total
 }
 
 func getDayOfWeekOrb(t time.Time, rng corecharacter.RandomSource) string {

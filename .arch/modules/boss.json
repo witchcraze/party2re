@@ -15,6 +15,12 @@
       "target_module": "party",
       "relation_type": "contract_interface",
       "source_ref": "internal/boss/boss.go#PartyRepository"
+    },
+    {
+      "name": "unseal_clock",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/boss/boss.go#UnsealClockReader"
     }
   ],
   "transaction_boundaries": [

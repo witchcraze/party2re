@@ -73,6 +73,10 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
+	bossRepo, err := database.NewBossRepository(db)
+	if err != nil {
+		return nil, err
+	}
 
 	battleAdapter := battle.NewService(
 		battle.WithCharacterRepository(normalWriter(core)),
@@ -88,6 +92,7 @@ func newCmbtServices(
 		battle.WithRandomSource(productionRandomSource{}),
 		battle.WithSkillProvider(core.skillCatalog),
 		battle.WithBattleDefinitions(coreskill.ProductionBattleDefinitions()),
+		battle.WithUnsealClockWriter(bossRepo),
 	)
 
 	var pvpRoomRepo pvp.RoomRepository
@@ -144,10 +149,6 @@ func newCmbtServices(
 		return nil, err
 	}
 
-	bossRepo, err := database.NewBossRepository(db)
-	if err != nil {
-		return nil, err
-	}
 	bossService, err := boss.NewService(bossRepo, core.charRepo, battleEngine)
 	if err != nil {
 		return nil, err

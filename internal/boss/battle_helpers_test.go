@@ -267,26 +267,57 @@ func TestClearTimeCrystalMultipliers(t *testing.T) {
 }
 
 func TestCalculateTotalCrystals(t *testing.T) {
-	// Normal stage: king1 has 7 bosses with total GetCrystal = 40 + 5*6 = 70
+	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	atElapsed := func(d time.Duration) *time.Time {
+		ts := now.Add(-d)
+		return &ts
+	}
+
+	// Normal stage: king1 has 6 stones (GetCrystal=5 each) + 1 boss (GetCrystal=40), sum=70.
+	// Note the 1.5x bracket truncates per enemy: 6*int(5*1.5) + int(40*1.5) = 6*7 + 60 = 102 (NOT int(70*1.5)=105).
 	stage := stageByID("king1")
 	allies := []corecharacter.Character{{ID: "a"}}
 
-	cFast := calculateTotalCrystals(stage, allies, 5*time.Minute) // 70 * 3.0 = 210
-	if cFast != 210 {
-		t.Errorf("expected 210 crystals for <=10m clear, got %d", cFast)
+	tests := []struct {
+		name       string
+		unsealedAt *time.Time
+		expected   int
+	}{
+		{"not yet unsealed", nil, 70},
+		{"600s boundary (3x)", atElapsed(600 * time.Second), 210},
+		{"601s boundary (2x)", atElapsed(601 * time.Second), 140},
+		{"1800s boundary (2x)", atElapsed(1800 * time.Second), 140},
+		{"1801s boundary (1.5x per enemy)", atElapsed(1801 * time.Second), 102},
+		{"3600s boundary (1.5x per enemy)", atElapsed(3600 * time.Second), 102},
+		{"3601s boundary (1x)", atElapsed(3601 * time.Second), 70},
+	}
+	for _, tt := range tests {
+		t.Run("king1/"+tt.name, func(t *testing.T) {
+			if got := calculateTotalCrystals(stage, allies, tt.unsealedAt, now); got != tt.expected {
+				t.Errorf("got %d crystals, want %d", got, tt.expected)
+			}
+		})
 	}
 
-	cSlow := calculateTotalCrystals(stage, allies, 70*time.Minute) // 70 * 1.0 = 70
-	if cSlow != 70 {
-		t.Errorf("expected 70 crystals for >60m clear, got %d", cSlow)
-	}
-
-	// King 99: base is len(allies) * 20
+	// King 99: 20 crystals per defeated clone, multiplier applied per clone before summing
 	stage99 := stageByID("king99")
 	allies3 := []corecharacter.Character{{ID: "a"}, {ID: "b"}, {ID: "c"}}
-	c99Fast := calculateTotalCrystals(stage99, allies3, 5*time.Minute) // 3 * 20 * 3.0 = 180
-	if c99Fast != 180 {
-		t.Errorf("expected 180 crystals for king99 3 allies <=10m clear, got %d", c99Fast)
+	king99Tests := []struct {
+		name       string
+		unsealedAt *time.Time
+		expected   int
+	}{
+		{"not yet unsealed", nil, 60},
+		{"600s (3x)", atElapsed(600 * time.Second), 180},
+		{"1801s (1.5x)", atElapsed(1801 * time.Second), 90},
+		{"3601s (1x)", atElapsed(3601 * time.Second), 60},
+	}
+	for _, tt := range king99Tests {
+		t.Run("king99/"+tt.name, func(t *testing.T) {
+			if got := calculateTotalCrystals(stage99, allies3, tt.unsealedAt, now); got != tt.expected {
+				t.Errorf("got %d crystals, want %d", got, tt.expected)
+			}
+		})
 	}
 }
 

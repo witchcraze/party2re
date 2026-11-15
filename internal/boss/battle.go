@@ -210,12 +210,16 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 			candidates = append(candidates, orb)
 			rewardItemID = s.pickTreasure(candidates)
 
-			// 10b. Elapsed time crystal reward with clear-time multiplier
-			elapsed := time.Since(p.CreatedAt)
-			if elapsed < 0 {
-				elapsed = 0
+			// 10b. Elapsed time crystal reward with clear-time multiplier from persisted unseal clock
+			var unsealedAt *time.Time
+			if s.unsealClock != nil {
+				var err error
+				unsealedAt, err = s.unsealClock.GetUnsealedAt(txCtx)
+				if err != nil {
+					return fmt.Errorf("failed to read unseal clock: %w", err)
+				}
 			}
-			rewardCrystals = calculateTotalCrystals(stage, orderedChars, elapsed)
+			rewardCrystals = calculateTotalCrystals(stage, orderedChars, unsealedAt, s.now())
 
 			heroNames := make([]string, 0, len(members))
 			for _, m := range members {

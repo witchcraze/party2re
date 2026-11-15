@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -978,4 +979,120 @@ func TestApplyPostBattleResult_MaoCount_Unseal(t *testing.T) {
 	if respDefeat.UpdatedCharacters["char-unseal-1"].MaoCount != 2 {
 		t.Errorf("expected char 1 MaoCount = 2 after earned unseal on defeat, got %d", respDefeat.UpdatedCharacters["char-unseal-1"].MaoCount)
 	}
+}
+
+type mockUnsealClockWriter struct {
+	calls []time.Time
+	err   error
+}
+
+func (m *mockUnsealClockWriter) SaveUnsealedAt(_ context.Context, unsealedAt time.Time) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.calls = append(m.calls, unsealedAt)
+	return nil
+}
+
+func TestApplyPostBattleResult_UnsealClock(t *testing.T) {
+	ctx := context.Background()
+	t1 := time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)
+	t2 := t1.Add(30 * time.Minute)
+	now := t1
+
+	t.Run("solo TransactionRunner", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		equipRepo := newMockEquipRepo()
+		clock := &mockUnsealClockWriter{}
+		_ = charRepo.Update(ctx, corecharacter.Character{ID: "solo-1", Name: "Solo", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}})
+		inv, _ := coreinventory.New("solo-1")
+		_ = invRepo.Save(ctx, inv)
+
+		txRunner, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(&mockTxProvider{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc := battle.NewService(
+			battle.WithCharacterRepository(charRepo),
+			battle.WithInventoryRepository(invRepo),
+			battle.WithEquipmentRepository(equipRepo),
+			battle.WithTransactionRunner(txRunner),
+			battle.WithUnsealClockWriter(clock),
+			battle.WithNowFunc(func() time.Time { return now }),
+		)
+
+		// Non-unseal leaves clock untouched
+		if _, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs: []string{"solo-1"},
+			BattleResult: corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, RemainingHP: map[string]int{"solo-1": 100}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if len(clock.calls) != 0 {
+			t.Fatalf("expected 0 clock writes for non-unseal, got %d", len(clock.calls))
+		}
+
+		// Unseal writes timestamp
+		resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs:    []string{"solo-1"},
+			BattleResult:    corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, RemainingHP: map[string]int{"solo-1": 100}},
+			UnsealDemonKing: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.UpdatedCharacters["solo-1"].MaoCount != 1 {
+			t.Fatalf("expected MaoCount=1, got %d", resp.UpdatedCharacters["solo-1"].MaoCount)
+		}
+		if len(clock.calls) != 1 || !clock.calls[0].Equal(t1) {
+			t.Fatalf("clock calls = %v, want [%v]", clock.calls, t1)
+		}
+
+		// Clock save error aborts settlement
+		clock.err = errors.New("clock write failed")
+		if _, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs:    []string{"solo-1"},
+			BattleResult:    corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, RemainingHP: map[string]int{"solo-1": 100}},
+			UnsealDemonKing: true,
+		}); err == nil {
+			t.Fatal("expected error when SaveUnsealedAt fails")
+		}
+	})
+
+	t.Run("multi-character TransactionProvider", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		equipRepo := newMockEquipRepo()
+		clock := &mockUnsealClockWriter{}
+		now = t2
+		for _, id := range []string{"p-1", "p-2"} {
+			_ = charRepo.Update(ctx, corecharacter.Character{ID: id, Name: id, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}})
+			inv, _ := coreinventory.New(id)
+			_ = invRepo.Save(ctx, inv)
+		}
+		svc := battle.NewService(
+			battle.WithCharacterRepository(charRepo),
+			battle.WithInventoryRepository(invRepo),
+			battle.WithEquipmentRepository(equipRepo),
+			battle.WithTransactionProvider(&mockTxProvider{}),
+			battle.WithUnsealClockWriter(clock),
+			battle.WithNowFunc(func() time.Time { return now }),
+		)
+
+		resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs:    []string{"p-1", "p-2"},
+			BattleResult:    corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, RemainingHP: map[string]int{"p-1": 100, "p-2": 100}},
+			UnsealDemonKing: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.UpdatedCharacters["p-1"].MaoCount != 1 || resp.UpdatedCharacters["p-2"].MaoCount != 1 {
+			t.Fatalf("expected MaoCount=1 for all members, got %+v", resp.UpdatedCharacters)
+		}
+		if len(clock.calls) != 1 || !clock.calls[0].Equal(t2) {
+			t.Fatalf("expected single clock write [%v], got %v", t2, clock.calls)
+		}
+	})
 }
