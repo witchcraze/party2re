@@ -48,7 +48,17 @@ func runInNewTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(ct
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	tx, err := db.BeginTx(context.WithoutCancel(ctx), opts)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	tx, err := conn.BeginTx(context.WithoutCancel(ctx), opts)
 	if err != nil {
 		return err
 	}

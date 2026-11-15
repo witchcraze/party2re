@@ -401,4 +401,80 @@ func TestRunInTx_ContextCancelAndCommitErrorRollbackScopeContract(t *testing.T) 
 			t.Fatalf("committed SQL state unexpected: money=%d want=%d", reloaded.Money, c.Money-25)
 		}
 	})
+
+	t.Run("pool wait respects context cancel while active tx holds row lock through OnRollback and returns conn", func(t *testing.T) {
+		limitedDB, err := OpenFromEnvironment()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = limitedDB.Close() })
+		limitedDB.SetMaxOpenConns(1)
+
+		c := newChar(t, "TxPoolWait")
+		ctx1, cancel1 := context.WithCancel(context.Background())
+		defer cancel1()
+
+		tx1Locked := make(chan struct{})
+		releaseTx1 := make(chan struct{})
+		var hookCalls atomic.Int32
+		var hookSawLock atomic.Bool
+		err1Ch := make(chan error, 1)
+
+		go func() {
+			err1Ch <- RunInTx(ctx1, limitedDB, func(txCtx context.Context) error {
+				if _, err := ExecutorFromContext(txCtx, limitedDB).ExecContext(txCtx,
+					`SELECT id FROM characters WHERE id = ? FOR UPDATE`, c.ID); err != nil {
+					close(tx1Locked)
+					return err
+				}
+				economy.OnRollback(txCtx, func(rbCtx context.Context) error {
+					hookCalls.Add(1)
+					if rbCtx.Err() != nil {
+						return rbCtx.Err()
+					}
+					_, lockErr := db.ExecContext(context.Background(),
+						`SELECT id FROM characters WHERE id = ? FOR UPDATE NOWAIT`, c.ID)
+					hookSawLock.Store(lockErr != nil)
+					return nil
+				})
+				close(tx1Locked)
+				<-releaseTx1
+				return nil
+			})
+		}()
+
+		<-tx1Locked
+
+		// Exhausted MaxOpenConns(1) pool: second caller waiting for a connection must unblock when its ctx expires.
+		waitCtx, cancelWait := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancelWait()
+		waitErr := RunInTx(waitCtx, limitedDB, func(txCtx context.Context) error {
+			return errors.New("waiter callback should not run while pool is exhausted")
+		})
+		if !errors.Is(waitErr, context.DeadlineExceeded) {
+			close(releaseTx1)
+			<-err1Ch
+			t.Fatalf("want context.DeadlineExceeded during pool wait, got %v", waitErr)
+		}
+
+		// Canceling tx1 after releasing it must still keep the SQL row lock through OnRollback.
+		cancel1()
+		close(releaseTx1)
+		if err1 := <-err1Ch; !errors.Is(err1, context.Canceled) {
+			t.Fatalf("want tx1 error context.Canceled, got %v", err1)
+		}
+		if hookCalls.Load() != 1 || !hookSawLock.Load() {
+			t.Fatalf("hookCalls=%d hookSawLock=%v; want 1, true", hookCalls.Load(), hookSawLock.Load())
+		}
+
+		// Confirm the single pooled connection was returned after rollback and close.
+		followCtx, cancelFollow := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancelFollow()
+		if err := RunInTx(followCtx, limitedDB, func(txCtx context.Context) error {
+			_, err := ExecutorFromContext(txCtx, limitedDB).ExecContext(txCtx, `SELECT 1`)
+			return err
+		}); err != nil {
+			t.Fatalf("single-conn pool failed after rollback (conn leak?): %v", err)
+		}
+	})
 }
