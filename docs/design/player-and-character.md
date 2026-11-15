@@ -250,5 +250,5 @@ Legacy `player.cgi` publicly shows a character's milestone log (`write_memory`) 
 - **Decision:** an entry is written in the transaction of the action it records, so a failed write fails the action. Legacy file writes had no such tie.
 - **Decision:** entries older than the newest 999 (`$max_log`) are kept but not shown.
 - **Decision:** unlike `GET /characters/{id}/profile`, the trajectory exposes past level, job and gender, as legacy does.
-- **Pitfall:** legacy captures the entry's header where `write_memory` is called, not after the action completes. A job change or mastery therefore shows the departing job and its level, and leaving or disbanding a guild still shows the guild. **Known difference:** a job-memory recall shows the job before the recall; legacy shows the recalled job.
+- **Pitfall:** legacy captures the entry's header where `write_memory` is called, not after the action completes. A job change or mastery therefore shows the departing job and its level, and leaving or disbanding a guild still shows the guild. Recall and manual restoration instead capture the resulting job and SP (`job_change.cgi:422–431,503–512,535–543`).
 - **Pitfall:** guild renaming (`＠かいめい`) and its entry are commented out of the dispatch table (`join_guild.cgi:55,63`), so no rename entry exists.
