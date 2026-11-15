@@ -27,20 +27,19 @@ func (r *HomeRepository) GetHome(ctx context.Context, characterID string) (home.
 	var expiresAt sql.NullTime
 
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT character_id, town_id, house_style, expires_at, companion_name, bgimg, updated_at
+		SELECT character_id, town_id, house_style, expires_at, bgimg, updated_at
 		FROM character_homes
 		WHERE character_id = ?
-	`, characterID).Scan(&h.CharacterID, &h.TownID, &h.HouseStyle, &expiresAt, &h.CompanionName, &h.BgImg, &h.UpdatedAt)
+	`, characterID).Scan(&h.CharacterID, &h.TownID, &h.HouseStyle, &expiresAt, &h.BgImg, &h.UpdatedAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return home.CharacterHome{
-			CharacterID:   characterID,
-			TownID:        "",
-			HouseStyle:    "",
-			ExpiresAt:     nil,
-			CompanionName: home.DefaultCompanionName,
-			BgImg:         "",
-			UpdatedAt:     time.Now().UTC(),
+			CharacterID: characterID,
+			TownID:      "",
+			HouseStyle:  "",
+			ExpiresAt:   nil,
+			BgImg:       "",
+			UpdatedAt:   time.Now().UTC(),
 		}, nil
 	}
 	if err != nil {
@@ -64,45 +63,16 @@ func (r *HomeRepository) SaveHome(ctx context.Context, h home.CharacterHome) err
 
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_homes (
-			character_id, town_id, house_style, expires_at, companion_name, bgimg, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+			character_id, town_id, house_style, expires_at, bgimg, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			town_id = VALUES(town_id),
 			house_style = VALUES(house_style),
 			expires_at = VALUES(expires_at),
-			companion_name = VALUES(companion_name),
 			bgimg = VALUES(bgimg),
 			updated_at = VALUES(updated_at)
-	`, h.CharacterID, h.TownID, h.HouseStyle, expiresAt, h.CompanionName, h.BgImg, h.UpdatedAt.UTC())
+	`, h.CharacterID, h.TownID, h.HouseStyle, expiresAt, h.BgImg, h.UpdatedAt.UTC())
 	return err
-}
-
-// UpdateCompanionName sets only the companion name of a character's home, so estate fields are never overwritten.
-// The write and the read-back share one transaction, so a failed read rolls the write back instead of reporting a saved change as failed.
-func (r *HomeRepository) UpdateCompanionName(ctx context.Context, characterID, companionName string, updatedAt time.Time) (home.CharacterHome, error) {
-	var stored home.CharacterHome
-	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		if _, err := ExecutorFromContext(txCtx, r.db).ExecContext(txCtx, `
-			INSERT INTO character_homes (
-				character_id, town_id, house_style, expires_at, companion_name, bgimg, updated_at
-			) VALUES (?, '', '', NULL, ?, '', ?)
-			ON DUPLICATE KEY UPDATE
-				companion_name = VALUES(companion_name),
-				updated_at = VALUES(updated_at)
-		`, characterID, companionName, updatedAt.UTC()); err != nil {
-			return err
-		}
-		h, err := r.GetHome(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-		stored = h
-		return nil
-	})
-	if err != nil {
-		return home.CharacterHome{}, err
-	}
-	return stored, nil
 }
 
 // LockTownHouseCapacityForUpdate takes the town's house capacity row lock, creating the row if absent.
@@ -131,10 +101,10 @@ func (r *HomeRepository) FindActiveHomeByCharacterID(ctx context.Context, charac
 	var expiresAt sql.NullTime
 
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT character_id, town_id, house_style, expires_at, companion_name, bgimg, updated_at
+		SELECT character_id, town_id, house_style, expires_at, bgimg, updated_at
 		FROM character_homes
 		WHERE character_id = ? AND expires_at > ?
-	`, characterID, now.UTC()).Scan(&h.CharacterID, &h.TownID, &h.HouseStyle, &expiresAt, &h.CompanionName, &h.BgImg, &h.UpdatedAt)
+	`, characterID, now.UTC()).Scan(&h.CharacterID, &h.TownID, &h.HouseStyle, &expiresAt, &h.BgImg, &h.UpdatedAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return home.CharacterHome{}, home.ErrHouseNotFound
@@ -156,11 +126,11 @@ func (r *HomeRepository) FindActiveHomeByCharacterName(ctx context.Context, char
 	var charID, charName string
 
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT c.id, c.name, h.town_id, h.house_style, h.expires_at, h.companion_name, h.bgimg, h.updated_at
+		SELECT c.id, c.name, h.town_id, h.house_style, h.expires_at, h.bgimg, h.updated_at
 		FROM characters c
 		JOIN character_homes h ON c.id = h.character_id
 		WHERE c.name = ? AND h.expires_at > ?
-	`, characterName, now.UTC()).Scan(&charID, &charName, &h.TownID, &h.HouseStyle, &expiresAt, &h.CompanionName, &h.BgImg, &h.UpdatedAt)
+	`, characterName, now.UTC()).Scan(&charID, &charName, &h.TownID, &h.HouseStyle, &expiresAt, &h.BgImg, &h.UpdatedAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return home.CharacterHome{}, corecharacter.Character{}, home.ErrHouseNotFound
@@ -179,7 +149,7 @@ func (r *HomeRepository) FindActiveHomeByCharacterName(ctx context.Context, char
 // ListActiveTownHouses returns all active houses in the specified town sorted by expiration ascending.
 func (r *HomeRepository) ListActiveTownHouses(ctx context.Context, townID string, now time.Time) ([]home.CharacterHome, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT character_id, town_id, house_style, expires_at, companion_name, bgimg, updated_at
+		SELECT character_id, town_id, house_style, expires_at, bgimg, updated_at
 		FROM character_homes
 		WHERE town_id = ? AND expires_at > ?
 		ORDER BY expires_at ASC
@@ -193,7 +163,7 @@ func (r *HomeRepository) ListActiveTownHouses(ctx context.Context, townID string
 	for rows.Next() {
 		var h home.CharacterHome
 		var expiresAt sql.NullTime
-		if err := rows.Scan(&h.CharacterID, &h.TownID, &h.HouseStyle, &expiresAt, &h.CompanionName, &h.BgImg, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.CharacterID, &h.TownID, &h.HouseStyle, &expiresAt, &h.BgImg, &h.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if expiresAt.Valid {

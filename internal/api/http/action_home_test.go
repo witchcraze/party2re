@@ -166,7 +166,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 	if status != 200 || f.executions != 1 || f.updates != 1 {
 		t.Fatalf("sleep status=%d calls=%d: %s", status, f.executions, got)
 	}
-	var result sleepResponse
+	var result home.SleepResult
 	if err := json.Unmarshal(got["result"], &result); err != nil {
 		t.Fatal(err)
 	}

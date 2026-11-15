@@ -102,9 +102,8 @@ func TestDepotSortGatewayInputsErrorsAndDiscovery(t *testing.T) {
 	if action.RequiredParams == nil || len(action.RequiredParams) != 0 || len(action.ParamsTemplate) != 0 || !strings.Contains(string(action.ParamsSchema), `"additionalProperties":false`) {
 		t.Fatalf("sort schema/template: %+v", action)
 	}
-	resolved := NewActionURLResolver().Resolve("hero", "depot_sort", "", "")
-	if resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" || f.executions != 0 || store.writes != 0 {
-		t.Fatalf("sort resolver/GET: %+v", resolved)
+	if f.executions != 0 || store.writes != 0 {
+		t.Fatal("sort GET mutated")
 	}
 	f.dep.Items = nil
 	status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"depot_sort"}`, nil)

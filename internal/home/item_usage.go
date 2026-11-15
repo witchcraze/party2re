@@ -77,22 +77,20 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	if source == "inventory" && s.invMgr != nil {
 		inv, err := s.invMgr.FindByCharacterID(ctx, characterID)
-		if err == nil {
-			itemInst, found = inv.Find(instanceID)
-			if found {
-				definitionID = itemInst.DefinitionID
-			}
+		if err != nil {
+			return nil, err
 		}
+		itemInst, found = inv.Find(instanceID)
+		definitionID = itemInst.DefinitionID
 	} else if source == "depot" && s.depotMgr != nil {
 		dp, err := s.depotMgr.FindByCharacterID(ctx, characterID)
-		if err == nil {
-			for _, it := range dp.Items {
-				if it.ID == instanceID {
-					itemInst = it
-					definitionID = it.DefinitionID
-					found = true
-					break
-				}
+		if err != nil {
+			return nil, err
+		}
+		for _, it := range dp.Items {
+			if it.ID == instanceID {
+				itemInst, definitionID, found = it, it.DefinitionID, true
+				break
 			}
 		}
 	}

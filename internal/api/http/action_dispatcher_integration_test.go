@@ -16,6 +16,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -196,7 +197,7 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			assertLoopRecovery(t, f.getContext(), false, false)
 
 			got = f.command("home_sleep", "", http.StatusOK)
-			var sleep sleepResponse
+			var sleep home.SleepResult
 			if err := json.Unmarshal(got["result"], &sleep); err != nil {
 				t.Fatal(err)
 			}

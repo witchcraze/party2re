@@ -289,13 +289,12 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 		now := time.Now().UTC().Truncate(time.Second)
 		initialExpires := now.Add(72 * time.Hour)
 		initialHome := home.CharacterHome{
-			CharacterID:   char.ID,
-			TownID:        "town2",
-			HouseStyle:    "005",
-			ExpiresAt:     &initialExpires,
-			CompanionName: "Saved companion",
-			BgImg:         "saved-wallpaper",
-			UpdatedAt:     now,
+			CharacterID: char.ID,
+			TownID:      "town2",
+			HouseStyle:  "005",
+			ExpiresAt:   &initialExpires,
+			BgImg:       "saved-wallpaper",
+			UpdatedAt:   now,
 		}
 		if err := realHomeRepo.SaveHome(ctx, initialHome); err != nil {
 			t.Fatalf("failed to seed initial home: %v", err)
@@ -337,9 +336,6 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 		}
 		if reloadedHome.ExpiresAt == nil || !reloadedHome.ExpiresAt.Equal(initialExpires) {
 			t.Errorf("expected expires_at %v, got %v", initialExpires, reloadedHome.ExpiresAt)
-		}
-		if reloadedHome.CompanionName != "Saved companion" {
-			t.Errorf("expected companion_name 'Saved companion', got %q", reloadedHome.CompanionName)
 		}
 		if reloadedHome.BgImg != "saved-wallpaper" {
 			t.Errorf("expected bgimg 'saved-wallpaper', got %q", reloadedHome.BgImg)
@@ -384,13 +380,12 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 		now := time.Now().UTC().Truncate(time.Second)
 		expiredAt := now.Add(-1 * time.Hour)
 		expiredHome := home.CharacterHome{
-			CharacterID:   char.ID,
-			TownID:        "town2",
-			HouseStyle:    "005",
-			ExpiresAt:     &expiredAt,
-			CompanionName: "CustomPet",
-			BgImg:         "custom-bg",
-			UpdatedAt:     now.Add(-24 * time.Hour),
+			CharacterID: char.ID,
+			TownID:      "town2",
+			HouseStyle:  "005",
+			ExpiresAt:   &expiredAt,
+			BgImg:       "custom-bg",
+			UpdatedAt:   now.Add(-24 * time.Hour),
 		}
 		if err := realHomeRepo.SaveHome(ctx, expiredHome); err != nil {
 			t.Fatalf("failed to seed expired home: %v", err)
@@ -427,9 +422,6 @@ func TestPostReviewSQLHouseGPMutationFailure(t *testing.T) {
 		}
 		if reloadedHome.TownID != "town1" || reloadedHome.HouseStyle != "001" {
 			t.Errorf("expected town1/001, got %s/%s", reloadedHome.TownID, reloadedHome.HouseStyle)
-		}
-		if reloadedHome.CompanionName != "CustomPet" {
-			t.Errorf("expected companion_name 'CustomPet' to be preserved, got %q", reloadedHome.CompanionName)
 		}
 		if reloadedHome.BgImg != "custom-bg" {
 			t.Errorf("expected bgimg 'custom-bg' to be preserved, got %q", reloadedHome.BgImg)

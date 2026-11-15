@@ -227,6 +227,11 @@ type scenarioContext struct {
 			Page struct {
 				Next json.RawMessage `json:"next"`
 			} `json:"page"`
+			View struct {
+				Private *struct {
+					Notices []home.DeliveryNotice `json:"notices"`
+				} `json:"private"`
+			} `json:"view"`
 			Deposit   int64 `json:"deposit"`
 			SaleOffer *struct {
 				ItemDefinitionID string `json:"item_definition_id"`
@@ -334,6 +339,20 @@ func (a *scenarioApp) elapseActionWait(characterID string) {
 	if err := timer.NewService(a.valkey).ReleaseLock(context.Background(), timer.CategoryActionWait, characterID); err != nil {
 		a.t.Fatal(err)
 	}
+}
+
+// homeNotices observes the owner's uncleared delivery notices in their Home,
+// then returns through town to returnTo so the caller keeps its scene.
+func (a *scenarioApp) homeNotices(token, characterID string, town scenarioContext, returnTo string) []home.DeliveryNotice {
+	a.t.Helper()
+	a.elapseActionWait(characterID)
+	observed := a.enter(token, characterID, town, "home")
+	if observed.Scene.Data.View.Private == nil {
+		a.t.Fatalf("own home lacks private facts: %+v", observed.Scene)
+	}
+	back := a.command(token, characterID, "scene_back", map[string]any{}, http.StatusOK).Context
+	a.enter(token, characterID, back, returnTo)
+	return observed.Scene.Data.View.Private.Notices
 }
 
 // enter follows a destination the current observation offers, paging hubs when needed.
@@ -734,8 +753,7 @@ func TestGameplayScenario_TakarakujiDraw(t *testing.T) {
 	if beforeWorker.Scene.Data.RoundID != roundID || !beforeWorker.Scene.Data.Purchased || beforeWorker.Scene.Data.SoldCount != 1 {
 		t.Fatalf("GET before worker unexpectedly settled or lost purchase: %+v", beforeWorker.Scene.Data)
 	}
-	var noticesBefore []home.DeliveryNotice
-	a.call(token, http.MethodGet, "/homes/"+hero+"/notices?uncleared_only=true", "", http.StatusOK, &noticesBefore)
+	noticesBefore := a.homeNotices(token, hero, town, "takarakuji")
 	if len(noticesBefore) != 0 {
 		t.Fatalf("expected 0 delivery notices before worker runs, got %+v", noticesBefore)
 	}
@@ -788,8 +806,7 @@ func TestGameplayScenario_TakarakujiDraw(t *testing.T) {
 		depotCtx.Scene.Data.Items[0].DefinitionID != wantPrizeID || depotCtx.Scene.Data.Items[0].Quantity != 1 {
 		t.Fatalf("expected 1 prize %s in depot, got %+v", wantPrizeID, depotCtx.Scene.Data)
 	}
-	var noticesAfter []home.DeliveryNotice
-	a.call(token, http.MethodGet, "/homes/"+hero+"/notices?uncleared_only=true", "", http.StatusOK, &noticesAfter)
+	noticesAfter := a.homeNotices(token, hero, town, "depot")
 	if len(noticesAfter) != 1 || noticesAfter[0].NoticeType != depot.NoticeItemTransfer || noticesAfter[0].Message != wantNoticeMsg {
 		t.Fatalf("expected 1 notice %q, got %+v", wantNoticeMsg, noticesAfter)
 	}
@@ -802,8 +819,7 @@ func TestGameplayScenario_TakarakujiDraw(t *testing.T) {
 		depotAgain.Scene.Data.Items[0].DefinitionID != wantPrizeID || depotAgain.Scene.Data.Items[0].Quantity != 1 {
 		t.Fatalf("re-processing worker action duplicated depot prize: %+v", depotAgain.Scene.Data)
 	}
-	var noticesAgain []home.DeliveryNotice
-	a.call(token, http.MethodGet, "/homes/"+hero+"/notices?uncleared_only=true", "", http.StatusOK, &noticesAgain)
+	noticesAgain := a.homeNotices(token, hero, town, "depot")
 	if len(noticesAgain) != 1 {
 		t.Fatalf("re-processing worker action duplicated delivery notice: %+v", noticesAgain)
 	}

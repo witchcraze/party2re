@@ -153,6 +153,13 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		// Note: Wake requires an expired sleep timer and pending recovery; rescue is also exempt.
 		RequiredGates: GateLocationCheck,
 	},
+	// Own-home living actions (home.cgi:73-105); the Home scene admits them only in the actor's own home.
+	{ID: "home_color", Label: "からー", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"color"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "home_item_use", Label: "つかう", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "home_phrase_teach", Label: "ことばをおしえる", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"phrase"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "home_phrase_forget", Label: "ことばをわすれさせる", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"phrase_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	// Legacy shows delivery notices while rendering the own home and clears them then (home.cgi:49-68).
+	{ID: "home_notice_ack", Label: "おしらせを確認する", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"notice_ids"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitReload},
 	// Shared NPC interaction in the current facility (docs/architecture/place-log.md).
 	{ID: "npc_talk", Label: "はなす", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "npc_inspect", Label: "しらべる", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitPrivate},

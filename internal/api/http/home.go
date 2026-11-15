@@ -16,7 +16,6 @@ import (
 // HomeEstateService defines estate, item, and color operations.
 type HomeEstateService interface {
 	GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error)
-	UpdateHome(ctx context.Context, characterID, companionName string) (home.CharacterHome, error)
 	BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
 	CheckHouse(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
 	ListTownHouses(ctx context.Context, townID string) ([]home.HomeCheckResult, error)
@@ -41,14 +40,12 @@ type HomeMailboxService interface {
 type HomeCompanionService interface {
 	TeachCompanionPhrase(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error)
 	ForgetCompanionPhrase(ctx context.Context, phraseID, characterID string) error
-	ListCompanionPhrases(ctx context.Context, characterID string) ([]home.CompanionPhrase, error)
 	TalkToCompanion(ctx context.Context, characterID string) (home.CompanionTalkResult, error)
 }
 
 // HomeLivingService defines resting, waking, and delivery notice operations.
 type HomeLivingService interface {
-	ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error)
-	ClearDeliveryNotices(ctx context.Context, characterID string) error
+	ClearDeliveryNotices(ctx context.Context, characterID string, noticeIDs []string) error
 	Sleep(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error)
 	GetSleepStatus(ctx context.Context, characterID string) (home.SleepStatus, error)
 	Wake(ctx context.Context, characterID string) (home.WakeResult, error)
@@ -62,27 +59,11 @@ type HomeService interface {
 	HomeLivingService
 }
 
-type updateHomeRequest struct {
-	CompanionName string `json:"companion_name"`
-	Color         string `json:"color,omitempty"`
-}
-
 type sendLetterRequest struct {
 	SenderCharacterID    string `json:"sender_character_id"`
 	RecipientCharacterID string `json:"recipient_character_id"`
 	Content              string `json:"content"`
 	Color                string `json:"color"`
-}
-
-type teachPhraseRequest struct {
-	Phrase string `json:"phrase"`
-}
-
-const defaultCompanionDialogue = "クエッ？（何か言いたそうにこちらを見つめている）"
-
-type companionTalkResponse struct {
-	PetName  string `json:"pet_name,omitempty"`
-	Dialogue string `json:"dialogue"`
 }
 
 type readLetterRequest struct {
@@ -121,33 +102,6 @@ func (h *Handler) handleGetHomeView(w http.ResponseWriter, r *http.Request) {
 	}
 	h.withAuthenticatedCharacter(w, r, visitorCharID, func(player coreplayer.Player, visitor corecharacter.Character) {
 		read(visitor.ID, player.ID)
-	})
-}
-
-func (h *Handler) handleUpdateHomeSettings(w http.ResponseWriter, r *http.Request) {
-	if h.homes == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req updateHomeRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		updated, err := h.homes.UpdateHome(r.Context(), char.ID, req.CompanionName)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		if req.Color != "" {
-			_ = h.homes.SetCharacterColor(r.Context(), char.ID, req.Color)
-		}
-
-		writeJSON(w, http.StatusOK, updated)
 	})
 }
 
@@ -331,151 +285,6 @@ func (h *Handler) handleDeleteLetter(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusForbidden, err)
 				return
 			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-	})
-}
-
-func (h *Handler) handleTeachCompanionPhrase(w http.ResponseWriter, r *http.Request) {
-	if h.homes == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req teachPhraseRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		phrase, err := h.homes.TeachCompanionPhrase(r.Context(), char.ID, req.Phrase)
-		if err != nil {
-			if errors.Is(err, home.ErrEmptyPhrase) || errors.Is(err, home.ErrPhraseTooLong) ||
-				errors.Is(err, home.ErrNoPetsAtHome) ||
-				isTextValidationError(err) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusCreated, phrase)
-	})
-}
-
-func (h *Handler) handleListCompanionPhrases(w http.ResponseWriter, r *http.Request) {
-	if h.homes == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	phrases, err := h.homes.ListCompanionPhrases(r.Context(), charID)
-	if err != nil {
-		if errors.Is(err, home.ErrCharacterNotFound) {
-			writeError(w, http.StatusNotFound, err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	if phrases == nil {
-		phrases = []home.CompanionPhrase{}
-	}
-
-	writeJSON(w, http.StatusOK, phrases)
-}
-
-func (h *Handler) handleForgetCompanionPhrase(w http.ResponseWriter, r *http.Request) {
-	if h.homes == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	phraseID := r.PathValue("phrase_id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		err := h.homes.ForgetCompanionPhrase(r.Context(), phraseID, char.ID)
-		if err != nil {
-			if errors.Is(err, home.ErrPhraseNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-	})
-}
-
-func (h *Handler) handleTalkToCompanion(w http.ResponseWriter, r *http.Request) {
-	if h.homes == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	res, err := h.homes.TalkToCompanion(r.Context(), charID)
-	if err != nil {
-		if errors.Is(err, home.ErrCharacterNotFound) {
-			writeError(w, http.StatusNotFound, err)
-			return
-		}
-		if errors.Is(err, home.ErrNoPetsAtHome) {
-			writeError(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	dialogue := res.Phrase
-	if dialogue == "" {
-		dialogue = defaultCompanionDialogue
-	}
-
-	writeJSON(w, http.StatusOK, companionTalkResponse{
-		PetName:  res.PetName,
-		Dialogue: dialogue,
-	})
-}
-
-func (h *Handler) handleListDeliveryNotices(w http.ResponseWriter, r *http.Request) {
-	if h.homes == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		unclearedOnly := r.URL.Query().Get("uncleared_only") == "true"
-		notices, err := h.homes.ListDeliveryNotices(r.Context(), char.ID, unclearedOnly)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, notices)
-	})
-}
-
-func (h *Handler) handleClearDeliveryNotices(w http.ResponseWriter, r *http.Request) {
-	if h.homes == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		err := h.homes.ClearDeliveryNotices(r.Context(), char.ID)
-		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}

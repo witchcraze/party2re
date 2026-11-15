@@ -50,7 +50,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		{"GET", "/parties/{id}", "", "", 200},
 		{"GET", "/towns/{town_id}/houses", "", "", 200},
 		{"POST", "/towns/{town_id}/houses", `{"character_id":"c1","house_style":"001"}`, "session", 201},
-		{"POST", "/characters/{id}/home/wake", "", "session", 200},
 		{"GET", "/homes/{id}", "", "", 200},
 		{"DELETE", "/letters/{id}", "", "session", 204},
 	} {
@@ -123,7 +122,6 @@ func TestOpenAPIConstraintBoundaries(t *testing.T) {
 		{"AlchemyCompendium", "entries", `[]`, true},
 		{"AlchemyCompendium", "entries", `[{}]`, false},
 		{"CasinoRoomView", "room", `{"password_hash":"secret"}`, false},
-		{"UseHomeItemRequest", "", `{"instance_id":"item-1"}`, true},
 	} {
 		t.Run(tc.schema+"/"+tc.field+"/"+tc.payload, func(t *testing.T) {
 			schema := schemas[tc.schema].(map[string]any)

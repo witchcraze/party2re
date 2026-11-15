@@ -80,9 +80,6 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 			existingHome.HouseStyle = houseStyle
 			existingHome.ExpiresAt = &expiresAt
 			existingHome.UpdatedAt = now
-			if existingHome.CompanionName == "" {
-				existingHome.CompanionName = DefaultCompanionName
-			}
 
 			return s.repo.SaveHome(tc.Context, existingHome)
 		})

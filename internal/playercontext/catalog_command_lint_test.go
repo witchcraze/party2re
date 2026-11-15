@@ -91,6 +91,16 @@ func TestCatalog_GemStoreSendGatewayContract(t *testing.T) {
 	}
 }
 
+func TestCatalog_HomeItemUseGatewayContract(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	then, params := gatewayContract(t, spec, "home_item_use")
+	source := params.Properties["source"]
+	if !slices.Contains(then.Required, "params") || string(params.AdditionalProperties) != "false" || !slices.Equal(params.Required, []string{"instance_id"}) ||
+		params.Properties["instance_id"].Type != "string" || source.Type != "string" || len(source.Enum) != 2 {
+		t.Fatalf("incorrect params: %+v / %+v", then, params)
+	}
+}
+
 func TestCatalog_GatewayContracts(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	tests := []struct {
@@ -106,6 +116,10 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"exile_oppose", "target_name", "string", true},
 		{"home_sleep", "target_home_id", "string", false},
 		{"home_wake", "", "", false},
+		{"home_color", "color", "string", true},
+		{"home_phrase_teach", "phrase", "string", true},
+		{"home_phrase_forget", "phrase_id", "string", true},
+		{"home_notice_ack", "notice_ids", "array", true},
 		{"depot_expand", "", "", false},
 		{"depot_sort", "", "", false},
 		{"secretshop_puffpuff", "", "", false},
@@ -160,7 +174,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "postCharactersIdDepotWithdraw", "postCharactersIdDepotSendMoney", "experienceSecretShopPuffPuff", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox", "getBlackMarketStatus", "getBlackMarketPoints", "sacrificeBlackMarketItem", "tradeBlackMarketPrize", "getCharactersIdAlchemy", "postCharactersIdAlchemySynthesize", "postCharactersIdAlchemyClaim", "createFleaMarketListing", "purchaseFleaMarketListing", "cancelFleaMarketListing", "listFleaMarketListings", "getFleaMarketListing", "getCharacterFleaMarketListings", "buyGem", "sendGem", "synthesizeGem", "appraiseGemStoreItem", "getCharacterGemBox", "getGemStoreCatalog", "getGemStoreRecipes", "getGemStoreDialogue", "getAltarStatus", "prayAltarRamia", "wishAltarTravelItem", "offerAltarOrb", "getWishingWellStatus", "exchangeWishingWellSP", "getGodDialogue", "getGodWishes", "grantGodWish"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch", "postCharactersIdDepotSort", "postCharactersIdDepotDeposit", "postCharactersIdDepotSendItem", "postCharactersIdDepotWithdraw", "postCharactersIdDepotSendMoney", "experienceSecretShopPuffPuff", "prayAtChapel", "getBlacksmithSeals", "getCharactersIdBlacksmithStorage", "postCharactersIdBlacksmithSeal", "postCharactersIdBlacksmithName", "postCharactersIdBlacksmithStorageDeposit", "postCharactersIdBlacksmithStorageWithdraw", "sellGem", "sortGemBox", "getBlackMarketStatus", "getBlackMarketPoints", "sacrificeBlackMarketItem", "tradeBlackMarketPrize", "getCharactersIdAlchemy", "postCharactersIdAlchemySynthesize", "postCharactersIdAlchemyClaim", "createFleaMarketListing", "purchaseFleaMarketListing", "cancelFleaMarketListing", "listFleaMarketListings", "getFleaMarketListing", "getCharacterFleaMarketListings", "buyGem", "sendGem", "synthesizeGem", "appraiseGemStoreItem", "getCharacterGemBox", "getGemStoreCatalog", "getGemStoreRecipes", "getGemStoreDialogue", "getAltarStatus", "prayAltarRamia", "wishAltarTravelItem", "offerAltarOrb", "getWishingWellStatus", "exchangeWishingWellSP", "getGodDialogue", "getGodWishes", "grantGodWish", "getHomeSleepStatus", "updateHomeSettings", "postCharactersIdColor", "getCharactersIdHomeItems", "postCharactersIdHomeItemsUse", "listCompanionPhrases", "teachCompanionPhrase", "forgetCompanionPhrase", "talkToCompanion", "listDeliveryNotices", "clearDeliveryNotices"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {

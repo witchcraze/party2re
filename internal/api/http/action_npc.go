@@ -30,6 +30,8 @@ type npcProfile struct {
 	inspect      string                                                                     // empty: npcInspectDefault
 	inspectWords []string                                                                   // inspection answered by ＠はなす: logged publicly
 	silent       bool                                                                       // inspection prints nothing (an empty shiraberu_npc)
+	// talk replaces ＠はなす where the speaker is chosen per call (a resident pet).
+	talk func(*Handler, context.Context, playercontext.Result) (NPCResult, error)
 }
 
 // NPCResult is the NPC's reply. Private replies are shown only to the actor and
@@ -104,6 +106,9 @@ func (h *Handler) divinate(ctx context.Context, current playercontext.Result) (N
 
 func (h *Handler) npcAct(ctx context.Context, current playercontext.Result, talk bool) (NPCResult, error) {
 	destination, npc, char := h.currentNPC(current)
+	if talk && npc.talk != nil {
+		return npc.talk(h, ctx, current)
+	}
 	if !talk && npc.silent {
 		return NPCResult{NPCName: npc.name, Private: true}, nil
 	}

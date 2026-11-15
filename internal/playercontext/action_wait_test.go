@@ -80,6 +80,10 @@ func TestCatalogWaitDispositions(t *testing.T) {
 			if def.WaitExempt != WaitReload {
 				t.Errorf("%s: a page reload carries no ＠ action", def.ID)
 			}
+		case def.ID == "home_notice_ack":
+			if def.WaitExempt != WaitReload {
+				t.Errorf("%s: legacy clears notices while rendering the own home (home.cgi:49-68)", def.ID)
+			}
 		case def.ID == "home_wake" || def.ID == "rescue_request":
 			if def.WaitExempt != WaitRecovery {
 				t.Errorf("%s: recovery runs outside party.cgi", def.ID)
@@ -164,7 +168,7 @@ func TestQueryReadsAndClaimsActionWait(t *testing.T) {
 
 	enabled := NewService(waitChars{}, waitActions{}, timers, WithActionWait(timers, DefaultActionWait))
 	r, err := enabled.Query(ctx, "c", "p")
-	if err != nil || r.Snapshot.ActionWait != 3*time.Second || !slices.Equal(r.AvailableActions, []string{"place_say", "rescue_request", "presence_refresh"}) {
+	if err != nil || r.Snapshot.ActionWait != 3*time.Second || !slices.Equal(r.AvailableActions, []string{"home_notice_ack", "place_say", "rescue_request", "presence_refresh"}) {
 		t.Fatalf("enabled read: %v %v %v", r.Snapshot.ActionWait, r.AvailableActions, err)
 	}
 	claim, ok, err := enabled.ClaimActionWait(ctx, "c", 0)

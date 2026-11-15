@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -86,12 +87,11 @@ func (m *mockHomeRepo) GetHome(ctx context.Context, characterID string) (Charact
 	h, ok := m.homes[characterID]
 	if !ok {
 		return CharacterHome{
-			CharacterID:   characterID,
-			TownID:        "",
-			HouseStyle:    "",
-			ExpiresAt:     nil,
-			CompanionName: DefaultCompanionName,
-			UpdatedAt:     time.Now().UTC(),
+			CharacterID: characterID,
+			TownID:      "",
+			HouseStyle:  "",
+			ExpiresAt:   nil,
+			UpdatedAt:   time.Now().UTC(),
 		}, nil
 	}
 	return h, nil
@@ -103,46 +103,6 @@ func (m *mockHomeRepo) SaveHome(ctx context.Context, home CharacterHome) error {
 	}
 	m.homes[home.CharacterID] = home
 	return nil
-}
-
-func (m *mockHomeRepo) UpdateCompanionName(ctx context.Context, characterID, companionName string, updatedAt time.Time) (CharacterHome, error) {
-	if m.saveHomeErr != nil {
-		return CharacterHome{}, m.saveHomeErr
-	}
-	h, ok := m.homes[characterID]
-	if !ok {
-		h = CharacterHome{CharacterID: characterID}
-	}
-	h.CompanionName = companionName
-	h.UpdatedAt = updatedAt
-	m.homes[characterID] = h
-	return h, nil
-}
-
-// buildBeforeWriteRepo commits a house purchase once, on the first settings write. Reads are not
-// intercepted, so a caller that read the home before the write keeps its stale house-less snapshot,
-// simulating a concurrent BuildHouse that lands between the caller's read and its save.
-type buildBeforeWriteRepo struct {
-	*mockHomeRepo
-	build CharacterHome
-	built bool
-}
-
-func (r *buildBeforeWriteRepo) commitBuildOnce() {
-	if !r.built {
-		r.built = true
-		r.homes[r.build.CharacterID] = r.build
-	}
-}
-
-func (r *buildBeforeWriteRepo) SaveHome(ctx context.Context, home CharacterHome) error {
-	r.commitBuildOnce()
-	return r.mockHomeRepo.SaveHome(ctx, home)
-}
-
-func (r *buildBeforeWriteRepo) UpdateCompanionName(ctx context.Context, characterID, companionName string, updatedAt time.Time) (CharacterHome, error) {
-	r.commitBuildOnce()
-	return r.mockHomeRepo.UpdateCompanionName(ctx, characterID, companionName, updatedAt)
 }
 
 func (m *mockHomeRepo) LockTownHouseCapacityForUpdate(context.Context, string) error { return nil }
@@ -381,9 +341,11 @@ func (m *mockHomeRepo) ListDeliveryNotices(ctx context.Context, characterID stri
 	return list, nil
 }
 
-func (m *mockHomeRepo) ClearDeliveryNotices(ctx context.Context, characterID string) error {
-	for i := range m.notices[characterID] {
-		m.notices[characterID][i].IsCleared = true
+func (m *mockHomeRepo) ClearDeliveryNotices(ctx context.Context, characterID string, ids []string) error {
+	for i, n := range m.notices[characterID] {
+		if slices.Contains(ids, n.ID) {
+			m.notices[characterID][i].IsCleared = true
+		}
 	}
 	return nil
 }
@@ -440,15 +402,6 @@ func TestHomeService(t *testing.T) {
 		}
 		if view.IsOwner {
 			t.Errorf("expected isOwner false")
-		}
-
-		// Update companion name
-		updated, err := service.UpdateHome(ctx, "char-1", "スライム")
-		if err != nil {
-			t.Fatalf("UpdateHome failed: %v", err)
-		}
-		if updated.CompanionName != "スライム" {
-			t.Errorf("unexpected updated home companion: %+v", updated)
 		}
 	})
 
@@ -677,10 +630,10 @@ func TestHomeService(t *testing.T) {
 			t.Fatalf("TeachCompanionPhrase failed: %v", err)
 		}
 
-		// List phrases
-		phrases, err := service.ListCompanionPhrases(ctx, "char-1")
-		if err != nil || len(phrases) != 1 {
-			t.Fatalf("expected 1 phrase, got %d", len(phrases))
+		// The owner's view lists the phrases.
+		view, err := service.GetHomeView(ctx, "char-1", "char-1", "player-1")
+		if err != nil || len(view.Private.Phrases) != 1 {
+			t.Fatalf("expected 1 phrase, got %+v (%v)", view.Private, err)
 		}
 
 		// Companion talks taught phrase
@@ -695,9 +648,8 @@ func TestHomeService(t *testing.T) {
 			t.Fatalf("ForgetCompanionPhrase failed: %v", err)
 		}
 
-		phrases, _ = service.ListCompanionPhrases(ctx, "char-1")
-		if len(phrases) != 0 {
-			t.Errorf("expected 0 phrases after forget, got %d", len(phrases))
+		if view, _ = service.GetHomeView(ctx, "char-1", "char-1", "player-1"); len(view.Private.Phrases) != 0 {
+			t.Errorf("expected 0 phrases after forget, got %d", len(view.Private.Phrases))
 		}
 	})
 
@@ -782,13 +734,6 @@ func TestHomeService(t *testing.T) {
 		}
 	})
 
-	t.Run("ListCompanionPhrases non-existent character returns ErrCharacterNotFound", func(t *testing.T) {
-		_, err := service.ListCompanionPhrases(ctx, "non-existent-char")
-		if !errors.Is(err, ErrCharacterNotFound) {
-			t.Errorf("expected ErrCharacterNotFound, got %v", err)
-		}
-	})
-
 	t.Run("0 pets rejection with ErrNoPetsAtHome", func(t *testing.T) {
 		// char-3 has 0 pets
 		chars.chars["char-3"] = corecharacter.Character{ID: "char-3", Name: "Guest"}
@@ -814,7 +759,7 @@ func TestHomeService(t *testing.T) {
 			t.Fatalf("expected 1 notice, got %d", len(notices))
 		}
 
-		err = service.ClearDeliveryNotices(ctx, "char-1")
+		err = service.ClearDeliveryNotices(ctx, "char-1", []string{notices[0].ID})
 		if err != nil {
 			t.Fatalf("ClearDeliveryNotices failed: %v", err)
 		}
@@ -833,7 +778,14 @@ func TestHomeService(t *testing.T) {
 		if notices, _ = service.ListDeliveryNotices(ctx, "char-1", true); len(notices) != 1 {
 			t.Fatalf("flag notices = %d, want 1", len(notices))
 		}
-		if err := service.ClearDeliveryNotices(ctx, "char-1"); err != nil {
+		// Acknowledging an unobserved ID clears nothing.
+		if err := service.ClearDeliveryNotices(ctx, "char-1", []string{"unobserved"}); err != nil {
+			t.Fatal(err)
+		}
+		if notices, _ = service.ListDeliveryNotices(ctx, "char-1", true); len(notices) != 1 {
+			t.Fatalf("unobserved acknowledgment cleared %d notices", 1-len(notices))
+		}
+		if err := service.ClearDeliveryNotices(ctx, "char-1", []string{notices[0].ID}); err != nil {
 			t.Fatal(err)
 		}
 		if err := service.AddDeliveryFlag(ctx, "char-1", "money_transfer", "flag"); err != nil {
@@ -843,43 +795,6 @@ func TestHomeService(t *testing.T) {
 			t.Fatalf("flag after clear = %d, want 1", len(notices))
 		}
 	})
-}
-
-func TestUpdateHomeKeepsHouseBuiltBeforeWrite(t *testing.T) {
-	ctx := context.Background()
-	repo := newMockHomeRepo(map[string]corecharacter.Character{
-		"char-1": {ID: "char-1", Name: "Owner"},
-	})
-	expiresAt := time.Now().UTC().Add(5 * 24 * time.Hour)
-	racing := &buildBeforeWriteRepo{
-		mockHomeRepo: repo,
-		build: CharacterHome{
-			CharacterID:   "char-1",
-			TownID:        "town-1",
-			HouseStyle:    "001",
-			ExpiresAt:     &expiresAt,
-			CompanionName: DefaultCompanionName,
-		},
-	}
-	service, err := NewService(racing, &mockCharReader{chars: repo.chars})
-	if err != nil {
-		t.Fatalf("NewService failed: %v", err)
-	}
-
-	if _, err := service.UpdateHome(ctx, "char-1", "スライム"); err != nil {
-		t.Fatalf("UpdateHome failed: %v", err)
-	}
-
-	stored := repo.homes["char-1"]
-	if stored.TownID != "town-1" || stored.HouseStyle != "001" {
-		t.Errorf("house contract lost: town=%q style=%q, want town=%q style=%q", stored.TownID, stored.HouseStyle, "town-1", "001")
-	}
-	if stored.ExpiresAt == nil || !stored.ExpiresAt.Equal(expiresAt) {
-		t.Errorf("house expiry lost: got %v, want %v", stored.ExpiresAt, expiresAt)
-	}
-	if stored.CompanionName != "スライム" {
-		t.Errorf("companion name not saved: got %q, want %q", stored.CompanionName, "スライム")
-	}
 }
 
 func TestTeachCompanionPhraseLimit(t *testing.T) {

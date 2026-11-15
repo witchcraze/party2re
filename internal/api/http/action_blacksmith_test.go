@@ -276,10 +276,6 @@ func TestBlacksmithGatewayGuardsAndDiscovery(t *testing.T) {
 		if action.RequiredParams == nil || !slices.Equal(schema.Required, action.RequiredParams) || schema.AdditionalProperties || len(schema.Properties) != len(action.RequiredParams) {
 			t.Fatalf("incorrect schema: %s", action.ParamsSchema)
 		}
-		resolved := NewActionURLResolver().Resolve("hero", input.action, "", "")
-		if resolved.Method != "POST" || resolved.URL != "/api/v1/characters/hero/actions" {
-			t.Fatalf("obsolete resolver: %+v", resolved)
-		}
 		for _, option := range []Option{WithBlacksmith(nil), func(*Handler) {}} {
 			g := newGatewayFixture(t)
 			h, err := NewHandler(g, g, &struct{ AdventureService }{}, &struct{ ShopService }{}, option, WithPlayerContext(playercontext.NewService(g, g, timer.NewService(nil))))

@@ -107,7 +107,7 @@ func TestNPCTalkStartsTheActionWaitButInspectDoesNot(t *testing.T) {
 func TestEveryNPCProfileHasLegacyFacts(t *testing.T) {
 	for id, f := range facilities {
 		p := f.npc
-		if p == nil {
+		if p == nil || p.talk != nil { // a per-call speaker has no fixed name or words
 			continue
 		}
 		if p.name == "" || (len(p.words) == 0) == (p.wordsOf == nil) {

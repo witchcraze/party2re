@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -148,7 +147,12 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 		if err != nil {
 			return HomeView{}, fmt.Errorf("listing delivery notices: %w", err)
 		}
-		view.Private = &OwnedHomeDetails{UnreadLetterCount: unreadCount, CompanionPhraseCount: len(phrases), RecentDeliveryCount: len(notices)}
+		items, err := s.ListHomeItems(ctx, homeCharacterID)
+		if err != nil {
+			return HomeView{}, fmt.Errorf("listing home items: %w", err)
+		}
+		view.Private = &OwnedHomeDetails{UnreadLetterCount: unreadCount, Phrases: append([]CompanionPhrase{}, phrases...),
+			Notices: append([]DeliveryNotice{}, notices...), Items: items}
 	}
 
 	if s.petReader != nil {
@@ -160,27 +164,6 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 	}
 
 	return view, nil
-}
-
-// UpdateHome updates private home custom settings (companion_name).
-func (s *Service) UpdateHome(ctx context.Context, characterID, companionName string) (CharacterHome, error) {
-	_, err := s.charReader.FindByID(ctx, characterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			return CharacterHome{}, ErrCharacterNotFound
-		}
-		return CharacterHome{}, err
-	}
-
-	cleanCompanion := strings.TrimSpace(companionName)
-	if cleanCompanion == "" {
-		cleanCompanion = DefaultCompanionName
-	}
-	if utf8.RuneCountInString(cleanCompanion) > MaxCompanionNameLength {
-		cleanCompanion = string([]rune(cleanCompanion)[:MaxCompanionNameLength])
-	}
-
-	return s.repo.UpdateCompanionName(ctx, characterID, cleanCompanion, s.nowFunc().UTC())
 }
 
 // SendLetter sends a player-to-player letter to a recipient character.
@@ -371,18 +354,6 @@ func (s *Service) ForgetCompanionPhrase(ctx context.Context, phraseID, character
 	return s.repo.DeleteCompanionPhrase(ctx, phraseID, characterID)
 }
 
-// ListCompanionPhrases returns all taught phrases for a character's companion.
-func (s *Service) ListCompanionPhrases(ctx context.Context, characterID string) ([]CompanionPhrase, error) {
-	_, err := s.charReader.FindByID(ctx, characterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			return nil, ErrCharacterNotFound
-		}
-		return nil, err
-	}
-	return s.repo.ListCompanionPhrases(ctx, characterID)
-}
-
 func (s *Service) randomInt(max int) int {
 	if max <= 0 {
 		return 0
@@ -472,7 +443,11 @@ func (s *Service) ListDeliveryNotices(ctx context.Context, characterID string, u
 	return s.repo.ListDeliveryNotices(ctx, characterID, unclearedOnly)
 }
 
-// ClearDeliveryNotices marks all delivery notices as cleared.
-func (s *Service) ClearDeliveryNotices(ctx context.Context, characterID string) error {
-	return s.repo.ClearDeliveryNotices(ctx, characterID)
+// ClearDeliveryNotices marks the owner's listed notices as cleared; IDs that
+// are unknown, already cleared or another character's are ignored.
+func (s *Service) ClearDeliveryNotices(ctx context.Context, characterID string, noticeIDs []string) error {
+	if len(noticeIDs) == 0 {
+		return nil
+	}
+	return s.repo.ClearDeliveryNotices(ctx, characterID, noticeIDs)
 }

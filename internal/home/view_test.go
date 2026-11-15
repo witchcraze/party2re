@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 type viewRepository struct {
@@ -39,13 +42,41 @@ func (r *viewRepository) ListCompanionPhrases(context.Context, string) ([]Compan
 	return []CompanionPhrase{{Phrase: "private"}}, nil
 }
 
+// viewInventory and viewDepot serve the owner's items, failing the named source.
+type viewInventory struct {
+	InventoryManager
+	fail *string
+	err  error
+}
+
+func (v viewInventory) FindByCharacterID(context.Context, string) (coreinventory.Inventory, error) {
+	if *v.fail == "inventory" {
+		return coreinventory.Inventory{}, v.err
+	}
+	return coreinventory.Inventory{Items: []item.Instance{{ID: "held", DefinitionID: "unknown", Quantity: 1}}}, nil
+}
+
+type viewDepot struct {
+	DepotManager
+	fail *string
+	err  error
+}
+
+func (v viewDepot) FindByCharacterID(context.Context, string) (depot.Depot, error) {
+	if *v.fail == "depot" {
+		return depot.Depot{}, v.err
+	}
+	return depot.Depot{Items: []item.Instance{{ID: "stored", DefinitionID: "unknown", Quantity: 1}}}, nil
+}
+
 func TestHomeViewPrivacyAndRequiredReads(t *testing.T) {
 	chars := &mockCharReader{chars: map[string]corecharacter.Character{
 		"owner":   {ID: "owner", PlayerID: "player", Name: "Owner", Money: 123456789},
 		"visitor": {ID: "visitor", PlayerID: "other"},
 	}}
 	repo := &viewRepository{Repository: newMockHomeRepo(chars.chars), err: errors.New("private read failure")}
-	svc, err := NewService(repo, chars)
+	svc, err := NewService(repo, chars, WithInventoryManager(viewInventory{fail: &repo.fail, err: repo.err}),
+		WithDepotManager(viewDepot{fail: &repo.fail, err: repo.err}), WithItemCatalog(&mockCatalog{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +93,7 @@ func TestHomeViewPrivacyAndRequiredReads(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, forbidden := range []string{"player_id", "money", "unread_letter_count", "companion_phrase_count", "recent_delivery_count"} {
+		for _, forbidden := range []string{"player_id", "money", "unread_letter_count", "phrases", "notices", "items"} {
 			if strings.Contains(string(raw), forbidden) {
 				t.Fatalf("leaked %s: %s", forbidden, raw)
 			}
@@ -71,7 +102,7 @@ func TestHomeViewPrivacyAndRequiredReads(t *testing.T) {
 	if _, err := svc.GetHomeView(context.Background(), "owner", "owner", "other"); !errors.Is(err, ErrForbidden) || repo.privateReads != 0 {
 		t.Fatalf("spoof: %v", err)
 	}
-	for _, failure := range []string{"unread", "phrases", "notices"} {
+	for _, failure := range []string{"unread", "phrases", "notices", "inventory", "depot"} {
 		repo.fail = failure
 		if _, err := svc.GetHomeView(context.Background(), "owner", "owner", "player"); !errors.Is(err, repo.err) {
 			t.Fatalf("required %s enrichment: %v", failure, err)
@@ -79,7 +110,10 @@ func TestHomeViewPrivacyAndRequiredReads(t *testing.T) {
 	}
 	repo.err = nil
 	view, err := svc.GetHomeView(context.Background(), "owner", "owner", "player")
-	if err != nil || !view.IsOwner || view.Private == nil || view.Private.UnreadLetterCount != 1 {
+	repo.fail = "none"
+	view, err = svc.GetHomeView(context.Background(), "owner", "owner", "player")
+	if err != nil || !view.IsOwner || view.Private == nil || view.Private.UnreadLetterCount != 1 || len(view.Private.Phrases) != 1 || len(view.Private.Notices) != 1 ||
+		len(view.Private.Items) != 2 || view.Private.Items[0].Source != "inventory" || view.Private.Items[1].Source != "depot" {
 		t.Fatalf("owned: %+v %v", view, err)
 	}
 	if _, err := svc.GetHomeView(context.Background(), "missing", "", ""); !errors.Is(err, ErrCharacterNotFound) {
