@@ -133,7 +133,7 @@ func (s *LifetimeState) ApplyJobAssets(c *JobAssetContext, id string, rng random
 					break
 				}
 			}
-			*a.HeldToolID = tool
+			a.setHeldTool(tool)
 			if !a.NPC {
 				*c.Assets.HeldToolID = tool
 			}
