@@ -50,7 +50,7 @@ Upon defeating all enemy boss participants:
      - $\le 30$ minutes (1800s): **2.0×**
      - $\le 60$ minutes (3600s): **1.5×** (truncated)
      - $> 60$ minutes: **1.0×**
-   - Go currently measures from the room creation (party) or request start (solo); [#1201](https://github.com/witchcraze/party2re/issues/1201) persists the clock and applies it.
+   - The legacy solo entry still measures from request start pending removal in [#1928](https://github.com/witchcraze/party2re/issues/1928).
    - Directly credited to each member's crystal balance (`characters.crystal`).
 3. **Experience & Gold**:
    - For `king1`..`king10`: Sum of boss definitions.
@@ -140,6 +140,5 @@ rollback of a failed settlement.
 - No sealing room is opened, no unseal news is published, the party lobby has no
   system-owned kind, king99 clones come from the participants and join fatigue is charged
   at battle start ([#1927](https://github.com/witchcraze/party2re/issues/1927)).
-- The clock is not persisted and the multiplier uses room or request start ([#1201](https://github.com/witchcraze/party2re/issues/1201)).
 - The solo entry exists ([#1928](https://github.com/witchcraze/party2re/issues/1928)).
 - The battle resolves at start, keeps no per-room enemy state, has no leader-defeat exit check and needs a character leader ([#1864](https://github.com/witchcraze/party2re/issues/1864)).

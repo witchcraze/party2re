@@ -125,11 +125,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			candidates = append(candidates, orb)
 			rewardItemID = s.pickTreasure(candidates)
 
-			elapsed := time.Since(startTime)
-			if elapsed < 0 {
-				elapsed = 0
-			}
-			rewardCrystals = calculateTotalCrystals(stage, []corecharacter.Character{char}, elapsed)
+			rewardCrystals = calculateTotalCrystals(stage, []corecharacter.Character{char}, &startTime, s.now())
 
 			char.HeroCount++
 			if err := char.AddMoney(battleRes.TotalReward.Currency); err != nil {

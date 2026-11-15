@@ -3,6 +3,7 @@ package battle
 import (
 	"context"
 	"errors"
+	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -97,6 +98,8 @@ type Service struct {
 	monsterTamer      MonsterTamer
 	blessingProvider  BlessingProvider
 	monsterRecorder   MonsterDefeatRecorder
+	unsealClock       UnsealClockWriter
+	nowFunc           func() time.Time
 }
 
 // Option configures Service dependencies.
@@ -212,6 +215,27 @@ func WithMonsterDefeatRecorder(recorder MonsterDefeatRecorder) Option {
 	return func(s *Service) {
 		s.monsterRecorder = recorder
 	}
+}
+
+// WithUnsealClockWriter injects the persistence port for the demon king unseal clock.
+func WithUnsealClockWriter(writer UnsealClockWriter) Option {
+	return func(s *Service) {
+		s.unsealClock = writer
+	}
+}
+
+// WithNowFunc overrides the wall clock used during post-battle settlement.
+func WithNowFunc(fn func() time.Time) Option {
+	return func(s *Service) {
+		s.nowFunc = fn
+	}
+}
+
+func (s *Service) now() time.Time {
+	if s.nowFunc != nil {
+		return s.nowFunc().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // SetMonsterTamer sets the MonsterTamer dependency.

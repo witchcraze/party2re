@@ -22,6 +22,8 @@ import (
 
 type mockBossRepo struct {
 	settlements  map[string]*boss.SealingSettlement
+	unsealedAt   *time.Time
+	unsealErr    error
 	records      map[string]boss.CharacterBossRecord
 	histories    map[string][]boss.BossChallengeHistory
 	savedChars   map[string]corecharacter.Character
@@ -46,6 +48,23 @@ func (m *mockBossRepo) SaveSealingSettlement(_ context.Context, receipt boss.Sea
 		m.settlements = make(map[string]*boss.SealingSettlement)
 	}
 	m.settlements[receipt.Lobby.Party.ID] = &receipt
+	return nil
+}
+
+func (m *mockBossRepo) GetUnsealedAt(_ context.Context) (*time.Time, error) {
+	if m.unsealErr != nil {
+		return nil, m.unsealErr
+	}
+	if m.unsealedAt == nil {
+		return nil, nil
+	}
+	t := *m.unsealedAt
+	return &t, nil
+}
+
+func (m *mockBossRepo) SaveUnsealedAt(_ context.Context, unsealedAt time.Time) error {
+	t := unsealedAt.UTC()
+	m.unsealedAt = &t
 	return nil
 }
 
@@ -956,58 +975,177 @@ func TestStartSealingBattle_CapacityEnforcement(t *testing.T) {
 	}
 }
 
-// TestStartSealingBattle_ClearTimeCrystals verifies that clear time crystal multipliers are applied
-// and credited to all participating party members on victory.
+// TestStartSealingBattle_ClearTimeCrystals verifies that crystal multipliers use the persisted unseal
+// timestamp (ignoring party.CreatedAt), default to 1x when not unsealed, apply per-enemy truncation,
+// and restart when re-unsealed.
 func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
 	ctx := context.Background()
-	bossRepo := newMockBossRepo()
+	fakeNow := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
 
-	chars := map[string]corecharacter.Character{
-		"c1": createTestChar("c1", 50, 600, 300, 200),
-		"c2": createTestChar("c2", 50, 600, 300, 200),
-	}
-	charRepo := &mockCharRepo{chars: chars}
-	partyRepo := newMockPartyRepo()
+	runAt := func(t *testing.T, unsealedAt *time.Time, partyCreatedAt time.Time) int {
+		t.Helper()
+		bossRepo := newMockBossRepo()
+		if unsealedAt != nil {
+			u := *unsealedAt
+			bossRepo.unsealedAt = &u
+		}
 
-	pID := "party-crystal-test"
-	// Party created 5 minutes ago (within <= 10m window -> 3.0x multiplier)
-	partyRepo.parties[pID] = party.Party{
-		ID:                pID,
-		LeaderCharacterID: "c1",
-		StageID:           "king1",
-		Status:            party.StatusRecruiting,
-		CreatedAt:         time.Now().UTC().Add(-5 * time.Minute),
-	}
-	partyRepo.members[pID] = []party.Member{
-		{PartyID: pID, CharacterID: "c1", CharacterName: "Hero_c1", ReadyState: true, IsLeader: true},
-		{PartyID: pID, CharacterID: "c2", CharacterName: "Hero_c2", ReadyState: true},
+		chars := map[string]corecharacter.Character{
+			"c1": createTestChar("c1", 50, 600, 300, 200),
+			"c2": createTestChar("c2", 50, 600, 300, 200),
+		}
+		charRepo := &mockCharRepo{chars: chars}
+		partyRepo := newMockPartyRepo()
+
+		pID := "party-crystal-test"
+		partyRepo.parties[pID] = party.Party{
+			ID:                pID,
+			LeaderCharacterID: "c1",
+			StageID:           "king1",
+			Status:            party.StatusRecruiting,
+			CreatedAt:         partyCreatedAt,
+		}
+		partyRepo.members[pID] = []party.Member{
+			{PartyID: pID, CharacterID: "c1", CharacterName: "Hero_c1", ReadyState: true, IsLeader: true},
+			{PartyID: pID, CharacterID: "c2", CharacterName: "Hero_c2", ReadyState: true},
+		}
+
+		service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		service.Configure(
+			boss.WithPartyRepository(partyRepo),
+			boss.WithNowFunc(func() time.Time { return fakeNow }),
+		)
+
+		res, err := service.StartSealingBattle(ctx, pID, "c1")
+		if err != nil {
+			t.Fatalf("StartSealingBattle failed: %v", err)
+		}
+		if charRepo.chars["c1"].Crystal != res.RewardCrystals || charRepo.chars["c2"].Crystal != res.RewardCrystals {
+			t.Fatalf("credited crystals mismatch: c1=%d c2=%d want=%d",
+				charRepo.chars["c1"].Crystal, charRepo.chars["c2"].Crystal, res.RewardCrystals)
+		}
+		return res.RewardCrystals
 	}
 
-	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.Configure(boss.WithPartyRepository(partyRepo))
-
-	res, err := service.StartSealingBattle(ctx, pID, "c1")
-	if err != nil {
-		t.Fatalf("StartSealingBattle failed: %v", err)
+	at := func(d time.Duration) *time.Time {
+		ts := fakeNow.Add(-d)
+		return &ts
 	}
 
-	// king1 base crystals = 70. Elapsed = 5m -> 3x multiplier -> 210 crystals.
-	if res.RewardCrystals != 210 {
-		t.Errorf("expected res.RewardCrystals == 210, got %d", res.RewardCrystals)
+	// Not unsealed -> 1.0x even when party was created 5s ago
+	if got := runAt(t, nil, fakeNow.Add(-5*time.Second)); got != 70 {
+		t.Errorf("not unsealed: got %d crystals, want 70", got)
 	}
 
-	// Verify both characters received 210 crystals in DB
-	c1Saved := charRepo.chars["c1"]
-	c2Saved := charRepo.chars["c2"]
-	if c1Saved.Crystal != 210 {
-		t.Errorf("expected c1 Crystal == 210, got %d", c1Saved.Crystal)
+	// Boundaries ignore party.CreatedAt (set far in past 2h ago or fresh 5s ago)
+	cases := []struct {
+		name      string
+		elapsed   time.Duration
+		createdAt time.Time
+		want      int
+	}{
+		{"600s (3x)", 600 * time.Second, fakeNow.Add(-2 * time.Hour), 210},
+		{"601s (2x)", 601 * time.Second, fakeNow.Add(-5 * time.Second), 140},
+		{"1800s (2x)", 1800 * time.Second, fakeNow.Add(-2 * time.Hour), 140},
+		{"1801s (1.5x per enemy)", 1801 * time.Second, fakeNow.Add(-5 * time.Second), 102},
+		{"3600s (1.5x per enemy)", 3600 * time.Second, fakeNow.Add(-2 * time.Hour), 102},
+		{"3601s (1x)", 3601 * time.Second, fakeNow.Add(-5 * time.Second), 70},
 	}
-	if c2Saved.Crystal != 210 {
-		t.Errorf("expected c2 Crystal == 210, got %d", c2Saved.Crystal)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runAt(t, at(tc.elapsed), tc.createdAt); got != tc.want {
+				t.Errorf("%s: got %d crystals, want %d", tc.name, got, tc.want)
+			}
+		})
 	}
+
+	// Re-unseal restarts the clock: expired window becomes 3x again
+	t.Run("re-unseal restarts clock", func(t *testing.T) {
+		bossRepo := newMockBossRepo()
+		expired := fakeNow.Add(-3601 * time.Second)
+		_ = bossRepo.SaveUnsealedAt(ctx, expired)
+		if got, _ := bossRepo.GetUnsealedAt(ctx); got == nil || !got.Equal(expired) {
+			t.Fatalf("unexpected unsealedAt: %v", got)
+		}
+		restarted := fakeNow.Add(-120 * time.Second)
+		_ = bossRepo.SaveUnsealedAt(ctx, restarted)
+
+		chars := map[string]corecharacter.Character{
+			"c1": createTestChar("c1", 50, 600, 300, 200),
+		}
+		charRepo := &mockCharRepo{chars: chars}
+		partyRepo := newMockPartyRepo()
+		partyRepo.parties["p-re"] = party.Party{
+			ID: "p-re", LeaderCharacterID: "c1", StageID: "king1",
+			Status: party.StatusRecruiting, CreatedAt: expired,
+		}
+		partyRepo.members["p-re"] = []party.Member{
+			{PartyID: "p-re", CharacterID: "c1", ReadyState: true, IsLeader: true},
+		}
+		service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		service.Configure(
+			boss.WithPartyRepository(partyRepo),
+			boss.WithNowFunc(func() time.Time { return fakeNow }),
+		)
+		res, err := service.StartSealingBattle(ctx, "p-re", "c1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.RewardCrystals != 210 {
+			t.Errorf("restarted unseal: got %d crystals, want 210", res.RewardCrystals)
+		}
+	})
+
+	t.Run("explicit clock reader and read error aborts", func(t *testing.T) {
+		altClock := newMockBossRepo()
+		ts := fakeNow.Add(-1801 * time.Second)
+		altClock.unsealedAt = &ts
+
+		bossRepo := newMockBossRepo()
+		charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"c1": createTestChar("c1", 50, 600, 300, 200)}}
+		partyRepo := newMockPartyRepo()
+		partyRepo.parties["p-alt"] = party.Party{
+			ID: "p-alt", LeaderCharacterID: "c1", StageID: "king1",
+			Status: party.StatusRecruiting, CreatedAt: fakeNow,
+		}
+		partyRepo.members["p-alt"] = []party.Member{
+			{PartyID: "p-alt", CharacterID: "c1", CharacterName: "Hero_c1", ReadyState: true, IsLeader: true},
+		}
+		service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		service.Configure(
+			boss.WithPartyRepository(partyRepo),
+			boss.WithUnsealClockReader(altClock),
+			boss.WithNowFunc(func() time.Time { return fakeNow }),
+		)
+		res, err := service.StartSealingBattle(ctx, "p-alt", "c1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.RewardCrystals != 102 {
+			t.Errorf("expected 102 crystals from configured UnsealClockReader, got %d", res.RewardCrystals)
+		}
+
+		altClock.unsealErr = errors.New("clock db failure")
+		partyRepo.parties["p-err"] = party.Party{
+			ID: "p-err", LeaderCharacterID: "c1", StageID: "king1",
+			Status: party.StatusRecruiting, CreatedAt: fakeNow,
+		}
+		partyRepo.members["p-err"] = []party.Member{
+			{PartyID: "p-err", CharacterID: "c1", CharacterName: "Hero_c1", ReadyState: true, IsLeader: true},
+		}
+		if _, err := service.StartSealingBattle(ctx, "p-err", "c1"); err == nil {
+			t.Fatal("expected error when GetUnsealedAt fails")
+		}
+	})
 }
 
 type mockBossMonsterDefeatRecorder struct {

@@ -1,13 +1,21 @@
 package battle
 
 import (
+	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 )
+
+// UnsealClockWriter persists the demon king unseal clock timestamp within the settlement transaction.
+type UnsealClockWriter interface {
+	SaveUnsealedAt(ctx context.Context, unsealedAt time.Time) error
+}
 
 // applyMonsterKills evaluates defeated non-player enemies against player combat strength
 // matching legacy Party2 (_battle.cgi:230-235). Surviving characters increment MonsterKills
@@ -69,4 +77,14 @@ func (s *Service) applyMaoCount(char *corecharacter.Character, req ApplyPostBatt
 	if req.UnsealDemonKing {
 		char.MaoCount++
 	}
+}
+
+func (s *Service) recordUnsealClock(ctx context.Context, req ApplyPostBattleRequest) error {
+	if !req.UnsealDemonKing || s.unsealClock == nil {
+		return nil
+	}
+	if err := s.unsealClock.SaveUnsealedAt(ctx, s.now()); err != nil {
+		return fmt.Errorf("failed to save unseal clock: %w", err)
+	}
+	return nil
 }

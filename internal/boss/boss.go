@@ -241,6 +241,18 @@ func WithMonsterDefeatRecorder(recorder MonsterDefeatRecorder) ServiceOption {
 	}
 }
 
+// UnsealClockReader reads the persisted demon king unseal timestamp.
+type UnsealClockReader interface {
+	GetUnsealedAt(ctx context.Context) (*time.Time, error)
+}
+
+// WithUnsealClockReader configures the UnsealClockReader.
+func WithUnsealClockReader(reader UnsealClockReader) ServiceOption {
+	return func(s *Service) {
+		s.unsealClock = reader
+	}
+}
+
 // WithNowFunc configures a custom time provider for testing.
 func WithNowFunc(fn func() time.Time) ServiceOption {
 	return func(s *Service) {
@@ -251,6 +263,7 @@ func WithNowFunc(fn func() time.Time) ServiceOption {
 type Service struct {
 	repo               Repository
 	settlementRepo     SealingSettlementRepository
+	unsealClock        UnsealClockReader
 	characterRepo      CharacterRepository
 	partyRepo          PartyRepository
 	battleEngine       corebattle.Resolver
@@ -312,9 +325,11 @@ func NewService(
 	}
 
 	settlements, _ := repo.(SealingSettlementRepository)
+	unsealClock, _ := repo.(UnsealClockReader)
 	return &Service{
 		repo:           repo,
 		settlementRepo: settlements,
+		unsealClock:    unsealClock,
 		characterRepo:  characterRepo,
 		battleEngine:   battleEngine,
 		stages:         catalog,

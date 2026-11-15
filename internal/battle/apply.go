@@ -144,6 +144,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			}
 		}
 		s.applyMaoCount(&tc.Character, req)
+		if err := s.recordUnsealClock(tc.Context, req); err != nil {
+			return err
+		}
 
 		resp.UpdatedCharacters[charID] = tc.Character
 		finalChar = tc.Character
@@ -292,13 +295,16 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			}
 		}
 
-		// Phase 6: Record defeated monsters (Rank 8) if won
+		// Phase 6: Record defeated monsters (Rank 8) if won and unseal clock on demon king unseal
 		if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
 			if s.monsterRecorder != nil {
 				if err := s.recordDefeatedMonsters(txCtx, sortedIDs, req.DefeatedEnemies, req.Habitat); err != nil {
 					return err
 				}
 			}
+		}
+		if err := s.recordUnsealClock(txCtx, req); err != nil {
+			return err
 		}
 
 		finalChars = chars
