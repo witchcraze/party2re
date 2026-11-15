@@ -28,7 +28,7 @@ type storeNameFixture struct {
 func newStoreNameFixture(t *testing.T) *storeNameFixture {
 	t.Helper()
 	// Construction counts the whole town, requiring a dedicated database.
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members", "character_stores", "store_town_capacity_lock", "store_name_lock")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members", "character_stores", "store_town_capacity_lock", "store_name_lock")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
 	repo, err := database.NewStoreRepository(db)

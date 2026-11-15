@@ -4,80 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/helperquest"
-	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
-
-// isolatedRepositoryDB copies table definitions into a dedicated, disposable database.
-func isolatedRepositoryDB(t *testing.T, tables ...string) *sql.DB {
-	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	ctx := context.Background()
-	source, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := source.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated repository tests")
-	}
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := database.Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	name := "party2_repository_test_" + id.New()
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Error(err)
-		}
-	})
-	cfg.DBName = name
-	db, err := database.Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	for _, table := range tables {
-		var tableName, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.ExecContext(ctx, ddl); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return db
-}
 
 type renewalFixture struct {
 	db      *sql.DB
@@ -88,7 +21,7 @@ type renewalFixture struct {
 
 func newRenewalFixture(t *testing.T) renewalFixture {
 	t.Helper()
-	db := isolatedRepositoryDB(t, "helper_quests")
+	db := database.CreateTestDatabase(t, "helper_quests")
 	repo, err := database.NewHelperRepository(db)
 	if err != nil {
 		t.Fatal(err)

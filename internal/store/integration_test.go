@@ -2,17 +2,13 @@ package store_test
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -75,79 +71,7 @@ type storeDBFixture struct {
 
 func isolatedStoreDB(t *testing.T) *sql.DB {
 	t.Helper()
-	sourceDSN := os.Getenv("PARTY2_DB_DSN")
-	if sourceDSN == "" {
-		t.Skip("PARTY2_DB_DSN not set")
-	}
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated store tests")
-	}
-
-	sourceCfg, err := mysql.ParseDSN(sourceDSN)
-	if err != nil {
-		t.Fatalf("parse PARTY2_DB_DSN: %v", err)
-	}
-	adminCfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatalf("parse PARTY2_TEST_DB_ADMIN_DSN: %v", err)
-	}
-
-	sourceDB, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("open source db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := sourceDB.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	adminDB, err := database.Open(adminDSN)
-	if err != nil {
-		t.Fatalf("open admin db: %v", err)
-	}
-
-	var suffix [6]byte
-	if _, err := rand.Read(suffix[:]); err != nil {
-		t.Fatalf("rand.Read: %v", err)
-	}
-	dbName := fmt.Sprintf("party2_store_test_%s", hex.EncodeToString(suffix[:]))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	if _, err := adminDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE `%s`", dbName)); err != nil {
-		if closeErr := adminDB.Close(); closeErr != nil {
-			t.Error(closeErr)
-		}
-		t.Fatalf("create isolated db: %v", err)
-	}
-	t.Cleanup(func() {
-		dropCtx, dropCancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer dropCancel()
-		if _, err := adminDB.ExecContext(dropCtx, fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", dbName)); err != nil {
-			t.Error(err)
-		}
-		if err := adminDB.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	isolatedCfg := *adminCfg
-	isolatedCfg.DBName = dbName
-	isolatedCfg.ParseTime = true
-	db, err := database.Open(isolatedCfg.FormatDSN())
-	if err != nil {
-		t.Fatalf("open isolated db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	tables := []string{
+	return database.CreateTestDatabase(t, []string{
 		"players",
 		"characters",
 		"character_depots",
@@ -158,18 +82,7 @@ func isolatedStoreDB(t *testing.T) *sql.DB {
 		"store_sales",
 		"store_interiors",
 		"character_pending_remittances",
-	}
-	for _, tbl := range tables {
-		var name, ddl string
-		row := sourceDB.QueryRowContext(ctx, fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", sourceCfg.DBName, tbl))
-		if err := row.Scan(&name, &ddl); err != nil {
-			t.Fatalf("SHOW CREATE TABLE %s: %v", tbl, err)
-		}
-		if _, err := db.ExecContext(ctx, ddl); err != nil {
-			t.Fatalf("create table %s: %v", tbl, err)
-		}
-	}
-	return db
+	}...)
 }
 
 func newStoreDBFixture(t *testing.T) *storeDBFixture {

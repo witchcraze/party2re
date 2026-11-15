@@ -8,9 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestNewPlayerRepositoryNilDB(t *testing.T) {
@@ -172,64 +170,7 @@ func TestPlayerRepositoryListAndBan(t *testing.T) {
 
 func playerIsolatedDB(t *testing.T) (*sql.DB, *PlayerRepository) {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Skip("PARTY2_TEST_DB_ADMIN_DSN is required for isolated player repository tests")
-	}
-	source, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := source.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	ctx := context.Background()
-	name := "party2_player_test_" + id.New()
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Error(err)
-		}
-	})
-	cfg.DBName = name
-	db, err := Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	for _, table := range []string{"players", "system_maintenance", "player_notifications", "player_api_tokens"} {
-		var tableName, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.ExecContext(ctx, ddl); err != nil {
-			t.Fatal(err)
-		}
-	}
+	db := CreateTestDatabase(t, []string{"players", "system_maintenance", "player_notifications", "player_api_tokens"}...)
 	repo, err := NewPlayerRepository(db)
 	if err != nil {
 		t.Fatal(err)

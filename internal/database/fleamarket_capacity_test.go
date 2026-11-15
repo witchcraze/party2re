@@ -53,7 +53,7 @@ func capacityCount(t *testing.T, db *sql.DB) int {
 
 // Requires a dedicated DB: the ceiling counts every active listing in the database.
 func TestFleaMarketCapacitySerializesSellers(t *testing.T) {
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "fleamarket_listings", "fleamarket_capacity_lock")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "fleamarket_listings", "fleamarket_capacity_lock")
 	ctx := context.Background()
 	if _, err := db.ExecContext(ctx, "DELETE FROM fleamarket_capacity_lock"); err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestFleaMarketCapacitySerializesSellers(t *testing.T) {
 }
 
 func TestFleaMarketListingOrderAndEnhancementPersist(t *testing.T) {
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "fleamarket_listings")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "fleamarket_listings")
 	ctx := context.Background()
 	repo, err := database.NewFleaMarketRepository(db)
 	if err != nil {

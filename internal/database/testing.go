@@ -3,14 +3,17 @@ package database
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 	"unicode"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -21,6 +24,96 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
+
+// CreateTestDatabase copies only the requested table definitions into a dedicated
+// database and drops it on cleanup. It skips without PARTY2_DB_DSN, but requires
+// PARTY2_TEST_DB_ADMIN_DSN when DB tests are enabled; it never uses the shared DB
+// for writes. An empty table list creates an empty database.
+func CreateTestDatabase(t testing.TB, tables ...string) *sql.DB {
+	t.Helper()
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for dedicated database tests")
+	}
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	source, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	admin, err := Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	name := "party2_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cleanupCancel()
+		if _, err := admin.ExecContext(cleanupCtx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg.DBName = name
+	cfg.ParseTime = true
+	db, err := Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		restoreCtx, restoreCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer restoreCancel()
+		if _, err := conn.ExecContext(restoreCtx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
+			t.Errorf("restore foreign key checks: %v", err)
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn }) //lint:ignore error-swallow marks connection bad so the pool discards it
+		}
+		if err := conn.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	// FK checks are session-local; keep all DDL and restoration on this connection.
+	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range tables {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+strings.ReplaceAll(table, "`", "``")+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatalf("read schema %s: %v", table, err)
+		}
+		if _, err := conn.ExecContext(ctx, ddl); err != nil {
+			t.Fatalf("copy %s: %v", table, err)
+		}
+	}
+	return db
+}
 
 // Re-export concurrency stress testing harness from testutil for database package tests.
 type ConcurrencyStressConfig = testutil.ConcurrencyStressConfig

@@ -3,7 +3,6 @@ package home_test
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"errors"
 	"fmt"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
@@ -24,62 +22,23 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// homeIsolatedDB creates a uniquely named database holding only copied table
-// definitions (no data). BuildHouse checks town capacity, so it cannot be
-// verified reliably beside unrelated houses in the shared DB. Cleanup drops
-// only this database; missing admin configuration fails rather than falling
-// back to the shared DB.
+// BuildHouse checks town capacity, so it needs a dedicated database.
 func homeIsolatedDB(t *testing.T) *sql.DB {
 	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-	ctx := context.Background()
+	// Estate reclamation traverses the full schema, unlike subset-based fixtures.
 	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
+	defer func() {
 		if err := source.Close(); err != nil {
 			t.Error(err)
 		}
-	})
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated home tests")
-	}
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := database.Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	name := "party2_home_test_" + id.New()
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Error(err)
-		}
-	})
-	cfg.DBName = name
-	db, err := database.Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	}()
+	ctx := context.Background()
 	rows, err := source.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'")
 	if err != nil {
 		t.Fatal(err)
@@ -97,42 +56,7 @@ func homeIsolatedDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	rows.Close()
-	copyTableDefinitions(t, source, db, tables)
-	return db
-}
-
-// copyTableDefinitions copies DDL with FK checks disabled on one dedicated
-// connection so table order is irrelevant. FK checks are always re-enabled on
-// that connection before it returns to the pool; if that fails the connection
-// is discarded so a session with checks disabled is never reused.
-func copyTableDefinitions(t *testing.T, source, db *sql.DB, tables []string) {
-	t.Helper()
-	ctx := context.Background()
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
-			t.Errorf("restore foreign key checks: %v", err)
-			_ = conn.Raw(func(any) error { return driver.ErrBadConn }) //lint:ignore error-swallow marks connection bad so the pool discards it
-		}
-		if err := conn.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
-	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
-		t.Fatal(err)
-	}
-	for _, table := range tables {
-		var tableName, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := conn.ExecContext(ctx, ddl); err != nil {
-			t.Fatalf("copy %s: %v", table, err)
-		}
-	}
+	return database.CreateTestDatabase(t, tables...)
 }
 
 func TestHomeServiceIntegration(t *testing.T) {

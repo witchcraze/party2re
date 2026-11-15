@@ -3,82 +3,16 @@ package guild_test
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
-
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
-	"github.com/witchcraze/party2re/internal/id"
 )
 
 func guildIsolatedDB(t *testing.T) *sql.DB {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated guild tests")
-	}
-
-	ctx := context.Background()
-	source, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := source.Close(); err != nil {
-			t.Errorf("failed to close source DB: %v", err)
-		}
-	})
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := database.Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Errorf("failed to close admin DB: %v", err)
-		}
-	})
-
-	name := "party2_guild_test_" + id.New()
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Errorf("failed to drop isolated database %s: %v", name, err)
-		}
-	})
-
-	cfg.DBName = name
-	db, err := database.Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("failed to close isolated DB: %v", err)
-		}
-	})
-
-	for _, table := range []string{"players", "characters", "character_depots", "guilds", "guild_members", "character_memories"} {
-		var tableName, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.ExecContext(ctx, ddl); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return db
+	return database.CreateTestDatabase(t, []string{"players", "characters", "character_depots", "guilds", "guild_members", "character_memories"}...)
 }
 
 func TestGuildIsolatedDB_DisbandPreservesSharedGuild(t *testing.T) {

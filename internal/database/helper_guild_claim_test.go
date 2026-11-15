@@ -29,7 +29,7 @@ func (s helperGuildStore) AddGuildPoints(ctx context.Context, guildID string, po
 }
 
 func TestHelperGuildQuest_RejectionAndConcurrentClaim_Integration(t *testing.T) {
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members", "helper_quests")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members", "helper_quests")
 	ctx := context.Background()
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {

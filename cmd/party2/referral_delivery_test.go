@@ -52,17 +52,8 @@ func (referralRunPenalty) ProjectRunPenalty(context.Context, string, time.Time) 
 
 func newReferralFixture(t *testing.T) referralFixture {
 	t.Helper()
-	db := wiringIsolatedDB(t, helperWiringRequiredTables)
-	source, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := source.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
-	copyTableDefinitions(t, source, db, []string{"news_articles", "character_delivery_notices", "fleamarket_listings"})
+	tables := append([]string{"news_articles", "character_delivery_notices", "fleamarket_listings"}, helperWiringRequiredTables...)
+	db := database.CreateTestDatabase(t, tables...)
 	core, err := newCoreServices(db, nil)
 	if err != nil {
 		t.Fatal(err)

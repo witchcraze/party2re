@@ -186,7 +186,7 @@ func (r exileLookupHook) FindByName(ctx context.Context, name string) (corechara
 }
 
 func TestExileSelfPetitionAfterApplicantRename_Integration(t *testing.T) {
-	db := isolatedRepositoryDB(t, "players", "characters", "character_depots", "depot_items",
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items",
 		"exile_board", "exile_petitions", "exile_votes", "exile_sentences", "news_articles")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

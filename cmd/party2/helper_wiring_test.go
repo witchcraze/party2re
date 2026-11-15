@@ -2,15 +2,11 @@ package main
 
 import (
 	"context"
-	"database/sql"
-	"database/sql/driver"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/helperquest"
@@ -35,98 +31,8 @@ var helperWiringRequiredTables = []string{
 	"character_monsters",
 }
 
-// wiringIsolatedDB copies only table definitions for operations that scan shared state.
-func wiringIsolatedDB(t *testing.T, tables []string) *sql.DB {
-	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	ctx := context.Background()
-	source, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := source.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated wiring tests")
-	}
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := database.Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	name := fmt.Sprintf("party2_wire_%06x_%s", time.Now().UnixNano()%0x1000000, id.New())
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Error(err)
-		}
-	})
-
-	cfg.DBName = name
-	db, err := database.Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	copyTableDefinitions(t, source, db, tables)
-	return db
-}
-
-func copyTableDefinitions(t *testing.T, source, db *sql.DB, tables []string) {
-	t.Helper()
-	ctx := context.Background()
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
-			t.Errorf("restore foreign key checks: %v", err)
-			_ = conn.Raw(func(any) error { return driver.ErrBadConn }) //lint:ignore error-swallow marks connection bad so the pool discards it
-		}
-		if err := conn.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
-	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
-		t.Fatal(err)
-	}
-	for _, table := range tables {
-		var tableName, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := conn.ExecContext(ctx, ddl); err != nil {
-			t.Fatalf("copy %s: %v", table, err)
-		}
-	}
-}
-
 func TestHelperProductionGuildWiring(t *testing.T) {
-	db := wiringIsolatedDB(t, helperWiringRequiredTables)
+	db := database.CreateTestDatabase(t, helperWiringRequiredTables...)
 	ctx := context.Background()
 
 	core, err := newCoreServices(db, nil)
@@ -246,7 +152,7 @@ func (f *faultyGuildPointAdapter) AddGuildPoints(ctx context.Context, guildID st
 }
 
 func TestHelperProductionGuildWiring_GPUpdateErrorRollsBack(t *testing.T) {
-	db := wiringIsolatedDB(t, helperWiringRequiredTables)
+	db := database.CreateTestDatabase(t, helperWiringRequiredTables...)
 	ctx := context.Background()
 
 	core, err := newCoreServices(db, nil)

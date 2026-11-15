@@ -15,7 +15,7 @@ import (
 )
 
 func TestGemBoxRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
-	db := sparseIsolatedDB(t, "party2_gembox_test_", "players", "characters", "character_depots", "character_gem_boxes", "gem_box_items")
+	db := sparseIsolatedDB(t, "players", "characters", "character_depots", "character_gem_boxes", "gem_box_items")
 	ctx := context.Background()
 	repo, err := NewGemBoxRepository(db)
 	if err != nil {

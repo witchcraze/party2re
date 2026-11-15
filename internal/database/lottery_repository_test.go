@@ -4,89 +4,23 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/database"
-	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
 
 func lotteryIsolatedDB(t *testing.T) *sql.DB {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	ctx := context.Background()
-	source, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := source.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
-	if adminDSN == "" {
-		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated lottery repository tests")
-	}
-	cfg, err := mysql.ParseDSN(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := database.Open(adminDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	name := "party2_lottery_repo_test_" + id.New()
-	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
-			t.Error(err)
-		}
-	})
-
-	cfg.DBName = name
-	db, err := database.Open(cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-
-	tables := []string{
+	return database.CreateTestDatabase(t, []string{
 		"players",
 		"characters",
 		"character_depots",
 		"character_lottery",
 		"takarakuji_rounds",
 		"takarakuji_tickets",
-	}
-	for _, table := range tables {
-		var tableName, ddl string
-		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.ExecContext(ctx, ddl); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return db
+	}...)
 }
 
 func TestLotteryRepository_Integration(t *testing.T) {
