@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -26,8 +27,19 @@ var errInjected = errors.New("injected deletion failure")
 // failingCharacterRepo injects failures into the real repository.
 type failingCharacterRepo struct {
 	*database.CharacterRepository
-	failDelete  string // character ID whose deletion fails after its SQL cleanup ran
-	failListing bool
+	failDelete     string // character ID whose deletion fails after its SQL cleanup ran
+	failListing    bool
+	failLetterLock bool
+}
+
+func (r *failingCharacterRepo) LockDeletionLetters(ctx context.Context, ids ...string) error {
+	if err := r.CharacterRepository.LockDeletionLetters(ctx, ids...); err != nil {
+		return err
+	}
+	if r.failLetterLock {
+		return errInjected
+	}
+	return nil
 }
 
 func (r *failingCharacterRepo) Delete(ctx context.Context, id string) error {
@@ -131,6 +143,7 @@ func newDeletionFixture(t *testing.T) *deletionFixture {
 		defer cancel()
 		// Workers join before cleanup; rollback injections must not prevent teardown.
 		f.chars.failDelete, f.chars.failListing, f.players.failDelete = "", false, false
+		f.chars.failLetterLock = false
 		for _, charID := range f.characterIDs {
 			if err := f.charSvc.Delete(ctx, "", charID); err != nil && !errors.Is(err, character.ErrNotFound) {
 				t.Error(err)
@@ -258,6 +271,7 @@ func TestAccountDeletionRollsBackOnFailure(t *testing.T) {
 		{"second character fails", func(f *deletionFixture, second string) { f.chars.failDelete = second }},
 		{"player delete fails", func(f *deletionFixture, _ string) { f.players.failDelete = true }},
 		{"character listing fails", func(f *deletionFixture, _ string) { f.chars.failListing = true }},
+		{"mailbox lock fails", func(f *deletionFixture, _ string) { f.chars.failLetterLock = true }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -267,6 +281,25 @@ func TestAccountDeletionRollsBackOnFailure(t *testing.T) {
 			other := f.character(t, "")
 			solo := f.createGuild(t, a)          // A alone: deletion would disband it
 			shared := f.createGuild(t, b, other) // B leads: deletion would hand over to other
+			homes, err := database.NewHomeRepository(f.db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var letters []home.Letter
+			for i, pair := range [][2]corecharacter.Character{{a, b}, {a, other}, {other, b}, {b, b}} {
+				letter := home.Letter{ID: id.New(), SenderCharacterID: pair[0].ID, SenderName: pair[0].Name,
+					RecipientCharacterID: pair[1].ID, RecipientName: pair[1].Name,
+					Content: "rollback", Color: "#123456", IsDeletedBySender: i == 1,
+					CreatedAt: time.Now().UTC().Add(time.Duration(i) * time.Minute)}
+				if err := homes.CreateLetter(ctx, letter, 100); err != nil {
+					t.Fatal(err)
+				}
+				letter, err = homes.GetLetterByID(ctx, letter.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				letters = append(letters, letter)
+			}
 			if _, _, err := f.accounts.CreateAPIToken(ctx, owner.ID, "keep", nil); err != nil {
 				t.Fatal(err)
 			}
@@ -282,6 +315,12 @@ func TestAccountDeletionRollsBackOnFailure(t *testing.T) {
 			}
 			if f.leader(t, solo.ID) != a.ID || f.leader(t, shared.ID) != b.ID || f.dissolutionNews(t, solo) != 0 {
 				t.Fatal("guild state or dissolution news survived the rollback")
+			}
+			for _, want := range letters {
+				got, err := homes.GetLetterByID(ctx, want.ID)
+				if err != nil || !reflect.DeepEqual(got, want) {
+					t.Fatalf("letter was not restored: got %+v, %v; want %+v", got, err, want)
+				}
 			}
 		})
 	}

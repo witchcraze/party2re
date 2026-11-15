@@ -119,6 +119,11 @@ func (r *mockRepository) DeleteSharedRows(_ context.Context, id string) error {
 	return r.err
 }
 
+func (r *mockRepository) LockDeletionLetters(_ context.Context, ids ...string) error {
+	r.deletionLog = append(r.deletionLog, "letters:"+strings.Join(ids, ","))
+	return r.err
+}
+
 func (r *mockRepository) Delete(_ context.Context, id string) error {
 	r.deletionLog = append(r.deletionLog, "delete:"+id)
 	if r.err != nil {
@@ -706,7 +711,7 @@ func TestService_Delete(t *testing.T) {
 		if err := service.DeleteByPlayerID(ctx, "player-123"); err != nil {
 			t.Fatalf("DeleteByPlayerID() error = %v", err)
 		}
-		want := []string{"shared:" + lo, "shared:" + hi, "hook", "delete:" + lo, "delete:" + hi}
+		want := []string{"shared:" + lo, "shared:" + hi, "hook", "letters:" + lo + "," + hi, "delete:" + lo, "delete:" + hi}
 		if !slices.Equal(repo.deletionLog, want) || !slices.Equal(hooked, []string{lo, hi}) {
 			t.Fatalf("deletion order = %v (hook %v), want %v", repo.deletionLog, hooked, want)
 		}

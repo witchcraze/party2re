@@ -452,6 +452,10 @@ func (r *realCharRepoForBankTest) DeleteSharedRows(context.Context, string) erro
 	return nil
 }
 
+func (r *realCharRepoForBankTest) LockDeletionLetters(context.Context, ...string) error {
+	return nil
+}
+
 type realBankRepoForBankTest struct {
 	charRepo *realCharRepoForBankTest
 }

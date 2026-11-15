@@ -67,6 +67,9 @@ restart returns an error with no deletion committed.
 
 Same-table multi-row acquisition uses [`economy.LockInOrder`](../../internal/economy/locking.go);
 callers retain transaction ownership and domain-specific missing-row decisions.
+Ordering covers the complete transaction's shared-row set, including every
+character's mailbox rows in account deletion; independently sorted subsets do
+not establish a transaction-wide order.
 
 Daily guild GP decay and GvG settlement acquire guild row locks in ascending ID
 order. Decay includes zero-balance guilds in this order, applying its formula and
