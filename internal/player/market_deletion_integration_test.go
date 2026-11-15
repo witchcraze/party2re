@@ -66,6 +66,13 @@ func (d deletionStoreDelivery) HoldPayment(ctx context.Context, recipientID, buy
 // Notices are outside this SQL locking regression; payments use the real repository.
 func (deletionStoreDelivery) NotifyItem(context.Context, string, string, string) error { return nil }
 
+type deletionFleaPayment struct{ *database.DepotRepository }
+
+func (d deletionFleaPayment) HoldPayment(ctx context.Context, recipientID, buyerName string, amount int) error {
+	return d.AddRemittance(ctx, depot.Remittance{ID: id.New(), CharacterID: recipientID,
+		Amount: amount, Source: depot.RemittanceFleaMarketPayment, SenderName: buyerName})
+}
+
 func TestMarketCreatedAfterDeletionDiscovery(t *testing.T) {
 	for _, market := range []string{"flea", "gold", "barter"} {
 		for _, mode := range []string{"character", "account", "account rollback"} {
@@ -127,7 +134,9 @@ func TestMarketCreatedAfterDeletionDiscovery(t *testing.T) {
 						t.Fatal(err)
 					}
 					tx := database.NewTransactionProvider(f.db)
-					flea, err := fleamarket.NewService(fleaRepo, f.chars, depots, fleamarket.WithTransactionProvider(tx))
+					flea, err := fleamarket.NewService(fleaRepo, f.chars, depots,
+						fleamarket.WithTransactionProvider(tx),
+						fleamarket.WithPaymentHolder(deletionFleaPayment{depots}))
 					if err != nil {
 						t.Fatal(err)
 					}

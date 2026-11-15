@@ -49,7 +49,10 @@ func newMarketFixture(t *testing.T) *marketFixture {
 	t.Helper()
 	f := &marketFixture{listings: &failingListingRepo{mockFleaMarketRepo: newMockFleaMarketRepo()}, chars: &failingCharRepo{mockCharRepo: newMockCharRepo()}, depots: newMockDepotRepo()}
 	var err error
-	f.svc, err = fleamarket.NewService(f.listings, f.chars, f.depots, fleamarket.WithItemDefinitionProvider(&mockItemDefs{}))
+	f.svc, err = fleamarket.NewService(f.listings, f.chars, f.depots,
+		fleamarket.WithItemDefinitionProvider(&mockItemDefs{}),
+		fleamarket.WithPaymentHolder(&mockPaymentHolder{}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

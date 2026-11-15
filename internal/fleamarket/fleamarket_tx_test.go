@@ -19,8 +19,9 @@ func TestFleaMarketService_PurchaseListing(t *testing.T) {
 	charRepo := newMockCharRepo()
 	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
-
 	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	payments := &mockPaymentHolder{}
+	svc.SetPaymentHolder(payments)
 
 	sellerID := "char-seller-2"
 	buyerID := "char-buyer-1"
@@ -78,8 +79,12 @@ func TestFleaMarketService_PurchaseListing(t *testing.T) {
 	if result.BuyerGold != 1550 {
 		t.Errorf("expected buyer gold 1550, got %d", result.BuyerGold)
 	}
-	if result.SellerGold != 1450 {
-		t.Errorf("expected seller gold 1450, got %d", result.SellerGold)
+	sellerAfter, _ := charRepo.FindByID(ctx, sellerID)
+	if sellerAfter.Money != 1000 {
+		t.Errorf("expected seller wallet unchanged at 1000, got %d", sellerAfter.Money)
+	}
+	if len(payments.held) != 1 || payments.held[0] != (heldPayment{recipientID: sellerID, buyerName: "BuyerBob", amount: 450}) {
+		t.Errorf("expected held payment {sellerID, BuyerBob, 450}, got %+v", payments.held)
 	}
 
 	// Verify buyer received item in their depot
@@ -101,8 +106,9 @@ func TestFleaMarketService_PurchaseListing_DepotFullDeliversOverCapacity(t *test
 	charRepo := newMockCharRepo()
 	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
-
 	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	payments := &mockPaymentHolder{}
+	svc.SetPaymentHolder(payments)
 
 	sellerID := "char-seller-full"
 	buyerID := "char-buyer-full"
@@ -147,8 +153,9 @@ func TestFleaMarketService_CancelListing(t *testing.T) {
 	charRepo := newMockCharRepo()
 	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
-
 	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	payments := &mockPaymentHolder{}
+	svc.SetPaymentHolder(payments)
 
 	sellerID := "char-seller-3"
 	otherID := "char-other"
@@ -210,8 +217,9 @@ func TestFleaMarketService_CancelListing_DepotFullReturnsOverCapacity(t *testing
 	charRepo := newMockCharRepo()
 	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
-
 	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	payments := &mockPaymentHolder{}
+	svc.SetPaymentHolder(payments)
 
 	sellerID := "char-seller-cancelfull"
 	charRepo.characters[sellerID] = corecharacter.Character{ID: sellerID, Name: "SellerCancel"}
@@ -252,8 +260,9 @@ func TestFleaMarketService_QueriesAndPagination(t *testing.T) {
 	charRepo := newMockCharRepo()
 	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
-
 	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	payments := &mockPaymentHolder{}
+	svc.SetPaymentHolder(payments)
 
 	sellerID := "char-seller-p"
 	charRepo.characters[sellerID] = corecharacter.Character{ID: sellerID, Name: "SellerP"}
@@ -312,8 +321,9 @@ func TestFleaMarketService_PurchaseListing_HighJobLevel_ExceedsInitialCapacity(t
 	charRepo := newMockCharRepo()
 	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
-
 	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	payments := &mockPaymentHolder{}
+	svc.SetPaymentHolder(payments)
 
 	sellerID := "seller-hj"
 	buyerID := "buyer-hj"
@@ -411,7 +421,10 @@ func TestFleaMarketService_PurchaseListing_NoBuyerDepot_FindOrCreate(t *testing.
 	sdr := &strictDepotRepo{depots: make(map[string]depot.Depot)}
 	sdr.depots[sellerID] = sellerDepot
 
-	svc2, _ := fleamarket.NewService(repo, charRepo, sdr, fleamarket.WithItemDefinitionProvider(itemDefs))
+	svc2, _ := fleamarket.NewService(repo, charRepo, sdr,
+		fleamarket.WithItemDefinitionProvider(itemDefs),
+		fleamarket.WithPaymentHolder(&mockPaymentHolder{}),
+	)
 
 	now := time.Now().UTC()
 	listing, err := svc2.CreateListing(ctx, sellerID, "item-herb", 100, now)
@@ -463,8 +476,9 @@ func TestFleaMarketService_CancelListing_HighJobLevel_ExceedsInitialCapacity(t *
 	charRepo := newMockCharRepo()
 	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
-
 	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	payments := &mockPaymentHolder{}
+	svc.SetPaymentHolder(payments)
 
 	sellerID := "seller-cancel-hj"
 	charRepo.characters[sellerID] = corecharacter.Character{
@@ -504,5 +518,128 @@ func TestFleaMarketService_CancelListing_HighJobLevel_ExceedsInitialCapacity(t *
 	updatedSellerDepot, _ := depotRepo.FindByCharacterID(ctx, sellerID)
 	if len(updatedSellerDepot.Items) != 7 {
 		t.Errorf("expected 7 items in seller depot, got %d", len(updatedSellerDepot.Items))
+	}
+}
+
+type mockRollbackTx struct {
+	repo      *mockFleaMarketRepo
+	charRepo  *mockCharRepo
+	depotRepo *mockDepotRepo
+}
+
+func (m *mockRollbackTx) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	listings := make(map[string]fleamarket.Listing, len(m.repo.listings))
+	for k, v := range m.repo.listings {
+		listings[k] = v
+	}
+	chars := make(map[string]corecharacter.Character, len(m.charRepo.characters))
+	for k, v := range m.charRepo.characters {
+		chars[k] = v
+	}
+	depots := make(map[string]depot.Depot, len(m.depotRepo.depots))
+	for k, v := range m.depotRepo.depots {
+		cp := v
+		cp.Items = append([]coreitem.Instance(nil), v.Items...)
+		depots[k] = cp
+	}
+	if err := fn(ctx); err != nil {
+		m.repo.listings = listings
+		m.charRepo.characters = chars
+		m.depotRepo.depots = depots
+		return err
+	}
+	return nil
+}
+
+func TestFleaMarketService_PurchaseListing_AtWalletCap(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockFleaMarketRepo()
+	charRepo := newMockCharRepo()
+	depotRepo := newMockDepotRepo()
+	payments := &mockPaymentHolder{}
+
+	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo,
+		fleamarket.WithItemDefinitionProvider(&mockItemDefs{}),
+		fleamarket.WithPaymentHolder(payments),
+	)
+
+	sellerID := "char-seller-cap"
+	buyerID := "char-buyer-cap"
+	charRepo.characters[sellerID] = corecharacter.Character{ID: sellerID, Name: "SellerCap", Money: corecharacter.MaxMoney}
+	charRepo.characters[buyerID] = corecharacter.Character{ID: buyerID, Name: "BuyerCap", Money: 1000}
+
+	sellerDepot, _ := depot.NewDepot(sellerID)
+	inst, _ := coreitem.NewInstance("wea-sword", 1)
+	_ = sellerDepot.AddItem(inst)
+	_ = depotRepo.Save(ctx, sellerDepot)
+
+	now := time.Now().UTC()
+	listing, err := svc.CreateListing(ctx, sellerID, "wea-sword", 300, now)
+	if err != nil {
+		t.Fatalf("CreateListing failed: %v", err)
+	}
+
+	result, err := svc.PurchaseListing(ctx, buyerID, listing.ID, now)
+	if err != nil {
+		t.Fatalf("PurchaseListing at wallet cap failed: %v", err)
+	}
+	if result.BuyerGold != 700 {
+		t.Errorf("expected buyer gold 700, got %d", result.BuyerGold)
+	}
+	sellerAfter, _ := charRepo.FindByID(ctx, sellerID)
+	if sellerAfter.Money != corecharacter.MaxMoney {
+		t.Errorf("expected seller wallet unchanged at %d, got %d", corecharacter.MaxMoney, sellerAfter.Money)
+	}
+	if len(payments.held) != 1 || payments.held[0] != (heldPayment{recipientID: sellerID, buyerName: "BuyerCap", amount: 300}) {
+		t.Errorf("expected held payment {sellerID, BuyerCap, 300}, got %+v", payments.held)
+	}
+}
+
+func TestFleaMarketService_PurchaseListing_PaymentHoldFailureRollsBack(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockFleaMarketRepo()
+	charRepo := newMockCharRepo()
+	depotRepo := newMockDepotRepo()
+	tx := &mockRollbackTx{repo: repo, charRepo: charRepo, depotRepo: depotRepo}
+	holdErr := errors.New("remittance failure")
+	payments := &mockPaymentHolder{err: holdErr}
+
+	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo,
+		fleamarket.WithTransactionProvider(tx),
+		fleamarket.WithItemDefinitionProvider(&mockItemDefs{}),
+		fleamarket.WithPaymentHolder(payments),
+	)
+
+	sellerID := "char-seller-rb"
+	buyerID := "char-buyer-rb"
+	charRepo.characters[sellerID] = corecharacter.Character{ID: sellerID, Name: "SellerRB", Money: 500}
+	charRepo.characters[buyerID] = corecharacter.Character{ID: buyerID, Name: "BuyerRB", Money: 1000}
+
+	sellerDepot, _ := depot.NewDepot(sellerID)
+	inst, _ := coreitem.NewInstance("wea-sword", 1)
+	_ = sellerDepot.AddItem(inst)
+	_ = depotRepo.Save(ctx, sellerDepot)
+
+	now := time.Now().UTC()
+	listing, err := svc.CreateListing(ctx, sellerID, "wea-sword", 300, now)
+	if err != nil {
+		t.Fatalf("CreateListing failed: %v", err)
+	}
+
+	if _, err := svc.PurchaseListing(ctx, buyerID, listing.ID, now); !errors.Is(err, holdErr) {
+		t.Fatalf("expected hold error, got %v", err)
+	}
+
+	buyerAfter, _ := charRepo.FindByID(ctx, buyerID)
+	if buyerAfter.Money != 1000 {
+		t.Errorf("expected buyer gold rolled back to 1000, got %d", buyerAfter.Money)
+	}
+	buyerDepot, _ := depotRepo.FindByCharacterID(ctx, buyerID)
+	if len(buyerDepot.Items) != 0 {
+		t.Errorf("expected buyer depot empty after rollback, got %+v", buyerDepot.Items)
+	}
+	persistedListing, _ := repo.GetListingByID(ctx, listing.ID)
+	if persistedListing.Status != fleamarket.StatusActive {
+		t.Errorf("expected listing active after rollback, got %s", persistedListing.Status)
 	}
 }

@@ -39,6 +39,22 @@
         "RunInTx"
       ],
       "source_ref": "internal/database/tx.go#TransactionProvider"
+    },
+    {
+      "module": "depot",
+      "relation_type": "public_service_call",
+      "methods": [
+        "HoldPayment"
+      ],
+      "source_ref": "internal/fleamarket/fleamarket.go#PaymentHolder"
+    },
+    {
+      "module": "home",
+      "relation_type": "public_service_call",
+      "methods": [
+        "HoldPayment"
+      ],
+      "source_ref": "internal/fleamarket/fleamarket.go#PaymentHolder"
     }
   ],
   "transaction_flows": [
@@ -65,9 +81,10 @@
         {"step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (min(buyer,seller))", "mode": "SELECT ... FOR UPDATE"},
         {"step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (max(buyer,seller))", "mode": "SELECT ... FOR UPDATE"},
         {"step": 4, "target": "character_depots / depot_items", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
-        {"step": 5, "target": "characters", "method": "CharacterRepository.Update (Buyer & Seller)", "mode": "UPDATE"},
+        {"step": 5, "target": "characters", "method": "CharacterRepository.Update (Buyer)", "mode": "UPDATE"},
         {"step": 6, "target": "character_depots / depot_items", "method": "DepotRepository.Save (Buyer)", "mode": "UPDATE"},
-        {"step": 7, "target": "fleamarket_listings", "method": "FleaMarketRepository.UpdateListing", "mode": "UPDATE (Mark Sold)"}
+        {"step": 7, "target": "fleamarket_listings", "method": "FleaMarketRepository.UpdateListing", "mode": "UPDATE (Mark Sold)"},
+        {"step": 8, "target": "character_pending_remittances / character_delivery_notices", "method": "PaymentHolder.HoldPayment", "mode": "INSERT (ambient transaction)"}
       ]
     },
     {

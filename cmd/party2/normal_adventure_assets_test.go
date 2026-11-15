@@ -275,8 +275,8 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 				t.Fatal(err)
 			}
 			after, err = core.charRepo.FindByID(ctx, actor.ID)
-			// The Depot send is held for collection rather than credited.
-			if err != nil || after.Money != before.Money+20 || heldGold(t, econ.depot, actor.ID) != 5 {
+			// Depot sends and Flea Market sales are held for collection rather than credited to wallet.
+			if err != nil || after.Money != before.Money+10 || heldGold(t, econ.depot, actor.ID) != 15 {
 				t.Fatal("exit lost incoming credits", after, err)
 			}
 			creditedDepot, err := econ.depotRepo.FindByCharacterID(ctx, actor.ID)

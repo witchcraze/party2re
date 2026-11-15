@@ -50,7 +50,6 @@ func (f *fleaMarketGatewayFixture) PurchaseListing(ctx context.Context, actor, l
 	return fleamarket.PurchaseResult{
 		Listing:      fleamarket.Listing{ID: listingID, Status: fleamarket.StatusSold},
 		BuyerGold:    700,
-		SellerGold:   9999,
 		ItemInstance: coreitem.Instance{ID: "item-1", DefinitionID: "weapon-01"},
 	}, nil
 }
@@ -125,13 +124,8 @@ func TestFleaMarketGatewayOutcomes(t *testing.T) {
 							t.Fatal(err)
 						}
 						keys := slices.Sorted(maps.Keys(fields))
-						if !slices.Equal(keys, []string{"buyer_gold", "item_instance", "listing"}) {
+						if !slices.Equal(keys, []string{"buyer_gold", "item_instance", "listing"}) || string(fields["buyer_gold"]) != "700" {
 							t.Fatalf("fleamarket_purchase result fields: %s", got["result"])
-						}
-						for _, private := range []string{"seller_gold", "9999"} {
-							if strings.Contains(string(got["result"]), private) {
-								t.Fatalf("fleamarket_purchase leaked seller balance %q: %s", private, got["result"])
-							}
 						}
 					}
 					if refreshFailure {
