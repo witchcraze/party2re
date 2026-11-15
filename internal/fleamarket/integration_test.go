@@ -13,7 +13,10 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
+	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -33,11 +36,30 @@ func (r *testFleaCollectionRecorder) RecordItemDiscovered(_ context.Context, cha
 	return nil
 }
 
+type sqlFleaPaymentHolder struct {
+	depots *database.DepotRepository
+	homes  *home.Service
+}
+
+func (h sqlFleaPaymentHolder) HoldPayment(ctx context.Context, recipientID, buyerName string, amount int) error {
+	if err := h.depots.AddRemittance(ctx, depot.Remittance{
+		ID:          id.New(),
+		CharacterID: recipientID,
+		Amount:      amount,
+		Source:      depot.RemittanceFleaMarketPayment,
+		SenderName:  buyerName,
+	}); err != nil {
+		return err
+	}
+	return h.homes.AddDeliveryFlag(ctx, recipientID, depot.NoticeMoneyTransfer, "お金が預かり所に届いています")
+}
+
 type fleaMarketDBFixture struct {
 	db       *sql.DB
 	repo     *database.FleaMarketRepository
 	chars    *database.CharacterRepository
 	depots   *database.DepotRepository
+	homes    *home.Service
 	catalog  *item.Catalog
 	recorder *testFleaCollectionRecorder
 }
@@ -69,6 +91,14 @@ func newFleaMarketDBFixture(t *testing.T) *fleaMarketDBFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	homeRepo, err := database.NewHomeRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	homes, err := home.NewService(homeRepo, chars)
+	if err != nil {
+		t.Fatal(err)
+	}
 	catalog, err := item.DefaultCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +108,7 @@ func newFleaMarketDBFixture(t *testing.T) *fleaMarketDBFixture {
 		repo:     repo,
 		chars:    chars,
 		depots:   depots,
+		homes:    homes,
 		catalog:  catalog,
 		recorder: &testFleaCollectionRecorder{},
 	}
@@ -108,6 +139,7 @@ func (f *fleaMarketDBFixture) service(t *testing.T) *fleamarket.Service {
 		fleamarket.WithTransactionProvider(database.NewTransactionProvider(f.db)),
 		fleamarket.WithItemDefinitionProvider(f.catalog),
 		fleamarket.WithCollectionRecorder(f.recorder),
+		fleamarket.WithPaymentHolder(sqlFleaPaymentHolder{depots: f.depots, homes: f.homes}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -161,7 +193,7 @@ func TestFleaMarketListPurchaseCancel_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PurchaseListing failed: %v", err)
 	}
-	if purchase.BuyerGold != 9400 || purchase.SellerGold != 5600 || purchase.ItemInstance.EnhancementLevel != 7 {
+	if purchase.BuyerGold != 9400 || purchase.ItemInstance.EnhancementLevel != 7 {
 		t.Fatalf("unexpected purchase result: %+v", purchase)
 	}
 
@@ -177,8 +209,22 @@ func TestFleaMarketListPurchaseCancel_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if persistedBuyer.Money != 9400 || persistedSeller.Money != 5600 {
+	if persistedBuyer.Money != 9400 || persistedSeller.Money != 5000 {
 		t.Fatalf("gold after purchase: buyer=%d seller=%d", persistedBuyer.Money, persistedSeller.Money)
+	}
+	remittances, err := f.depots.ListRemittances(ctx, seller.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remittances) != 1 || remittances[0].Amount != 600 || remittances[0].Source != depot.RemittanceFleaMarketPayment || remittances[0].SenderName != buyer.Name {
+		t.Fatalf("seller remittances = %+v", remittances)
+	}
+	notices, err := f.homes.ListDeliveryNotices(ctx, seller.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notices) != 1 || notices[0].NoticeType != depot.NoticeMoneyTransfer || notices[0].Message != "お金が預かり所に届いています" {
+		t.Fatalf("seller notices = %+v", notices)
 	}
 	buyerDepot, err := f.depots.FindByCharacterID(ctx, buyer.ID)
 	if err != nil {
@@ -321,7 +367,17 @@ func TestFleaMarketConcurrentPurchasesConserveAssets_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	totalGold := persistedSeller.Money
+	if persistedSeller.Money != 5000 {
+		t.Fatalf("seller wallet changed after purchase: %d", persistedSeller.Money)
+	}
+	held, err := f.depots.ListRemittances(ctx, seller.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(held) != 1 || held[0].Amount != price {
+		t.Fatalf("seller remittances = %+v", held)
+	}
+	totalGold := persistedSeller.Money + held[0].Amount
 	totalItems := 0
 	for _, bID := range buyers {
 		b, err := f.chars.FindByID(ctx, bID)

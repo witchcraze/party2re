@@ -176,6 +176,9 @@ func newSocServices(
 	if econ != nil && econ.gemStore != nil {
 		econ.gemStore.SetDeliveryNotifier(homeService)
 	}
+	if econ != nil && econ.fleamarket != nil {
+		econ.fleamarket.SetPaymentHolder(fleaMarketDelivery{remittances: econ.depotRepo, notifier: homeService})
+	}
 
 	guildService, err := guild.NewService(
 		guildRepo,

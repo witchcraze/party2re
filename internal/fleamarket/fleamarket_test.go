@@ -180,6 +180,25 @@ func (m *mockCollectionRecorder) RecordItemDiscovered(ctx context.Context, chara
 	return nil
 }
 
+type heldPayment struct {
+	recipientID string
+	buyerName   string
+	amount      int
+}
+
+type mockPaymentHolder struct {
+	held []heldPayment
+	err  error
+}
+
+func (m *mockPaymentHolder) HoldPayment(_ context.Context, recipientID, buyerName string, amount int) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.held = append(m.held, heldPayment{recipientID: recipientID, buyerName: buyerName, amount: amount})
+	return nil
+}
+
 type mockItemDefs struct{}
 
 func (m *mockItemDefs) FindByID(id string) (coreitem.Definition, error) {

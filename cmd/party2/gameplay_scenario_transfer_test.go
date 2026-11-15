@@ -153,11 +153,13 @@ func TestGameplayScenario_TwoAccountTransfers(t *testing.T) {
 	}
 	act(0, market, "fleamarket_purchase", map[string]any{"listing_id": market.Scene.Data.Listings[0].ID})
 	want[0].gold -= listingPrice
-	// Current rule: immediate seller wallet credit. Legacy free.cgi:174 holds
-	// proceeds instead; #1902 owns that defect and must update this expectation.
-	want[1].gold += listingPrice
+	want[1].held = listingPrice
 	want[1].listed, want[0].stored = 0, 1
-	check("market purchase paid seller and delivered once")
+	check("market purchase held seller proceeds and delivered once")
+	act(1, visit(1, "depot"), "depot_withdraw", map[string]any{})
+	want[1].held = 0
+	want[1].gold += listingPrice
+	check("seller collected flea market remittance")
 	a.restart()
 	check("restart preserved both sessions and assets")
 	check("repeated observations did not collect or duplicate assets")

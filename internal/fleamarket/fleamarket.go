@@ -61,7 +61,6 @@ type Listing struct {
 type PurchaseResult struct {
 	Listing      Listing           `json:"listing"`
 	BuyerGold    int               `json:"buyer_gold"`
-	SellerGold   int               `json:"seller_gold"`
 	ItemInstance coreitem.Instance `json:"item_instance"`
 }
 
@@ -92,6 +91,12 @@ type CollectionRecorder interface {
 	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
 }
 
+// PaymentHolder holds a Flea Market sale payment for the seller at the Depot
+// and raises the Home money-arrival notice inside the caller's transaction.
+type PaymentHolder interface {
+	HoldPayment(ctx context.Context, recipientID, buyerName string, amount int) error
+}
+
 type ItemDefinitionProvider = coreitem.DefinitionProvider
 
 type TransactionProvider interface {
@@ -106,9 +111,20 @@ type Service struct {
 	itemDefs           ItemDefinitionProvider
 	txProvider         TransactionProvider
 	collectionRecorder CollectionRecorder
+	payment            PaymentHolder
 }
 
 type Option func(*Service)
+
+func WithPaymentHolder(holder PaymentHolder) Option {
+	return func(s *Service) {
+		s.payment = holder
+	}
+}
+
+func (s *Service) SetPaymentHolder(holder PaymentHolder) {
+	s.payment = holder
+}
 
 func WithCollectionRecorder(recorder CollectionRecorder) Option {
 	return func(s *Service) {
@@ -357,12 +373,9 @@ func (s *Service) PurchaseListing(
 			return err
 		}
 
-		// 5. Transfer Gold
+		// 5. Deduct Gold from Buyer (seller receives a pending remittance below)
 		if err := buyerChar.DeductMoney(listing.Price); err != nil {
 			return ErrInsufficientGold
-		}
-		if err := sellerChar.AddMoney(listing.Price); err != nil {
-			return err
 		}
 
 		// 6. Deliver Item to Buyer Depot (legacy &send_item)
@@ -379,11 +392,8 @@ func (s *Service) PurchaseListing(
 		buyerName := buyerChar.Name
 		listing.BuyerName = &buyerName
 
-		// 8. Persist mutations
+		// 8. Persist mutations and hold seller proceeds with the Home money notice
 		if err := s.charRepo.Update(txCtx, buyerChar); err != nil {
-			return err
-		}
-		if err := s.charRepo.Update(txCtx, sellerChar); err != nil {
 			return err
 		}
 		if err := s.depotRepo.Save(txCtx, buyerDepot); err != nil {
@@ -392,11 +402,16 @@ func (s *Service) PurchaseListing(
 		if err := s.repo.UpdateListing(txCtx, listing); err != nil {
 			return err
 		}
+		if s.payment == nil {
+			return errors.New("fleamarket payment holder is required")
+		}
+		if err := s.payment.HoldPayment(txCtx, sellerChar.ID, buyerChar.Name, listing.Price); err != nil {
+			return err
+		}
 
 		result = PurchaseResult{
 			Listing:      listing,
 			BuyerGold:    buyerChar.Money,
-			SellerGold:   sellerChar.Money,
 			ItemInstance: itemInst,
 		}
 

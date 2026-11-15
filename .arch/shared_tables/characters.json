@@ -130,7 +130,7 @@
       "caller_method": "internal/fleamarket/fleamarket.go#Service.PurchaseListing",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
-      "purpose": "Lock buyer and seller characters in ascending ID order to transfer gold"
+      "purpose": "Lock buyer and seller characters in ascending ID order to deduct buyer gold and guard seller remittance delivery"
     },
     {
       "module": "gemstore",

@@ -559,6 +559,20 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 		res.TotalOps, cfg.Workers, res.Duration)
 }
 
+type stressFleaPaymentHolder struct {
+	depots *DepotRepository
+}
+
+func (h stressFleaPaymentHolder) HoldPayment(ctx context.Context, recipientID, buyerName string, amount int) error {
+	return h.depots.AddRemittance(ctx, depot.Remittance{
+		ID:          id.New(),
+		CharacterID: recipientID,
+		Amount:      amount,
+		Source:      depot.RemittanceFleaMarketPayment,
+		SenderName:  buyerName,
+	})
+}
+
 func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -596,9 +610,21 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 		depotRepo,
 		fleamarket.WithTransactionProvider(txProvider),
 		fleamarket.WithItemDefinitionProvider(itemCatalog),
+		fleamarket.WithPaymentHolder(stressFleaPaymentHolder{depots: depotRepo}),
 	)
 	if err != nil {
 		t.Fatal(err)
+	}
+	sumRemittances := func(characterID string) int64 {
+		remittances, rErr := depotRepo.ListRemittances(ctx, characterID)
+		if rErr != nil {
+			t.Fatal(rErr)
+		}
+		var total int64
+		for _, r := range remittances {
+			total += int64(r.Amount)
+		}
+		return total
 	}
 
 	// 1. Setup Seller with depot items
@@ -672,7 +698,7 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		totalGoldBefore := int64(sellerBefore.Money)
+		totalGoldBefore := int64(sellerBefore.Money) + sumRemittances(sellerChar.ID)
 		for _, b := range buyers {
 			bc, err := charRepo.FindByID(ctx, b.ID)
 			if err != nil {
@@ -720,7 +746,10 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		totalGoldAfter := int64(sellerAfter.Money)
+		if sellerAfter.Money != sellerInitialGold {
+			t.Fatalf("Phase 1 iter %d: seller wallet changed from %d to %d", iter, sellerInitialGold, sellerAfter.Money)
+		}
+		totalGoldAfter := int64(sellerAfter.Money) + sumRemittances(sellerChar.ID)
 		for _, b := range buyers {
 			bc, err := charRepo.FindByID(ctx, b.ID)
 			if err != nil {
@@ -769,7 +798,7 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		totalGoldBefore := int64(sellerBefore.Money + buyerBefore.Money)
+		totalGoldBefore := int64(sellerBefore.Money+buyerBefore.Money) + sumRemittances(sellerChar.ID)
 
 		// Race: Purchase vs Cancel
 		buyErr, cancelErr := RunRace2(
@@ -826,7 +855,10 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		totalGoldAfter := int64(sellerAfter.Money + buyerAfter.Money)
+		if sellerAfter.Money != sellerInitialGold {
+			t.Fatalf("Phase 2 iter %d: seller wallet changed from %d to %d", iter, sellerInitialGold, sellerAfter.Money)
+		}
+		totalGoldAfter := int64(sellerAfter.Money+buyerAfter.Money) + sumRemittances(sellerChar.ID)
 
 		if totalGoldBefore != totalGoldAfter {
 			t.Fatalf("Phase 2 iter %d: GOLD LEAK/CREATION! Before: %d, After: %d, Diff: %d",
