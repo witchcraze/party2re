@@ -245,8 +245,12 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if handed.Room.LeaderCharacterID != c2.ID || handed.Room.PrizePool != 200 || len(handed.Members) != 2 || !handed.Members[0].IsLeader || handed.Members[0].CharacterID != c2.ID {
-		t.Fatalf("expected Bob promoted to leader with 200G pool, got room=%+v members=%+v", handed.Room, handed.Members)
+	if handed.Room.LeaderCharacterID != c2.ID || handed.Room.LeaderName != c2.Name || handed.Room.PrizePool != 200 || len(handed.Members) != 2 || !handed.Members[0].IsLeader || handed.Members[0].CharacterID != c2.ID {
+		t.Fatalf("expected Bob (%s) promoted to leader with 200G pool, got room=%+v members=%+v", c2.Name, handed.Room, handed.Members)
+	}
+	listed, err := svc.ListRooms(ctx)
+	if err != nil || len(listed) != 1 || listed[0].LeaderCharacterID != c2.ID || listed[0].LeaderName != c2.Name {
+		t.Fatalf("expected ListRooms to reflect new leader %s (%s), got %+v err=%v", c2.ID, c2.Name, listed, err)
 	}
 	outsider := createTestCharacter("outsider", "Outsider", 500)
 	charRepo.add(outsider)
@@ -258,8 +262,8 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 		t.Fatal(err)
 	}
 	handed2, err := svc.GetRoom(ctx, detail2.Room.ID)
-	if err != nil || handed2.Room.LeaderCharacterID != c3.ID {
-		t.Fatalf("expected Charlie promoted to leader, got %+v err=%v", handed2.Room, err)
+	if err != nil || handed2.Room.LeaderCharacterID != c3.ID || handed2.Room.LeaderName != c3.Name {
+		t.Fatalf("expected Charlie (%s) promoted to leader, got %+v err=%v", c3.Name, handed2.Room, err)
 	}
 	if err := svc.LeaveRoom(ctx, c3.ID, detail2.Room.ID); err != nil {
 		t.Fatal(err)
@@ -581,8 +585,8 @@ func TestColosseum_LeaveRoom_InProgress_AndForfeit(t *testing.T) {
 		t.Fatalf("expected no refund for in_progress leave, got %d", aAfter.Money)
 	}
 	afterLeave, err := svc.GetRoom(ctx, d1.Room.ID)
-	if err != nil || afterLeave.Room.LeaderCharacterID != c2.ID || afterLeave.Room.PrizePool != 200 {
-		t.Fatalf("expected Bob promoted with 200G pool, got %+v err=%v", afterLeave.Room, err)
+	if err != nil || afterLeave.Room.LeaderCharacterID != c2.ID || afterLeave.Room.LeaderName != c2.Name || afterLeave.Room.PrizePool != 200 {
+		t.Fatalf("expected Bob (%s) promoted with 200G pool, got %+v err=%v", c2.Name, afterLeave.Room, err)
 	}
 
 	res, err := svc.AdvanceRound(ctx, c2.ID, d1.Room.ID)
@@ -652,8 +656,8 @@ func TestColosseum_LeaveRoom_Completed(t *testing.T) {
 		t.Fatalf("expected idempotent retry after completed leave, got %v", err)
 	}
 	rem, err := svc.GetRoom(ctx, d.Room.ID)
-	if err != nil || rem.Room.LeaderCharacterID != c2.ID || len(rem.Members) != 1 {
-		t.Fatalf("expected Bob promoted on completed leader exit, got %+v err=%v", rem, err)
+	if err != nil || rem.Room.LeaderCharacterID != c2.ID || rem.Room.LeaderName != c2.Name || len(rem.Members) != 1 {
+		t.Fatalf("expected Bob (%s) promoted on completed leader exit, got %+v err=%v", c2.Name, rem, err)
 	}
 	if err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
 		t.Fatalf("expected final completed leave success, got %v", err)

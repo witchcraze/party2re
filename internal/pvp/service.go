@@ -373,5 +373,12 @@ func (s *Service) GetCharacterRoom(ctx context.Context, characterID string) (Roo
 	if err != nil {
 		return RoomDetail{}, err
 	}
-	return s.repo.GetRoom(ctx, roomID)
+	detail, err := s.repo.GetRoom(ctx, roomID)
+	if err != nil {
+		return RoomDetail{}, err
+	}
+	if detail.Room.Status == StatusCompleted && !hasRoomMember(detail.Members, characterID) {
+		return RoomDetail{}, ErrRoomNotFound
+	}
+	return detail, nil
 }

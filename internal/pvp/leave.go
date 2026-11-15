@@ -105,14 +105,17 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 			}, func(context.Context) error { return nil })
 
 		case StatusCompleted:
-			if err := s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID); err != nil {
-				return err
-			}
 			if hasRemaining {
 				detail.Room.UpdatedAt = now
-				return s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members)
+				if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+					return err
+				}
+			} else {
+				if err := s.repo.DeleteRoom(lockedCtx, roomID); err != nil {
+					return err
+				}
 			}
-			return s.repo.DeleteRoom(lockedCtx, roomID)
+			return s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID)
 
 		default:
 			return s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID)
@@ -135,6 +138,7 @@ func removeMemberAndTransferLeader(detail *RoomDetail, characterID string, isLea
 			updated[i].IsLeader = i == 0
 		}
 		detail.Room.LeaderCharacterID = updated[0].CharacterID
+		detail.Room.LeaderName = updated[0].CharacterName
 	}
 	detail.Members = updated
 	return true
