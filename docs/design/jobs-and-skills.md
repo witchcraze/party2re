@@ -7,7 +7,7 @@ This document records legacy rules, decisions and pitfalls for job changes, mast
 ## Job changes
 
 - A change requires level 20 (`job_change.cgi:147`) and halves maximum HP/MP and base stats (truncated, minimum 10), restores HP/MP, resets level and experience and increments the job-change count.
-- **Pitfall:** entering the gambler from the leisure job still requires holding item039 but does not consume it (`job_change.cgi:164–179`). Re-entering the current, previous or a mastered job needs no item.
+- **Pitfall:** entering the gambler from the leisure job still requires holding item039 but does not consume it (`job_change.cgi:164–179`). Re-entering the current or previous job needs no item, whereas a mastered job outside current/previous still requires its prerequisites, item or equipped armor (`_data.cgi:303–309`, `job_change.cgi:158–188`).
 - **Pitfall:** a cross-job change clears the limit-break flag (`job_change.cgi:225`), but re-selecting the current job keeps it while still resetting level and halving stats (`job_change.cgi:214–226`); the Dragon Noble wish keeps it too (`god.cgi:196–218`).
 - Fire fighter (job84) requires armor29 equipped in the body slot; it is consumed in the change (`job_change.cgi:181–188`).
 - Target SP comes from current SP when re-selecting the active job, previous SP when returning to the previous job, the retained SP of any other mastered job, otherwise 0 (`job_change.cgi:207–221,271–273`).
