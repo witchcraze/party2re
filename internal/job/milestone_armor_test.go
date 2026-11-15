@@ -451,3 +451,122 @@ func TestChangeJob_Gambler_FromPlayboy_RequiresItemOwnership(t *testing.T) {
 		runTest(t, "job-01", "job-08")
 	})
 }
+
+// TestChangeJob_FireFighter_MasteredTargetStillRequiresTreeAndArmor verifies #1158:
+// mastering job-84 (炎闘士) does not exempt its prerequisite tree or equipped armor-29
+// unless job-84 is currently active or OldJobID.
+func TestChangeJob_FireFighter_MasteredTargetStillRequiresTreeAndArmor(t *testing.T) {
+	ctx := context.Background()
+
+	setup := func(t *testing.T, char corecharacter.Character, equipArmor bool) (*Service, *repositoryStub, *errCharRepoStub, *errInventoryRepoStub, *equipmentRepoStub, string) {
+		t.Helper()
+		state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+		state.RecordMastery("job-84", 180, 140)
+		repo := &repositoryStub{value: state}
+		ecoCharRepo := &errCharRepoStub{char: char}
+
+		inv, _ := coreinventory.New(char.ID)
+		equip, _ := coreequipment.New(char.ID)
+		var armorID string
+		if equipArmor {
+			armorInst, _ := item.NewInstance("armor-29", 1)
+			_ = inv.Add(armorInst)
+			equip.Slots[item.SlotBody] = armorInst.ID
+			armorID = armorInst.ID
+		}
+		invRepo := &errInventoryRepoStub{inv: inv}
+		equipRepo := &equipmentRepoStub{equipment: equip}
+
+		ecoSvc, err := economy.NewService(ecoCharRepo, invRepo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc, err := NewService(
+			repo,
+			WithCharacterRepository(ecoCharRepo),
+			WithInventoryRepository(invRepo),
+			WithEquipmentRepository(equipRepo),
+			WithEconomy(ecoSvc),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc, repo, ecoCharRepo, invRepo, equipRepo, armorID
+	}
+
+	t.Run("prerequisite_tree_mismatch_does_not_consume_armor_or_mutate_state", func(t *testing.T) {
+		char := corecharacter.Character{
+			ID: "char-ff-m1", JobID: "job-02", OldJobID: "job-03",
+			Level: 50, Gender: "unspecified", SP: 55, OldSP: 22, OverLevel: true,
+		}
+		svc, repo, charRepo, invRepo, equipRepo, armorID := setup(t, char, true)
+
+		_, _, err := svc.ChangeJob(ctx, char.ID, "job-84")
+		if !errors.Is(err, corejob.ErrJobUnavailable) {
+			t.Fatalf("expected ErrJobUnavailable when prerequisite tree fails for mastered job-84, got %v", err)
+		}
+		if charRepo.char.JobID != "job-02" || charRepo.char.OldJobID != "job-03" || charRepo.char.SP != 55 || charRepo.char.OldSP != 22 {
+			t.Fatalf("character mutated on rejection: %+v", charRepo.char)
+		}
+		if repo.value.CurrentJobID != "job-02" {
+			t.Fatalf("job state mutated to %s", repo.value.CurrentJobID)
+		}
+		if invRepo.inv.Quantity("armor-29") != 1 || equipRepo.equipment.Slots[item.SlotBody] != armorID {
+			t.Fatalf("armor mutated on rejection: qty=%d slot=%s", invRepo.inv.Quantity("armor-29"), equipRepo.equipment.Slots[item.SlotBody])
+		}
+	})
+
+	t.Run("tree_satisfied_without_armor_returns_ErrRequiredArmor", func(t *testing.T) {
+		char := corecharacter.Character{
+			ID: "char-ff-m2", JobID: "job-01", OldJobID: "job-04",
+			Level: 50, Gender: "unspecified", SP: 55, OldSP: 22, OverLevel: true,
+		}
+		svc, repo, charRepo, _, _, _ := setup(t, char, false)
+
+		_, _, err := svc.ChangeJob(ctx, char.ID, "job-84")
+		if !errors.Is(err, ErrRequiredArmor) {
+			t.Fatalf("expected ErrRequiredArmor without armor-29 for mastered job-84, got %v", err)
+		}
+		if charRepo.char.JobID != "job-01" || charRepo.char.SP != 55 || repo.value.CurrentJobID != "job-01" {
+			t.Fatalf("state mutated on ErrRequiredArmor: char=%+v state=%+v", charRepo.char, repo.value)
+		}
+	})
+
+	t.Run("tree_satisfied_with_armor_consumes_armor_and_restores_mastered_SP", func(t *testing.T) {
+		char := corecharacter.Character{
+			ID: "char-ff-m3", JobID: "job-01", OldJobID: "job-04",
+			Level: 50, Gender: "unspecified", SP: 55, OldSP: 22, OverLevel: true,
+		}
+		svc, _, _, invRepo, equipRepo, _ := setup(t, char, true)
+
+		updatedChar, _, err := svc.ChangeJob(ctx, char.ID, "job-84")
+		if err != nil {
+			t.Fatalf("expected mastered job-84 change with tree and armor-29 to succeed, got %v", err)
+		}
+		if updatedChar.JobID != "job-84" || updatedChar.SP != 180 {
+			t.Fatalf("expected job-84 with mastered SP 180, got job=%s SP=%d", updatedChar.JobID, updatedChar.SP)
+		}
+		if invRepo.inv.Quantity("armor-29") != 0 {
+			t.Fatalf("expected armor-29 consumed, remaining %d", invRepo.inv.Quantity("armor-29"))
+		}
+		if _, ok := equipRepo.equipment.Equipped(item.SlotBody); ok {
+			t.Fatal("expected body slot empty after armor consumption")
+		}
+	})
+
+	t.Run("old_job_is_fire_fighter_exempts_tree_and_armor", func(t *testing.T) {
+		char := corecharacter.Character{
+			ID: "char-ff-m4", JobID: "job-02", OldJobID: "job-84",
+			Level: 50, Gender: "unspecified", SP: 55, OldSP: 180, OverLevel: true,
+		}
+		svc, _, _, _, _, _ := setup(t, char, false)
+
+		updatedChar, _, err := svc.ChangeJob(ctx, char.ID, "job-84")
+		if err != nil {
+			t.Fatalf("expected returning to old job job-84 to succeed without armor-29, got %v", err)
+		}
+		if updatedChar.JobID != "job-84" || updatedChar.SP != 180 {
+			t.Fatalf("expected job-84 with SP 180, got job=%s SP=%d", updatedChar.JobID, updatedChar.SP)
+		}
+	})
+}

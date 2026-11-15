@@ -260,22 +260,50 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 		t.Fatalf("expected job-34 with restored SP 50, got job=%s SP=%d", updatedChar.JobID, updatedChar.SP)
 	}
 
-	// 3. Target job is already mastered -> no item needed
-	char.JobID = "job-01"
-	char.OldJobID = "job-02"
+	// 3. Target job is already mastered (outside current/old) -> still requires prerequisites and item
+	// Regression check for #1158: past mastery restores SP on success, never bypasses requirements.
+	char = corecharacter.Character{
+		ID: "char-1", Name: "Hero", JobID: "job-01", OldJobID: "job-02",
+		Level: 50, Gender: "male", SP: 45, OldSP: 25, OverLevel: true,
+	}
 	state, _ = corejob.NewCharacterJob(char.ID, char.JobID)
 	state.RecordMastery("job-34", 180, 180) // job-34 mastered
-	svc, _, _, _ = setupSvc(char, state, nil)
-	updatedChar, _, err = svc.ChangeJob(ctx, char.ID, "job-34")
-	if err != nil {
-		t.Fatalf("expected no item needed when target is mastered: %v", err)
+	svc, repo, charRepo, _ := setupSvc(char, state, nil)
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-34")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when mastered target job-34 lacks HeroCount >= 5, got %v", err)
 	}
-	if updatedChar.JobID != "job-34" || updatedChar.SP != 180 {
-		t.Fatalf("expected job-34 with mastered SP 180, got job=%s SP=%d", updatedChar.JobID, updatedChar.SP)
+	if charRepo.char.JobID != "job-01" || charRepo.char.SP != 45 || repo.value.CurrentJobID != "job-01" {
+		t.Fatalf("state mutated on rejection: char=%+v state=%+v", charRepo.char, repo.value)
 	}
 
-	// 4. job-33 (賢者) access when old job is job-08 (遊び人) -> no item needed
+	char.HeroCount = 5
+	svc, repo, charRepo, _ = setupSvc(char, state, nil)
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-34")
+	if !errors.Is(err, ErrRequiredItem) {
+		t.Fatalf("expected ErrRequiredItem when mastered target job-34 lacks item-028, got %v", err)
+	}
+	if charRepo.char.JobID != "job-01" || charRepo.char.SP != 45 || repo.value.CurrentJobID != "job-01" {
+		t.Fatalf("state mutated on ErrRequiredItem: char=%+v state=%+v", charRepo.char, repo.value)
+	}
+
+	invMastered, _ := coreinventory.New(char.ID)
+	heroProof, _ := item.NewInstance("item-028", 1)
+	_ = invMastered.Add(heroProof)
+	svc, _, _, invMasteredRepo := setupSvc(char, state, &invMastered)
+	updatedChar, _, err = svc.ChangeJob(ctx, char.ID, "job-34")
+	if err != nil {
+		t.Fatalf("expected mastered job-34 with HeroCount>=5 and item-028 to succeed: %v", err)
+	}
+	if updatedChar.JobID != "job-34" || updatedChar.SP != 180 || invMasteredRepo.inventory.Quantity("item-028") != 0 {
+		t.Fatalf("expected job-34 with mastered SP 180 and item-028 consumed, got job=%s SP=%d qty=%d",
+			updatedChar.JobID, updatedChar.SP, invMasteredRepo.inventory.Quantity("item-028"))
+	}
+	char.HeroCount = 0
+
+	// 4. job-33 (賢者) access when old/current job is job-08 (遊び人) -> no item needed and item preserved
 	// Legacy: &_is_need_job(8, 33) means current or old job must be job-08 or job-33.
+	char.JobID = "job-01"
 	char.OldJobID = "job-08"
 	state, _ = corejob.NewCharacterJob(char.ID, char.JobID)
 	svc, _, _, _ = setupSvc(char, state, nil)
@@ -286,6 +314,22 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 	if updatedChar.JobID != "job-33" {
 		t.Fatalf("expected job-33, got %s", updatedChar.JobID)
 	}
+
+	char.JobID = "job-08"
+	char.OldJobID = "job-02"
+	invSageBook, _ := coreinventory.New(char.ID)
+	sageBook, _ := item.NewInstance("item-027", 1)
+	_ = invSageBook.Add(sageBook)
+	state, _ = corejob.NewCharacterJob(char.ID, char.JobID)
+	svc, _, _, invSageRepo := setupSvc(char, state, &invSageBook)
+	updatedChar, _, err = svc.ChangeJob(ctx, char.ID, "job-33")
+	if err != nil {
+		t.Fatalf("expected job-33 access when current job is job-08: %v", err)
+	}
+	if updatedChar.JobID != "job-33" || invSageRepo.inventory.Quantity("item-027") != 1 {
+		t.Fatalf("expected job-33 without consuming item-027, got job=%s qty=%d", updatedChar.JobID, invSageRepo.inventory.Quantity("item-027"))
+	}
+	char.JobID = "job-01"
 	char.OldJobID = "job-02" // restore
 
 	// 5. job-46 (ギャンブラー) requires item-039 AND CasinoWins >= 10
@@ -812,5 +856,164 @@ func TestExchangeJob_GenderMismatch_Rejected(t *testing.T) {
 	}
 	if femaleUpdated.JobID != "job-14" || femaleUpdated.OldJobID != "job-03" {
 		t.Fatalf("unexpected jobs after exchange: JobID=%s, OldJobID=%s", femaleUpdated.JobID, femaleUpdated.OldJobID)
+	}
+}
+
+// TestChangeJob_MasteredTargetStillRequiresPrerequisitesAndLeavesStateUnchangedOnReject verifies
+// #1158: mastering a target job in the past restores its retained SP upon a valid change,
+// but never exempts job-tree, milestone counter, level, or gender checks when the target is
+// neither the character's current nor previous job.
+func TestChangeJob_MasteredTargetStillRequiresPrerequisitesAndLeavesStateUnchangedOnReject(t *testing.T) {
+	ctx := context.Background()
+
+	type testCase struct {
+		name         string
+		char         corecharacter.Character
+		targetJobID  string
+		masteredSP   int
+		masteryLimit int
+		wantErr      error
+		wantSP       int
+	}
+
+	cases := []testCase{
+		{
+			name: "mastered_prerequisite_tree_rejected",
+			char: corecharacter.Character{
+				ID: "char-reg-1", Name: "Tester", JobID: "job-01", OldJobID: "job-02",
+				Level: 50, Gender: "m", SP: 77, OldSP: 33, OverLevel: true,
+			},
+			targetJobID:  "job-23", // 竜騎士 requires current/old in [job-09, job-11, job-23, job-26]
+			masteredSP:   130,
+			masteryLimit: 130,
+			wantErr:      corejob.ErrJobUnavailable,
+		},
+		{
+			name: "mastered_monster_kills_milestone_rejected",
+			char: corecharacter.Character{
+				ID: "char-reg-2", Name: "Tester", JobID: "job-01", OldJobID: "job-04",
+				Level: 50, Gender: "m", SP: 60, OldSP: 20, MonsterKills: 200, OverLevel: true,
+			},
+			targetJobID:  "job-21", // バーサーカー requires MonsterKills > 200 unless current/old is job-21
+			masteredSP:   110,
+			masteryLimit: 110,
+			wantErr:      corejob.ErrJobUnavailable,
+		},
+		{
+			name: "mastered_sp_milestone_rejected",
+			char: corecharacter.Character{
+				ID: "char-reg-3", Name: "Tester", JobID: "job-01", OldJobID: "job-02",
+				Level: 50, Gender: "m", SP: 100, OldSP: 40, OverLevel: true,
+			},
+			targetJobID:  "job-49", // 若芽剣士 requires SP >= 300 unless current/old is job-49
+			masteredSP:   300,
+			masteryLimit: 300,
+			wantErr:      corejob.ErrJobUnavailable,
+		},
+		{
+			name: "mastered_gender_mismatch_rejected",
+			char: corecharacter.Character{
+				ID: "char-reg-4", Name: "Tester", JobID: "job-01", OldJobID: "job-02",
+				Level: 50, Gender: "f", SP: 55, OldSP: 15, OverLevel: true,
+			},
+			targetJobID:  "job-13", // requires gender "m"
+			masteredSP:   90,
+			masteryLimit: 90,
+			wantErr:      corejob.ErrJobUnavailable,
+		},
+		{
+			name: "mastered_prerequisite_tree_satisfied_restores_sp",
+			char: corecharacter.Character{
+				ID: "char-reg-5", Name: "Tester", JobID: "job-09", OldJobID: "job-02",
+				Level: 50, Gender: "m", SP: 77, OldSP: 33, OverLevel: true,
+			},
+			targetJobID:  "job-23",
+			masteredSP:   135,
+			masteryLimit: 130,
+			wantSP:       135,
+		},
+		{
+			name: "mastered_old_job_exempts_milestone_counter",
+			char: corecharacter.Character{
+				ID: "char-reg-6", Name: "Tester", JobID: "job-01", OldJobID: "job-74",
+				Level: 50, Gender: "m", SP: 60, OldSP: 155, PvPWins: 0, OverLevel: true,
+			},
+			targetJobID:  "job-74", // 剣闘士: _is_need_job(74) || (PvPWins > 30 && _is_need_job(2,3,4,8))
+			masteredSP:   150,
+			masteryLimit: 150,
+			wantSP:       155,
+		},
+		{
+			name: "mastered_gladiator_outside_current_old_still_requires_pvp_wins",
+			char: corecharacter.Character{
+				ID: "char-reg-7", Name: "Tester", JobID: "job-02", OldJobID: "job-03",
+				Level: 50, Gender: "m", SP: 60, OldSP: 20, PvPWins: 0, OverLevel: true,
+			},
+			targetJobID:  "job-74",
+			masteredSP:   150,
+			masteryLimit: 150,
+			wantErr:      corejob.ErrJobUnavailable,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			state, _ := corejob.NewCharacterJob(tc.char.ID, tc.char.JobID)
+			state.RecordMastery(tc.targetJobID, tc.masteredSP, tc.masteryLimit)
+			repo := &repositoryStub{value: state}
+			ecoCharRepo := &errCharRepoStub{char: tc.char}
+
+			inv, _ := coreinventory.New(tc.char.ID)
+			sampleItem, _ := item.NewInstance("item-001", 2)
+			_ = inv.Add(sampleItem)
+			invRepo := &errInventoryRepoStub{inv: inv}
+
+			ecoSvc, err := economy.NewService(ecoCharRepo, invRepo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc, err := NewService(
+				repo,
+				WithCharacterRepository(ecoCharRepo),
+				WithInventoryRepository(invRepo),
+				WithEconomy(ecoSvc),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			updatedChar, _, err := svc.ChangeJob(ctx, tc.char.ID, tc.targetJobID)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected error %v, got %v", tc.wantErr, err)
+				}
+				savedChar, findErr := ecoCharRepo.FindByID(ctx, tc.char.ID)
+				if findErr != nil {
+					t.Fatal(findErr)
+				}
+				if savedChar.JobID != tc.char.JobID || savedChar.OldJobID != tc.char.OldJobID ||
+					savedChar.SP != tc.char.SP || savedChar.OldSP != tc.char.OldSP {
+					t.Fatalf("character state mutated on rejection: got=%+v want=%+v", savedChar, tc.char)
+				}
+				if repo.value.CurrentJobID != tc.char.JobID {
+					t.Fatalf("job state CurrentJobID mutated to %s, expected %s", repo.value.CurrentJobID, tc.char.JobID)
+				}
+				if retained, ok := repo.value.SavedSP(tc.targetJobID); !ok || retained != tc.masteredSP {
+					t.Fatalf("mastered SP mutated on rejection: retained=%d ok=%v", retained, ok)
+				}
+				if invRepo.inv.Quantity("item-001") != 2 {
+					t.Fatalf("inventory mutated on rejection: qty=%d", invRepo.inv.Quantity("item-001"))
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("expected success, got %v", err)
+			}
+			if updatedChar.JobID != tc.targetJobID || updatedChar.SP != tc.wantSP {
+				t.Fatalf("unexpected updated character: JobID=%s SP=%d (want job=%s SP=%d)",
+					updatedChar.JobID, updatedChar.SP, tc.targetJobID, tc.wantSP)
+			}
+		})
 	}
 }

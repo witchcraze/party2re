@@ -39,26 +39,21 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 
-	// Build a ChangeContext for ValidateRequirements, populating inventory/equipment
-	// state only for the specific jobs that need them.
-	// Mastered jobs bypass ValidateRequirements: having mastered a job proves requirements
-	// were satisfied before, and current/old job matches also bypass (job_change.cgi:164).
-	isBypassJob := targetJobID == char.JobID || targetJobID == char.OldJobID || state.IsMastered(targetJobID)
-	if !isBypassJob {
-		// Set HasRequiredItem and HasEquippedArmor to true so ValidateRequirements only
-		// checks non-item conditions (level, gender, prerequisite tree, milestone counters).
-		// Actual item/armor possession is verified separately below to produce the
-		// correct ErrRequiredItem / ErrRequiredArmor error instead of ErrJobUnavailable.
-		reqCtx := s.buildChangeContextNoItems(char, state)
-		if err := corejob.ValidateRequirements(targetDef, reqCtx); err != nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
-		}
+	// Validate basic requirements (level, gender, prerequisite tree, milestone counters).
+	// Set HasRequiredItem and HasEquippedArmor to true via buildChangeContextNoItems so
+	// ValidateRequirements only evaluates non-item conditions; actual item/armor possession
+	// is verified separately below to return ErrRequiredItem / ErrRequiredArmor instead of ErrJobUnavailable.
+	// Only current/previous job matches (_is_need_job in _data.cgi:303-309) bypass
+	// prerequisites and item/armor requirements; previously mastered jobs still require them.
+	reqCtx := s.buildChangeContextNoItems(char, state)
+	if err := corejob.ValidateRequirements(targetDef, reqCtx); err != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 
 	requiredItem := targetDef.RequiredItem()
-	needsItemPossession := !isBypassJob && corejob.RequiresItemPossession(targetDef, char.JobID, char.OldJobID)
+	needsItemPossession := corejob.RequiresItemPossession(targetDef, char.JobID, char.OldJobID)
 	consumesItem := needsItemPossession && !corejob.IsItemExempt(targetJobID, char.JobID, char.OldJobID)
-	needArmor := !isBypassJob && corejob.IsArmorConsumed(targetJobID, char.JobID, char.OldJobID)
+	needArmor := corejob.IsArmorConsumed(targetJobID, char.JobID, char.OldJobID)
 
 	// Pre-validate required item possession before executing mutations.
 	if needsItemPossession {
