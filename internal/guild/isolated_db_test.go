@@ -17,15 +17,7 @@ func guildIsolatedDB(t *testing.T) *sql.DB {
 
 func TestGuildIsolatedDB_DisbandPreservesSharedGuild(t *testing.T) {
 	db := guildIsolatedDB(t)
-	shared, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := shared.Close(); err != nil {
-			t.Errorf("failed to close shared DB: %v", err)
-		}
-	})
+	shared := database.OpenTestDB(t)
 	ctx := context.Background()
 	sharedGuild, _, err := database.CreateTestGuildWithLeader(ctx, shared, "IsolationSentinel", 10000)
 	if err != nil {

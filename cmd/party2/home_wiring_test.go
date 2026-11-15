@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -25,18 +24,7 @@ import (
 
 func newHomePetCharacter(t *testing.T) (*sql.DB, corecharacter.Character) {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

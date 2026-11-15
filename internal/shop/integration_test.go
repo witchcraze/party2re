@@ -3,7 +3,6 @@ package shop_test
 import (
 	"context"
 	"errors"
-	"os"
 	"sync"
 	"testing"
 
@@ -16,15 +15,7 @@ import (
 )
 
 func TestShopIntegrationPurchaseAndSell(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
@@ -129,15 +120,7 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 }
 
 func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
@@ -197,15 +180,7 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 }
 
 func TestConcurrentShopSalesPreventDoubleSpending(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
@@ -269,15 +244,7 @@ func TestConcurrentShopSalesPreventDoubleSpending(t *testing.T) {
 }
 
 func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
@@ -324,15 +291,7 @@ func (l *shopLegendInductor) RecordLegend(_ context.Context, category, character
 }
 
 func TestShopIntegration_MandatoryInductionRollback(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)

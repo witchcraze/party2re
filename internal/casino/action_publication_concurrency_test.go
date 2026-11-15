@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -15,19 +14,8 @@ import (
 
 func TestActionPublication_ConcurrentWagers(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := database.OpenTestDB(t)
 	db.SetMaxOpenConns(100)
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	for _, game := range []casino.GameType{casino.GameTypeIndian, casino.GameTypeHighLow, casino.GameTypeDoppel} {

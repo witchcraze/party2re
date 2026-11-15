@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -122,18 +121,7 @@ func (r *consumptionPartyHistory) SaveAdventureLog(ctx context.Context, log part
 }
 
 func TestAdventureConsumptionSQLIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

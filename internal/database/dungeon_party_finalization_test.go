@@ -3,7 +3,6 @@ package database_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -14,15 +13,7 @@ import (
 )
 
 func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	dungeonRepo, err := database.NewDungeonRepository(db)
@@ -178,15 +169,7 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 }
 
 func TestDungeonRepository_FinalizeExpedition_PreservesConcurrentWalletUpdates(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	dungeonRepo, err := database.NewDungeonRepository(db)
@@ -249,15 +232,7 @@ func TestDungeonRepository_FinalizeExpedition_PreservesConcurrentWalletUpdates(t
 }
 
 func TestDungeonRepository_FinalizeExpedition_RollbackOnMemberFailure(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	dungeonRepo, err := database.NewDungeonRepository(db)

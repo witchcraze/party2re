@@ -3,7 +3,6 @@ package adventure_test
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -33,16 +32,8 @@ func (r *failingSaveDepotRepo) Save(ctx context.Context, dep depot.Depot) error 
 }
 
 func TestAdventure_ImmediateDungeonCrawlIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	characters, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -105,16 +96,8 @@ func TestAdventure_ImmediateDungeonCrawlIntegration(t *testing.T) {
 }
 
 func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	characters, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -193,16 +176,8 @@ func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
 }
 
 func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -382,16 +357,8 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 }
 
 func TestAdventurePostAdventureHook_TavernDelivery_ZeroFundsLifecycle(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -601,16 +568,8 @@ func (e *settlementBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRe
 }
 
 func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -922,16 +881,8 @@ func (r *failingSaveAdventureRepo) Save(ctx context.Context, value adventure.Adv
 }
 
 func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -1163,16 +1114,8 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 }
 
 func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {

@@ -9,14 +9,7 @@ import (
 )
 
 func TestJobPointsMigrationBackfillsOnlyKnownSP(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 	db.SetMaxOpenConns(1)
 	ctx := context.Background()
 	// Connection-local shadows isolate the backfill from other test packages.

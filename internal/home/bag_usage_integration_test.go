@@ -3,7 +3,6 @@ package home_test
 import (
 	"context"
 	"errors"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,18 +37,7 @@ type bagFixture struct {
 // slots relative to capacity (delta −1, 0 or +1).
 func newBagFixture(t *testing.T, name, bagDef, source string, delta int) bagFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close bag usage test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, name)
 	if err != nil {

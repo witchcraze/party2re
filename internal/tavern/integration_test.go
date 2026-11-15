@@ -3,7 +3,6 @@ package tavern_test
 import (
 	"context"
 	"errors"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -34,18 +33,7 @@ func (r *failingTavernSQLRepo) ResetFullness(ctx context.Context, id string) err
 }
 
 func TestTavern_RealDatabase_ErrorPropagation(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close tavern test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -234,18 +222,7 @@ func (h *hookTavernRepo) ResetFullness(ctx context.Context, id string) error {
 }
 
 func TestTavern_RealDatabase_ResetFullness_Concurrency(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close tavern test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -636,18 +613,7 @@ func (g *countingGuildPoints) AddGuildPoints(_ context.Context, _ string, points
 
 // TestTavern_RealDatabase_OrderMealRewards verifies that a meal's tickets and guild points commit or roll back with its price, healing and history (#1145).
 func TestTavern_RealDatabase_OrderMealRewards(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close tavern test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

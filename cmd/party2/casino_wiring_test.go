@@ -48,15 +48,7 @@ func TestWireCasinoMedalProgressPreservedOnResponseReadFailure(t *testing.T) {
 		t.Skip("Integration environment not configured")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
 	rawValkey, err := valkeygo.NewClient(valkeygo.ClientOption{

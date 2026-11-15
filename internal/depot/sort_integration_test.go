@@ -3,7 +3,6 @@ package depot_test
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"slices"
 	"sync/atomic"
@@ -30,18 +29,7 @@ func (r sortFailingPostSave) Save(ctx context.Context, value depot.Depot) error 
 
 func sortDBFixture(t *testing.T, failSave bool) (*depot.Service, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, []item.Instance) {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {

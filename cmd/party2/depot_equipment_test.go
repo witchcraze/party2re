@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -28,18 +27,7 @@ type depotEquipmentFixture struct {
 
 func newDepotEquipmentFixture(t *testing.T, slot item.Slot, equipped bool) depotEquipmentFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	core, err := newCoreServices(db, nil)
 	if err != nil {
 		t.Fatal(err)

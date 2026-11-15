@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -36,18 +35,7 @@ func (a removalLetterAdapter) SendLetter(ctx context.Context, senderID, senderNa
 
 func newRemovalFixture(t *testing.T, pending bool) *removalFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	repo, err := database.NewGuildRepository(db)
 	if err != nil {
 		t.Fatal(err)

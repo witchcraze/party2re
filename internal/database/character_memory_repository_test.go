@@ -3,7 +3,6 @@ package database_test
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -13,15 +12,8 @@ import (
 
 // Runs on the shared DB: every assertion is scoped to characters this test created.
 func TestCharacterMemoryRepository(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := database.OpenTestDB(t)
 	repo, err := database.NewCharacterMemoryRepository(db)
 	if err != nil {
 		t.Fatal(err)

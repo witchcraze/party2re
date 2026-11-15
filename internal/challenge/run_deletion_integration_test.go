@@ -27,6 +27,7 @@ import (
 // This extends an already populated fixture; CreateTestDatabase creates a new DB.
 func (f *protocolFixture) deletionService(t testing.TB, account bool) func(context.Context) error {
 	t.Helper()
+	// Schema source for a dedicated DB; close it when the schema copy finishes.
 	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)

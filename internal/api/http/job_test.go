@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
@@ -307,18 +306,7 @@ func (a *cancelJobReadAdapter) FindByCharacterID(ctx context.Context, characterI
 }
 
 func TestJobMasteryUnreadableStateAndMissingStateHTTP(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	realChars, err := database.NewCharacterRepository(db)

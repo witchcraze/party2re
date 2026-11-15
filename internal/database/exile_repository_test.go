@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,26 +19,9 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func openExileTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close exile test db: %v", err)
-		}
-	})
-	return db
-}
-
 func TestExileBoard_Integration(t *testing.T) {
 	ctx := context.Background()
-	db := openExileTestDB(t)
+	db := database.OpenTestDB(t)
 	repo, err := database.NewExileRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +107,7 @@ func TestExileBoard_Integration(t *testing.T) {
 // row: exactly one succeeds, so no petition keeps a stale target name.
 func TestExileRenameAndPetitionRace_Integration(t *testing.T) {
 	ctx := context.Background()
-	db := openExileTestDB(t)
+	db := database.OpenTestDB(t)
 	repo, err := database.NewExileRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -270,7 +252,7 @@ func TestExileSelfPetitionAfterApplicantRename_Integration(t *testing.T) {
 }
 
 func TestExileFixtureCleanup(t *testing.T) {
-	observer := openExileTestDB(t)
+	observer := database.OpenTestDB(t)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
@@ -362,11 +344,11 @@ func TestExileFixtureCleanup(t *testing.T) {
 	}
 	var normalRun, earlyRun exileRun
 	t.Run("normal scope end", func(t *testing.T) {
-		db := openExileTestDB(t)
+		db := database.OpenTestDB(t)
 		normalRun.app, normalRun.target, normalRun.voter, normalRun.petitionID = seed(t, db, "ExNm")
 	})
 	t.Run("early return path", func(t *testing.T) {
-		db := openExileTestDB(t)
+		db := database.OpenTestDB(t)
 		earlyRun.app, earlyRun.target, earlyRun.voter, earlyRun.petitionID = seed(t, db, "ExEr")
 		return
 	})

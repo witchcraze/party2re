@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -18,19 +17,7 @@ import (
 
 func openMonsterTestDB(t *testing.T) (*sql.DB, *CharacterRepository, *MonsterRepository, *monster.Service) {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close monster test db: %v", err)
-		}
-	})
+	db := OpenTestDB(t)
 
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
@@ -734,19 +721,7 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 }
 
 func TestMonsterFixtureCleanup(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	observer, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment observer: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := observer.Close(); err != nil {
-			t.Errorf("close observer db: %v", err)
-		}
-	})
+	observer := OpenTestDB(t)
 
 	ctx := context.Background()
 	obsCharRepo, err := NewCharacterRepository(observer)
@@ -907,6 +882,7 @@ func TestMonsterFixtureCleanup(t *testing.T) {
 	assertRowCount("SELECT COUNT(*) FROM players WHERE id = ?", unrelated.PlayerID, 1)
 
 	t.Run("cleanup errors reported", func(t *testing.T) {
+		// Intentionally closed before cleanup to verify error reporting.
 		brokenDB, err := OpenFromEnvironment()
 		if err != nil {
 			t.Fatalf("OpenFromEnvironment brokenDB: %v", err)

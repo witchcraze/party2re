@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 
@@ -30,18 +29,7 @@ func (l writeThenFailLegend) RecordLegend(ctx context.Context, category, charact
 }
 
 func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	core, err := newCoreServices(db, nil)
 	if err != nil {

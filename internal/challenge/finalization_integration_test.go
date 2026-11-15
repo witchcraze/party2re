@@ -3,7 +3,6 @@ package challenge_test
 import (
 	"context"
 	"errors"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,14 +15,7 @@ import (
 )
 
 func TestChallengeFinalizationIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	repo, err := database.NewChallengeRepository(db)
 	if err != nil {
 		t.Fatal(err)

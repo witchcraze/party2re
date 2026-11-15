@@ -63,15 +63,7 @@ func TestSettlementBoundary_HighLow_PostPayloadSecondarySyncFailure(t *testing.T
 		t.Skip("Integration environment not configured")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close casino highlow settlement db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	rawValkey := openIsolatedTestValkey(t, 13)
 	t.Cleanup(rawValkey.Close)
@@ -203,15 +195,7 @@ func TestSettlementBoundary_HighLow_PrePayloadFailureRollback(t *testing.T) {
 		t.Skip("Integration environment not configured")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close casino highlow settlement db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	rawValkey := openIsolatedTestValkey(t, 13)
 	t.Cleanup(rawValkey.Close)

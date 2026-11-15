@@ -69,15 +69,7 @@ func newFleaMarketDBFixture(t *testing.T) *fleaMarketDBFixture {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN not set")
 	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	repo, err := database.NewFleaMarketRepository(db)
 	if err != nil {

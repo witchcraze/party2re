@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -39,19 +38,7 @@ func findRankingEntry(
 }
 
 func TestRankingExtraRepository_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db failed: %v", err)
-		}
-	})
+	db := OpenTestDB(t)
 
 	rankingRepo, err := NewRankingRepository(db)
 	if err != nil {
@@ -364,19 +351,7 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 }
 
 func TestRankingExtraRepository_Integration_ResetIsolation(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db failed: %v", err)
-		}
-	})
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	playerRepo, err := NewPlayerRepository(db)

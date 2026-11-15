@@ -41,15 +41,7 @@ func newBlacksmithAssetsFixture(t *testing.T) *blacksmithAssetsFixture {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN not set")
 	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	baseChars, err := database.NewCharacterRepository(db)
 	if err != nil {

@@ -17,11 +17,7 @@ func TestNotificationRepository_Database(t *testing.T) {
 		t.Skip("PARTY2_DB_DSN is not set")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	repo, err := database.NewNotificationRepository(db)

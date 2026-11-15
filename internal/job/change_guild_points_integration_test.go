@@ -3,7 +3,6 @@ package job_test
 import (
 	"context"
 	"errors"
-	"os"
 	"slices"
 	"testing"
 	"time"
@@ -29,14 +28,7 @@ func (a failAfterGuildPointsAward) AddGuildPoints(ctx context.Context, character
 }
 
 func TestChangeJob_RealDatabase_GuildPointsRollbackAndCommit(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

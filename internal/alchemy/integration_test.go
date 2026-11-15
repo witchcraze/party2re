@@ -3,7 +3,6 @@ package alchemy_test
 import (
 	"context"
 	"errors"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -19,15 +18,7 @@ import (
 )
 
 func TestAlchemyIntegrationOvernightDepotSynthesis(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
@@ -177,15 +168,7 @@ func (r failingSynthesisStateRepo) SaveSynthesisState(context.Context, alchemy.S
 }
 
 func TestAlchemyIntegrationGearConsumptionAndRollback(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
@@ -327,15 +310,7 @@ func TestAlchemyIntegrationGearConsumptionAndRollback(t *testing.T) {
 }
 
 func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
@@ -392,15 +367,7 @@ func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
 }
 
 func TestAlchemyIntegrationClaim_SynthesisHookRollbackAndRetry(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
@@ -586,15 +553,7 @@ func TestAlchemyIntegrationClaim_SynthesisHookRollbackAndRetry(t *testing.T) {
 }
 
 func TestAlchemyIntegrationViewRecipes_LegendRollbackAndRetry(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
@@ -836,15 +795,7 @@ func TestAlchemyIntegrationViewRecipes_LegendRollbackAndRetry(t *testing.T) {
 }
 
 func TestAlchemyIntegrationConcurrentClaimsDeliverOnce(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)

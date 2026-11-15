@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -60,13 +59,7 @@ type archiveFixture struct {
 
 func newArchiveFixture(t *testing.T) *archiveFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := database.OpenTestDB(t)
 	repo, err := database.NewReplayRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +80,6 @@ func newArchiveFixture(t *testing.T) *archiveFixture {
 				t.Error(err)
 			}
 		}
-		db.Close()
 	})
 	return f
 }

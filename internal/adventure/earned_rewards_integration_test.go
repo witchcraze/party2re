@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -45,18 +44,7 @@ func (s failingEarnedSettler) ApplyPostBattleResult(ctx context.Context, req bat
 
 func earnedRewardStorage(t *testing.T) (*sql.DB, *database.CharacterRepository, *database.InventoryRepository, *database.AdventureRepository, *battle.Service) {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

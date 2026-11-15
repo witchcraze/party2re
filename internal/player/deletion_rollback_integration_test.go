@@ -77,14 +77,7 @@ type deletionFixture struct {
 
 func newDeletionFixture(t *testing.T) *deletionFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := database.OpenTestDB(t)
 	tx := database.NewTransactionProvider(db)
 	f := &deletionFixture{db: db}
 	charRepo, err := database.NewCharacterRepository(db)

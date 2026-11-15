@@ -30,6 +30,7 @@ func sparseIsolatedDB(t *testing.T, tables ...string) *sql.DB {
 		if os.Getenv("PARTY2_DB_DSN") == "" {
 			t.Skip("PARTY2_DB_DSN is not configured")
 		}
+		// Schema source for a dedicated DB; close it when discovery finishes.
 		source, err := OpenFromEnvironment()
 		if err != nil {
 			t.Fatal(err)

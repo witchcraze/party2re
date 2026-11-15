@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,15 +15,7 @@ import (
 )
 
 func TestCasinoRoomMultiplayerDatabaseIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
@@ -128,15 +119,7 @@ func TestCasinoRoomMultiplayerDatabaseIntegration(t *testing.T) {
 }
 
 func TestCasinoPrizeDepotDatabaseIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
@@ -206,15 +189,7 @@ func TestCasinoPrizeDepotDatabaseIntegration(t *testing.T) {
 }
 
 func TestCasinoSlotMachineDatabaseIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
@@ -275,15 +250,7 @@ func TestCasinoSlotMachineDatabaseIntegration(t *testing.T) {
 }
 
 func TestCasinoSlotMachine_ConcurrencyExploitPrevented(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
@@ -378,15 +345,7 @@ func TestCasinoSlotMachine_ConcurrencyExploitPrevented(t *testing.T) {
 }
 
 func TestCasinoIndianPoker_ConcurrencyExploitPrevented(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
@@ -499,15 +458,7 @@ func TestCasinoIndianPoker_ConcurrencyExploitPrevented(t *testing.T) {
 }
 
 func TestCasinoBulkEquipmentPrizeDepotDatabaseIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
@@ -622,15 +573,7 @@ func TestCasinoBulkEquipmentPrizeDepotDatabaseIntegration(t *testing.T) {
 }
 
 func TestExchangeGoldToCoins_RealDB_OverflowAndBoundary(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {

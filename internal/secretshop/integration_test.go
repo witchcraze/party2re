@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/database"
@@ -13,18 +12,7 @@ import (
 )
 
 func TestPurchaseItem_HelperExclusionAndConcurrentRouting_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {

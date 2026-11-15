@@ -60,15 +60,7 @@ func TestSettlementBoundary_ConcurrencyStress(t *testing.T) {
 		t.Skip("PARTY2_VALKEY_ADDR is not configured")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close casino settlement concurrency db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	rawValkey := openIsolatedTestValkey(t, 12)
 	t.Cleanup(rawValkey.Close)

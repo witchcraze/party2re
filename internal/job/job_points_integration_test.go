@@ -32,11 +32,7 @@ func TestFutureMemoryUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
 	}
 	for _, tc := range []struct{ recorded, fail bool }{{true, false}, {true, true}, {false, false}} {
 		fail := tc.fail
-		db, err := database.OpenFromEnvironment()
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer db.Close()
+		db := database.OpenTestDB(t)
 		ctx := context.Background()
 		char, err := database.CreateTestCharacter(ctx, db, "Job Points")
 		if err != nil {
@@ -139,14 +135,7 @@ func TestFutureMemoryUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
 }
 
 func TestChangeJobRecordsPresenceAcrossDatabaseReload(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -230,14 +219,7 @@ func TestChangeJobRecordsPresenceAcrossDatabaseReload(t *testing.T) {
 }
 
 func TestJobMasteryDatabaseProjectionRegression(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 
 	// 1. Create character via test factory: current=job-03 SP 9, old=job-04 SP 11
@@ -373,14 +355,7 @@ func TestJobMasteryDatabaseProjectionRegression(t *testing.T) {
 }
 
 func TestExchangeJobUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 
 	chars, err := database.NewCharacterRepository(db)
@@ -580,14 +555,7 @@ func TestExchangeJobUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
 }
 
 func TestMasteredJobDepartureAndFutureSaveRefreshRetainedSPDatabaseRoundTrip(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 
 	chars, err := database.NewCharacterRepository(db)

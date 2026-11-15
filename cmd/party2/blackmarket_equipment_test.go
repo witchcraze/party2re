@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"os"
 	"sync/atomic"
 	"testing"
 
@@ -27,18 +26,7 @@ type blackMarketEquipmentFixture struct {
 
 func newBlackMarketEquipmentFixture(t *testing.T, slot item.Slot, definitionID string) blackMarketEquipmentFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	core, err := newCoreServices(db, nil)
 	if err != nil {
 		t.Fatal(err)

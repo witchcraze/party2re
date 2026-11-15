@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -368,15 +367,7 @@ func TestGuildService_DisbandInactiveGuilds_ConcurrentRace_RealDB(t *testing.T) 
 }
 
 func TestGuildRepository_DisbandGuild_RowsAffectedAndRollback_RealDB(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {

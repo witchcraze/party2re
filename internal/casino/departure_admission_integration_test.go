@@ -50,7 +50,7 @@ func (r *pausedDeparturePreflight) FindPendingDeparture(ctx context.Context, act
 }
 
 func TestDepartureRecovery_AdmissionAfterEmptyPreflight(t *testing.T) {
-	db := openDepartureDB(t)
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	for _, role := range []string{"departing-participant", "disbanded-spectator"} {
@@ -78,7 +78,7 @@ func TestDepartureRecovery_AdmissionAfterEmptyPreflight(t *testing.T) {
 				}
 				beforeSource, beforeTarget := source.state(t, ctx), target.state(t, ctx)
 				preflight := &pausedDeparturePreflight{DepartureRepository: source.accounts, actor: mover, checked: make(chan struct{}), resume: make(chan struct{}), db: db}
-				joiner := departureService(t, openDepartureDB(t), raw, preflight)
+				joiner := departureService(t, database.OpenTestDB(t), raw, preflight)
 				leaver := departureService(t, db, raw, departureEvidenceFault{DepartureRepository: source.accounts, failAck: true})
 				request := casino.CreateRoomRequest{Name: "Admission-" + id.New()[:8], GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 2, Rate: 10}
 				createdRoom := ""
@@ -145,7 +145,7 @@ func TestDepartureRecovery_AdmissionAfterEmptyPreflight(t *testing.T) {
 					}
 				}
 				// With acknowledgement restored, the next command recovers first and then admits.
-				healthy := departureService(t, openDepartureDB(t), raw, nil)
+				healthy := departureService(t, database.OpenTestDB(t), raw, nil)
 				if err := admit(healthy); err != nil {
 					t.Fatal(err)
 				}
@@ -189,7 +189,7 @@ func (r pausedDepartureCommit) CommitDeparture(ctx context.Context, d casino.Dep
 }
 
 func TestDepartureRecovery_RejectsClaimAfterNewAdmission(t *testing.T) {
-	db := openDepartureDB(t)
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -203,7 +203,7 @@ func TestDepartureRecovery_RejectsClaimAfterNewAdmission(t *testing.T) {
 	}
 	pause := pausedDepartureCommit{DepartureRepository: source.accounts, staged: make(chan struct{}), resume: make(chan struct{})}
 	leaver := departureService(t, db, raw, pause)
-	joiner := departureService(t, openDepartureDB(t), raw, nil)
+	joiner := departureService(t, database.OpenTestDB(t), raw, nil)
 	mover := source.actors[0]
 	leaveErr, joinErr := testutil.RunRace2(
 		func() error { return leaver.LeaveRoom(ctx, source.roomID, mover) },

@@ -3,7 +3,6 @@ package depot_test
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -19,15 +18,7 @@ import (
 )
 
 func TestDepotLifecycle_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
@@ -138,15 +129,7 @@ func TestDepotLifecycle_Integration(t *testing.T) {
 }
 
 func TestDepotStackWithdrawRollbackAndConcurrent_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -233,15 +216,7 @@ func TestDepotStackWithdrawRollbackAndConcurrent_Integration(t *testing.T) {
 }
 
 func TestConcurrentDepotExpansion(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
@@ -315,15 +290,7 @@ func (l *depotLegendInductor) RecordLegend(_ context.Context, category, characte
 }
 
 func TestDepotIntegration_MandatoryInductionRollback(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
@@ -444,18 +411,7 @@ func (failingDepotSave) Save(context.Context, depot.Depot) error {
 
 func expansionDBFixture(t *testing.T, count, funds int, failSave bool) (*depot.Service, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, item.Instance) {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {

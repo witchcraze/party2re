@@ -26,15 +26,7 @@ import (
 var errOutOfStock = errors.New("out of stock")
 
 func TestConcurrencyStressBankDepositsAndWithdrawals(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 
@@ -119,15 +111,7 @@ func TestConcurrencyStressBankDepositsAndWithdrawals(t *testing.T) {
 }
 
 func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -196,15 +180,7 @@ func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
 }
 
 func TestConcurrencyStressShopStockDepletion(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 
@@ -327,15 +303,7 @@ func TestConcurrencyStressShopStockDepletion(t *testing.T) {
 }
 
 func TestConcurrencyStressAuctionP2PTrading(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 
@@ -433,15 +401,7 @@ func TestConcurrencyStressAuctionP2PTrading(t *testing.T) {
 }
 
 func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -574,15 +534,7 @@ func (h stressFleaPaymentHolder) HoldPayment(ctx context.Context, recipientID, b
 }
 
 func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -871,15 +823,7 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 }
 
 func TestConcurrencyStressGuildConcurrentDepartures(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 

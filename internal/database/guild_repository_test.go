@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -14,15 +13,7 @@ import (
 )
 
 func TestGuildRepositoryLifecycle(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -236,15 +227,7 @@ func TestGuildRepositoryLifecycle(t *testing.T) {
 }
 
 func TestGuildRepository_ConcurrentPoints(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	guildRepo, err := NewGuildRepository(db)
@@ -338,15 +321,7 @@ func TestGuildRepository_ConcurrentPoints(t *testing.T) {
 }
 
 func TestGuildRepository_TransferLeadership_PendingApplicant(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -417,15 +392,7 @@ func TestGuildRepository_TransferLeadership_PendingApplicant(t *testing.T) {
 }
 
 func TestGuildRepository_TransferLeadership_InvalidSuccessor(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -466,15 +433,7 @@ func TestGuildRepository_TransferLeadership_InvalidSuccessor(t *testing.T) {
 }
 
 func TestGuildRepository_TransferLeadership_StaleLeader(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -521,15 +480,7 @@ func TestGuildRepository_TransferLeadership_StaleLeader(t *testing.T) {
 }
 
 func TestGuildRepository_GetGuildForUpdate(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {

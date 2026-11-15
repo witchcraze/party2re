@@ -47,15 +47,7 @@ func newScenarioApp(t *testing.T) *scenarioApp {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("requires MariaDB and Valkey")
 	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	return newScenarioAppWithDB(t, db, client)
 }
@@ -68,6 +60,7 @@ func newIsolatedScenarioApp(t *testing.T) *scenarioApp {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("requires MariaDB and Valkey")
 	}
+	// Schema source for a dedicated DB; close it before creating the scenario app.
 	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)

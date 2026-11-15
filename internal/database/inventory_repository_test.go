@@ -2,22 +2,13 @@ package database
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/item"
 )
 
 func TestInventoryRepositoryPersistsAndLoadsInventory(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	character, err := CreateTestCharacter(context.Background(), db, "Inventory Test")
 	if err != nil {
@@ -47,15 +38,7 @@ func TestInventoryRepositoryPersistsAndLoadsInventory(t *testing.T) {
 }
 
 func TestItemDefinitionRepositoryPersistsAndLoadsDefinition(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	repository, err := NewItemDefinitionRepository(db)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -23,16 +22,7 @@ type activeAffiliationFixture struct {
 
 func newActiveAffiliationFixture(t *testing.T) *activeAffiliationFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
+	db := database.OpenTestDB(t)
 	repo, err := database.NewGuildRepository(db)
 	if err != nil {
 		t.Fatal(err)

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -17,15 +16,7 @@ import (
 )
 
 func TestAdventureRepository(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	character, err := CreateTestCharacter(context.Background(), db, "Adventure Test")
 	if err != nil {
@@ -73,15 +64,7 @@ func TestAdventureRepository(t *testing.T) {
 }
 
 func TestAdventureRepositoryListByCharacterIDAndAggregatedStats(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	character, err := CreateTestCharacter(ctx, db, "Chronicle Test Hero")
@@ -225,15 +208,7 @@ func TestAdventureRepositoryListByCharacterIDAndAggregatedStats(t *testing.T) {
 }
 
 func TestAdventureRepository_CoopAndSeasonalClears(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	character, err := CreateTestCharacter(ctx, db, "Seasonal Chronicle Hero")
@@ -420,15 +395,7 @@ func TestAdventureRepository_CoopAndSeasonalClears(t *testing.T) {
 }
 
 func TestAdventureRepository_AggregatedStatsDefeatOutcomes(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	character, err := CreateTestCharacter(ctx, db, "Defeat Aggregate Hero")

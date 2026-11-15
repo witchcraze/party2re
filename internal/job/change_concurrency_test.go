@@ -45,7 +45,6 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-
 	cases := []struct {
 		name         string
 		itemID       string
@@ -77,15 +76,7 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			db, err := database.OpenFromEnvironment()
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				if err := db.Close(); err != nil {
-					t.Errorf("failed to close database: %v", err)
-				}
-			})
+			db := database.OpenTestDB(t)
 
 			charRepo, err := database.NewCharacterRepository(db)
 			if err != nil {

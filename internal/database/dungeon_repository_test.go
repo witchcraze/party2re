@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -18,15 +17,7 @@ import (
 )
 
 func TestDungeonRepository(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	dungeonRepo, err := database.NewDungeonRepository(db)
@@ -115,15 +106,7 @@ func TestDungeonRepository(t *testing.T) {
 }
 
 func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	dungeonRepo, err := database.NewDungeonRepository(db)
@@ -255,15 +238,7 @@ func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 }
 
 func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	dungeonRepo, err := database.NewDungeonRepository(db)
@@ -371,15 +346,7 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 }
 
 func TestDungeonRepository_RollbackOnRewardFailure(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	dungeonRepo, err := database.NewDungeonRepository(db)
@@ -442,15 +409,7 @@ func TestDungeonRepository_RollbackOnRewardFailure(t *testing.T) {
 }
 
 func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	dungeonRepo, err := database.NewDungeonRepository(db)

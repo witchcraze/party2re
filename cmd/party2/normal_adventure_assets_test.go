@@ -30,15 +30,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {

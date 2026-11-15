@@ -104,15 +104,7 @@ func TestWake_SQLRecovery(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("SQL and Valkey integration environment is not configured")
 	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close wake subtest db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)
@@ -304,15 +296,7 @@ func TestWake_RealTavernFullnessReset(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("SQL and Valkey integration environment is not configured")
 	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close wake subtest db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)
@@ -464,15 +448,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("SQL and Valkey integration environment is not configured")
 	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close wake cycle db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	timers := timer.NewService(client)
 	charRepo, err := database.NewCharacterRepository(db)

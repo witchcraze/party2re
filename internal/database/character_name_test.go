@@ -42,11 +42,7 @@ func TestCharacterNameMigration(t *testing.T) {
 	sql := strings.ReplaceAll(strings.ReplaceAll(string(source), "DELIMITER //", ""), "DELIMITER ;", "")
 	for _, duplicate := range []bool{false, true} {
 		t.Run(map[bool]string{false: "clean_and_repeat", true: "duplicates_retained"}[duplicate], func(t *testing.T) {
-			db, err := OpenFromEnvironment()
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer db.Close()
+			db := OpenTestDB(t)
 			db.SetMaxOpenConns(1)
 			ctx := context.Background()
 			for _, statement := range []string{

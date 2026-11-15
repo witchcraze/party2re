@@ -40,20 +40,13 @@ func newAuctionDBFixture(t *testing.T) *auctionDBFixture {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN not set")
 	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	f := &auctionDBFixture{db: db}
+	var err error
 	if f.chars, err = database.NewCharacterRepository(db); err != nil {
 		t.Fatal(err)
 	}
