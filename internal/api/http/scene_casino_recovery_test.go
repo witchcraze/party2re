@@ -21,43 +21,29 @@ func TestCasinoConfirmedCommandsSurviveFailedObservation(t *testing.T) {
 			if command == "casino_room_join" {
 				f.store.selection.Subject = playercontext.Subject{Kind: "room", ID: "room"}
 			}
-			var executions int
-			// Test-only adapters exercise the existing dispatcher boundary; this PR
-			// does not connect Casino mutations in production.
-			adapter := withActionCommand(command, func(ctx context.Context, actor string, p CasinoRoomParams) (any, error) {
-				executions++
-				var result any
-				var err error
-				switch command {
-				case "casino_room_join":
-					result, err = f.service.JoinRoom(ctx, p.RoomID, actor, "secret", f.char.Tired)
-				case "casino_room_start":
-					result, err = f.service.StartGame(ctx, p.RoomID, actor)
-				case "casino_room_leave":
-					err = f.service.LeaveRoom(ctx, p.RoomID, actor)
-					result = map[string]bool{"left": err == nil}
-				}
-				if err == nil {
-					f.reads.viewErr = errors.New("detail refresh failed")
-					f.accounts.err = errors.New("lobby refresh failed")
-				}
-				return result, err
-			}, gatewayRejection)
-			router := f.router(adapter)
-			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"`+command+`","params":{"room_id":"room"}}`, nil)
-			if status != 200 || string(raw["success"]) != "true" || string(raw["context"]) != "null" || raw["result"] == nil || executions != 1 {
+			f.reads.mutated = func() {
+				f.reads.viewErr = errors.New("detail refresh failed")
+				f.accounts.err = errors.New("lobby refresh failed")
+			}
+			router := f.router()
+			params := `{"room_id":"room"}`
+			if command == "casino_room_join" {
+				params = `{"room_id":"room","password":"secret"}`
+			}
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"`+command+`","params":`+params+`}`, nil)
+			if status != 200 || string(raw["success"]) != "true" || string(raw["context"]) != "null" || raw["result"] == nil || f.reads.mutation != 1 {
 				t.Fatalf("known outcome lost: %d %s", status, raw)
 			}
 			var e ErrorDetail
 			if err := json.Unmarshal(raw["context_error"], &e); err != nil || e.Code != "CONTEXT_REFRESH_FAILED" {
 				t.Fatalf("recovery: %s %v", raw, err)
 			}
-			if status, _ := navigationGET(t, router); status != 500 || executions != 1 {
+			if status, _ := navigationGET(t, router); status != 500 || f.reads.mutation != 1 {
 				t.Fatal("failed GET hid error or replayed command")
 			}
 			f.reads.viewErr, f.accounts.err = nil, nil
 			status, observed := navigationGET(t, router)
-			if status != 200 || executions != 1 || f.store.writes != 0 {
+			if status != 200 || f.reads.mutation != 1 || f.store.writes != 0 {
 				t.Fatalf("GET recovery: %d %+v", status, observed)
 			}
 			if command == "casino_room_leave" {

@@ -30,10 +30,11 @@ Evidence: `lib/casino_indian.cgi:22–33`, `lib/casino_highlow.cgi:33–50`, `li
 
 ### Scoped legacy dispatch reconciliation
 
-All room, slot, exchange and prize operations still run through REST; their Gateway connection is open (#949). Screenshot (`すくしょ`) and invitation (`さそう`) (`_casino.cgi:124–145`) have no replacement and are deferred to #949/#140. Known differences, reconciled under #949:
+The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Screenshot (`すくしょ`) and invitation (`さそう`) (`_casino.cgi:124–145`) have no replacement (#140). Known differences, reconciled under #949:
 
 - High & Low: legacy hides “continue” at the maximum bet or with insufficient coins (`casino_highlow.cgi:10–50`); the service accepts all-in calls.
 - Doppel: legacy clears declarations on start and stores mark changes in the card field, allowing reselection before all cards are selected (`casino_doppel.cgi:10–99`). Eligibility of waiting entrants follows the existing service.
+- Room pacing: in-room actions wait the room speed and a kicked member waits 60 s (`_casino.cgi:57,114,167`); Go starts no wait for them (#2251).
 
 ## Game rules
 

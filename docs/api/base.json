@@ -81,10 +81,6 @@
       "name": "Lottery"
     },
     {
-      "description": "Casino mini-games (Slot, High & Low, Doppelganger, Indian Poker)",
-      "name": "Casino"
-    },
-    {
       "description": "Endurance challenges, World Boss encounters, Dungeons, and PvP Arena",
       "name": "Combat"
     },
@@ -4600,15 +4596,54 @@
                       "type": "string"
                     },
                     "action": {
-                      "type": "string"
-                    },
-                    "mark": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "One of the activity scene `controls.actions`: an Indian or High & Low action, or a Doppel mark."
                     }
                   },
                   "required": [
                     "room_id",
                     "action"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "casino_slot"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "bet": {
+                      "type": "integer",
+                      "enum": [
+                        1,
+                        10,
+                        50,
+                        100,
+                        200
+                      ],
+                      "description": "One of the casino scene `menu.slot_bet_rates`."
+                    }
+                  },
+                  "required": [
+                    "bet"
                   ]
                 }
               },
@@ -4640,7 +4675,7 @@
                       "type": "integer",
                       "format": "int64",
                       "minimum": 1,
-                      "maximum": 9223372036854775807
+                      "maximum": 461168601842738790
                     }
                   },
                   "required": [
@@ -10726,437 +10761,6 @@
           "hero_count_gained",
           "banquet_held",
           "battle_result"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GetCasinoAccountResponse": {
-        "properties": {
-          "account": {
-            "$ref": "#/components/schemas/CasinoAccount"
-          }
-        },
-        "required": [
-          "account"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoAccount": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "coins": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9223372036854775807,
-            "format": "int64"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "coins",
-          "updated_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoExchangeResponse": {
-        "properties": {
-          "account": {
-            "$ref": "#/components/schemas/CasinoAccount"
-          },
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          }
-        },
-        "required": [
-          "account",
-          "character"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoPrizeExchangeResponse": {
-        "properties": {
-          "result": {
-            "$ref": "#/components/schemas/CasinoPrizeExchangeResult"
-          }
-        },
-        "required": [
-          "result"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoPrizeExchangeResult": {
-        "properties": {
-          "count": {
-            "type": "integer"
-          },
-          "prize": {
-            "$ref": "#/components/schemas/CasinoPrize"
-          },
-          "remaining_coins": {
-            "type": "integer"
-          },
-          "total_cost_coins": {
-            "type": "integer"
-          },
-          "transferred_to_depot": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "prize",
-          "count",
-          "total_cost_coins",
-          "transferred_to_depot",
-          "remaining_coins"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoPrizeExchangeRequest": {
-        "properties": {
-          "cost_coins": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "count": {
-            "type": "integer",
-            "description": "Defaults to 1 when omitted or nonpositive."
-          }
-        },
-        "type": "object",
-        "required": [
-          "cost_coins"
-        ],
-        "additionalProperties": false
-      },
-      "CasinoRoomResponse": {
-        "properties": {
-          "room": {
-            "$ref": "#/components/schemas/CasinoRoomDetail"
-          }
-        },
-        "required": [
-          "room"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoRoomDetail": {
-        "properties": {
-          "members": {
-            "items": {
-              "$ref": "#/components/schemas/CasinoRoomMember"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "room": {
-            "$ref": "#/components/schemas/CasinoRoom"
-          }
-        },
-        "required": [
-          "room",
-          "members"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoRoomMember": {
-        "properties": {
-          "action": {
-            "type": "string"
-          },
-          "card": {
-            "type": "integer"
-          },
-          "card_display": {
-            "type": "string"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "is_spectator": {
-            "type": "boolean"
-          },
-          "joined_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "room_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "room_id",
-          "character_id",
-          "is_spectator",
-          "action",
-          "card",
-          "joined_at",
-          "updated_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoRoom": {
-        "properties": {
-          "allow_spectators": {
-            "type": "boolean"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "current_bet": {
-            "type": "integer"
-          },
-          "game_type": {
-            "type": "string"
-          },
-          "has_password": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "string"
-          },
-          "leader_character_id": {
-            "type": "string"
-          },
-          "max_bet": {
-            "type": "integer"
-          },
-          "max_players": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "pot": {
-            "type": "integer"
-          },
-          "rate": {
-            "type": "integer"
-          },
-          "round": {
-            "type": "integer"
-          },
-          "speed": {
-            "type": "integer"
-          },
-          "status": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "winner_character_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "game_type",
-          "leader_character_id",
-          "speed",
-          "max_players",
-          "rate",
-          "has_password",
-          "allow_spectators",
-          "status",
-          "round",
-          "current_bet",
-          "max_bet",
-          "pot",
-          "created_at",
-          "updated_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CreateCasinoRoomRequest": {
-        "properties": {
-          "allow_spectators": {
-            "type": "boolean"
-          },
-          "game_type": {
-            "type": "string",
-            "enum": [
-              "doppel",
-              "indian",
-              "highlow"
-            ]
-          },
-          "max_players": {
-            "type": "integer",
-            "minimum": 2,
-            "maximum": 8
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 50
-          },
-          "password": {
-            "type": "string",
-            "writeOnly": true
-          },
-          "rate": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "Doppel requires at least 10 coins; other games accept 1, 5, 10, 20, 50, 100, 500, 1000 or 5000."
-          },
-          "speed": {
-            "type": "integer",
-            "enum": [
-              12,
-              18,
-              28
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "game_type",
-          "speed",
-          "max_players",
-          "rate"
-        ],
-        "additionalProperties": false
-      },
-      "CasinoRoomActionRequest": {
-        "properties": {
-          "action": {
-            "type": "string"
-          },
-          "mark": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false,
-        "anyOf": [
-          {
-            "required": [
-              "action"
-            ]
-          },
-          {
-            "required": [
-              "mark"
-            ]
-          }
-        ],
-        "description": "Indian Poker and High/Low use action; Doppel uses mark, falling back to action."
-      },
-      "JoinCasinoRoomRequest": {
-        "properties": {
-          "password": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
-      "KickCasinoRoomMemberRequest": {
-        "properties": {
-          "target_character_id": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "target_character_id"
-        ],
-        "additionalProperties": false
-      },
-      "CasinoSlotResponse": {
-        "properties": {
-          "account": {
-            "$ref": "#/components/schemas/CasinoAccount"
-          },
-          "result": {
-            "$ref": "#/components/schemas/CasinoSpinResult"
-          }
-        },
-        "required": [
-          "result",
-          "account"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "CasinoSpinResult": {
-        "properties": {
-          "bet_coins": {
-            "type": "integer"
-          },
-          "bonus_coins": {
-            "type": "integer"
-          },
-          "is_win": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string"
-          },
-          "multiplier": {
-            "type": "integer"
-          },
-          "net_coins": {
-            "type": "integer"
-          },
-          "payout_coins": {
-            "type": "integer"
-          },
-          "reels": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "Cherry",
-                "Note",
-                "Dagger",
-                "Star",
-                "Seven"
-              ]
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "required": [
-          "bet_coins",
-          "reels",
-          "is_win",
-          "multiplier",
-          "payout_coins",
-          "net_coins",
-          "message"
         ],
         "type": "object",
         "additionalProperties": false

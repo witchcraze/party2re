@@ -234,7 +234,7 @@ func TestRoom_UnifiedStartAndActionDispatch(t *testing.T) {
 		t.Errorf("expected round 1, got %d", startedHL.Room.Round)
 	}
 
-	_, err = svc.PlayRoomAction(ctx, hlRoom.Room.ID, p1, casino.RoomActionRequest{Action: "high"})
+	_, err = svc.PlayRoomAction(ctx, hlRoom.Room.ID, p1, "high")
 	if err != nil {
 		t.Fatalf("PlayRoomAction(HL high) failed: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestRoom_UnifiedStartAndActionDispatch(t *testing.T) {
 		t.Errorf("expected round 1, got %d", startedDP.Room.Round)
 	}
 
-	_, err = svc.PlayRoomAction(ctx, dpRoom.Room.ID, p1, casino.RoomActionRequest{Action: "mark", Mark: "★"})
+	_, err = svc.PlayRoomAction(ctx, dpRoom.Room.ID, p1, "★")
 	if err != nil {
 		t.Fatalf("PlayRoomAction(DP mark) failed: %v", err)
 	}

@@ -362,30 +362,6 @@ func TestGuardSleepingCharacter(t *testing.T) {
 		}
 	})
 
-	t.Run("casino exchange returns 409 Conflict when sleeping", func(t *testing.T) {
-		mockHome := &mockHomeService{
-			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
-				return home.SleepStatus{
-					Sleeping:         true,
-					RemainingSeconds: 300,
-					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
-				}, nil
-			},
-		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithCasino(&stubCasinoService{}))
-		if err != nil {
-			t.Fatalf("failed to create handler: %v", err)
-		}
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/casino/exchange", bytes.NewReader([]byte(`{"coins":10}`)))
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		h.Router().ServeHTTP(rec, req)
-		if rec.Code != http.StatusConflict {
-			t.Errorf("expected 409 Conflict for casino when sleeping, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
 	t.Run("sleep status lookup failure returns 500 Conflict-free error", func(t *testing.T) {
 		mockHome := &mockHomeService{
 			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {

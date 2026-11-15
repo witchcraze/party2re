@@ -362,14 +362,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	// =========================================================================
 	// Category: entertainment (Casino, Lottery & Tavern)
 	// =========================================================================
-	{
-		ID:             "casino_slot",
-		Label:          "カジノスロット",
-		Category:       "entertainment",
-		OperationID:    "playCasinoSlot",
-		RequiredParams: []string{"bet"},
-		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	// ＄すろっと answers with $mes and sets $m{wt} to a tenth of $act_time (casino.cgi:552-554), which the next
+	// request truncates to no wait (lib/system.cgi:159); request frequency is the HTTP rate limit (#1106).
+	{ID: "casino_slot", Label: "カジノスロット", Category: "entertainment", OperationID: "executeCharacterAction", RequiredParams: []string{"bet"}, RequiredGates: GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitPrivate},
 	{ID: "lottery_raffle", Label: "福引を引く", Category: "entertainment", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	// No currency gate: takarakuzi.cgi kau answers sold-out and one-per-person before funds.
 	{ID: "takarakuji_buy", Label: "宝くじ購入", Category: "entertainment", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},

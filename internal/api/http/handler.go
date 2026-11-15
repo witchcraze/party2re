@@ -448,24 +448,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/achievements/{achievement_id}/claim", h.handleClaimAchievement)
 	mux.HandleFunc("GET /characters/{id}/medals", h.handleGetCharacterMedals)
 
-	// Lottery & Raffle
-
-	// Casino
-	mux.HandleFunc("GET /characters/{id}/casino", h.handleGetCasinoAccount)
-	mux.HandleFunc("POST /characters/{id}/casino/exchange", h.handleCasinoExchange)
-	mux.HandleFunc("POST /characters/{id}/casino/slot", h.handleCasinoSlot)
-	mux.HandleFunc("GET /casino/prizes", h.handleGetCasinoPrizes)
-	mux.HandleFunc("POST /characters/{id}/casino/prizes/exchange", h.handleCasinoExchangePrize)
-	mux.HandleFunc("GET /casino/rooms", h.handleListCasinoRooms)
-	mux.HandleFunc("POST /characters/{id}/casino/rooms", h.handleCreateCasinoRoom)
-	mux.HandleFunc("GET /casino/rooms/{roomId}", h.handleGetCasinoRoom)
-	mux.HandleFunc("POST /characters/{id}/casino/rooms/{roomId}/join", h.handleJoinCasinoRoom)
-	mux.HandleFunc("POST /characters/{id}/casino/rooms/{roomId}/spectate", h.handleSpectateCasinoRoom)
-	mux.HandleFunc("POST /characters/{id}/casino/rooms/{roomId}/leave", h.handleLeaveCasinoRoom)
-	mux.HandleFunc("POST /characters/{id}/casino/rooms/{roomId}/kick", h.handleKickCasinoRoomMember)
-	mux.HandleFunc("POST /characters/{id}/casino/rooms/{roomId}/start", h.handleStartCasinoRoomGame)
-	mux.HandleFunc("POST /characters/{id}/casino/rooms/{roomId}/action", h.handlePlayCasinoRoomAction)
-
 	// Combat & Challenges
 	mux.HandleFunc("GET /challenges/tiers", h.handleListChallengeTiers)
 	mux.HandleFunc("GET /challenges/hall-of-fame", h.handleListChallengeHallOfFame)
