@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -15,20 +14,8 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corerandom "github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/dungeon"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
-
-func openTestValkey(t *testing.T) valkeygo.Client {
-	t.Helper()
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("open valkey client: %v", err)
-	}
-	return client
-}
 
 func cleanupDungeonValkey(t *testing.T, client valkeygo.Client, charIDs ...string) {
 	t.Helper()
@@ -203,8 +190,7 @@ func TestMemoryExpeditionRepository_TTL(t *testing.T) {
 }
 
 func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	charID := "vk-char-01"
 	expID := "vk-exp-01"
@@ -366,8 +352,7 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 }
 
 func TestValkeyExpeditionRepository_ConcurrentSteps(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	repo, err := dungeon.NewValkeyExpeditionRepository(client)
 	if err != nil {
@@ -472,8 +457,7 @@ func (m *failFinalizeMockDungeonRepo) FinalizeExpedition(
 }
 
 func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	charID := "two-phase-char"
 	cleanupDungeonValkey(t, client, charID)
@@ -558,8 +542,7 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 }
 
 func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
-	client := openTestValkey(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	charID := "vk-treasure-char"
 	expID := "vk-treasure-exp"
@@ -677,7 +660,7 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 }
 
 func TestValkeyExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t *testing.T) {
-	client := openTestValkey(t)
+	client := testutil.OpenValkey(t)
 	charID := "hero-valkey-parity"
 	expID := "exp-valkey-parity-1"
 	cleanupDungeonValkey(t, client, charID)
@@ -824,7 +807,7 @@ func TestMemoryExpeditionRepository_Step_MemberHPDeltasAndCurrentHPConsistency(t
 }
 
 func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t *testing.T) {
-	client := openTestValkey(t)
+	client := testutil.OpenValkey(t)
 	charID := "hero-valkey-combat"
 	cleanupDungeonValkey(t, client, charID)
 	defer cleanupDungeonValkey(t, client, charID)

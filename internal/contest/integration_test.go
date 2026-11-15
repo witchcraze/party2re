@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -19,7 +18,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/scheduling"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func contestIntegrationDB(t *testing.T) (*sql.DB, *database.ContestRepository, *database.CharacterRepository, database.TransactionProvider) {
@@ -421,19 +420,6 @@ func TestContestSettlement_SchedulingFailureAndReconciliation_DatabaseIntegratio
 	}
 }
 
-func openContestTestValkey(t *testing.T) valkey.Client {
-	t.Helper()
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("open valkey client: %v", err)
-	}
-	return client
-}
-
 func cleanupValkeyAction(ctx context.Context, client valkey.Client, actorID, actionID string) {
 	_ = client.Do(ctx, client.B().Del().Key("party2:scheduled:action:"+actionID).Build())
 	_ = client.Do(ctx, client.B().Del().Key("party2:scheduled:lock:"+actionID).Build())
@@ -463,8 +449,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	ctx := context.Background()
 	_, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
 
-	vkClient := openContestTestValkey(t)
-	t.Cleanup(vkClient.Close)
+	vkClient := testutil.OpenValkey(t)
 
 	testActorID := fmt.Sprintf("contest:test:%s", id.New())
 	var trackedActions []string
@@ -771,8 +756,7 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 	ctx := context.Background()
 	db, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
 
-	vkClient := openContestTestValkey(t)
-	t.Cleanup(vkClient.Close)
+	vkClient := testutil.OpenValkey(t)
 
 	testActorID := fmt.Sprintf("contest:test:%s", id.New())
 	var trackedActions []string

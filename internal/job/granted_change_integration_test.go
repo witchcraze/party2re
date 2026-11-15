@@ -23,7 +23,7 @@ import (
 	"github.com/witchcraze/party2re/internal/inventory"
 	"github.com/witchcraze/party2re/internal/job"
 	"github.com/witchcraze/party2re/internal/store"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type countingGuildAwarder struct{ calls int }
@@ -178,11 +178,7 @@ func testCostumeRepoFromEnv(t *testing.T) costume.Repository {
 	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		return costume.NewMemoryCostumeRepository()
 	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	return costume.NewValkeyCostumeRepository(client)
 }
 

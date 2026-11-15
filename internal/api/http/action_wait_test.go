@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func actionWaitRouter(t *testing.T, destination string) (*bankGatewayFixture, timer.Service, http.Handler) {
@@ -121,14 +120,7 @@ func TestActionWaitIsReadOnlyForGET(t *testing.T) {
 // Real Valkey: SET NX EX claim, rejection during the wait, release on a
 // rejected command and expiry, across sequential commands.
 func TestActionWaitWithRealValkey(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	timers := timer.NewService(client)
 	ctx := context.Background()
 	_ = timers.ReleaseLock(ctx, timer.CategoryActionWait, "hero")

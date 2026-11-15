@@ -9,11 +9,11 @@ import (
 	core "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/scheduling"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func TestRequeuePendingPreservesStoredState(t *testing.T) {
-	client := openValkeyClient(t)
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	ctx := context.Background()
 	repo := scheduling.NewValkeyRepository(client)
 	action := validTestAction("requeue:"+id.New(), time.Now().UTC().Add(-time.Hour))

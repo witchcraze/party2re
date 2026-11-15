@@ -176,6 +176,7 @@ func TestService_Singleflight_PreventsCacheStampede(t *testing.T) {
 }
 
 func TestValkeySnapshotCache_RealOrNop(t *testing.T) {
+	// This probe also runs without an address and skips unreachable servers.
 	client, err := valkey.NewClient()
 	if err != nil {
 		t.Skip("Valkey is not reachable")

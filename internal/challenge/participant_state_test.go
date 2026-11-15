@@ -7,6 +7,7 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type stateRoundEngine struct {
@@ -47,8 +48,7 @@ func TestChallengeParticipantStateAcrossRounds(t *testing.T) {
 			ctx := context.Background()
 			var store challenge.ActiveSessionStore = challenge.NewMemorySessionRepository()
 			if live {
-				client := openTestValkey(t)
-				t.Cleanup(client.Close)
+				client := testutil.OpenValkey(t)
 				var err error
 				store, err = challenge.NewValkeySessionRepository(client)
 				if err != nil {

@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/maintenance"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type countingFallbackRepo struct {
@@ -164,15 +163,7 @@ func TestValkeyRepository_FailOpen_WhenFallbackErrors(t *testing.T) {
 }
 
 func TestValkeyRepository_RealValkeyIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not set, skipping real Valkey test")
-	}
-
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("open valkey client: %v", err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 
 	ctx := context.Background()
 	testKey := "party2:test:maintenance:status"

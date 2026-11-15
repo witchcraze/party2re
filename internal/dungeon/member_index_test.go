@@ -7,6 +7,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func TestMemberIndex(t *testing.T) {
@@ -19,8 +20,7 @@ func TestMemberIndex(t *testing.T) {
 			cleanupReference := func(string) {}
 			var store dungeon.ActiveExpeditionStore = dungeon.NewMemoryExpeditionRepository()
 			if live {
-				client := openTestValkey(t)
-				t.Cleanup(client.Close)
+				client := testutil.OpenValkey(t)
 				r, err := dungeon.NewValkeyExpeditionRepository(client)
 				if err != nil {
 					t.Fatal(err)

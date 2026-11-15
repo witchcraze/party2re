@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type fakeCharacterNames map[string]string
@@ -171,14 +170,7 @@ func TestSpeechInTownAndRejectedOutsideAQualifiedPlace(t *testing.T) {
 // Real Valkey: speech during a held wait and whisper visibility per viewer.
 // Rows are identified by unique text, so the shared bank log is never cleared.
 func TestSpeechWithRealValkey(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	ctx := context.Background()
 	timers := timer.NewService(client)
 	log := placelog.New(client, placelog.Config{})

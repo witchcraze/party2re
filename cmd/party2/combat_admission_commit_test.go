@@ -13,7 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/party"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 // commitFault wraps the real transaction provider. "abort" makes the real
@@ -58,11 +58,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)

@@ -21,7 +21,6 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/testutil"
-	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func retireDungeon(ctx context.Context, store dungeon.ActiveExpeditionStore, actor string) error {
@@ -46,11 +45,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
@@ -294,11 +289,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	t.Cleanup(func() {
 		_ = db.Close()
 	})
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
@@ -446,11 +437,7 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 	t.Cleanup(func() {
 		_ = db.Close()
 	})
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)

@@ -49,8 +49,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { db.Close() })
-			client := openTestValkey(t)
-			t.Cleanup(client.Close)
+			client := testutil.OpenValkey(t)
 			store, err := dungeon.NewValkeyExpeditionRepository(client)
 			if err != nil {
 				t.Fatal(err)

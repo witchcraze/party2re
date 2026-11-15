@@ -67,8 +67,7 @@ type protocolFixture struct {
 
 func newProtocolFixture(t *testing.T, n int) *protocolFixture {
 	t.Helper()
-	f := &protocolFixture{db: participantSettlementDB(t), client: openTestValkey(t), engine: &protocolEngine{}}
-	t.Cleanup(f.client.Close)
+	f := &protocolFixture{db: participantSettlementDB(t), client: testutil.OpenValkey(t), engine: &protocolEngine{}}
 	var err error
 	f.chars, err = database.NewCharacterRepository(f.db)
 	if err != nil {

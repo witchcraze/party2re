@@ -11,7 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/scheduling"
-	vk "github.com/witchcraze/party2re/internal/valkey"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 // Concurrent rescues of one stuck character share one committed record and add
@@ -27,11 +27,7 @@ func TestRescueServiceIntegration_ConcurrentRescueAddsOnePenalty(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	valkeyClient, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer valkeyClient.Close()
+	valkeyClient := testutil.OpenValkey(t)
 
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {

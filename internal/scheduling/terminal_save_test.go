@@ -13,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/scheduling"
+	"github.com/witchcraze/party2re/internal/testutil"
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
@@ -32,8 +33,7 @@ func (c *terminalFaultClient) Do(ctx context.Context, cmd valkey.Completed) valk
 
 func terminalFixture(t *testing.T) (valkey.Client, *terminalFaultClient, *scheduling.ValkeyRepository, core.ScheduledAction) {
 	t.Helper()
-	client := openValkeyClient(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	action := validTestAction(id.New(), time.Now().Add(-time.Minute))
 	action.ActorID = id.New()
 	t.Cleanup(func() {

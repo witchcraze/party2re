@@ -19,8 +19,7 @@ func encounterStore(t *testing.T, kind string) dungeon.ActiveExpeditionStore {
 	if kind == "memory" {
 		return dungeon.NewMemoryExpeditionRepository()
 	}
-	client := openTestValkey(t)
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	store, err := dungeon.NewValkeyExpeditionRepository(client)
 	if err != nil {
 		t.Fatal(err)

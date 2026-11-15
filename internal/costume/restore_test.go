@@ -2,14 +2,12 @@ package costume_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
-	vk "github.com/witchcraze/party2re/internal/valkey"
-
 	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 // restoreContract: restore only while the applied value is current; previous nil clears.
@@ -91,13 +89,6 @@ func TestMemoryCostumeRepository_RestoreActiveCostume(t *testing.T) {
 }
 
 func TestValkeyCostumeRepository_RestoreActiveCostume(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
-	}
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(client.Close)
+	client := testutil.OpenValkey(t)
 	restoreContract(t, costume.NewValkeyCostumeRepository(client))
 }

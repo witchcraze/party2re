@@ -27,8 +27,7 @@ func TestAdvanceRound_CompareAndSwap(t *testing.T) {
 			defer cancel()
 			var store challenge.ActiveSessionStore = challenge.NewMemorySessionRepository()
 			if live {
-				client := openTestValkey(t)
-				t.Cleanup(client.Close)
+				client := testutil.OpenValkey(t)
 				r, err := challenge.NewValkeySessionRepository(client)
 				if err != nil {
 					t.Fatal(err)
@@ -154,8 +153,7 @@ func TestServiceAdvanceRound_ConcurrentSnapshot(t *testing.T) {
 			defer cancel()
 			var store challenge.ActiveSessionStore = challenge.NewMemorySessionRepository()
 			if live {
-				client := openTestValkey(t)
-				t.Cleanup(client.Close)
+				client := testutil.OpenValkey(t)
 				r, err := challenge.NewValkeySessionRepository(client)
 				if err != nil {
 					t.Fatal(err)

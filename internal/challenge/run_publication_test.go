@@ -8,6 +8,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/challenge"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func TestRunPublicationVersionAndReplacementParity(t *testing.T) {
@@ -20,8 +21,7 @@ func TestRunPublicationVersionAndReplacementParity(t *testing.T) {
 			ctx := context.Background()
 			var store challenge.ActiveSessionStore = challenge.NewMemorySessionRepository()
 			if live {
-				client := openTestValkey(t)
-				t.Cleanup(client.Close)
+				client := testutil.OpenValkey(t)
 				var err error
 				store, err = challenge.NewValkeySessionRepository(client)
 				if err != nil {

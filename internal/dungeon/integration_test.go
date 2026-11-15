@@ -12,7 +12,6 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/testutil"
-	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 type failOnceDeleteStore struct {
@@ -53,11 +52,7 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 	}
 	defer db.Close()
 
-	vkClient, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer vkClient.Close()
+	vkClient := testutil.OpenValkey(t)
 
 	vStore, err := dungeon.NewValkeyExpeditionRepository(vkClient)
 	if err != nil {

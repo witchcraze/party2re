@@ -21,7 +21,6 @@ import (
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/testutil"
-	vk "github.com/witchcraze/party2re/internal/valkey"
 	"github.com/witchcraze/party2re/internal/wishingwell"
 )
 
@@ -40,11 +39,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	client, err := vk.NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
+	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
