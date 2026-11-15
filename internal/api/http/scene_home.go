@@ -55,7 +55,7 @@ func (h *Handler) homeSceneData(ctx context.Context, r playercontext.Result) (an
 	data := HomeSceneData{Parent: "town", View: view, Destinations: []SceneDestination{}, ColorSamples: []HomeColorSample{}}
 	if view.IsOwner {
 		data.ColorSamples = homeColorSamples
-		for _, id := range []string{"home_inbox", "home_outbox"} {
+		for _, id := range []string{"home_inbox", "home_outbox", "home_notices"} {
 			if adapter, ok := h.sceneAdapters[id]; ok {
 				data.Destinations = append(data.Destinations, SceneDestination{ID: id, Title: adapter.title, Supported: adapter.read != nil, EnterParams: sceneEnterParams{Destination: id}})
 			}

@@ -45,6 +45,7 @@ type HomeCompanionService interface {
 
 // HomeLivingService defines resting, waking, and delivery notice operations.
 type HomeLivingService interface {
+	ListDeliveryNoticesPage(ctx context.Context, characterID, playerID string, limit, offset int, cursor string) (pagination.CursorPage[home.DeliveryNotice], error)
 	ClearDeliveryNotices(ctx context.Context, characterID string, noticeIDs []string) error
 	Sleep(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error)
 	GetSleepStatus(ctx context.Context, characterID string) (home.SleepStatus, error)

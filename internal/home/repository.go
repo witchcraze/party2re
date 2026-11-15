@@ -44,6 +44,7 @@ type DeliveryNoticeRepository interface {
 	// HasUnclearedDeliveryNotice locks matching uncleared notices so a concurrent clear is not missed.
 	HasUnclearedDeliveryNotice(ctx context.Context, characterID, noticeType string) (bool, error)
 	ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]DeliveryNotice, error)
+	ListDeliveryNoticesPage(ctx context.Context, characterID string, limit, offset int, beforeTime time.Time, beforeID string) ([]DeliveryNotice, error)
 	ClearDeliveryNotices(ctx context.Context, characterID string, noticeIDs []string) error
 }
 

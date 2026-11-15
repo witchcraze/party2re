@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/home"
 )
@@ -125,15 +126,32 @@ func (r *HomeRepository) ListDeliveryNotices(ctx context.Context, characterID st
 	if unclearedOnly {
 		query += ` AND is_cleared = FALSE`
 	}
-	query += ` ORDER BY created_at DESC LIMIT 50`
+	query += ` ORDER BY created_at DESC, id DESC LIMIT 50`
 
-	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, characterID)
+	return r.listDeliveryNotices(ctx, query, characterID)
+}
+
+// ListDeliveryNoticesPage reads uncleared notices without changing their state.
+func (r *HomeRepository) ListDeliveryNoticesPage(ctx context.Context, characterID string, limit, offset int, beforeTime time.Time, beforeID string) ([]home.DeliveryNotice, error) {
+	query := `SELECT id, character_id, notice_type, message, is_cleared, created_at
+		FROM character_delivery_notices WHERE character_id = ? AND is_cleared = FALSE`
+	args := []any{characterID}
+	if !beforeTime.IsZero() {
+		query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`
+		args = append(args, beforeTime.UTC(), beforeTime.UTC(), beforeID)
+	}
+	query += ` ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	return r.listDeliveryNotices(ctx, query, args...)
+}
+
+func (r *HomeRepository) listDeliveryNotices(ctx context.Context, query string, args ...any) ([]home.DeliveryNotice, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var notices []home.DeliveryNotice
+	notices := []home.DeliveryNotice{}
 	for rows.Next() {
 		var n home.DeliveryNotice
 		if err := rows.Scan(&n.ID, &n.CharacterID, &n.NoticeType, &n.Message, &n.IsCleared, &n.CreatedAt); err != nil {
@@ -141,7 +159,6 @@ func (r *HomeRepository) ListDeliveryNotices(ctx context.Context, characterID st
 		}
 		notices = append(notices, n)
 	}
-
 	return notices, rows.Err()
 }
 

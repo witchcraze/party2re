@@ -59,7 +59,7 @@ var facilities = func() map[string]facility {
 		"god": godFacility, "u_god": underworldGodFacility, "auction": auctionFacility, "bank": bankFacility,
 		"blackmarket": blackMarketFacility, "blacksmith": blacksmithFacility, "chapel": chapelFacility, "exile": exileFacility,
 		"depot": depotFacility, "fleamarket": fleaMarketFacility, "gemstore": gemStoreFacility, "secretshop": secretShopFacility,
-		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "casino": casinoFacility, "tavern": tavernFacility, "lottery": lotteryFacility, "takarakuji": takarakujiFacility, "plantation": plantationFacility, "oracle": oracleFacility, "contest": contestFacility,
+		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "home_notices": homeNoticesFacility, "casino": casinoFacility, "tavern": tavernFacility, "lottery": lotteryFacility, "takarakuji": takarakujiFacility, "plantation": plantationFacility, "oracle": oracleFacility, "contest": contestFacility,
 	}
 	for _, t := range town.AllTowns() {
 		m[t.ID] = townDistrictFacility(t.Name)

@@ -2110,6 +2110,9 @@
                       "$ref": "#/components/schemas/HomeMailboxSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/HomeNoticesSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/ShopCatalogSceneData"
                     },
                     {
@@ -2205,6 +2208,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeMailboxSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeNoticesSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/ShopProductSceneData"
@@ -2323,6 +2329,29 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeMailboxSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home_notices"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeNoticesSceneData"
                 }
               }
             }
@@ -4024,6 +4053,7 @@
                         "shop_accessory",
                         "home_inbox",
                         "home_outbox",
+                        "home_notices",
                         "casino",
                         "secretshop",
                         "town1",
@@ -4138,6 +4168,7 @@
                         "shop_accessory",
                         "home_inbox",
                         "home_outbox",
+                        "home_notices",
                         "casino",
                         "secretshop",
                         "town1",
@@ -4195,7 +4226,7 @@
                       }
                     }
                   ],
-                  "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox; empty cursor starts the existing keyset reader."
+                  "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox/notices; empty cursor starts the existing keyset reader."
                 }
               },
               "required": [
@@ -7861,6 +7892,7 @@
               "shop_accessory",
               "home_inbox",
               "home_outbox",
+              "home_notices",
               "casino",
               "secretshop",
               "town1",
@@ -7917,7 +7949,7 @@
             }
           }
         ],
-        "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox; empty cursor starts the existing keyset reader."
+        "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox/notices; empty cursor starts the existing keyset reader."
       },
       "ScenePage": {
         "type": "object",
@@ -8002,6 +8034,7 @@
                   "shop_accessory",
                   "home_inbox",
                   "home_outbox",
+                  "home_notices",
                   "casino",
                   "secretshop",
                   "town1",
@@ -17779,6 +17812,30 @@
           "min_entries",
           "is_postponed",
           "photos"
+        ]
+      },
+      "HomeNoticesSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "notices": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/HomeDeliveryNotice"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          }
+        },
+        "required": [
+          "parent",
+          "notices",
+          "page"
         ]
       }
     },

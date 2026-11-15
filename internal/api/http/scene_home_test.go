@@ -123,6 +123,7 @@ func homeSceneRouter(t *testing.T, options ...Option) (*homeSceneFixture, *gatew
 		}, SubjectOwned: func(_ context.Context, actorID, target string) (bool, error) { return actorID == target, nil }},
 		playercontext.SceneDefinition{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
 		playercontext.SceneDefinition{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
+		playercontext.SceneDefinition{ID: "home_notices", Parent: "home", Pageable: true, CursorPageable: true},
 	))
 	h, err := NewHandler(f.gatewayFixture, f.homeGatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, append([]Option{WithHome(f), WithPlayerContext(service)}, options...)...)
 	if err != nil {
@@ -160,7 +161,7 @@ func TestHomeScenesPublicOwnedTargetsAndRecovery(t *testing.T) {
 	f, store, router := homeSceneRouter(t)
 	status, response := navigationGET(t, router)
 	data := decodeHomeData(t, response)
-	if status != 200 || !data.View.IsOwner || data.View.Private == nil || len(data.Destinations) != 2 || response.Scene.Support.Observation != "details" {
+	if status != 200 || !data.View.IsOwner || data.View.Private == nil || len(data.Destinations) != 3 || response.Scene.Support.Observation != "details" {
 		t.Fatalf("owned: %d %+v", status, response)
 	}
 	before := f.repo.privateReads

@@ -159,6 +159,10 @@ func (m *mockHomeService) TalkToCompanion(context.Context, string) (home.Compani
 
 func (m *mockHomeService) ClearDeliveryNotices(context.Context, string, []string) error { return nil }
 
+func (m *mockHomeService) ListDeliveryNoticesPage(context.Context, string, string, int, int, string) (pagination.CursorPage[home.DeliveryNotice], error) {
+	return pagination.CursorPage[home.DeliveryNotice]{}, nil
+}
+
 func (m *mockHomeService) Sleep(context.Context, string, string) (home.SleepResult, error) {
 	return home.SleepResult{}, nil
 }
