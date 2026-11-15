@@ -221,6 +221,30 @@ func TestColosseumPvPEndpoints(t *testing.T) {
 		}
 	})
 
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"unconscious", pvp.ErrCharacterUnconscious},
+		{"exhausted", pvp.ErrCharacterExhausted},
+	} {
+		t.Run("POST /characters/{id}/pvp/rooms - "+tc.name+" 422", func(t *testing.T) {
+			stubPvP.createRoomFn = func(_ context.Context, _ string, _ pvp.CreateRoomRequest) (pvp.RoomDetail, error) {
+				return pvp.RoomDetail{}, tc.err
+			}
+			defer func() { stubPvP.createRoomFn = nil }()
+
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/pvp/rooms", `{"name":"Grand Arena","bet":100}`)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("expected 422 UnprocessableEntity for %s, got %d", tc.name, rec.Code)
+			}
+		})
+	}
+
 	t.Run("GET /pvp/rooms", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/pvp/rooms", nil)
 		rec := httptest.NewRecorder()
@@ -278,6 +302,31 @@ func TestColosseumPvPEndpoints(t *testing.T) {
 		}
 	})
 
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"not recruiting", pvp.ErrRoomNotRecruiting},
+		{"unconscious", pvp.ErrCharacterUnconscious},
+		{"exhausted", pvp.ErrCharacterExhausted},
+	} {
+		t.Run("POST /characters/{id}/pvp/rooms/{room_id}/join - "+tc.name+" 422", func(t *testing.T) {
+			stubPvP.joinRoomFn = func(_ context.Context, _ string, _ string, _ string) (pvp.RoomDetail, error) {
+				return pvp.RoomDetail{}, tc.err
+			}
+			defer func() { stubPvP.joinRoomFn = nil }()
+
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/pvp/rooms/room-1/join", `{"password":""}`)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("expected 422 UnprocessableEntity for %s, got %d", tc.name, rec.Code)
+			}
+		})
+	}
+
 	t.Run("POST /characters/{id}/pvp/rooms/{room_id}/team - success", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/pvp/rooms/room-1/team", `{"team_color":"#FF3333"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
@@ -308,6 +357,22 @@ func TestColosseumPvPEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/pvp/rooms/{room_id}/leave - not in room 422", func(t *testing.T) {
+		stubPvP.leaveRoomFn = func(_ context.Context, _ string, _ string) error {
+			return pvp.ErrCharacterNotInRoom
+		}
+		defer func() { stubPvP.leaveRoomFn = nil }()
+
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/pvp/rooms/room-1/leave", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 UnprocessableEntity, got %d", rec.Code)
 		}
 	})
 

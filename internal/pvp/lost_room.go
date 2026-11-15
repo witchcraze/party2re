@@ -28,9 +28,10 @@ func (s *Service) abandonLostRoom(ctx context.Context, characterID string, last 
 	if claim != last.Detail.Room.ID {
 		return ErrCharacterNotInRoom
 	}
+	beforePool := last.Detail.Room.PrizePool
 	detail := last.Detail
 	detail.Room.Status = StatusDisbanded
 	detail.Room.PrizePool = 0
 	detail.Room.UpdatedAt = time.Now().UTC()
-	return s.commitTransition(ctx, Transition{Kind: "abandon", ActorID: characterID, Detail: detail, RemovedIDs: memberIDs}, func(context.Context) error { return nil })
+	return s.commitTransition(ctx, Transition{Kind: "abandon", ActorID: characterID, Detail: detail, RemovedIDs: memberIDs, ForfeitedPool: beforePool}, func(context.Context) error { return nil })
 }

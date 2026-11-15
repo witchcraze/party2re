@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
@@ -29,7 +31,7 @@ func assertPvPForfeited(t *testing.T, f *transitionFixture) {
 		wallets += char.Money
 	}
 	last, err := f.store.FindTransition(ctx, f.room.Room.ID)
-	if err != nil || last.Detail.Room.PrizePool != 0 || last.Detail.Room.Bet*len(last.Detail.Members)+wallets != 2000 {
+	if err != nil || last.Detail.Room.PrizePool != 0 || last.ForfeitedPool+wallets != 2000 || last.Detail.Room.Bet*len(last.Detail.Members)+wallets != 2000 {
 		t.Fatalf("wallets plus forfeiture do not conserve assets: %+v %v", last, err)
 	}
 }
@@ -169,4 +171,52 @@ func TestPvPLostRoomRecoveryRejectsUnownedAndUnavailableIntegration(t *testing.T
 		t.Fatalf("rejected recovery changed claim: %+v %v", after, err)
 	}
 	f.assertFunds(t, 900, 1000, 0, 100)
+}
+
+func TestPvPCompletedRoomLeaveIntegration(t *testing.T) {
+	f := newTransitionFixture(t)
+	f.prepare(t, "settle")
+	ctx := context.Background()
+	outsider, err := database.CreateTestCharacterWithFunds(ctx, f.db, "O"+id.New()[:7], 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := f.db.ExecContext(ctx, "DELETE FROM character_depots WHERE character_id = ?", outsider.ID); err != nil {
+			t.Error(err)
+		}
+		if _, err := f.db.ExecContext(ctx, "DELETE FROM characters WHERE id = ?", outsider.ID); err != nil {
+			t.Error(err)
+		}
+		if _, err := f.db.ExecContext(ctx, "DELETE FROM players WHERE id = ?", outsider.PlayerID); err != nil {
+			t.Error(err)
+		}
+	})
+	res, err := f.service.AdvanceRound(ctx, f.leader.ID, f.room.Room.ID)
+	if err != nil || !res.MatchCompleted {
+		t.Fatalf("expected completed match, got %+v err=%v", res, err)
+	}
+	if err := f.service.LeaveRoom(ctx, outsider.ID, f.room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+		t.Fatalf("expected ErrCharacterNotInRoom for unrelated actor in completed room, got %v", err)
+	}
+	if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+		t.Fatalf("leader leave completed room: %v", err)
+	}
+	if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+		t.Fatalf("idempotent leader leave completed room: %v", err)
+	}
+	rem, err := f.service.GetRoom(ctx, f.room.Room.ID)
+	if err != nil || rem.Room.LeaderCharacterID != f.member.ID || len(rem.Members) != 1 {
+		t.Fatalf("expected member promoted in completed room, got %+v err=%v", rem, err)
+	}
+	if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
+		t.Fatalf("final leave completed room: %v", err)
+	}
+	if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
+		t.Fatalf("idempotent final leave completed room: %v", err)
+	}
+	if _, err := f.service.GetRoom(ctx, f.room.Room.ID); !errors.Is(err, pvp.ErrRoomNotFound) {
+		t.Fatalf("expected completed room deleted after final exit, got %v", err)
+	}
+	f.assertFunds(t, 900, 900, 1, 0)
 }

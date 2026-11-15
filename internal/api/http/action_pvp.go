@@ -30,8 +30,6 @@ func pvpLeaveRejection(err error) (int, ErrorDetail) {
 		return http.StatusNotFound, ErrorDetail{Code: "PVP_ROOM_NOT_FOUND", Message: "PvP room not found."}
 	case errors.Is(err, pvp.ErrCharacterNotInRoom):
 		return http.StatusForbidden, ErrorDetail{Code: "PVP_NOT_IN_ROOM", Message: "Character is not in this PvP room."}
-	case errors.Is(err, pvp.ErrMatchAlreadyStarted):
-		return http.StatusConflict, ErrorDetail{Code: "PVP_MATCH_STARTED", Message: "PvP match already started."}
 	case errors.Is(err, pvp.ErrTransitionConflict):
 		return http.StatusConflict, ErrorDetail{Code: "PVP_TRANSITION_CONFLICT", Message: "PvP room changed; refresh before retrying."}
 	default:

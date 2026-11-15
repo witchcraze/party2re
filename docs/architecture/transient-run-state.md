@@ -74,7 +74,7 @@ port commits bets, refunds or prizes and victory counters with this recovery sta
 in one SQL transaction. It locks the room claim (Rank 0), affected characters in
 ascending ID order (Rank 2), then participation claims (Rank 8). A unique character
 claim rolls back a competing admission, including its debit. Terminal claims reject
-further financial transitions. Financial versions also reject stale cached rosters.
+further financial transitions, while post-completion leaves update or delete only ephemeral Valkey state. Pre-start departure refunds only the departing participant; post-start departure preserves remaining escrow for active teams or records forfeited escrow (`ForfeitedPool`) on last-member forfeit, undecided max-round draw, settlement remainder, and lost-room abandonment. Financial versions also reject stale cached rosters.
 
 Valkey publication happens after commit. Before subsequent room mutations, pending
 publication is retried under the room lock without repeating financial effects or

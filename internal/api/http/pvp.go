@@ -97,7 +97,8 @@ func (h *Handler) handleCreatePvPRoom(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if errors.Is(err, pvp.ErrInsufficientBetFunds) || errors.Is(err, pvp.ErrAlreadyInRoom) ||
-				errors.Is(err, pvp.ErrNeedJoinNotMet) {
+				errors.Is(err, pvp.ErrNeedJoinNotMet) || errors.Is(err, pvp.ErrCharacterUnconscious) ||
+				errors.Is(err, pvp.ErrCharacterExhausted) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -178,9 +179,10 @@ func (h *Handler) handleJoinPvPRoom(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusForbidden, err)
 				return
 			}
-			if errors.Is(err, pvp.ErrRoomFull) || errors.Is(err, pvp.ErrMatchAlreadyStarted) ||
+			if errors.Is(err, pvp.ErrRoomFull) || errors.Is(err, pvp.ErrRoomNotRecruiting) ||
 				errors.Is(err, pvp.ErrAlreadyInRoom) || errors.Is(err, pvp.ErrInsufficientBetFunds) ||
-				errors.Is(err, pvp.ErrNeedJoinNotMet) {
+				errors.Is(err, pvp.ErrNeedJoinNotMet) || errors.Is(err, pvp.ErrCharacterUnconscious) ||
+				errors.Is(err, pvp.ErrCharacterExhausted) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -207,7 +209,7 @@ func (h *Handler) handleLeavePvPRoom(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
-			if errors.Is(err, pvp.ErrCharacterNotInRoom) || errors.Is(err, pvp.ErrMatchAlreadyStarted) {
+			if errors.Is(err, pvp.ErrCharacterNotInRoom) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
