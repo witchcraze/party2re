@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/witchcraze/party2re/internal/contest"
@@ -157,9 +158,10 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 	result, err := h.contest.SettleContest(r.Context(), req.Force)
 	if err != nil {
 		if errors.Is(err, contest.ErrScheduleFailed) {
+			slog.ErrorContext(r.Context(), "contest settlement scheduling failed", slog.Any("error", err))
 			writeJSON(w, http.StatusAccepted, settleContestResponse{
 				SettlementResult: result,
-				Warning:          "contest settled, but settlement scheduling failed: " + err.Error(),
+				Warning:          "contest settled, but settlement scheduling failed",
 			})
 			return
 		}

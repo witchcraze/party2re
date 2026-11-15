@@ -1,8 +1,10 @@
 package http_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -82,6 +84,11 @@ func TestStartOutcomeUnknownHTTP(t *testing.T) {
 		{"challenge party", "/characters/c1/challenges/party-start", `{"tier_id":"1"}`, challenge.ErrOutcomeUnknown},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			var logBuf bytes.Buffer
+			prevLogger := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, nil)))
+			t.Cleanup(func() { slog.SetDefault(prevLogger) })
+
 			joined := errors.Join(tc.sentinel, causeSave, causeCleanup)
 			ds := &stubDungeonService{
 				startExpeditionFn: func(context.Context, string, string) (*dungeon.ActiveExpedition, error) { return nil, joined },
@@ -107,8 +114,12 @@ func TestStartOutcomeUnknownHTTP(t *testing.T) {
 			if errors.Is(tc.sentinel, challenge.ErrOutcomeUnknown) {
 				wantStatus = http.StatusServiceUnavailable
 			}
-			if rec.Code != wantStatus || !strings.Contains(body, tc.sentinel.Error()) || strings.Contains(body, "secret") {
+			if rec.Code != wantStatus || !strings.Contains(body, "internal server error") || strings.Contains(body, tc.sentinel.Error()) || strings.Contains(body, "secret") {
 				t.Fatalf("status=%d body=%s", rec.Code, body)
+			}
+			logged := logBuf.String()
+			if !strings.Contains(logged, tc.sentinel.Error()) || !strings.Contains(logged, "secret save response lost") || !strings.Contains(logged, "secret cleanup failure") {
+				t.Fatalf("expected joined error details in server log, got %q", logged)
 			}
 		})
 	}

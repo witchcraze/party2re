@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/netip"
 	"os"
@@ -867,6 +868,11 @@ type errorResponse struct {
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {
+	if status >= http.StatusInternalServerError {
+		slog.Error("http server error", slog.Int("status", status), slog.Any("error", err))
+		writeJSON(w, status, errorResponse{Error: "internal server error"})
+		return
+	}
 	writeJSON(w, status, errorResponse{Error: err.Error()})
 }
 
