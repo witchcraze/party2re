@@ -93,6 +93,7 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 	if !isImmune && dmg < 1 {
 		dmg = 1
 	}
+	targetWasAlive := ctx.hpMap[target.ID] > 0
 	ctx.hpMap[target.ID] -= dmg
 	if ctx.hpMap[target.ID] < 0 {
 		ctx.hpMap[target.ID] = 0
@@ -134,7 +135,9 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 				ctx.applyMazinSynergy(target)
 				crystalsBefore := ctx.droppedCrystals
 				ctx.checkCrystalDrop(target)
-				ctx.recordDefeatEarnings(actor, target, ctx.droppedCrystals-crystalsBefore)
+				if targetWasAlive {
+					ctx.recordDefeatEarnings(actor, target, ctx.droppedCrystals-crystalsBefore)
+				}
 			}
 		}
 	} else if hasAbility(ctx.abilitiesMap[actor.ID], "seal_kuu") {
