@@ -52,6 +52,10 @@ func (m *mockSchedRepo) FindPendingByActorID(_ context.Context, actorID string) 
 	return actions, nil
 }
 
+func (m *mockSchedRepo) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
+	return nil
+}
+
 func (m *mockSchedRepo) AcquireLock(_ context.Context, _ string, _ time.Duration) (bool, error) {
 	return true, nil
 }

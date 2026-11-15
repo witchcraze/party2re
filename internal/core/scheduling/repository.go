@@ -15,6 +15,11 @@ type ScheduledActionRepository interface {
 	// storage failures or invalid payloads return an error without partial results.
 	FindPendingByActorID(ctx context.Context, actorID string) ([]ScheduledAction, error)
 
+	// RequeuePending restores missing queue membership for a Pending snapshot without
+	// changing an existing score, payload, actor index or lock. Concurrent state
+	// transitions remain authoritative; FetchDue/Worker validate them before dispatch.
+	RequeuePending(ctx context.Context, action ScheduledAction) error
+
 	// FetchDue returns actions that are due for execution at or before the given time.
 	// It traverses the pending queue in bounded batches, separating preserved Processing
 	// records from execution candidates by removing them from the pending queue while

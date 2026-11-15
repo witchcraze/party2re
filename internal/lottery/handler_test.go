@@ -71,11 +71,25 @@ func (r *memScheduledRepo) FindPendingByActorID(_ context.Context, actorID strin
 	return out, nil
 }
 
+func (r *memScheduledRepo) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
+	// Every Pending payload is already visible to this adapter's FetchDue.
+	return nil
+}
+
 type failingScheduler struct {
-	err error
+	err     error
+	findErr error
 }
 
 func (f failingScheduler) ScheduleWithID(context.Context, string, string, string, map[string]string, time.Time) error {
+	return f.err
+}
+
+func (f failingScheduler) FindPendingByActorID(context.Context, string) ([]core_scheduling.ScheduledAction, error) {
+	return nil, f.findErr
+}
+
+func (f failingScheduler) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
 	return f.err
 }
 
@@ -196,9 +210,12 @@ func TestDrawHandler_FutureExecuteAt(t *testing.T) {
 	if !createdRound.DrawDate.Equal(expectedNext) {
 		t.Fatalf("next round DrawDate = %v, want %v", createdRound.DrawDate, expectedNext)
 	}
-	nextAction, ok := schedRepo.actions[lottery.DrawActionID(expectedNext)]
-	if !ok || nextAction.State != core_scheduling.StatePending || !nextAction.ExecuteAt.Equal(expectedNext) {
-		t.Fatalf("next action = %+v, want pending at %v", nextAction, expectedNext)
+	actions, err := schedRepo.FindPendingByActorID(context.Background(), "system")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) != 1 || !actions[0].ExecuteAt.Equal(expectedNext) {
+		t.Fatalf("next actions = %+v, want pending at %v", actions, expectedNext)
 	}
 }
 

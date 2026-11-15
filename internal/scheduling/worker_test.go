@@ -48,6 +48,10 @@ func (m *mockRepository) FindPendingByActorID(_ context.Context, actorID string)
 	return actions, nil
 }
 
+func (m *mockRepository) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
+	return nil
+}
+
 func (m *mockRepository) AcquireLock(ctx context.Context, actionID string, lockTTL time.Duration) (bool, error) {
 	if m.acquireLockErr != nil {
 		return false, m.acquireLockErr
@@ -107,6 +111,28 @@ type mockLogger struct{}
 func (m *mockLogger) Info(ctx context.Context, msg string, attrs ...slog.Attr)             {}
 func (m *mockLogger) Warn(ctx context.Context, msg string, attrs ...slog.Attr)             {}
 func (m *mockLogger) Error(ctx context.Context, msg string, err error, attrs ...slog.Attr) {}
+
+func TestWorker_ReconcilesWithEmptyOrUnavailableQueue(t *testing.T) {
+	repo := newMockRepository()
+	worker := NewWorker(repo, time.Second, &mockLogger{})
+	calls := 0
+	worker.RegisterReconciler("lottery", func(ctx context.Context) error {
+		calls++
+		return errors.New("temporary registration failure")
+	})
+	handler := &mockHandler{}
+	worker.RegisterHandler("test_action", handler)
+	repo.actions = []core_scheduling.ScheduledAction{{ID: "unrelated", ActionType: "test_action", ActorID: "actor", ExecuteAt: time.Now().Add(-time.Hour), State: core_scheduling.StatePending}}
+	worker.processActions(context.Background())
+	if !handler.handled {
+		t.Fatal("reconciliation error blocked unrelated work")
+	}
+	repo.fetchDueErr = errors.New("queue unavailable")
+	worker.processActions(context.Background())
+	if calls != 2 {
+		t.Fatalf("reconciliation calls = %d, want 2", calls)
+	}
+}
 
 func TestWorker(t *testing.T) {
 	repo := newMockRepository()

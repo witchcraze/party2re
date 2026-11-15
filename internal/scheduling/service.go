@@ -65,3 +65,7 @@ func (s *Service) ClearActiveActions(ctx context.Context, characterID string) (b
 func (s *Service) FindPendingByActorID(ctx context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {
 	return s.repo.FindPendingByActorID(ctx, actorID)
 }
+
+func (s *Service) RequeuePending(ctx context.Context, action core_scheduling.ScheduledAction) error {
+	return s.repo.RequeuePending(ctx, action)
+}

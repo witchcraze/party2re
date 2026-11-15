@@ -235,7 +235,9 @@ func wireHooks(
 	soc.registerWorkerHandlers(misc.activity, misc.chapel, misc.lottery, misc.contest)
 
 	if soc.sched != nil && misc.lottery != nil {
-		wireTakarakujiDrawing(soc.sched)
+		if err := wireTakarakujiDrawing(soc.sched, misc.lottery); err != nil {
+			return err
+		}
 	}
 	if soc.sched != nil && soc.guild != nil {
 		wireGuildInactivityCheck(soc.sched)
@@ -275,10 +277,8 @@ func wireGuildPointDecay(sched *scheduling.Service) {
 }
 
 // wireTakarakujiDrawing enqueues the recurring Takarakuji drawing action if not already scheduled.
-func wireTakarakujiDrawing(sched *scheduling.Service) {
-	ctx := context.Background()
-	next := lottery.NextDrawDateJST(time.Now())
-	_ = sched.ScheduleWithID(ctx, lottery.DrawActionID(next), lottery.ActionTypeTakarakujiDraw, "system", nil, next)
+func wireTakarakujiDrawing(sched *scheduling.Service, lotterySvc *lottery.Service) error {
+	return lottery.NewDrawHandler(lotterySvc, lottery.WithScheduler(sched)).Reconcile(context.Background())
 }
 
 func newHTTPHandler(
