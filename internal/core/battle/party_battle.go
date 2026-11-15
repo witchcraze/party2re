@@ -413,6 +413,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		BaseReward:      selectedReward,
 		BonusPercent:    bonusPercent,
 		TotalReward:     totalReward,
+		DefeatEarnings:  ctx.defeatEarnings,
 		AlliesSurvived:  alliesSurvived,
 		AlliesFallen:    alliesFallen,
 		RemainingHP:     copyHPMap(ctx.hpMap),

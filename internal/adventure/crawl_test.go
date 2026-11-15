@@ -482,13 +482,16 @@ type crystalRewardBattleResolver struct {
 
 func (r crystalRewardBattleResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 	remHP := make(map[string]int)
+	var recipients []string
 	for _, a := range req.Allies {
 		remHP[a.ID] = a.HP
+		recipients = append(recipients, a.ID)
 	}
 	return corebattle.PartyBattleResult{
-		Outcome:     corebattle.OutcomeWin,
-		Turns:       1,
-		RemainingHP: remHP,
+		Outcome:        corebattle.OutcomeWin,
+		Turns:          1,
+		RemainingHP:    remHP,
+		DefeatEarnings: []corebattle.DefeatEarnings{{Reward: corebattle.Reward{Experience: 10, Currency: 20, Crystals: r.crystalsPerFloor}, RecipientIDs: recipients}},
 		TotalReward: corebattle.Reward{
 			Experience: 10,
 			Currency:   20,

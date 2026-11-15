@@ -74,7 +74,9 @@ func (e *mockConcurrentBattleEngine) ResolvePartyBattle(req battle.PartyBattleRe
 	e.runCount.Add(1)
 	remHP := make(map[string]int)
 	remMP := make(map[string]int)
+	var recipients []string
 	for _, p := range req.Allies {
+		recipients = append(recipients, p.ID)
 		remHP[p.ID] = p.HP
 		remMP[p.ID] = p.MP
 	}
@@ -82,10 +84,11 @@ func (e *mockConcurrentBattleEngine) ResolvePartyBattle(req battle.PartyBattleRe
 	time.Sleep(10 * time.Millisecond)
 
 	return battle.PartyBattleResult{
-		Outcome:     battle.OutcomeWin,
-		Turns:       1,
-		RemainingHP: remHP,
-		RemainingMP: remMP,
+		Outcome:        battle.OutcomeWin,
+		Turns:          1,
+		RemainingHP:    remHP,
+		RemainingMP:    remMP,
+		DefeatEarnings: []battle.DefeatEarnings{{Reward: battle.Reward{Experience: 100, Currency: 50}, RecipientIDs: recipients}},
 		TotalReward: battle.Reward{
 			Experience: 100,
 			Currency:   50,

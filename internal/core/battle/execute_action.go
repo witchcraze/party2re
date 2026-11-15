@@ -30,6 +30,7 @@ type battleContext struct {
 	allyTeamID        string
 	crystalDroppedMap map[string]bool
 	droppedCrystals   int
+	defeatEarnings    []DefeatEarnings
 }
 
 func (ctx *battleContext) executeDefend(actor Participant) {
@@ -131,7 +132,9 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 				}
 			} else {
 				ctx.applyMazinSynergy(target)
+				crystalsBefore := ctx.droppedCrystals
 				ctx.checkCrystalDrop(target)
+				ctx.recordDefeatEarnings(actor, target, ctx.droppedCrystals-crystalsBefore)
 			}
 		}
 	} else if hasAbility(ctx.abilitiesMap[actor.ID], "seal_kuu") {
@@ -157,6 +160,19 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
 	return !isImmune
+}
+
+func (ctx *battleContext) recordDefeatEarnings(actor, target Participant, crystals int) {
+	if ctx.teamMap[actor.ID] != ctx.allyTeamID || actor.ID == target.ID {
+		return
+	}
+	e := DefeatEarnings{Reward: Reward{Experience: target.ExperienceReward, Currency: target.GoldReward, Crystals: crystals}}
+	for _, ally := range ctx.req.Allies {
+		if ctx.hpMap[ally.ID] > 0 {
+			e.RecipientIDs = append(e.RecipientIDs, ally.ID)
+		}
+	}
+	ctx.defeatEarnings = append(ctx.defeatEarnings, e)
 }
 
 func (ctx *battleContext) applyMazinSynergy(fallen Participant) {

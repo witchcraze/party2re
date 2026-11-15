@@ -184,18 +184,21 @@ func TestAdventure_EarnedRewardSettlementConcurrentIntegration(t *testing.T) {
 		if worker%2 == 1 {
 			ordered = []string{ids[1], ids[0]}
 		}
-		_, err := settler.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{CharacterIDs: ordered, PreserveEarnedRewards: true, BattleResult: corebattle.PartyBattleResult{Outcome: corebattle.OutcomeDefeat, TotalReward: corebattle.Reward{Experience: 1, Currency: 2, Crystals: 1}}})
+		_, err := settler.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{CharacterIDs: ordered, PreserveEarnedRewards: true,
+			RecipientRewards: map[string]corebattle.Reward{ids[0]: {Experience: 1, Currency: 2, Crystals: 1}, ids[1]: {Experience: 2, Currency: 3, Crystals: 2}},
+			BattleResult:     corebattle.PartyBattleResult{Outcome: corebattle.OutcomeDefeat, TotalReward: corebattle.Reward{Experience: 1000, Currency: 1000, Crystals: 1000}},
+		})
 		return err
 	})
 	if res.Failures != 0 || res.Successes != res.TotalOps {
 		t.Fatalf("settlement failures: %+v", res)
 	}
-	for _, id := range ids {
+	for i, id := range ids {
 		c, err := chars.FindByID(ctx, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.Experience != int(res.Successes) || c.Money != 100+int(res.Successes)*2 || c.Crystal != int(res.Successes) {
+		if c.Experience != int(res.Successes)*(i+1) || c.Money != 100+int(res.Successes)*(i+2) || c.Crystal != int(res.Successes)*(i+1) {
 			t.Fatalf("assets not conserved: %+v, operations=%+v", c, res)
 		}
 	}

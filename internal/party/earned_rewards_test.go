@@ -37,13 +37,20 @@ func TestPartyAdventure_EarnedRewards(t *testing.T) {
 						outcome = corebattle.OutcomeDefeat
 					}
 					hps, mps := make(map[string]int), make(map[string]int)
+					var recipients []string
 					for _, p := range req.Allies {
+						recipients = append(recipients, p.ID)
 						hps[p.ID], mps[p.ID] = 80, 12
 						if outcome == corebattle.OutcomeDefeat {
 							hps[p.ID] = 0
 						}
 					}
-					return corebattle.PartyBattleResult{Outcome: outcome, RemainingHP: hps, RemainingMP: mps, TotalReward: corebattle.Reward{Experience: 7, Currency: 11, Crystals: 3}}, nil
+					reward := corebattle.Reward{Experience: 7, Currency: 11, Crystals: 3}
+					var earnings []corebattle.DefeatEarnings
+					if outcome == corebattle.OutcomeWin {
+						earnings = []corebattle.DefeatEarnings{{Reward: reward, RecipientIDs: recipients}}
+					}
+					return corebattle.PartyBattleResult{Outcome: outcome, RemainingHP: hps, RemainingMP: mps, TotalReward: reward, DefeatEarnings: earnings}, nil
 				})
 				svc, parties, chars, invs, _ := setupPartyAdventureTestService(t, engine)
 				if adapter {
