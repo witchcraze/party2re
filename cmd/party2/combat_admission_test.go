@@ -36,15 +36,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		t.Skip("requires MariaDB and Valkey")
 	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {
@@ -282,13 +274,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 		t.Skip("requires MariaDB and Valkey")
 	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {
@@ -430,13 +416,7 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 		t.Skip("requires MariaDB and Valkey")
 	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {

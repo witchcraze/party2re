@@ -2,7 +2,6 @@ package collection_test
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/collection"
@@ -10,15 +9,7 @@ import (
 )
 
 func TestCollectionServiceDatabaseIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	collectionRepo, err := database.NewCollectionRepository(db)
 	if err != nil {

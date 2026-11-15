@@ -34,14 +34,7 @@ func (a *countingGuildAwarder) AddGuildPoints(context.Context, string, int) erro
 }
 
 func TestCelestialWishSynchronizesJobStateAcrossDatabaseReload(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -286,14 +279,7 @@ func sameCostume(got *costume.ActiveCostume, want costume.ActiveCostume) bool {
 }
 
 func TestChangeJob_CostumeResetContract(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	costumeRepo := testCostumeRepoFromEnv(t)
 	storeSvc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
@@ -560,14 +546,7 @@ func TestChangeJob_CostumeResetContract(t *testing.T) {
 }
 
 func TestCelestialWish_CostumeResetContract(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	costumeRepo := testCostumeRepoFromEnv(t)
 	storeSvc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))

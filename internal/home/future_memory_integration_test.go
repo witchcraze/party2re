@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -40,18 +39,7 @@ type futureMemoryFixture struct {
 // while the previous job has none, and owns item-207 in both Home sources.
 func newFutureMemoryFixture(t *testing.T, name string, overFuture int, inventoryIDs, depotIDs []string) futureMemoryFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close home future memory test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 
 	char, err := database.CreateTestCharacter(ctx, db, name)

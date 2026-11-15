@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -64,18 +63,7 @@ func (r *mutationLockGateRepo) LockCharacterForUpdate(ctx context.Context, chara
 
 func newMutationLockFixture(t *testing.T) *mutationLockFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	repo, err := database.NewGuildRepository(db)
 	if err != nil {
 		t.Fatal(err)

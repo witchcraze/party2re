@@ -11,11 +11,7 @@ import (
 
 func (f bagFixture) godVisit(t *testing.T) string {
 	t.Helper()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
+	db := database.OpenTestDB(t)
 	repo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -51,11 +47,7 @@ func TestHomeGodReins_Integration_EntersRealmFromEitherSource(t *testing.T) {
 
 func TestHomeGodReins_Integration_AlreadyAdmittedKeepsReins(t *testing.T) {
 	f := newBagFixture(t, "ReinsTwice", "item-262", "inventory", 0)
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
+	db := database.OpenTestDB(t)
 	repo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -16,15 +15,7 @@ import (
 )
 
 func TestReplayRepository(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	// Pruning must only delete this test's rows, even when other packages use the same DB.
@@ -110,15 +101,7 @@ func TestReplayRepository(t *testing.T) {
 }
 
 func TestReplayRepository_ArchiveVisibilityAndCursorPredicates(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	db.SetMaxOpenConns(1)

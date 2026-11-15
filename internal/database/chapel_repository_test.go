@@ -3,7 +3,6 @@ package database_test
 import (
 	"context"
 	"errors"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,15 +14,7 @@ import (
 )
 
 func TestChapelRepository_LifecycleAndQuota(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, "PrayingDevotee")
@@ -128,15 +119,7 @@ func TestChapelRepository_LifecycleAndQuota(t *testing.T) {
 }
 
 func TestChapelRepository_ConcurrentSelectBlessing(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, "RaceDevotee")
@@ -201,15 +184,7 @@ func TestChapelRepository_ConcurrentSelectBlessing(t *testing.T) {
 }
 
 func TestChapelRepository_ConcurrentSelectAndClear(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, "SleepRaceDevotee")

@@ -3,7 +3,6 @@ package database_test
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -13,14 +12,7 @@ import (
 )
 
 func TestDungeonRepository_RunQualifiedCleanup(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	repo, err := database.NewDungeonRepository(db)
 	if err != nil {

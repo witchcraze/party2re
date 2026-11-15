@@ -296,15 +296,7 @@ func (c *countingValkeyClient) Do(ctx context.Context, cmd valkeygo.Completed) v
 }
 
 func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("cleanup db close: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	raw := openIsolatedTestValkey(t, 11)
 	t.Cleanup(raw.Close)
@@ -504,15 +496,7 @@ func TestRoomDetail_SingleLockAcquisitionPerAction(t *testing.T) {
 }
 
 func TestValkeyRoomLock_LeaseSafetyAndContentionHoldTiming(t *testing.T) {
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("cleanup db close: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	raw := openIsolatedTestValkey(t, 11)
 	t.Cleanup(raw.Close)

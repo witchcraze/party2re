@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"os"
 	"reflect"
 	"testing"
 
@@ -10,14 +9,7 @@ import (
 )
 
 func TestCharacterJobRepositoryPersistsAndLoadsHistory(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	character, err := CreateTestCharacter(context.Background(), db, "Job Test")
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 
@@ -55,14 +54,7 @@ type prizeDatabaseTest struct {
 
 func newPrizeDatabaseTest(t *testing.T, coins int64, exDepot int, items []item.Instance) prizeDatabaseTest {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
+	db := database.OpenTestDB(t)
 	coinRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
 		t.Fatal(err)

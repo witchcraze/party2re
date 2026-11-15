@@ -46,11 +46,7 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		t.Skip("PARTY2_VALKEY_ADDR is not configured")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	vkClient := testutil.OpenValkey(t)
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -77,19 +76,6 @@ func (c *departureWriteFault) Do(ctx context.Context, cmd valkeygo.Completed) va
 	return c.Client.Do(ctx, cmd)
 }
 
-func openDepartureDB(t *testing.T) *sql.DB {
-	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
-}
-
 func departureService(t *testing.T, db *sql.DB, client valkeygo.Client, evidence casino.DepartureRepository) *casino.Service {
 	t.Helper()
 	accounts, err := database.NewCasinoRepository(db)
@@ -157,7 +143,7 @@ func assertDeparture(t *testing.T, ctx context.Context, f *publicationFixture, a
 }
 
 func TestDepartureRecovery_InterruptionWindows(t *testing.T) {
-	db := openDepartureDB(t)
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	ctx := context.Background()
@@ -209,7 +195,7 @@ func TestDepartureRecovery_InterruptionWindows(t *testing.T) {
 				// Independent SQL/Valkey handles inspect pending work without repairing it.
 				observerClient := openIsolatedTestValkey(t, 0)
 				t.Cleanup(observerClient.Close)
-				observer := departureService(t, openDepartureDB(t), observerClient, nil)
+				observer := departureService(t, database.OpenTestDB(t), observerClient, nil)
 				for _, actor := range f.actors {
 					ch, err := f.characters.FindByID(ctx, actor)
 					if err != nil {
@@ -246,7 +232,7 @@ func TestDepartureRecovery_InterruptionWindows(t *testing.T) {
 			}
 			freshClient := openIsolatedTestValkey(t, 0)
 			t.Cleanup(freshClient.Close)
-			restarted := departureService(t, openDepartureDB(t), freshClient, nil)
+			restarted := departureService(t, database.OpenTestDB(t), freshClient, nil)
 			for range 3 {
 				if err := restarted.LeaveRoom(ctx, f.roomID, f.actors[0]); err != nil {
 					t.Fatal(err)
@@ -273,7 +259,7 @@ func TestDepartureRecovery_InterruptionWindows(t *testing.T) {
 }
 
 func TestDepartureRecovery_RolesAndDisband(t *testing.T) {
-	db := openDepartureDB(t)
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	ctx := context.Background()
@@ -348,7 +334,7 @@ func TestDepartureRecovery_RolesAndDisband(t *testing.T) {
 }
 
 func TestDepartureRecovery_ConcurrentDuplicateAndRejoin(t *testing.T) {
-	db := openDepartureDB(t)
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	ctx := context.Background()
@@ -356,7 +342,7 @@ func TestDepartureRecovery_ConcurrentDuplicateAndRejoin(t *testing.T) {
 	before := f.state(t, ctx)
 	client := openIsolatedTestValkey(t, 0)
 	t.Cleanup(client.Close)
-	other := departureService(t, openDepartureDB(t), client, nil)
+	other := departureService(t, database.OpenTestDB(t), client, nil)
 	errs := testutil.RunRace(
 		func() error { return f.svc.LeaveRoom(ctx, f.roomID, f.actors[0]) },
 		func() error { return other.LeaveRoom(ctx, f.roomID, f.actors[0]) },
@@ -383,7 +369,7 @@ func TestDepartureRecovery_ConcurrentDuplicateAndRejoin(t *testing.T) {
 }
 
 func TestDepartureRecovery_LostValkeyAndExpiry(t *testing.T) {
-	db := openDepartureDB(t)
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	ctx := context.Background()
@@ -412,7 +398,7 @@ func TestDepartureRecovery_LostValkeyAndExpiry(t *testing.T) {
 			}
 			fresh := openIsolatedTestValkey(t, 0)
 			t.Cleanup(fresh.Close)
-			restarted := departureService(t, openDepartureDB(t), fresh, nil)
+			restarted := departureService(t, database.OpenTestDB(t), fresh, nil)
 			peer, err := f.characters.FindByID(ctx, f.actors[1])
 			if err != nil {
 				t.Fatal(err)
@@ -458,7 +444,7 @@ func TestDepartureRecovery_LostValkeyAndExpiry(t *testing.T) {
 }
 
 func TestDepartureRecovery_PersistentFailureDoesNotBlockOtherRooms(t *testing.T) {
-	db := openDepartureDB(t)
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	ctx := context.Background()
@@ -492,7 +478,7 @@ func TestDepartureRecovery_PersistentFailureDoesNotBlockOtherRooms(t *testing.T)
 }
 
 func TestDepartureRecovery_RejectsAmbientTransactionAndStaleRoom(t *testing.T) {
-	db := openDepartureDB(t)
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	ctx := context.Background()

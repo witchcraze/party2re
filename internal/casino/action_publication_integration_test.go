@@ -3,7 +3,6 @@ package casino_test
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -17,14 +16,7 @@ import (
 // Compare all persisted facts, then let the healthy opponent act without replaying the rejected command.
 func TestActionPublication_FailureBoundaries(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	t.Cleanup(raw.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -211,14 +203,7 @@ func (f *publicationFixture) assertApplied(t *testing.T, ctx context.Context, sc
 }
 
 func TestActionPublication_GameHookFailureIsBestEffort(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	defer raw.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -238,14 +223,7 @@ func TestActionPublication_GameHookFailureIsBestEffort(t *testing.T) {
 }
 
 func TestActionPublication_MultipleWinnersReadFailure(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	raw := openIsolatedTestValkey(t, 0)
 	defer raw.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

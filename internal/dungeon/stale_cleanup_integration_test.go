@@ -2,7 +2,6 @@ package dungeon_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -41,14 +40,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 			name = "failed-cleanup-retry"
 		}
 		t.Run(name, func(t *testing.T) {
-			if os.Getenv("PARTY2_DB_DSN") == "" {
-				t.Skip("PARTY2_DB_DSN is not configured")
-			}
-			db, err := database.OpenFromEnvironment()
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { db.Close() })
+			db := database.OpenTestDB(t)
 			client := testutil.OpenValkey(t)
 			store, err := dungeon.NewValkeyExpeditionRepository(client)
 			if err != nil {

@@ -11,6 +11,7 @@ func TestOpenFromEnvironmentUsesConfiguredDSN(t *testing.T) {
 	const dsn = "party2:party2@tcp(example:3306)/party2?parseTime=true"
 	t.Setenv("PARTY2_DB_DSN", dsn)
 
+	// Exercise the production constructor with a synthetic DSN, without connecting.
 	db, err := OpenFromEnvironment()
 	if err != nil {
 		t.Fatalf("OpenFromEnvironment() error = %v", err)
@@ -181,15 +182,7 @@ func TestOpen_DefaultSettings(t *testing.T) {
 }
 
 func TestConfiguredDatabaseIsReachable(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment() error = %v", err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	if err := Ping(db); err != nil {
 		t.Fatalf("Ping() error = %v", err)
@@ -214,15 +207,7 @@ func TestPing_NilDatabase(t *testing.T) {
 }
 
 func TestPingContext_CanceledContext(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment() error = %v", err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

@@ -25,6 +25,25 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
+// OpenTestDB opens the shared database selected by PARTY2_DB_DSN and closes it
+// after fixture cleanup. Missing configuration skips; opening errors fail.
+func OpenTestDB(t testing.TB) *sql.DB {
+	t.Helper()
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close test database: %v", err)
+		}
+	})
+	return db
+}
+
 // CreateTestDatabase copies only the requested table definitions into a dedicated
 // database and drops it on cleanup. It skips without PARTY2_DB_DSN, but requires
 // PARTY2_TEST_DB_ADMIN_DSN when DB tests are enabled; it never uses the shared DB

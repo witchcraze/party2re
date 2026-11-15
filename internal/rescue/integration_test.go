@@ -22,11 +22,7 @@ func TestRescueServiceIntegration_ConcurrentRescueAddsOnePenalty(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	valkeyClient := testutil.OpenValkey(t)
 
 	charRepo, err := database.NewCharacterRepository(db)

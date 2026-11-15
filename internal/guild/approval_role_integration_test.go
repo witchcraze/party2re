@@ -46,15 +46,7 @@ func newApprovalRoleFixture(t *testing.T) *approvalRoleFixture {
 	t.Cleanup(cancel)
 	start := time.Now()
 	defer func() { t.Logf("fixture: %s", time.Since(start)) }()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	repo, err := database.NewGuildRepository(db)
 	if err != nil {
 		t.Fatal(err)

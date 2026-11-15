@@ -94,15 +94,7 @@ func newTransitionFixture(t *testing.T) *transitionFixture {
 		t.Skip("PARTY2_DB_DSN and PARTY2_VALKEY_ADDR are required")
 	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{os.Getenv("PARTY2_VALKEY_ADDR")}})
 	if err != nil {
 		t.Fatal(err)

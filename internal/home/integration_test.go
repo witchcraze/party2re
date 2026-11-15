@@ -29,6 +29,7 @@ func homeIsolatedDB(t *testing.T) *sql.DB {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
 	// Estate reclamation traverses the full schema, unlike subset-based fixtures.
+	// Schema source for a dedicated DB; close it when the schema copy finishes.
 	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
@@ -294,15 +295,7 @@ func (a *testDepotManagerAdapter) ConsumeOne(ctx context.Context, characterID, i
 }
 
 func TestHomeItemUsage_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 
@@ -432,15 +425,7 @@ func TestHomeItemUsage_Integration(t *testing.T) {
 }
 
 func TestHomeItemUsage_ConcurrentStress(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 

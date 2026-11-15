@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -19,14 +18,7 @@ import (
 
 // Deleting an identity removes only that identity's mailbox copies (#1094).
 func TestIdentityDeletionPreservesSurvivingMailboxCopies(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 
 	charRepo, err := database.NewCharacterRepository(db)
@@ -189,14 +181,7 @@ func TestIdentityDeletionPreservesSurvivingMailboxCopies(t *testing.T) {
 
 // A letter delivered while its recipient is being deleted must not outlive both owners' copies.
 func TestCharacterDeletionRacingLetterDelivery(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {

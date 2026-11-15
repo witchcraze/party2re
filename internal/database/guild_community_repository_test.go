@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -13,15 +12,7 @@ import (
 )
 
 func TestGuildRepository_ApplicationsAndApprovals(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -152,15 +143,7 @@ func TestGuildRepository_ApplicationsAndApprovals(t *testing.T) {
 }
 
 func TestGuildRepository_CustomizationMarkAndWallpaper(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -238,15 +221,7 @@ func TestGuildRepository_CustomizationMarkAndWallpaper(t *testing.T) {
 }
 
 func TestGuildRepository_InactivityScanAndDisband(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -335,15 +310,7 @@ func TestGuildRepository_InactivityScanAndDisband(t *testing.T) {
 }
 
 func TestGuildRepository_MultiplePendingApplicationsAndAffiliation(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -494,15 +461,7 @@ func TestGuildRepository_MultiplePendingApplicationsAndAffiliation(t *testing.T)
 }
 
 func TestGuildRepository_LockCharacterForUpdate(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {

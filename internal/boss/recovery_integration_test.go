@@ -98,15 +98,7 @@ func newSealingStorageFixture(t *testing.T) *sealingStorageFixture {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("MariaDB and Valkey settings required")
 	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{os.Getenv("PARTY2_VALKEY_ADDR")}})
 	if err != nil {
 		t.Fatal(err)

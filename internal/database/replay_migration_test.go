@@ -13,14 +13,7 @@ import (
 )
 
 func TestReplayArchiveMigrationPreservesUnknownRows(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	// Connection-local tables shadow shared tables, so migration/pruning tests cannot affect other packages.
 	db.SetMaxOpenConns(1)

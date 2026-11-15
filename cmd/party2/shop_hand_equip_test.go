@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"reflect"
 	"testing"
 
@@ -31,16 +30,7 @@ type shopFixture struct {
 
 func newShopFixture(t *testing.T, money int) shopFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
+	db := database.OpenTestDB(t)
 	core, err := newCoreServices(db, nil)
 	if err != nil {
 		t.Fatal(err)

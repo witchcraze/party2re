@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -34,15 +33,7 @@ func TestTxContextHelpers(t *testing.T) {
 }
 
 func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -271,15 +262,7 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 }
 
 func TestRunInTx_ContextCancelAndCommitErrorRollbackScopeContract(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := OpenTestDB(t)
 
 	chars, err := NewCharacterRepository(db)
 	if err != nil {
@@ -403,11 +386,7 @@ func TestRunInTx_ContextCancelAndCommitErrorRollbackScopeContract(t *testing.T) 
 	})
 
 	t.Run("pool wait respects context cancel while active tx holds row lock through OnRollback and returns conn", func(t *testing.T) {
-		limitedDB, err := OpenFromEnvironment()
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = limitedDB.Close() })
+		limitedDB := OpenTestDB(t)
 		limitedDB.SetMaxOpenConns(1)
 
 		c := newChar(t, "TxPoolWait")

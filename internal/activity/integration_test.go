@@ -22,16 +22,8 @@ type fixedClock struct{ now time.Time }
 func (c *fixedClock) Now() time.Time { return c.now }
 
 func TestTrainingPersistsResultAndCharacterAcrossServiceRestart(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	characters, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -102,16 +94,8 @@ func TestTrainingPersistsResultAndCharacterAcrossServiceRestart(t *testing.T) {
 }
 
 func TestConcurrentTrainingClaimsApplyRewardOnce(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	characters, err := database.NewCharacterRepository(db)
 	if err != nil {
@@ -211,16 +195,8 @@ func TestTrainingScheduledActionIntegration(t *testing.T) {
 	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("PARTY2_VALKEY_ADDR is not configured")
 	}
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := database.OpenTestDB(t)
 
 	valkeyClient := testutil.OpenValkey(t)
 

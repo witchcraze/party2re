@@ -2,7 +2,6 @@ package database_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -11,15 +10,7 @@ import (
 )
 
 func TestAchievementRepository_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	repo, err := database.NewAchievementRepository(db)
 	if err != nil {

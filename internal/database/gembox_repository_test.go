@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -16,15 +15,7 @@ func TestGemBoxRepositoryNilDB(t *testing.T) {
 }
 
 func TestGemBoxRepositorySaveAndFind(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	repo, err := NewGemBoxRepository(db)

@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -10,15 +9,7 @@ import (
 )
 
 func TestShopRepositoryCommitTransaction(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := NewCharacterRepository(db)

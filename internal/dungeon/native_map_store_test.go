@@ -90,11 +90,7 @@ func TestNativeMap0_EscapeAtLimitThroughSQLFinalizer(t *testing.T) {
 		t.Skip("PARTY2_DB_DSN and PARTY2_VALKEY_ADDR are required")
 	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	store, err := dungeon.NewValkeyExpeditionRepository(client)
 	if err != nil {

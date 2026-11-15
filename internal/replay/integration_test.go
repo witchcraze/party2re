@@ -2,7 +2,6 @@ package replay_test
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -11,15 +10,7 @@ import (
 )
 
 func TestReplayIntegrationFlow(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
 	repo, err := database.NewReplayRepository(db)

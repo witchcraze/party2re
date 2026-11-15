@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -351,15 +350,7 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 }
 
 func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := database.OpenTestDB(t)
 
 	valkeyClient := testutil.OpenValkey(t)
 

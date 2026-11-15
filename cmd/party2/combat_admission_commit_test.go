@@ -49,15 +49,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 		t.Skip("requires MariaDB and Valkey")
 	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
 	core, err := newCoreServices(db, client)
 	if err != nil {

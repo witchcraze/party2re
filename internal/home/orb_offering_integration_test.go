@@ -33,11 +33,7 @@ func (f bagFixture) orb(t *testing.T) string {
 
 func (f bagFixture) charRepo(t *testing.T) *database.CharacterRepository {
 	t.Helper()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := database.OpenTestDB(t)
 	repo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

@@ -3,7 +3,6 @@ package job_test
 import (
 	"context"
 	"errors"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -20,19 +19,7 @@ import (
 )
 
 func TestFutureMemory_Integration_ConcurrentSavesEnforceCapacity(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close job future memory test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -170,19 +157,7 @@ func TestFutureMemory_Integration_ConcurrentSavesEnforceCapacity(t *testing.T) {
 }
 
 func TestFutureMemory_Integration_ConcurrentSaveAndJobMemoryConflict(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close job future memory conflict test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

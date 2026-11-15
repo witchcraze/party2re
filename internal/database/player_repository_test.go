@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -19,15 +18,7 @@ func TestNewPlayerRepositoryNilDB(t *testing.T) {
 }
 
 func TestPlayerRepositorySaveAndFind(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	repository, err := NewPlayerRepository(db)
 	if err != nil {
@@ -91,15 +82,7 @@ func TestPlayerRepositorySaveAndFind(t *testing.T) {
 }
 
 func TestPlayerRepositoryListAndBan(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	repository, err := NewPlayerRepository(db)
 	if err != nil {

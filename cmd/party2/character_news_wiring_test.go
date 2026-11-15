@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/database"
@@ -11,18 +10,7 @@ import (
 )
 
 func TestCharacterJoiningNewsProductionWiring(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	core, err := newCoreServices(db, nil)
 	if err != nil {

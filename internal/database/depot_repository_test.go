@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"slices"
 	"sync"
@@ -22,18 +21,7 @@ func TestDepotRepositoryNilDB(t *testing.T) {
 }
 
 func TestDepotRepositoryPreservesItemOrder(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := OpenTestDB(t)
 	ctx := context.Background()
 	actor, err := CreateTestCharacter(ctx, db, "Depot order")
 	if err != nil {
@@ -115,15 +103,7 @@ func TestDepotRepositoryPreservesItemOrder(t *testing.T) {
 }
 
 func TestDepotRepositorySaveAndFind(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	depotRepo, err := NewDepotRepository(db)
@@ -156,15 +136,7 @@ func TestDepotRepositorySaveAndFind(t *testing.T) {
 }
 
 func TestDepotRepositoryExecuteTransaction(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	charRepo, err := NewCharacterRepository(db)
@@ -246,15 +218,7 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 }
 
 func TestDepotRepositoryCannotUpdateOtherCharacterItem(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	repo, err := NewDepotRepository(db)
@@ -311,15 +275,7 @@ func TestDepotRepositoryCannotUpdateOtherCharacterItem(t *testing.T) {
 }
 
 func TestDepotRepositoryFindByCharacterIDForUpdateReadsLatestCommittedData(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	repo, err := NewDepotRepository(db)
@@ -422,15 +378,7 @@ func TestDepotRepositoryFindByCharacterIDForUpdateReadsLatestCommittedData(t *te
 // SELECT, FindByCharacterIDForUpdate always retrieves the latest committed items and subsequent Save
 // does not erase items added by concurrent transactions.
 func TestDepotRepositoryPriorNonLockingReadPreventsStaleSnapshotAndItemLoss(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	repo, err := NewDepotRepository(db)

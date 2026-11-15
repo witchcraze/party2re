@@ -3,7 +3,6 @@ package home_test
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -41,18 +40,7 @@ type veteranFixture struct {
 // newVeteranFixture stores item-237 in inventory and in a full Depot.
 func newVeteranFixture(t *testing.T, level, exp, gold int) veteranFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close veteran reward test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, "Veteran")
 	if err != nil {

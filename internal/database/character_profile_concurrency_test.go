@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -26,31 +25,13 @@ func (r *interceptingProfileRepo) GetProfile(ctx context.Context, characterID st
 	return p, err
 }
 
-func openProfileTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close profile test db: %v", err)
-		}
-	})
-	return db
-}
-
 // TestCharacterService_ConcurrentProfilePatch_DisjointFields reproduces the interleaving
 // where two services update disjoint fields (Comment vs AvatarURL) concurrently.
 // It verifies that Service 2 blocks on the character row lock while Service 1 is in-flight,
 // and after Service 1 commits, Service 2 applies its change over the committed state,
 // preserving both new fields as well as existing bio data.
 func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
-	db := openProfileTestDB(t)
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "ProfDisjointTest")
@@ -194,7 +175,7 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 // when the character has no existing profile row in character_profiles.
 // It verifies that the row lock on characters serializes first-profile creation.
 func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
-	db := openProfileTestDB(t)
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "ProfFirstTest")
@@ -323,7 +304,7 @@ func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
 // TestCharacterService_ConcurrentAllOptionalFields verifies that Comment, AvatarURL,
 // AuraEffect, and BioData are all preserved across concurrent partial updates.
 func TestCharacterService_ConcurrentAllOptionalFields(t *testing.T) {
-	db := openProfileTestDB(t)
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "ProfAllFieldsTest")
@@ -444,7 +425,7 @@ func TestCharacterService_ConcurrentAllOptionalFields(t *testing.T) {
 // failed profile reads (e.g. corrupt JSON) cause zero saves and do not overwrite
 // existing stored data with default empty profiles.
 func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T) {
-	db := openProfileTestDB(t)
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "ProfCorruptTest")
@@ -508,7 +489,7 @@ func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T)
 }
 
 func TestCharacterProfileFixtureCleanup(t *testing.T) {
-	observer := openProfileTestDB(t)
+	observer := OpenTestDB(t)
 	ctx := context.Background()
 
 	obsRepo, err := NewCharacterRepository(observer)
@@ -548,7 +529,7 @@ func TestCharacterProfileFixtureCleanup(t *testing.T) {
 
 	var normalChar, earlyChar corecharacter.Character
 	t.Run("normal scope end", func(t *testing.T) {
-		db := openProfileTestDB(t)
+		db := OpenTestDB(t)
 		var err error
 		normalChar, err = CreateTestCharacter(ctx, db, "ProfNorm")
 		if err != nil {
@@ -559,7 +540,7 @@ func TestCharacterProfileFixtureCleanup(t *testing.T) {
 	})
 
 	t.Run("early return path", func(t *testing.T) {
-		db := openProfileTestDB(t)
+		db := OpenTestDB(t)
 		var err error
 		earlyChar, err = CreateTestCharacter(ctx, db, "ProfEarly")
 		if err != nil {

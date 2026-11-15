@@ -3,7 +3,6 @@ package depot_test
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -50,18 +49,7 @@ func (c saleFixedPriceCatalog) FindByID(id string) (item.Definition, error) {
 
 func saleDBFixtureWithOptions(t *testing.T, failCharSave, failDepotSave bool, catalog depot.ItemDefinitionProvider) (*depot.Service, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, []item.Instance) {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

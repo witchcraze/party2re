@@ -3,7 +3,6 @@ package god_test
 import (
 	"context"
 	"errors"
-	"os"
 	"slices"
 	"testing"
 
@@ -83,18 +82,7 @@ func TestGod_GrantWish_Admission(t *testing.T) {
 }
 
 func TestGod_GrantWish_Integration_ConcurrentDoubleSubmit(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close god admission test db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	c, err := database.CreateTestCharacter(ctx, db, "GodDouble")
 	if err != nil {

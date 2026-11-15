@@ -3,31 +3,12 @@ package database
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
 )
-
-func openFutureMemoryTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close future memory test db: %v", err)
-		}
-	})
-	return db
-}
 
 func TestFutureMemoryRepositoryNilDB(t *testing.T) {
 	if _, err := NewFutureMemoryRepository(nil); err == nil {
@@ -36,7 +17,7 @@ func TestFutureMemoryRepositoryNilDB(t *testing.T) {
 }
 
 func TestFutureMemoryRepositorySaveAndFind(t *testing.T) {
-	db := openFutureMemoryTestDB(t)
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "FutureMem DB Test")
@@ -100,7 +81,7 @@ func TestFutureMemoryRepositorySaveAndFind(t *testing.T) {
 }
 
 func TestFutureMemoryRepositoryAmbientTransaction(t *testing.T) {
-	db := openFutureMemoryTestDB(t)
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 	char, err := CreateTestCharacter(ctx, db, "FutureMem Tx Test")
@@ -145,7 +126,7 @@ func TestFutureMemoryRepositoryAmbientTransaction(t *testing.T) {
 }
 
 func TestFutureMemoryFixtureCleanup(t *testing.T) {
-	observer := openFutureMemoryTestDB(t)
+	observer := OpenTestDB(t)
 	ctx := context.Background()
 
 	obsRepo, err := NewFutureMemoryRepository(observer)
@@ -192,7 +173,7 @@ func TestFutureMemoryFixtureCleanup(t *testing.T) {
 	}
 
 	t.Run("normal scope end", func(t *testing.T) {
-		db := openFutureMemoryTestDB(t)
+		db := OpenTestDB(t)
 		var err error
 		normalChar, err = CreateTestCharacter(ctx, db, "FMNorm")
 		if err != nil {
@@ -203,7 +184,7 @@ func TestFutureMemoryFixtureCleanup(t *testing.T) {
 	})
 
 	t.Run("early return path", func(t *testing.T) {
-		db := openFutureMemoryTestDB(t)
+		db := OpenTestDB(t)
 		var err error
 		earlyChar, err = CreateTestCharacter(ctx, db, "FMEarly")
 		if err != nil {

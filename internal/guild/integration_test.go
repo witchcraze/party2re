@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,15 +13,7 @@ import (
 )
 
 func TestGuildServiceDatabaseIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {
@@ -150,15 +141,7 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 }
 
 func TestGuildService_PendingSuccessionIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {
@@ -233,15 +216,7 @@ func TestGuildService_PendingSuccessionIntegration(t *testing.T) {
 }
 
 func TestGuildService_ConcurrentDepartureRace(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {
@@ -340,15 +315,7 @@ func (r *interceptingGuildRepo) GetGuildForUpdate(ctx context.Context, guildID s
 }
 
 func TestGuildService_DeterministicDepartureInterleaving(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	realRepo, err := database.NewGuildRepository(db)
 	if err != nil {
@@ -477,15 +444,7 @@ func TestGuildService_DeterministicDepartureInterleaving(t *testing.T) {
 }
 
 func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {

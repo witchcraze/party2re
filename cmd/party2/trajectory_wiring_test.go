@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -18,18 +17,7 @@ import (
 
 // Each production milestone hook reaches the shared trajectory store.
 func TestTrajectoryProductionWiring(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	core, err := newCoreServices(db, nil)
 	if err != nil {

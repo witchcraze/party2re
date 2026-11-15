@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"testing"
 
@@ -74,18 +73,11 @@ func TestPartyVictoryHook_LaterParticipantFailure(t *testing.T) {
 }
 
 func TestWireBossBanquet_SkipsAmbientTransaction(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	plaza := &banquetPlazaSpy{}
 	hook := buildVictoryBanquetHook(plaza)
 	injected := errors.New("outer rollback")
-	err = database.RunInTx(context.Background(), db, func(ctx context.Context) error {
+	err := database.RunInTx(context.Background(), db, func(ctx context.Context) error {
 		if err := hook(ctx, "king1", "King", "hero", "Hero", 1); err == nil {
 			t.Fatal("ambient transaction must not publish a banquet")
 		}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -45,14 +44,7 @@ func TestEventPlazaRetiredRoutes(t *testing.T) {
 }
 
 func TestEventPlazaRetiredToastConcurrentRequestsPreserveAssets(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 	ctx := context.Background()
 	actor, err := database.CreateTestCharacterWithFunds(ctx, db, "RetiredToast_"+id.New()[:8], 1234)
 	if err != nil {

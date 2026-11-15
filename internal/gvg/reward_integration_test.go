@@ -35,15 +35,7 @@ func newRewardFixture(t *testing.T, target, round int, outcome corebattle.Outcom
 		t.Skip("PARTY2_DB_DSN and PARTY2_VALKEY_ADDR are required")
 	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	db := database.OpenTestDB(t)
 	standings, err := database.NewGvGRepository(db)
 	if err != nil {
 		t.Fatal(err)

@@ -72,15 +72,7 @@ func TestSettlementBoundary_ReproductionIssue1080(t *testing.T) {
 		t.Skip("PARTY2_VALKEY_ADDR is not configured")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close casino settlement db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	rawValkey := openIsolatedTestValkey(t, 13)
 	t.Cleanup(rawValkey.Close)
@@ -268,15 +260,7 @@ func TestSettlementBoundary_IndianPoker_PrePayloadFailureRollback(t *testing.T) 
 		t.Skip("Integration environment not configured")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close casino settlement db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	rawValkey := openIsolatedTestValkey(t, 13)
 	t.Cleanup(rawValkey.Close)
@@ -399,15 +383,7 @@ func TestSettlementBoundary_IndianPoker_HealthySettlementContrast(t *testing.T) 
 		t.Skip("Integration environment not configured")
 	}
 
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close casino settlement db: %v", err)
-		}
-	})
+	db := database.OpenTestDB(t)
 
 	rawValkey := openIsolatedTestValkey(t, 13)
 	t.Cleanup(rawValkey.Close)

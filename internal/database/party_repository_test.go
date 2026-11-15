@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -11,15 +10,7 @@ import (
 )
 
 func TestPartyRepository_AdventureLog(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := OpenTestDB(t)
 
 	ctx := context.Background()
 

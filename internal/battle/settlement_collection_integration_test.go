@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 
@@ -135,16 +134,8 @@ func setupBattleCollectionIntegration(
 //  2. Subsequent retry (reprocessing) successfully commits rewards, monster book, completion, and legend records exactly once.
 //  3. Normal subsequent victories do not duplicate rewards, completions, or legend inductions.
 func TestBattleCollectionSettlement_SingleCharacter_RealDB_FailureAndRecovery(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment failed: %v", err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	rankingRepo, err := database.NewRankingRepository(db)
 	if err != nil {
@@ -390,16 +381,8 @@ func TestBattleCollectionSettlement_SingleCharacter_RealDB_FailureAndRecovery(t 
 //     rolls back all party members' rewards (Gold, EXP, HP, drops) and monster collection state.
 //  2. Reprocessing retry commits rewards and milestone records for all members exactly once.
 func TestBattleCollectionSettlement_MultiCharacter_RealDB_FailureAndRecovery(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment failed: %v", err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	rankingRepo, err := database.NewRankingRepository(db)
 	if err != nil {
@@ -567,16 +550,8 @@ func TestBattleCollectionSettlement_MultiCharacter_RealDB_FailureAndRecovery(t *
 // TestBattleCollectionSettlement_Concurrency_NoDeadlock verifies that concurrent battles
 // completing monster collection records do not encounter deadlocks and conserve assets.
 func TestBattleCollectionSettlement_Concurrency_NoDeadlock(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatalf("OpenFromEnvironment failed: %v", err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	rankingRepo, err := database.NewRankingRepository(db)
 	if err != nil {

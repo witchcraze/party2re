@@ -4,19 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 )
 
 func TestDeletionRestartOwnsCompleteTransaction(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := OpenTestDB(t)
 	chars, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
