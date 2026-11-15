@@ -68,10 +68,16 @@ func (f *rescueGatewayFixture) Save(ctx context.Context, rec rescue.RescueRecord
 }
 
 func (f *rescueGatewayFixture) FindLatestByCharacterID(context.Context, string) (rescue.RescueRecord, error) {
+	if f.saved.ID != "" {
+		return f.saved, nil
+	}
 	return rescue.RescueRecord{}, rescue.ErrNoRescueRecord
 }
 
-func (f *rescueGatewayFixture) MarkApplied(context.Context, string, time.Time) error { return nil }
+func (f *rescueGatewayFixture) MarkApplied(_ context.Context, _ string, at time.Time) error {
+	f.saved.AppliedAt = at
+	return nil
+}
 
 func (f *rescueGatewayFixture) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
 	return f.FindByID(ctx, id)
@@ -87,16 +93,16 @@ func visibleRescue(r rescue.RescueRecord) rescue.RescueRecord {
 	return r
 }
 
-func (f *rescueGatewayFixture) ClearActiveActions(ctx context.Context, actor string) (bool, error) {
+func (f *rescueGatewayFixture) CancelByActorID(ctx context.Context, actor string) (int, error) {
 	f.checkContext(ctx)
 	if actor != "hero" {
 		f.t.Fatal("wrong cleanup actor")
 	}
 	f.clears++
 	if f.clearErr != nil {
-		return false, f.clearErr
+		return 0, f.clearErr
 	}
-	cleared := len(f.actions) > 0
+	cleared := len(f.actions)
 	f.actions = nil
 	return cleared, nil
 }

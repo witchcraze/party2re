@@ -48,18 +48,6 @@ func (s *Service) CancelByActorID(ctx context.Context, actorID string) (int, err
 	return s.repo.CancelByActorID(ctx, actorID)
 }
 
-// ClearActiveActions clears all active and pending scheduled actions for the character,
-// fulfilling the rescue.ActionCleaner interface.
-// Returns true if any active actions were cleared, or false if the character was already safe with none.
-// Returns an error and cleared=false if cancellation encountered a storage failure.
-func (s *Service) ClearActiveActions(ctx context.Context, characterID string) (bool, error) {
-	count, err := s.CancelByActorID(ctx, characterID)
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
 // FindPendingByActorID returns unfinished (Pending or Processing) work for an actor,
 // delegating to the underlying scheduled action repository.
 func (s *Service) FindPendingByActorID(ctx context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {

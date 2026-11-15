@@ -81,17 +81,20 @@ func (c *stubActionCleaner) FindPendingByActorID(_ context.Context, characterID 
 	return []corescheduling.ScheduledAction{{ID: "work", ActorID: characterID, State: corescheduling.StatePending}}, nil
 }
 
-func (c *stubActionCleaner) ClearActiveActions(_ context.Context, characterID string) (bool, error) {
+func (c *stubActionCleaner) CancelByActorID(_ context.Context, characterID string) (int, error) {
 	c.clearedCharacters = append(c.clearedCharacters, characterID)
 	if c.err != nil {
-		return false, c.err
+		return 0, c.err
 	}
 	cleared := c.hasWork(characterID)
 	if c.stuckCharacters == nil {
 		c.stuckCharacters = map[string]bool{}
 	}
 	c.stuckCharacters[characterID] = false
-	return cleared, nil
+	if cleared {
+		return 1, nil
+	}
+	return 0, nil
 }
 
 type stubTx struct{}
@@ -111,11 +114,11 @@ func (t *faultyTimer) GetRemainingLock(ctx context.Context, category, id string)
 	return t.Service.GetRemainingLock(ctx, category, id)
 }
 
-func (t *faultyTimer) SetLock(ctx context.Context, category, id string, d time.Duration) error {
+func (t *faultyTimer) ExtendLockUntil(ctx context.Context, category, id string, until time.Time) error {
 	if t.setErr != nil {
 		return t.setErr
 	}
-	return t.Service.SetLock(ctx, category, id, d)
+	return t.Service.ExtendLockUntil(ctx, category, id, until)
 }
 
 func newTestService(repo RescueRepository, chars CharacterRepository, cleaner ActionCleaner, timers TimerService) *Service {
@@ -136,7 +139,7 @@ func assertSleep(t *testing.T, timers timer.Service, want time.Duration) {
 
 func TestEmergencyRescueSuccess(t *testing.T) {
 	ctx := context.Background()
-	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	rescueRepo := &stubRescueRepo{}
 	cleaner := &stubActionCleaner{}
 	timerSvc := timer.NewService(nil)
@@ -163,7 +166,7 @@ func TestEmergencyRescueSuccess(t *testing.T) {
 
 func TestEmergencyRescue_ConsecutiveRescuesDoNotDoublePenalty(t *testing.T) {
 	ctx := context.Background()
-	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	rescueRepo := &stubRescueRepo{records: []RescueRecord{{
 		ID: "rec-0", CharacterID: "char-1", Reason: "First rescue", PenaltySeconds: DefaultPenaltySeconds,
 		CreatedAt: now.Add(-2 * time.Hour), SleepUntil: now.Add(-110 * time.Minute), AppliedAt: now.Add(-2 * time.Hour),
@@ -190,7 +193,7 @@ func TestEmergencyRescue_ConsecutiveRescuesDoNotDoublePenalty(t *testing.T) {
 
 func TestEmergencyRescue_AccumulatesSleepTimerWhenAlreadyLocked(t *testing.T) {
 	ctx := context.Background()
-	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	timerSvc := timer.NewService(nil)
 	if err := timerSvc.SetLock(ctx, timer.CategorySleep, "char-1", 200*time.Second); err != nil {
 		t.Fatal(err)
@@ -281,7 +284,7 @@ func TestEmergencyRescue_PartialFailuresResumeWithOnePenalty(t *testing.T) {
 
 			*repo = stubRescueRepo{records: repo.records}
 			cleaner.err, tm.getErr, tm.setErr = nil, nil, nil
-			rec, err = svc.EmergencyRescue(ctx, "char-1", "retry", now.Add(time.Second))
+			rec, err = svc.EmergencyRescue(ctx, "char-1", "retry", time.Now().UTC())
 			if err != nil || rec.PenaltySeconds != DefaultPenaltySeconds {
 				t.Fatalf("retry = %+v, %v", rec, err)
 			}
@@ -440,11 +443,11 @@ func TestEmergencyRescue_ResumeAppliesOwedSleepDuringNewActivity(t *testing.T) {
 	activity := &stubActivityReader{kinds: []string{"dungeon"}}
 	svc.SetActivityReader(activity)
 
-	rec, err := svc.EmergencyRescue(ctx, "char-1", "retry", now.Add(time.Second))
+	rec, err := svc.EmergencyRescue(ctx, "char-1", "retry", time.Now().UTC())
 	if err != nil || rec.Reason != "stuck" || repo.records[0].AppliedAt.IsZero() {
 		t.Fatalf("resume during activity = %+v, %v (%+v)", rec, err, repo.records)
 	}
-	assertSleep(t, base, 599*time.Second)
+	assertSleep(t, base, 600*time.Second)
 	if len(cleaner.clearedCharacters) != 1 {
 		t.Fatalf("resume during activity must not clear work again: %v", cleaner.clearedCharacters)
 	}

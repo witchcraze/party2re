@@ -108,40 +108,6 @@ func TestService_CancelByActorID(t *testing.T) {
 	}
 }
 
-func TestService_ClearActiveActions(t *testing.T) {
-	repo := newMockRepository()
-	service := NewService(repo)
-	ctx := context.Background()
-
-	_, _ = service.Schedule(ctx, "training", "char-stuck", nil, time.Now().Add(1*time.Hour))
-	_, _ = service.Schedule(ctx, "adventure", "char-stuck", nil, time.Now().Add(2*time.Hour))
-	_, _ = service.Schedule(ctx, "other", "char-ok", nil, time.Now().Add(1*time.Hour))
-
-	cleared, err := service.ClearActiveActions(ctx, "char-stuck")
-	if err != nil {
-		t.Fatalf("ClearActiveActions failed: %v", err)
-	}
-	if !cleared {
-		t.Fatalf("expected cleared == true for char-stuck")
-	}
-
-	if len(repo.actions) != 1 {
-		t.Fatalf("expected 1 remaining action, got %d", len(repo.actions))
-	}
-	if repo.actions[0].ActorID != "char-ok" {
-		t.Errorf("expected char-ok remaining, got %s", repo.actions[0].ActorID)
-	}
-
-	// Character without active actions returns cleared == false
-	cleared, err = service.ClearActiveActions(ctx, "char-idle")
-	if err != nil {
-		t.Fatalf("ClearActiveActions failed: %v", err)
-	}
-	if cleared {
-		t.Errorf("expected cleared == false for idle character")
-	}
-}
-
 func TestService_FindPendingByActorID(t *testing.T) {
 	repo := newMockRepository()
 	service := NewService(repo)
