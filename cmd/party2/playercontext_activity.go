@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/witchcraze/party2re/internal/adventure"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/challenge"
@@ -232,7 +233,8 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if err != nil {
 			return nil, err
 		}
-		a := playercontext.Activity{Kind: "casino", ID: view.Room.ID, Phase: string(view.Room.Status), Round: view.Room.Round, Role: controls.Role, Actions: []string{"casino_room_leave"}}
+		// Room commands wait the room speed ($act_time = $speed, _casino.cgi:57,114).
+		a := playercontext.Activity{Kind: "casino", ID: view.Room.ID, Phase: string(view.Room.Status), Round: view.Room.Round, Role: controls.Role, Actions: []string{"casino_room_leave"}, Pace: time.Duration(view.Room.Speed) * time.Second}
 		if controls.CanStart {
 			a.Actions = append(a.Actions, "casino_room_start", "casino_room_kick")
 		}

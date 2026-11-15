@@ -34,7 +34,6 @@ The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby disp
 
 - High & Low: legacy hides “continue” at the maximum bet or with insufficient coins (`casino_highlow.cgi:10–50`); the service accepts all-in calls.
 - Doppel: legacy clears declarations on start and stores mark changes in the card field, allowing reselection before all cards are selected (`casino_doppel.cgi:10–99`). Eligibility of waiting entrants follows the existing service.
-- Room pacing: in-room actions wait the room speed and a kicked member waits 60 s (`_casino.cgi:57,114,167`); Go starts no wait for them (#2251).
 
 ## Game rules
 

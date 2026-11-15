@@ -213,8 +213,9 @@ func (a *scenarioApp) registerAccount(autoCleanup bool) (playerID, name, token, 
 
 type scenarioContext struct {
 	Character struct {
-		Gold  int `json:"gold"`
-		Tired int `json:"tired"`
+		Gold         int   `json:"gold"`
+		Tired        int   `json:"tired"`
+		ActionWaitMS int64 `json:"action_wait_ms"`
 	} `json:"character"`
 	Scene struct {
 		LocationID string `json:"location_id"`

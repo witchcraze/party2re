@@ -62,11 +62,17 @@ func TestGameplayScenario_CasinoDoppelRoom(t *testing.T) {
 	}
 	a.elapseActionWait(leader)
 	started := a.offered(leaderToken, leader, a.context(leaderToken, leader), "casino_room_start", nil, http.StatusOK).Context
-	marks := started.Scene.Data.Casino.Controls.Actions
+	// Room commands wait the room speed, 18 s for まったり (_casino.cgi:57,114).
+	if started.Character.ActionWaitMS <= 4000 || started.Character.ActionWaitMS > 18000 {
+		t.Fatalf("start wait %d ms, want the room speed", started.Character.ActionWaitMS)
+	}
+	a.elapseActionWait(leader)
+	turn := a.context(leaderToken, leader)
+	marks := turn.Scene.Data.Casino.Controls.Actions
 	if len(marks) != 3 {
 		t.Fatalf("two players choose from three marks: %v", marks)
 	}
-	a.offered(leaderToken, leader, started, "casino_room_action", map[string]any{"action": marks[0]}, http.StatusOK)
+	a.offered(leaderToken, leader, turn, "casino_room_action", map[string]any{"action": marks[0]}, http.StatusOK)
 	a.elapseActionWait(child)
 	childTurn := a.context(childToken, child)
 	a.offered(childToken, child, childTurn, "casino_room_action", map[string]any{"action": marks[1]}, http.StatusOK)
@@ -86,6 +92,8 @@ func TestGameplayScenario_CasinoDoppelRoom(t *testing.T) {
 	}
 
 	// Leaving as a participant costs one fatigue and disbands the empty room.
+	a.elapseActionWait(leader)
+	settled = a.context(leaderToken, leader)
 	left := a.offered(leaderToken, leader, settled, "casino_room_leave", nil, http.StatusOK).Context
 	if left.Character.Tired != settled.Character.Tired+1 || left.Scene.Data.Casino != nil || len(left.Scene.Data.Rooms) != 0 {
 		t.Fatalf("leave: tired %d->%d %+v", settled.Character.Tired, left.Character.Tired, left.Scene.Data)

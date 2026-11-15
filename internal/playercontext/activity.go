@@ -3,6 +3,7 @@ package playercontext
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 )
@@ -19,6 +20,8 @@ type Activity struct {
 	Actions    []string `json:"actions"`
 	PartyID    string   `json:"party_id,omitempty"`
 	BlocksWake bool     `json:"-"`
+	// Pace is the wait each successful continuation starts (ActionPace).
+	Pace time.Duration `json:"-"`
 }
 
 // ActivityReader adapts public feature services at the composition root.

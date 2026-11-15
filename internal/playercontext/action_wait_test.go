@@ -92,6 +92,16 @@ func TestCatalogWaitDispositions(t *testing.T) {
 	}
 }
 
+func TestActionPaceComesFromTheMatchingActivity(t *testing.T) {
+	snapshot := Snapshot{Activities: []Activity{{Kind: "pvp"}, {Kind: "casino", Pace: 12 * time.Second}}}
+	for id, want := range map[string]time.Duration{"casino_room_action": 12 * time.Second, "casino_room_leave": 12 * time.Second, "pvp_leave": 0, "casino_exchange": 0} {
+		def, _ := findAction(id)
+		if got := ActionPace(def, snapshot); got != want {
+			t.Errorf("%s: pace %v, want %v", id, got, want)
+		}
+	}
+}
+
 type waitTimers struct {
 	remaining map[string]time.Duration
 	err       error
@@ -117,6 +127,10 @@ func (w *waitTimers) TryLockWithToken(_ context.Context, category, id, token str
 	w.held = true
 	w.claims = append(w.claims, category+":"+id+":"+d.String())
 	return token != "", nil
+}
+func (w *waitTimers) SetLock(_ context.Context, category, id string, d time.Duration) error {
+	w.claims = append(w.claims, "set:"+category+":"+id+":"+d.String())
+	return w.err
 }
 func (w *waitTimers) ReleaseLockWithToken(context.Context, string, string, string) (bool, error) {
 	w.released++
@@ -144,7 +158,7 @@ func TestQueryReadsAndClaimsActionWait(t *testing.T) {
 	if r, err := disabled.Query(ctx, "c", "p"); err != nil || r.Snapshot.ActionWait != 0 {
 		t.Fatalf("disabled wait must not be read: %v %v", r.Snapshot.ActionWait, err)
 	}
-	if claim, ok, err := disabled.ClaimActionWait(ctx, "c"); err != nil || !ok || claim.Release(ctx) != nil || len(timers.claims) != 0 {
+	if claim, ok, err := disabled.ClaimActionWait(ctx, "c", 0); err != nil || !ok || claim.Release(ctx) != nil || len(timers.claims) != 0 {
 		t.Fatalf("disabled wait must not be written: %v %v %v", ok, err, timers.claims)
 	}
 
@@ -153,21 +167,30 @@ func TestQueryReadsAndClaimsActionWait(t *testing.T) {
 	if err != nil || r.Snapshot.ActionWait != 3*time.Second || !slices.Equal(r.AvailableActions, []string{"place_say", "rescue_request", "presence_refresh"}) {
 		t.Fatalf("enabled read: %v %v %v", r.Snapshot.ActionWait, r.AvailableActions, err)
 	}
-	claim, ok, err := enabled.ClaimActionWait(ctx, "c")
+	claim, ok, err := enabled.ClaimActionWait(ctx, "c", 0)
 	if err != nil || !ok || len(timers.claims) != 1 || timers.claims[0] != "action_wait:c:4s" {
 		t.Fatalf("claim: %v %v %v", ok, err, timers.claims)
 	}
-	if _, ok, err := enabled.ClaimActionWait(ctx, "c"); err != nil || ok {
+	if _, ok, err := enabled.ClaimActionWait(ctx, "c", 0); err != nil || ok {
 		t.Fatalf("a second claim while held must fail: %v %v", ok, err)
 	}
 	if err := claim.Release(ctx); err != nil || timers.released != 1 {
 		t.Fatalf("release: %v %d", err, timers.released)
 	}
+	if claim, ok, err := enabled.ClaimActionWait(ctx, "c", 18*time.Second); err != nil || !ok || timers.claims[1] != "action_wait:c:18s" || claim.Release(ctx) != nil {
+		t.Fatalf("a pace replaces the default: %v %v %v", ok, err, timers.claims)
+	}
+	if err := enabled.ImposeActionWait(ctx, "k", time.Minute); err != nil || timers.claims[2] != "set:action_wait:k:1m0s" {
+		t.Fatalf("impose: %v %v", err, timers.claims)
+	}
+	if err := disabled.ImposeActionWait(ctx, "k", time.Minute); err != nil || len(timers.claims) != 3 {
+		t.Fatalf("disabled wait must not be imposed: %v %v", err, timers.claims)
+	}
 	timers.err = errors.New("down")
 	if _, err := enabled.Query(ctx, "c", "p"); err == nil {
 		t.Fatal("a wait read failure must fail the query, not pass silently")
 	}
-	if _, _, err := enabled.ClaimActionWait(ctx, "c"); err == nil {
+	if _, _, err := enabled.ClaimActionWait(ctx, "c", 0); err == nil {
 		t.Fatal("a claim failure must be reported to the caller")
 	}
 }
@@ -176,7 +199,7 @@ func TestActionWaitExpiresWithTimer(t *testing.T) {
 	ctx := context.Background()
 	timers := timer.NewService(nil)
 	s := NewService(waitChars{}, waitActions{}, timers, WithActionWait(timers, 300*time.Millisecond))
-	if _, ok, err := s.ClaimActionWait(ctx, "c"); err != nil || !ok {
+	if _, ok, err := s.ClaimActionWait(ctx, "c", 0); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	if r, err := s.Query(ctx, "c", "p"); err != nil || r.Snapshot.ActionWait <= 0 || slices.Contains(r.AvailableActions, "scene_enter") {
@@ -199,7 +222,7 @@ func TestConcurrentActionWaitClaimsAdmitOne(t *testing.T) {
 		fns := make([]func() error, 20)
 		for i := range fns {
 			fns[i] = func() error {
-				_, ok, err := s.ClaimActionWait(ctx, charID)
+				_, ok, err := s.ClaimActionWait(ctx, charID, 0)
 				if ok {
 					wins.Add(1)
 				}
