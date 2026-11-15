@@ -25,7 +25,7 @@ type CharacterRepository interface {
 }
 
 type ActionCleaner interface {
-	ClearActiveActions(ctx context.Context, characterID string) (bool, error)
+	CancelByActorID(ctx context.Context, characterID string) (int, error)
 	FindPendingByActorID(ctx context.Context, actorID string) ([]corescheduling.ScheduledAction, error)
 }
 
@@ -39,7 +39,7 @@ type ActivityReader interface {
 }
 
 type TimerService interface {
-	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+	ExtendLockUntil(ctx context.Context, category, targetID string, until time.Time) error
 	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
 }
 
@@ -106,7 +106,7 @@ func (s *Service) Unstuck(ctx context.Context, characterID string) error {
 	}
 
 	if s.cleaner != nil {
-		if _, err := s.cleaner.ClearActiveActions(ctx, characterID); err != nil {
+		if _, err := s.cleaner.CancelByActorID(ctx, characterID); err != nil {
 			return err
 		}
 	}
@@ -122,6 +122,8 @@ func (s *Service) Unstuck(ctx context.Context, characterID string) error {
 // The owed deadline is committed to rescue_records before Valkey is touched; clearing and
 // the sleep timer follow and the record is confirmed last. Any failure leaves the record
 // unconfirmed and the next rescue resumes it with the same deadline (#1100).
+// Transaction: separate RunInTx boundaries for the durable receipt and its application.
+// Lock Order: characters(2), held through application confirmation in the second boundary.
 func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (RescueRecord, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return RescueRecord{}, ErrInvalidCharacterID
@@ -131,20 +133,11 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 		return RescueRecord{}, ErrInvalidReason
 	}
 
-	char, err := s.characters.FindByID(ctx, characterID)
-	if err != nil {
-		return RescueRecord{}, err
-	}
-	activityErr := s.ensureNoActivity(ctx, char)
-	if activityErr != nil && !errors.Is(activityErr, ErrActivityRemaining) {
-		return RescueRecord{}, activityErr
-	}
-
-	rec, err := s.recordPenalty(ctx, char.ID, reason, now, activityErr)
+	rec, err := s.recordPenalty(ctx, characterID, reason, now)
 	if err != nil || rec.ID == "" {
 		return rec, err
 	}
-	if err := s.applyPenalty(ctx, rec, now, activityErr == nil); err != nil {
+	if err := s.applyPenalty(ctx, rec); err != nil {
 		return RescueRecord{}, err
 	}
 	return rec, nil
@@ -152,13 +145,18 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 
 // recordPenalty returns the unconfirmed penalty to resume, a new committed one, or an
 // idle result without ID. The character row lock makes concurrent rescues share one record.
-// Remaining activity (activityErr) only permits resuming a penalty whose work is already gone:
+// Remaining activity only permits resuming a penalty whose work is already gone:
 // a player who started an activity after a failed sleep write still owes that sleep.
-func (s *Service) recordPenalty(ctx context.Context, characterID, reason string, now time.Time, activityErr error) (RescueRecord, error) {
+func (s *Service) recordPenalty(ctx context.Context, characterID, reason string, now time.Time) (RescueRecord, error) {
 	rec := RescueRecord{CharacterID: characterID, Reason: reason, CreatedAt: now}
 	err := s.tx.RunInTx(ctx, func(ctx context.Context) error {
-		if _, err := s.characters.FindByIDForUpdate(ctx, characterID); err != nil {
+		char, err := s.characters.FindByIDForUpdate(ctx, characterID)
+		if err != nil {
 			return err
+		}
+		activityErr := s.ensureNoActivity(ctx, char)
+		if activityErr != nil && !errors.Is(activityErr, ErrActivityRemaining) {
+			return activityErr
 		}
 		latest, err := s.rescues.FindLatestByCharacterID(ctx, characterID)
 		resume := err == nil && latest.AppliedAt.IsZero()
@@ -201,24 +199,39 @@ func (s *Service) recordPenalty(ctx context.Context, characterID, reason string,
 	return rec, nil
 }
 
-// applyPenalty repeats safely: clearing is idempotent and the timer only moves toward SleepUntil.
-// clear is false while feature activity remains, so its new scheduled work is never touched.
-func (s *Service) applyPenalty(ctx context.Context, rec RescueRecord, now time.Time, clear bool) error {
-	if clear {
-		if _, err := s.cleaner.ClearActiveActions(ctx, rec.CharacterID); err != nil {
-			return err
-		}
-	}
-	if owed := rec.SleepUntil.Sub(now); owed > 0 {
-		remaining, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, rec.CharacterID)
+// applyPenalty revalidates the committed receipt under the character lock and holds
+// it through confirmation. A delayed duplicate must not cancel successor work.
+func (s *Service) applyPenalty(ctx context.Context, rec RescueRecord) error {
+	return s.tx.RunInTx(ctx, func(ctx context.Context) error {
+		char, err := s.characters.FindByIDForUpdate(ctx, rec.CharacterID)
 		if err != nil {
 			return err
 		}
-		if remaining < owed {
-			if err := s.timer.SetLock(ctx, timer.CategorySleep, rec.CharacterID, owed); err != nil {
+		latest, err := s.rescues.FindLatestByCharacterID(ctx, rec.CharacterID)
+		if err != nil {
+			return err
+		}
+		if latest.ID != rec.ID || !latest.AppliedAt.IsZero() {
+			return nil
+		}
+		activityErr := s.ensureNoActivity(ctx, char)
+		if activityErr != nil {
+			if !errors.Is(activityErr, ErrActivityRemaining) {
+				return activityErr
+			}
+			pending, err := s.cleaner.FindPendingByActorID(ctx, rec.CharacterID)
+			if err != nil {
 				return err
 			}
+			if len(pending) > 0 {
+				return activityErr
+			}
+		} else if _, err := s.cleaner.CancelByActorID(ctx, rec.CharacterID); err != nil {
+			return err
 		}
-	}
-	return s.rescues.MarkApplied(ctx, rec.ID, now)
+		if err := s.timer.ExtendLockUntil(ctx, timer.CategorySleep, rec.CharacterID, latest.SleepUntil); err != nil {
+			return err
+		}
+		return s.rescues.MarkApplied(ctx, rec.ID, time.Now().UTC())
+	})
 }

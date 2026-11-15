@@ -125,7 +125,7 @@ func TestCancelByActorID_WriteFailureMatrix(t *testing.T) {
 	}
 }
 
-func TestService_ClearActiveActions_WriteFailure(t *testing.T) {
+func TestService_CancelByActorID_WriteFailure(t *testing.T) {
 	ctx := context.Background()
 	injectedErr := errors.New("valkey failure")
 
@@ -141,12 +141,12 @@ func TestService_ClearActiveActions_WriteFailure(t *testing.T) {
 	repo := NewValkeyRepository(client)
 	svc := NewService(repo)
 
-	cleared, err := svc.ClearActiveActions(ctx, "hero")
+	cleared, err := svc.CancelByActorID(ctx, "hero")
 	if !errors.Is(err, injectedErr) {
 		t.Fatalf("expected error %v, got %v", injectedErr, err)
 	}
-	if cleared {
-		t.Fatalf("expected cleared == false when writes fail, got cleared == true")
+	if cleared != 0 {
+		t.Fatalf("expected zero cancellations when writes fail, got %d", cleared)
 	}
 }
 
@@ -309,13 +309,12 @@ func TestCancelByActorID_StatefulDiscoverability(t *testing.T) {
 		injectedErr := errors.New("zrem storage crash")
 		adapter.failZrem = injectedErr
 
-		// Attempt ClearActiveActions
-		cleared, err := svc.ClearActiveActions(ctx, "hero-disco")
+		cleared, err := svc.CancelByActorID(ctx, "hero-disco")
 		if !errors.Is(err, injectedErr) {
 			t.Fatalf("expected error %v, got %v", injectedErr, err)
 		}
-		if cleared {
-			t.Fatalf("expected cleared == false on failure")
+		if cleared != 0 {
+			t.Fatalf("expected zero cancellations on failure, got %d", cleared)
 		}
 
 		// CRITICAL: Work MUST retain discoverability after cancellation failure
@@ -353,12 +352,12 @@ func TestCancelByActorID_StatefulDiscoverability(t *testing.T) {
 		injectedErr := errors.New("del action payload crash")
 		adapter.failDelKey[actionKeyPrefix+actionID] = injectedErr
 
-		cleared, err := svc.ClearActiveActions(ctx, "hero-disco-2")
+		cleared, err := svc.CancelByActorID(ctx, "hero-disco-2")
 		if !errors.Is(err, injectedErr) {
 			t.Fatalf("expected error %v, got %v", injectedErr, err)
 		}
-		if cleared {
-			t.Fatalf("expected cleared == false on failure")
+		if cleared != 0 {
+			t.Fatalf("expected zero cancellations on failure, got %d", cleared)
 		}
 
 		// Work MUST retain discoverability
@@ -423,7 +422,7 @@ func (r *memoryCharRepo) FindByIDForUpdate(ctx context.Context, id string) (core
 
 func TestEmergencyRescue_WithRealSchedulingCleaner_FailureAndRecovery(t *testing.T) {
 	ctx := context.Background()
-	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 
 	adapter := newStatefulValkeyAdapter()
 	client := adapter.toMockClient()

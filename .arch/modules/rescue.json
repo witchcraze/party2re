@@ -1,0 +1,31 @@
+{
+  "module": "rescue",
+  "tier": 2,
+  "description": "SQL-first rescue receipts with character-serialized application to scheduled work and absolute sleep deadlines (C1, C4).",
+  "entrypoint": "internal/rescue/service.go",
+  "dependencies": [
+    {"module": "core/character", "source_ref": "internal/rescue/service.go#CharacterRepository"},
+    {"module": "scheduling", "source_ref": "internal/rescue/service.go#ActionCleaner"},
+    {"module": "core/timer", "source_ref": "internal/rescue/service.go#TimerService"},
+    {"module": "database", "source_ref": "internal/rescue/service.go#RescueRepository"},
+    {"module": "database", "source_ref": "internal/rescue/service.go#TransactionProvider"}
+  ],
+  "transaction_flows": [
+    {
+      "flow": "Commit or resume the owed penalty before Valkey effects",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/rescue/service.go#Service.recordPenalty",
+      "lock_sequence": [
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate"}
+      ]
+    },
+    {
+      "flow": "Revalidate the committed receipt and serialize application through confirmation",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/rescue/service.go#Service.applyPenalty",
+      "lock_sequence": [
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate"}
+      ]
+    }
+  ]
+}
