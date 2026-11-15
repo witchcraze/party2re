@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"reflect"
 	"slices"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -86,6 +88,32 @@ func TestCasinoGatewayCounterCommands(t *testing.T) {
 				t.Fatalf("%s = %q, want %q", tc.field, result[tc.field], tc.want)
 			}
 		})
+	}
+}
+
+// Legacy ＄すろっと sets $m{wt} to a tenth of $act_time, which the next request
+// truncates to no wait (lib/system.cgi:159), yet a running wait still rejects it.
+func TestCasinoSlotStartsNoActionWait(t *testing.T) {
+	f := newCasinoSceneFixture(t)
+	waits := timer.NewService(nil)
+	f.waits = &waits
+	counter := &casinoCounter{CasinoService: f.service}
+	f.reads.CasinoService = counter
+	router := f.router()
+	slot := `{"action":"casino_slot","params":{"bet":1}}`
+	for range 2 {
+		if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", slot, nil); status != 200 || waitMS(t, raw) != 0 {
+			t.Fatalf("slot: %d %s", status, raw)
+		}
+	}
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_exchange","params":{"coins":1}}`, nil); status != 200 || waitMS(t, raw) <= 0 {
+		t.Fatalf("exchange must start the wait: %d %s", status, raw)
+	}
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", slot, nil); status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_WAIT" {
+		t.Fatalf("slot during wait: %d %s", status, raw)
+	}
+	if !reflect.DeepEqual(counter.calls, []string{"slot", "slot", "exchange"}) {
+		t.Fatalf("calls %v", counter.calls)
 	}
 }
 

@@ -62,7 +62,7 @@ func TestCatalogWaitDispositions(t *testing.T) {
 			}
 		case def.ID == "casino_slot":
 			if def.WaitExempt != WaitPrivate {
-				t.Errorf("%s: suroto answers with $mes and a tenth of the wait (casino.cgi:552-554)", def.ID)
+				t.Errorf("%s: suroto's tenth of the wait truncates to none (casino.cgi:552-554, system.cgi:159)", def.ID)
 			}
 		case def.ID == "place_say":
 			if def.WaitExempt != WaitSpeech {

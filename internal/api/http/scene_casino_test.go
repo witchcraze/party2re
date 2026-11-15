@@ -147,6 +147,7 @@ type casinoSceneFixture struct {
 	service    *casino.Service
 	reads      *casinoSceneReads
 	store      *gatewayNavigationStore
+	waits      *timer.Service // non-nil enables the legacy action wait
 	facts      []playercontext.Activity
 }
 
@@ -167,7 +168,11 @@ func (f *casinoSceneFixture) router(options ...Option) http.Handler {
 		rows, err := f.service.ListRooms(ctx)
 		return slices.ContainsFunc(rows, func(r casino.RoomSummary) bool { return r.ID == id }), err
 	}}
-	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(f.store, playercontext.SceneDefinition{ID: "town"}, scene), playercontext.WithActivities(f.readActivities))
+	timers, wait := timer.NewService(nil), playercontext.WithActionWait(nil, 0)
+	if f.waits != nil {
+		timers, wait = *f.waits, playercontext.WithActionWait(*f.waits, playercontext.DefaultActionWait)
+	}
+	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers, playercontext.WithNavigation(f.store, playercontext.SceneDefinition{ID: "town"}, scene), playercontext.WithActivities(f.readActivities), wait)
 	opts := []Option{WithPlayerContext(pc), WithCasino(f.reads)}
 	opts = append(opts, options...)
 	return f.gatewayFixture.router("rescue_request", timer.NewService(nil), opts...)
