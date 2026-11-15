@@ -163,8 +163,9 @@ type Member struct {
 }
 
 type Detail struct {
-	Guild   Guild    `json:"guild"`
-	Members []Member `json:"members"`
+	Guild       Guild        `json:"guild"`
+	Members     []Member     `json:"members"`
+	Decorations []Decoration `json:"decorations"`
 }
 
 // WallpaperPrices defines the complete legacy wallpaper catalog and pricing in Gold (_data.cgi:330-388).

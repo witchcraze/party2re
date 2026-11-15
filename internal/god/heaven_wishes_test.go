@@ -45,11 +45,24 @@ func (m *mockLotteryRepo) AddRaffleTickets(_ context.Context, charID string, cou
 }
 
 type mockGuildRepo struct {
-	guilds  map[string]guild.Guild
-	members map[string]guild.Member
+	guilds      map[string]guild.Guild
+	members     map[string]guild.Member
+	decorations int
 }
 
-func (m *mockGuildRepo) GetGuildByCharacter(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
+func (m *mockGuildRepo) MakeGorgeous(ctx context.Context, characterID string) error {
+	g, _, err := m.GetByCharacter(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	if err := m.UpdateBgimg(ctx, g.ID, "god.gif"); err != nil {
+		return err
+	}
+	m.decorations++
+	return nil
+}
+
+func (m *mockGuildRepo) GetByCharacter(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
 	mem, ok := m.members[charID]
 	if !ok {
 		return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
@@ -304,6 +317,9 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		if guildRepo.guilds["guild-1"].Bgimg != "god.gif" {
 			t.Errorf("expected god.gif guild bgimg, got %s", guildRepo.guilds["guild-1"].Bgimg)
+		}
+		if guildRepo.decorations != 1 {
+			t.Errorf("expected one gold medal decoration, got %d", guildRepo.decorations)
 		}
 	})
 

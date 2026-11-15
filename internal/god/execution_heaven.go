@@ -86,7 +86,7 @@ func (s *Service) executeHeavenWish(
 		if s.guilds == nil {
 			return ErrWishRequirement
 		}
-		g, _, err := s.guilds.GetGuildByCharacter(ctx, char.ID)
+		g, _, err := s.guilds.GetByCharacter(ctx, char.ID)
 		if errors.Is(err, guild.ErrCharacterNotInGuild) {
 			return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
 		}
@@ -104,14 +104,10 @@ func (s *Service) executeHeavenWish(
 		if s.guilds == nil {
 			return ErrWishRequirement
 		}
-		g, _, err := s.guilds.GetGuildByCharacter(ctx, char.ID)
-		if errors.Is(err, guild.ErrCharacterNotInGuild) {
-			return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
-		}
-		if err != nil {
-			return err
-		}
-		if err := s.guilds.UpdateBgimg(ctx, g.ID, "god.gif"); err != nil {
+		if err := s.guilds.MakeGorgeous(ctx, char.ID); err != nil {
+			if errors.Is(err, guild.ErrCharacterNotInGuild) {
+				return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
+			}
 			return err
 		}
 		msg = "ギルドが神々しい佇まいに生まれ変わりました！"

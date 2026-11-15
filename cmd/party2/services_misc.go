@@ -335,7 +335,7 @@ func newMiscServices(
 		god.WithTransactionProvider(core.txProvider),
 		god.WithCasinoRepository(casinoRepo),
 		god.WithLotteryRepository(lotteryRepo),
-		god.WithGuildRepository(soc.guildRepo),
+		god.WithGuildRepository(soc.guild),
 		god.WithHomeMemberRepository(homeMemberRepo),
 		god.WithProfileRepository(homeMemberRepo),
 		god.WithHomeRepository(homeMemberRepo),

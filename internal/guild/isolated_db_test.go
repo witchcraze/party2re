@@ -12,7 +12,7 @@ import (
 
 func guildIsolatedDB(t *testing.T) *sql.DB {
 	t.Helper()
-	return database.CreateTestDatabase(t, []string{"players", "characters", "character_depots", "guilds", "guild_members", "character_memories"}...)
+	return database.CreateTestDatabase(t, []string{"players", "characters", "character_depots", "guilds", "guild_members", "guild_decorations", "character_memories"}...)
 }
 
 func TestGuildIsolatedDB_DisbandPreservesSharedGuild(t *testing.T) {

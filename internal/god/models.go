@@ -139,9 +139,9 @@ type LotteryRepository interface {
 
 // GuildRepository provides guild operations for wishes.
 type GuildRepository interface {
-	GetGuildByCharacter(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)
+	GetByCharacter(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)
 	AddPoints(ctx context.Context, guildID string, points int64) error
-	UpdateBgimg(ctx context.Context, guildID string, bgimg string) error
+	MakeGorgeous(ctx context.Context, characterID string) error
 }
 
 // HomeMemberRepository manages home members.

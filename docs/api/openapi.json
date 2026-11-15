@@ -10459,9 +10459,48 @@
         ],
         "type": "object"
       },
+      "GuildDecoration": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "icon": {
+            "description": "Appearance identity reference; resolve via the asset catalog or its placeholder, not a legacy image URL.",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "gold_medal"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "icon",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "GuildDetail": {
         "additionalProperties": false,
         "properties": {
+          "decorations": {
+            "description": "Guild-owned display records, excluded from player membership and authority.",
+            "items": {
+              "$ref": "#/components/schemas/GuildDecoration"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "guild": {
             "$ref": "#/components/schemas/Guild"
           },
@@ -10477,7 +10516,8 @@
         },
         "required": [
           "guild",
-          "members"
+          "members",
+          "decorations"
         ],
         "type": "object"
       },

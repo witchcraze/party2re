@@ -129,7 +129,11 @@ func (s *Service) Get(ctx context.Context, guildID string) (Detail, error) {
 	if err != nil {
 		return Detail{}, err
 	}
-	return Detail{Guild: g, Members: members}, nil
+	decorations, err := s.repo.ListDecorations(ctx, guildID)
+	if err != nil {
+		return Detail{}, err
+	}
+	return Detail{Guild: g, Members: members, Decorations: decorations}, nil
 }
 
 func (s *Service) GetByCharacter(ctx context.Context, characterID string) (Guild, Member, error) {

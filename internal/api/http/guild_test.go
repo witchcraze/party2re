@@ -235,7 +235,8 @@ func TestGuild_ListAndGet(t *testing.T) {
 			{ID: "g2", Name: "Beta", LeaderCharacterID: "c2", Points: 50, CreatedAt: now},
 		},
 		detail: guild.Detail{
-			Guild: guild.Guild{ID: "g1", Name: "Alpha", LeaderCharacterID: "c1", Points: 100, CreatedAt: now},
+			Guild:       guild.Guild{ID: "g1", Name: "Alpha", LeaderCharacterID: "c1", Points: 100, CreatedAt: now},
+			Decorations: []guild.Decoration{{ID: "d1", Kind: guild.GoldMedal, Icon: "assets/images/placeholders/guild/gold-medal.svg", CreatedAt: now}},
 			Members: []guild.Member{
 				{GuildID: "g1", CharacterID: "c1", Role: guild.RoleLeader, Title: guild.DefaultTitleLeader},
 			},
@@ -273,6 +274,9 @@ func TestGuild_ListAndGet(t *testing.T) {
 	}
 	if detail.Guild.ID != "g1" || len(detail.Members) != 1 {
 		t.Fatalf("unexpected detail: %+v", detail)
+	}
+	if len(detail.Decorations) != 1 || detail.Decorations[0].Kind != guild.GoldMedal || detail.Decorations[0].Icon != guildSvc.detail.Decorations[0].Icon {
+		t.Fatalf("missing decoration in guild response: %+v", detail.Decorations)
 	}
 
 	// 3. GET /characters/{id}/guild

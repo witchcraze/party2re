@@ -1,6 +1,6 @@
 # Endgame Wishes & Limit Breaks Design (天界・裏天界)
 
-The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wish per audience in Heaven (`@神`, reached with item059) or the Underworld (`@神?`, reached with item262). The wish catalog, costs and effects are owned by `internal/god`; this document keeps decisions and non-obvious legacy findings.
+The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wish per audience in Heaven (`@神`, reached with item059) or the Underworld (`@神?`, reached with item262). The wish catalog, costs and effects are owned by `internal/god`; this document keeps decisions and non-obvious legacy findings. Guild display entries follow the [decoration ownership decision](guild.md#decorations).
 
 ## Visit
 
