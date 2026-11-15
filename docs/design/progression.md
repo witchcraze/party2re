@@ -88,6 +88,8 @@ and the character is above level 99, those ceilings are doubled.
 
 ## Celestial OverLevel (天界限界突破)
 
+**Pitfall:** the Heaven wishes only toggle `over_lv` (`god.cgi:121–130`); the actual stat and level limits are applied later by `system.cgi`'s `write_user` (`49–69,92–97`). Restoring the normal cap therefore reduces level and stats without resetting experience or SP.
+
 OverLevel allows characters that have reached the celestial realm to progress beyond the standard Lv99 cap:
 - **Maximum Level**: Extends from Lv99 to Lv150.
 - **Job Change Reset & Preservation**: Normal cross-job transitions (`targetJobID != currentJobID`) reset the `OverLevel` flag to `false`, requiring re-ascension. Re-changing to the same job (`targetJobID == currentJobID`) and celestial Dragon Noble changes (`WishCelestialDragon` / 天竜人) preserve `OverLevel` status (legacy `party2/lib/job_change.cgi:214-226` and `party2/lib/god.cgi:196-218`).

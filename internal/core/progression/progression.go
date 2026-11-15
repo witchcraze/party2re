@@ -40,6 +40,13 @@ func MaxLevelForCharacter(char *character.Character) int {
 	return MaxLevel
 }
 
+// ClampLevel lowers a level above the character's current cap without changing experience or SP.
+func ClampLevel(value *character.Character) {
+	if value != nil {
+		value.Level = min(value.Level, MaxLevelForCharacter(value))
+	}
+}
+
 // ExperienceForNextLevel returns the cumulative experience required to advance
 // from the supplied level.
 func ExperienceForNextLevel(level int) (int, error) {

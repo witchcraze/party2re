@@ -7,6 +7,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/guild"
 )
@@ -289,6 +290,8 @@ func (s *Service) executeHeavenWish(
 		return ErrWishNotFound
 	}
 
+	char.Stats.Clamp(char.OverLevel, char.Level)
+	progression.ClampLevel(char)
 	if err := s.characters.Update(ctx, *char); err != nil {
 		return err
 	}

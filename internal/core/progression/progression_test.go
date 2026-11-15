@@ -11,6 +11,31 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
+func TestClampLevel(t *testing.T) {
+	ClampLevel(nil)
+	for _, tc := range []struct {
+		level, want int
+		overLevel   bool
+	}{
+		{50, 50, false},
+		{99, 99, false},
+		{100, 99, false},
+		{120, 99, false},
+		{99, 99, true},
+		{100, 100, true},
+		{150, 150, true},
+		{151, 150, true},
+	} {
+		value := character.Character{Level: tc.level, OverLevel: tc.overLevel, Experience: 200000, SP: 123}
+		want := value
+		want.Level = tc.want
+		ClampLevel(&value)
+		if value != want {
+			t.Errorf("ClampLevel(%d, overLevel=%v) = %+v, want %+v", tc.level, tc.overLevel, value, want)
+		}
+	}
+}
+
 func TestExperienceForNextLevelUsesCumulativeSquareThreshold(t *testing.T) {
 	tests := []struct {
 		level int
