@@ -56,6 +56,9 @@ func rejectStored(t *testing.T, s corebattle.LifetimeState, f corebattle.Callbac
 // _heal 9067 is int(40×.9)=36 at draw0.
 func TestStoredToolConsumesCategoryOneWithOuterTarget(t *testing.T) {
 	s, f, d := storedFixture("item-001", herb("first"), herb("second"))
+	*s.Actors[0].HeldToolID, *f.Assets.HeldToolID = "item-169", "item-169"
+	s.Actors[0].Gear.AccessoryID = "item-169"
+	s.Actors[0].ItemDefinitionIDs = []string{"item-169"}
 	runStored(t, &s, &f, d, 0)
 	if s.Actors[0].HP != 536 || s.Actors[1].HP != 1000 {
 		t.Fatal("outer target not bound", s.Actors)
@@ -65,6 +68,9 @@ func TestStoredToolConsumesCategoryOneWithOuterTarget(t *testing.T) {
 	}
 	if !s.StoredToolHistory["party"]["item-001"] || !reflect.DeepEqual(f.Arguments, []string{"enemy", "tail"}) {
 		t.Fatal(s.StoredToolHistory, f.Arguments)
+	}
+	if *s.Actors[0].HeldToolID != "item-169" || *f.Assets.HeldToolID != "item-169" || s.Actors[0].Gear.AccessoryID != "item-169" || !reflect.DeepEqual(s.Actors[0].ItemDefinitionIDs, []string{"item-169"}) {
+		t.Fatal("stored consumption changed the hand", s.Actors[0], f.Assets)
 	}
 
 	// Every copy is now excluded for this color, also after reload.
@@ -130,12 +136,19 @@ func TestStoredToolExchangesOtherCategories(t *testing.T) {
 		t.Run("held="+held, func(t *testing.T) {
 			s, f, d := storedFixture("item-018", corebattle.StoredTool{InstanceID: "book", DefinitionID: "item-018", Category: item.UsageCategoryAnytime})
 			*f.Assets.HeldToolID, *s.Actors[0].HeldToolID = held, held
+			s.Actors[0].Gear.AccessoryID = held
+			if held != "" {
+				s.Actors[0].ItemDefinitionIDs = []string{held}
+			}
 			runStored(t, &s, &f, d)
 			if *f.Assets.HeldToolID != "item-018" || *s.Actors[0].HeldToolID != "item-018" || s.Actors[0].HP != 500 {
 				t.Fatal(*f.Assets.HeldToolID, *s.Actors[0].HeldToolID, s.Actors[0])
 			}
 			if !reflect.DeepEqual(f.Assets.StoredOutcomes, []corebattle.StoredToolOutcome{{InstanceID: "book", Result: corebattle.StoredToolExchanged}}) || !s.StoredToolHistory["party"]["item-018"] {
 				t.Fatal(f.Assets.StoredOutcomes, s.StoredToolHistory)
+			}
+			if s.Actors[0].Gear.AccessoryID != "item-018" || !reflect.DeepEqual(s.Actors[0].ItemDefinitionIDs, []string{"item-018"}) {
+				t.Fatal("inconsistent exchanged hand", s.Actors[0])
 			}
 		})
 	}

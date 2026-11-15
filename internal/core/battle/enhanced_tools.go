@@ -68,7 +68,7 @@ func (s *LifetimeState) applyEnhancedTool(c *JobAssetContext, rng random.Generat
 		return err
 	}
 	a := s.actor(c.ActorID) // Summons can reallocate Actors.
-	*a.HeldToolID = ""
+	a.setHeldTool("")
 	if !a.NPC {
 		*c.Assets.HeldToolID = ""
 	}
@@ -90,7 +90,7 @@ func (s *LifetimeState) purchaseEnhancedTool(c *JobAssetContext, rng random.Gene
 		return err
 	}
 	a := s.actor(c.ActorID)
-	*a.HeldToolID = enhancedToolID(selected)
+	a.setHeldTool(enhancedToolID(selected))
 	if !a.NPC {
 		*c.Assets.HeldToolID = *a.HeldToolID
 	}

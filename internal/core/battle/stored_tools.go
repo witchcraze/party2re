@@ -145,8 +145,8 @@ func (s *LifetimeState) applyStoredTool(c *JobAssetContext, rng random.Generator
 	outcome := StoredToolOutcome{InstanceID: row.InstanceID, Result: StoredToolExchanged}
 	if row.Category != item.UsageCategoryCombatOnly {
 		held := row.DefinitionID
+		a.setHeldTool(held)
 		*assets.HeldToolID = held
-		a.HeldToolID = &held
 		assets.StoredOutcomes = append(assets.StoredOutcomes, outcome)
 		return nil
 	}
