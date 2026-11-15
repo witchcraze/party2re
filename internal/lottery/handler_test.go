@@ -71,6 +71,11 @@ func (r *memScheduledRepo) FindPendingByActorID(_ context.Context, actorID strin
 	return out, nil
 }
 
+func (r *memScheduledRepo) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
+	// Every Pending payload is already visible to this adapter's FetchDue.
+	return nil
+}
+
 type failingScheduler struct {
 	err     error
 	findErr error
@@ -82,6 +87,10 @@ func (f failingScheduler) ScheduleWithID(context.Context, string, string, string
 
 func (f failingScheduler) FindPendingByActorID(context.Context, string) ([]core_scheduling.ScheduledAction, error) {
 	return nil, f.findErr
+}
+
+func (f failingScheduler) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
+	return f.err
 }
 
 func TestDrawHandler_OverdueAndSameIDCollision(t *testing.T) {

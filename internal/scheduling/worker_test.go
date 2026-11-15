@@ -48,6 +48,10 @@ func (m *mockRepository) FindPendingByActorID(_ context.Context, actorID string)
 	return actions, nil
 }
 
+func (m *mockRepository) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
+	return nil
+}
+
 func (m *mockRepository) AcquireLock(ctx context.Context, actionID string, lockTTL time.Duration) (bool, error) {
 	if m.acquireLockErr != nil {
 		return false, m.acquireLockErr

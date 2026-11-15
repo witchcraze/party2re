@@ -323,8 +323,9 @@ Lottery owns reservation recovery from the current SQL round: startup and the
 Worker's explicitly registered periodic reconciliation restore missing work,
 including after a committed draw loses its next registration. Registration
 failure is reported separately from SQL settlement; recovery must not replay
-committed prizes or Home notices. Concurrent registration attempts use distinct
-IDs so terminal saves cannot overwrite another reservation.
+committed prizes or Home notices. For discovered Pending work, recovery restores
+missing queue membership without replacing payloads or existing scores; new
+registrations use distinct IDs so terminal saves cannot overwrite another reservation.
 
 `FetchDue` preserves queued work on transient payload-read errors/cancellation;
 it removes genuinely missing entries and propagates cleanup errors. Malformed or

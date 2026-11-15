@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/valkey-io/valkey-go"
 	core "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/home"
@@ -17,6 +18,7 @@ import (
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/testutil"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -29,6 +31,28 @@ type recoveryQueue struct {
 }
 
 var errRecoverySchedule = errors.New("schedule response lost")
+
+type partialScheduleClient struct {
+	valkey.Client
+	fail       bool
+	originalID string
+}
+
+func (c *partialScheduleClient) Do(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+	args := cmd.Commands()
+	if c.fail && (args[0] == "ZADD" || args[0] == "SREM" || args[0] == "DEL") {
+		original := false
+		for _, arg := range args[1:] {
+			if arg == c.originalID || arg == "party2:scheduled:action:"+c.originalID || arg == "party2:scheduled:lock:"+c.originalID {
+				original = true
+			}
+		}
+		if !original {
+			return valkeytest.MakeErrorResult(errRecoverySchedule)
+		}
+	}
+	return c.Client.Do(ctx, cmd)
+}
 
 func (q *recoveryQueue) Schedule(ctx context.Context, a core.ScheduledAction) error {
 	a.ActorID = q.actor
@@ -84,14 +108,15 @@ func TestTakarakujiScheduleRecoveryIntegration(t *testing.T) {
 		t.Skip("PARTY2_VALKEY_ADDR is not configured")
 	}
 	for _, tc := range []struct {
-		name                                      string
-		buyers, scheduleFail, committed, rollback bool
+		name                                               string
+		buyers, scheduleFail, committed, rollback, partial bool
 	}{
 		{name: "normal"},
 		{name: "unsold_schedule_failure", scheduleFail: true},
 		{name: "buyers_schedule_failure", buyers: true, scheduleFail: true},
 		{name: "unknown_committed_response", buyers: true, scheduleFail: true, committed: true},
 		{name: "draw_rollback", buyers: true, rollback: true},
+		{name: "partial_registration", buyers: true, partial: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := takarakujiIsolatedDB(t)
@@ -102,8 +127,10 @@ func TestTakarakujiScheduleRecoveryIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer client.Close()
-			queue := &recoveryQueue{ScheduledActionRepository: scheduling.NewValkeyRepository(client), actor: "lottery-test:" + id.New()}
+			faults := &partialScheduleClient{Client: client}
+			queue := &recoveryQueue{ScheduledActionRepository: scheduling.NewValkeyRepository(faults), actor: "lottery-test:" + id.New()}
 			defer func() {
+				faults.fail = false
 				if _, err := queue.CancelByActorID(context.Background(), queue.actor); err != nil {
 					t.Error(err)
 				}
@@ -159,10 +186,11 @@ func TestTakarakujiScheduleRecoveryIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			queue.fail, queue.committed = tc.scheduleFail, tc.committed
+			faults.fail, faults.originalID = tc.partial, action.ID
 			handler := lottery.NewDrawHandler(svc, lottery.WithScheduler(scheduling.NewService(queue)))
 			worker := scheduling.NewWorker(queue, time.Millisecond, logging.Nop())
 			worker.RegisterHandler(lottery.ActionTypeTakarakujiDraw, handler)
-			if tc.buyers && !tc.committed {
+			if tc.buyers && !tc.committed && !tc.partial {
 				_, competingErr := testutil.RunRace2(func() error {
 					worker.ProcessAction(ctx, action)
 					return nil
@@ -186,7 +214,7 @@ func TestTakarakujiScheduleRecoveryIntegration(t *testing.T) {
 				return a
 			}
 			wantState := core.StateCompleted
-			if tc.scheduleFail || tc.rollback {
+			if tc.scheduleFail || tc.rollback || tc.partial {
 				wantState = core.StateFailed
 			}
 			if got := readAction(); got.State != wantState {
@@ -227,12 +255,28 @@ func TestTakarakujiScheduleRecoveryIntegration(t *testing.T) {
 				}
 			}
 			assertSQL(!tc.rollback)
-			if tc.scheduleFail && !tc.committed {
+			var partialActionID, partialPayload string
+			if tc.partial {
+				leftovers, err := queue.FindPendingByActorID(ctx, "system")
+				if err != nil || len(leftovers) != 1 {
+					t.Fatalf("partial reservations = %+v, %v", leftovers, err)
+				}
+				partialActionID = leftovers[0].ID
+				partialPayload, err = client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+partialActionID).Build()).ToString()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := client.Do(ctx, client.B().Zscore().Key("party2:scheduled:pending").Member(partialActionID).Build()).Error(); !valkey.IsValkeyNil(err) {
+					t.Fatalf("expected missing queue member, got %v", err)
+				}
+			}
+			if (tc.scheduleFail && !tc.committed) || tc.partial {
 				if err := handler.Reconcile(ctx); !errors.Is(err, errRecoverySchedule) {
 					t.Fatalf("reconcile error = %v", err)
 				}
 			}
 			queue.fail, notifier.fail = false, false
+			faults.fail = false
 			// Recovery runs on the existing periodic worker even when no job is queued.
 			reconciled := make(chan struct{}, 1)
 			worker.RegisterReconciler(lottery.ActionTypeTakarakujiDraw, func(ctx context.Context) error {
@@ -282,6 +326,15 @@ func TestTakarakujiScheduleRecoveryIntegration(t *testing.T) {
 			}
 			if len(pending) != 1 {
 				t.Fatalf("unfinished = %+v", pending)
+			}
+			if tc.partial {
+				if pending[0].ID != partialActionID {
+					t.Fatalf("replaced partial reservation: %s", pending[0].ID)
+				}
+				payload, err := client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+partialActionID).Build()).ToString()
+				if err != nil || payload != partialPayload {
+					t.Fatalf("payload changed during repair: %v", err)
+				}
 			}
 			active, err := lotRepo.GetActiveTakarakujiRound(ctx)
 			if err != nil {

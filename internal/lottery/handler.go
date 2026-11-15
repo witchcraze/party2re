@@ -20,6 +20,7 @@ const (
 type Scheduler interface {
 	ScheduleWithID(ctx context.Context, id, actionType, actorID string, params map[string]string, executeAt time.Time) error
 	FindPendingByActorID(ctx context.Context, actorID string) ([]core_scheduling.ScheduledAction, error)
+	RequeuePending(ctx context.Context, action core_scheduling.ScheduledAction) error
 }
 
 // DrawActionID returns the date prefix shared by reservations for a JST draw time.
@@ -100,7 +101,10 @@ func (h *DrawHandler) scheduleRound(ctx context.Context, round TakarakujiRound) 
 	for _, action := range actions {
 		if action.ActionType == ActionTypeTakarakujiDraw && action.ExecuteAt.Equal(round.DrawDate) &&
 			(action.State == core_scheduling.StatePending || action.State == core_scheduling.StateProcessing) {
-			return nil
+			if action.State == core_scheduling.StateProcessing {
+				return nil
+			}
+			return h.scheduler.RequeuePending(ctx, action)
 		}
 	}
 	// Discovery and registration are not atomic; never overwrite a concurrent worker's payload.

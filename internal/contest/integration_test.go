@@ -295,6 +295,10 @@ func (r *statefulSchedRepo) AcquireLock(_ context.Context, actionID string, _ ti
 	return true, nil
 }
 
+func (r *statefulSchedRepo) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
+	return nil
+}
+
 func (r *statefulSchedRepo) Save(_ context.Context, action core_scheduling.ScheduledAction) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
