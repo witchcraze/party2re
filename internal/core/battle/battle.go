@@ -151,6 +151,7 @@ type PartyBattleResult struct {
 	BaseReward      Reward                    `json:"base_reward"`
 	BonusPercent    int                       `json:"bonus_percent"`
 	TotalReward     Reward                    `json:"total_reward"`
+	DefeatEarnings  []DefeatEarnings          `json:"-"`
 	AlliesSurvived  []string                  `json:"allies_survived"`
 	AlliesFallen    []string                  `json:"allies_fallen"`
 	RemainingHP     map[string]int            `json:"remaining_hp"`
@@ -161,6 +162,12 @@ type PartyBattleResult struct {
 	BanishedIDs     map[string]bool           `json:"banished_ids,omitempty"`
 	Logs            []TurnLog                 `json:"logs,omitempty"`
 	FinalField      *FieldState               `json:"final_field,omitempty"`
+}
+
+// DefeatEarnings records unscaled earnings and allies alive at a reached defeat.
+type DefeatEarnings struct {
+	Reward       Reward   `json:"reward"`
+	RecipientIDs []string `json:"recipient_ids"`
 }
 
 type Engine struct{}

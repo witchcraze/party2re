@@ -70,6 +70,7 @@ type DungeonCrawlResult struct {
 	TotalEXP              int                                   `json:"total_exp"`
 	TotalGold             int                                   `json:"total_gold"`
 	TotalCrystals         int                                   `json:"total_crystals"`
+	RecipientRewards      map[string]corebattle.Reward          `json:"-"`
 	FloorResults          []DungeonFloorResult                  `json:"floor_results"`
 	TreasureBoxes         []TreasureBox                         `json:"treasure_boxes,omitempty"`
 	InspectedBoxes        map[string]int                        `json:"inspected_boxes,omitempty"`
@@ -102,6 +103,7 @@ type CrawlSession struct {
 	TotalEXP            int                                  `json:"total_exp"`
 	TotalGold           int                                  `json:"total_gold"`
 	TotalCrystals       int                                  `json:"total_crystals"`
+	Earnings            map[string]RunEarnings               `json:"earnings,omitempty"`
 	FloorResults        []DungeonFloorResult                 `json:"floor_results"`
 	TreasureBoxes       []TreasureBox                        `json:"treasure_boxes,omitempty"`
 	InspectedBoxes      map[string]int                       `json:"inspected_boxes,omitempty"`
@@ -327,6 +329,11 @@ func (s *CrawlSession) AdvanceFloor(
 	battleRes, err := engine.ResolvePartyBattle(req)
 	if err != nil {
 		return DungeonFloorResult{}, fmt.Errorf("resolve floor %d battle: %w", s.CurrentFloor, err)
+	}
+	if len(s.CharacterIDs) > 1 {
+		if err := s.recordDefeatEarnings(battleRes); err != nil {
+			return DungeonFloorResult{}, err
+		}
 	}
 
 	// Update ally HP/MP state from battle outcome

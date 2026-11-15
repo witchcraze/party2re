@@ -122,31 +122,39 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 	if mode == "" {
 		mode = CrawlModeNormal
 	}
+	var recipientRewards map[string]corebattle.Reward
+	if len(s.CharacterIDs) > 1 {
+		recipientRewards = make(map[string]corebattle.Reward, len(s.CharacterIDs))
+		for _, id := range s.CharacterIDs {
+			recipientRewards[id] = runReward(s.Earnings[id])
+		}
+	}
 
 	return DungeonCrawlResult{
-		AdventureIDs:    make(map[string]string),
-		StageID:         s.StageID,
-		StageName:       s.StageName,
-		Season:          s.Stage.Season,
-		SeasonalSubID:   SeasonToSubID(s.Stage.Season),
-		Mode:            mode,
-		Round:           s.Round,
-		ExitFatigue:     CalculateExitFatigue(s.Round, mode),
-		FloorsCleared:   s.FloorsCleared,
-		StageCleared:    s.StageCleared,
-		Outcome:         outcome,
-		TotalTurns:      s.TotalTurns,
-		TotalEXP:        s.TotalEXP,
-		TotalGold:       s.TotalGold,
-		TotalCrystals:   s.TotalCrystals,
-		FloorResults:    s.FloorResults,
-		TreasureBoxes:   s.TreasureBoxes,
-		InspectedBoxes:  cloneInspectedBoxes(s.InspectedBoxes),
-		PartySize:       len(s.Characters),
-		ParticipantHPs:  participantHPs,
-		ParticipantMPs:  participantMPs,
-		ConsumedItems:   cloneConsumedItems(s.ConsumedItems),
-		UnsealDemonKing: s.UnsealDemonKing,
+		AdventureIDs:     make(map[string]string),
+		StageID:          s.StageID,
+		StageName:        s.StageName,
+		Season:           s.Stage.Season,
+		SeasonalSubID:    SeasonToSubID(s.Stage.Season),
+		Mode:             mode,
+		Round:            s.Round,
+		ExitFatigue:      CalculateExitFatigue(s.Round, mode),
+		FloorsCleared:    s.FloorsCleared,
+		StageCleared:     s.StageCleared,
+		Outcome:          outcome,
+		TotalTurns:       s.TotalTurns,
+		TotalEXP:         s.TotalEXP,
+		TotalGold:        s.TotalGold,
+		TotalCrystals:    s.TotalCrystals,
+		RecipientRewards: recipientRewards,
+		FloorResults:     s.FloorResults,
+		TreasureBoxes:    s.TreasureBoxes,
+		InspectedBoxes:   cloneInspectedBoxes(s.InspectedBoxes),
+		PartySize:        len(s.Characters),
+		ParticipantHPs:   participantHPs,
+		ParticipantMPs:   participantMPs,
+		ConsumedItems:    cloneConsumedItems(s.ConsumedItems),
+		UnsealDemonKing:  s.UnsealDemonKing,
 	}
 }
 

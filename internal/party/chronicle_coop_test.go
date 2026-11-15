@@ -480,6 +480,7 @@ func TestParty_BackfillDuplicatePreventionWithLiveRun(t *testing.T) {
 			AlliesSurvived: survived,
 			RemainingHP:    remHP,
 			TotalReward:    corebattle.Reward{Experience: 100, Currency: 50},
+			DefeatEarnings: []corebattle.DefeatEarnings{{Reward: corebattle.Reward{Experience: 100, Currency: 50}, RecipientIDs: survived}},
 		}, nil
 	})
 

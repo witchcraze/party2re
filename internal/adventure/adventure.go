@@ -384,6 +384,7 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 
 		// Persist adventure record for each participating character
 		for _, c := range characters {
+			reward := result.RewardForCharacter(c.ID)
 			advIDHash := sha256.Sum256([]byte(fmt.Sprintf("solo:%s:%s", session.ID, c.ID)))
 			advID := hex.EncodeToString(advIDHash[:16])
 			result.AdventureIDs[c.ID] = advID
@@ -404,17 +405,13 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 				FloorsCleared:    result.FloorsCleared,
 				IsCleared:        result.StageCleared,
 				PartySize:        len(characters),
-				ExperienceReward: result.TotalEXP,
+				ExperienceReward: reward.Experience,
 				Resolved:         true,
 				BattleResult: corebattle.Result{
 					Outcome:  result.Outcome,
 					WinnerID: winnerID,
 					Turns:    result.TotalTurns,
-					Reward: corebattle.Reward{
-						Experience: result.TotalEXP,
-						Currency:   result.TotalGold,
-						Crystals:   result.TotalCrystals,
-					},
+					Reward:   reward,
 				},
 			}
 
@@ -439,18 +436,18 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 				c.AddTired(result.EffectiveExitFatigue(req.Mode))
 
 				if result.Outcome == corebattle.OutcomeWin || result.Mode != CrawlModeTry {
-					if result.TotalEXP > 0 {
-						if _, err := progression.ApplyExperience(&c, result.TotalEXP); err != nil {
+					if reward.Experience > 0 {
+						if _, err := progression.ApplyExperience(&c, reward.Experience); err != nil {
 							return fmt.Errorf("adding experience for character %s: %w", c.ID, err)
 						}
 					}
-					if result.TotalGold > 0 {
-						if err := c.AddMoney(result.TotalGold); err != nil {
+					if reward.Currency > 0 {
+						if err := c.AddMoney(reward.Currency); err != nil {
 							return fmt.Errorf("adding gold for character %s: %w", c.ID, err)
 						}
 					}
-					if result.TotalCrystals > 0 {
-						if err := c.AddCrystal(result.TotalCrystals); err != nil {
+					if reward.Crystals > 0 {
+						if err := c.AddCrystal(reward.Crystals); err != nil {
 							return fmt.Errorf("adding crystals for character %s: %w", c.ID, err)
 						}
 					}
@@ -471,7 +468,7 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 
 	for _, c := range characters {
 		if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {
-			if err := s.victoryHook(ctx, c.ID, result.FloorsCleared, result.TotalGold); err != nil {
+			if err := s.victoryHook(ctx, c.ID, result.FloorsCleared, result.RewardForCharacter(c.ID).Currency); err != nil {
 				s.logger.Warn("adventure victory hook failed for character %s: %v", c.ID, err)
 			}
 		}

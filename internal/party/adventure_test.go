@@ -53,7 +53,9 @@ type fixedBattleEngine struct {
 func (e fixedBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 	remHP := make(map[string]int)
 	remMP := make(map[string]int)
+	var recipients []string
 	for _, p := range req.Allies {
+		recipients = append(recipients, p.ID)
 		if e.remainingHP != nil {
 			if hp, ok := e.remainingHP[p.ID]; ok {
 				remHP[p.ID] = hp
@@ -97,15 +99,20 @@ func (e fixedBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest)
 		Currency:   baseReward.Currency * (100 + bonusPercent) / 100,
 		Crystals:   baseReward.Crystals,
 	}
+	var earnings []corebattle.DefeatEarnings
+	if outcome == corebattle.OutcomeWin {
+		earnings = []corebattle.DefeatEarnings{{Reward: baseReward, RecipientIDs: recipients}}
+	}
 
 	return corebattle.PartyBattleResult{
-		Outcome:      outcome,
-		Turns:        1,
-		RemainingHP:  remHP,
-		RemainingMP:  remMP,
-		BaseReward:   baseReward,
-		BonusPercent: bonusPercent,
-		TotalReward:  totalReward,
+		Outcome:        outcome,
+		Turns:          1,
+		RemainingHP:    remHP,
+		RemainingMP:    remMP,
+		BaseReward:     baseReward,
+		BonusPercent:   bonusPercent,
+		TotalReward:    totalReward,
+		DefeatEarnings: earnings,
 	}, nil
 }
 

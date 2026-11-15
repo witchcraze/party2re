@@ -81,6 +81,7 @@ func (s *Service) settleWithBattleSettler(
 	postBattleReq := battleadapter.ApplyPostBattleRequest{
 		CharacterIDs:          charIDs,
 		PreserveEarnedRewards: crawlResult.Mode != adventure.CrawlModeTry,
+		RecipientRewards:      crawlResult.RecipientRewards,
 		BattleResult: corebattle.PartyBattleResult{
 			Outcome: crawlResult.Outcome,
 			Turns:   crawlResult.TotalTurns,
@@ -167,9 +168,8 @@ func (s *Service) settleFallback(
 		levelBefore := c.Level
 		var gainedEXP, gainedGold, gainedCrystals int
 		if crawlResult.Outcome == corebattle.OutcomeWin || crawlResult.Mode != adventure.CrawlModeTry {
-			gainedEXP = crawlResult.TotalEXP
-			gainedGold = crawlResult.TotalGold
-			gainedCrystals = crawlResult.TotalCrystals
+			r := crawlResult.RewardForCharacter(cID)
+			gainedEXP, gainedGold, gainedCrystals = r.Experience, r.Currency, r.Crystals
 		}
 
 		if err := c.AddMoney(gainedGold); err != nil {

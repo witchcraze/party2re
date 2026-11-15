@@ -87,6 +87,13 @@ func (e *consumptionFloorEngine) ResolvePartyBattle(req corebattle.PartyBattleRe
 			res.ConsumedItems[ally.ID] = append(res.ConsumedItems[ally.ID], revived.ConsumedItems[ally.ID]...)
 		}
 	}
+	if !e.defeat || e.calls != e.last {
+		var recipients []string
+		for _, ally := range req.Allies {
+			recipients = append(recipients, ally.ID)
+		}
+		res.DefeatEarnings = []corebattle.DefeatEarnings{{Reward: res.TotalReward, RecipientIDs: recipients}}
+	}
 	if e.defeat && e.calls == e.last {
 		res.Outcome = corebattle.OutcomeDefeat
 		for owner := range res.RemainingHP {
