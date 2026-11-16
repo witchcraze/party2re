@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -90,13 +91,36 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 }
 
 // whitelistedLegacyPresentationFields records pre-existing legacy struct fields declaring presentation strings
-// (NPCMessage, NPCSpeech, Dialogue) in untouched domain packages.
+// (including Message) in untouched domain packages.
 // Each entry maps pkg.Struct.Field to the issue tracking its decoupling.
 // No new fields may be added. When a field is decoupled, it MUST be removed from this map to ratchet down.
-var whitelistedLegacyPresentationFields = map[string]string{}
+var whitelistedLegacyPresentationFields = map[string]string{
+	"alchemy.SynthesisResult.Message":      "#2304",
+	"alchemy.ClaimResult.Message":          "#2304",
+	"auction.SendResult.Message":           "#2304",
+	"bank.DepositResult.Message":           "#2304",
+	"bank.WithdrawResult.Message":          "#2304",
+	"blackmarket.SacrificeResult.Message":  "#2304",
+	"blackmarket.TradeResult.Message":      "#2304",
+	"gemstore.AppraiseResult.Message":      "#2304",
+	"tavern.OrderResult.Message":           "#2304",
+	"altar.PrayResult.Message":             "#2305",
+	"altar.WishResult.Message":             "#2305",
+	"god.WishResult.Message":               "#2305",
+	"wishingwell.ExchangeResult.Message":   "#2305",
+	"home.SleepResult.Message":             "#2306",
+	"home.SleepStatus.Message":             "#2306",
+	"home.WakeResult.Message":              "#2306",
+	"home.UseHomeItemResult.Message":       "#2306",
+	"battle.TurnLog.Message":               "#2307",
+	"battle.RevivalResult.Message":         "#2307",
+	"battle.MonsterTameResult.Message":     "#2307",
+	"dungeon.ExpeditionStepResult.Message": "#2307",
+	"contest.SettlementResult.Message":     "#2308",
+}
 
 // TestProhibitPresentationFieldsInDomainModels verifies that domain service result structs
-// do not declare presentation-specific string fields like NPCMessage, NPCSpeech, or Dialogue.
+// do not declare presentation fields without a tracked migration or a data annotation.
 // Pre-existing violations in untouched domain packages are locked in whitelistedLegacyPresentationFields;
 // any new violation or un-ratcheted removal fails the test.
 func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
@@ -104,14 +128,23 @@ func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to determine repository root: %v", err)
 	}
+	violations, err := presentationFieldViolations(repoRoot, whitelistedLegacyPresentationFields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) > 0 {
+		t.Errorf("found %d prohibited presentation field violations:\n%s", len(violations), strings.Join(violations, "\n"))
+	}
+}
 
+func presentationFieldViolations(repoRoot string, whitelist map[string]string) ([]string, error) {
 	internalDir := filepath.Join(repoRoot, "internal")
 	fset := token.NewFileSet()
 
 	seenWhitelisted := make(map[string]bool)
 	var violations []string
 
-	err = filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -131,35 +164,69 @@ func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 			return nil
 		}
 
-		node, err := parser.ParseFile(fset, path, nil, 0)
+		node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
 			return err
 		}
 
 		pkgName := node.Name.Name
+		typeNames := map[*ast.StructType]string{}
 
 		ast.Inspect(node, func(n ast.Node) bool {
-			ts, ok := n.(*ast.TypeSpec)
-			if !ok {
+			if ts, ok := n.(*ast.TypeSpec); ok {
+				if st, ok := ts.Type.(*ast.StructType); ok {
+					typeNames[st] = ts.Name.Name
+				}
 				return true
 			}
-			st, ok := ts.Type.(*ast.StructType)
+			st, ok := n.(*ast.StructType)
 			if !ok || st.Fields == nil {
 				return true
 			}
+			typeName := typeNames[st]
+			if typeName == "" {
+				typeName = "(anonymous)"
+			}
 
 			for _, f := range st.Fields.List {
-				for _, name := range f.Names {
-					if name.Name == "NPCMessage" || name.Name == "NPCSpeech" || name.Name == "Dialogue" {
-						key := pkgName + "." + ts.Name.Name + "." + name.Name
-						if _, ok := whitelistedLegacyPresentationFields[key]; ok {
+				jsonName := ""
+				if f.Tag != nil {
+					jsonName = strings.Split(reflect.StructTag(stringLiteral(f.Tag)).Get("json"), ",")[0]
+				}
+				names := f.Names
+				if len(names) == 0 {
+					// Embedded fields have no Names; their field name comes from the type.
+					embedded := f.Type
+					if pointer, ok := embedded.(*ast.StarExpr); ok {
+						embedded = pointer.X
+					}
+					switch generic := embedded.(type) {
+					case *ast.IndexExpr:
+						embedded = generic.X
+					case *ast.IndexListExpr:
+						embedded = generic.X
+					}
+					switch embedded := embedded.(type) {
+					case *ast.Ident:
+						names = []*ast.Ident{embedded}
+					case *ast.SelectorExpr:
+						names = []*ast.Ident{embedded.Sel}
+					}
+				}
+				for _, name := range names {
+					if name.Name == "NPCMessage" || name.Name == "NPCSpeech" || name.Name == "Dialogue" || name.Name == "Message" || jsonName == "message" {
+						if (name.Name == "Message" || jsonName == "message") && presentationDataField(f) {
+							continue
+						}
+						key := pkgName + "." + typeName + "." + name.Name
+						if _, ok := whitelist[key]; ok {
 							seenWhitelisted[key] = true
 							continue
 						}
 						pos := fset.Position(name.Pos())
 						relPath, _ := filepath.Rel(repoRoot, path)
-						violations = append(violations, fmt.Sprintf("%s:%d: struct %s.%s declares prohibited presentation field: %s",
-							relPath, pos.Line, pkgName, ts.Name.Name, name.Name))
+						violations = append(violations, fmt.Sprintf("%s:%d: prohibited presentation field %s; move formatting to HTTP or annotate authored/persisted data with //lint:ignore presentation <reason>",
+							relPath, pos.Line, key))
 					}
 				}
 			}
@@ -170,18 +237,29 @@ func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 	})
 
 	if err != nil {
-		t.Fatalf("failed to walk internal directory: %v", err)
+		return nil, err
 	}
 
 	// Ratchet down check: every whitelisted entry must still exist in the codebase
-	for key, issue := range whitelistedLegacyPresentationFields {
+	for key, issue := range whitelist {
 		if !seenWhitelisted[key] {
 			violations = append(violations, fmt.Sprintf("whitelisted legacy presentation field %q (%s) is no longer present; remove it from whitelistedLegacyPresentationFields to ratchet down", key, issue))
 		}
 	}
 
-	if len(violations) > 0 {
-		t.Errorf("found %d prohibited presentation field violations:\n%s",
-			len(violations), strings.Join(violations, "\n"))
+	return violations, nil
+}
+
+func presentationDataField(field *ast.Field) bool {
+	const directive = "//lint:ignore presentation "
+	for _, group := range []*ast.CommentGroup{field.Doc, field.Comment} {
+		if group != nil {
+			for _, comment := range group.List {
+				if reason, ok := strings.CutPrefix(comment.Text, directive); ok && strings.TrimSpace(reason) != "" {
+					return true
+				}
+			}
+		}
 	}
+	return false
 }

@@ -42,7 +42,6 @@ type StoreCheckResult struct {
 	HouseStyle  string    `json:"house_style"`
 	Wallpaper   string    `json:"wallpaper"`
 	ExpiresAt   time.Time `json:"expires_at"`
-	Message     string    `json:"message"`
 }
 
 type StoreDetails struct {
@@ -257,7 +256,6 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 			return err
 		}
 
-		jstExpires := expiresAt.In(timer.JST)
 		res = &StoreCheckResult{
 			CharacterID: characterID,
 			OwnerName:   char.Name,
@@ -267,8 +265,6 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 			HouseStyle:  houseStyle,
 			Wallpaper:   storeObj.Wallpaper,
 			ExpiresAt:   expiresAt,
-			Message: fmt.Sprintf("%s の店を建てました！店の所有期間は %d月%d日%d時 までです",
-				char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour()),
 		}
 		return nil
 	})

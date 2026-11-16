@@ -13,7 +13,8 @@ var (
 
 // Status represents the system maintenance state.
 type Status struct {
-	Enabled          bool       `json:"enabled"`
+	Enabled bool `json:"enabled"`
+	//lint:ignore presentation persisted administrator announcement, including its default text
 	Message          string     `json:"message"`
 	EstimatedEndTime *time.Time `json:"estimated_end_time,omitempty"`
 	UpdatedAt        time.Time  `json:"updated_at"`

@@ -17454,6 +17454,52 @@
         ],
         "type": "object"
       },
+      "StoreBuildResult": {
+        "additionalProperties": false,
+        "description": "Result of the store_build Gateway command: store facts and an HTTP-owned confirmation message.",
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "house_style": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "town_id": {
+            "type": "string"
+          },
+          "town_name": {
+            "type": "string"
+          },
+          "wallpaper": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "owner_name",
+          "town_id",
+          "town_name",
+          "store_name",
+          "house_style",
+          "wallpaper",
+          "expires_at",
+          "message"
+        ],
+        "type": "object"
+      },
       "StoreBuildTerms": {
         "additionalProperties": false,
         "properties": {
