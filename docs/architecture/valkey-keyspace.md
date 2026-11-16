@@ -198,28 +198,33 @@ SQL finalization failures and lost game state still require separate settlement
 recovery.
 
 **Departure recovery** uses the SQL-first publication pattern described for
-[PvP](transient-run-state.md#pvp-financial-publication), limited to Casino departure.
-SQL commits participant fatigue and the admission's complete departure outcome
-together before room publication; spectators incur no fatigue. The latest receipt
-per room is retained indefinitely and replaced only by a later committed departure.
-Pending roster claims survive Valkey loss and are released only after all room,
-index and conditional mapping writes are acknowledged. Admission and departure
-claims serialize on character SQL row locks: admission rechecks pending evidence
-before publishing, and departure rejects a roster that has moved to another room.
-Subsequent Casino room
-commands resume pending publication under the existing room lock without replaying
-fatigue, wagers or progression, preserving later character updates. Recovery can
-restore lost pending room state only until the original departure deadline; after
-that it finishes cleanup without resurrecting the room. Already acknowledged
-receipts never republish or renew a room. A retry of the latest departure succeeds
-without another fatigue increment; after a new admission, an identity-free leave
-request denotes a new departure, as in PvP. Older outcomes superseded by another
-member's departure are not replayable. Owned activity/view GETs remain read-only
-and surface pending recovery rather than false idle state. Publication or SQL
-acknowledgement failures retain evidence and remain observable as
-`ErrDepartureRecovery` with the underlying error (HTTP 500). This protocol retains
-the existing room-lease boundary; broader multi-instance fencing remains outside
-its guarantee ([#1574](https://github.com/witchcraze/party2re/issues/1574)).
+[PvP](transient-run-state.md#pvp-financial-publication), limited to Casino
+departure and kick. SQL commits participant fatigue (none for spectators or
+kicks), the complete departure outcome and, for kicks, the target's 60-second
+action-wait deadline together before room and timer publication. The latest
+receipt per room is retained indefinitely and replaced only by a later committed
+departure or kick. Pending roster claims survive Valkey loss and are released
+only after room, index, conditional mapping and kick-wait writes are
+acknowledged. Admission and departure claims serialize on character SQL row
+locks: admission rechecks pending evidence before publishing, and departure
+rejects a roster that has moved to another room. Subsequent Casino room commands
+and Action Gateway mutations (`POST /actions`) resume pending publication under
+the existing room lock without replaying fatigue, wagers, progression or kick
+deadlines, preserving later character updates. Kick recovery extends
+`party2:timer:action_wait:<target>` via `ExtendLockUntil` so it neither shortens
+a longer active wait nor revives an expired deadline. Recovery can restore lost
+pending room state only until the original departure deadline; after that it
+finishes cleanup without resurrecting the room. Already acknowledged receipts
+never republish or renew a room. A retry of the latest departure or kick
+succeeds without another fatigue increment or wait reset; after a new admission,
+an identity-free request denotes a new departure or kick, as in PvP. Older
+outcomes superseded by another member's departure are not replayable, and
+voluntary leaves are never treated as kick replays. Owned activity/view GETs
+remain read-only and surface pending recovery rather than false idle state or
+writing timers. Publication or SQL acknowledgement failures retain evidence and
+remain observable as `ErrDepartureRecovery` with the underlying error (HTTP 500).
+This protocol retains the existing room-lease boundary; broader multi-instance
+fencing remains outside its guarantee ([#1574](https://github.com/witchcraze/party2re/issues/1574)).
 
 Room creation/start and admission
 operations retain their own publication boundaries. `AddMember` / `RemoveMember`

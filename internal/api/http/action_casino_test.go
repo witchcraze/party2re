@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -276,4 +280,273 @@ func TestCasinoGatewayEntryRejections(t *testing.T) {
 			}
 		})
 	}
+}
+
+type faultyKickWaitService struct {
+	timer.Service
+	target     string
+	failExtend atomic.Bool
+}
+
+func (w *faultyKickWaitService) ExtendLockUntil(ctx context.Context, category, targetID string, until time.Time) error {
+	if category == timer.CategoryActionWait && targetID == w.target && w.failExtend.Load() {
+		return errors.New("injected target wait write failure")
+	}
+	return w.Service.ExtendLockUntil(ctx, category, targetID, until)
+}
+
+type multiActorGateway struct {
+	*gatewayFixture
+	peer corecharacter.Character
+}
+
+func (g *multiActorGateway) Authenticate(ctx context.Context, token string) (coreplayer.Player, error) {
+	if token == "peer-session" {
+		return coreplayer.Player{ID: g.peer.PlayerID}, nil
+	}
+	return g.gatewayFixture.Authenticate(ctx, token)
+}
+
+func (g *multiActorGateway) Get(ctx context.Context, id string) (corecharacter.Character, error) {
+	if id == g.peer.ID {
+		return g.peer, nil
+	}
+	return g.gatewayFixture.Get(ctx, id)
+}
+
+func (g *multiActorGateway) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	if id == g.peer.ID {
+		return g.peer, nil
+	}
+	return g.gatewayFixture.FindByID(ctx, id)
+}
+
+func (g *multiActorGateway) FindPendingByActorID(ctx context.Context, id string) ([]scheduling.ScheduledAction, error) {
+	if id == g.peer.ID {
+		return nil, nil
+	}
+	return g.gatewayFixture.FindPendingByActorID(ctx, id)
+}
+
+type multiActorCasinoChars struct {
+	*casinoSceneCharacters
+	peer  corecharacter.Character
+	peer2 corecharacter.Character
+}
+
+func (r *multiActorCasinoChars) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	if id == r.peer.ID {
+		return r.peer, nil
+	}
+	if id == r.peer2.ID {
+		return r.peer2, nil
+	}
+	return r.casinoSceneCharacters.FindByID(ctx, id)
+}
+
+func (r *multiActorCasinoChars) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
+func (r *multiActorCasinoChars) Update(_ context.Context, c corecharacter.Character) error {
+	switch c.ID {
+	case r.peer.ID:
+		r.peer = c
+	case r.peer2.ID:
+		r.peer2 = c
+	default:
+		r.f.char = c
+	}
+	return nil
+}
+
+func newMultiActorKickFixture(t *testing.T) (f *casinoSceneFixture, waits *faultyKickWaitService, departures *casino.MemoryDepartureRepository, router http.Handler) {
+	t.Helper()
+	f = newCasinoSceneFixture(t)
+	departures = casino.NewMemoryDepartureRepository()
+	peer := corecharacter.Character{ID: "peer", PlayerID: "peer-owner", Name: "peer", Money: 100, Stats: corecharacter.Stats{HP: 50}}
+	peer2 := corecharacter.Character{ID: "peer2", PlayerID: "peer-owner", Name: "peer2", Money: 100, Stats: corecharacter.Stats{HP: 50}}
+	chars := &multiActorCasinoChars{casinoSceneCharacters: f.characters, peer: peer, peer2: peer2}
+	var err error
+	f.service, err = casino.NewService(f.accounts, casino.WithDepartureRepository(departures), casino.WithRoomRepository(f.rooms), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.reads = &casinoSceneReads{CasinoService: f.service, f: f.gatewayFixture}
+	waits = &faultyKickWaitService{Service: timer.NewService(nil), target: "peer"}
+	gw := &multiActorGateway{gatewayFixture: f.gatewayFixture, peer: peer}
+	scene := playercontext.SceneDefinition{ID: "casino", Parent: "town", Pageable: true, SubjectKind: "room", SubjectAvailable: func(ctx context.Context, _, id string) (bool, error) {
+		rows, err := f.service.ListRooms(ctx)
+		return slices.ContainsFunc(rows, func(r casino.RoomSummary) bool { return r.ID == id }), err
+	}}
+	pc := playercontext.NewService(gw, gw, waits, playercontext.WithNavigation(f.store, playercontext.SceneDefinition{ID: "town"}, scene), playercontext.WithActivities(f.readActivities), playercontext.WithActionWait(waits, playercontext.DefaultActionWait))
+	f.service.SetActionWait(pc)
+	rescueCmd := withActionCommand("rescue_request", func(ctx context.Context, id string, p rescueActionParams) (any, error) {
+		return f.execute(ctx, id, 0)
+	}, gatewayRejection)
+	h, err := NewHandler(gw, gw, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithPlayerContext(pc), rescueCmd, func(h *Handler) { h.homes = f }, WithCasino(f.reads))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.room("room", casino.GameTypeIndian, true)
+	return f, waits, departures, h.Router()
+}
+
+func contextGET(t *testing.T, router http.Handler, actor, token string) (int, PlayerContextResponse) {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/characters/"+actor+"/context", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+	var response PlayerContextResponse
+	if w.Code == http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return w.Code, response
+}
+
+func TestCasinoKickWaitFailureAndRecovery(t *testing.T) {
+	ctx := context.Background()
+	remaining := func(t *testing.T, waits timer.Service, id string) time.Duration {
+		t.Helper()
+		d, err := waits.GetRemainingLock(ctx, timer.CategoryActionWait, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+
+	t.Run("healthy kick enforces peer 60s wait and rejects peer actions", func(t *testing.T) {
+		f, waits, _, router := newMultiActorKickFixture(t)
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"peer"}}`, nil)
+		if status != http.StatusOK || string(raw["success"]) != "true" {
+			t.Fatalf("kick failed: %d %s", status, raw)
+		}
+		if got := remaining(t, waits, "hero"); got <= playercontext.DefaultActionWait || got > time.Duration(casino.SpeedNormal)*time.Second {
+			t.Fatalf("hero wait=%v, want room speed", got)
+		}
+		if got := remaining(t, waits, "peer"); got <= 58*time.Second || got > 60*time.Second {
+			t.Fatalf("peer wait=%v, want ~60s", got)
+		}
+		if _, err := f.rooms.GetMember(ctx, "room", "peer"); !errors.Is(err, casino.ErrMemberNotFound) {
+			t.Fatalf("peer remained in room: %v", err)
+		}
+		// Peer is rejected by ACTION_WAIT on subsequent Gateway commands.
+		status, raw = gatewayRequest(t, router, "peer", "peer-session", "application/json", `{"action":"scene_enter","params":{"destination":"town"}}`, nil)
+		if status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_WAIT" {
+			t.Fatalf("peer action during kick wait: %d %s", status, raw)
+		}
+	})
+
+	t.Run("wait write failure keeps pending evidence and recovers on hero retry", func(t *testing.T) {
+		_, waits, departures, router := newMultiActorKickFixture(t)
+		waits.failExtend.Store(true)
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"peer"}}`, nil)
+		if status != http.StatusInternalServerError {
+			t.Fatalf("expected 500 on wait write failure, got %d %s", status, raw)
+		}
+		if got := remaining(t, waits, "hero"); got != 0 {
+			t.Fatalf("failed kick kept hero claim: %v", got)
+		}
+		if got := remaining(t, waits, "peer"); got != 0 {
+			t.Fatalf("unexpected peer wait while write failed: %v", got)
+		}
+		d, err := departures.FindDeparture(ctx, "room")
+		if err != nil || !d.Pending || !d.Kicked || d.Member.CharacterID != "peer" || d.WaitUntil.IsZero() {
+			t.Fatalf("missing pending kick evidence: %+v %v", d, err)
+		}
+
+		// GET must stay read-only and never repair wait or membership even after fault heals.
+		waits.failExtend.Store(false)
+		for _, actor := range []struct{ id, token string }{{"hero", "session"}, {"peer", "peer-session"}} {
+			if getStatus, _ := contextGET(t, router, actor.id, actor.token); getStatus != http.StatusInternalServerError {
+				t.Fatalf("GET %s hid pending recovery: %d", actor.id, getStatus)
+			}
+		}
+		if got := remaining(t, waits, "peer"); got != 0 {
+			t.Fatalf("GET wrote wait during pending recovery: %v", got)
+		}
+
+		// Hero retries the kick: recovery completes peer's 60s wait and returns 200 idempotently.
+		status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"peer"}}`, nil)
+		if status != http.StatusOK || string(raw["success"]) != "true" {
+			t.Fatalf("retry kick recovery failed: %d %s", status, raw)
+		}
+		if got := remaining(t, waits, "hero"); got <= playercontext.DefaultActionWait || got > time.Duration(casino.SpeedNormal)*time.Second {
+			t.Fatalf("hero wait after retry=%v", got)
+		}
+		if got := remaining(t, waits, "peer"); got <= 58*time.Second || got > 60*time.Second {
+			t.Fatalf("peer wait after retry=%v, want ~60s", got)
+		}
+		status, raw = gatewayRequest(t, router, "peer", "peer-session", "application/json", `{"action":"scene_enter","params":{"destination":"town"}}`, nil)
+		if status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_WAIT" {
+			t.Fatalf("peer not blocked after retry recovery: %d %s", status, raw)
+		}
+	})
+
+	t.Run("peer mutation recovers pending kick wait and rejects with ACTION_WAIT", func(t *testing.T) {
+		_, waits, departures, router := newMultiActorKickFixture(t)
+		waits.failExtend.Store(true)
+		status, _ := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"peer"}}`, nil)
+		if status != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", status)
+		}
+		waits.failExtend.Store(false)
+
+		// Without hero retrying, peer's next Gateway mutation recovers the pending kick and blocks peer.
+		status, raw := gatewayRequest(t, router, "peer", "peer-session", "application/json", `{"action":"casino_room_join","params":{"room_id":"room","password":"secret"}}`, nil)
+		if status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_WAIT" {
+			t.Fatalf("expected ACTION_WAIT after peer recovery, got %d %s", status, raw)
+		}
+		if got := remaining(t, waits, "peer"); got <= 58*time.Second || got > 60*time.Second {
+			t.Fatalf("peer wait=%v, want ~60s", got)
+		}
+		if claim, err := departures.FindPendingDeparture(ctx, "peer"); err != nil || claim != "" {
+			t.Fatalf("pending claim remained: %q %v", claim, err)
+		}
+		if getStatus, obs := contextGET(t, router, "hero", "session"); getStatus != http.StatusOK || obs.Scene.Kind != "activity" {
+			t.Fatalf("hero context after peer recovery: %d %+v", getStatus, obs)
+		}
+	})
+
+	t.Run("lost response retry does not reset wait and voluntary leave rejects kick", func(t *testing.T) {
+		f, waits, _, router := newMultiActorKickFixture(t)
+		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"peer"}}`, nil); status != http.StatusOK {
+			t.Fatalf("kick status=%d", status)
+		}
+		// Simulate hero's room-speed wait elapsing while peer still has >40s kick wait.
+		if err := waits.ReleaseLock(ctx, timer.CategoryActionWait, "hero"); err != nil {
+			t.Fatal(err)
+		}
+		if err := waits.SetLock(ctx, timer.CategoryActionWait, "peer", 40*time.Second); err != nil {
+			t.Fatal(err)
+		}
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"peer"}}`, nil)
+		if status != http.StatusOK {
+			t.Fatalf("idempotent retry status=%d %s", status, raw)
+		}
+		if got := remaining(t, waits, "peer"); got > 41*time.Second {
+			t.Fatalf("idempotent retry reset peer wait to %v", got)
+		}
+
+		// A non-kicked member who left voluntarily must not be treated as a kick replay.
+		if err := f.rooms.AddMember(ctx, casino.RoomMember{RoomID: "room", CharacterID: "peer2", JoinedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.service.LeaveRoom(ctx, "room", "peer2"); err != nil {
+			t.Fatal(err)
+		}
+		if err := waits.ReleaseLock(ctx, timer.CategoryActionWait, "hero"); err != nil {
+			t.Fatal(err)
+		}
+		status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"peer2"}}`, nil)
+		if status != http.StatusNotFound || actionErrorCode(t, raw) != "CASINO_MEMBER_NOT_FOUND" {
+			t.Fatalf("kick after voluntary leave: %d %s", status, raw)
+		}
+		if got := remaining(t, waits, "peer2"); got != 0 {
+			t.Fatalf("rejected kick created wait for peer2: %v", got)
+		}
+	})
 }

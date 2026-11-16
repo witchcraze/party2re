@@ -3,6 +3,7 @@ package casino
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -149,7 +150,7 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 	return detail, nil
 }
 
-// KickMember allows leader to kick a non-leader member while round is 0 (party2/lib/_casino.cgi:148-187).
+// KickMember commits a kick departure and the target's 60 s wait deadline before publishing room state (party2/lib/_casino.cgi:148-187).
 func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error {
 	if leaderID == "" || targetID == "" {
 		return ErrInvalidCharacterID
@@ -157,29 +158,69 @@ func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string
 	if leaderID == targetID {
 		return ErrCannotKickSelf
 	}
-	if s.roomRepo == nil {
-		return errors.New("room repository is required")
+	if s.roomRepo == nil || s.departures == nil {
+		return errors.New("room and departure repositories are required")
 	}
 
 	return s.withRoomMutationLock(ctx, roomID, leaderID, func(lockedCtx context.Context) error {
-		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
-			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
-			if err != nil {
-				return err
-			}
-			if room.LeaderCharacterID != leaderID {
-				return ErrNotLeader
-			}
-			if room.Round > 0 {
-				return ErrGameInProgress
-			}
+		previous, err := s.departures.FindDeparture(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
+		isReplay := previous.Kicked && previous.Member.CharacterID == targetID && previous.LeaderID == leaderID
 
-			_, err = s.roomRepo.GetMember(txCtx, roomID, targetID)
-			if err != nil {
-				return ErrMemberNotFound
-			}
+		room, err := s.roomRepo.GetRoomForUpdate(lockedCtx, roomID)
+		if errors.Is(err, ErrRoomNotFound) && isReplay {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if room.LeaderCharacterID != leaderID {
+			return ErrNotLeader
+		}
+		if room.Round > 0 {
+			return ErrGameInProgress
+		}
 
-			return s.roomRepo.RemoveMember(txCtx, roomID, targetID)
-		})
+		members, err := s.roomRepo.ListMembersForUpdate(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
+		index := slices.IndexFunc(members, func(m RoomMember) bool { return m.CharacterID == targetID })
+		if index < 0 {
+			if isReplay {
+				return nil
+			}
+			return ErrMemberNotFound
+		}
+		if room.DepartureVersion != previous.Version {
+			return ErrDepartureRecovery
+		}
+		member := members[index]
+		if previous.Member.CharacterID == targetID && previous.Member.JoinedAt.Equal(member.JoinedAt) {
+			return ErrDepartureRecovery
+		}
+
+		claimed := departureClaimedIDs(members)
+		remaining := slices.Delete(members, index, index+1)
+		now := time.Now().UTC()
+		room.UpdatedAt = now
+		room.DepartureVersion = previous.Version + 1
+		d := Departure{
+			Version:      room.DepartureVersion,
+			Member:       member,
+			Detail:       RoomDetail{Room: *room, Members: remaining},
+			PasswordHash: room.PasswordHash,
+			ClaimedIDs:   claimed,
+			Pending:      true,
+			Kicked:       true,
+			LeaderID:     leaderID,
+			WaitUntil:    now.Add(KickActionWait),
+		}
+		if err := s.commitDeparture(lockedCtx, d, false); err != nil {
+			return err
+		}
+		return s.publishDeparture(lockedCtx, d)
 	})
 }

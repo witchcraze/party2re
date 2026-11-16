@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -30,6 +28,7 @@ type casinoRoomService interface {
 	SpectateRoom(ctx context.Context, roomID string, characterID string, password string) (*casino.RoomDetail, error)
 	LeaveRoom(ctx context.Context, roomID string, characterID string) error
 	KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error
+	RecoverCharacterDeparture(ctx context.Context, characterID string) error
 	StartGame(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error)
 	PlayRoomAction(ctx context.Context, roomID string, characterID string, action string) (*casino.RoomDetail, error)
 }
@@ -161,25 +160,13 @@ func WithCasino(service CasinoService) Option {
 			return casinoRoom(service.PlayRoomAction(ctx, p.RoomID, actor, p.Action))
 		}, casinoActionRejection)(h)
 		withActionCommand("casino_room_kick", func(ctx context.Context, actor string, p casinoRoomKickParams) (any, error) {
-			if err := service.KickMember(ctx, p.RoomID, actor, p.TargetCharacterID); err != nil {
-				return nil, err
-			}
-			// ＠きっく sets the kicked member's wait to 60 s (_casino.cgi:167). The
-			// kick is committed, so a failed wait write is logged, not returned.
-			if h.playerContext != nil {
-				if err := h.playerContext.ImposeActionWait(ctx, p.TargetCharacterID, casinoKickWait); err != nil {
-					slog.WarnContext(ctx, "casino kick wait not imposed", slog.String("target", p.TargetCharacterID), slog.String("error", err.Error()))
-				}
-			}
-			return casinoRoomResult{RoomID: p.RoomID}, nil
+			return casinoRoomResult{RoomID: p.RoomID}, service.KickMember(ctx, p.RoomID, actor, p.TargetCharacterID)
 		}, casinoActionRejection)(h)
 		withActionCommand("casino_room_leave", func(ctx context.Context, actor string, p CasinoRoomParams) (any, error) {
 			return casinoRoomResult{RoomID: p.RoomID}, service.LeaveRoom(ctx, p.RoomID, actor)
 		}, casinoActionRejection)(h)
 	}
 }
-
-const casinoKickWait = 60 * time.Second
 
 func casinoRoom(room *casino.RoomDetail, err error) (any, error) {
 	if err != nil {

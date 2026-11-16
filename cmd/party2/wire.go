@@ -287,6 +287,9 @@ func newHTTPHandler(
 		players = placeMemberLogout{PlayerService: core.playerService, characters: core.charRepo, members: soc.placeMembers}
 	}
 	pc := newPlayerContext(core, soc, econ, cmbt, misc, playercontext.WithActionWait(soc.timer, cfg.ActionWait))
+	if misc.casino != nil {
+		misc.casino.SetActionWait(pc)
+	}
 	if soc.schedRepo != nil {
 		opts = append(opts, http.WithPlayerContext(pc))
 	}

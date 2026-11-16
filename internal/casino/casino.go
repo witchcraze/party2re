@@ -94,6 +94,7 @@ type Service struct {
 	repo             Repository
 	roomRepo         RoomRepository
 	departures       DepartureRepository
+	actionWait       ActionWaitWriter
 	depotRepo        DepotRepository
 	charRepo         CharacterRepository
 	invRepo          InventoryRepository

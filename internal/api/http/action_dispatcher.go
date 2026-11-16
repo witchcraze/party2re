@@ -116,6 +116,12 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusBadRequest, "INVALID_ACTION_PARAMS", "Invalid action parameters.")
 			return
 		}
+		if h.casino != nil {
+			if err := h.casino.RecoverCharacterDeparture(r.Context(), char.ID); err != nil {
+				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
+				return
+			}
+		}
 		current, err := h.playerContext.Query(r.Context(), char.ID, player.ID)
 		if err != nil {
 			if errors.Is(err, playercontext.ErrNavigationForbidden) {

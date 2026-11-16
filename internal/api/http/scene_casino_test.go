@@ -41,6 +41,9 @@ func (r *casinoActivityProjection) GetRoomView(context.Context, string, string, 
 func (r *casinoActivityProjection) GetAccount(context.Context, string) (casino.Account, error) {
 	return casino.Account{}, nil
 }
+func (r *casinoActivityProjection) RecoverCharacterDeparture(context.Context, string) error {
+	return nil
+}
 func (r *casinoSceneAccounts) GetAccount(_ context.Context, id string) (casino.Account, error) {
 	if r.coins == nil {
 		r.coins = map[string]int64{}
@@ -173,6 +176,7 @@ func (f *casinoSceneFixture) router(options ...Option) http.Handler {
 		timers, wait = *f.waits, playercontext.WithActionWait(*f.waits, playercontext.DefaultActionWait)
 	}
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers, playercontext.WithNavigation(f.store, playercontext.SceneDefinition{ID: "town"}, scene), playercontext.WithActivities(f.readActivities), wait)
+	f.service.SetActionWait(pc)
 	opts := []Option{WithPlayerContext(pc), WithCasino(f.reads)}
 	opts = append(opts, options...)
 	return f.gatewayFixture.router("rescue_request", timer.NewService(nil), opts...)
