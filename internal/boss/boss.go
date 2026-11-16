@@ -173,7 +173,6 @@ type TransactionProvider interface {
 }
 
 type VictoryBanquetHook func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error
-type VictoryHook func(ctx context.Context, characterID string, bossID string, tier int) error
 
 type ServiceOption func(*Service)
 
@@ -270,7 +269,6 @@ type Service struct {
 	stages             []BossStage
 	stageMap           map[string]BossStage
 	victoryBanquetHook VictoryBanquetHook
-	victoryHook        VictoryHook
 	newsPub            NewsPublisher
 	txProvider         TransactionProvider
 	rng                corecharacter.RandomSource
@@ -288,10 +286,6 @@ func (s *Service) now() time.Time {
 
 func (s *Service) SetVictoryBanquetHook(hook VictoryBanquetHook) {
 	s.victoryBanquetHook = hook
-}
-
-func (s *Service) SetVictoryHook(hook VictoryHook) {
-	s.victoryHook = hook
 }
 
 func (s *Service) SetMonsterDefeatRecorder(recorder MonsterDefeatRecorder) {

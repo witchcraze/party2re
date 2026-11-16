@@ -82,8 +82,6 @@ type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-type SynthesisHook func(ctx context.Context, characterID string, recipeID string) error
-
 // LegendInductor defines permanent Hall of Fame induction contract (legend.cgi).
 type LegendInductor interface {
 	RecordLegend(ctx context.Context, category, characterID string) error
@@ -114,12 +112,6 @@ func WithTransactionProvider(txProvider TransactionProvider) Option {
 	}
 }
 
-func WithSynthesisHook(hook SynthesisHook) Option {
-	return func(s *Service) {
-		s.synthesisHook = hook
-	}
-}
-
 func WithLegendInductor(inductor LegendInductor) Option {
 	return func(s *Service) {
 		s.legend = inductor
@@ -133,19 +125,18 @@ func WithNowFunc(fn func() time.Time) Option {
 }
 
 type Service struct {
-	characters    CharacterRepository
-	depots        DepotRepository
-	repo          Repository
-	txProvider    TransactionProvider
-	recipes       *RecipeCatalog
-	items         coreitem.DefinitionProvider
-	synthesisHook SynthesisHook
-	legend        LegendInductor
-	news          NewsPublisher
-	memories      corecharacter.MemoryRecorder
-	nowFunc       func() time.Time
-	rngMu         sync.Mutex
-	rng           random.Generator
+	characters CharacterRepository
+	depots     DepotRepository
+	repo       Repository
+	txProvider TransactionProvider
+	recipes    *RecipeCatalog
+	items      coreitem.DefinitionProvider
+	legend     LegendInductor
+	news       NewsPublisher
+	memories   corecharacter.MemoryRecorder
+	nowFunc    func() time.Time
+	rngMu      sync.Mutex
+	rng        random.Generator
 }
 
 func WithRNG(rng random.Generator) Option {
@@ -177,10 +168,6 @@ func NewService(
 		opt(s)
 	}
 	return s, nil
-}
-
-func (s *Service) SetSynthesisHook(hook SynthesisHook) {
-	s.synthesisHook = hook
 }
 
 func (s *Service) SetNewsPublisher(news NewsPublisher) {
@@ -409,7 +396,6 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 
 		state.TotalCrafts++
 
-		clearedRecipeID := state.RecipeID
 		state.State = StateNone
 		state.RecipeID = ""
 		state.StartedAt = nil
@@ -428,11 +414,6 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 			Message:     msg,
 		}
 
-		if s.synthesisHook != nil {
-			if err := s.synthesisHook(txCtx, characterID, clearedRecipeID); err != nil {
-				return fmt.Errorf("synthesis hook: %w", err)
-			}
-		}
 		return nil
 	})
 	if err != nil {

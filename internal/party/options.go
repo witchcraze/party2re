@@ -41,13 +41,6 @@ func WithNewsPublisher(news NewsPublisher) Option {
 	}
 }
 
-// WithVictoryHook configures the victory hook.
-func WithVictoryHook(hook VictoryHook) Option {
-	return func(s *Service) {
-		s.victoryHook = hook
-	}
-}
-
 // ParticipantBuilder constructs a Participant from a character ID.
 type ParticipantBuilder interface {
 	BuildParticipant(ctx context.Context, characterID string) (battle.Participant, error)

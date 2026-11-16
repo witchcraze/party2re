@@ -257,12 +257,6 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 
 			leaderChar := chars[leaderCharID]
 			slayerName = leaderChar.Name
-			stageTier := stageTierFromID(stage.ID)
-			if s.victoryHook != nil {
-				if err := s.victoryHook(txCtx, leaderChar.ID, stage.ID, stageTier); err != nil {
-					return fmt.Errorf("failed to record boss victory progress: %w", err)
-				}
-			}
 		}
 
 		// 11. Persist updated characters in DB

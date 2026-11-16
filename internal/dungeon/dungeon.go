@@ -197,9 +197,6 @@ type InventoryProvider interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 }
 
-// MonsterDefeatedHook is called when a monster or boss is slain during dungeon exploration.
-type MonsterDefeatedHook func(ctx context.Context, characterID string, count int) error
-
 type RandomSource interface {
 	Intn(n int) int
 	Float64() float64
@@ -231,21 +228,16 @@ type ParticipantBuilder interface {
 }
 
 type Service struct {
-	admission           Admission
-	repo                Repository
-	characterRepo       CharacterRepository
-	invRepo             InventoryProvider
-	battleEngine        corebattle.Resolver
-	activeStore         ActiveExpeditionStore
-	dungeons            []Dungeon
-	dungeonMap          map[string]Dungeon
-	monsterDefeatedHook MonsterDefeatedHook
-	rng                 RandomSource
-	participantBuilder  ParticipantBuilder
-}
-
-func (s *Service) SetMonsterDefeatedHook(hook MonsterDefeatedHook) {
-	s.monsterDefeatedHook = hook
+	admission          Admission
+	repo               Repository
+	characterRepo      CharacterRepository
+	invRepo            InventoryProvider
+	battleEngine       corebattle.Resolver
+	activeStore        ActiveExpeditionStore
+	dungeons           []Dungeon
+	dungeonMap         map[string]Dungeon
+	rng                RandomSource
+	participantBuilder ParticipantBuilder
 }
 
 // Option configures optional parameters on Service.

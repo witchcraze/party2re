@@ -152,13 +152,6 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			if err := s.recordBossDefeats(txCtx, stage, char.ID, cloneRecords); err != nil {
 				return err
 			}
-
-			stageTier := stageTierFromID(stage.ID)
-			if s.victoryHook != nil {
-				if err := s.victoryHook(txCtx, char.ID, stage.ID, stageTier); err != nil {
-					return fmt.Errorf("failed to record boss victory progress: %w", err)
-				}
-			}
 		}
 
 		if err := s.characterRepo.Update(txCtx, char); err != nil {

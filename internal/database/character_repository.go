@@ -247,8 +247,6 @@ func (r *CharacterRepository) deleteLockedCharacter(ctx context.Context, id stri
 		`DELETE FROM character_monster_book WHERE character_id = ?`,
 		`DELETE FROM character_item_collection WHERE character_id = ?`,
 		`DELETE FROM character_collection_completions WHERE character_id = ?`,
-		`DELETE FROM character_medals WHERE character_id = ?`,
-		`DELETE FROM character_achievements WHERE character_id = ?`,
 		`DELETE FROM guild_members WHERE character_id = ?`,
 		`DELETE FROM activities WHERE character_id = ?`,
 		`DELETE FROM adventures WHERE character_id = ?`,

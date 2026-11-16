@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -37,7 +36,6 @@ type Reward struct {
 }
 
 type CharacterRepository interface {
-	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 	Update(ctx context.Context, value corecharacter.Character) error
 }
@@ -51,15 +49,6 @@ type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-type AchievementRepository interface {
-	RecordProgress(ctx context.Context, characterID string, metric MetricType, amount int, matchingAchievements []Achievement) error
-	GetCharacterAchievements(ctx context.Context, characterID string) ([]AchievementRecord, error)
-	GetAchievementForUpdate(ctx context.Context, characterID string, achievementID string) (AchievementRecord, error)
-	MarkAchievementClaimed(ctx context.Context, characterID string, achievementID string, claimedAt time.Time) error
-	SaveMedal(ctx context.Context, medal CharacterMedal) error
-	GetCharacterMedals(ctx context.Context, characterID string) ([]CharacterMedal, error)
-}
-
 type Option func(*Service)
 
 func WithTransactionProvider(txProvider TransactionProvider) Option {
@@ -68,29 +57,12 @@ func WithTransactionProvider(txProvider TransactionProvider) Option {
 	}
 }
 
-func WithAchievementRepository(repo AchievementRepository, achievements ...Achievement) Option {
-	return func(s *Service) {
-		s.achievementRepo = repo
-		if len(achievements) > 0 {
-			s.achievements = achievements
-		}
-	}
-}
-
-func WithAchievementCatalog(achievements []Achievement) Option {
-	return func(s *Service) {
-		s.achievements = achievements
-	}
-}
-
 type Service struct {
-	mutationCheck   func(context.Context, string) error
-	characters      CharacterRepository
-	depots          DepotRepository
-	txProvider      TransactionProvider
-	rewards         []Reward
-	achievements    []Achievement
-	achievementRepo AchievementRepository
+	mutationCheck func(context.Context, string) error
+	characters    CharacterRepository
+	depots        DepotRepository
+	txProvider    TransactionProvider
+	rewards       []Reward
 }
 
 func NewService(
@@ -139,12 +111,6 @@ func NewServiceWithRewards(
 	}
 	for _, opt := range opts {
 		opt(s)
-	}
-	if len(s.achievements) == 0 {
-		defaultAchs, err := InitialAchievements()
-		if err == nil {
-			s.achievements = defaultAchs
-		}
 	}
 	return s, nil
 }

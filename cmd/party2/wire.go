@@ -19,7 +19,6 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
-	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -92,30 +91,8 @@ func wireHooks(
 	misc *miscServices,
 	soc *socServices,
 ) error {
-	cmbt.boss.SetVictoryHook(func(ctx context.Context, characterID string, bossID string, tier int) error {
-		return misc.medal.RecordProgress(ctx, characterID, medal.MetricBossesSlain, 1)
-	})
-
-	cmbt.pvp.SetVictoryHook(func(ctx context.Context, winnerID, loserID string) error {
-		return misc.medal.RecordProgress(ctx, winnerID, medal.MetricPvPVictories, 1)
-	})
-
-	cmbt.dungeon.SetMonsterDefeatedHook(func(ctx context.Context, characterID string, count int) error {
-		return misc.medal.RecordProgress(ctx, characterID, medal.MetricMonstersSlain, count)
-	})
-
-	econ.alchemy.SetSynthesisHook(func(ctx context.Context, characterID string, recipeID string) error {
-		return misc.medal.RecordProgress(ctx, characterID, medal.MetricAlchemyCrafts, 1)
-	})
 	cmbt.boss.SetVictoryBanquetHook(buildVictoryBanquetHook(misc.eventplaza))
 	misc.rescue.SetActivityReader(newContextActivityReaders(cmbt, misc))
-
-	misc.casino.SetGamePlayedHook(func(ctx context.Context, characterID string, gameName string) error {
-		return misc.medal.RecordProgress(ctx, characterID, medal.MetricCasinoGames, 1)
-	})
-
-	cmbt.adv.SetVictoryHook(buildAdventureVictoryHook(misc.medal.RecordProgress))
-	cmbt.party.SetVictoryHook(buildPartyVictoryHook(misc.medal.RecordProgress))
 
 	if misc.collection != nil {
 		econ.depot.SetCollectionRecorder(misc.collection)

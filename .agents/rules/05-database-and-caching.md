@@ -25,7 +25,7 @@ description: Guidelines for database transaction boundaries, concurrency control
     | **Rank 5** | **Depot Storage** | `character_depots`, `depot_items`<br>(`depotRepo.FindByCharacterIDForUpdate`, `depots.FindByCharacterIDForUpdate`) | Long-term bank/item storage. |
     | **Rank 6** | **Reserved Bank Category** | `bankRepo.*ForUpdate` classification in the lock linter | MUST NOT infer separate account/transfer tables; current bank savings are `characters.deposit` and use Rank 2. |
     | **Rank 7** | **Guilds** | `guilds`, `guild_members`<br>(`guildRepo.*ForUpdate`) | Guild management; multiple guilds MUST be locked in ascending ID order (`id1 < id2`). |
-    | **Rank 8** | **Secondary Feature Records** | `character_achievements`, `plantation_plots`, `blackmarket_character_points`, `character_monsters`<br>(achievement, points, monster, or plantation `*ForUpdate` methods) | Secondary domain features and progression counters. |
+    | **Rank 8** | **Secondary Feature Records** | `plantation_plots`, `blackmarket_character_points`, `character_monsters`<br>(points, monster, or plantation `*ForUpdate` methods) | Secondary domain features and progression counters. |
 - **BANNED ANTI-PATTERNS (Lost Updates & Deadlocks):**
   - **Unprotected Read-Modify-Write:** Do NOT read structs (e.g., Character) outside a transaction, mutate them in Go memory, and then blindly save them back. This will erase concurrent changes (like Adventure rewards).
   - **Direct `BeginTx` in Repositories:** Do NOT call `r.db.BeginTx` directly in repositories. Always use `RunInTx(ctx, r.db, ...)` and `ExecutorFromContext(ctx, r.db)`. (Note: This is automatically validated by the Go AST linter in `internal/architecture/tx_lint_test.go` on every `make check`).

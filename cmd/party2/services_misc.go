@@ -62,16 +62,11 @@ func newMiscServices(
 	econ *econServices,
 	valkeyClient valkeygo.Client,
 ) (*miscServices, error) {
-	achievementRepo, err := database.NewAchievementRepository(db)
-	if err != nil {
-		return nil, err
-	}
 	medalService, err := medal.NewService(
 		core.charRepo,
 		econ.depotRepo,
 		"",
 		medal.WithTransactionProvider(core.txProvider),
-		medal.WithAchievementRepository(achievementRepo),
 	)
 	if err != nil {
 		return nil, err

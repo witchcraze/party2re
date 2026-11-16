@@ -183,41 +183,6 @@ func TestCasinoService_SpinSlot(t *testing.T) {
 	}
 }
 
-func TestCasinoService_GamePlayedHookFailureIsBestEffort(t *testing.T) {
-	ctx := context.Background()
-	var currentCoins int64 = 500
-
-	repo := &mockCasinoRepo{
-		getAccountFn: func(_ context.Context, charID string) (casino.Account, error) {
-			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
-		},
-		deductAndCreditFn: func(_ context.Context, charID string, bet int64, payout int64) (casino.Account, error) {
-			currentCoins = currentCoins - bet + payout
-			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
-		},
-	}
-	svc, err := casino.NewService(repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var playedGames []string
-	svc.SetGamePlayedHook(func(ctx context.Context, characterID string, gameName string) error {
-		playedGames = append(playedGames, gameName)
-		return errors.New("medal progress unavailable")
-	})
-
-	// 1. Slot
-	_, _, err = svc.SpinSlot(ctx, "char1", 10)
-	if err != nil {
-		t.Fatalf("SpinSlot failed: %v", err)
-	}
-
-	if len(playedGames) != 1 || playedGames[0] != "slot" {
-		t.Fatalf("expected 1 game recorded as 'slot', got %v", playedGames)
-	}
-}
-
 type stubTransactionRunner struct {
 	called bool
 	req    economy.TransactionRequest

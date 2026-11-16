@@ -768,34 +768,6 @@ func TestViewRecipes_LegendFailure_PropagatesWithoutAward(t *testing.T) {
 	}
 }
 
-func TestClaim_SynthesisHookFailure_PropagatesError(t *testing.T) {
-	ctx := context.Background()
-	now := time.Now().UTC()
-	svc, _, depotRepo, _, char := setupTestService(t, &now)
-	errSynthesisInjected := errors.New("synthesis hook failure")
-	svc.SetSynthesisHook(func(_ context.Context, _, _ string) error {
-		return errSynthesisInjected
-	})
-
-	_ = svc.UnlockRecipe(ctx, char.ID, "rec-super-herb")
-
-	dep, _ := depot.NewDepot(char.ID)
-	dep.Capacity = 10
-	h1, _ := coreitem.NewInstance("item-001", 10)
-	_ = dep.AddItem(h1)
-	_ = depotRepo.Save(ctx, dep)
-
-	_, _ = svc.Synthesize(ctx, char.ID, "rec-super-herb")
-	_ = svc.CompleteOngoingSynthesis(ctx, char.ID)
-	_, err := svc.Claim(ctx, char.ID)
-	if err == nil {
-		t.Fatal("expected error from Claim when SynthesisHook fails, got nil")
-	}
-	if !errors.Is(err, errSynthesisInjected) {
-		t.Errorf("expected errSynthesisInjected, got: %v", err)
-	}
-}
-
 func TestLearnRecipe_PoolFilterAndExhaustion(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()

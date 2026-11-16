@@ -27,7 +27,7 @@ Battle is an independent domain component used by features. At a conceptual leve
 Party2 contains asynchronous/time-based actions (an action is started and a result becomes available later). Model this as a reusable concept such as `ScheduledAction` (actor, action type, start time, execution time, state). The scheduling mechanism itself must not contain the rules of individual features.
 
 ## 6. Domain Events & Side-Effect Hooks
-Use domain events or explicit observer hooks (e.g., `VictoryHook`, `SynthesisHook`, `BattleFinished`, `LevelUp`) when they provide meaningful decoupling:
+Use domain events or explicit observer hooks (e.g., `PostAdventureHook`, `BattleFinished`, `LevelUp`) when they provide meaningful decoupling:
 - **Two-Phase Dispatcher (`internal/core/event.Dispatcher`)**: Producers emit domain events via `tc.EmitEvent`. The dispatcher separates in-tx synchronous execution from post-commit asynchronous execution. See [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) §5 for dispatcher architecture and lifecycle semantics.
 - **Modular Monolith Decoupling**: Action producers define explicit hook signatures or domain event types at their module boundaries rather than importing downstream consumer modules. Wire registrations in `cmd/party2/wire.go` at the composition root.
 - **Lock Hierarchy & Transaction Safety**: Sync event handlers mutating secondary entities must adhere to the lock order in `.agents/rules/05-database-and-caching.md` (`characters` -> `inventory_items` -> secondary records). Secondary records must always be locked *after* characters, never before.

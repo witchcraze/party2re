@@ -197,11 +197,6 @@ func TestBossSettlement_HookFailureRollsBackWholeSettlement(t *testing.T) {
 		{"news publisher", func(f *sealFixture, t *testing.T) *boss.Service {
 			return f.service(t, f.bossRepo, f.partyRepo, boss.WithNewsPublisher(boss.NewsPublisherFunc(failingNews)))
 		}},
-		{"victory hook", func(f *sealFixture, t *testing.T) *boss.Service {
-			svc := f.service(t, f.bossRepo, f.partyRepo)
-			svc.SetVictoryHook(func(context.Context, string, string, int) error { return errInjected })
-			return svc
-		}},
 	}
 	for _, tc := range cases {
 		t.Run("party/"+tc.name, func(t *testing.T) {

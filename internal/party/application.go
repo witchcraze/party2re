@@ -9,9 +9,6 @@ import (
 	"github.com/witchcraze/party2re/internal/pagination"
 )
 
-// VictoryHook is called when a party multiplayer co-op adventure concludes with a victory.
-type VictoryHook func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error
-
 type Service struct {
 	lobbyBoundary      func(context.Context, string, func(context.Context) error) error
 	activityCheck      func(context.Context, string) error
@@ -24,7 +21,6 @@ type Service struct {
 	battleEngine       BattleEngine
 	news               NewsPublisher
 	txProvider         TransactionProvider
-	victoryHook        VictoryHook
 	postAdventureHook  PostAdventureHook
 	participantBuilder ParticipantBuilder
 	battleSettler      PostBattleSettler
@@ -32,10 +28,6 @@ type Service struct {
 	blessingProvider   BlessingProvider
 	timer              TimerService
 	rng                func(n int) int
-}
-
-func (s *Service) SetVictoryHook(hook VictoryHook) {
-	s.victoryHook = hook
 }
 
 func NewService(

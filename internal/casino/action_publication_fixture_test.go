@@ -108,11 +108,6 @@ func (r publicationCharacters) Update(ctx context.Context, ch corecharacter.Char
 	return r.CharacterRepository.Update(ctx, ch)
 }
 
-type publicationHookCall struct {
-	CharacterID string
-	GameName    string
-}
-
 type publicationFixture struct {
 	svc        *casino.Service
 	rooms      *casino.ValkeyRoomRepository
@@ -122,8 +117,6 @@ type publicationFixture struct {
 	roomID     string
 	actors     [2]string
 	game       casino.GameType
-	hookCalls  []publicationHookCall
-	hookErr    error
 }
 
 func newPublicationFixture(t *testing.T, ctx context.Context, db *sql.DB, raw valkeygo.Client, game casino.GameType, coinsB int64) *publicationFixture {
@@ -149,12 +142,6 @@ func newPublicationFixture(t *testing.T, ctx context.Context, db *sql.DB, raw va
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.svc.SetGamePlayedHook(func(_ context.Context, charID, gameName string) error {
-		f.fault.mu.Lock()
-		defer f.fault.mu.Unlock()
-		f.hookCalls = append(f.hookCalls, publicationHookCall{CharacterID: charID, GameName: gameName})
-		return f.hookErr
-	})
 	for i, coins := range []int64{500, coinsB} {
 		ch, err := database.CreateTestCharacterWithFunds(ctx, db, "W"+id.New()[:7], int(coins*20))
 		if err != nil {
@@ -328,31 +315,6 @@ func (f *publicationFixture) assertPendingOpponent(t *testing.T, ctx context.Con
 		if m.CharacterID == f.actors[0] && (m.Action != "" || (f.game == casino.GameTypeDoppel && m.Card != -1)) {
 			t.Fatalf("unpaid actor accepted: %+v", m)
 		}
-	}
-}
-
-func (f *publicationFixture) resetHooks() {
-	f.fault.mu.Lock()
-	defer f.fault.mu.Unlock()
-	f.hookCalls = nil
-}
-
-func (f *publicationFixture) getHooks() []publicationHookCall {
-	f.fault.mu.Lock()
-	defer f.fault.mu.Unlock()
-	return slices.Clone(f.hookCalls)
-}
-
-func (f *publicationFixture) hookGameName() string {
-	switch f.game {
-	case casino.GameTypeIndian:
-		return "indian_poker"
-	case casino.GameTypeHighLow:
-		return "highlow"
-	case casino.GameTypeDoppel:
-		return "doppel"
-	default:
-		return ""
 	}
 }
 

@@ -340,12 +340,6 @@ func TestColosseum_AdvanceRoundAndMatchVictory(t *testing.T) {
 	ctx := context.Background()
 	svc, charRepo, _ := setupService(corebattle.OutcomeWin) // Team 1 (Allies) wins
 
-	var victoryCalledWithWinner string
-	svc.SetVictoryHook(func(_ context.Context, winnerID, _ string) error {
-		victoryCalledWithWinner = winnerID
-		return nil
-	})
-
 	c1 := createTestCharacter("char-1", "Alice", 500)
 	c2 := createTestCharacter("char-2", "Bob", 500)
 	charRepo.add(c1)
@@ -394,11 +388,6 @@ func TestColosseum_AdvanceRoundAndMatchVictory(t *testing.T) {
 	}
 	if updatedBob.PvPWins != 0 {
 		t.Errorf("expected Bob PvPWins 0, got %d", updatedBob.PvPWins)
-	}
-
-	// Verify VictoryHook was executed
-	if victoryCalledWithWinner != "char-1" {
-		t.Errorf("expected VictoryHook called with char-1, got %q", victoryCalledWithWinner)
 	}
 }
 

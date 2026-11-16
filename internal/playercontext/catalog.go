@@ -404,7 +404,6 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{ID: "medal_claim", Label: "小さなメダル景品交換", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "achievement_claim", Label: "記念メダルを受け取る", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"achievement_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
 	// Category: social (Companions, Quests & Public Facilities)

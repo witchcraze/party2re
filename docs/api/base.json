@@ -7068,41 +7068,6 @@
               "properties": {
                 "action": {
                   "type": "string",
-                  "const": "achievement_claim"
-                }
-              },
-              "required": [
-                "action"
-              ]
-            },
-            "then": {
-              "type": "object",
-              "properties": {
-                "params": {
-                  "type": "object",
-                  "properties": {
-                    "achievement_id": {
-                      "type": "string",
-                      "description": "A completed, unclaimed achievement from the medal scene."
-                    }
-                  },
-                  "additionalProperties": false,
-                  "required": [
-                    "achievement_id"
-                  ]
-                }
-              },
-              "required": [
-                "params"
-              ]
-            }
-          },
-          {
-            "if": {
-              "type": "object",
-              "properties": {
-                "action": {
-                  "type": "string",
                   "const": "helper_complete"
                 }
               },
@@ -15118,113 +15083,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "MedalAchievementProgress": {
-        "properties": {
-          "category": {
-            "type": "string"
-          },
-          "claimed_at": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "completed_at": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "completion_percentage": {
-            "type": "number"
-          },
-          "current_progress": {
-            "type": "integer"
-          },
-          "description": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "is_claimed": {
-            "type": "boolean"
-          },
-          "is_completed": {
-            "type": "boolean"
-          },
-          "medal_description": {
-            "type": "string"
-          },
-          "medal_id": {
-            "type": "string"
-          },
-          "medal_name": {
-            "type": "string"
-          },
-          "metric": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "threshold": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "category",
-          "description",
-          "metric",
-          "threshold",
-          "current_progress",
-          "completion_percentage",
-          "is_completed",
-          "is_claimed",
-          "medal_id",
-          "medal_name",
-          "medal_description"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "MedalCharacterMedal": {
-        "properties": {
-          "awarded_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "category": {
-            "type": "string"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "medal_id": {
-            "type": "string"
-          },
-          "medal_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "medal_id",
-          "medal_name",
-          "category",
-          "description",
-          "awarded_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "MedalReward": {
         "properties": {
           "cost": {
@@ -18223,7 +18081,7 @@
       "MedalSceneData": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The medal castle: the actor's Small Medal balance, the prize tiers medal_claim exchanges (delivered to the Depot), achievement progress and the commemorative medals held. achievement_claim awards only the commemorative medal and never changes small_medals. NPC dialogue comes from npc_talk/npc_inspect. Observation never claims.",
+        "description": "The medal castle: the actor's Small Medal balance and the prize tiers medal_claim exchanges (delivered to the Depot). NPC dialogue comes from npc_talk/npc_inspect. Observation never claims.",
         "properties": {
           "parent": {
             "type": "string",
@@ -18237,26 +18095,12 @@
               "$ref": "#/components/schemas/MedalReward"
             },
             "type": "array"
-          },
-          "achievements": {
-            "items": {
-              "$ref": "#/components/schemas/MedalAchievementProgress"
-            },
-            "type": "array"
-          },
-          "medals": {
-            "items": {
-              "$ref": "#/components/schemas/MedalCharacterMedal"
-            },
-            "type": "array"
           }
         },
         "required": [
           "parent",
           "small_medals",
-          "rewards",
-          "achievements",
-          "medals"
+          "rewards"
         ]
       },
       "HelperSceneData": {
