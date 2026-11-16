@@ -73,7 +73,7 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 	}
 
 	// 3. Leader assigns custom role title to Member1 (あたえる: 親衛隊長)
-	if err := service.AssignCustomRole(ctx, g.ID, leaderChar.ID, memberChar1.ID, "親衛隊長"); err != nil {
+	if err := assigned(service.Assign(ctx, g.ID, leaderChar.ID, memberChar1.ID, "親衛隊長")); err != nil {
 		t.Fatalf("service.AssignCustomRole failed: %v", err)
 	}
 	_, m1Updated, err := service.GetByCharacter(ctx, memberChar1.ID)
@@ -106,7 +106,7 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 	}
 
 	// 7. Leader kicks Member2
-	if err := service.Kick(ctx, g.ID, leaderChar.ID, memberChar2.ID); err != nil {
+	if err := assigned(service.Assign(ctx, g.ID, leaderChar.ID, memberChar2.ID, guild.RemovalTitle)); err != nil {
 		t.Fatalf("service.Kick failed: %v", err)
 	}
 
@@ -538,7 +538,7 @@ func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
 	_ = gC
 
 	// 6. Leader B approves applicant into Guild B
-	if err := service.ApproveApplication(ctx, gB.ID, leaderB.ID, applicant.ID, "斥候"); err != nil {
+	if err := assigned(service.Assign(ctx, gB.ID, leaderB.ID, applicant.ID, "斥候")); err != nil {
 		t.Fatalf("ApproveApplication in B failed: %v", err)
 	}
 
@@ -549,7 +549,7 @@ func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
 	}
 
 	// 7. Leader A tries to approve applicant into Guild A -> fails with ErrCharacterAlreadyInGuild
-	if err := service.ApproveApplication(ctx, gA.ID, leaderA.ID, applicant.ID, "親衛隊"); !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
+	if err := assigned(service.Assign(ctx, gA.ID, leaderA.ID, applicant.ID, "親衛隊")); !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
 		t.Fatalf("expected ErrCharacterAlreadyInGuild when approving already-affiliated member in A, got %v", err)
 	}
 

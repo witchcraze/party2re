@@ -27,7 +27,7 @@ func setupIneligibleCandidates(t *testing.T, f *activeAffiliationFixture, ctx co
 		if err := f.service.ApplyToJoin(ctx, gBID, char.ID); err != nil {
 			t.Fatalf("apply to gB [%d]: %v", i, err)
 		}
-		if err := f.service.ApproveApplication(ctx, gBID, leaderBID, char.ID, "member"); err != nil {
+		if err := assigned(f.service.Assign(ctx, gBID, leaderBID, char.ID, "member")); err != nil {
 			t.Fatalf("approve in gB [%d]: %v", i, err)
 		}
 	}

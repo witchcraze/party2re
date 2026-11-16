@@ -8,6 +8,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type Service struct {
@@ -210,26 +211,6 @@ func (s *Service) Join(ctx context.Context, guildID string, characterID string) 
 	return res, nil
 }
 
-// Kick removes an active member or delegates pending removal to the rejection workflow.
-// Transaction: RunInTx (authorization, classification and removal; notification follows success).
-// Lock Order: guilds(7) -> guild_members(7).
-func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID string, targetCharID string) error {
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return ErrInvalidGuildID
-	}
-	requesterCharID = strings.TrimSpace(requesterCharID)
-	targetCharID = strings.TrimSpace(targetCharID)
-	if requesterCharID == "" || targetCharID == "" {
-		return ErrCharacterNotFound
-	}
-	if requesterCharID == targetCharID {
-		return errors.New("cannot kick self; use leave")
-	}
-
-	return s.removeAuthorizedMember(ctx, guildID, requesterCharID, targetCharID, false)
-}
-
 func (s *Service) TransferLeadership(ctx context.Context, guildID string, currentLeaderCharID string, newLeaderCharID string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -291,24 +272,46 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 	})
 }
 
-// AssignCustomRole sets a custom role title on a guild member (guild.cgi:ataeru).
-// Only the guild leader can assign role titles.
-// Transaction: RunInTx (Rank 2 target character lock, Rank 7 guild lock and title assignment; pending applicant approved atomically).
+// AssignOutcome is what ＠あたえる did to its target.
+type AssignOutcome string
+
+const (
+	AssignApproved AssignOutcome = "approved" // a pending applicant joined with the title
+	AssignRetitled AssignOutcome = "retitled" // an active member received the title
+	AssignRejected AssignOutcome = "rejected" // RemovalTitle refused a pending applicant
+	AssignExpelled AssignOutcome = "expelled" // RemovalTitle removed an active member
+)
+
+// Assign is ＠あたえる (guild.cgi:ataeru), the guild master's single member command:
+// RemovalTitle rejects an applicant or expels a member; any other title approves an
+// applicant with it or retitles a member. Only the current leader may assign.
+// Transaction: RunInTx (Rank 2 target character lock for titles, Rank 7 guild lock,
+// authorization and mutation; letters follow success).
 // Lock Order: characters(2) -> guilds(7) -> guild_members(7).
-func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requesterCharID string, targetCharID string, title string) error {
+func (s *Service) Assign(ctx context.Context, guildID string, requesterCharID string, targetCharID string, title string) (AssignOutcome, error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
-		return ErrInvalidGuildID
+		return "", ErrInvalidGuildID
 	}
 	requesterCharID = strings.TrimSpace(requesterCharID)
 	targetCharID = strings.TrimSpace(targetCharID)
 	if requesterCharID == "" || targetCharID == "" {
-		return ErrCharacterNotFound
+		return "", ErrCharacterNotFound
+	}
+	if title == RemovalTitle {
+		pending, err := s.removeAuthorizedMember(ctx, guildID, requesterCharID, targetCharID)
+		if err != nil {
+			return "", err
+		}
+		if pending {
+			return AssignRejected, nil
+		}
+		return AssignExpelled, nil
 	}
 
 	normalizedTitle, err := ValidateRoleTitle(title)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	var (
@@ -350,38 +353,42 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 			return ErrCannotAssignToLeader
 		}
 
-		if target.IsPending {
-			// Re-verify that the applicant is not already an active member of another guild (guild.cgi:ataeru)
-			if activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, targetCharID); err == nil {
-				if activeGuild.ID != guildID {
-					return ErrCharacterAlreadyInGuild
-				}
-				return ErrMemberNotPending
-			} else if !errors.Is(err, ErrCharacterNotInGuild) {
-				return err
-			}
-
-			if err := s.repo.ApproveMember(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
+		if !target.IsPending {
+			if err := s.repo.AssignCustomRole(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
 				return err
 			}
 			s.touchActive(txCtx, guildID)
-			g = lockedGuild
-			approved = true
 			return nil
 		}
-
-		if err := s.repo.AssignCustomRole(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
+		// Re-verify that the applicant is not already an active member of another guild (guild.cgi:220-224)
+		if activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, targetCharID); err == nil {
+			if activeGuild.ID != guildID {
+				return ErrCharacterAlreadyInGuild
+			}
+			return ErrMemberNotPending
+		} else if !errors.Is(err, ErrCharacterNotInGuild) {
+			return err
+		}
+		if err := s.repo.ApproveMember(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
+			return err
+		}
+		if err := s.memories.Record(txCtx, targetCharID, corecharacter.MemoryGuildJoin, lockedGuild.Name+"ギルドに加入"); err != nil {
 			return err
 		}
 		s.touchActive(txCtx, guildID)
+		g, approved = lockedGuild, true
 		return nil
 	})
 	if err != nil {
-		return err
+		return "", err
+	}
+	if !approved {
+		return AssignRetitled, nil
 	}
 
-	// Send acceptance letter to applicant if pending was approved (guild.cgi:236-237)
-	if approved && s.letterSender != nil && s.charReader != nil {
+	// Acceptance letter (guild.cgi:236-237). Production letters persist through the
+	// incoming ambient context, so an outer transaction rolls them back with the approval.
+	if s.letterSender != nil && s.charReader != nil {
 		leaderChar, errL := s.charReader.FindByID(ctx, requesterCharID)
 		_, errA := s.charReader.FindByID(ctx, targetCharID)
 		if errL == nil && errA == nil {
@@ -390,8 +397,13 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 			_ = s.letterSender.SendLetter(ctx, requesterCharID, targetCharID, content)
 		}
 	}
+	return AssignApproved, nil
+}
 
-	return nil
+// RecordRoomPresence keeps the guild active while members stay in its room, as
+// legacy refreshed log_member.cgi, whose age decides inactivity (join_guild.cgi:423-433).
+func (s *Service) RecordRoomPresence(ctx context.Context, guildID string) error {
+	return s.repo.TouchActive(ctx, guildID)
 }
 
 // UpdateColor changes the guild's hex color (guild.cgi:color).
@@ -461,8 +473,11 @@ func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCha
 	if requesterCharID == "" {
 		return ErrCharacterNotFound
 	}
-	if len([]rune(notice)) > MaxNoticeLength {
+	notice, err := validation.ValidatePlainLine(notice, MaxNoticeLength)
+	if errors.Is(err, validation.ErrTooLong) {
 		return ErrNoticeTooLong
+	} else if err != nil {
+		return ErrInvalidNotice
 	}
 
 	return s.runInTx(ctx, func(txCtx context.Context) error {

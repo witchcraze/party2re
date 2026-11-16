@@ -400,6 +400,18 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "job_restore", Label: "転職の神殿で元の職業に戻る", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "job_future_recall", Label: "転職の神殿で未来の記憶を呼び起こす", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"memory_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "medal_claim", Label: "小さなメダル景品交換", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	// Guild association (join_guild.cgi); ＠かいめい is disabled in legacy and omitted.
+	{ID: "guild_create", Label: "つくる", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{"name"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "guild_apply", Label: "さんか", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{"guild_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "guild_mark", Label: "まーく", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{"mark"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "guild_wallpaper", Label: "かべがみ", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{"wallpaper"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "guild_leave", Label: "だったい", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "guild_disband", Label: "かいさん", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	// Own guild room (guild.cgi); ＠めんばー is the room observation.
+	{ID: "guild_callout", Label: "よびかける", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{"message"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "guild_color", Label: "からー", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{"color"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "guild_message", Label: "めっせーじ", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{"message"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "guild_assign", Label: "あたえる", Category: "guild", OperationID: "executeCharacterAction", RequiredParams: []string{"member_id", "title"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
 	// Category: social (Companions, Quests & Public Facilities)

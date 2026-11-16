@@ -166,7 +166,7 @@ func shopFacility(kind shop.ShopType) facility {
 		return bound
 	}
 	return facility{title: shopTitles[kind], commands: commands, bind: bind, read: (*Handler).shopSceneData, placeLog: true, npc: npc,
-		present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+		present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 			switch data := data.(type) {
 			case ShopCatalogSceneData:
 				presentation := shopSaleOffer(data.ShopSceneInfo)

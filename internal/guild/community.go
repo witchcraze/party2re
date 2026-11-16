@@ -70,118 +70,6 @@ func (s *Service) ApplyToJoin(ctx context.Context, guildID string, applicantID s
 	return nil
 }
 
-// ApproveApplication approves a pending applicant, assigns their role title, and clears is_pending (guild.cgi:ataeru).
-// Sends an acceptance letter to the applicant after successful approval, using the incoming ambient context.
-// Transaction: RunInTx (authorization, target classification and approval; notification follows success).
-// Lock Order: guilds(7) -> guild_members(7).
-func (s *Service) ApproveApplication(ctx context.Context, guildID string, leaderID string, applicantID string, title string) error {
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return ErrInvalidGuildID
-	}
-	leaderID = strings.TrimSpace(leaderID)
-	applicantID = strings.TrimSpace(applicantID)
-	if leaderID == "" || applicantID == "" {
-		return ErrCharacterNotFound
-	}
-
-	normalizedTitle, err := ValidateRoleTitle(title)
-	if err != nil {
-		return err
-	}
-
-	var g Guild
-	err = s.runInTx(ctx, func(txCtx context.Context) error {
-		if err := s.repo.LockCharacterForUpdate(txCtx, applicantID); err != nil {
-			if errors.Is(err, ErrCharacterNotFound) {
-				return ErrTargetNotMember
-			}
-			return err
-		}
-
-		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
-		if err != nil {
-			return err
-		}
-
-		var requester, target *Member
-		for i := range members {
-			if members[i].CharacterID == leaderID {
-				requester = &members[i]
-			}
-			if members[i].CharacterID == applicantID {
-				target = &members[i]
-			}
-		}
-
-		if lockedGuild.LeaderCharacterID != leaderID || requester == nil || requester.Role != RoleLeader || requester.IsPending {
-			return ErrUnauthorized
-		}
-		if target == nil {
-			return ErrTargetNotMember
-		}
-		if !target.IsPending {
-			return ErrMemberNotPending
-		}
-
-		// Re-verify that the applicant is not already an active member of another guild (guild.cgi:ataeru)
-		if activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, applicantID); err == nil {
-			if activeGuild.ID != guildID {
-				return ErrCharacterAlreadyInGuild
-			}
-			return ErrMemberNotPending
-		} else if !errors.Is(err, ErrCharacterNotInGuild) {
-			return err
-		}
-
-		if err := s.repo.ApproveMember(txCtx, guildID, applicantID, normalizedTitle); err != nil {
-			return err
-		}
-		if err := s.memories.Record(txCtx, applicantID, corecharacter.MemoryGuildJoin, lockedGuild.Name+"ギルドに加入"); err != nil {
-			return err
-		}
-		s.touchActive(txCtx, guildID)
-		g = lockedGuild
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	// Send acceptance letter to applicant (guild.cgi:236-237)
-	// Production letters persist through the incoming ambient context. An outer
-	// transaction therefore rolls them back along with the membership mutation.
-	if s.letterSender != nil && s.charReader != nil {
-		leaderChar, errL := s.charReader.FindByID(ctx, leaderID)
-		_, errA := s.charReader.FindByID(ctx, applicantID)
-		if errL == nil && errA == nil {
-			content := "【＋参加許可証＋】" + g.Name + " (ギルマス " + leaderChar.Name + ") から参加許可をもらいました"
-			//lint:ignore error-swallow existing best-effort membership notification
-			_ = s.letterSender.SendLetter(ctx, leaderID, applicantID, content)
-		}
-	}
-
-	return nil
-}
-
-// RejectApplication rejects a pending applicant and removes them from the guild (guild.cgi:ataeru/tsuihou).
-// Sends a rejection letter after successful removal, using the incoming ambient context.
-// Transaction: RunInTx (authorization, pending-state validation and removal).
-// Lock Order: guilds(7) -> guild_members(7).
-func (s *Service) RejectApplication(ctx context.Context, guildID string, leaderID string, applicantID string) error {
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return ErrInvalidGuildID
-	}
-	leaderID = strings.TrimSpace(leaderID)
-	applicantID = strings.TrimSpace(applicantID)
-	if leaderID == "" || applicantID == "" {
-		return ErrCharacterNotFound
-	}
-
-	return s.removeAuthorizedMember(ctx, guildID, leaderID, applicantID, true)
-}
-
 // BroadcastCallout sends a broadcast message to all guild members (including pending applicants) and awards +1 Guild Point (guild.cgi:yobikakeru).
 func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID string, message string) error {
 	guildID = strings.TrimSpace(guildID)
@@ -249,8 +137,8 @@ func (s *Service) ChangeMark(ctx context.Context, guildID string, leaderID strin
 		return corecharacter.Character{}, ErrCharacterNotFound
 	}
 	trimmedMark := strings.TrimSpace(mark)
-	if trimmedMark == "" {
-		return corecharacter.Character{}, ErrInvalidMark
+	if err := ValidateMark(trimmedMark); err != nil {
+		return corecharacter.Character{}, err
 	}
 
 	var updatedChar corecharacter.Character

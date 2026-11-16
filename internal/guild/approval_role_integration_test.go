@@ -135,11 +135,11 @@ func (f *approvalRoleFixture) newService(t *testing.T, repo guild.Repository) *g
 func (f *approvalRoleFixture) executeOp(ctx context.Context, s *guild.Service, mode string, title string) error {
 	switch mode {
 	case "assignActive":
-		return s.AssignCustomRole(ctx, f.g.ID, f.leader.ID, f.active.ID, title)
+		return assigned(s.Assign(ctx, f.g.ID, f.leader.ID, f.active.ID, title))
 	case "assignPending":
-		return s.AssignCustomRole(ctx, f.g.ID, f.leader.ID, f.pending.ID, title)
+		return assigned(s.Assign(ctx, f.g.ID, f.leader.ID, f.pending.ID, title))
 	case "approvePending":
-		return s.ApproveApplication(ctx, f.g.ID, f.leader.ID, f.pending.ID, title)
+		return assigned(s.Assign(ctx, f.g.ID, f.leader.ID, f.pending.ID, title))
 	default:
 		return errors.New("unknown mode: " + mode)
 	}
@@ -450,7 +450,7 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 		}
 
 		// New leader active member cannot assign custom role to themselves
-		if err := f.service.AssignCustomRole(ctx, f.g.ID, f.active.ID, f.active.ID, "大将軍"); !errors.Is(err, guild.ErrCannotAssignToLeader) {
+		if err := assigned(f.service.Assign(ctx, f.g.ID, f.active.ID, f.active.ID, "大将軍")); !errors.Is(err, guild.ErrCannotAssignToLeader) {
 			t.Fatalf("assign to leader = %v, want %v", err, guild.ErrCannotAssignToLeader)
 		}
 	})
@@ -521,9 +521,9 @@ func TestGuildApprovalRole_HealthyAndRollback(t *testing.T) {
 					t.Fatalf("expected 1 acceptance letter, got: %v", letters)
 				}
 
-				// Repeat approval of already approved member must fail with ErrMemberNotPending
-				if err := f.service.ApproveApplication(ctx, f.g.ID, f.leader.ID, f.pending.ID, "RepeatTitle"); !errors.Is(err, guild.ErrMemberNotPending) {
-					t.Fatalf("repeat approval = %v, want %v", err, guild.ErrMemberNotPending)
+				// Assigning the approved member again only retitles it (guild.cgi:247-249).
+				if outcome, err := f.service.Assign(ctx, f.g.ID, f.leader.ID, f.pending.ID, "RepeatTitle"); err != nil || outcome != guild.AssignRetitled {
+					t.Fatalf("repeat assign = %q, %v; want retitled", outcome, err)
 				}
 				if letters := f.recipientLetters(t, f.pending.ID); len(letters) != 1 {
 					t.Fatalf("repeat approval persisted unexpected letter: %v", letters)
@@ -537,33 +537,29 @@ func TestGuildApprovalRole_CurrentState(t *testing.T) {
 	f := newApprovalRoleFixture(t)
 	ctx := context.Background()
 
-	t.Run("unauthorized caller cannot assign role or approve", func(t *testing.T) {
-		if err := f.service.AssignCustomRole(ctx, f.g.ID, f.active.ID, f.pending.ID, "Title"); !errors.Is(err, guild.ErrUnauthorized) {
-			t.Fatalf("non-leader assign = %v, want %v", err, guild.ErrUnauthorized)
-		}
-		if err := f.service.ApproveApplication(ctx, f.g.ID, f.active.ID, f.pending.ID, "Title"); !errors.Is(err, guild.ErrUnauthorized) {
-			t.Fatalf("non-leader approve = %v, want %v", err, guild.ErrUnauthorized)
+	t.Run("unauthorized caller cannot assign", func(t *testing.T) {
+		for _, title := range []string{"Title", guild.RemovalTitle} {
+			if err := assigned(f.service.Assign(ctx, f.g.ID, f.active.ID, f.pending.ID, title)); !errors.Is(err, guild.ErrUnauthorized) {
+				t.Fatalf("non-leader assign %s = %v, want %v", title, err, guild.ErrUnauthorized)
+			}
 		}
 	})
 
 	t.Run("non-member target returns ErrTargetNotMember", func(t *testing.T) {
 		strangerID := "stranger_" + id.New()[:8]
-		if err := f.service.AssignCustomRole(ctx, f.g.ID, f.leader.ID, strangerID, "Title"); !errors.Is(err, guild.ErrTargetNotMember) {
+		if err := assigned(f.service.Assign(ctx, f.g.ID, f.leader.ID, strangerID, "Title")); !errors.Is(err, guild.ErrTargetNotMember) {
 			t.Fatalf("stranger assign = %v, want %v", err, guild.ErrTargetNotMember)
-		}
-		if err := f.service.ApproveApplication(ctx, f.g.ID, f.leader.ID, strangerID, "Title"); !errors.Is(err, guild.ErrTargetNotMember) {
-			t.Fatalf("stranger approve = %v, want %v", err, guild.ErrTargetNotMember)
 		}
 	})
 
-	t.Run("approve on active member returns ErrMemberNotPending", func(t *testing.T) {
-		if err := f.service.ApproveApplication(ctx, f.g.ID, f.leader.ID, f.active.ID, "Title"); !errors.Is(err, guild.ErrMemberNotPending) {
-			t.Fatalf("approve active member = %v, want %v", err, guild.ErrMemberNotPending)
+	t.Run("an active member is retitled", func(t *testing.T) {
+		if outcome, err := f.service.Assign(ctx, f.g.ID, f.leader.ID, f.active.ID, "Title"); err != nil || outcome != guild.AssignRetitled {
+			t.Fatalf("assign active member = %q, %v; want retitled", outcome, err)
 		}
 	})
 
 	t.Run("assign to leader returns ErrCannotAssignToLeader", func(t *testing.T) {
-		if err := f.service.AssignCustomRole(ctx, f.g.ID, f.leader.ID, f.leader.ID, "大将軍"); !errors.Is(err, guild.ErrCannotAssignToLeader) {
+		if err := assigned(f.service.Assign(ctx, f.g.ID, f.leader.ID, f.leader.ID, "大将軍")); !errors.Is(err, guild.ErrCannotAssignToLeader) {
 			t.Fatalf("assign to leader = %v, want %v", err, guild.ErrCannotAssignToLeader)
 		}
 	})

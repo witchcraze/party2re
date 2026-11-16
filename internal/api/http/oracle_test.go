@@ -47,7 +47,7 @@ func (f *oracleFixture) router(t *testing.T, destination string, options ...Opti
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
 		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"},
 		playercontext.SceneDefinition{ID: "oracle", Parent: "town"},
-		playercontext.SceneDefinition{ID: "blackmarket", Parent: "oracle", ParentOnly: true, CanEnter: func(c corecharacter.Character) bool { return c.JobLevel >= 15 }}))
+		playercontext.SceneDefinition{ID: "blackmarket", Parent: "oracle", ParentOnly: true, CanEnter: playercontext.ByCharacter(func(c corecharacter.Character) bool { return c.JobLevel >= 15 })}))
 	opts := append([]Option{WithOracleShop(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, options...)
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, opts...)
 	if err != nil {

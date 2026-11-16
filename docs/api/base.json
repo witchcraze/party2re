@@ -2020,6 +2020,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/JobTempleSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GuildAssociationSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GuildRoomSceneData"
                     }
                   ]
                 }
@@ -2078,6 +2084,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/StoreSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GuildAssociationSceneData"
                     }
                   ]
                 }
@@ -3253,6 +3262,96 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "join_guild"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GuildAssociationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "join_guild"
+                },
+                "kind": {
+                  "const": "subject"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GuildAssociationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "guild"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GuildRoomSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -4276,7 +4375,9 @@
                         "contest",
                         "medal",
                         "helper",
-                        "job"
+                        "job",
+                        "join_guild",
+                        "guild"
                       ]
                     }
                   },
@@ -4398,7 +4499,9 @@
                         "contest",
                         "medal",
                         "helper",
-                        "job"
+                        "job",
+                        "join_guild",
+                        "guild"
                       ]
                     },
                     "offset": {
@@ -7133,6 +7236,341 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "guild_create"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "New guild name (16 characters, no whitespace or , ; \" ' & < > \\ / @ ＠). Costs 5,000G; the founder then enters the new guild's room."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_apply"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "guild_id": {
+                      "type": "string",
+                      "description": "The guild association's selected guild; bound to the observed subject."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "guild_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_mark"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "mark": {
+                      "type": "string",
+                      "description": "One of the guild association scene's marks (\"0\"-\"65\"). Costs 3,000G; guild master only."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "mark"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_wallpaper"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "wallpaper": {
+                      "type": "string",
+                      "description": "One of the guild association scene's wallpapers; costs its price. Guild master only."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "wallpaper"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_leave"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_disband"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_callout"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "description": "Letter sent to every roster row, including pending applicants (200 characters)."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "message"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_color"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "color": {
+                      "type": "string",
+                      "description": "#RRGGBB guild color; non-white colors are unique and NPC pink is reserved. Guild master only."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "color"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_message"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "description": "Guild message (200 characters, none of , ; \" ' & < >). Guild master only."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "message"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "guild_assign"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "member_id": {
+                      "type": "string",
+                      "description": "A member row of the guild room scene."
+                    },
+                    "title": {
+                      "type": "string",
+                      "description": "Role title (6 full-width / 12 half-width characters). 追放 rejects a pending applicant or expels a member; any other title approves an applicant with it or retitles a member. Guild master only."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "member_id",
+                    "title"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "npc_talk"
                 }
               },
@@ -8368,7 +8806,9 @@
               "contest",
               "medal",
               "helper",
-              "job"
+              "job",
+              "join_guild",
+              "guild"
             ]
           },
           "offset": {
@@ -8517,7 +8957,9 @@
                   "contest",
                   "medal",
                   "helper",
-                  "job"
+                  "job",
+                  "join_guild",
+                  "guild"
                 ]
               }
             },
@@ -12444,22 +12886,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "GuildCharacterResponse": {
-        "properties": {
-          "guild": {
-            "$ref": "#/components/schemas/Guild"
-          },
-          "member": {
-            "$ref": "#/components/schemas/GuildMember"
-          }
-        },
-        "required": [
-          "guild",
-          "member"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "Guild": {
         "properties": {
           "bgimg": {
@@ -12511,39 +12937,6 @@
           "last_active_at",
           "created_at",
           "updated_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GuildMember": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "guild_id": {
-            "type": "string"
-          },
-          "is_pending": {
-            "type": "boolean"
-          },
-          "joined_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "guild_id",
-          "character_id",
-          "role",
-          "title",
-          "is_pending",
-          "joined_at"
         ],
         "type": "object",
         "additionalProperties": false
@@ -14505,148 +14898,6 @@
           "available"
         ],
         "type": "object",
-        "additionalProperties": false
-      },
-      "CreateGuildResponse": {
-        "properties": {
-          "guild": {
-            "$ref": "#/components/schemas/Guild"
-          },
-          "member": {
-            "$ref": "#/components/schemas/GuildMember"
-          }
-        },
-        "required": [
-          "guild",
-          "member"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GuildMessageResponse": {
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "GuildActionCharacterRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_id"
-        ],
-        "additionalProperties": false
-      },
-      "GuildDetail": {
-        "properties": {
-          "guild": {
-            "$ref": "#/components/schemas/Guild"
-          },
-          "members": {
-            "items": {
-              "$ref": "#/components/schemas/GuildMember"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "decorations": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/GuildDecoration"
-            },
-            "description": "Guild-owned display records, excluded from player membership and authority."
-          }
-        },
-        "required": [
-          "guild",
-          "members",
-          "decorations"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ApproveGuildApplicationRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_id"
-        ],
-        "additionalProperties": false
-      },
-      "BroadcastGuildCalloutRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_id"
-        ],
-        "additionalProperties": false
-      },
-      "CustomizeGuildRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "color": {
-            "type": "string"
-          },
-          "mark": {
-            "type": "string"
-          },
-          "notice": {
-            "type": "string"
-          },
-          "wallpaper": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_id"
-        ],
-        "additionalProperties": false
-      },
-      "AssignGuildRoleTitleRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_id"
-        ],
         "additionalProperties": false
       },
       "GvGLeaderboardResponse": {
@@ -18198,6 +18449,204 @@
           "jobs",
           "recall_jobs",
           "future_memories"
+        ]
+      },
+      "GuildMemberView": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One roster row as ＠めんばー lists it (name＠title); pending applicants included.",
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "leader",
+              "member"
+            ]
+          },
+          "pending": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "title",
+          "role",
+          "pending"
+        ]
+      },
+      "GuildView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "guild": {
+            "$ref": "#/components/schemas/Guild"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuildMemberView"
+            }
+          },
+          "decorations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuildDecoration"
+            },
+            "description": "Guild-owned display records, excluded from player membership and authority."
+          }
+        },
+        "required": [
+          "guild",
+          "members",
+          "decorations"
+        ]
+      },
+      "GuildAffiliation": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's active guild membership.",
+        "properties": {
+          "guild": {
+            "$ref": "#/components/schemas/Guild"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "leader",
+              "member"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "guild",
+          "role",
+          "title"
+        ]
+      },
+      "GuildWallpaper": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "wallpaper": {
+            "type": "string"
+          },
+          "price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "wallpaper",
+          "price"
+        ]
+      },
+      "GuildAssociationSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The guild association: a page of guilds, or the selected guild's roster (selected), the actor's active affiliation (null when none) and the mark and wallpaper choices. Commands are offered by the actor's current affiliation and role; guild_apply is bound to the selected guild. Observation never mutates.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "affiliation": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/GuildAffiliation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "guilds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Guild"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "selected": {
+            "$ref": "#/components/schemas/GuildView"
+          },
+          "marks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wallpapers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuildWallpaper"
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "affiliation",
+          "guilds",
+          "page",
+          "marks",
+          "wallpapers"
+        ]
+      },
+      "GuildRoomSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's own guild room, entered only by active members: the roster with pending applicants and decorations. guild_color, guild_message and guild_assign are offered to the guild master, who also receives the colour samples. Observation never mutates; commands in the room keep the guild active.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "view": {
+            "$ref": "#/components/schemas/GuildView"
+          },
+          "is_leader": {
+            "type": "boolean"
+          },
+          "color_samples": {
+            "type": "array",
+            "description": "The ＠からー sample palette, offered only to the guild master; empty otherwise.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9A-Fa-f]{6}$"
+                }
+              },
+              "required": [
+                "name",
+                "color"
+              ]
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "view",
+          "is_leader",
+          "color_samples"
         ]
       },
       "JobOption": {

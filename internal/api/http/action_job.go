@@ -199,7 +199,7 @@ func jobActionRejection(err error) (int, ErrorDetail) {
 var jobTempleFacility = facility{
 	title: "転職の神殿", commands: []string{"job_change", "job_recall", "job_restore", "job_future_recall"},
 	read: (*Handler).jobTempleSceneData, placeLog: true,
-	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+	present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 		// job_change.cgi:118-127 offers only the memory commands that apply.
 		d := data.(JobTempleSceneData)
 		var hide []string

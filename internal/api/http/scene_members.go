@@ -42,7 +42,11 @@ func (h *Handler) readPlaceMembers(ctx context.Context, current playercontext.Re
 	if h.placeMembers == nil {
 		return out, nil
 	}
-	rows, err := h.placeMembers.Read(ctx, h.scenePlace(current), time.Now())
+	place, err := h.scenePlace(ctx, current)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := h.placeMembers.Read(ctx, place, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -56,17 +60,28 @@ func (h *Handler) readPlaceMembers(ctx context.Context, current playercontext.Re
 // runs, as legacy read_member precedes the action (party.cgi:19-20).
 func (h *Handler) refreshPlaceMember(ctx context.Context, current playercontext.Result) error {
 	characterID, location := current.Snapshot.Character.ID, current.Snapshot.LocationID
-	if h.placeMembers == nil || !h.sceneAdapters[location].placeLog {
+	// An unavailable scene has no place; its member entry simply expires.
+	if h.placeMembers == nil || !h.sceneAdapters[location].placeLog || (current.Navigation != nil && current.Navigation.Unavailable) {
 		return nil
 	}
 	profile, err := h.characters.GetProfile(ctx, characterID)
 	if err != nil {
 		return err
 	}
-	return h.placeMembers.Refresh(ctx, h.scenePlace(current), placelog.Member{
+	place, err := h.scenePlace(ctx, current)
+	if err != nil {
+		return err
+	}
+	if err := h.placeMembers.Refresh(ctx, place, placelog.Member{
 		CharacterID: characterID, Name: profile.Character.Name, Color: profile.Character.Color,
 		IconURL: profile.Profile.AvatarURL, AuraEffect: profile.Profile.AuraEffect,
-	}, time.Now())
+	}, time.Now()); err != nil {
+		return err
+	}
+	if refreshed := h.sceneAdapters[location].refreshed; refreshed != nil {
+		return refreshed(h, ctx, place)
+	}
+	return nil
 }
 
 // leavePlace removes the actor after it moved. The move has committed, so a

@@ -827,3 +827,17 @@ func TestValidateVerbatimLine(t *testing.T) {
 		}
 	}
 }
+
+func TestValidatePlainLine(t *testing.T) {
+	if got, err := validation.ValidatePlainLine(" ようこそ！ ", 10); err != nil || got != "ようこそ！" {
+		t.Fatalf("plain line = %q, %v", got, err)
+	}
+	for _, in := range []string{"a,b", "a;b", `a"b`, "a'b", "a&b", "a<b", "a>b"} {
+		if _, err := validation.ValidatePlainLine(in, 10); !errors.Is(err, validation.ErrProhibitedCharacter) {
+			t.Fatalf("%q: %v", in, err)
+		}
+	}
+	if _, err := validation.ValidatePlainLine("", 10); !errors.Is(err, validation.ErrEmpty) {
+		t.Fatalf("empty: %v", err)
+	}
+}

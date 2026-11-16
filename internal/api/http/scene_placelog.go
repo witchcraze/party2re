@@ -30,12 +30,12 @@ func WithPlaceLog(reader PlaceLog) Option {
 	return func(h *Handler) { h.placeLog = reader }
 }
 
-func (h *Handler) scenePlace(current playercontext.Result) placelog.Place {
+func (h *Handler) scenePlace(ctx context.Context, current playercontext.Result) (placelog.Place, error) {
 	destination := current.Snapshot.LocationID
 	if resolve := h.sceneAdapters[destination].place; resolve != nil {
-		return resolve(current)
+		return resolve(h, ctx, current)
 	}
-	return placelog.Place{Kind: placelog.KindFacility, ID: destination}
+	return placelog.Place{Kind: placelog.KindFacility, ID: destination}, nil
 }
 
 func (h *Handler) readPlaceLog(ctx context.Context, current playercontext.Result) ([]PlaceLogEntry, error) {
@@ -43,7 +43,11 @@ func (h *Handler) readPlaceLog(ctx context.Context, current playercontext.Result
 	if h.placeLog == nil {
 		return out, nil
 	}
-	rows, err := h.placeLog.Read(ctx, h.scenePlace(current), current.Snapshot.Character.ID)
+	place, err := h.scenePlace(ctx, current)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := h.placeLog.Read(ctx, place, current.Snapshot.Character.ID)
 	if err != nil {
 		return nil, err
 	}

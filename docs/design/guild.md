@@ -2,14 +2,12 @@
 
 ## Overview
 
-Guilds (`guild.cgi`, `join_guild.cgi`) are social organizations ranked by Guild Points. Legacy Party2 has **no guild levels, donation EXP or capacity scaling**. Fees, name and title validation, point awards and transport are owned by code and [OpenAPI](../api/openapi.json).
+Guilds (`guild.cgi`, `join_guild.cgi`) are social organizations ranked by Guild Points. Legacy Party2 has **no guild levels, donation EXP or capacity scaling**. Fees, name and title validation, point awards and transport are owned by code and [OpenAPI](../api/openapi.json). Renaming (`＠かいめい`) is commented out of the legacy dispatch (`lib/join_guild.cgi:54,63`), so it is unreachable and not reconstructed.
 
 ## Membership
 
 - Applications are guild roster rows with title `参加申請中` (`lib/join_guild.cgi:182–219`). An unaffiliated character may apply to several guilds; an active member may neither apply nor create a guild. An applicant may still create a guild and becomes its leader. Pending rows earn no action points (`lib/guild.cgi:63`).
 - Approval rechecks that the applicant has not joined another guild in the meantime (`lib/guild.cgi:220–224`). A character holds at most one active affiliation, also under concurrent creation, joining and approval.
-- The leader cannot be given a custom title, and the reserved titles `参加申請中` and `ギルマス` cannot be assigned. Title width counts ASCII as 1 and other characters as 2, up to 12.
-- White (`#FFFFFF`) is the default color and marks a friendly guild that cannot enter GvG; other colors are unique, and NPC pink (`#FF69B4`) is prohibited.
 
 ### Broadcast Callouts (`よびかける`)
 
@@ -33,7 +31,7 @@ Dissolution happens on removal from a roster of at most one row, on manual disba
 
 ## Inactivity and point decay
 
-- Guilds with no member activity for 20 days (`auto_delete_guild_day = 20`) are disbanded; inactivity is rechecked under the guild lock before deletion.
+- Guilds with no member activity for 20 days (`auto_delete_guild_day = 20`) are disbanded; inactivity is rechecked under the guild lock before deletion. Legacy measures the age of the room's member list (`lib/join_guild.cgi:423–433`), which every request inside the guild room rewrites, so presence alone keeps a guild alive. Go therefore counts every command a member sends from the guild room, as well as guild mutations.
 - Daily maintenance decays points: `$gpoint = int($gpoint * 0.8)` (`login.cgi:448`).
 
 ## Operator policy for duplicate affiliations

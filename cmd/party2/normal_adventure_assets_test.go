@@ -204,7 +204,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 					})
 				}},
 				{"guild-create", func() error { _, _, _, err := soc.guild.Create(ctx, actor.ID, "Guild_"+id.New()[:8]); return err }},
-				{"guild-mark", func() error { _, err := soc.guild.ChangeMark(ctx, "missing", actor.ID, "star"); return err }},
+				{"guild-mark", func() error { _, err := soc.guild.ChangeMark(ctx, "missing", actor.ID, "1"); return err }},
 				{"guild-wallpaper", func() error { _, err := soc.guild.ChangeWallpaper(ctx, "missing", actor.ID, "farm.gif"); return err }},
 				{"customskill", func() error {
 					_, err := combat.customSkill.SetCustomSkill(ctx, actor.ID, "Test", "", [3]string{"gem_atk_1"})

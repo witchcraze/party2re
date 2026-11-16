@@ -29,13 +29,16 @@ type facility struct {
 	bind func(n playercontext.Selection, actorID string) map[string]map[string]any
 	read func(*Handler, context.Context, playercontext.Result) (any, error)
 	// present only adjusts display facts; it cannot admit commands.
-	present      func(*Handler, playercontext.Result, any) scenePresentation
+	present      func(*Handler, context.Context, playercontext.Result, any) scenePresentation
 	controlsOnly bool
 	// placeLog marks facilities with a shared legacy log (docs/architecture/place-log.md).
 	placeLog bool
-	// place overrides the fixed-facility identity for owner-scoped scenes.
-	place func(playercontext.Result) placelog.Place
-	npc   *npcProfile
+	// place overrides the fixed-facility identity for owner-scoped scenes; it
+	// may read the owner but must not mutate.
+	place func(*Handler, context.Context, playercontext.Result) (placelog.Place, error)
+	// refreshed runs after the actor's member entry is refreshed in place.
+	refreshed func(*Handler, context.Context, placelog.Place) error
+	npc       *npcProfile
 }
 
 type scenePresentation struct {
@@ -60,7 +63,7 @@ var facilities = func() map[string]facility {
 		"blackmarket": blackMarketFacility, "blacksmith": blacksmithFacility, "chapel": chapelFacility, "exile": exileFacility,
 		"depot": depotFacility, "fleamarket": fleaMarketFacility, "gemstore": gemStoreFacility, "secretshop": secretShopFacility,
 		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "home_notices": homeNoticesFacility,
-		"home_collection": homeCollectionFacility, "home_monster_book": homeMonsterBookFacility, "home_job_master": homeJobMasterFacility, "home_custom_skill": homeCustomSkillFacility, "casino": casinoFacility, "tavern": tavernFacility, "lottery": lotteryFacility, "takarakuji": takarakujiFacility, "plantation": plantationFacility, "oracle": oracleFacility, "contest": contestFacility, "medal": medalFacility, "helper": helperFacility, "job": jobTempleFacility,
+		"home_collection": homeCollectionFacility, "home_monster_book": homeMonsterBookFacility, "home_job_master": homeJobMasterFacility, "home_custom_skill": homeCustomSkillFacility, "casino": casinoFacility, "tavern": tavernFacility, "lottery": lotteryFacility, "takarakuji": takarakujiFacility, "plantation": plantationFacility, "oracle": oracleFacility, "contest": contestFacility, "medal": medalFacility, "helper": helperFacility, "job": jobTempleFacility, "join_guild": guildAssociationFacility, "guild": guildRoomFacility,
 	}
 	for _, t := range town.AllTowns() {
 		m[t.ID] = townDistrictFacility(t.Name)
@@ -172,14 +175,20 @@ func (h *Handler) boundParams(result playercontext.Result) map[string]map[string
 	return map[string]map[string]any{}
 }
 
-func (h *Handler) townSceneData(_ context.Context, result playercontext.Result) (any, error) {
+func (h *Handler) townSceneData(ctx context.Context, result playercontext.Result) (any, error) {
 	rows := make([]SceneDestination, 0, len(h.sceneAdapters))
 	for id, adapter := range h.sceneAdapters {
 		if adapter.definition.Parent != "town" {
 			continue
 		}
-		if canEnter := adapter.definition.CanEnter; canEnter != nil && !canEnter(result.Snapshot.Character) {
-			continue
+		if canEnter := adapter.definition.CanEnter; canEnter != nil {
+			ok, err := canEnter(ctx, result.Snapshot.Character)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				continue
+			}
 		}
 		rows = append(rows, SceneDestination{ID: id, Title: adapter.title, Supported: adapter.read != nil, EnterParams: sceneEnterParams{Destination: id}})
 	}
@@ -270,7 +279,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		}
 		var presentation scenePresentation
 		if adapter.present != nil {
-			presentation = adapter.present(h, result, data)
+			presentation = adapter.present(h, ctx, result, data)
 			if presentation.title != nil {
 				scene.Title = *presentation.title
 			}
@@ -315,7 +324,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		if !connected || !eligible {
 			continue
 		}
-		action, err := h.contextAction(def.ID, templates[def.ID], result)
+		action, err := h.contextAction(ctx, def.ID, templates[def.ID], result)
 		if err != nil {
 			return err
 		}

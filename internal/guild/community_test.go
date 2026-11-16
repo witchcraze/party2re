@@ -205,7 +205,7 @@ func TestService_ApplyToJoin(t *testing.T) {
 	})
 }
 
-func TestService_ApproveApplication(t *testing.T) {
+func TestService_AssignApprovesApplicant(t *testing.T) {
 	ctx := context.Background()
 	guildID := "guild-1"
 	leaderID := "leader-1"
@@ -247,7 +247,7 @@ func TestService_ApproveApplication(t *testing.T) {
 			guild.WithLetterSender(letterSender),
 		)
 
-		err := svc.ApproveApplication(ctx, guildID, leaderID, applicantID, "突撃隊長")
+		err := assigned(svc.Assign(ctx, guildID, leaderID, applicantID, "突撃隊長"))
 		if err != nil {
 			t.Fatalf("ApproveApplication error: %v", err)
 		}
@@ -278,13 +278,13 @@ func TestService_ApproveApplication(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		err := svc.ApproveApplication(ctx, guildID, "stranger", applicantID, "隊長")
+		err := assigned(svc.Assign(ctx, guildID, "stranger", applicantID, "隊長"))
 		if !errors.Is(err, guild.ErrUnauthorized) {
 			t.Errorf("expected ErrUnauthorized, got %v", err)
 		}
 	})
 
-	t.Run("fails when target is already an active member", func(t *testing.T) {
+	t.Run("an active member is retitled, not approved again", func(t *testing.T) {
 		repo := &mockGuildRepo{
 			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
 				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, []guild.Member{
@@ -294,9 +294,9 @@ func TestService_ApproveApplication(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		err := svc.ApproveApplication(ctx, guildID, leaderID, applicantID, "隊長")
-		if !errors.Is(err, guild.ErrMemberNotPending) {
-			t.Errorf("expected ErrMemberNotPending, got %v", err)
+		outcome, err := svc.Assign(ctx, guildID, leaderID, applicantID, "隊長")
+		if err != nil || outcome != guild.AssignRetitled {
+			t.Errorf("Assign = %q, %v; want retitled", outcome, err)
 		}
 	})
 
@@ -316,7 +316,7 @@ func TestService_ApproveApplication(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		err := svc.ApproveApplication(ctx, guildID, leaderID, applicantID, "隊長")
+		err := assigned(svc.Assign(ctx, guildID, leaderID, applicantID, "隊長"))
 		if !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
 			t.Errorf("expected ErrCharacterAlreadyInGuild, got %v", err)
 		}
@@ -342,7 +342,7 @@ func TestService_ApproveApplication(t *testing.T) {
 		}
 
 		svc, _ := guild.NewService(repo)
-		err := svc.ApproveApplication(ctx, guildID, leaderID, applicantID, decomposed)
+		err := assigned(svc.Assign(ctx, guildID, leaderID, applicantID, decomposed))
 		if err != nil {
 			t.Fatalf("ApproveApplication error: %v", err)
 		}
@@ -356,7 +356,7 @@ func TestService_ApproveApplication(t *testing.T) {
 	})
 }
 
-func TestService_RejectApplication(t *testing.T) {
+func TestService_AssignRejectsApplicant(t *testing.T) {
 	ctx := context.Background()
 	guildID := "guild-1"
 	leaderID := "leader-1"
@@ -390,9 +390,9 @@ func TestService_RejectApplication(t *testing.T) {
 			guild.WithLetterSender(letterSender),
 		)
 
-		err := svc.RejectApplication(ctx, guildID, leaderID, applicantID)
+		err := assigned(svc.Assign(ctx, guildID, leaderID, applicantID, guild.RemovalTitle))
 		if err != nil {
-			t.Fatalf("RejectApplication error: %v", err)
+			t.Fatalf("Assign error: %v", err)
 		}
 
 		if !removed {

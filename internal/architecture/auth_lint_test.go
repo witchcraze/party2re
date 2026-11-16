@@ -117,9 +117,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /contest/legends$`),
 		regexp.MustCompile(`^GET /parties$`),
 		regexp.MustCompile(`^GET /parties/\{id\}$`),
-		regexp.MustCompile(`^GET /guilds$`),
-		regexp.MustCompile(`^GET /guilds/\{id\}$`),
-		regexp.MustCompile(`^GET /characters/\{id\}/guild$`),
 		regexp.MustCompile(`^GET /rankings/.*$`),
 		regexp.MustCompile(`^GET /legends$`),
 		regexp.MustCompile(`^GET /legends/\{category\}$`),
@@ -363,17 +360,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Event Plaza
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",
-		// Guild
-		"handleCreateGuild":             "guild.go",
-		"handleApplyGuild":              "guild.go",
-		"handleApproveGuildApplication": "guild.go",
-		"handleRejectGuildApplication":  "guild.go",
-		"handleBroadcastGuildCallout":   "guild.go",
-		"handleAssignGuildRoleTitle":    "guild.go",
-		"handleCustomizeGuild":          "guild.go",
-		"handleLeaveGuild":              "guild.go",
-		"handleKickGuildMember":         "guild.go",
-		"handleDisbandGuild":            "guild.go",
 		// Adventure
 		"handleStartAdventure": "handler.go",
 		// Monster

@@ -179,10 +179,10 @@ func TestGuildActiveAffiliation_ConcurrentApproval(t *testing.T) {
 	// Both leaders approve the applicant concurrently
 	err1, err2 := testutil.RunRace2(
 		func() error {
-			return f.service.ApproveApplication(ctx, g1.ID, leader1.ID, applicant.ID, "騎士")
+			return assigned(f.service.Assign(ctx, g1.ID, leader1.ID, applicant.ID, "騎士"))
 		},
 		func() error {
-			return f.service.ApproveApplication(ctx, g2.ID, leader2.ID, applicant.ID, "魔導士")
+			return assigned(f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, "魔導士"))
 		},
 	)
 
@@ -234,7 +234,7 @@ func TestGuildActiveAffiliation_CreateVsApproval(t *testing.T) {
 			return err
 		},
 		func() error {
-			return f.service.ApproveApplication(ctx, g1.ID, leader1.ID, target.ID, "戦士")
+			return assigned(f.service.Assign(ctx, g1.ID, leader1.ID, target.ID, "戦士"))
 		},
 	)
 
@@ -353,7 +353,7 @@ func TestGuildActiveAffiliation_PendingSuccessionDisband(t *testing.T) {
 	}
 
 	// Leader2 approves applicant in G2 -> applicant is now active in G2
-	if err := f.service.ApproveApplication(ctx, g2.ID, leader2.ID, applicant.ID, "精鋭"); err != nil {
+	if err := assigned(f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, "精鋭")); err != nil {
 		t.Fatal(err)
 	}
 	if count := f.countActiveAffiliations(t, applicant.ID); count != 1 {
@@ -414,7 +414,7 @@ func TestGuildActiveAffiliation_PendingSuccessionFallback(t *testing.T) {
 	if err := f.service.ApplyToJoin(ctx, g2.ID, appDisqualified.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.ApproveApplication(ctx, g2.ID, leader2.ID, appDisqualified.ID, "戦士"); err != nil {
+	if err := assigned(f.service.Assign(ctx, g2.ID, leader2.ID, appDisqualified.ID, "戦士")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -472,10 +472,10 @@ func TestGuildActiveAffiliation_AssignCustomRoleConcurrency(t *testing.T) {
 	// Concurrent AssignCustomRole on pending applicant vs ApproveApplication (or AssignCustomRole on other guild)
 	err1, err2 := testutil.RunRace2(
 		func() error {
-			return f.service.AssignCustomRole(ctx, g1.ID, leader1.ID, applicant.ID, "親衛隊長")
+			return assigned(f.service.Assign(ctx, g1.ID, leader1.ID, applicant.ID, "親衛隊長"))
 		},
 		func() error {
-			return f.service.AssignCustomRole(ctx, g2.ID, leader2.ID, applicant.ID, "魔導将軍")
+			return assigned(f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, "魔導将軍"))
 		},
 	)
 
@@ -533,7 +533,7 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.
 			return f.service.Leave(ctx, g1.ID, leader1.ID)
 		},
 		func() error {
-			return f.service.ApproveApplication(ctx, g2.ID, leader2.ID, applicant.ID, "精鋭")
+			return assigned(f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, "精鋭"))
 		},
 	)
 

@@ -3,6 +3,7 @@ package guild
 import (
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,8 @@ const (
 	DefaultColor              = "#FFFFFF"
 	NPCColor                  = "#FF69B4"
 	DefaultMark               = "0"
+	MarkCount                 = 66                  // Marks 0-65, as legacy icon/mark/000.gif-065.gif
+	RemovalTitle              = "追放"                // ＠あたえる with this title rejects an applicant or expels a member (guild.cgi:ataeru)
 	MarkChangeFee             = 3000                // Gold required to change guild mark (3,000G in join_guild.cgi)
 	InactivityDisbandDuration = 20 * 24 * time.Hour // 20 days of inactivity before automatic disbandment (join_guild.cgi:29)
 	DefaultPointDecayFactor   = 0.8                 // Daily 20% point decay factor (login.cgi:448 parity)
@@ -44,6 +47,7 @@ var (
 	ErrInvalidGuildID            = errors.New("invalid guild ID")
 	ErrInvalidGuildName          = errors.New("guild name must be between 1 and 16 characters")
 	ErrNoticeTooLong             = errors.New("guild notice exceeds maximum allowed length")
+	ErrInvalidNotice             = errors.New("guild notice must be nonempty and contain none of , ; \" ' & < >")
 	ErrGuildNotFound             = errors.New("guild not found")
 	ErrGuildNameTaken            = errors.New("guild name is already taken")
 	ErrCharacterNotFound         = errors.New("character not found")
@@ -128,6 +132,15 @@ func ValidateRoleTitle(title string) (string, error) {
 		return "", ErrRoleTitleTooLong
 	}
 	return normalized, nil
+}
+
+// ValidateMark accepts the legacy mark numbers "0" to "65" without leading zeros.
+func ValidateMark(mark string) error {
+	n, err := strconv.Atoi(mark)
+	if err != nil || n < 0 || n >= MarkCount || strconv.Itoa(n) != mark {
+		return ErrInvalidMark
+	}
+	return nil
 }
 
 // ValidateColorFormat validates that a hex color string is in #RRGGBB format and normalizes to uppercase.

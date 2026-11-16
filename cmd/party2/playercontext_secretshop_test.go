@@ -37,7 +37,7 @@ func TestPlayerContextRegistersQualifiedSecretShop(t *testing.T) {
 	}
 	for _, level := range []int{6, 7} {
 		chars.char.JobLevel = level
-		if d.CanEnter(chars.char) != (level == 7) {
+		if ok, err := d.CanEnter(context.Background(), chars.char); err != nil || ok != (level == 7) {
 			t.Fatalf("qualification: %d", level)
 		}
 	}

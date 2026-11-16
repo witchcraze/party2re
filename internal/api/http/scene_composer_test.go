@@ -206,7 +206,7 @@ func TestHomeSleepIsBoundToTheObservedHome(t *testing.T) {
 
 func TestOfferedParamsReuseGatewaySchemaAndKeepCompleteInputs(t *testing.T) {
 	h := &Handler{}
-	a, err := h.contextAction("scene_page", map[string]any{"destination": "shop_weapon", "offset": 20, "limit": 20}, playercontext.Result{})
+	a, err := h.contextAction(context.Background(), "scene_page", map[string]any{"destination": "shop_weapon", "offset": 20, "limit": 20}, playercontext.Result{})
 	if err != nil {
 		t.Fatal(err)
 	}

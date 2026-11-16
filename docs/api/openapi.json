@@ -889,36 +889,6 @@
         ],
         "type": "object"
       },
-      "ApproveGuildApplicationRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id"
-        ],
-        "type": "object"
-      },
-      "AssignGuildRoleTitleRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id"
-        ],
-        "type": "object"
-      },
       "AuctionListing": {
         "properties": {
           "buyout_price": {
@@ -2369,21 +2339,6 @@
           "hero_count_gained",
           "banquet_held",
           "battle_result"
-        ],
-        "type": "object"
-      },
-      "BroadcastGuildCalloutRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id"
         ],
         "type": "object"
       },
@@ -4459,7 +4414,9 @@
                         "contest",
                         "medal",
                         "helper",
-                        "job"
+                        "job",
+                        "join_guild",
+                        "guild"
                       ],
                       "type": "string"
                     }
@@ -4609,7 +4566,9 @@
                         "contest",
                         "medal",
                         "helper",
-                        "job"
+                        "job",
+                        "join_guild",
+                        "guild"
                       ],
                       "type": "string"
                     },
@@ -7316,6 +7275,341 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "guild_create",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "description": "New guild name (16 characters, no whitespace or , ; \" ' \u0026 \u003c \u003e \\ / @ ＠). Costs 5,000G; the founder then enters the new guild's room.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_apply",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "guild_id": {
+                      "description": "The guild association's selected guild; bound to the observed subject.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "guild_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_mark",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "mark": {
+                      "description": "One of the guild association scene's marks (\"0\"-\"65\"). Costs 3,000G; guild master only.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mark"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_wallpaper",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "wallpaper": {
+                      "description": "One of the guild association scene's wallpapers; costs its price. Guild master only.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "wallpaper"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_leave",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_disband",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_callout",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "message": {
+                      "description": "Letter sent to every roster row, including pending applicants (200 characters).",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_color",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "description": "#RRGGBB guild color; non-white colors are unique and NPC pink is reserved. Guild master only.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "color"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_message",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "message": {
+                      "description": "Guild message (200 characters, none of , ; \" ' \u0026 \u003c \u003e). Guild master only.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "guild_assign",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "member_id": {
+                      "description": "A member row of the guild room scene.",
+                      "type": "string"
+                    },
+                    "title": {
+                      "description": "Role title (6 full-width / 12 half-width characters). 追放 rejects a pending applicant or expels a member; any other title approves an applicant with it or retitles a member. Guild master only.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "member_id",
+                    "title"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "npc_talk",
                   "type": "string"
                 }
@@ -9336,22 +9630,6 @@
         ],
         "type": "object"
       },
-      "CreateGuildResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "guild": {
-            "$ref": "#/components/schemas/Guild"
-          },
-          "member": {
-            "$ref": "#/components/schemas/GuildMember"
-          }
-        },
-        "required": [
-          "guild",
-          "member"
-        ],
-        "type": "object"
-      },
       "CreatePartyRequest": {
         "additionalProperties": false,
         "properties": {
@@ -9463,30 +9741,6 @@
           "cmp",
           "gems",
           "updated_at"
-        ],
-        "type": "object"
-      },
-      "CustomizeGuildRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "color": {
-            "type": "string"
-          },
-          "mark": {
-            "type": "string"
-          },
-          "notice": {
-            "type": "string"
-          },
-          "wallpaper": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id"
         ],
         "type": "object"
       },
@@ -10764,31 +11018,81 @@
         ],
         "type": "object"
       },
-      "GuildActionCharacterRequest": {
+      "GuildAffiliation": {
         "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id"
-        ],
-        "type": "object"
-      },
-      "GuildCharacterResponse": {
-        "additionalProperties": false,
+        "description": "The actor's active guild membership.",
         "properties": {
           "guild": {
             "$ref": "#/components/schemas/Guild"
           },
-          "member": {
-            "$ref": "#/components/schemas/GuildMember"
+          "role": {
+            "enum": [
+              "leader",
+              "member"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
           }
         },
         "required": [
           "guild",
-          "member"
+          "role",
+          "title"
+        ],
+        "type": "object"
+      },
+      "GuildAssociationSceneData": {
+        "additionalProperties": false,
+        "description": "The guild association: a page of guilds, or the selected guild's roster (selected), the actor's active affiliation (null when none) and the mark and wallpaper choices. Commands are offered by the actor's current affiliation and role; guild_apply is bound to the selected guild. Observation never mutates.",
+        "properties": {
+          "affiliation": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/GuildAffiliation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "guilds": {
+            "items": {
+              "$ref": "#/components/schemas/Guild"
+            },
+            "type": "array"
+          },
+          "marks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "selected": {
+            "$ref": "#/components/schemas/GuildView"
+          },
+          "wallpapers": {
+            "items": {
+              "$ref": "#/components/schemas/GuildWallpaper"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent",
+          "affiliation",
+          "guilds",
+          "page",
+          "marks",
+          "wallpapers"
         ],
         "type": "object"
       },
@@ -10821,7 +11125,84 @@
         ],
         "type": "object"
       },
-      "GuildDetail": {
+      "GuildMemberView": {
+        "additionalProperties": false,
+        "description": "One roster row as ＠めんばー lists it (name＠title); pending applicants included.",
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "role": {
+            "enum": [
+              "leader",
+              "member"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "title",
+          "role",
+          "pending"
+        ],
+        "type": "object"
+      },
+      "GuildRoomSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's own guild room, entered only by active members: the roster with pending applicants and decorations. guild_color, guild_message and guild_assign are offered to the guild master, who also receives the colour samples. Observation never mutates; commands in the room keep the guild active.",
+        "properties": {
+          "color_samples": {
+            "description": "The ＠からー sample palette, offered only to the guild master; empty otherwise.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "color": {
+                  "pattern": "^#[0-9A-Fa-f]{6}$",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "color"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "is_leader": {
+            "type": "boolean"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "view": {
+            "$ref": "#/components/schemas/GuildView"
+          }
+        },
+        "required": [
+          "parent",
+          "view",
+          "is_leader",
+          "color_samples"
+        ],
+        "type": "object"
+      },
+      "GuildView": {
         "additionalProperties": false,
         "properties": {
           "decorations": {
@@ -10829,22 +11210,16 @@
             "items": {
               "$ref": "#/components/schemas/GuildDecoration"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "guild": {
             "$ref": "#/components/schemas/Guild"
           },
           "members": {
             "items": {
-              "$ref": "#/components/schemas/GuildMember"
+              "$ref": "#/components/schemas/GuildMemberView"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           }
         },
         "required": [
@@ -10854,48 +11229,19 @@
         ],
         "type": "object"
       },
-      "GuildMember": {
+      "GuildWallpaper": {
         "additionalProperties": false,
         "properties": {
-          "character_id": {
-            "type": "string"
+          "price": {
+            "type": "integer"
           },
-          "guild_id": {
-            "type": "string"
-          },
-          "is_pending": {
-            "type": "boolean"
-          },
-          "joined_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "title": {
+          "wallpaper": {
             "type": "string"
           }
         },
         "required": [
-          "guild_id",
-          "character_id",
-          "role",
-          "title",
-          "is_pending",
-          "joined_at"
-        ],
-        "type": "object"
-      },
-      "GuildMessageResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
+          "wallpaper",
+          "price"
         ],
         "type": "object"
       },
@@ -15089,7 +15435,9 @@
                   "contest",
                   "medal",
                   "helper",
-                  "job"
+                  "job",
+                  "join_guild",
+                  "guild"
                 ],
                 "type": "string"
               }
@@ -15295,7 +15643,9 @@
               "contest",
               "medal",
               "helper",
-              "job"
+              "job",
+              "join_guild",
+              "guild"
             ],
             "type": "string"
           },
@@ -15464,6 +15814,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/JobTempleSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GuildAssociationSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GuildRoomSceneData"
                     }
                   ]
                 }
@@ -15517,6 +15873,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/StoreSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GuildAssociationSceneData"
                     }
                   ]
                 }
@@ -16682,6 +17041,96 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/JobTempleSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "join_guild"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GuildAssociationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subject"
+                },
+                "location_id": {
+                  "const": "join_guild"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GuildAssociationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "guild"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/GuildRoomSceneData"
                 },
                 "support": {
                   "properties": {
@@ -19002,7 +19451,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep returns sleeping, duration_seconds, remaining_seconds, home_character_id and message; home_wake returns success, message and the actor's character. home_color returns the color set; home_item_use returns action (inspect or consumed), message, item_name, kind, consumed and the actor's character; home_phrase_teach returns the stored phrase; home_phrase_forget returns phrase_id; home_notice_ack returns the submitted notice_ids. home_letter_send returns the stored Letter; home_letter_read and home_letter_delete return letter_id. npc_talk in a home answers with a random resident's taught phrase, an empty dialogue when none is taught, or a private reply when nobody is home. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message. contest_enter returns the entry and the host's message (warning set when the entry committed but settlement scheduling failed); contest_vote returns the vote and message; contest_photo_delete returns the message. medal_claim returns the prize cost, item_id and item_name, the remaining small_medals and the keeper's message; helper_complete returns completed_quest (null when only expired requests were exchanged), the exchanged expired requests in renewed and the clerk's message. job_change, job_recall, job_restore and job_future_recall return the actor's character, its job state and the priest's message."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep returns sleeping, duration_seconds, remaining_seconds, home_character_id and message; home_wake returns success, message and the actor's character. home_color returns the color set; home_item_use returns action (inspect or consumed), message, item_name, kind, consumed and the actor's character; home_phrase_teach returns the stored phrase; home_phrase_forget returns phrase_id; home_notice_ack returns the submitted notice_ids. home_letter_send returns the stored Letter; home_letter_read and home_letter_delete return letter_id. npc_talk in a home answers with a random resident's taught phrase, an empty dialogue when none is taught, or a private reply when nobody is home. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message. contest_enter returns the entry and the host's message (warning set when the entry committed but settlement scheduling failed); contest_vote returns the vote and message; contest_photo_delete returns the message. medal_claim returns the prize cost, item_id and item_name, the remaining small_medals and the keeper's message; helper_complete returns completed_quest (null when only expired requests were exchanged), the exchanged expired requests in renewed and the clerk's message. job_change, job_recall, job_restore and job_future_recall return the actor's character, its job state and the priest's message. Guild commands return GuildResult: the replying NPC and message, guild_assign's outcome, the paid character for guild_create, guild_mark and guild_wallpaper, and for guild_create the new guild and the room selection when the founder moved in."
           },
           "400": {
             "content": {
@@ -21465,59 +21914,6 @@
           }
         ],
         "summary": "Change character gender / appearance",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/guild": {
-      "get": {
-        "operationId": "getCharactersIdGuild",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildCharacterResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get Character Guild",
         "tags": [
           "Character"
         ]
@@ -24459,937 +24855,6 @@
         "summary": "Register character presence in Event Plaza",
         "tags": [
           "EventPlaza"
-        ]
-      }
-    },
-    "/guilds": {
-      "get": {
-        "operationId": "getGuilds",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Guild"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List Guilds",
-        "tags": [
-          "Guilds"
-        ]
-      },
-      "post": {
-        "description": "Creates a new guild with 1-16 runes name for 5,000 G. Requires character ownership and validates guild name constraints.",
-        "operationId": "postGuilds",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "description": "Founding character ID",
-                    "type": "string"
-                  },
-                  "name": {
-                    "description": "Guild name (1..16 runes)",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id",
-                  "name"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateGuildResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create Guild",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}": {
-      "delete": {
-        "operationId": "deleteGuildsId",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GuildActionCharacterRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Disband Guild",
-        "tags": [
-          "Guilds"
-        ]
-      },
-      "get": {
-        "operationId": "getGuildsId",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildDetail"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get Guild",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}/applications/{applicant_id}/approve": {
-      "post": {
-        "operationId": "postGuildsIdApplicationsApplicantIdApprove",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "applicant_id parameter",
-            "in": "path",
-            "name": "applicant_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApproveGuildApplicationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Approve Guild Application",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}/applications/{applicant_id}/reject": {
-      "post": {
-        "operationId": "postGuildsIdApplicationsApplicantIdReject",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "applicant_id parameter",
-            "in": "path",
-            "name": "applicant_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GuildActionCharacterRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Reject Guild Application",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}/apply": {
-      "post": {
-        "operationId": "postGuildsIdApply",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GuildActionCharacterRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Apply Guild",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}/callout": {
-      "post": {
-        "operationId": "postGuildsIdCallout",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BroadcastGuildCalloutRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error",
-            "description": "Too Many Requests - a recipient cannot receive another letter from this sender yet"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Broadcast Guild Callout",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}/customization": {
-      "put": {
-        "operationId": "putGuildsIdCustomization",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CustomizeGuildRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Customize Guild",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}/leave": {
-      "post": {
-        "operationId": "postGuildsIdLeave",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GuildActionCharacterRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Leave Guild",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}/members/{char_id}": {
-      "delete": {
-        "operationId": "deleteGuildsIdMembersCharId",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "char_id parameter",
-            "in": "path",
-            "name": "char_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GuildActionCharacterRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Kick Guild Member",
-        "tags": [
-          "Guilds"
-        ]
-      }
-    },
-    "/guilds/{id}/members/{char_id}/title": {
-      "put": {
-        "operationId": "putGuildsIdMembersCharIdTitle",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "char_id parameter",
-            "in": "path",
-            "name": "char_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AssignGuildRoleTitleRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GuildMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Assign Guild Role Title",
-        "tags": [
-          "Guilds"
         ]
       }
     },

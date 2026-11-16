@@ -51,7 +51,7 @@ func secretShopSceneRouterWith(t *testing.T, handlerOptions []Option, options ..
 	reads := &secretShopSceneService{SecretShopService: f}
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
 		playercontext.SceneDefinition{ID: "town", Pageable: true},
-		playercontext.SceneDefinition{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: secretshop.CheckEligibility,
+		playercontext.SceneDefinition{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: playercontext.ByCharacter(secretshop.CheckEligibility),
 			SubjectAvailable: func(ctx context.Context, actor, target string) (bool, error) {
 				status, err := f.service.GetShopStatus(ctx, actor)
 				if err != nil {

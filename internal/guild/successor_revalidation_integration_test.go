@@ -78,7 +78,7 @@ func TestGuildSuccession_RevalidateSuccessor_ApprovedDuringDeparture(t *testing.
 	if err := f.service.ApplyToJoin(ctx, gB.ID, candidate.ID); err != nil {
 		t.Fatalf("apply to gB: %v", err)
 	}
-	if err := f.service.ApproveApplication(ctx, gB.ID, leaderB.ID, candidate.ID, "member"); err != nil {
+	if err := assigned(f.service.Assign(ctx, gB.ID, leaderB.ID, candidate.ID, "member")); err != nil {
 		t.Fatalf("approve in gB: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestGuildSuccession_RevalidateSuccessor_ApprovedDuringDeparture(t *testing.
 			if err := f.service.Leave(ctx, gB.ID, candidate.ID); err != nil {
 				t.Errorf("interleaved Leave(B, C) failed: %v", err)
 			}
-			if err := f.service.ApproveApplication(ctx, gA.ID, leaderA.ID, candidate.ID, "member"); err != nil {
+			if err := assigned(f.service.Assign(ctx, gA.ID, leaderA.ID, candidate.ID, "member")); err != nil {
 				t.Errorf("interleaved ApproveApplication(A, L, C) failed: %v", err)
 			}
 			if count := f.countActiveAffiliations(t, candidate.ID); count != 1 {
@@ -167,7 +167,7 @@ func TestGuildSuccession_RevalidateSuccessor_LeftOtherGuildDuringDeparture(t *te
 	if err := f.service.ApplyToJoin(ctx, gB.ID, candidate.ID); err != nil {
 		t.Fatalf("apply to gB: %v", err)
 	}
-	if err := f.service.ApproveApplication(ctx, gB.ID, leaderB.ID, candidate.ID, "member"); err != nil {
+	if err := assigned(f.service.Assign(ctx, gB.ID, leaderB.ID, candidate.ID, "member")); err != nil {
 		t.Fatalf("approve in gB: %v", err)
 	}
 
@@ -247,7 +247,7 @@ func TestGuildSuccession_RevalidateSuccessor_StillIneligibleDisbands(t *testing.
 	if err := f.service.ApplyToJoin(ctx, gB.ID, candidate.ID); err != nil {
 		t.Fatalf("apply to gB: %v", err)
 	}
-	if err := f.service.ApproveApplication(ctx, gB.ID, leaderB.ID, candidate.ID, "member"); err != nil {
+	if err := assigned(f.service.Assign(ctx, gB.ID, leaderB.ID, candidate.ID, "member")); err != nil {
 		t.Fatalf("approve in gB: %v", err)
 	}
 
@@ -333,7 +333,7 @@ func TestGuildSuccession_RevalidateSuccessor_DBErrorPropagation(t *testing.T) {
 	if err := f.service.ApplyToJoin(ctx, gB.ID, candidate.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.ApproveApplication(ctx, gB.ID, leaderB.ID, candidate.ID, "member"); err != nil {
+	if err := assigned(f.service.Assign(ctx, gB.ID, leaderB.ID, candidate.ID, "member")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -387,7 +387,7 @@ func TestGuildSuccession_RevalidateSuccessor_RemoveFromGuilds(t *testing.T) {
 	if err := f.service.ApplyToJoin(ctx, gB.ID, candidate.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.ApproveApplication(ctx, gB.ID, leaderB.ID, candidate.ID, "member"); err != nil {
+	if err := assigned(f.service.Assign(ctx, gB.ID, leaderB.ID, candidate.ID, "member")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -399,7 +399,7 @@ func TestGuildSuccession_RevalidateSuccessor_RemoveFromGuilds(t *testing.T) {
 			if err := f.service.Leave(ctx, gB.ID, candidate.ID); err != nil {
 				t.Errorf("interleaved Leave(B, C) failed: %v", err)
 			}
-			if err := f.service.ApproveApplication(ctx, gA.ID, leaderA.ID, candidate.ID, "member"); err != nil {
+			if err := assigned(f.service.Assign(ctx, gA.ID, leaderA.ID, candidate.ID, "member")); err != nil {
 				t.Errorf("interleaved ApproveApplication(A, L, C) failed: %v", err)
 			}
 		}
@@ -462,7 +462,7 @@ func TestGuildSuccession_RevalidateSuccessor_ConcurrentApprovalRace(t *testing.T
 	if err := f.service.ApplyToJoin(ctx, gB.ID, candidate.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.ApproveApplication(ctx, gB.ID, leaderB.ID, candidate.ID, "member"); err != nil {
+	if err := assigned(f.service.Assign(ctx, gB.ID, leaderB.ID, candidate.ID, "member")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -477,7 +477,7 @@ func TestGuildSuccession_RevalidateSuccessor_ConcurrentApprovalRace(t *testing.T
 			if err := f.service.Leave(ctx, gB.ID, candidate.ID); err != nil {
 				return err
 			}
-			err := f.service.ApproveApplication(ctx, gA.ID, leaderA.ID, candidate.ID, "member")
+			err := assigned(f.service.Assign(ctx, gA.ID, leaderA.ID, candidate.ID, "member"))
 			if err != nil && (errors.Is(err, guild.ErrGuildNotFound) || errors.Is(err, guild.ErrUnauthorized)) {
 				// Guild A already disbanded or leaderA already left
 				return nil
@@ -560,7 +560,7 @@ func TestGuildSuccession_RevalidateSuccessor_CandidateLeavesOtherGuildPostRevali
 	if err := f.service.ApplyToJoin(ctx, gB.ID, candidate.ID); err != nil {
 		t.Fatalf("apply to gB: %v", err)
 	}
-	if err := f.service.ApproveApplication(ctx, gB.ID, leaderB.ID, candidate.ID, "member"); err != nil {
+	if err := assigned(f.service.Assign(ctx, gB.ID, leaderB.ID, candidate.ID, "member")); err != nil {
 		t.Fatalf("approve in gB: %v", err)
 	}
 

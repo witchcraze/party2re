@@ -39,6 +39,6 @@ func (h *Handler) homeNoticesSceneData(ctx context.Context, r playercontext.Resu
 }
 
 var homeNoticesFacility = facility{title: "お知らせ", commands: []string{"home_notice_ack"}, read: (*Handler).homeNoticesSceneData,
-	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+	present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 		return scenePresentation{next: data.(HomeNoticesSceneData).Page.Next}
 	}}

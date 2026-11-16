@@ -107,11 +107,9 @@ func (f *removalFixture) newService(t *testing.T, repo guild.Repository) *guild.
 	return s
 }
 
-func (f *removalFixture) remove(ctx context.Context, s *guild.Service, reject bool) error {
-	if reject {
-		return s.RejectApplication(ctx, f.g.ID, f.leader.ID, f.target.ID)
-	}
-	return s.Kick(ctx, f.g.ID, f.leader.ID, f.target.ID)
+// remove is ＠あたえる>追放: rejection for a pending target, expulsion otherwise.
+func (f *removalFixture) remove(ctx context.Context, s *guild.Service) error {
+	return assigned(s.Assign(ctx, f.g.ID, f.leader.ID, f.target.ID, guild.RemovalTitle))
 }
 
 func (f *removalFixture) assertRoster(t *testing.T) guild.Detail {
@@ -191,9 +189,9 @@ func awaitRemovalSignal(t *testing.T, ch <-chan struct{}) {
 
 func TestGuildRemoval_TransferFirst(t *testing.T) {
 	for _, mode := range []struct {
-		name            string
-		pending, reject bool
-	}{{"kickActive", false, false}, {"kickPending", true, false}, {"reject", true, true}} {
+		name    string
+		pending bool
+	}{{"expelActive", false}, {"rejectPending", true}} {
 		t.Run(mode.name, func(t *testing.T) {
 			f := newRemovalFixture(t, mode.pending)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -229,7 +227,7 @@ func TestGuildRemoval_TransferFirst(t *testing.T) {
 				close(committed)
 			}()
 			awaitRemovalSignal(t, locked)
-			go func() { removalDone <- f.remove(ctx, removal, mode.reject) }()
+			go func() { removalDone <- f.remove(ctx, removal) }()
 			awaitRemovalSignal(t, removalStarted)
 			close(resume)
 			if err := <-transferDone; err != nil {
@@ -251,16 +249,16 @@ func TestGuildRemoval_TransferFirst(t *testing.T) {
 
 func TestGuildRemoval_HealthyAndRollback(t *testing.T) {
 	for _, mode := range []struct {
-		name            string
-		pending, reject bool
-		marker          string
-	}{{"kickActive", false, false, "【＋追放＋】"}, {"kickPending", true, false, "【＋不合格＋】"}, {"reject", true, true, "【＋不合格＋】"}} {
+		name    string
+		pending bool
+		marker  string
+	}{{"expelActive", false, "【＋追放＋】"}, {"rejectPending", true, "【＋不合格＋】"}} {
 		t.Run(mode.name, func(t *testing.T) {
 			f := newRemovalFixture(t, mode.pending)
 			ctx := context.Background()
 			rollback := errors.New("outer transaction rollback")
 			err := database.RunInTx(ctx, f.db, func(txCtx context.Context) error {
-				if err := f.remove(txCtx, f.service, mode.reject); err != nil {
+				if err := f.remove(txCtx, f.service); err != nil {
 					return err
 				}
 				return rollback
@@ -274,7 +272,7 @@ func TestGuildRemoval_HealthyAndRollback(t *testing.T) {
 			if letters := f.removalLetters(t); len(letters) != 0 {
 				t.Fatalf("rollback retained letters: %v", letters)
 			}
-			if err := f.remove(ctx, f.service, mode.reject); err != nil {
+			if err := f.remove(ctx, f.service); err != nil {
 				t.Fatal(err)
 			}
 			if d := f.assertRoster(t); len(d.Members) != 1 {
@@ -284,7 +282,7 @@ func TestGuildRemoval_HealthyAndRollback(t *testing.T) {
 			if len(letters) != 1 || !strings.Contains(letters[0], mode.marker) || !strings.Contains(letters[0], f.g.Name) {
 				t.Fatalf("notification = %v", letters)
 			}
-			if err := f.remove(ctx, f.service, mode.reject); !errors.Is(err, guild.ErrTargetNotMember) {
+			if err := f.remove(ctx, f.service); !errors.Is(err, guild.ErrTargetNotMember) {
 				t.Fatalf("repeat removal = %v", err)
 			}
 			if letters := f.removalLetters(t); len(letters) != 1 {
@@ -296,9 +294,9 @@ func TestGuildRemoval_HealthyAndRollback(t *testing.T) {
 
 func TestGuildRemoval_RemovalFirst(t *testing.T) {
 	for _, mode := range []struct {
-		name            string
-		pending, reject bool
-	}{{"kickActive", false, false}, {"kickPending", true, false}, {"reject", true, true}} {
+		name    string
+		pending bool
+	}{{"expelActive", false}, {"rejectPending", true}} {
 		t.Run(mode.name, func(t *testing.T) {
 			f := newRemovalFixture(t, mode.pending)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -315,7 +313,7 @@ func TestGuildRemoval_RemovalFirst(t *testing.T) {
 			transferRepo := &removalGateRepo{GuildRepository: f.repo, beforeLocked: func(context.Context) { close(transferStarted) }}
 			transfer := f.newService(t, transferRepo)
 			removalDone, transferDone := make(chan error, 1), make(chan error, 1)
-			go func() { removalDone <- f.remove(ctx, removal, mode.reject) }()
+			go func() { removalDone <- f.remove(ctx, removal) }()
 			awaitRemovalSignal(t, locked)
 			go func() { transferDone <- transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.target.ID) }()
 			awaitRemovalSignal(t, transferStarted)
@@ -337,30 +335,24 @@ func TestGuildRemoval_RemovalFirst(t *testing.T) {
 }
 
 func TestGuildRemoval_CurrentState(t *testing.T) {
-	t.Run("rejection requires pending target", func(t *testing.T) {
+	t.Run("removing an approved applicant expels it", func(t *testing.T) {
 		f := newRemovalFixture(t, true)
 		ctx := context.Background()
-		if err := f.service.ApproveApplication(ctx, f.g.ID, f.leader.ID, f.target.ID, "member"); err != nil {
+		if err := assigned(f.service.Assign(ctx, f.g.ID, f.leader.ID, f.target.ID, "member")); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.remove(ctx, f.service, true); !errors.Is(err, guild.ErrMemberNotPending) {
-			t.Fatalf("approved applicant rejection = %v", err)
+		if outcome, err := f.service.Assign(ctx, f.g.ID, f.leader.ID, f.target.ID, guild.RemovalTitle); err != nil || outcome != guild.AssignExpelled {
+			t.Fatalf("remove approved applicant = %q, %v", outcome, err)
 		}
-		if d := f.assertRoster(t); len(d.Members) != 2 {
-			t.Fatalf("approved member removed: %+v", d)
-		}
-		letters := f.removalLetters(t)
-		if len(letters) != 1 || !strings.Contains(letters[0], "【＋参加許可証＋】") {
-			t.Fatalf("failed rejection notification: %v", letters)
+		if d := f.assertRoster(t); len(d.Members) != 1 {
+			t.Fatalf("approved member kept: %+v", d)
 		}
 	})
 	t.Run("member cannot remove leader", func(t *testing.T) {
 		f := newRemovalFixture(t, false)
 		ctx := context.Background()
-		for _, err := range []error{f.service.Kick(ctx, f.g.ID, f.target.ID, f.leader.ID), f.service.RejectApplication(ctx, f.g.ID, f.target.ID, f.leader.ID)} {
-			if !errors.Is(err, guild.ErrUnauthorized) {
-				t.Fatalf("member removal = %v", err)
-			}
+		if err := assigned(f.service.Assign(ctx, f.g.ID, f.target.ID, f.leader.ID, guild.RemovalTitle)); !errors.Is(err, guild.ErrUnauthorized) {
+			t.Fatalf("member removal = %v", err)
 		}
 		if d := f.assertRoster(t); len(d.Members) != 2 {
 			t.Fatalf("unauthorized removal: %+v", d)
@@ -373,16 +365,16 @@ func TestGuildRemoval_CurrentState(t *testing.T) {
 
 func TestGuildRemoval_Stress(t *testing.T) {
 	for _, mode := range []struct {
-		name            string
-		pending, reject bool
-	}{{"kickActive", false, false}, {"kickPending", true, false}, {"reject", true, true}} {
+		name    string
+		pending bool
+	}{{"expelActive", false}, {"rejectPending", true}} {
 		t.Run(mode.name, func(t *testing.T) {
 			f := newRemovalFixture(t, mode.pending)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 				err1, err2 := testutil.RunRace2(
-					func() error { return f.remove(ctx, f.service, mode.reject) },
+					func() error { return f.remove(ctx, f.service) },
 					func() error { return f.service.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.target.ID) },
 				)
 				for _, err := range []error{err1, err2} {
