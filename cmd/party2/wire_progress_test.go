@@ -3,74 +3,10 @@ package main
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/database"
-	"github.com/witchcraze/party2re/internal/medal"
 )
-
-func TestAdventureVictoryHook_ProgressErrors(t *testing.T) {
-	wantMetrics := []medal.MetricType{medal.MetricAdventureVictories, medal.MetricMonstersSlain, medal.MetricGoldEarned}
-	wantAmounts := []int{1, 3, 20}
-	injected := errors.New("progress unavailable")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	for failAt := 0; failAt <= len(wantMetrics); failAt++ {
-		calls := 0
-		hook := buildAdventureVictoryHook(func(gotCtx context.Context, actor string, metric medal.MetricType, amount int) error {
-			if gotCtx != ctx || actor != "hero" || metric != wantMetrics[calls] || amount != wantAmounts[calls] {
-				t.Fatalf("lost progress arguments: actor=%s metric=%s amount=%d", actor, metric, amount)
-			}
-			calls++
-			if calls == failAt {
-				return injected
-			}
-			return nil
-		})
-		err := hook(ctx, "hero", 3, 20)
-		if failAt == 0 {
-			if err != nil || calls != 3 {
-				t.Fatalf("success: err=%v calls=%d", err, calls)
-			}
-		} else if !errors.Is(err, injected) || calls != 3 {
-			t.Fatalf("failure at %d: err=%v calls=%d", failAt, err, calls)
-		}
-	}
-	for _, amount := range []int{0, -1} {
-		var got []medal.MetricType
-		hook := buildAdventureVictoryHook(func(_ context.Context, _ string, metric medal.MetricType, _ int) error {
-			got = append(got, metric)
-			return nil
-		})
-		if err := hook(ctx, "hero", amount, amount); err != nil || !reflect.DeepEqual(got, wantMetrics[:1]) {
-			t.Fatalf("nonpositive optional metrics: got=%v err=%v", got, err)
-		}
-	}
-}
-
-func TestPartyVictoryHook_LaterParticipantFailure(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	injected := errors.New("second participant progress unavailable")
-	var actors []string
-	hook := buildPartyVictoryHook(func(gotCtx context.Context, actor string, metric medal.MetricType, amount int) error {
-		if gotCtx != ctx {
-			t.Fatal("lost caller context")
-		}
-		actors = append(actors, actor)
-		if actor == "second" {
-			return injected
-		}
-		return nil
-	})
-	if err := hook(ctx, []string{"first", "second", "third"}, 2, 5); !errors.Is(err, injected) {
-		t.Fatalf("suppressed later participant failure: %v", err)
-	}
-	if !reflect.DeepEqual(actors, []string{"first", "first", "first", "second", "second", "second", "third", "third", "third"}) {
-		t.Fatalf("progress actors = %v", actors)
-	}
-}
 
 func TestWireBossBanquet_SkipsAmbientTransaction(t *testing.T) {
 	db := database.OpenTestDB(t)

@@ -261,13 +261,6 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 				if err := s.awardPrizes(txCtx, awardedIDs, detail.Room.Name, prizePerMember); err != nil {
 					return err
 				}
-				if s.victoryHook != nil {
-					for _, aID := range awardedIDs {
-						if err := s.victoryHook(txCtx, aID, ""); err != nil {
-							return err
-						}
-					}
-				}
 				return nil
 			}); err != nil {
 				return err

@@ -29,7 +29,6 @@ import (
 //  6. Reset party status to StatusRecruiting and member ready states to false.
 func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID string) (PartyAdventureResult, error) {
 	var result PartyAdventureResult
-	var defeatedMonsterCount int
 
 	err := s.repo.WithPartyAdventureLock(ctx, partyID, func(lockedCtx context.Context) error {
 		return s.withWaitingLobbyTx(lockedCtx, partyID, func(txCtx context.Context) error {
@@ -206,9 +205,6 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 
 			// 7. Post-Battle Settlement: rewards, surviving HP/MP, and Floor 11 treasure drops
 			outcome := string(crawlResult.Outcome)
-			if crawlResult.Outcome == battle.OutcomeWin {
-				defeatedMonsterCount = crawlResult.FloorsCleared
-			}
 
 			rewardSummaries, lostDrops, err := s.settlePostBattle(txCtx, members, charMap, &crawlResult, lastBattleRes)
 			if err != nil {
@@ -323,17 +319,6 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 	})
 	if err != nil {
 		return PartyAdventureResult{}, err
-	}
-
-	if result.Outcome == string(battle.OutcomeWin) && s.victoryHook != nil {
-		charIDs := make([]string, len(result.Rewards))
-		for i, r := range result.Rewards {
-			charIDs[i] = r.CharacterID
-		}
-		//lint:ignore error-swallow best-effort medal progress cannot roll back committed adventure rewards
-		if err := s.victoryHook(ctx, charIDs, defeatedMonsterCount, result.TotalGold); err != nil {
-			slog.WarnContext(ctx, "party victory progress failed", "error_type", reflect.TypeOf(err).String())
-		}
 	}
 
 	if s.postAdventureHook != nil {

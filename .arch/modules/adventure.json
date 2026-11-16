@@ -117,7 +117,7 @@
           "note": "Persist resolved adventure history record for each participant in the same transaction"
         }
       ],
-      "note": "Wraps post-battle reward/item settlement and adventure history persistence in a single RunInTx boundary; VictoryHook and PostAdventureHook execute after commit."
+      "note": "Wraps post-battle reward/item settlement and adventure history persistence in a single RunInTx boundary; PostAdventureHook executes after commit."
     },
     {
       "method": "WithRunForUpdate",

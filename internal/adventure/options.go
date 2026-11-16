@@ -28,11 +28,6 @@ type nopLogger struct{}
 
 func (nopLogger) Warn(msg string, args ...any) {}
 
-// VictoryHook is called when an adventure stage concludes with a player victory.
-// It is invoked as a best-effort side-effect notification after adventure state and rewards are committed.
-// Hook execution errors are logged via Logger without failing the completed adventure.
-type VictoryHook func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error
-
 // PostAdventureHook is called after an adventure concludes and state is applied.
 // It is invoked as a best-effort side-effect notification.
 // A nonempty message is included in the participant's completion result on success.

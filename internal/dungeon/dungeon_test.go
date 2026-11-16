@@ -163,28 +163,6 @@ func TestStartExpedition_SuccessAndGuards(t *testing.T) {
 	}
 }
 
-func TestService_MonsterDefeatedHook(t *testing.T) {
-	f := newNativeFixture(t, createTestChar("strong", 20, 1000, 500, 500))
-	var hookCharID string
-	var hookCount int
-	f.svc.SetMonsterDefeatedHook(func(ctx context.Context, characterID string, count int) error {
-		hookCharID, hookCount = characterID, count
-		return nil
-	})
-	f.place(t, "strong", 0, 0, 1)
-	f.rng.floats = []float64{0.1} // passage spawn
-	res, err := f.svc.Move(context.Background(), "strong", dungeon.DirectionEast)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.EventType != dungeon.EventBattle {
-		t.Fatalf("expected EventBattle, got %v", res.EventType)
-	}
-	if hookCharID != "strong" || hookCount != 1 {
-		t.Errorf("hook = (%q, %d), want (strong, 1)", hookCharID, hookCount)
-	}
-}
-
 type mockCustomActiveStore struct {
 	dungeon.ActiveExpeditionStore
 	getActiveFn func(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)

@@ -277,43 +277,6 @@ func TestExecuteCrawl_ParticipantsValidation(t *testing.T) {
 	}
 }
 
-func TestAdventure_VictoryHook(t *testing.T) {
-	service, _, _, characters := newTestService(t)
-	// Give high level so character easily wins starter stage
-	characters.value.Level = 50
-	characters.value.Stats.HP = 500
-	characters.value.Stats.MaxHP = 500
-	characters.value.Stats.Attack = 100
-	characters.value.Stats.Defense = 50
-
-	var hookedCharID string
-	var hookedMonsters int
-	var hookedGold int
-	service.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
-		hookedCharID = characterID
-		hookedMonsters = monstersDefeated
-		hookedGold = goldEarned
-		return nil
-	})
-
-	adv, err := service.Start(context.Background(), characters.value.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if adv.BattleResult.Outcome == corebattle.OutcomeWin {
-		if hookedCharID != characters.value.ID {
-			t.Errorf("expected hookedCharID %s, got %s", characters.value.ID, hookedCharID)
-		}
-		if hookedMonsters == 0 {
-			t.Errorf("expected hookedMonsters > 0, got %d", hookedMonsters)
-		}
-		if hookedGold != adv.BattleResult.Reward.Currency {
-			t.Errorf("expected hookedGold %d, got %d", adv.BattleResult.Reward.Currency, hookedGold)
-		}
-	}
-}
-
 func TestAdventure_PostAdventureHook(t *testing.T) {
 	service, _, _, characters := newTestService(t)
 
@@ -618,9 +581,6 @@ func TestExecuteCrawl_HookErrorHandling(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
-		return errors.New("simulated victory hook error")
-	})
 	service.SetPostAdventureHook(func(ctx context.Context, characterID string) (string, error) {
 		return "", errors.New("simulated post adventure hook error")
 	})
@@ -638,14 +598,8 @@ func TestExecuteCrawl_HookErrorHandling(t *testing.T) {
 
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
-	if len(logger.warnings) != 2 {
-		t.Fatalf("expected 2 warnings from failed hooks, got %d: %+v", len(logger.warnings), logger.warnings)
-	}
-	if !strings.Contains(logger.warnings[0], "adventure victory hook failed for character char-hook-test: simulated victory hook error") {
-		t.Errorf("unexpected victory hook warning: %s", logger.warnings[0])
-	}
-	if !strings.Contains(logger.warnings[1], "post adventure hook failed for character char-hook-test: simulated post adventure hook error") {
-		t.Errorf("unexpected post adventure hook warning: %s", logger.warnings[1])
+	if len(logger.warnings) != 1 || !strings.Contains(logger.warnings[0], "post adventure hook failed for character char-hook-test: simulated post adventure hook error") {
+		t.Fatalf("expected the post adventure hook warning, got %+v", logger.warnings)
 	}
 }
 

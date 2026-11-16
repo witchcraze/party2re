@@ -181,7 +181,7 @@ To preserve parallel testability and eliminate global state mutations:
    - `services_cmbt.go`: Battle engine, Boss, PvP, GvG, Dungeon, Challenge, Party, Replay, and Custom Skill.
    - `services_soc.go`: Guild, Ranking, Home, Notification, Scheduling, and Worker.
    - `services_misc.go`: Town facilities and side systems (Casino, Contest, Medal, Collection, Chapel, Altar, Wishing Well, Activity, etc.).
-   - `wire.go`: Cross-domain event hooks (`VictoryHook`, `SynthesisHook`, `GamePlayedHook`, `PostAdventureHook`) and HTTP handler composition.
+   - `wire.go`: Cross-domain event hooks (`PostAdventureHook`) and HTTP handler composition.
 5. **Fail-Fast Startup Connectivity & Clean Teardown**:
    - Both MariaDB and Valkey are required runtime infrastructure dependencies in production.
    - During bootstrap, `runWithConfig` executes blocking, timeout-bounded connectivity checks (`database.PingContext`, `valkey.Ping`) before binding network listeners or launching background workers.

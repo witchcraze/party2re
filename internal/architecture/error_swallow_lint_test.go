@@ -267,7 +267,7 @@ func TestErrorSwallowLint_UnitTests(t *testing.T) {
 			name: "hook configuration does not return an error",
 			code: `package testpkg
 func foo(s *Service) {
-	s.SetVictoryHook(hook)
+	s.SetPostAdventureHook(hook)
 }`,
 			expectCount: 0,
 		},
@@ -275,7 +275,7 @@ func foo(s *Service) {
 			name: "discarded hook error",
 			code: `package testpkg
 func foo(s *Service) {
-	_ = s.victoryHook(ctx, id)
+	_, _ = s.postAdventureHook(ctx, id)
 }`,
 			expectCount: 1,
 		},
@@ -283,7 +283,7 @@ func foo(s *Service) {
 			name: "bare hook call",
 			code: `package testpkg
 func foo(s *Service) {
-	s.gamePlayedHook(ctx, id)
+	s.postAdventureHook(ctx, id)
 }`,
 			expectCount: 1,
 		},
@@ -307,8 +307,8 @@ func foo(s *Service) {
 			name: "annotated hook and publisher",
 			code: `package testpkg
 func foo(s *Service) {
-	//lint:ignore error-swallow best-effort post-commit progress
-	_ = s.victoryHook(ctx, id)
+	//lint:ignore error-swallow best-effort post-commit effect
+	_, _ = s.postAdventureHook(ctx, id)
 	s.newsPub.PublishNews(ctx, news) //lint:ignore error-swallow informational news
 }`,
 			expectCount: 0,
@@ -317,7 +317,7 @@ func foo(s *Service) {
 			name: "handled hook and publisher",
 			code: `package testpkg
 func foo(s *Service) {
-	if err := s.victoryHook(ctx, id); err != nil { warn(err) }
+	if _, err := s.postAdventureHook(ctx, id); err != nil { warn(err) }
 	if err := s.newsPub.PublishNews(ctx, news); err != nil { warn(err) }
 }`,
 			expectCount: 0,

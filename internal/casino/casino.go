@@ -4,10 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"log/slog"
 	"math"
 	"math/big"
-	"reflect"
 	"slices"
 	"time"
 
@@ -91,9 +89,6 @@ func (f BlessingProviderFunc) HasCasinoBlessing(ctx context.Context, characterID
 	return f(ctx, characterID)
 }
 
-// GamePlayedHook is called whenever a casino game round concludes.
-type GamePlayedHook func(ctx context.Context, characterID string, gameName string) error
-
 type Service struct {
 	mutationCheck    func(context.Context, string) error
 	repo             Repository
@@ -105,7 +100,6 @@ type Service struct {
 	txProvider       TransactionProvider
 	runner           TransactionRunner
 	blessingProvider BlessingProvider
-	gamePlayedHook   GamePlayedHook
 	reelRoller       func(bet int64) (SpinResult, error)
 	wish5Roller      func() bool
 }
@@ -177,10 +171,6 @@ func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) erro
 		return s.txProvider.RunInTx(ctx, fn)
 	}
 	return fn(ctx)
-}
-
-func (s *Service) SetGamePlayedHook(hook GamePlayedHook) {
-	s.gamePlayedHook = hook
 }
 
 func NewService(repo Repository, opts ...Option) (*Service, error) {
@@ -352,13 +342,6 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 	})
 	if err != nil {
 		return SpinResult{}, Account{}, err
-	}
-
-	if s.gamePlayedHook != nil {
-		//lint:ignore error-swallow best-effort medal progress must not fail a committed game
-		if err := s.gamePlayedHook(ctx, characterID, "slot"); err != nil {
-			slog.WarnContext(ctx, "casino slot progress failed", "error_type", reflect.TypeOf(err).String())
-		}
 	}
 
 	return res, acc, nil

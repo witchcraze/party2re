@@ -19,10 +19,10 @@ import (
 
 type medalHelperFixture struct {
 	*gatewayFixture
-	achievementsErr, medalsErr, questsErr error
-	quests                                []helperquest.Quest
-	completion                            helperquest.CompletionResult
-	completedID, claimedItem, claimedAch  string
+	questsErr                error
+	quests                   []helperquest.Quest
+	completion               helperquest.CompletionResult
+	completedID, claimedItem string
 }
 
 func (f *medalHelperFixture) GetRewards() []medal.Reward {
@@ -33,21 +33,6 @@ func (f *medalHelperFixture) Claim(ctx context.Context, actor, itemID string) (c
 	f.claimedItem = itemID
 	_, err := f.execute(ctx, actor, 0)
 	return corecharacter.Character{ID: actor, Name: "勇者", SmallMedals: 2}, depot.Depot{}, err
-}
-
-func (f *medalHelperFixture) GetAchievements(context.Context, string) ([]medal.AchievementProgress, error) {
-	return nil, f.achievementsErr
-}
-
-func (f *medalHelperFixture) ClaimAchievement(ctx context.Context, actor, id string) (medal.ClaimResult, error) {
-	f.claimedAch = id
-	_, err := f.execute(ctx, actor, 0)
-	return medal.ClaimResult{AchievementID: id, AchievementName: "冒険の第一歩", Medal: medal.CharacterMedal{MedalID: "medal_adv_bronze"},
-		Character: corecharacter.Character{ID: actor, Money: 999}}, err
-}
-
-func (f *medalHelperFixture) GetCharacterMedals(context.Context, string) ([]medal.CharacterMedal, error) {
-	return nil, f.medalsErr
 }
 
 func (f *medalHelperFixture) ListQuests(context.Context, time.Time) ([]helperquest.Quest, error) {
@@ -87,10 +72,10 @@ func TestMedalAndHelperScenesObserveTheirLists(t *testing.T) {
 	status, observation := navigationGET(t, router)
 	data := decodeShopScene[MedalSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "メダル伯爵の城" || data.SmallMedals != 5 || len(data.Rewards) != 2 ||
-		data.Rewards[0] != (MedalReward{Cost: 3, ItemID: "armor-32", ItemName: "戦士のパジャマ"}) || data.Achievements == nil || data.Medals == nil {
+		data.Rewards[0] != (MedalReward{Cost: 3, ItemID: "armor-32", ItemName: "戦士のパジャマ"}) {
 		t.Fatalf("medal: %d %+v", status, data)
 	}
-	for _, action := range []string{"medal_claim", "achievement_claim", "npc_talk", "npc_inspect", "place_say", "scene_back"} {
+	for _, action := range []string{"medal_claim", "npc_talk", "npc_inspect", "place_say", "scene_back"} {
 		if !offered(observation, action) {
 			t.Fatalf("medal missing %s", action)
 		}
@@ -111,21 +96,12 @@ func TestMedalAndHelperScenesObserveTheirLists(t *testing.T) {
 	}
 }
 
-func TestMedalAndHelperScenesFailOnRequiredReads(t *testing.T) {
-	for _, tc := range []struct {
-		scene string
-		fail  func(*medalHelperFixture)
-	}{
-		{"medal", func(f *medalHelperFixture) { f.achievementsErr = errors.New("private") }},
-		{"medal", func(f *medalHelperFixture) { f.medalsErr = errors.New("private") }},
-		{"helper", func(f *medalHelperFixture) { f.questsErr = errors.New("private") }},
-	} {
-		f := newMedalHelperFixture(t)
-		tc.fail(f)
-		_, router := f.router(t, tc.scene)
-		if status, observation := navigationGET(t, router); status != 500 || observation.Scene.Data != nil {
-			t.Fatalf("%s partial observation: %d %+v", tc.scene, status, observation)
-		}
+func TestHelperSceneFailsOnRequiredRead(t *testing.T) {
+	f := newMedalHelperFixture(t)
+	f.questsErr = errors.New("private")
+	_, router := f.router(t, "helper")
+	if status, observation := navigationGET(t, router); status != 500 || observation.Scene.Data != nil {
+		t.Fatalf("partial observation: %d %+v", status, observation)
 	}
 }
 
@@ -153,11 +129,7 @@ func TestMedalCommands(t *testing.T) {
 		got.Message != "メダル3枚の賞品と交換するのじゃな！戦士のパジャマは勇者の預かり所に送っておいたぞ！" {
 		t.Fatalf("medal_claim: %d %+v", status, got)
 	}
-	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("achievement_claim", `{"achievement_id":"adv_novice"}`), nil)
-	if ach := tavernResult[AchievementClaimResult](t, raw); status != 200 || f.claimedAch != "adv_novice" || ach.Medal.MedalID != "medal_adv_bronze" || strings.Contains(string(raw["result"]), "999") {
-		t.Fatalf("achievement_claim: %d %s", status, raw["result"])
-	}
-	for _, body := range []string{saleGatewayBody("medal_claim", `{}`), saleGatewayBody("achievement_claim", `{"achievement_id":"a","x":1}`), saleGatewayBody("helper_complete", `{"quest_id":1}`)} {
+	for _, body := range []string{saleGatewayBody("medal_claim", `{}`), saleGatewayBody("medal_claim", `{"item_id":"armor-32","x":1}`), saleGatewayBody("helper_complete", `{"quest_id":1}`)} {
 		before := f.executions
 		if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", body, nil); status != 400 || f.executions != before {
 			t.Fatalf("%s executed: %d %s", body, status, raw)
@@ -198,9 +170,6 @@ func TestMedalAndHelperCommandErrors(t *testing.T) {
 	}{
 		{"medal", "medal_claim", `{"item_id":"item-013"}`, medal.ErrInsufficientMedals, "MEDAL_INSUFFICIENT", "小さなメダル5枚の賞品と交換するにはメダルが足りないぞ", 409},
 		{"medal", "medal_claim", `{"item_id":"x"}`, medal.ErrRewardNotFound, "MEDAL_REWARD_NOT_FOUND", "", 400},
-		{"medal", "achievement_claim", `{"achievement_id":"x"}`, medal.ErrAchievementNotFound, "ACHIEVEMENT_NOT_FOUND", "", 400},
-		{"medal", "achievement_claim", `{"achievement_id":"a"}`, medal.ErrAchievementNotCompleted, "ACHIEVEMENT_NOT_COMPLETED", "", 409},
-		{"medal", "achievement_claim", `{"achievement_id":"a"}`, medal.ErrAchievementAlreadyClaimed, "ACHIEVEMENT_ALREADY_CLAIMED", "", 409},
 		{"helper", "helper_complete", `{"quest_id":"q1"}`, helperquest.ErrInsufficientItems, "HELPER_CONDITION_UNMET", "こんぼう 2 本 の条件を満たしてないようです", 409},
 		{"helper", "helper_complete", `{"quest_id":"q1"}`, helperquest.ErrGuildRequired, "HELPER_GUILD_REQUIRED", "趣味でその7はギルド専用のクエストよ。", 409},
 		{"helper", "helper_complete", `{"quest_id":"gone"}`, helperquest.ErrQuestNotFound, "HELPER_QUEST_NOT_FOUND", "", 400},

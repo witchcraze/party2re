@@ -89,7 +89,6 @@ type Service struct {
 	logger             Logger
 	clock              Clock
 	nowFunc            func() time.Time
-	victoryHook        VictoryHook
 	postAdventureHook  PostAdventureHook
 	participantBuilder ParticipantBuilder
 	battleSettler      PostBattleSettler
@@ -113,10 +112,6 @@ func (s *Service) now() time.Time {
 		return s.clock.Now()
 	}
 	return time.Now()
-}
-
-func (s *Service) SetVictoryHook(hook VictoryHook) {
-	s.victoryHook = hook
 }
 
 func (s *Service) SetBlessingProvider(provider BlessingProvider) {
@@ -467,12 +462,6 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	committed = true
 
 	for _, c := range characters {
-		if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {
-			if err := s.victoryHook(ctx, c.ID, result.FloorsCleared, result.RewardForCharacter(c.ID).Currency); err != nil {
-				s.logger.Warn("adventure victory hook failed for character %s: %v", c.ID, err)
-			}
-		}
-
 		if s.postAdventureHook != nil {
 			if message, err := s.postAdventureHook(ctx, c.ID); err != nil {
 				s.logger.Warn("post adventure hook failed for character %s: %v", c.ID, err)

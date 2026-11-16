@@ -176,7 +176,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/chapel.cgi` | 礼拝堂 (@シスター) | `internal/chapel/` | [design/chapel.md](../design/chapel.md) | Review against source | 祈願枠と効果期間の分離、同日睡眠後の再祈願拒否、日跨ぎ睡眠による枠解除・効果終了、残留chapel_reset安全化。詳細は [design/chapel.md](../design/chapel.md) 参照。 |
 | `lib/god.cgi` | 天界 (@神) | `internal/god/` | [design/god.md](../design/god.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | `＠ねがう` → `GrantWish` / `god_wish` (`POST /api/v1/characters/{id}/actions`)。能力値強化・上限解除/復帰の保存境界: [回帰テスト](../../internal/god/limits_test.go)。金メダル装飾の保存・読出し・願い消費の原子性: [回帰テスト](../../internal/god/guild_decoration_test.go)。その他の仕様・残差は所有 Design Doc と原典を照合する。 |
 | `lib/u_god.cgi` | 裏天界 (@裏神) | `internal/god/` | [design/god.md](../design/god.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | 5大保管庫拡張(牧場・預かり所+50/段、各最大5段階) |
-| `lib/medal.cgi` | メダル伯爵の城 (@メダル伯爵、clean-room名) | `internal/medal/`<br/>`internal/api/http/action_medal.go` | [design/medal.md](../design/medal.md)<br/>[design/achievements.md](../design/achievements.md) | Review against source | `medal` シーン。`こうかん` → `medal_claim`、景品一覧・所持枚数 → シーン観測。承認済み拡張の実績・記念メダルも同シーンで観測し `achievement_claim` で受け取る。景品はDepotへ直送 |
+| `lib/medal.cgi` | メダル伯爵の城 (@メダル伯爵、clean-room名) | `internal/medal/`<br/>`internal/api/http/action_medal.go` | [design/medal.md](../design/medal.md) | Review against source | `medal` シーン。`こうかん` → `medal_claim`、景品一覧・所持枚数 → シーン観測。景品はDepotへ直送 |
 | `lib/exile.cgi` | 荒らし追放騎士団 (@追放騎士) | `internal/exile/` | [design/exile.md](../design/exile.md) | Review against source | `ついほう`/`さんせい`/`はんたい` → `exile_petition`/`exile_approve`/`exile_oppose`。原典の癖も再現し、改善案は #1972。 |
 
 ---

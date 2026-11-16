@@ -42,7 +42,7 @@ const (
 	// Rank 7: Guilds and guild membership. Multiple guilds must be locked ascending by ID.
 	RankGuild LockRank = 7
 
-	// Rank 8: Secondary domain feature records (monsters, achievements, points, farm plots).
+	// Rank 8: Secondary domain feature records (monsters, points, farm plots).
 	RankSecondaryFeature LockRank = 8
 )
 
@@ -148,10 +148,10 @@ func classifyLockCall(recvName, methodName, relPath string) (LockRank, string, b
 	}
 
 	// Rank 8: Secondary domain feature records
-	if strings.Contains(r, "monster") || strings.Contains(r, "achievement") ||
+	if strings.Contains(r, "monster") ||
 		strings.Contains(r, "blackmarket") || strings.Contains(r, "point") ||
 		strings.Contains(r, "farm") || strings.Contains(r, "plantation") ||
-		strings.Contains(r, "plot") || strings.Contains(m, "achievement") ||
+		strings.Contains(r, "plot") ||
 		strings.Contains(m, "point") {
 		return RankSecondaryFeature, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}

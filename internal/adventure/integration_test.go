@@ -975,11 +975,7 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		t.Fatal(err)
 	}
 
-	var victoryHooks, postHooks int
-	advService.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
-		victoryHooks++
-		return nil
-	})
+	var postHooks int
 	advService.SetPostAdventureHook(func(ctx context.Context, characterID string) (string, error) {
 		postHooks++
 		return "", nil
@@ -992,8 +988,8 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 	if err == nil {
 		t.Fatal("expected StartStage to fail when adventure Save fails")
 	}
-	if victoryHooks != 0 || postHooks != 0 {
-		t.Fatalf("hooks must not run on rolled-back crawl: victory=%d post=%d", victoryHooks, postHooks)
+	if postHooks != 0 {
+		t.Fatalf("hooks must not run on rolled-back crawl: post=%d", postHooks)
 	}
 
 	afterFail1, err := charRepo.FindByID(ctx, hero1.ID)
@@ -1029,8 +1025,8 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 	if err == nil {
 		t.Fatal("expected ExecuteCrawl to fail when 2nd participant adventure Save fails")
 	}
-	if victoryHooks != 0 || postHooks != 0 {
-		t.Fatalf("hooks must not run on multi-participant rollback: victory=%d post=%d", victoryHooks, postHooks)
+	if postHooks != 0 {
+		t.Fatalf("hooks must not run on multi-participant rollback: post=%d", postHooks)
 	}
 
 	for _, h := range []corecharacter.Character{hero1, hero2} {
@@ -1062,21 +1058,14 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 			outsideMoneyDuringSave = outsideChar.Money
 		}
 	}
-	advService.SetVictoryHook(func(hookCtx context.Context, characterID string, _ int, _ int) error {
-		victoryHooks++
+	advService.SetPostAdventureHook(func(hookCtx context.Context, characterID string) (string, error) {
+		postHooks++
 		if database.TxFromContext(hookCtx) != nil {
-			t.Errorf("expected victoryHook context to have no active transaction")
+			t.Errorf("expected postAdventureHook context to have no active transaction")
 		}
 		hist, err := advService.ListHistory(context.Background(), characterID, 10, 0)
 		if err == nil && hist.Total == 1 {
 			hookSawCommittedHistory = true
-		}
-		return errors.New("victory hook failure after commit")
-	})
-	advService.SetPostAdventureHook(func(hookCtx context.Context, _ string) (string, error) {
-		postHooks++
-		if database.TxFromContext(hookCtx) != nil {
-			t.Errorf("expected postAdventureHook context to have no active transaction")
 		}
 		return "", errors.New("post adventure hook failure after commit")
 	})
@@ -1089,9 +1078,9 @@ func TestAdventurePostBattleSettlement_AtomicHistoryAndHooks_Integration(t *test
 		t.Fatalf("expected rewards to be uncommitted during adventure Save, but outside reader saw money=%d (initial=%d)",
 			outsideMoneyDuringSave, hero1.Money)
 	}
-	if !hookSawCommittedHistory || victoryHooks != 1 || postHooks != 1 {
-		t.Fatalf("expected hooks to run after commit and observe committed history: sawHistory=%v victory=%d post=%d",
-			hookSawCommittedHistory, victoryHooks, postHooks)
+	if !hookSawCommittedHistory || postHooks != 1 {
+		t.Fatalf("expected the hook to run after commit and observe committed history: sawHistory=%v post=%d",
+			hookSawCommittedHistory, postHooks)
 	}
 
 	committedHero1, err := charRepo.FindByID(ctx, hero1.ID)

@@ -621,12 +621,12 @@ func TestAdventure_SettlementAndHistoryInSameTxBoundary(t *testing.T) {
 
 	var hookInTx bool
 	var hooksCalled int
-	svc.SetVictoryHook(func(ctx context.Context, _ string, _ int, _ int) error {
+	svc.SetPostAdventureHook(func(ctx context.Context, _ string) (string, error) {
 		hooksCalled++
 		if ctx.Value(txKey{}) == true {
 			hookInTx = true
 		}
-		return nil
+		return "", nil
 	})
 
 	_, err = svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{

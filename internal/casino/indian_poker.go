@@ -5,9 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math/big"
-	"reflect"
 	"slices"
 	"time"
 )
@@ -140,7 +138,6 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 
 	var detail *RoomDetail
 	var readErr error
-	var showdownWinner string
 	var secondarySyncErr error
 
 	err := s.withRoomMutationLock(ctx, roomID, characterID, func(lockedCtx context.Context) error {
@@ -293,7 +290,6 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 							return err
 						}
 					}
-					showdownWinner = winnerID
 				}
 
 				room.Round = 0
@@ -346,12 +342,6 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 		return nil, err
 	}
 
-	if showdownWinner != "" && s.gamePlayedHook != nil {
-		//lint:ignore error-swallow best-effort medal progress must not fail a committed game
-		if err := s.gamePlayedHook(ctx, showdownWinner, "indian_poker"); err != nil {
-			slog.WarnContext(ctx, "casino indian poker progress failed", "error_type", reflect.TypeOf(err).String())
-		}
-	}
 	if readErr != nil {
 		return nil, readErr
 	}
