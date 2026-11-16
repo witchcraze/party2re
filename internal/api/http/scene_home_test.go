@@ -124,6 +124,10 @@ func homeSceneRouter(t *testing.T, options ...Option) (*homeSceneFixture, *gatew
 		playercontext.SceneDefinition{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
 		playercontext.SceneDefinition{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
 		playercontext.SceneDefinition{ID: "home_notices", Parent: "home", Pageable: true, CursorPageable: true},
+		playercontext.SceneDefinition{ID: "home_collection", Parent: "home", InheritsSubject: true},
+		playercontext.SceneDefinition{ID: "home_monster_book", Parent: "home", InheritsSubject: true},
+		playercontext.SceneDefinition{ID: "home_job_master", Parent: "home", InheritsSubject: true},
+		playercontext.SceneDefinition{ID: "home_custom_skill", Parent: "home"},
 	))
 	h, err := NewHandler(f.gatewayFixture, f.homeGatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, append([]Option{WithHome(f), WithPlayerContext(service)}, options...)...)
 	if err != nil {
@@ -161,7 +165,7 @@ func TestHomeScenesPublicOwnedTargetsAndRecovery(t *testing.T) {
 	f, store, router := homeSceneRouter(t)
 	status, response := navigationGET(t, router)
 	data := decodeHomeData(t, response)
-	if status != 200 || !data.View.IsOwner || data.View.Private == nil || len(data.Destinations) != 3 || response.Scene.Support.Observation != "details" {
+	if status != 200 || !data.View.IsOwner || data.View.Private == nil || len(data.Destinations) != 7 || response.Scene.Support.Observation != "details" {
 		t.Fatalf("owned: %d %+v", status, response)
 	}
 	before := f.repo.privateReads
@@ -172,7 +176,7 @@ func TestHomeScenesPublicOwnedTargetsAndRecovery(t *testing.T) {
 	refreshed := homeObservation(t, raw)
 	status, response = navigationGET(t, router)
 	data = decodeHomeData(t, response)
-	if status != 200 || !reflect.DeepEqual(refreshed.Scene, response.Scene) || response.Character.ID != "hero" || data.View.Owner.ID != "other" || data.View.IsOwner || data.View.Private != nil || len(data.Destinations) != 0 || f.repo.privateReads != before {
+	if status != 200 || !reflect.DeepEqual(refreshed.Scene, response.Scene) || response.Character.ID != "hero" || data.View.Owner.ID != "other" || data.View.IsOwner || data.View.Private != nil || len(data.Destinations) != 3 || f.repo.privateReads != before {
 		t.Fatalf("public: %+v", response)
 	}
 	for _, a := range response.AvailableActions {

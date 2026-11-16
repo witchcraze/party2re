@@ -109,20 +109,6 @@ func (r *CollectionRepository) GetItemCollection(ctx context.Context, characterI
 	return entries, rows.Err()
 }
 
-func (r *CollectionRepository) GetItemCollectionCount(ctx context.Context, characterID, category string) (int, error) {
-	var count int
-	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM character_item_collection
-		WHERE character_id = ?
-		  AND (? = '' OR category = ?)
-		  AND (LOWER(category) != 'item' OR (
-		      NOT (item_id REGEXP '^(item|ite)-[0-9]+$')
-		      OR CAST(REGEXP_SUBSTR(item_id, '[0-9]+$') AS UNSIGNED) <= 141
-		  ))
-	`, characterID, category, category).Scan(&count)
-	return count, err
-}
-
 func (r *CollectionRepository) MarkCompleted(ctx context.Context, characterID, kind string) (bool, error) {
 	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT IGNORE INTO character_collection_completions (

@@ -70,7 +70,6 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithDepot(&stubDepotService{}),
 		apihttp.WithContest(&stubContestService{}),
 		apihttp.WithEventPlaza(&mockEventPlazaService{}),
-		apihttp.WithCustomSkill(&stubCustomSkillService{}),
 		apihttp.WithGuild(&stubGuildService{}),
 		apihttp.WithMedal(&mockMedalService{}),
 		apihttp.WithBlackMarket(&stubBlackMarketService{}),
@@ -118,9 +117,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		// Event Plaza
 		{"eventplaza_presence", http.MethodPost, "/eventplaza/presence", `{"character_id":"char-1"}`},
 		{"eventplaza_merchant_purchase", http.MethodPost, "/eventplaza/merchant/purchase", `{"character_id":"char-1","item_id":"item-1","quantity":1}`},
-		// Tavern
-		// Custom Skill
-		{"custom_skill_set", http.MethodPost, "/characters/char-1/custom-skills", `{"name":"Skill","comment":"Desc","gems":["g1","g2","g3"]}`},
 		// Guild
 		{"guild_create", http.MethodPost, "/guilds", `{"character_id":"char-1","name":"Guild"}`},
 		{"guild_apply", http.MethodPost, "/guilds/guild-1/apply", `{"character_id":"char-1"}`},

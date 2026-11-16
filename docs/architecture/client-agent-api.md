@@ -240,10 +240,13 @@ Shop subjects use `target_kind:item` and IDs validated by
 the owned actor's existing Shop catalog, including its eligibility filters.
 Home registers `target_kind:home` with a character ID validated by the public
 Home service. Entering `home` observes the actor; selecting another ID observes
-that target without changing the actor/viewer. `home_inbox` and `home_outbox` have
-`home` as their parent and always read the owned actor, without a target input.
-Public Home detail never offers owner mailbox destinations. Other subject kinds
-remain adapter-owned.
+that target without changing the actor/viewer. Home sub-scenes have `home` as
+their parent; the owner-only ones always read the owned actor, without a target
+input, and public Home detail never offers them. An `InheritsSubject` destination
+is a view of its parent's selected subject: entry from the parent keeps that
+subject, back returns to the parent with it, and it offers no `scene_select`
+([Home](../design/home.md#observation-visibility-and-navigation)). Other subject
+kinds remain adapter-owned.
 SecretShop registers `target_kind:item` with its public status catalog IDs.
 A destination may register a pure `SceneDefinition.CanEnter` character predicate,
 such as SecretShop's JobLevel ≥7 qualification. Town and the `scene_enter` input
@@ -253,8 +256,8 @@ Enter rechecks qualification against the owned query snapshot and returns
 write. A saved disallowed selection becomes `selection_unavailable` without a
 facility/subject read; only back and entry to another permitted destination
 remain eligible. Feature execution still rechecks qualification independently.
-`scene_back` clears a selected subject to its facility list; otherwise it selects
-the registered parent. Enter/select reset subject/page descendants.
+`scene_back` clears a selected subject to its facility list (an inherited subject
+returns to the parent instead); otherwise it selects the registered parent. Enter/select reset subject/page descendants.
 
 Page input requires `destination` and exactly one of `offset` (0–1,000,000) or
 `cursor`, with optional `limit` (default 20, maximum 100). It applies only to a

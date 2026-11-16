@@ -461,17 +461,6 @@ func TestCompletionInduction_RepositoryFailures(t *testing.T) {
 		}
 	})
 
-	t.Run("GetItemCollectionCount_failure", func(t *testing.T) {
-		repo := &mockCollectionRepo{
-			getItemCountErr: errInjectedRepoFailure,
-		}
-		svc, _ := collection.NewService(repo, 10, 10)
-		err := svc.RecordItemDiscovered(ctx, "char-1", "i1", "Item", "item")
-		if !errors.Is(err, errInjectedRepoFailure) {
-			t.Errorf("expected errInjectedRepoFailure, got %v", err)
-		}
-	})
-
 	t.Run("GetWeaponCollection_failure", func(t *testing.T) {
 		repo := &mockCollectionRepo{
 			getItemCollectionErr: errInjectedRepoFailure,

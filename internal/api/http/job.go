@@ -211,28 +211,3 @@ func (h *Handler) handleRecallFutureMemory(w http.ResponseWriter, r *http.Reques
 		})
 	})
 }
-
-func (h *Handler) handleGetCharacterJobMastery(w http.ResponseWriter, r *http.Request) {
-	if h.jobs == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("job service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	if charID == "" {
-		writeError(w, http.StatusBadRequest, errors.New("character id is required"))
-		return
-	}
-
-	mastery, err := h.jobs.GetJobMastery(r.Context(), charID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, errors.New("character not found"))
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, mastery)
-}

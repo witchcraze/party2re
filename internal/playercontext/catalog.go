@@ -360,7 +360,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		ID:             "custom_skill_set",
 		Label:          "カスタムスキル作成",
 		Category:       "crafting",
-		OperationID:    "setCustomSkill",
+		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"name"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},

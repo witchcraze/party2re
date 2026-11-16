@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"slices"
 
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/placelog"
@@ -53,12 +54,14 @@ func (h *Handler) homeSceneData(ctx context.Context, r playercontext.Result) (an
 		return nil, err
 	}
 	data := HomeSceneData{Parent: "town", View: view, Destinations: []SceneDestination{}, ColorSamples: []HomeColorSample{}}
+	destinations := homeRecordScenes
 	if view.IsOwner {
 		data.ColorSamples = homeColorSamples
-		for _, id := range []string{"home_inbox", "home_outbox", "home_notices"} {
-			if adapter, ok := h.sceneAdapters[id]; ok {
-				data.Destinations = append(data.Destinations, SceneDestination{ID: id, Title: adapter.title, Supported: adapter.read != nil, EnterParams: sceneEnterParams{Destination: id}})
-			}
+		destinations = append(slices.Clone(homeRecordScenes), "home_inbox", "home_outbox", "home_notices", "home_custom_skill")
+	}
+	for _, id := range destinations {
+		if adapter, ok := h.sceneAdapters[id]; ok {
+			data.Destinations = append(data.Destinations, SceneDestination{ID: id, Title: adapter.title, Supported: adapter.read != nil, EnterParams: sceneEnterParams{Destination: id}})
 		}
 	}
 	return data, nil

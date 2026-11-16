@@ -43,11 +43,12 @@ func (s *Service) InspectLocation(ctx context.Context, characterID string) (Publ
 	if !ok || (n.Subject != (Subject{}) && n.Subject.Kind != definition.SubjectKind) {
 		return PublicLocation{}, ErrInvalidSelection
 	}
-	if n.Destination != "home" && n.Destination != "home_inbox" && n.Destination != "home_outbox" {
+	// Home sub-scenes are still inside the home being observed.
+	if n.Destination != "home" && definition.Parent != "home" {
 		return PublicLocation{Kind: "scene", SceneID: n.Destination}, nil
 	}
 	ownerID := characterID
-	if n.Destination == "home" && n.Subject.Kind == "home" {
+	if n.Subject.Kind == "home" {
 		ownerID = n.Subject.ID
 	}
 	owner, err := s.characters.FindByID(ctx, ownerID)

@@ -895,28 +895,6 @@
         ],
         "type": "object"
       },
-      "ArmorCollectionResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionItemCollectionEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "progress": {
-            "$ref": "#/components/schemas/CollectionCompletionProgress"
-          }
-        },
-        "required": [
-          "entries",
-          "progress"
-        ],
-        "type": "object"
-      },
       "AssignGuildRoleTitleRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4270,6 +4248,54 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "custom_skill_set",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "comment": {
+                      "description": "Optional line spoken when the skill is used.",
+                      "type": "string"
+                    },
+                    "gems": {
+                      "description": "Gem IDs for the three slots; an empty string leaves a slot unused. The chosen gems leave the gem box and the previous skill's gems return to it.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "name": {
+                      "description": "Skill name; validated by the custom skill service.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "scene_enter"
                 }
               },
@@ -4308,6 +4334,10 @@
                         "home_inbox",
                         "home_outbox",
                         "home_notices",
+                        "home_collection",
+                        "home_monster_book",
+                        "home_job_master",
+                        "home_custom_skill",
                         "casino",
                         "secretshop",
                         "town1",
@@ -4451,6 +4481,10 @@
                         "home_inbox",
                         "home_outbox",
                         "home_notices",
+                        "home_collection",
+                        "home_monster_book",
+                        "home_job_master",
+                        "home_custom_skill",
                         "casino",
                         "secretshop",
                         "town1",
@@ -8490,6 +8524,25 @@
         ],
         "type": "object"
       },
+      "CollectionSection": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionItemCollectionEntry"
+            },
+            "type": "array"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/CollectionCompletionProgress"
+          }
+        },
+        "required": [
+          "entries",
+          "progress"
+        ],
+        "type": "object"
+      },
       "ContestContestEntry": {
         "additionalProperties": false,
         "properties": {
@@ -11238,6 +11291,35 @@
         ],
         "type": "object"
       },
+      "HomeCollectionSceneData": {
+        "additionalProperties": false,
+        "description": "The observed home owner's item collection (legacy アイテム図鑑): weapons, armors and items with their completion progress. Visitors see the owner's collection.",
+        "properties": {
+          "armors": {
+            "$ref": "#/components/schemas/CollectionSection"
+          },
+          "items": {
+            "$ref": "#/components/schemas/CollectionSection"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "parent": {
+            "const": "home"
+          },
+          "weapons": {
+            "$ref": "#/components/schemas/CollectionSection"
+          }
+        },
+        "required": [
+          "parent",
+          "owner_id",
+          "weapons",
+          "armors",
+          "items"
+        ],
+        "type": "object"
+      },
       "HomeCompanionPhrase": {
         "additionalProperties": false,
         "properties": {
@@ -11260,6 +11342,30 @@
           "character_id",
           "phrase",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "HomeCustomSkillSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's own custom skill, offered in their own home with custom_skill_set.",
+        "properties": {
+          "custom_skill": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CustomSkill"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parent": {
+            "const": "home"
+          }
+        },
+        "required": [
+          "parent",
+          "custom_skill"
         ],
         "type": "object"
       },
@@ -11296,6 +11402,23 @@
         ],
         "type": "object"
       },
+      "HomeJobMasterSceneData": {
+        "additionalProperties": false,
+        "description": "The observed home owner's job mastery. Visitors see the owner's mastery.",
+        "properties": {
+          "mastery": {
+            "$ref": "#/components/schemas/CharacterJobMastery"
+          },
+          "parent": {
+            "const": "home"
+          }
+        },
+        "required": [
+          "parent",
+          "mastery"
+        ],
+        "type": "object"
+      },
       "HomeMailboxSceneData": {
         "additionalProperties": false,
         "properties": {
@@ -11321,6 +11444,34 @@
           "parent",
           "letters",
           "page"
+        ],
+        "type": "object"
+      },
+      "HomeMonsterBookSceneData": {
+        "additionalProperties": false,
+        "description": "The observed home owner's monster book. Visitors see the owner's book.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionMonsterBookEntry"
+            },
+            "type": "array"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "parent": {
+            "const": "home"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/CollectionCompletionProgress"
+          }
+        },
+        "required": [
+          "parent",
+          "owner_id",
+          "entries",
+          "progress"
         ],
         "type": "object"
       },
@@ -11635,28 +11786,6 @@
         "required": [
           "CharacterID",
           "Items"
-        ],
-        "type": "object"
-      },
-      "ItemCollectionResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionItemCollectionEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "progress": {
-            "$ref": "#/components/schemas/CollectionCompletionProgress"
-          }
-        },
-        "required": [
-          "entries",
-          "progress"
         ],
         "type": "object"
       },
@@ -12177,28 +12306,6 @@
         "required": [
           "cost",
           "item_id"
-        ],
-        "type": "object"
-      },
-      "MonsterBookResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionMonsterBookEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "progress": {
-            "$ref": "#/components/schemas/CollectionCompletionProgress"
-          }
-        },
-        "required": [
-          "entries",
-          "progress"
         ],
         "type": "object"
       },
@@ -14852,6 +14959,10 @@
                   "home_inbox",
                   "home_outbox",
                   "home_notices",
+                  "home_collection",
+                  "home_monster_book",
+                  "home_job_master",
+                  "home_custom_skill",
                   "casino",
                   "secretshop",
                   "town1",
@@ -15051,6 +15162,10 @@
               "home_inbox",
               "home_outbox",
               "home_notices",
+              "home_collection",
+              "home_monster_book",
+              "home_job_master",
+              "home_custom_skill",
               "casino",
               "secretshop",
               "town1",
@@ -15149,6 +15264,18 @@
                       "$ref": "#/components/schemas/HomeNoticesSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/HomeCollectionSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeMonsterBookSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeCustomSkillSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/ShopCatalogSceneData"
                     },
                     {
@@ -15242,6 +15369,15 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeNoticesSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeCollectionSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeMonsterBookSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeJobMasterSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/ShopProductSceneData"
@@ -15383,6 +15519,107 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeNoticesSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                },
+                "location_id": {
+                  "const": "home_collection"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeCollectionSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                },
+                "location_id": {
+                  "const": "home_monster_book"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeMonsterBookSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                },
+                "location_id": {
+                  "const": "home_job_master"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "home_custom_skill"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeCustomSkillSceneData"
                 }
               }
             }
@@ -17810,28 +18047,6 @@
         },
         "required": [
           "unread_count"
-        ],
-        "type": "object"
-      },
-      "WeaponCollectionResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionItemCollectionEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "progress": {
-            "$ref": "#/components/schemas/CollectionCompletionProgress"
-          }
-        },
-        "required": [
-          "entries",
-          "progress"
         ],
         "type": "object"
       },
@@ -20598,551 +20813,6 @@
         ]
       }
     },
-    "/characters/{id}/collections/armors": {
-      "get": {
-        "operationId": "getArmorCollection",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ArmorCollectionResponse"
-                }
-              }
-            },
-            "description": "Armor collection entries and completion progress"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Armor Collection discovery log",
-        "tags": [
-          "Collections"
-        ]
-      }
-    },
-    "/characters/{id}/collections/items": {
-      "get": {
-        "operationId": "getItemCollection",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Item Category Filter",
-            "in": "query",
-            "name": "category",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ItemCollectionResponse"
-                }
-              }
-            },
-            "description": "Item collection entries and completion progress"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Item Collection discovery log",
-        "tags": [
-          "Collections"
-        ]
-      }
-    },
-    "/characters/{id}/collections/monsters": {
-      "get": {
-        "operationId": "getMonsterBook",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MonsterBookResponse"
-                }
-              }
-            },
-            "description": "Monster book entries and completion progress"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Monster Book defeat encyclopedia",
-        "tags": [
-          "Collections"
-        ]
-      }
-    },
-    "/characters/{id}/collections/weapons": {
-      "get": {
-        "operationId": "getWeaponCollection",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WeaponCollectionResponse"
-                }
-              }
-            },
-            "description": "Weapon collection entries and completion progress"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get Weapon Collection discovery log",
-        "tags": [
-          "Collections"
-        ]
-      }
-    },
-    "/characters/{id}/custom-skills": {
-      "get": {
-        "operationId": "getCustomSkill",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "custom_skill": {
-                      "anyOf": [
-                        {
-                          "$ref": "#/components/schemas/CustomSkill"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "custom_skill"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Get custom skill synthesis"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get custom skill synthesis",
-        "tags": [
-          "CustomSkills"
-        ]
-      },
-      "post": {
-        "operationId": "setCustomSkill",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "comment": {
-                    "type": "string"
-                  },
-                  "gem1": {
-                    "type": "string"
-                  },
-                  "gem2": {
-                    "type": "string"
-                  },
-                  "gem3": {
-                    "type": "string"
-                  },
-                  "gems": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "maxItems": 3,
-                    "minItems": 3,
-                    "type": "array"
-                  },
-                  "name": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "name"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "custom_skill": {
-                      "anyOf": [
-                        {
-                          "$ref": "#/components/schemas/CustomSkill"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "custom_skill"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Set custom skill synthesis"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Set custom skill synthesis",
-        "tags": [
-          "CustomSkills"
-        ]
-      }
-    },
     "/characters/{id}/dungeons": {
       "get": {
         "operationId": "listDungeons",
@@ -22633,74 +22303,6 @@
           }
         ],
         "summary": "Start GvGMatch",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/job-mastery": {
-      "get": {
-        "description": "Retrieves the character's job mastery catalog, complete percentage, counts, and status across all 87 jobs (job_master.cgi).",
-        "operationId": "getCharacterJobMastery",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CharacterJobMastery"
-                }
-              }
-            },
-            "description": "Character job mastery catalog retrieved successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid character ID"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get character job mastery catalog and completion percentage",
         "tags": [
           "Character"
         ]
@@ -30608,16 +30210,8 @@
       "name": "Rankings"
     },
     {
-      "description": "Custom skill loadouts and slot management",
-      "name": "CustomSkills"
-    },
-    {
       "description": "Agricultural plantation and crop cultivation",
       "name": "Farm"
-    },
-    {
-      "description": "Monster Book encyclopedia and item collection logs",
-      "name": "Collections"
     },
     {
       "description": "Raffle drawings and periodic lottery tickets",
