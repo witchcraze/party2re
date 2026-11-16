@@ -101,7 +101,7 @@ func TestCollectionRepository_Integration(t *testing.T) {
 		t.Errorf("items: %+v", items)
 	}
 
-	// Record armor and item to verify category filtering in counts
+	// Record armor and item entries across categories.
 	if err := repo.RecordItemDiscovered(ctx, char.ID, "arm_shield", "Iron Shield", "ARMOR"); err != nil {
 		t.Fatalf("RecordItemDiscovered armor failed: %v", err)
 	}
@@ -109,65 +109,12 @@ func TestCollectionRepository_Integration(t *testing.T) {
 		t.Fatalf("RecordItemDiscovered item failed: %v", err)
 	}
 
-	// Total across all categories (category == "")
-	totalAll, err := repo.GetItemCollectionCount(ctx, char.ID, "")
-	if err != nil {
-		t.Fatalf("GetItemCollectionCount (all) failed: %v", err)
-	}
-	if totalAll != 3 {
-		t.Errorf("total all items = %d, want 3", totalAll)
-	}
-
-	// Filter by WEAPON
-	totalWeapons, err := repo.GetItemCollectionCount(ctx, char.ID, "WEAPON")
-	if err != nil {
-		t.Fatalf("GetItemCollectionCount (WEAPON) failed: %v", err)
-	}
-	if totalWeapons != 1 {
-		t.Errorf("total weapons = %d, want 1", totalWeapons)
-	}
-
-	// Filter by ARMOR
-	totalArmors, err := repo.GetItemCollectionCount(ctx, char.ID, "ARMOR")
-	if err != nil {
-		t.Fatalf("GetItemCollectionCount (ARMOR) failed: %v", err)
-	}
-	if totalArmors != 1 {
-		t.Errorf("total armors = %d, want 1", totalArmors)
-	}
-
-	// Filter by ITEM
-	totalItems, err := repo.GetItemCollectionCount(ctx, char.ID, "ITEM")
-	if err != nil {
-		t.Fatalf("GetItemCollectionCount (ITEM) failed: %v", err)
-	}
-	if totalItems != 1 {
-		t.Errorf("total items = %d, want 1", totalItems)
-	}
-
-	// Filter by non-existent category
-	totalNonExistent, err := repo.GetItemCollectionCount(ctx, char.ID, "ACCESSORY")
-	if err != nil {
-		t.Fatalf("GetItemCollectionCount (ACCESSORY) failed: %v", err)
-	}
-	if totalNonExistent != 0 {
-		t.Errorf("total non-existent = %d, want 0", totalNonExistent)
-	}
-
-	// Verify items above No. 141 are excluded from GetItemCollectionCount but viewable in GetItemCollection
+	// Items above No. 141 stay viewable in GetItemCollection.
 	if err := repo.RecordItemDiscovered(ctx, char.ID, "item-141", "Basic 141", "ITEM"); err != nil {
 		t.Fatalf("RecordItemDiscovered item-141 failed: %v", err)
 	}
 	if err := repo.RecordItemDiscovered(ctx, char.ID, "item-142", "Extra 142", "ITEM"); err != nil {
 		t.Fatalf("RecordItemDiscovered item-142 failed: %v", err)
-	}
-	totalItemsAfter, err := repo.GetItemCollectionCount(ctx, char.ID, "ITEM")
-	if err != nil {
-		t.Fatalf("GetItemCollectionCount (ITEM) after extra item failed: %v", err)
-	}
-	// itm_herb (1) + item-141 (1) = 2. item-142 is > 141 so it is excluded from completion count.
-	if totalItemsAfter != 2 {
-		t.Errorf("total items after adding item-141 and item-142 = %d, want 2", totalItemsAfter)
 	}
 	allItemEntries, err := repo.GetItemCollection(ctx, char.ID, "ITEM")
 	if err != nil {

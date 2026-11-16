@@ -17,6 +17,23 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
+type stubCollectionService struct {
+	apihttp.CollectionService
+	getItemCollectionFn   func(ctx context.Context, characterID, category string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+	getWeaponCollectionFn func(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+	getArmorCollectionFn  func(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+}
+
+func (s *stubCollectionService) GetItemCollection(ctx context.Context, id, category string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
+	return s.getItemCollectionFn(ctx, id, category)
+}
+func (s *stubCollectionService) GetWeaponCollection(ctx context.Context, id string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
+	return s.getWeaponCollectionFn(ctx, id)
+}
+func (s *stubCollectionService) GetArmorCollection(ctx context.Context, id string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
+	return s.getArmorCollectionFn(ctx, id)
+}
+
 type trajectoryAlchemy struct {
 	apihttp.AlchemyService
 	percent int

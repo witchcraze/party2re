@@ -102,3 +102,59 @@ func TestOwnedSubjectAdmitsOwnerActionsAndPropagatesReadFailure(t *testing.T) {
 		t.Fatalf("owner read failure was hidden: %v", err)
 	}
 }
+
+func TestInheritedSubjectSceneViewsTheParentSubject(t *testing.T) {
+	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner"}, ctx: context.Background()}
+	store := &navigationStore{}
+	available := func(_ context.Context, _, target string) (bool, error) {
+		return target == "other" || target == "hero", nil
+	}
+	owned := func(_ context.Context, actor, target string) (bool, error) { return actor == target, nil }
+	s := NewService(r, r, r, WithNavigation(store, SceneDefinition{ID: "town"},
+		SceneDefinition{ID: "home", Parent: "town", SubjectKind: "home", SubjectAvailable: available, SubjectOwned: owned},
+		SceneDefinition{ID: "record", Parent: "home", InheritsSubject: true}))
+	visited := Subject{Kind: "home", ID: "other"}
+	for _, step := range []func() (Selection, error){
+		func() (Selection, error) { return s.Enter(r.ctx, "owner", "hero", "home") },
+		func() (Selection, error) { return s.Select(r.ctx, "owner", "hero", visited) },
+		func() (Selection, error) { return s.Enter(r.ctx, "owner", "hero", "record") },
+	} {
+		if _, err := step(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if store.selection != (Selection{Destination: "record", Subject: visited}) {
+		t.Fatalf("entry lost the visited subject: %+v", store.selection)
+	}
+	got, err := s.Query(r.ctx, "hero", "owner")
+	if err != nil || got.Navigation.Unavailable || got.Navigation.SubjectOwned || slices.Contains(s.sceneActions(got.Navigation), "scene_select") {
+		t.Fatalf("observation: %+v %v", got.Navigation, err)
+	}
+	if _, err := s.Select(r.ctx, "owner", "hero", Subject{Kind: "home", ID: "hero"}); !errors.Is(err, ErrInvalidSelection) {
+		t.Fatalf("inherited scene accepted its own selection: %v", err)
+	}
+	if _, err := s.Back(r.ctx, "owner", "hero"); err != nil || store.selection != (Selection{Destination: "home", Subject: visited}) {
+		t.Fatalf("back left the visited home: %v %+v", err, store.selection)
+	}
+	// Entry from the unselected parent views the actor's own.
+	if _, err := s.Back(r.ctx, "owner", "hero"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Enter(r.ctx, "owner", "hero", "record"); err != nil || store.selection != (Selection{Destination: "record"}) {
+		t.Fatalf("unselected entry: %v %+v", err, store.selection)
+	}
+	got, err = s.Query(r.ctx, "hero", "owner")
+	if err != nil || slices.Contains(s.sceneActions(got.Navigation), "scene_select") {
+		t.Fatalf("unselected observation offered selection: %+v %v", got.Navigation, err)
+	}
+}
+
+func TestInheritedSubjectRequiresASubjectParent(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("accepted an inherited scene under a parent without subjects")
+		}
+	}()
+	r := &queryReaders{ctx: context.Background()}
+	NewService(r, r, r, WithNavigation(&navigationStore{}, SceneDefinition{ID: "town"}, SceneDefinition{ID: "record", Parent: "town", InheritsSubject: true}))
+}

@@ -19,7 +19,6 @@ type mockCollectionRepo struct {
 	items                map[string]collection.ItemCollectionEntry
 	completions          map[string]bool // key: charID + ":" + kind
 	getMonsterCountErr   error
-	getItemCountErr      error
 	getItemCollectionErr error
 	markCompletedErr     error
 	isCompletedErr       error
@@ -109,27 +108,6 @@ func (m *mockCollectionRepo) GetItemCollection(_ context.Context, _, category st
 		}
 	}
 	return list, nil
-}
-
-func (m *mockCollectionRepo) GetItemCollectionCount(_ context.Context, _, category string) (int, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.getItemCountErr != nil {
-		return 0, m.getItemCountErr
-	}
-	count := 0
-	for _, v := range m.items {
-		if category == "" || strings.EqualFold(v.Category, category) {
-			if strings.EqualFold(v.Category, "item") {
-				if collection.IsBasicItem(v.ItemID, collection.DefaultTotalItems) {
-					count++
-				}
-			} else {
-				count++
-			}
-		}
-	}
-	return count, nil
 }
 
 func (m *mockCollectionRepo) MarkCompleted(_ context.Context, charID, kind string) (bool, error) {

@@ -9,8 +9,7 @@ job mastery, priorities, and four-slot equipment are not part of this feature.
 
 ## Rules
 
-- A gem selection contains `gem1`, `gem2`, and `gem3`; empty positions are
-  allowed.
+- A gem selection has three positions; empty positions are allowed.
 - The sum of gem slot costs must be at most 3.
 - Selected gems are removed from the character's gem box (`character_gem_boxes` / `gem_box_items`)
   atomically. Gems from the previous configuration are returned to the gem box before the new selection
@@ -28,8 +27,7 @@ job mastery, priorities, and four-slot equipment are not part of this feature.
 ## Persistence and API
 
 `character_custom_skills` stores the name, phrase, computed CMP cost, and three
-gem IDs. `POST /characters/{id}/custom-skills` accepts `name`, `comment`, and
-`gems` (or `gem1`/`gem2`/`gem3`). `GET` returns the saved `custom_skill`.
-Gem box storage and custom-skill writes share one transaction boundary.
+gem IDs, set with `custom_skill_set` in the own-Home custom skill scene
+([Home](home.md#observation-visibility-and-navigation)). Gem box storage and custom-skill writes share one transaction boundary.
 
 Combat execution of the synthesized skill remains a separate concern.

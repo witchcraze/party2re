@@ -51,6 +51,10 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
 		{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
 		{ID: "home_notices", Parent: "home", Pageable: true, CursorPageable: true},
+		{ID: "home_collection", Parent: "home", InheritsSubject: true},
+		{ID: "home_monster_book", Parent: "home", InheritsSubject: true},
+		{ID: "home_job_master", Parent: "home", InheritsSubject: true},
+		{ID: "home_custom_skill", Parent: "home"},
 		{ID: "casino", Parent: "town", SubjectKind: "room", Pageable: true, SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
 			rooms, err := misc.casino.ListRooms(ctx)
 			if err != nil {

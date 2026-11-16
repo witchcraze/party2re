@@ -371,9 +371,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Event Plaza
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",
-		// Tavern
-		// Custom Skill
-		"handleSetCustomSkill": "custom_skill.go",
 		// Guild
 		"handleCreateGuild":             "guild.go",
 		"handleApplyGuild":              "guild.go",

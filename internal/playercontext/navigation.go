@@ -59,6 +59,10 @@ type SceneDefinition struct {
 	// ParentOnly admits entry only from Parent: a place legacy reaches through
 	// a facility action instead of ＠いどう.
 	ParentOnly bool
+	// InheritsSubject makes the scene a view of its parent's selected subject:
+	// entry from the parent keeps that subject, back returns to it, and the
+	// scene has no selection of its own. It adopts the parent's subject adapters.
+	InheritsSubject bool
 	// CanEnter is a pure character qualification check; nil permits entry.
 	CanEnter         func(character.Character) bool
 	SubjectAvailable func(ctx context.Context, actorID, targetID string) (bool, error)
@@ -114,6 +118,17 @@ func WithNavigation(store NavigationRepository, definitions ...SceneDefinition) 
 			}
 			s.scenes[d.ID] = d
 		}
+		for id, d := range s.scenes {
+			if !d.InheritsSubject {
+				continue
+			}
+			parent := s.scenes[d.Parent]
+			if d.SubjectKind != "" || parent.SubjectKind == "" || parent.InheritsSubject {
+				panic("invalid inherited subject scene: " + id)
+			}
+			d.SubjectKind, d.SubjectAvailable, d.SubjectOwned = parent.SubjectKind, parent.SubjectAvailable, parent.SubjectOwned
+			s.scenes[id] = d
+		}
 		if _, ok := s.scenes[LocationTown]; !ok {
 			panic("navigation requires town")
 		}
@@ -167,7 +182,7 @@ func (s *Service) sceneActions(o *NavigationObservation) []string {
 		}
 		return append(actions, d.Actions...)
 	}
-	if d.SubjectKind != "" {
+	if d.SubjectKind != "" && !d.InheritsSubject {
 		actions = append(actions, "scene_select")
 	}
 	if d.Pageable {
@@ -304,7 +319,11 @@ func (s *Service) Enter(ctx context.Context, playerID, actorID, destination stri
 		if err := s.Enterable(r, destination); err != nil {
 			return Selection{}, err
 		}
-		return Selection{Destination: destination}, nil
+		n := Selection{Destination: destination}
+		if d := s.scenes[destination]; d.InheritsSubject && r.Navigation != nil && r.Navigation.Selection.Destination == d.Parent {
+			n.Subject = r.Navigation.Selection.Subject
+		}
+		return n, nil
 	})
 }
 
@@ -315,7 +334,7 @@ func (s *Service) Select(ctx context.Context, playerID, actorID string, subject 
 		if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
 			return Selection{}, ErrSceneAccessDenied
 		}
-		if !ok || d.SubjectAvailable == nil || d.SubjectKind != subject.Kind || !navigationID.MatchString(subject.ID) {
+		if !ok || d.InheritsSubject || d.SubjectAvailable == nil || d.SubjectKind != subject.Kind || !navigationID.MatchString(subject.ID) {
 			return Selection{}, ErrInvalidSelection
 		}
 		available, err := d.SubjectAvailable(ctx, actorID, subject.ID)
@@ -351,10 +370,13 @@ func (s *Service) Page(ctx context.Context, playerID, actorID string, p PagePara
 func (s *Service) Back(ctx context.Context, playerID, actorID string) (Selection, error) {
 	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
 		n := r.Navigation.Selection
+		d, ok := s.scenes[n.Destination]
+		if n.Subject != (Subject{}) && d.InheritsSubject {
+			return Selection{Destination: d.Parent, Subject: n.Subject}, nil
+		}
 		if n.Subject != (Subject{}) {
 			return Selection{Destination: n.Destination}, nil
 		}
-		d, ok := s.scenes[n.Destination]
 		if !ok {
 			return Selection{}, ErrInvalidSelection
 		}

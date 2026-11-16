@@ -398,28 +398,17 @@ func (h *Handler) Router() http.Handler {
 
 	// Jobs
 	mux.HandleFunc("GET /jobs", h.handleListJobs)
-	mux.HandleFunc("GET /characters/{id}/job-mastery", h.handleGetCharacterJobMastery)
 	mux.HandleFunc("POST /characters/{id}/change-job", h.handleChangeJob)
 	mux.HandleFunc("POST /characters/{id}/exchange-job", h.handleExchangeJob)
 	mux.HandleFunc("GET /characters/{id}/future-memories", h.handleListFutureMemories)
 	mux.HandleFunc("POST /characters/{id}/future-memories", h.handleSaveFutureMemory)
 	mux.HandleFunc("POST /characters/{id}/recall-future", h.handleRecallFutureMemory)
 
-	// Custom Skills
-	mux.HandleFunc("GET /characters/{id}/custom-skills", h.handleGetCustomSkills)
-	mux.HandleFunc("POST /characters/{id}/custom-skills", h.handleSetCustomSkill)
-
 	// Tavern
 
 	// Plantation
 
 	// Black Market
-
-	// Collections
-	mux.HandleFunc("GET /characters/{id}/collections/monsters", h.handleGetMonsterBook)
-	mux.HandleFunc("GET /characters/{id}/collections/items", h.handleGetItemCollection)
-	mux.HandleFunc("GET /characters/{id}/collections/weapons", h.handleGetWeaponCollection)
-	mux.HandleFunc("GET /characters/{id}/collections/armors", h.handleGetArmorCollection)
 
 	// Achievements & Commemorative Medals
 	mux.HandleFunc("GET /characters/{id}/achievements", h.handleGetCharacterAchievements)

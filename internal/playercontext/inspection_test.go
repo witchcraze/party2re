@@ -24,6 +24,7 @@ func TestInspectLocation(t *testing.T) {
 		{"visited home", Selection{Destination: "home", Subject: Subject{Kind: "home", ID: "host"}}, false, PublicLocation{Kind: "home", HomeOwnerCharacterID: "host", HomeOwnerName: "家主"}},
 		{"inbox", Selection{Destination: "home_inbox"}, false, PublicLocation{Kind: "home", HomeOwnerCharacterID: "peer", HomeOwnerName: "相手"}},
 		{"outbox", Selection{Destination: "home_outbox"}, false, PublicLocation{Kind: "home", HomeOwnerCharacterID: "peer", HomeOwnerName: "相手"}},
+		{"visited home record", Selection{Destination: "home_collection", Subject: Subject{Kind: "home", ID: "host"}}, false, PublicLocation{Kind: "home", HomeOwnerCharacterID: "host", HomeOwnerName: "家主"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -39,6 +40,7 @@ func TestInspectLocation(t *testing.T) {
 					t.Fatal("public inspection validated home admission")
 					return false, nil
 				}}, SceneDefinition{ID: "home_inbox", Parent: "home"}, SceneDefinition{ID: "home_outbox", Parent: "home"},
+				SceneDefinition{ID: "home_collection", Parent: "home", InheritsSubject: true},
 				SceneDefinition{ID: "shop", Parent: "town", SubjectKind: "item", SubjectAvailable: func(context.Context, string, string) (bool, error) {
 					t.Fatal("public inspection read selected product")
 					return false, nil

@@ -61,16 +61,8 @@
       "name": "Rankings"
     },
     {
-      "description": "Custom skill loadouts and slot management",
-      "name": "CustomSkills"
-    },
-    {
       "description": "Agricultural plantation and crop cultivation",
       "name": "Farm"
-    },
-    {
-      "description": "Monster Book encyclopedia and item collection logs",
-      "name": "Collections"
     },
     {
       "description": "Raffle drawings and periodic lottery tickets",
@@ -2080,6 +2072,18 @@
                       "$ref": "#/components/schemas/HomeNoticesSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/HomeCollectionSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeMonsterBookSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeCustomSkillSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/ShopCatalogSceneData"
                     },
                     {
@@ -2178,6 +2182,15 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeNoticesSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeCollectionSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeMonsterBookSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeJobMasterSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/ShopProductSceneData"
@@ -2319,6 +2332,107 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeNoticesSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home_collection"
+                },
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeCollectionSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home_monster_book"
+                },
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeMonsterBookSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home_job_master"
+                },
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home_custom_skill"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeCustomSkillSceneData"
                 }
               }
             }
@@ -4092,6 +4206,54 @@
               "type": "object",
               "properties": {
                 "action": {
+                  "type": "string",
+                  "const": "custom_skill_set"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Skill name; validated by the custom skill service."
+                    },
+                    "comment": {
+                      "type": "string",
+                      "description": "Optional line spoken when the skill is used."
+                    },
+                    "gems": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "description": "Gem IDs for the three slots; an empty string leaves a slot unused. The chosen gems leave the gem box and the previous skill's gems return to it."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
                   "const": "scene_enter"
                 }
               },
@@ -4131,6 +4293,10 @@
                         "home_inbox",
                         "home_outbox",
                         "home_notices",
+                        "home_collection",
+                        "home_monster_book",
+                        "home_job_master",
+                        "home_custom_skill",
                         "casino",
                         "secretshop",
                         "town1",
@@ -4246,6 +4412,10 @@
                         "home_inbox",
                         "home_outbox",
                         "home_notices",
+                        "home_collection",
+                        "home_monster_book",
+                        "home_job_master",
+                        "home_custom_skill",
                         "casino",
                         "secretshop",
                         "town1",
@@ -8010,6 +8180,10 @@
               "home_inbox",
               "home_outbox",
               "home_notices",
+              "home_collection",
+              "home_monster_book",
+              "home_job_master",
+              "home_custom_skill",
               "casino",
               "secretshop",
               "town1",
@@ -8152,6 +8326,10 @@
                   "home_inbox",
                   "home_outbox",
                   "home_notices",
+                  "home_collection",
+                  "home_monster_book",
+                  "home_job_master",
+                  "home_custom_skill",
                   "casino",
                   "secretshop",
                   "town1",
@@ -13166,28 +13344,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "ArmorCollectionResponse": {
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionItemCollectionEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "progress": {
-            "$ref": "#/components/schemas/CollectionCompletionProgress"
-          }
-        },
-        "required": [
-          "entries",
-          "progress"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "CollectionItemCollectionEntry": {
         "properties": {
           "category": {
@@ -13237,50 +13393,6 @@
           "total_catalog_count",
           "completion_percentage",
           "is_completed"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ItemCollectionResponse": {
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionItemCollectionEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "progress": {
-            "$ref": "#/components/schemas/CollectionCompletionProgress"
-          }
-        },
-        "required": [
-          "entries",
-          "progress"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "MonsterBookResponse": {
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionMonsterBookEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "progress": {
-            "$ref": "#/components/schemas/CollectionCompletionProgress"
-          }
-        },
-        "required": [
-          "entries",
-          "progress"
         ],
         "type": "object",
         "additionalProperties": false
@@ -13355,28 +13467,6 @@
           "agility",
           "exp_reward",
           "gold_reward"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "WeaponCollectionResponse": {
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionItemCollectionEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "progress": {
-            "$ref": "#/components/schemas/CollectionCompletionProgress"
-          }
-        },
-        "required": [
-          "entries",
-          "progress"
         ],
         "type": "object",
         "additionalProperties": false
@@ -17943,6 +18033,123 @@
           "kind",
           "icon",
           "created_at"
+        ]
+      },
+      "CollectionSection": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionItemCollectionEntry"
+            }
+          },
+          "progress": {
+            "$ref": "#/components/schemas/CollectionCompletionProgress"
+          }
+        },
+        "required": [
+          "entries",
+          "progress"
+        ]
+      },
+      "HomeCollectionSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The observed home owner's item collection (legacy アイテム図鑑): weapons, armors and items with their completion progress. Visitors see the owner's collection.",
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "weapons": {
+            "$ref": "#/components/schemas/CollectionSection"
+          },
+          "armors": {
+            "$ref": "#/components/schemas/CollectionSection"
+          },
+          "items": {
+            "$ref": "#/components/schemas/CollectionSection"
+          }
+        },
+        "required": [
+          "parent",
+          "owner_id",
+          "weapons",
+          "armors",
+          "items"
+        ]
+      },
+      "HomeMonsterBookSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The observed home owner's monster book. Visitors see the owner's book.",
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionMonsterBookEntry"
+            }
+          },
+          "progress": {
+            "$ref": "#/components/schemas/CollectionCompletionProgress"
+          }
+        },
+        "required": [
+          "parent",
+          "owner_id",
+          "entries",
+          "progress"
+        ]
+      },
+      "HomeJobMasterSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The observed home owner's job mastery. Visitors see the owner's mastery.",
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "mastery": {
+            "$ref": "#/components/schemas/CharacterJobMastery"
+          }
+        },
+        "required": [
+          "parent",
+          "mastery"
+        ]
+      },
+      "HomeCustomSkillSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's own custom skill, offered in their own home with custom_skill_set.",
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "custom_skill": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CustomSkill"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "parent",
+          "custom_skill"
         ]
       }
     },
