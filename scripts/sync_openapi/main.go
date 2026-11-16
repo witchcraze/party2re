@@ -536,7 +536,7 @@ func moduleForRoute(route Route) string {
 		return "system"
 	case strings.HasPrefix(p, "/characters/{id}/oracle"):
 		return "oracle"
-	case strings.HasPrefix(p, "/characters") || p == "/jobs" || strings.HasPrefix(p, "/naming-hall"):
+	case strings.HasPrefix(p, "/characters") || strings.HasPrefix(p, "/naming-hall"):
 		return "character"
 	default:
 		trimmed := strings.TrimPrefix(p, "/")

@@ -96,7 +96,7 @@ func TestFutureMemoryUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		snapshot, saveErr := svc.SaveFutureMemory(ctx, char.ID)
+		snapshot, saveErr := saveWithFragment(ctx, runner, svc, char.ID)
 		loaded, err := jobs.FindByCharacterID(ctx, char.ID)
 		if err != nil {
 			t.Fatal(err)
@@ -745,7 +745,7 @@ func TestMasteredJobDepartureAndFutureSaveRefreshRetainedSPDatabaseRoundTrip(t *
 	if err := inventories.Save(ctx, inv); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.SaveFutureMemory(ctx, char.ID); err != nil {
+	if _, err := saveWithFragment(ctx, runner, svc, char.ID); err != nil {
 		t.Fatal(err)
 	}
 	// Move from job-02 to job-03 so job-01 is neither JobID nor OldJobID, then ChangeJob to job-01

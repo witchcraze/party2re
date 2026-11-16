@@ -104,7 +104,7 @@ func TestFutureMemory_Integration_ConcurrentSavesEnforceCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Run 2 concurrent calls to SaveFutureMemory
+	// Run 2 concurrent item-207 saves
 	var successCount int32
 	var slotLimitCount int32
 
@@ -114,7 +114,7 @@ func TestFutureMemory_Integration_ConcurrentSavesEnforceCapacity(t *testing.T) {
 	}
 
 	res := testutil.RunConcurrentStressTest(t, cfg, func(_ int, _ int) error {
-		_, err := svc.SaveFutureMemory(ctx, char.ID)
+		_, err := saveWithFragment(ctx, ecoSvc, svc, char.ID)
 		if err == nil {
 			atomic.AddInt32(&successCount, 1)
 			return nil
@@ -233,8 +233,8 @@ func TestFutureMemory_Integration_ConcurrentSaveAndJobMemoryConflict(t *testing.
 	}
 
 	// In this test, a goroutine holds the character lock and sets JobMemory != nil,
-	// committing right before or while SaveFutureMemory waits for the lock.
-	// SaveFutureMemory must see the active JobMemory upon acquiring the lock,
+	// committing right before or while the save waits for the lock.
+	// The save must see the active JobMemory upon acquiring the lock,
 	// abort and return ErrJobUnavailable without consuming item-207.
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -263,7 +263,7 @@ func TestFutureMemory_Integration_ConcurrentSaveAndJobMemoryConflict(t *testing.
 		defer wg.Done()
 		<-barrier
 		time.Sleep(5 * time.Millisecond) // Let JobMemory tx acquire lock first
-		_, saveErr = svc.SaveFutureMemory(ctx, char.ID)
+		_, saveErr = saveWithFragment(ctx, ecoSvc, svc, char.ID)
 	}()
 
 	close(barrier)
@@ -290,4 +290,17 @@ func TestFutureMemory_Integration_ConcurrentSaveAndJobMemoryConflict(t *testing.
 	if len(memories) != 0 {
 		t.Fatalf("expected 0 future memories, got %d", len(memories))
 	}
+}
+
+// saveWithFragment mirrors Home's item-207 use: the fragment is consumed and
+// the snapshot saved under one character lock.
+func saveWithFragment(ctx context.Context, runner *economy.Service, svc *job.Service, characterID string) (corecharacter.FutureMemory, error) {
+	var snapshot corecharacter.FutureMemory
+	_, err := runner.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: characterID, LockInventory: true,
+		Cost: economy.ResourceCost{ItemDefinitionID: "item-207", ItemDefinitionQty: 1}}, func(tc *economy.TxContext) error {
+		var err error
+		snapshot, err = svc.SaveFutureMemorySnapshot(tc.Context, tc.Character)
+		return err
+	})
+	return snapshot, err
 }

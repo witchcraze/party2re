@@ -238,12 +238,7 @@ func (s *Service) lockEquippedArmor(ctx context.Context, characterID string, inv
 	if err != nil {
 		return coreequipment.Equipment{}, err
 	}
-	instID, ok := equip.Equipped(coreitem.SlotBody)
-	if !ok {
-		return coreequipment.Equipment{}, ErrRequiredArmor
-	}
-	inst, found := inv.Find(instID)
-	if !found || inst.DefinitionID != "armor-29" {
+	if !armorEquipped(equip, inv) {
 		return coreequipment.Equipment{}, ErrRequiredArmor
 	}
 	return equip, nil

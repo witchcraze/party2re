@@ -619,15 +619,12 @@ func TestServiceFutureMemorySaveAndRecall(t *testing.T) {
 	}
 
 	// 1. Save future memory
-	snapshot, err := svc.SaveFutureMemory(context.Background(), char.ID)
+	snapshot, err := svc.SaveFutureMemorySnapshot(context.Background(), charRepo.char)
 	if err != nil {
-		t.Fatalf("SaveFutureMemory failed: %v", err)
+		t.Fatalf("save failed: %v", err)
 	}
 	if snapshot.JobID != "job-05" || snapshot.Level != 50 || snapshot.MaxHP != 600 {
 		t.Fatalf("unexpected saved snapshot: %#v", snapshot)
-	}
-	if invRepo.inventory.Quantity("item-207") != 1 {
-		t.Fatalf("expected 1 fragment remaining, got %d", invRepo.inventory.Quantity("item-207"))
 	}
 	// SP saved to state
 	if repo.value.RecordedJobSP["job-05"] != 80 || repo.value.RecordedJobSP["job-01"] != 40 {
@@ -635,7 +632,7 @@ func TestServiceFutureMemorySaveAndRecall(t *testing.T) {
 	}
 
 	// 2. Capacity limit check: OverFuture=0 allows only 1 slot (0 <= 0 is ok, next count 1 <= 0 is false)
-	_, err = svc.SaveFutureMemory(context.Background(), char.ID)
+	_, err = svc.SaveFutureMemorySnapshot(context.Background(), charRepo.char)
 	if err == nil || err.Error() != "future memory slot limit reached" {
 		t.Fatalf("expected slot limit reached error, got %v", err)
 	}

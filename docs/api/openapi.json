@@ -3442,33 +3442,6 @@
         ],
         "type": "object"
       },
-      "ChangeJobRequest": {
-        "properties": {
-          "job_id": {
-            "description": "ID of the target job class to switch to",
-            "type": "string"
-          }
-        },
-        "required": [
-          "job_id"
-        ],
-        "type": "object"
-      },
-      "ChangeJobResponse": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "job": {
-            "$ref": "#/components/schemas/CharacterJob"
-          }
-        },
-        "required": [
-          "character",
-          "job"
-        ],
-        "type": "object"
-      },
       "ChapelBlessingInfo": {
         "additionalProperties": false,
         "properties": {
@@ -4485,7 +4458,8 @@
                         "oracle",
                         "contest",
                         "medal",
-                        "helper"
+                        "helper",
+                        "job"
                       ],
                       "type": "string"
                     }
@@ -4634,7 +4608,8 @@
                         "oracle",
                         "contest",
                         "medal",
-                        "helper"
+                        "helper",
+                        "job"
                       ],
                       "type": "string"
                     },
@@ -7206,6 +7181,146 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "job_change",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "job_id": {
+                      "description": "One of the job temple scene's jobs.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "job_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "job_recall",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "One of recall_items: item-168 starts a memory reverted by job_restore, item-243 one that sleep reverts.",
+                      "type": "string"
+                    },
+                    "job_id": {
+                      "description": "One of the job temple scene's recall_jobs, recalled as the current job.",
+                      "type": "string"
+                    },
+                    "old_job_id": {
+                      "description": "A different recall_jobs entry, recalled as the previous job.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "job_id",
+                    "old_job_id",
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "job_restore",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "job_future_recall",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "memory_id": {
+                      "description": "One of the job temple scene's future_memories IDs; the snapshot is consumed.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "memory_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "npc_talk",
                   "type": "string"
                 }
@@ -8093,76 +8208,6 @@
           "success",
           "result",
           "context"
-        ],
-        "type": "object"
-      },
-      "CharacterJob": {
-        "properties": {
-          "all_jobs_mastered": {
-            "type": "boolean"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "current_job_id": {
-            "type": "string"
-          },
-          "history": {
-            "items": {
-              "$ref": "#/components/schemas/CharacterJobChange"
-            },
-            "type": "array"
-          },
-          "mastered_job_sp": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object"
-          },
-          "mastered_jobs": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "recorded_job_ids": {
-            "description": "Explicitly written job records, independently of known SP and mastery. Departure history and mastery records also establish record existence.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "recorded_job_sp": {
-            "additionalProperties": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "description": "Preserved known SP by job. A value, including zero, does not by itself prove a job record exists or grant recall eligibility.",
-            "type": "object"
-          }
-        },
-        "required": [
-          "character_id",
-          "current_job_id",
-          "history",
-          "mastered_jobs",
-          "mastered_job_sp",
-          "all_jobs_mastered"
-        ],
-        "type": "object"
-      },
-      "CharacterJobChange": {
-        "properties": {
-          "from_job_id": {
-            "type": "string"
-          },
-          "to_job_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "from_job_id",
-          "to_job_id"
         ],
         "type": "object"
       },
@@ -10201,27 +10246,6 @@
         ],
         "type": "object"
       },
-      "ExchangeJobRequest": {
-        "properties": {
-          "item_definition_id": {
-            "description": "Optional item definition ID (e.g. 'item-168' for persistent, 'item-243' for temporary). Defaults to 'item-168'.",
-            "type": "string"
-          },
-          "job_id": {
-            "description": "ID of the target job class to switch to",
-            "type": "string"
-          },
-          "old_job_id": {
-            "description": "ID of the previous job class to record or swap",
-            "type": "string"
-          }
-        },
-        "required": [
-          "job_id",
-          "old_job_id"
-        ],
-        "type": "object"
-      },
       "ExileBoard": {
         "additionalProperties": false,
         "description": "Open petitions in submission order; empty unless eligible.",
@@ -10490,70 +10514,6 @@
           "listing_count",
           "owned_listings",
           "page"
-        ],
-        "type": "object"
-      },
-      "FutureMemory": {
-        "properties": {
-          "agility": {
-            "type": "integer"
-          },
-          "attack": {
-            "type": "integer"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "defense": {
-            "type": "integer"
-          },
-          "experience": {
-            "type": "integer"
-          },
-          "gender": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "job_id": {
-            "type": "string"
-          },
-          "level": {
-            "type": "integer"
-          },
-          "max_hp": {
-            "type": "integer"
-          },
-          "max_mp": {
-            "type": "integer"
-          },
-          "old_job_id": {
-            "type": "string"
-          },
-          "over_level": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "character_id",
-          "job_id",
-          "old_job_id",
-          "level",
-          "experience",
-          "max_hp",
-          "max_mp",
-          "attack",
-          "defense",
-          "agility",
-          "gender",
-          "over_level",
-          "created_at"
         ],
         "type": "object"
       },
@@ -11999,61 +11959,63 @@
         ],
         "type": "object"
       },
-      "JobDefinition": {
+      "JobFutureMemory": {
         "additionalProperties": false,
         "properties": {
-          "agility_growth": {
+          "agility": {
             "type": "integer"
           },
-          "attack_growth": {
+          "attack": {
             "type": "integer"
           },
-          "c_mp_tier": {
-            "type": "integer"
-          },
-          "defense_growth": {
-            "type": "integer"
-          },
-          "hp_growth": {
+          "defense": {
             "type": "integer"
           },
           "id": {
             "type": "string"
           },
-          "mastery_sp": {
+          "job_name": {
+            "type": "string"
+          },
+          "level": {
             "type": "integer"
           },
-          "mp_growth": {
+          "max_hp": {
             "type": "integer"
           },
-          "name": {
-            "type": "string"
+          "max_mp": {
+            "type": "integer"
           },
-          "required_gender": {
+          "old_job_name": {
             "type": "string"
-          },
-          "required_item_id": {
-            "type": "string"
-          },
-          "required_job_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
           }
         },
         "required": [
           "id",
-          "name",
-          "hp_growth",
-          "mp_growth",
-          "attack_growth",
-          "defense_growth",
-          "agility_growth",
-          "c_mp_tier"
+          "job_name",
+          "old_job_name",
+          "level",
+          "max_hp",
+          "max_mp",
+          "attack",
+          "defense",
+          "agility"
+        ],
+        "type": "object"
+      },
+      "JobOption": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "name"
         ],
         "type": "object"
       },
@@ -12086,6 +12048,59 @@
           "status",
           "current_sp",
           "master_sp"
+        ],
+        "type": "object"
+      },
+      "JobTempleSceneData": {
+        "additionalProperties": false,
+        "description": "The job temple: the choices job_change, job_recall and job_future_recall accept now, and the active job memory kind (absent when none; job_restore applies to persistent). NPC dialogue comes from npc_talk/npc_inspect. Observation never mutates.",
+        "properties": {
+          "future_memories": {
+            "items": {
+              "$ref": "#/components/schemas/JobFutureMemory"
+            },
+            "type": "array"
+          },
+          "job_memory": {
+            "enum": [
+              "persistent",
+              "temporary"
+            ],
+            "type": "string"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobOption"
+            },
+            "type": "array"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "recall_items": {
+            "items": {
+              "enum": [
+                "item-168",
+                "item-243"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recall_jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobOption"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent",
+          "jobs",
+          "recall_jobs",
+          "recall_items",
+          "future_memories"
         ],
         "type": "object"
       },
@@ -14809,18 +14824,6 @@
         ],
         "type": "object"
       },
-      "RecallFutureMemoryRequest": {
-        "properties": {
-          "memory_id": {
-            "description": "ID of the saved future memory snapshot to restore",
-            "type": "string"
-          }
-        },
-        "required": [
-          "memory_id"
-        ],
-        "type": "object"
-      },
       "RefreshRankingsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -15093,7 +15096,8 @@
                   "oracle",
                   "contest",
                   "medal",
-                  "helper"
+                  "helper",
+                  "job"
                 ],
                 "type": "string"
               }
@@ -15298,7 +15302,8 @@
               "oracle",
               "contest",
               "medal",
-              "helper"
+              "helper",
+              "job"
             ],
             "type": "string"
           },
@@ -15464,6 +15469,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HelperSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JobTempleSceneData"
                     }
                   ]
                 }
@@ -16652,6 +16660,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HelperSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "job"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/JobTempleSceneData"
                 },
                 "support": {
                   "properties": {
@@ -18972,7 +19010,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep returns sleeping, duration_seconds, remaining_seconds, home_character_id and message; home_wake returns success, message and the actor's character. home_color returns the color set; home_item_use returns action (inspect or consumed), message, item_name, kind, consumed and the actor's character; home_phrase_teach returns the stored phrase; home_phrase_forget returns phrase_id; home_notice_ack returns the submitted notice_ids. home_letter_send returns the stored Letter; home_letter_read and home_letter_delete return letter_id. npc_talk in a home answers with a random resident's taught phrase, an empty dialogue when none is taught, or a private reply when nobody is home. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message. contest_enter returns the entry and the host's message (warning set when the entry committed but settlement scheduling failed); contest_vote returns the vote and message; contest_photo_delete returns the message. medal_claim returns the prize cost, item_id and item_name, the remaining small_medals and the keeper's message; helper_complete returns completed_quest (null when only expired requests were exchanged), the exchanged expired requests in renewed and the clerk's message."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep returns sleeping, duration_seconds, remaining_seconds, home_character_id and message; home_wake returns success, message and the actor's character. home_color returns the color set; home_item_use returns action (inspect or consumed), message, item_name, kind, consumed and the actor's character; home_phrase_teach returns the stored phrase; home_phrase_forget returns phrase_id; home_notice_ack returns the submitted notice_ids. home_letter_send returns the stored Letter; home_letter_read and home_letter_delete return letter_id. npc_talk in a home answers with a random resident's taught phrase, an empty dialogue when none is taught, or a private reply when nobody is home. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message. contest_enter returns the entry and the host's message (warning set when the entry committed but settlement scheduling failed); contest_vote returns the vote and message; contest_photo_delete returns the message. medal_claim returns the prize cost, item_id and item_name, the remaining small_medals and the keeper's message; helper_complete returns completed_quest (null when only expired requests were exchanged), the exchanged expired requests in renewed and the clerk's message. job_change, job_recall, job_restore and job_future_recall return the actor's character, its job state and the priest's message."
           },
           "400": {
             "content": {
@@ -20722,119 +20760,6 @@
         ]
       }
     },
-    "/characters/{id}/change-job": {
-      "post": {
-        "operationId": "changeCharacterJob",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChangeJobRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeJobResponse"
-                }
-              }
-            },
-            "description": "Job changed result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - job requirements not met, item missing, or active job memory present"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Change character job class",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
     "/characters/{id}/dungeons": {
       "get": {
         "operationId": "listDungeons",
@@ -21470,304 +21395,6 @@
         "summary": "Start dungeon exploration expedition",
         "tags": [
           "Combat"
-        ]
-      }
-    },
-    "/characters/{id}/exchange-job": {
-      "post": {
-        "operationId": "exchangeCharacterJob",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExchangeJobRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeJobResponse"
-                }
-              }
-            },
-            "description": "Job exchange result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - job requirements not met or item missing"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Exchange character job using Job Exchange Ticket (item-168)",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
-    "/characters/{id}/future-memories": {
-      "get": {
-        "operationId": "listCharacterFutureMemories",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/FutureMemory"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "List of saved future memory snapshots"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List saved future memory snapshots",
-        "tags": [
-          "Character"
-        ]
-      },
-      "post": {
-        "operationId": "saveCharacterFutureMemory",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FutureMemory"
-                }
-              }
-            },
-            "description": "Saved future memory snapshot"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - slot limit reached, item missing, or job unavailable"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Save character state snapshot using Future Fragment (item-207)",
-        "tags": [
-          "Character"
         ]
       }
     },
@@ -24003,119 +23630,6 @@
         ]
       }
     },
-    "/characters/{id}/recall-future": {
-      "post": {
-        "operationId": "recallCharacterFutureMemory",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RecallFutureMemoryRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeJobResponse"
-                }
-              }
-            },
-            "description": "Restored character state from future memory snapshot"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or missing memory_id"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - future memory not found or job unavailable"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Restore character state from a saved future memory snapshot",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
     "/characters/{id}/replays": {
       "get": {
         "description": "Returns explicitly classified personal archives for the requested recipient character, with ownership verified by session at both HTTP and Replay service boundaries. Combat header appearances do not confer ownership. Filtering precedes pagination. Retained archive history is separate from the original latest-copy slot; no producer or latest-copy lifecycle is enabled here.",
@@ -26167,58 +25681,6 @@
         "summary": "Get public or authenticated owned home view",
         "tags": [
           "Homes"
-        ]
-      }
-    },
-    "/jobs": {
-      "get": {
-        "operationId": "listJobs",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/JobDefinition"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "Job definitions list"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List all available job definitions",
-        "tags": [
-          "Character"
         ]
       }
     },

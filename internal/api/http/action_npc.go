@@ -116,7 +116,7 @@ func (h *Handler) npcAct(ctx context.Context, current playercontext.Result, talk
 	if !talk && len(npc.inspectWords) > 0 {
 		command, words = "＠しらべる>"+npc.name, npc.inspectWords
 	} else if !talk {
-		text := strings.ReplaceAll(npc.inspect, "{name}", char.Name)
+		text := npcReplacer(h, char).Replace(npc.inspect)
 		if text == "" {
 			text = npcInspectDefault
 		}
@@ -131,9 +131,16 @@ func (h *Handler) npcAct(ctx context.Context, current playercontext.Result, talk
 	if len(words) == 0 {
 		return NPCResult{NPCName: npc.name, Dialogue: npcNoWords, Private: true}, nil
 	}
-	word := strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP), "{medals}", strconv.Itoa(char.SmallMedals), "{job}", h.jobName(char.JobID)).Replace(words[random.Intn(len(words))])
+	word := npcReplacer(h, char).Replace(words[random.Intn(len(words))])
 	h.appendNPCLog(ctx, current, command, npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
+}
+
+// npcReplacer fills the speaker's facts into NPC lines.
+func npcReplacer(h *Handler, char corecharacter.Character) *strings.Replacer {
+	return strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP), "{medals}", strconv.Itoa(char.SmallMedals), "{job}", h.jobName(char.JobID),
+		"{monster_kills}", strconv.Itoa(char.MonsterKills), "{pvp_wins}", strconv.Itoa(char.PvPWins), "{mao}", strconv.Itoa(char.MaoCount),
+		"{hero}", strconv.Itoa(char.HeroCount), "{casino_wins}", strconv.Itoa(char.CasinoWins))
 }
 
 // appendNPCLog writes the actor's command row and the NPC reply; a nonempty

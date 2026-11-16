@@ -395,14 +395,10 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "altar_pray", Label: "復活の祭壇（祈り）", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "altar_wish", Label: "復活の祭壇（願い）", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "god_wish", Label: "神の願い・限界突破", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"wish_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{
-		ID:             "job_change",
-		Label:          "ダーマ神殿で転職",
-		Category:       "growth",
-		OperationID:    "changeCharacterJob",
-		RequiredParams: []string{"job_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "job_change", Label: "転職の神殿で転職", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"job_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "job_recall", Label: "転職の神殿で職業を思いだす", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"job_id", "old_job_id", "item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "job_restore", Label: "転職の神殿で元の職業に戻る", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "job_future_recall", Label: "転職の神殿で未来の記憶を呼び起こす", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"memory_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "medal_claim", Label: "小さなメダル景品交換", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
