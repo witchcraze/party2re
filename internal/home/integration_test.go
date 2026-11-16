@@ -137,7 +137,7 @@ func TestHomeServiceIntegration(t *testing.T) {
 	}
 
 	// 3. Letters
-	letter, err := svc.SendLetter(ctx, char2.ID, char1.ID, "Nice house!", "#00ff00")
+	letter, err := svc.SendLetter(ctx, char2.ID, char1.ID, "Nice house!")
 	if err != nil {
 		t.Fatalf("SendLetter failed: %v", err)
 	}

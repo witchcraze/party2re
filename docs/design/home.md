@@ -12,11 +12,11 @@ Own Home offers `home_inbox`, `home_outbox` and `home_notices`, which always rea
 
 ### Scoped legacy action reconciliation
 
-Active registration: `lib/home.cgi:26–39,73–105` (call paths `138–201,237–265,379–507,591–604`); only one's own home registers the living actions. **Decision (#646/#1012):** explicit `home_wake` replaces the implicit recovery on GET in `sleep.cgi:18–42`. Own Home connects `からー`, `つかう`, `ことばをおしえる` and `ことばをわすれさせる` as Gateway commands and resident talk as `npc_talk` in any home. Commented avatar/upload registrations are not active dispatch.
+Active registration: `lib/home.cgi:26–39,73–105` (call paths `138–201,237–265,379–507,591–604`); only one's own home registers the living actions. **Decision (#646/#1012):** explicit `home_wake` replaces the implicit recovery on GET in `sleep.cgi:18–42`. Own Home connects `からー`, `つかう`, `てがみをかく`, `ことばをおしえる` and `ことばをわすれさせる` as Gateway commands and resident talk as `npc_talk` in any home; `てがみをよむ` is the inbox observation, whose rows are marked read or deleted only by explicit commands. Commented avatar/upload registrations are not active dispatch.
 
 ### Retained REST and deferred detail ownership
 
-Letters (#2162), reference views and custom skill (#2160) still use REST, as do the public view and the profile, adventure record and image links tracked by #949; route removal is #950.
+Reference views and custom skill (#2160) still use REST, as do the public view and the profile, adventure record and image links tracked by #949; route removal is #950.
 
 ## Domain rules
 

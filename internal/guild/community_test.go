@@ -16,30 +16,24 @@ import (
 )
 
 type sentLetterRecord struct {
-	SenderID      string
-	SenderName    string
-	RecipientID   string
-	RecipientName string
-	Content       string
-	Color         string
+	SenderID    string
+	RecipientID string
+	Content     string
 }
 
 type mockLetterSender struct {
 	letters      []sentLetterRecord
-	sendLetterFn func(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error
+	sendLetterFn func(ctx context.Context, senderID, recipientID, content string) error
 }
 
-func (m *mockLetterSender) SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
+func (m *mockLetterSender) SendLetter(ctx context.Context, senderID, recipientID, content string) error {
 	m.letters = append(m.letters, sentLetterRecord{
-		SenderID:      senderID,
-		SenderName:    senderName,
-		RecipientID:   recipientID,
-		RecipientName: recipientName,
-		Content:       content,
-		Color:         color,
+		SenderID:    senderID,
+		RecipientID: recipientID,
+		Content:     content,
 	})
 	if m.sendLetterFn != nil {
-		return m.sendLetterFn(ctx, senderID, senderName, recipientID, recipientName, content, color)
+		return m.sendLetterFn(ctx, senderID, recipientID, content)
 	}
 	return nil
 }
@@ -590,7 +584,7 @@ func TestService_BroadcastCallout(t *testing.T) {
 	t.Run("first recipient delivery failure returns error and skips point award and touch active", func(t *testing.T) {
 		deliveryErr := errors.New("mail storage unavailable")
 		letterSender := &mockLetterSender{
-			sendLetterFn: func(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
+			sendLetterFn: func(ctx context.Context, senderID, recipientID, content string) error {
 				return deliveryErr
 			},
 		}
@@ -632,7 +626,7 @@ func TestService_BroadcastCallout(t *testing.T) {
 	t.Run("later recipient delivery failure returns error, preserves earlier delivery, skips point award", func(t *testing.T) {
 		deliveryErr := errors.New("recipient mailbox full")
 		letterSender := &mockLetterSender{
-			sendLetterFn: func(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
+			sendLetterFn: func(ctx context.Context, senderID, recipientID, content string) error {
 				if recipientID == member2 {
 					return deliveryErr
 				}
@@ -681,7 +675,7 @@ func TestService_BroadcastCallout(t *testing.T) {
 	t.Run("pending recipient delivery failure returns error, preserves earlier delivery, skips point award", func(t *testing.T) {
 		deliveryErr := errors.New("mail storage unavailable for pending recipient")
 		letterSender := &mockLetterSender{
-			sendLetterFn: func(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
+			sendLetterFn: func(ctx context.Context, senderID, recipientID, content string) error {
 				if recipientID == pendingMember {
 					return deliveryErr
 				}
@@ -732,7 +726,7 @@ func TestService_BroadcastCallout(t *testing.T) {
 
 type postReviewFailLetter struct{}
 
-func (postReviewFailLetter) SendLetter(context.Context, string, string, string, string, string, string) error {
+func (postReviewFailLetter) SendLetter(context.Context, string, string, string) error {
 	return errors.New("mail storage unavailable")
 }
 

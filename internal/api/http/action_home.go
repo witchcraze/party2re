@@ -8,6 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type sleepRequest struct {
@@ -46,6 +47,20 @@ type homeNoticeAckRequest struct {
 	NoticeIDs []string `json:"notice_ids"`
 }
 
+type homeLetterSendRequest struct {
+	RecipientName string `json:"recipient_name"`
+	Content       string `json:"content"`
+}
+
+type homeLetterRequest struct {
+	LetterID string `json:"letter_id"`
+}
+
+// HomeLetterResult names the letter a read or delete command applied to.
+type HomeLetterResult struct {
+	LetterID string `json:"letter_id"`
+}
+
 // HomeColorResult is the colour ＠からー set.
 type HomeColorResult struct {
 	Color string `json:"color"`
@@ -75,6 +90,9 @@ func WithHome(service HomeService) Option {
 			withActionCommand[homePhraseTeachRequest]("home_phrase_teach", nil, nil)(h)
 			withActionCommand[homePhraseForgetRequest]("home_phrase_forget", nil, nil)(h)
 			withActionCommand[homeNoticeAckRequest]("home_notice_ack", nil, nil)(h)
+			withActionCommand[homeLetterSendRequest]("home_letter_send", nil, nil)(h)
+			withActionCommand[homeLetterRequest]("home_letter_read", nil, nil)(h)
+			withActionCommand[homeLetterRequest]("home_letter_delete", nil, nil)(h)
 			return
 		}
 		withActionCommand("home_sleep", func(ctx context.Context, actor string, p sleepRequest) (any, error) {
@@ -114,6 +132,34 @@ func WithHome(service HomeService) Option {
 			}
 			return HomeNoticeAckResult{NoticeIDs: append([]string{}, p.NoticeIDs...)}, nil
 		}, homeActionRejection)(h)
+		// Legacy addresses a letter by the recipient's name (send_letter).
+		withActionCommand("home_letter_send", func(ctx context.Context, actor string, p homeLetterSendRequest) (any, error) {
+			if h.characterNames == nil {
+				return nil, errSceneNotConfigured
+			}
+			name, err := validation.ValidateCharacterName(p.RecipientName)
+			if err != nil {
+				return nil, recipientNotFoundError{name: p.RecipientName}
+			}
+			recipient, err := h.characterNames.FindByName(ctx, name)
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return nil, recipientNotFoundError{name: name}
+			}
+			if err != nil {
+				return nil, err
+			}
+			letter, err := service.SendLetter(ctx, actor, recipient.ID, p.Content)
+			if isTextValidationError(err) {
+				return nil, invalidLetterError{err}
+			}
+			return letter, err
+		}, homeActionRejection)(h)
+		withActionCommand("home_letter_read", func(ctx context.Context, actor string, p homeLetterRequest) (any, error) {
+			return HomeLetterResult{LetterID: p.LetterID}, service.ReadLetter(ctx, p.LetterID, actor)
+		}, homeActionRejection)(h)
+		withActionCommand("home_letter_delete", func(ctx context.Context, actor string, p homeLetterRequest) (any, error) {
+			return HomeLetterResult{LetterID: p.LetterID}, service.DeleteLetter(ctx, p.LetterID, actor)
+		}, homeActionRejection)(h)
 	}
 }
 
@@ -138,7 +184,14 @@ func homeTalk(h *Handler, ctx context.Context, current playercontext.Result) (NP
 	return NPCResult{NPCName: talk.PetName, Dialogue: talk.Phrase}, nil
 }
 
+// invalidLetterError keeps letter text failures apart from phrase text
+// failures; it deliberately does not unwrap.
+type invalidLetterError struct{ error }
+
 func homeActionRejection(err error) (int, ErrorDetail) {
+	if status, detail := speechRejection(err); status != 0 {
+		return status, detail
+	}
 	switch {
 	case errors.Is(err, home.ErrAlreadySleeping):
 		return http.StatusConflict, ErrorDetail{Code: "HOME_ALREADY_SLEEPING", Message: "Character is already sleeping."}
@@ -174,6 +227,13 @@ func homeActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "HOME_INVALID_PHRASE", Message: "Phrase must be one nonempty line of plain text."}
 	case errors.Is(err, home.ErrPhraseNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "HOME_PHRASE_NOT_FOUND", Message: "Choose one of the observed phrases."}
+	// Another character's letter is indistinguishable from a missing one.
+	case errors.Is(err, home.ErrLetterNotFound), errors.Is(err, home.ErrForbidden):
+		return http.StatusNotFound, ErrorDetail{Code: "HOME_LETTER_NOT_FOUND", Message: "Choose one of the observed letters."}
+	case errors.Is(err, home.ErrLetterThrottled):
+		return http.StatusTooManyRequests, ErrorDetail{Code: "HOME_LETTER_THROTTLED", Message: "連続で手紙を送ることはできません。しばらくしてから送ってください"}
+	case errors.Is(err, home.ErrEmptyContent), errors.Is(err, home.ErrContentTooLong), errors.As(err, new(invalidLetterError)):
+		return http.StatusBadRequest, ErrorDetail{Code: "HOME_INVALID_LETTER", Message: "Letter must be nonempty plain text within the length limit."}
 	default:
 		return 0, ErrorDetail{}
 	}

@@ -60,14 +60,14 @@ func (s *Service) removeAuthorizedMember(ctx context.Context, guildID, leaderID,
 	// transaction therefore rolls them back along with the membership mutation.
 	if s.letterSender != nil && s.charReader != nil {
 		leader, errL := s.charReader.FindByID(ctx, leaderID)
-		target, errT := s.charReader.FindByID(ctx, targetID)
+		_, errT := s.charReader.FindByID(ctx, targetID)
 		if errL == nil && errT == nil {
 			content := "【＋追放＋】" + g.Name + " (ギルマス " + leader.Name + ") から追放されました"
 			if pending {
 				content = "【＋不合格＋】残念ながら " + g.Name + " (ギルマス " + leader.Name + ") から参加を拒否されました"
 			}
 			//lint:ignore error-swallow existing best-effort membership notification
-			_ = s.letterSender.SendLetter(ctx, leaderID, leader.Name, targetID, target.Name, content, leader.Color)
+			_ = s.letterSender.SendLetter(ctx, leaderID, targetID, content)
 		}
 	}
 	return nil

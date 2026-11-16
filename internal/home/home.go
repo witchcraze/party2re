@@ -68,7 +68,6 @@ const (
 	DefaultLetterLogLimit = 30
 	// LetterThrottleSeconds is the wait before a sender can follow their own latest inbox letter.
 	LetterThrottleSeconds = 30
-	MaxColorLength        = 7
 )
 
 // IsLetterThrottled reports whether a sender must wait, given the latest letter in the recipient's inbox.

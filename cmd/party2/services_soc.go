@@ -65,11 +65,11 @@ type homeLetterAdapter struct {
 	home *home.Service
 }
 
-func (a *homeLetterAdapter) SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
+func (a *homeLetterAdapter) SendLetter(ctx context.Context, senderID, recipientID, content string) error {
 	if a.home == nil {
 		return nil
 	}
-	_, err := a.home.SendLetter(ctx, senderID, recipientID, content, color)
+	_, err := a.home.SendLetter(ctx, senderID, recipientID, content)
 	return err
 }
 

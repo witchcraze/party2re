@@ -49,15 +49,11 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		{"GET", "/gvg/leaderboard", "", "", 200},
 		{"GET", "/parties/{id}", "", "", 200},
 		{"GET", "/homes/{id}", "", "", 200},
-		{"DELETE", "/letters/{id}", "", "session", 204},
 	} {
 		t.Run(tc.method+" "+tc.path+"/"+strconv.Itoa(tc.status), func(t *testing.T) {
 			url := strings.NewReplacer("{id}", "c1", "{town_id}", "town1", "{room_id}", "room-1").Replace(tc.path)
 			if strings.HasPrefix(url, "/gvg/") {
 				url = strings.ReplaceAll(url, "room-1", "gvg-room-1")
-			}
-			if tc.path == "/letters/{id}" {
-				url += "?character_id=c1"
 			}
 			req := httptest.NewRequest(tc.method, url, strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -139,48 +135,8 @@ func TestOpenAPIConstraintBoundaries(t *testing.T) {
 	}
 }
 
-func TestOpenAPILetterRequestContracts(t *testing.T) {
-	var root map[string]any
-	decoder := json.NewDecoder(strings.NewReader(string(gamehttp.OpenAPISpec())))
-	decoder.UseNumber()
-	if err := decoder.Decode(&root); err != nil {
-		t.Fatal(err)
-	}
-	schemas := root["components"].(map[string]any)["schemas"].(map[string]any)
-	paths := root["paths"].(map[string]any)
-	letter := `{"sender_character_id":"c1","recipient_character_id":"c2","content":"こんにちは\nHello"}`
-	for _, tc := range []struct {
-		name, path, payload string
-		valid               bool
-	}{
-		{"letter without color", "/letters", letter, true},
-		{"letter with empty color", "/letters", strings.Replace(letter, "}", `,"color":""}`, 1), true},
-		{"letter with non-hex color", "/letters", strings.Replace(letter, "}", `,"color":"arbitrary color"}`, 1), true},
-		{"letter trimmed content at limit", "/letters", strings.Replace(letter, `こんにちは\nHello`, " "+strings.Repeat("あ", 1000)+" ", 1), true},
-		{"missing sender", "/letters", strings.Replace(letter, `"sender_character_id":"c1",`, "", 1), false},
-		{"missing recipient", "/letters", strings.Replace(letter, `"recipient_character_id":"c2",`, "", 1), false},
-		{"missing content", "/letters", `{"sender_character_id":"c1","recipient_character_id":"c2"}`, false},
-		{"empty sender", "/letters", strings.Replace(letter, `"c1"`, `""`, 1), false},
-		{"blank sender", "/letters", strings.Replace(letter, `"c1"`, `" \t\u3000"`, 1), false},
-		{"empty recipient", "/letters", strings.Replace(letter, `"c2"`, `""`, 1), false},
-		{"blank recipient", "/letters", strings.Replace(letter, `"c2"`, `"\u0085\u00a0"`, 1), false},
-		{"empty content", "/letters", strings.Replace(letter, `"こんにちは\nHello"`, `""`, 1), false},
-		{"blank content", "/letters", strings.Replace(letter, `"こんにちは\nHello"`, `" \t\r\n\u3000"`, 1), false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			schema := paths[tc.path].(map[string]any)["post"].(map[string]any)["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
-			var value any
-			decoder := json.NewDecoder(strings.NewReader(tc.payload))
-			decoder.UseNumber()
-			if err := decoder.Decode(&value); err != nil {
-				t.Fatal(err)
-			}
-			if err := checkOpenAPIPayload(schemas, schema, value); (err == nil) != tc.valid {
-				t.Fatalf("valid=%t: %v", tc.valid, err)
-			}
-		})
-	}
-	// Check minLength independently of the nonblank pattern, counting Unicode characters.
+// minLength counts Unicode characters, independently of any nonblank pattern.
+func TestOpenAPIPayloadMinLengthCountsCharacters(t *testing.T) {
 	for _, tc := range []struct {
 		value string
 		valid bool

@@ -77,7 +77,7 @@ owns the approved lifecycle and delivery policies.
 
 - **Scope / Legacy**: `lib/home.cgi`の公開/本人表示、Home設定、`てがみをかく` / `てがみをよむ`、`からー`、`ことばをおしえる` / `ことばをわすれさせる`、ペット表示/会話、配送通知。共有`lib/system.cgi`の手紙・ログ処理まで追う。
 - **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/api/http/scene_home.go`・`action_home.go` (Homeシーンと本人コマンド)、`internal/api/http/home.go` (手紙・公開表示)。
-- **Contracts**: [design/home.md](../design/home.md)、[api/paths/home.json](../api/paths/home.json)、[api/paths/letter.json](../api/paths/letter.json)。
+- **Contracts**: [design/home.md](../design/home.md)、[api/paths/home.json](../api/paths/home.json)。
 - **Open follow-ups**: [#2162](https://github.com/witchcraze/party2re/issues/2162) (手紙のGateway移行)。
 - **Boundary**: Homeからの図鑑・ジョブマスター・プロフィール・冒険記録・特技設定・画像設定は遷移先と対象identityを確認する。遷移先の全仕様はCL-01/04/06/07の担当範囲。壁紙等の表示はここ、使用による変更はCL-02E。
 
@@ -125,7 +125,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| `lib/home.cgi` | 自宅拠点 (@自宅ペット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json)<br/>[api/paths/letter.json](../api/paths/letter.json) | Reconciling | CL-02A/B/E。未解決の所有・更新・睡眠・使用差分は各監査単位および所有文書を参照。 |
+| `lib/home.cgi` | 自宅拠点 (@自宅ペット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json) | Reconciling | CL-02A/B/E。未解決の所有・更新・睡眠・使用差分は各監査単位および所有文書を参照。 |
 | `lib/sleep.cgi` | 睡眠 (無料全快・日次リセット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json) | Reconciling | CL-02B (#1117〜#1119, #1822)。有料宿屋は非存在。時間/人数・起床義務・訪問条件の契約は CL-02B および [design/home.md](../design/home.md) 参照。 |
 | `lib/park.cgi` | 交流広場 (@町娘) = town hub | `internal/api/http/scene_town.go` (NPC文言)<br/>`internal/api/http/action_npc.go` | [architecture/place-log.md](../architecture/place-log.md) | Review against source | 発言/ささやきは共有place log、`はなす`/`しらべる`/`うらない`はNPC Gateway。10G回復は非存在。 |
 | `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | [design/depot.md](../design/depot.md) | Reconciling | CL-02C。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |

@@ -127,9 +127,9 @@ var (
 		bind: func(n playercontext.Selection, actorID string) map[string]map[string]any {
 			return map[string]map[string]any{"home_sleep": {"target_home_id": homeOwner(&playercontext.NavigationObservation{Selection: n}, actorID)}}
 		}}
-	homeOwnerCommands  = []string{"home_sleep", "home_color", "home_item_use", "home_phrase_teach", "home_phrase_forget", "home_notice_ack"}
-	homeInboxFacility  = facility{title: "受信箱", read: (*Handler).homeMailboxSceneData, present: homeMailboxPresentation}
-	homeOutboxFacility = facility{title: "送信箱", read: (*Handler).homeMailboxSceneData, present: homeMailboxPresentation}
+	homeOwnerCommands  = []string{"home_sleep", "home_color", "home_item_use", "home_phrase_teach", "home_phrase_forget", "home_notice_ack", "home_letter_send"}
+	homeInboxFacility  = facility{title: "受信箱", commands: []string{"home_letter_read", "home_letter_delete"}, read: (*Handler).homeMailboxSceneData, present: homeMailboxPresentation}
+	homeOutboxFacility = facility{title: "送信箱", commands: []string{"home_letter_delete"}, read: (*Handler).homeMailboxSceneData, present: homeMailboxPresentation}
 )
 
 func homeMailboxPresentation(_ *Handler, _ playercontext.Result, data any) scenePresentation {

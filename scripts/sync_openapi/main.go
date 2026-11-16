@@ -516,8 +516,6 @@ func moduleForRoute(route Route) string {
 		return "helper"
 	case strings.HasPrefix(p, "/homes"):
 		return "home"
-	case strings.HasPrefix(p, "/letters"):
-		return "letter"
 	case strings.HasPrefix(p, "/characters/{id}/lottery"):
 		return "lottery"
 	case strings.HasPrefix(p, "/characters/{id}/achievements") || strings.HasPrefix(p, "/characters/{id}/medals") || strings.HasPrefix(p, "/medals"):
@@ -584,7 +582,6 @@ func moduleToTagName(module string) string {
 		"gemstore":     "GemStore",
 		"helper":       "Helpers",
 		"home":         "Homes",
-		"letter":       "Letters",
 		"lottery":      "Lottery",
 		"medal":        "Medals",
 		"monster":      "Monster",
