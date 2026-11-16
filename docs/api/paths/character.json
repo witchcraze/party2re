@@ -101,7 +101,7 @@
               }
             }
           },
-          "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; Adventure/Rescue/Home/Bank service character-not-found returns CHARACTER_NOT_FOUND. Home rejects missing/expired destination houses with HOME_HOUSE_NOT_FOUND / HOME_HOUSE_EXPIRED. Known service rejections refresh context when possible. An absent or unavailable product returns SELECTION_NOT_FOUND. Depot sale missing targets/storage or character return DEPOT_ITEM_NOT_FOUND, DEPOT_NOT_FOUND or CHARACTER_NOT_FOUND with refreshed context when possible. Missing Challenge runs use CHALLENGE_NOT_FOUND. Auction uses AUCTION_TARGET_NOT_FOUND or AUCTION_ITEM_NOT_FOUND with refreshed context when possible."
+          "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; Adventure/Rescue/Home/Bank service character-not-found returns CHARACTER_NOT_FOUND. Known service rejections refresh context when possible. An absent or unavailable product returns SELECTION_NOT_FOUND. Depot sale missing targets/storage or character return DEPOT_ITEM_NOT_FOUND, DEPOT_NOT_FOUND or CHARACTER_NOT_FOUND with refreshed context when possible. Missing Challenge runs use CHALLENGE_NOT_FOUND. Auction uses AUCTION_TARGET_NOT_FOUND or AUCTION_ITEM_NOT_FOUND with refreshed context when possible."
         },
         "409": {
           "content": {

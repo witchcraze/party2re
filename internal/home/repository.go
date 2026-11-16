@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
@@ -15,9 +14,7 @@ type EstateRepository interface {
 	// LockTownHouseCapacityForUpdate serializes house construction in one town (Rank 0).
 	LockTownHouseCapacityForUpdate(ctx context.Context, townID string) error
 	CountActiveTownHouses(ctx context.Context, townID string, now time.Time) (int, error)
-	FindActiveHomeByCharacterID(ctx context.Context, characterID string, now time.Time) (CharacterHome, error)
-	FindActiveHomeByCharacterName(ctx context.Context, characterName string, now time.Time) (CharacterHome, corecharacter.Character, error)
-	ListActiveTownHouses(ctx context.Context, townID string, now time.Time) ([]CharacterHome, error)
+	ListActiveTownHouses(ctx context.Context, townID string, now time.Time) ([]TownHouse, error)
 }
 
 type LetterRepository interface {

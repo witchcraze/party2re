@@ -20,9 +20,7 @@ import (
 
 type mockHomeService struct {
 	getHomeViewFn          func(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error)
-	buildHouseFn           func(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
-	checkHouseFn           func(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
-	listTownHousesFn       func(ctx context.Context, townID string) ([]home.HomeCheckResult, error)
+	buildHouseFn           func(ctx context.Context, characterID, townID, houseStyle string) (*home.TownHouse, error)
 	sendLetterFn           func(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error)
 	readLetterFn           func(ctx context.Context, letterID, recipientID string) error
 	listInboxFn            func(ctx context.Context, recipientID string, limit, offset int) (home.LetterListResult, error)
@@ -50,25 +48,15 @@ func (m *mockHomeService) GetHomeView(ctx context.Context, homeCharacterID, visi
 	}, nil
 }
 
-func (m *mockHomeService) BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error) {
+func (m *mockHomeService) BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*home.TownHouse, error) {
 	if m.buildHouseFn != nil {
 		return m.buildHouseFn(ctx, characterID, townID, houseStyle)
 	}
-	return &home.HomeCheckResult{CharacterID: characterID, TownID: townID, HouseStyle: houseStyle}, nil
+	return &home.TownHouse{CharacterID: characterID, TownID: townID, HouseStyle: houseStyle}, nil
 }
 
-func (m *mockHomeService) CheckHouse(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error) {
-	if m.checkHouseFn != nil {
-		return m.checkHouseFn(ctx, targetNameOrID)
-	}
-	return &home.HomeCheckResult{CharacterID: "char-1", OwnerName: targetNameOrID, TownID: "town1"}, nil
-}
-
-func (m *mockHomeService) ListTownHouses(ctx context.Context, townID string) ([]home.HomeCheckResult, error) {
-	if m.listTownHousesFn != nil {
-		return m.listTownHousesFn(ctx, townID)
-	}
-	return []home.HomeCheckResult{{CharacterID: "char-1", TownID: townID}}, nil
+func (m *mockHomeService) ListTownHouses(context.Context, string) ([]home.TownHouse, error) {
+	return []home.TownHouse{}, nil
 }
 
 func (m *mockHomeService) SetCharacterColor(context.Context, string, string) error { return nil }

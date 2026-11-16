@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -230,13 +231,13 @@ func TestHomeServiceIntegration(t *testing.T) {
 		t.Errorf("unexpected build result: %+v", buildRes)
 	}
 
-	// Check house
-	checkRes, err := svc.CheckHouse(ctx, char1.ID)
+	// Town listing reads the owner's name through the join.
+	houses, err := svc.ListTownHouses(ctx, "town1")
 	if err != nil {
-		t.Fatalf("CheckHouse failed: %v", err)
+		t.Fatalf("ListTownHouses failed: %v", err)
 	}
-	if checkRes.OwnerName != char1.Name {
-		t.Errorf("expected owner %s, got %s", char1.Name, checkRes.OwnerName)
+	if !slices.ContainsFunc(houses, func(h home.TownHouse) bool { return h.CharacterID == char1.ID && h.OwnerName == char1.Name }) {
+		t.Errorf("town1 houses %+v miss %s", houses, char1.Name)
 	}
 }
 

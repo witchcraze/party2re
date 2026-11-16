@@ -5933,6 +5933,46 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "house_build"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "town_id": {
+                      "type": "string",
+                      "description": "Town scene ID (town1..town4) from the house_build template."
+                    },
+                    "house_style": {
+                      "type": "string",
+                      "description": "House style from the observed town.house_styles. Funds, town capacity and ownership stay service-owned."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "town_id",
+                    "house_style"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "store_build"
                 }
               },
@@ -14610,43 +14650,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "HomeCheckResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "house_style": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "owner_name": {
-            "type": "string"
-          },
-          "town_id": {
-            "type": "string"
-          },
-          "town_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "owner_name",
-          "town_id",
-          "town_name",
-          "house_style",
-          "expires_at",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "RankingLegendCategoryInfo": {
         "properties": {
           "category": {
@@ -16258,22 +16261,6 @@
           "paths"
         ]
       },
-      "BuildHouseRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "house_style": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_id",
-          "house_style"
-        ],
-        "additionalProperties": false
-      },
       "ChallengeCommandResult": {
         "type": "object",
         "properties": {
@@ -17280,16 +17267,53 @@
           "house_styles"
         ]
       },
+      "TownHouse": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Active house in a town. character_id is the owner's Home scene subject.",
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "town_id": {
+            "type": "string"
+          },
+          "house_style": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "character_id",
+          "owner_name",
+          "town_id",
+          "house_style",
+          "expires_at"
+        ]
+      },
       "TownDistrictSceneData": {
         "type": "object",
         "additionalProperties": false,
-        "description": "One legacy town: its active stores in construction order and the ＠みせ terms.",
+        "description": "One legacy town: its active houses soonest expiry first, its active stores in construction order, and the ＠みせ terms. The town carries the ＠たてる terms.",
         "properties": {
           "parent": {
             "const": "town"
           },
           "town": {
             "$ref": "#/components/schemas/TownInfo"
+          },
+          "houses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TownHouse"
+            },
+            "maxItems": 10
           },
           "stores": {
             "type": "array",
@@ -17305,6 +17329,7 @@
         "required": [
           "parent",
           "town",
+          "houses",
           "stores",
           "store_terms"
         ]

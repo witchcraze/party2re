@@ -4,18 +4,21 @@ import (
 	"context"
 	"errors"
 
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/town"
 )
 
-// TownDistrictSceneData is one legacy town (town1..town4): its active stores
-// and the ＠みせ construction terms. Selecting a store observes StoreSceneData.
+// TownDistrictSceneData is one legacy town (town1..town4): its active houses
+// and stores, with the ＠たてる (Town) and ＠みせ construction terms. Selecting a
+// store observes StoreSceneData; a house names its owner's Home subject.
 type TownDistrictSceneData struct {
-	Parent     string          `json:"parent"`
-	Town       town.Town       `json:"town"`
-	Stores     []store.Store   `json:"stores"`
-	StoreTerms StoreBuildTerms `json:"store_terms"`
+	Parent     string           `json:"parent"`
+	Town       town.Town        `json:"town"`
+	Houses     []home.TownHouse `json:"houses"`
+	Stores     []store.Store    `json:"stores"`
+	StoreTerms StoreBuildTerms  `json:"store_terms"`
 }
 
 type StoreBuildTerms struct {
@@ -39,7 +42,7 @@ var (
 )
 
 func (h *Handler) townDistrictSceneData(ctx context.Context, r playercontext.Result) (any, error) {
-	if h.stores == nil {
+	if h.stores == nil || h.homes == nil {
 		return nil, errSceneNotConfigured
 	}
 	n := r.Navigation.Selection
@@ -57,18 +60,22 @@ func (h *Handler) townDistrictSceneData(ctx context.Context, r playercontext.Res
 	if !ok {
 		return nil, errSceneNotConfigured
 	}
+	houses, err := h.homes.ListTownHouses(ctx, t.ID)
+	if err != nil {
+		return nil, err
+	}
 	stores, err := h.stores.GetTownStores(ctx, t.ID)
 	if err != nil {
 		return nil, err
 	}
-	return TownDistrictSceneData{Parent: "town", Town: t, Stores: append([]store.Store{}, stores...),
+	return TownDistrictSceneData{Parent: "town", Town: t, Houses: append([]home.TownHouse{}, houses...), Stores: append([]store.Store{}, stores...),
 		StoreTerms: StoreBuildTerms{Price: store.StorePrice, CycleDays: store.StoreCycleDays, MaxStores: store.MaxTownStores, HouseStyles: t.HouseStyles}}, nil
 }
 
 func townDistrictFacility(name string) facility {
-	return facility{title: name, commands: []string{"store_build"}, subjectCommands: storeVisitorCommands, ownedSubjectCommands: storeOwnerCommands,
+	return facility{title: name, commands: []string{"house_build", "store_build"}, subjectCommands: storeVisitorCommands, ownedSubjectCommands: storeOwnerCommands,
 		bind: func(n playercontext.Selection, _ string) map[string]map[string]any {
-			return map[string]map[string]any{"store_build": {"town_id": n.Destination}}
+			return map[string]map[string]any{"house_build": {"town_id": n.Destination}, "store_build": {"town_id": n.Destination}}
 		},
 		present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
 			if data, ok := data.(StoreSceneData); ok {

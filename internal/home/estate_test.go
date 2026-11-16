@@ -266,21 +266,13 @@ func TestEstateService(t *testing.T) {
 		}
 	})
 
-	t.Run("check house by ID and by name", func(t *testing.T) {
-		resID, err := svc.CheckHouse(ctx, "char-1")
-		if err != nil {
-			t.Fatalf("CheckHouse by ID failed: %v", err)
+	t.Run("list town houses with owner names", func(t *testing.T) {
+		houses, err := svc.ListTownHouses(ctx, "town1")
+		if err != nil || len(houses) != 1 || houses[0].CharacterID != "char-1" || houses[0].OwnerName != "Hero" || houses[0].HouseStyle != "001" {
+			t.Fatalf("ListTownHouses = %+v, %v", houses, err)
 		}
-		if resID.OwnerName != "Hero" {
-			t.Errorf("expected Hero, got %s", resID.OwnerName)
-		}
-
-		resName, err := svc.CheckHouse(ctx, "Hero")
-		if err != nil {
-			t.Fatalf("CheckHouse by Name failed: %v", err)
-		}
-		if resName.CharacterID != "char-1" {
-			t.Errorf("expected char-1, got %s", resName.CharacterID)
+		if _, err := svc.ListTownHouses(ctx, "nowhere"); !errors.Is(err, ErrInvalidTownID) {
+			t.Fatalf("unknown town err = %v", err)
 		}
 	})
 

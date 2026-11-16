@@ -127,7 +127,7 @@ type homeGatewayRepository struct {
 func (r homeGatewayRepository) GetHome(ctx context.Context, id string) (home.CharacterHome, error) {
 	r.fixture.checkContext(ctx)
 	if id != "other" {
-		return home.CharacterHome{}, home.ErrHouseNotFound
+		return home.CharacterHome{CharacterID: id}, nil
 	}
 	expires := time.Now().Add(time.Hour)
 	return home.CharacterHome{CharacterID: id, TownID: "town", ExpiresAt: &expires}, nil

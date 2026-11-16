@@ -9,15 +9,39 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/store"
 )
 
 type storeSceneService struct {
 	StoreService
-	stores           map[string]store.Store
-	townErr, getErr  error
-	reads, mutations int
+	stores                     map[string]store.Store
+	houses                     []home.TownHouse
+	townErr, getErr, housesErr error
+	reads, mutations           int
+}
+
+// districtHomes adds the town house surface to the gateway fixture's Home service.
+type districtHomes struct {
+	HomeService
+	s *storeSceneService
+}
+
+func (d districtHomes) ListTownHouses(_ context.Context, townID string) ([]home.TownHouse, error) {
+	d.s.reads++
+	var rows []home.TownHouse
+	for _, h := range d.s.houses {
+		if h.TownID == townID {
+			rows = append(rows, h)
+		}
+	}
+	return rows, d.s.housesErr
+}
+
+func (d districtHomes) BuildHouse(_ context.Context, actor, townID, style string) (*home.TownHouse, error) {
+	d.s.mutations++
+	return &home.TownHouse{CharacterID: actor, TownID: townID, HouseStyle: style}, nil
 }
 
 func (s *storeSceneService) GetTownStores(_ context.Context, townID string) ([]store.Store, error) {
@@ -61,7 +85,7 @@ func storeSceneRouter(t *testing.T, service *storeSceneService, selection player
 			}})
 	}
 	pc := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithNavigation(nav, scenes...))
-	h, err := NewHandler(f, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithPlayerContext(pc), WithStore(service), func(h *Handler) { h.homes = f })
+	h, err := NewHandler(f, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithPlayerContext(pc), WithStore(service), WithHome(districtHomes{f, service}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,6 +106,9 @@ func newStoreSceneService() *storeSceneService {
 		"mine":  {ID: "mine", CharacterID: "hero", TownID: "town1", StoreName: "@Heroの店@", ExpiresAt: exp},
 		"peer":  {ID: "peer", CharacterID: "peer", TownID: "town1", StoreName: "@Peerの店@", ExpiresAt: exp},
 		"other": {ID: "other", CharacterID: "peer2", TownID: "town2", StoreName: "@Peer2の店@", ExpiresAt: exp},
+	}, houses: []home.TownHouse{
+		{CharacterID: "peer", OwnerName: "Peer", TownID: "town1", HouseStyle: "002", ExpiresAt: exp},
+		{CharacterID: "peer2", OwnerName: "Peer2", TownID: "town2", HouseStyle: "005", ExpiresAt: exp},
 	}}
 }
 
@@ -98,23 +125,23 @@ func TestTownHubListsLegacyTowns(t *testing.T) {
 	}
 }
 
-func TestTownDistrictObservesStoresAndBuildTerms(t *testing.T) {
+func TestTownDistrictObservesHousesStoresAndBuildTerms(t *testing.T) {
 	service := newStoreSceneService()
 	nav, router := storeSceneRouter(t, service, playercontext.Selection{Destination: "town1"})
 	status, observation := navigationGET(t, router)
 	data := decodeShopScene[TownDistrictSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "メケメケ村" || observation.Scene.Support.Observation != "details" ||
-		len(data.Stores) != 2 || data.Town.ID != "town1" || data.StoreTerms.Price != store.StorePrice || len(data.StoreTerms.HouseStyles) != 4 {
+		len(data.Stores) != 2 || len(data.Houses) != 1 || data.Houses[0].CharacterID != "peer" || data.Houses[0].OwnerName != "Peer" || data.Town.ID != "town1" || data.StoreTerms.Price != store.StorePrice || len(data.StoreTerms.HouseStyles) != 4 {
 		t.Fatalf("district: %d %+v %+v", status, observation.Scene, data)
 	}
 	names := actionNames(observation.AvailableActions)
-	for _, want := range []string{"store_build", "scene_select", "scene_back"} {
+	for _, want := range []string{"house_build", "store_build", "scene_select", "scene_back"} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("missing %s: %v", want, names)
 		}
 	}
 	for _, a := range observation.AvailableActions {
-		if a.Action == "store_build" && a.ParamsTemplate["town_id"] != "town1" {
+		if (a.Action == "store_build" || a.Action == "house_build") && a.ParamsTemplate["town_id"] != "town1" {
 			t.Fatalf("build template: %+v", a)
 		}
 		if a.Action == "scene_select" && a.ParamsTemplate["target_kind"] != "store" {
@@ -150,7 +177,7 @@ func TestStoreSceneOwnerAndVisitorCommands(t *testing.T) {
 					t.Fatalf("missing %s: %v", want, names)
 				}
 			}
-			for _, deny := range append(slices.Clone(tc.deny), "store_build", "scene_select") {
+			for _, deny := range append(slices.Clone(tc.deny), "house_build", "store_build", "scene_select") {
 				if slices.Contains(names, deny) {
 					t.Fatalf("unexpected %s: %v", deny, names)
 				}
@@ -185,6 +212,24 @@ func TestStoreCommandsFollowTheSelectedStoreOwnership(t *testing.T) {
 	}
 }
 
+// ＠たてる builds in the observed town only, as legacy builds in the current town.
+func TestHouseBuildIsBoundToTheObservedTown(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		ok   bool
+	}{
+		{`{"action":"house_build","params":{"town_id":"town1","house_style":"001"}}`, true},
+		{`{"action":"house_build","params":{"town_id":"town2","house_style":"005"}}`, false},
+	} {
+		service := newStoreSceneService()
+		_, router := storeSceneRouter(t, service, playercontext.Selection{Destination: "town1"})
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", tc.body, nil)
+		if (status == 200) != tc.ok || (service.mutations == 1) != tc.ok {
+			t.Fatalf("%s: %d %s (mutations %d)", tc.body, status, raw, service.mutations)
+		}
+	}
+}
+
 func TestStoreSceneUnavailableAndRequiredReads(t *testing.T) {
 	for name, tc := range map[string]struct {
 		selection playercontext.Selection
@@ -197,6 +242,7 @@ func TestStoreSceneUnavailableAndRequiredReads(t *testing.T) {
 		"expired":      {playercontext.Selection{Destination: "town1", Subject: playercontext.Subject{Kind: "store", ID: "mine"}}, func(s *storeSceneService) { s.getErr = store.ErrStoreExpired }, 200, "selection_unavailable"},
 		"store read":   {playercontext.Selection{Destination: "town1", Subject: playercontext.Subject{Kind: "store", ID: "mine"}}, func(s *storeSceneService) { s.getErr = errors.New("private read") }, 500, ""},
 		"stores read":  {playercontext.Selection{Destination: "town1"}, func(s *storeSceneService) { s.townErr = errors.New("private read") }, 500, ""},
+		"houses read":  {playercontext.Selection{Destination: "town1"}, func(s *storeSceneService) { s.housesErr = errors.New("private read") }, 500, ""},
 		"unconfigured": {playercontext.Selection{Destination: "town1"}, nil, 501, ""},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -335,7 +335,7 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | Legacy action / dispatch | Replacement or deferred owner |
 | --- | --- |
 | `いどう` → `idou`, registered `@places` → saved `$m{lib}` | Gateway `scene_enter` → `playercontext.Service.Enter`; the initial closed registry covers the destinations above. Remaining facilities belong to #948–#949. |
-| `まち` → `machi`, registered `@towns` → saved `$m{lib}` | The hub plus the four town scenes `town1`..`town4` through `scene_enter` / `scene_back`; town stores follow [Store](../design/store.md#town-scenes-and-commands). Estate projections remain #949 work. |
+| `まち` → `machi`, registered `@towns` → saved `$m{lib}` | The hub plus the four town scenes `town1`..`town4` through `scene_enter` / `scene_back`; town stores follow [Store](../design/store.md#town-scenes-and-commands) and town houses [Home](../design/home.md#1-town-house-estate). |
 | `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` through `scene_enter` and public Home targets through `scene_select` → Home.GetHomeView. Query authenticates the actor; unavailable targets remain explicit. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
 | Reload dispatch: sleep before `$m{lib}`, default `park` | The town hub is that park: `交流広場` with `@町娘`, the same place and log as `＠いどう>交流広場`. Shared GET/refresh derives owned activity/recovery before ordinary selection. Expired sleep requires explicit Wake; conflicting activities remain explicit. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |

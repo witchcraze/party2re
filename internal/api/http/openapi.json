@@ -2257,22 +2257,6 @@
         ],
         "type": "object"
       },
-      "BuildHouseRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "house_style": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "house_style"
-        ],
-        "type": "object"
-      },
       "CasinoLobbyRoom": {
         "additionalProperties": false,
         "properties": {
@@ -6079,6 +6063,46 @@
                   },
                   "required": [
                     "listing_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "house_build",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "house_style": {
+                      "description": "House style from the observed town.house_styles. Funds, town capacity and ownership stay service-owned.",
+                      "type": "string"
+                    },
+                    "town_id": {
+                      "description": "Town scene ID (town1..town4) from the house_build template.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "town_id",
+                    "house_style"
                   ],
                   "type": "object"
                 }
@@ -11101,43 +11125,6 @@
           "is_guild",
           "expires_at",
           "created_at"
-        ],
-        "type": "object"
-      },
-      "HomeCheckResult": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "house_style": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "owner_name": {
-            "type": "string"
-          },
-          "town_id": {
-            "type": "string"
-          },
-          "town_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "owner_name",
-          "town_id",
-          "town_name",
-          "house_style",
-          "expires_at",
-          "message"
         ],
         "type": "object"
       },
@@ -17644,8 +17631,15 @@
       },
       "TownDistrictSceneData": {
         "additionalProperties": false,
-        "description": "One legacy town: its active stores in construction order and the ＠みせ terms.",
+        "description": "One legacy town: its active houses soonest expiry first, its active stores in construction order, and the ＠みせ terms. The town carries the ＠たてる terms.",
         "properties": {
+          "houses": {
+            "items": {
+              "$ref": "#/components/schemas/TownHouse"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
           "parent": {
             "const": "town"
           },
@@ -17666,8 +17660,39 @@
         "required": [
           "parent",
           "town",
+          "houses",
           "stores",
           "store_terms"
+        ],
+        "type": "object"
+      },
+      "TownHouse": {
+        "additionalProperties": false,
+        "description": "Active house in a town. character_id is the owner's Home scene subject.",
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "house_style": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "town_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "owner_name",
+          "town_id",
+          "house_style",
+          "expires_at"
         ],
         "type": "object"
       },
@@ -18517,7 +18542,7 @@
                 }
               }
             },
-            "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; Adventure/Rescue/Home/Bank service character-not-found returns CHARACTER_NOT_FOUND. Home rejects missing/expired destination houses with HOME_HOUSE_NOT_FOUND / HOME_HOUSE_EXPIRED. Known service rejections refresh context when possible. An absent or unavailable product returns SELECTION_NOT_FOUND. Depot sale missing targets/storage or character return DEPOT_ITEM_NOT_FOUND, DEPOT_NOT_FOUND or CHARACTER_NOT_FOUND with refreshed context when possible. Missing Challenge runs use CHALLENGE_NOT_FOUND. Auction uses AUCTION_TARGET_NOT_FOUND or AUCTION_ITEM_NOT_FOUND with refreshed context when possible."
+            "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; Adventure/Rescue/Home/Bank service character-not-found returns CHARACTER_NOT_FOUND. Known service rejections refresh context when possible. An absent or unavailable product returns SELECTION_NOT_FOUND. Depot sale missing targets/storage or character return DEPOT_ITEM_NOT_FOUND, DEPOT_NOT_FOUND or CHARACTER_NOT_FOUND with refreshed context when possible. Missing Challenge runs use CHALLENGE_NOT_FOUND. Auction uses AUCTION_TARGET_NOT_FOUND or AUCTION_ITEM_NOT_FOUND with refreshed context when possible."
           },
           "409": {
             "content": {
@@ -26722,63 +26747,6 @@
         ]
       }
     },
-    "/houses/check": {
-      "get": {
-        "operationId": "getHousesCheck",
-        "parameters": [
-          {
-            "description": "Character name or identifier checked by the house service",
-            "in": "query",
-            "name": "target",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/HomeCheckResult"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Check House",
-        "tags": [
-          "Houses"
-        ]
-      }
-    },
     "/jobs": {
       "get": {
         "operationId": "listJobs",
@@ -31194,141 +31162,6 @@
         "summary": "Login player and obtain session token",
         "tags": [
           "Auth"
-        ]
-      }
-    },
-    "/towns/{town_id}/houses": {
-      "get": {
-        "operationId": "getTownsTownIdHouses",
-        "parameters": [
-          {
-            "description": "town_id parameter",
-            "in": "path",
-            "name": "town_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/HomeCheckResult"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List Town Houses",
-        "tags": [
-          "Towns"
-        ]
-      },
-      "post": {
-        "operationId": "postTownsTownIdHouses",
-        "parameters": [
-          {
-            "description": "town_id parameter",
-            "in": "path",
-            "name": "town_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BuildHouseRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/HomeCheckResult"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Build House",
-        "tags": [
-          "Towns"
         ]
       }
     }

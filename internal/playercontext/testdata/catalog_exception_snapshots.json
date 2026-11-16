@@ -45,6 +45,7 @@
     "fleamarket_list",
     "fleamarket_purchase",
     "fleamarket_cancel",
+    "house_build",
     "store_build",
     "store_list_gold",
     "store_list_barter",
