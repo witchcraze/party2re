@@ -90,7 +90,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^POST /players$`),
 		regexp.MustCompile(`^POST /sessions$`),
 		regexp.MustCompile(`^DELETE /sessions$`),
-		regexp.MustCompile(`^GET /jobs$`),
 		regexp.MustCompile(`^GET /news$`),
 		regexp.MustCompile(`^GET /news/\{id\}$`),
 		regexp.MustCompile(`^GET /eventplaza$`),
@@ -359,11 +358,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 	t.Helper()
 
 	requiredActionGuardHandlers := map[string]string{
-		// Job
-		"handleChangeJob":          "job.go",
-		"handleExchangeJob":        "job.go",
-		"handleSaveFutureMemory":   "job.go",
-		"handleRecallFutureMemory": "job.go",
 		// Contest
 		"handleSaveCharacterPhoto": "contest.go",
 		// Event Plaza

@@ -95,10 +95,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"bank_deposit", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"bank_deposit","params":{"amount":100}}`},
 		{"bank_withdraw", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"bank_withdraw","params":{"amount":100}}`},
 		// Job
-		{"job_change", http.MethodPost, "/characters/char-1/change-job", `{"job_id":"warrior"}`},
-		{"job_exchange", http.MethodPost, "/characters/char-1/exchange-job", `{"job_id":"mage","old_job_id":"warrior"}`},
-		{"job_memory_save", http.MethodPost, "/characters/char-1/future-memories", `{}`},
-		{"job_memory_recall", http.MethodPost, "/characters/char-1/recall-future", `{"memory_id":"mem-1"}`},
+		{"job_change", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"job_change","params":{"job_id":"job-01"}}`},
 		// Depot
 		{"depot_deposit", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_deposit","params":{"item_id":"item-1"}}`},
 		{"depot_withdraw", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_withdraw","params":{"item_id":"item-1"}}`},

@@ -376,14 +376,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /legends", h.handleGetLegends)
 	mux.HandleFunc("GET /legends/{category}", h.handleGetLegendCategory)
 
-	// Jobs
-	mux.HandleFunc("GET /jobs", h.handleListJobs)
-	mux.HandleFunc("POST /characters/{id}/change-job", h.handleChangeJob)
-	mux.HandleFunc("POST /characters/{id}/exchange-job", h.handleExchangeJob)
-	mux.HandleFunc("GET /characters/{id}/future-memories", h.handleListFutureMemories)
-	mux.HandleFunc("POST /characters/{id}/future-memories", h.handleSaveFutureMemory)
-	mux.HandleFunc("POST /characters/{id}/recall-future", h.handleRecallFutureMemory)
-
 	// Tavern
 
 	// Plantation

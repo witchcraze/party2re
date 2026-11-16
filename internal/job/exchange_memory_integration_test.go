@@ -90,7 +90,7 @@ func TestExchangeJobTrajectoryDatabaseSnapshotsAndRollback(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			assertRollback := func(target, old, token string) {
+			assertRollback := func(run func() error) {
 				t.Helper()
 				beforeChar, err := chars.FindByID(ctx, char.ID)
 				if err != nil {
@@ -109,7 +109,7 @@ func TestExchangeJobTrajectoryDatabaseSnapshotsAndRollback(t *testing.T) {
 					t.Fatal(err)
 				}
 				failRecord = true
-				_, _, err = svc.ExchangeJob(ctx, char.ID, target, old, token)
+				err = run()
 				failRecord = false
 				if !errors.Is(err, sentinel) {
 					t.Fatalf("expected injected failure, got %v", err)
@@ -153,8 +153,8 @@ func TestExchangeJobTrajectoryDatabaseSnapshotsAndRollback(t *testing.T) {
 					t.Fatalf("snapshot mismatch: entry=%+v character=%+v", m, stored)
 				}
 			}
-			assertRollback("job-03", "job-04", itemID)
-			if _, _, err := svc.ExchangeJob(ctx, char.ID, "job-03", "job-04", itemID); err != nil {
+			assertRollback(func() error { _, _, err := svc.ExchangeJob(ctx, char.ID, "job-03", "job-04"); return err })
+			if _, _, err := svc.ExchangeJob(ctx, char.ID, "job-03", "job-04"); err != nil {
 				t.Fatal(err)
 			}
 			assertSnapshot(corecharacter.MemoryJobRecall, "job-03", 80, 1, "ThirdとFourthの記憶を思い出す")
@@ -170,18 +170,18 @@ func TestExchangeJobTrajectoryDatabaseSnapshotsAndRollback(t *testing.T) {
 			if err != nil || inv.Quantity(itemID) != 0 {
 				t.Fatalf("recall item not consumed: inventory=%+v err=%v", inv, err)
 			}
-			if _, _, err := svc.ExchangeJob(ctx, char.ID, "job-03", "job-04", itemID); !errors.Is(err, corejob.ErrJobUnavailable) {
+			if _, _, err := svc.ExchangeJob(ctx, char.ID, "job-03", "job-04"); !errors.Is(err, corejob.ErrJobUnavailable) {
 				t.Fatalf("overlapping recall: %v", err)
 			}
 			if itemID == "item-243" {
-				if _, _, err := svc.ExchangeJob(ctx, char.ID, "", ""); !errors.Is(err, corejob.ErrJobUnavailable) {
+				if _, _, err := svc.RestoreJobMemory(ctx, char.ID); !errors.Is(err, corejob.ErrJobUnavailable) {
 					t.Fatalf("temporary manual revert: %v", err)
 				}
 				assertSnapshot(corecharacter.MemoryJobRecall, "job-03", 80, 1, "ThirdとFourthの記憶を思い出す")
 				return
 			}
-			assertRollback("", "", "")
-			if _, _, err := svc.ExchangeJob(ctx, char.ID, "", ""); err != nil {
+			assertRollback(func() error { _, _, err := svc.RestoreJobMemory(ctx, char.ID); return err })
+			if _, _, err := svc.RestoreJobMemory(ctx, char.ID); err != nil {
 				t.Fatal(err)
 			}
 			assertSnapshot(corecharacter.MemoryJobRevert, "job-01", 50, 2, "FirstとSecondに戻る")

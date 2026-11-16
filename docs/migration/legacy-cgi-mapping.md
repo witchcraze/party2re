@@ -166,7 +166,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| `lib/job_change.cgi` | 転職所 (@ダーマ神官) | `internal/job/` | [design/jobs-and-skills.md](../design/jobs-and-skills.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | 初回極め(`RecordMastery`)と離職時SP最新化(`RecordJobSP`/`SavedSP`)の分離、おもいだす2職記憶スワップ、よびおこす枠/排他ロック検証。詳細は [design/jobs-and-skills.md](../design/jobs-and-skills.md) 参照。 |
+| `lib/job_change.cgi` | 転職の神殿 (@神官、clean-room名) | `internal/job/`<br/>`internal/api/http/action_job.go` | [design/jobs-and-skills.md](../design/jobs-and-skills.md) | Review against source | `job` シーン。`てんしょく` → `job_change`、`おもいだす` → `job_recall`（記憶中は `job_restore`）、`よびおこす` → `job_future_recall`、転職候補・記憶 → シーン観測。未来の記憶の保存は自宅での未来のカケラ使用 |
 | `lib/job_master.cgi` | 職業極め所 | `internal/job/` | [design/jobs-and-skills.md](../design/jobs-and-skills.md)<br/>[design/home.md](../design/home.md#observation-visibility-and-navigation) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `lib/sp_change.cgi` | 願いの泉 (@女神) | `internal/wishingwell/` | [design/jobs-and-skills.md](../design/jobs-and-skills.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | SPを消費して5大ステータス強化。OverLevel/JobMemoryガード |
 | `lib/custom_skill.cgi` | 特技設定 (@マニャ) | `internal/customskill/` | [design/custom_skill.md](../design/custom_skill.md)<br/>[design/home.md](../design/home.md#observation-visibility-and-navigation) | Review against source | 3宝玉スロット合成、GemBox消費・返還接続、転職後キャパシティガード解除、CMP計算式復元 |

@@ -602,33 +602,6 @@
         ],
         "type": "object"
       },
-      "ChangeJobRequest": {
-        "properties": {
-          "job_id": {
-            "description": "ID of the target job class to switch to",
-            "type": "string"
-          }
-        },
-        "required": [
-          "job_id"
-        ],
-        "type": "object"
-      },
-      "ChangeJobResponse": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "job": {
-            "$ref": "#/components/schemas/CharacterJob"
-          }
-        },
-        "required": [
-          "character",
-          "job"
-        ],
-        "type": "object"
-      },
       "Character": {
         "properties": {
           "created_at": {
@@ -682,76 +655,6 @@
           "mp",
           "max_mp",
           "gold"
-        ],
-        "type": "object"
-      },
-      "CharacterJob": {
-        "properties": {
-          "all_jobs_mastered": {
-            "type": "boolean"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "current_job_id": {
-            "type": "string"
-          },
-          "history": {
-            "items": {
-              "$ref": "#/components/schemas/CharacterJobChange"
-            },
-            "type": "array"
-          },
-          "mastered_job_sp": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object"
-          },
-          "mastered_jobs": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "recorded_job_ids": {
-            "description": "Explicitly written job records, independently of known SP and mastery. Departure history and mastery records also establish record existence.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "recorded_job_sp": {
-            "description": "Preserved known SP by job. A value, including zero, does not by itself prove a job record exists or grant recall eligibility.",
-            "additionalProperties": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "type": "object"
-          }
-        },
-        "required": [
-          "character_id",
-          "current_job_id",
-          "history",
-          "mastered_jobs",
-          "mastered_job_sp",
-          "all_jobs_mastered"
-        ],
-        "type": "object"
-      },
-      "CharacterJobChange": {
-        "properties": {
-          "from_job_id": {
-            "type": "string"
-          },
-          "to_job_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "from_job_id",
-          "to_job_id"
         ],
         "type": "object"
       },
@@ -1017,27 +920,6 @@
         },
         "type": "object"
       },
-      "ExchangeJobRequest": {
-        "properties": {
-          "item_definition_id": {
-            "description": "Optional item definition ID (e.g. 'item-168' for persistent, 'item-243' for temporary). Defaults to 'item-168'.",
-            "type": "string"
-          },
-          "job_id": {
-            "description": "ID of the target job class to switch to",
-            "type": "string"
-          },
-          "old_job_id": {
-            "description": "ID of the previous job class to record or swap",
-            "type": "string"
-          }
-        },
-        "required": [
-          "job_id",
-          "old_job_id"
-        ],
-        "type": "object"
-      },
       "ErrorResponse": {
         "properties": {
           "error": {
@@ -1047,70 +929,6 @@
         },
         "required": [
           "error"
-        ],
-        "type": "object"
-      },
-      "FutureMemory": {
-        "properties": {
-          "agility": {
-            "type": "integer"
-          },
-          "attack": {
-            "type": "integer"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "defense": {
-            "type": "integer"
-          },
-          "experience": {
-            "type": "integer"
-          },
-          "gender": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "job_id": {
-            "type": "string"
-          },
-          "level": {
-            "type": "integer"
-          },
-          "max_hp": {
-            "type": "integer"
-          },
-          "max_mp": {
-            "type": "integer"
-          },
-          "old_job_id": {
-            "type": "string"
-          },
-          "over_level": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "character_id",
-          "job_id",
-          "old_job_id",
-          "level",
-          "experience",
-          "max_hp",
-          "max_mp",
-          "attack",
-          "defense",
-          "agility",
-          "gender",
-          "over_level",
-          "created_at"
         ],
         "type": "object"
       },
@@ -1668,18 +1486,6 @@
         ],
         "type": "object"
       },
-      "RecallFutureMemoryRequest": {
-        "properties": {
-          "memory_id": {
-            "description": "ID of the saved future memory snapshot to restore",
-            "type": "string"
-          }
-        },
-        "required": [
-          "memory_id"
-        ],
-        "type": "object"
-      },
       "ReplayHeader": {
         "properties": {
           "combat_type": {
@@ -2211,6 +2017,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HelperSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JobTempleSceneData"
                     }
                   ]
                 }
@@ -3414,6 +3223,36 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "job"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/JobTempleSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -4436,7 +4275,8 @@
                         "oracle",
                         "contest",
                         "medal",
-                        "helper"
+                        "helper",
+                        "job"
                       ]
                     }
                   },
@@ -4557,7 +4397,8 @@
                         "oracle",
                         "contest",
                         "medal",
-                        "helper"
+                        "helper",
+                        "job"
                       ]
                     },
                     "offset": {
@@ -7157,6 +6998,141 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "job_change"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string",
+                      "description": "One of the job temple scene's jobs."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "job_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "job_recall"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string",
+                      "description": "One of the job temple scene's recall_jobs, recalled as the current job."
+                    },
+                    "old_job_id": {
+                      "type": "string",
+                      "description": "A different recall_jobs entry, recalled as the previous job. The held recall_item is consumed and decides the memory kind."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "job_id",
+                    "old_job_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "job_restore"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "job_future_recall"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "memory_id": {
+                      "type": "string",
+                      "description": "One of the job temple scene's future_memories IDs; the snapshot is consumed."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "memory_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "npc_talk"
                 }
               },
@@ -8391,7 +8367,8 @@
               "oracle",
               "contest",
               "medal",
-              "helper"
+              "helper",
+              "job"
             ]
           },
           "offset": {
@@ -8539,7 +8516,8 @@
                   "oracle",
                   "contest",
                   "medal",
-                  "helper"
+                  "helper",
+                  "job"
                 ]
               }
             },
@@ -13468,64 +13446,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "JobDefinition": {
-        "properties": {
-          "agility_growth": {
-            "type": "integer"
-          },
-          "attack_growth": {
-            "type": "integer"
-          },
-          "c_mp_tier": {
-            "type": "integer"
-          },
-          "defense_growth": {
-            "type": "integer"
-          },
-          "hp_growth": {
-            "type": "integer"
-          },
-          "id": {
-            "type": "string"
-          },
-          "mastery_sp": {
-            "type": "integer"
-          },
-          "mp_growth": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "required_gender": {
-            "type": "string"
-          },
-          "required_item_id": {
-            "type": "string"
-          },
-          "required_job_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "hp_growth",
-          "mp_growth",
-          "attack_growth",
-          "defense_growth",
-          "agility_growth",
-          "c_mp_tier"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "CharacterNamingHallDialogue": {
         "properties": {
           "gender_change_cost": {
@@ -18228,6 +18148,116 @@
         "required": [
           "parent",
           "quests"
+        ]
+      },
+      "JobTempleSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The job temple: the choices job_change, job_recall and job_future_recall accept now, and the active job memory kind (absent when none; job_restore applies to persistent). NPC dialogue comes from npc_talk/npc_inspect. Observation never mutates.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobOption"
+            }
+          },
+          "recall_jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobOption"
+            }
+          },
+          "recall_item": {
+            "type": "string",
+            "enum": [
+              "item-168",
+              "item-243"
+            ],
+            "description": "The held recall item, absent when none: item-168 starts a memory job_restore reverts, item-243 one that sleep reverts."
+          },
+          "job_memory": {
+            "type": "string",
+            "enum": [
+              "persistent",
+              "temporary"
+            ]
+          },
+          "future_memories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobFutureMemory"
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "jobs",
+          "recall_jobs",
+          "future_memories"
+        ]
+      },
+      "JobOption": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "name"
+        ]
+      },
+      "JobFutureMemory": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "old_job_name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "agility": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "job_name",
+          "old_job_name",
+          "level",
+          "max_hp",
+          "max_mp",
+          "attack",
+          "defense",
+          "agility"
         ]
       },
       "BattleRevivalResult": {

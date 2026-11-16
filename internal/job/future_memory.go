@@ -11,6 +11,9 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
+// ErrFutureMemoryNotFound is returned when recalling a snapshot the character does not have.
+var ErrFutureMemoryNotFound = errors.New("future memory not found")
+
 // FutureMemoryRepository defines persistence operations for future memory snapshots.
 type FutureMemoryRepository interface {
 	Save(ctx context.Context, memory corecharacter.FutureMemory) error
@@ -23,91 +26,6 @@ func WithFutureMemoryRepository(repo FutureMemoryRepository) Option {
 	return func(s *Service) {
 		s.futureMemories = repo
 	}
-}
-
-// SaveFutureMemory creates a future memory snapshot of the character's state,
-// consuming item-207 (未来のカケラ) and enforcing the OverFuture slot limit.
-func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (corecharacter.FutureMemory, error) {
-	if s.characters == nil {
-		return corecharacter.FutureMemory{}, errors.New("character repository is nil")
-	}
-	if s.futureMemories == nil {
-		return corecharacter.FutureMemory{}, errors.New("future memory repository is nil")
-	}
-	char, err := s.characters.FindByID(ctx, characterID)
-	if err != nil {
-		return corecharacter.FutureMemory{}, err
-	}
-	if char.JobMemory != nil {
-		return corecharacter.FutureMemory{}, corejob.ErrJobUnavailable
-	}
-	existing, err := s.futureMemories.FindByCharacterID(ctx, characterID)
-	if err != nil {
-		return corecharacter.FutureMemory{}, err
-	}
-	if !char.CanSaveFutureMemory(len(existing)) {
-		return corecharacter.FutureMemory{}, corecharacter.ErrFutureMemorySlotLimit
-	}
-
-	const requiredItem = "item-207"
-	if s.economy != nil {
-		req := economy.TransactionRequest{
-			CharacterID:   characterID,
-			LockInventory: true,
-			Cost: economy.ResourceCost{
-				ItemDefinitionID:  requiredItem,
-				ItemDefinitionQty: 1,
-			},
-		}
-		var snapshot corecharacter.FutureMemory
-		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			var err error
-			snapshot, err = s.SaveFutureMemorySnapshot(tc.Context, tc.Character)
-			return err
-		})
-		if err != nil {
-			if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) {
-				return corecharacter.FutureMemory{}, ErrRequiredItem
-			}
-			return corecharacter.FutureMemory{}, err
-		}
-		return snapshot, nil
-	}
-
-	if s.inventories == nil {
-		return corecharacter.FutureMemory{}, ErrRequiredItem
-	}
-	inventory, err := s.inventories.FindByCharacterID(ctx, characterID)
-	if err != nil || inventory.Quantity(requiredItem) < 1 {
-		return corecharacter.FutureMemory{}, ErrRequiredItem
-	}
-	for _, instance := range inventory.Items {
-		if instance.DefinitionID == requiredItem {
-			if err := inventory.Consume(instance.ID, 1); err != nil {
-				return corecharacter.FutureMemory{}, err
-			}
-			break
-		}
-	}
-	if err := s.inventories.Save(ctx, inventory); err != nil {
-		return corecharacter.FutureMemory{}, err
-	}
-
-	now := time.Now().UTC()
-	snapshot := char.CreateFutureMemory(id.New(), now)
-	if err := s.futureMemories.Save(ctx, snapshot); err != nil {
-		return corecharacter.FutureMemory{}, err
-	}
-	state, err := s.loadState(ctx, char)
-	if err == nil {
-		if err := refreshFutureMemoryPoints(&state, char); err != nil {
-			return corecharacter.FutureMemory{}, err
-		}
-		if err := s.repository.Save(ctx, state); err != nil {
-			return corecharacter.FutureMemory{}, err
-		}
-	}
-	return snapshot, nil
 }
 
 // SaveFutureMemorySnapshot re-checks the save conditions for char, which the
@@ -178,7 +96,7 @@ func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID 
 				}
 			}
 			if targetMemory == nil {
-				return errors.New("future memory not found")
+				return ErrFutureMemoryNotFound
 			}
 
 			state, err := s.loadState(tc.Context, tc.Character)
@@ -230,7 +148,7 @@ func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID 
 		}
 	}
 	if targetMemory == nil {
-		return char, corejob.CharacterJob{}, errors.New("future memory not found")
+		return char, corejob.CharacterJob{}, ErrFutureMemoryNotFound
 	}
 
 	state, err := s.loadState(ctx, char)
