@@ -69,7 +69,11 @@ func (s *Service) applyRewardsForCharacter(
 ) (int, int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
 	blessing := ""
 	if !finalized {
-		blessing = s.queryBlessing(ctx, char.ID)
+		var err error
+		blessing, err = s.queryBlessing(ctx, char.ID)
+		if err != nil {
+			return 0, 0, 0, progression.LevelUpResult{}, nil, nil, err
+		}
 	}
 
 	gainedGold := reward.Currency
