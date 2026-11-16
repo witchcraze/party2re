@@ -117,12 +117,13 @@ type CompanionPhrase struct {
 
 // DeliveryNotice represents an asynchronous item or gold delivery record.
 type DeliveryNotice struct {
-	ID          string    `json:"id"`
-	CharacterID string    `json:"character_id"`
-	NoticeType  string    `json:"notice_type"`
-	Message     string    `json:"message"`
-	IsCleared   bool      `json:"is_cleared"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          string `json:"id"`
+	CharacterID string `json:"character_id"`
+	NoticeType  string `json:"notice_type"`
+	//lint:ignore presentation persisted delivery notice body supplied by the producer
+	Message   string    `json:"message"`
+	IsCleared bool      `json:"is_cleared"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // HomeOwner is the public identity whitelist; never expose the raw Character.

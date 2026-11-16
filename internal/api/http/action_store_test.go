@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	nethttp "net/http"
@@ -49,7 +50,35 @@ func (f *storeGatewayFixture) BuildStore(ctx context.Context, actor, townID, sty
 	if err := f.run(ctx, actor, townID, style); err != nil {
 		return nil, err
 	}
-	return &store.StoreCheckResult{CharacterID: actor, TownID: townID, StoreName: "@Heroの店@"}, nil
+	return &store.StoreCheckResult{
+		CharacterID: actor, OwnerName: "Hero", TownID: townID, TownName: "Town",
+		StoreName: "@Heroの店@", HouseStyle: style, Wallpaper: "none",
+		ExpiresAt: time.Date(2026, 12, 31, 16, 0, 0, 0, time.UTC),
+	}, nil
+}
+
+func TestStoreBuildPresentation(t *testing.T) {
+	f := &storeGatewayFixture{gatewayFixture: newGatewayFixture(t)}
+	status, got := gatewayRequest(t, f.router(t, timer.NewService(nil)), "hero", "session", "application/json",
+		saleGatewayBody("store_build", `{"town_id":"town2","house_style":"005"}`), nil)
+	if status != 200 {
+		t.Fatalf("build failed: %d %s", status, got)
+	}
+	var result struct {
+		store.StoreCheckResult
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(got["result"], &result); err != nil {
+		t.Fatal(err)
+	}
+	want := store.StoreCheckResult{
+		CharacterID: "hero", OwnerName: "Hero", TownID: "town2", TownName: "Town",
+		StoreName: "@Heroの店@", HouseStyle: "005", Wallpaper: "none",
+		ExpiresAt: time.Date(2026, 12, 31, 16, 0, 0, 0, time.UTC),
+	}
+	if result.StoreCheckResult != want || result.Message != "Hero の店を建てました！店の所有期間は 1月1日1時 までです" {
+		t.Fatalf("lost facts or incorrect JST confirmation: %+v", result)
+	}
 }
 
 func (f *storeGatewayFixture) ListGoldItem(ctx context.Context, actor, item string, price int) (*store.Sale, error) {

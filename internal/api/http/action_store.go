@@ -3,9 +3,11 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/store"
 )
 
@@ -29,6 +31,11 @@ type StoreService interface {
 type storeBuildRequest struct {
 	TownID     string `json:"town_id"`
 	HouseStyle string `json:"house_style"`
+}
+
+type storeBuildResult struct {
+	store.StoreCheckResult
+	Message string `json:"message"`
 }
 
 type storeListGoldRequest struct {
@@ -90,7 +97,16 @@ func WithStore(service StoreService) Option {
 			return
 		}
 		withActionCommand("store_build", func(ctx context.Context, actor string, p storeBuildRequest) (any, error) {
-			return service.BuildStore(ctx, actor, p.TownID, p.HouseStyle)
+			result, err := service.BuildStore(ctx, actor, p.TownID, p.HouseStyle)
+			if err != nil {
+				return nil, err
+			}
+			expires := result.ExpiresAt.In(timer.JST)
+			return storeBuildResult{
+				StoreCheckResult: *result,
+				Message: fmt.Sprintf("%s の店を建てました！店の所有期間は %d月%d日%d時 までです",
+					result.OwnerName, expires.Month(), expires.Day(), expires.Hour()),
+			}, nil
 		}, storeActionRejection)(h)
 		withActionCommand("store_list_gold", func(ctx context.Context, actor string, p storeListGoldRequest) (any, error) {
 			return service.ListGoldItem(ctx, actor, p.ItemID, p.Price)
