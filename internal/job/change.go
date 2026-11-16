@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/economy"
@@ -16,6 +18,9 @@ var ErrRequiredArmor = errors.New("equipped armor-29 (炎の鎧) is required")
 // ErrRequiredItem is returned when a required job-change item is missing.
 var ErrRequiredItem = errors.New("required job-change item is missing")
 
+// ChangeJob performs a normal Dharma job change for characterID into targetJobID.
+// Transaction: delegates to economy.TransactionRunner.ExecuteTransaction.
+// Lock Order: characters(2) -> inventory_items(3) -> equipment_slots(3) -> character_jobs(4).
 func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID string) (corecharacter.Character, corejob.CharacterJob, error) {
 	if s.characters == nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("character repository not configured")
@@ -34,64 +39,67 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	if char.JobMemory != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
-	state, err := s.loadState(ctx, char)
-	if err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-
-	// Validate basic requirements (level, gender, prerequisite tree, milestone counters).
-	// Set HasRequiredItem and HasEquippedArmor to true via buildChangeContextNoItems so
-	// ValidateRequirements only evaluates non-item conditions; actual item/armor possession
-	// is verified separately below to return ErrRequiredItem / ErrRequiredArmor instead of ErrJobUnavailable.
-	// Only current/previous job matches (_is_need_job in _data.cgi:303-309) bypass
-	// prerequisites and item/armor requirements; previously mastered jobs still require them.
-	reqCtx := s.buildChangeContextNoItems(char, state)
-	if err := corejob.ValidateRequirements(targetDef, reqCtx); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
 
 	requiredItem := targetDef.RequiredItem()
-	needsItemPossession := corejob.RequiresItemPossession(targetDef, char.JobID, char.OldJobID)
-	consumesItem := needsItemPossession && !corejob.IsItemExempt(targetJobID, char.JobID, char.OldJobID)
-	needArmor := corejob.IsArmorConsumed(targetJobID, char.JobID, char.OldJobID)
-
-	// Pre-validate required item possession before executing mutations.
-	if needsItemPossession {
-		if s.inventories == nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
-		}
-		inventory, err := s.inventories.FindByCharacterID(ctx, characterID)
-		if err != nil || inventory.Quantity(requiredItem) < 1 {
-			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
-		}
+	req := economy.TransactionRequest{
+		CharacterID:   characterID,
+		LockInventory: requiredItem != "",
+		CostFunc: func(lockedChar corecharacter.Character) (economy.ResourceCost, error) {
+			if lockedChar.JobMemory != nil {
+				return economy.ResourceCost{}, corejob.ErrJobUnavailable
+			}
+			// Evaluate character-level prerequisites before item deduction so
+			// non-item rejections return ErrJobUnavailable rather than ErrRequiredItem.
+			preCtx := s.buildChangeContextNoItems(lockedChar, corejob.CharacterJob{AllJobsMastered: true})
+			if err := corejob.ValidateRequirements(targetDef, preCtx); err != nil {
+				return economy.ResourceCost{}, err
+			}
+			needsItemPossession := corejob.RequiresItemPossession(targetDef, lockedChar.JobID, lockedChar.OldJobID)
+			consumesItem := needsItemPossession && !corejob.IsItemExempt(targetJobID, lockedChar.JobID, lockedChar.OldJobID)
+			if !consumesItem {
+				return economy.ResourceCost{}, nil
+			}
+			return economy.ResourceCost{
+				ItemDefinitionID:  requiredItem,
+				ItemDefinitionQty: 1,
+			}, nil
+		},
 	}
 
-	// Pre-validate equipped armor before executing mutations.
-	if needArmor {
-		if err := s.verifyEquippedArmor(ctx, characterID); err != nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
-		}
-	}
-
-	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: consumesItem}
-	if consumesItem {
-		req.Cost.ItemDefinitionID = requiredItem
-		req.Cost.ItemDefinitionQty = 1
-	}
 	var updated corecharacter.Character
 	var updatedState corejob.CharacterJob
 	_, err = s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
 		if tc.Character.JobMemory != nil {
 			return corejob.ErrJobUnavailable
 		}
+		needsItemPossession := corejob.RequiresItemPossession(targetDef, tc.Character.JobID, tc.Character.OldJobID)
+		consumesItem := needsItemPossession && !corejob.IsItemExempt(targetJobID, tc.Character.JobID, tc.Character.OldJobID)
+		if needsItemPossession && !consumesItem && tc.Inventory.Quantity(requiredItem) < 1 {
+			return ErrRequiredItem
+		}
+		needArmor := corejob.IsArmorConsumed(targetJobID, tc.Character.JobID, tc.Character.OldJobID)
+		var lockedEquip *coreequipment.Equipment
 		if needArmor {
-			if err := s.consumeEquippedArmor(tc.Context, characterID); err != nil {
+			equip, err := s.lockEquippedArmor(tc.Context, characterID, tc.Inventory)
+			if err != nil {
 				return err
 			}
+			lockedEquip = &equip
 		}
 		currentState, err := s.loadState(tc.Context, tc.Character)
 		if err != nil {
 			return err
+		}
+		// Only current/previous job matches (_is_need_job in _data.cgi:303-309) bypass
+		// prerequisites and item/armor requirements; previously mastered jobs still require them.
+		reqCtx := s.buildChangeContextNoItems(tc.Character, currentState)
+		if err := corejob.ValidateRequirements(targetDef, reqCtx); err != nil {
+			return err
+		}
+		if lockedEquip != nil {
+			if err := s.consumeEquippedArmor(tc.Context, lockedEquip, &tc.Inventory); err != nil {
+				return err
+			}
 		}
 		// Legacy order: the change, then the departing job's mastery, then completion.
 		if err := s.memories.Record(tc.Context, characterID, corecharacter.MemoryJobChange,
@@ -221,60 +229,37 @@ func (s *Service) buildChangeContextNoItems(char corecharacter.Character, state 
 	}
 }
 
-// verifyEquippedArmor checks that armor-29 is currently equipped in the body slot.
-func (s *Service) verifyEquippedArmor(ctx context.Context, characterID string) error {
-	if s.equipment == nil || s.inventories == nil {
-		return ErrRequiredArmor
+// lockEquippedArmor locks equipment_slots and checks that armor-29 is equipped in the body slot.
+func (s *Service) lockEquippedArmor(ctx context.Context, characterID string, inv coreinventory.Inventory) (coreequipment.Equipment, error) {
+	if s.equipment == nil {
+		return coreequipment.Equipment{}, ErrRequiredArmor
 	}
-	equip, err := s.equipment.FindByCharacterID(ctx, characterID)
+	equip, err := s.equipment.FindByCharacterIDForUpdate(ctx, characterID)
 	if err != nil {
-		return ErrRequiredArmor
+		return coreequipment.Equipment{}, err
 	}
 	instID, ok := equip.Equipped(coreitem.SlotBody)
 	if !ok {
-		return ErrRequiredArmor
-	}
-	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
-	if err != nil {
-		return ErrRequiredArmor
+		return coreequipment.Equipment{}, ErrRequiredArmor
 	}
 	inst, found := inv.Find(instID)
 	if !found || inst.DefinitionID != "armor-29" {
-		return ErrRequiredArmor
+		return coreequipment.Equipment{}, ErrRequiredArmor
 	}
-	return nil
+	return equip, nil
 }
 
 // consumeEquippedArmor unequips and destroys armor-29 from the body slot (job_change.cgi:181-188).
-func (s *Service) consumeEquippedArmor(ctx context.Context, characterID string) error {
-	if s.equipment == nil || s.inventories == nil {
+func (s *Service) consumeEquippedArmor(ctx context.Context, equip *coreequipment.Equipment, inv *coreinventory.Inventory) error {
+	if equip == nil || inv == nil {
 		return ErrRequiredArmor
 	}
-	equip, err := s.equipment.FindByCharacterID(ctx, characterID)
+	instID, err := equip.Unequip(coreitem.SlotBody)
 	if err != nil {
-		return ErrRequiredArmor
-	}
-	instID, ok := equip.Equipped(coreitem.SlotBody)
-	if !ok {
-		return ErrRequiredArmor
-	}
-	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
-	if err != nil {
-		return ErrRequiredArmor
-	}
-	inst, found := inv.Find(instID)
-	if !found || inst.DefinitionID != "armor-29" {
-		return ErrRequiredArmor
-	}
-	// Unequip from body slot, then consume the instance from inventory.
-	if _, err := equip.Unequip(coreitem.SlotBody); err != nil {
 		return err
 	}
 	if err := inv.Consume(instID, 1); err != nil {
 		return err
 	}
-	if err := s.equipment.Save(ctx, equip); err != nil {
-		return err
-	}
-	return s.inventories.Save(ctx, inv)
+	return s.equipment.Save(ctx, *equip)
 }
