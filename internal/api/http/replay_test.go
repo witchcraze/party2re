@@ -91,9 +91,9 @@ func TestReplayEndpoints(t *testing.T) {
 			{ID: "c1", Name: "Hero", MaxHP: 100, Attack: 20, Defense: 10},
 			{ID: "c2", Name: "Rival", MaxHP: 100, Attack: 18, Defense: 8},
 		},
-		TurnLogs: []corebattle.TurnLog{
+		TurnLogs: json.RawMessage(replay.EncodeJSON([]corebattle.TurnLog{
 			{Turn: 1, ActorID: "c1", TargetID: "c2", ActionName: "こうげき", DamageDealt: 40},
-		},
+		})),
 		CreatedAt: time.Now().UTC(),
 	}
 

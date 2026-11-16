@@ -58,8 +58,9 @@ type BattleReplay struct {
 	LoserID             string                `json:"loser_id,omitempty"`
 	TotalTurns          int                   `json:"total_turns"`
 	InitialParticipants []ParticipantSnapshot `json:"initial_participants"`
-	TurnLogs            []corebattle.TurnLog  `json:"turn_logs"`
-	CreatedAt           time.Time             `json:"created_at"`
+	// TurnLogs retains archived JSON losslessly; presentation belongs to the reader.
+	TurnLogs  json.RawMessage `json:"turn_logs"`
+	CreatedAt time.Time       `json:"created_at"`
 }
 
 type ReplayHeader struct {
@@ -162,7 +163,7 @@ func (s *Service) RecordBattle(ctx context.Context, req SaveReplayRequest) (stri
 			req.Initiator,
 			req.Opponent,
 		},
-		TurnLogs:  req.BattleResult.Logs,
+		TurnLogs:  json.RawMessage(EncodeJSON(req.BattleResult.Logs)),
 		CreatedAt: now,
 	}
 

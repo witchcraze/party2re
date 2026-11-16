@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -45,6 +46,7 @@ func ValidateCombatItem(def item.Definition) error {
 // Fictional 1-hour expedition timer fields (AvailableAt, Claimed) are purged per Issue #478.
 type Adventure struct {
 	PostAdventureMessages map[string]string
+	MonsterTames          map[string][]battle.MonsterTameResult `json:"-"`
 	ID                    string
 	CharacterID           string
 	Type                  string
@@ -230,6 +232,7 @@ func (s *Service) StartStage(ctx context.Context, characterID string, stageID st
 		return Adventure{}, err
 	}
 	adv.PostAdventureMessages = crawlRes.PostAdventureMessages
+	adv.MonsterTames = crawlRes.MonsterTames
 	return adv, nil
 }
 

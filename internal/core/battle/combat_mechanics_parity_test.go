@@ -1,7 +1,6 @@
 package battle_test
 
 import (
-	"strings"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -114,7 +113,7 @@ func TestNormalAttack_EvasionAndHitRate(t *testing.T) {
 		t.Fatal("expected logs")
 	}
 	firstLog := resMiss.Logs[0]
-	if firstLog.DamageDealt != 0 || !strings.Contains(firstLog.Message, "かわした") {
+	if firstLog.DamageDealt != 0 || firstLog.Kind != "miss" {
 		t.Errorf("expected miss log with 0 damage, got %+v", firstLog)
 	}
 
@@ -144,7 +143,7 @@ func TestNormalAttack_EvasionAndHitRate(t *testing.T) {
 		t.Fatal("expected logs")
 	}
 	firstLog63 := resWeapon63.Logs[0]
-	if firstLog63.DamageDealt <= 0 || strings.Contains(firstLog63.Message, "かわした") {
+	if firstLog63.DamageDealt <= 0 || firstLog63.Kind == "miss" {
 		t.Errorf("expected weapon-63 to never miss, got %+v", firstLog63)
 	}
 
@@ -188,7 +187,7 @@ func TestNormalAttack_EvasionAndHitRate(t *testing.T) {
 	if heroAttackLog == nil {
 		t.Fatal("expected hero attack log")
 	}
-	if heroAttackLog.DamageDealt <= 0 || strings.Contains(heroAttackLog.Message, "かわした") {
+	if heroAttackLog.DamageDealt <= 0 || heroAttackLog.Kind == "miss" {
 		t.Errorf("expected paralyzed defender to be unable to evade, got %+v", heroAttackLog)
 	}
 }
@@ -235,8 +234,8 @@ func TestNormalAttack_CriticalStrike(t *testing.T) {
 	if !firstLog.IsCritical {
 		t.Errorf("expected TurnLog.IsCritical = true, got false")
 	}
-	if !strings.Contains(firstLog.Message, "会心の一撃") {
-		t.Errorf("expected log message to contain 会心の一撃, got %s", firstLog.Message)
+	if !firstLog.IsCritical {
+		t.Errorf("expected log message to contain 会心の一撃, got %s", firstLog.Kind)
 	}
 	// Atk = 100. Direct damage = 100 * 0.75 = 75. Variance = 0.9 + 0.5*0.3 = 1.05.
 	// Damage ~ 78. Normal damage would be 100*0.5 - 1000*0.3 <= 0 -> 1 or 2.

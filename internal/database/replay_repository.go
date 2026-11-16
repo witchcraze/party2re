@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -23,8 +24,14 @@ func NewReplayRepository(db *sql.DB) (*ReplayRepository, error) {
 
 func (r *ReplayRepository) Save(ctx context.Context, rep replay.BattleReplay) error {
 	participantsJSON := replay.EncodeJSON(rep.InitialParticipants)
-	turnLogsJSON := replay.EncodeJSON(rep.TurnLogs)
+	turnLogsJSON, err := json.Marshal(rep.TurnLogs)
+	if err != nil {
+		return err
+	}
 
+	if _, err := replay.DecodeJSON[[]corebattle.TurnLog](string(turnLogsJSON)); err != nil {
+		return err
+	}
 	var winnerID, loserID sql.NullString
 	if rep.WinnerID != "" {
 		winnerID = sql.NullString{String: rep.WinnerID, Valid: true}
@@ -40,7 +47,7 @@ func (r *ReplayRepository) Save(ctx context.Context, rep replay.BattleReplay) er
 			turn_logs_json, created_at, provenance, archive_recipient_id
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
+	_, err = ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
 		query,
 		rep.ID,
@@ -124,11 +131,11 @@ func (r *ReplayRepository) FindByID(ctx context.Context, id string) (*replay.Bat
 	}
 	rep.InitialParticipants = participants
 
-	turnLogs, err := replay.DecodeJSON[[]corebattle.TurnLog](turnLogsJSON)
+	_, err = replay.DecodeJSON[[]corebattle.TurnLog](turnLogsJSON)
 	if err != nil {
 		return nil, err
 	}
-	rep.TurnLogs = turnLogs
+	rep.TurnLogs = json.RawMessage(turnLogsJSON)
 
 	return &rep, nil
 }

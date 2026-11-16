@@ -764,7 +764,7 @@ func TestMagicSealSkillExecution(t *testing.T) {
 		foundSealLog := false
 		for _, log := range res.Logs {
 			if log.ActorID == mageSealed.ID {
-				if log.ActionName == "magic-20" && log.Message == "しかし、Mage は魔法が封じられていた" {
+				if log.ActionName == "magic-20" && log.Kind == "magic_sealed" {
 					foundSealLog = true
 					if log.DamageDealt != 0 {
 						t.Errorf("expected 0 damage when sealed, got %d", log.DamageDealt)
@@ -799,7 +799,7 @@ func TestMagicSealSkillExecution(t *testing.T) {
 		foundDamageLog := false
 		for _, log := range res.Logs {
 			if log.ActorID == mageSealed.ID {
-				if log.ActionName == "magic-20" && log.Message == "Mage は魔法が使えるようになりました！" {
+				if log.ActionName == "magic-20" && log.Kind == "status_cured" && log.Status == corebattle.StatusMagicSeal {
 					foundCureLog = true
 				}
 				if log.ActionName == "magic-20" && log.DamageDealt > 0 {
@@ -829,7 +829,7 @@ func TestMagicSealSkillExecution(t *testing.T) {
 		}
 		foundCureLog := false
 		for _, log := range res.Logs {
-			if log.ActorID == mage.ID && log.Message == "Mage は魔法が使えるようになりました！" {
+			if log.ActorID == mage.ID && log.Kind == "status_cured" && log.Status == corebattle.StatusMagicSeal {
 				foundCureLog = true
 				break
 			}

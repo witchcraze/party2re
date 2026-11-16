@@ -1,8 +1,6 @@
 package battle
 
 import (
-	"fmt"
-
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
@@ -39,7 +37,8 @@ func (ctx *battleContext) executeDefend(actor Participant) {
 		Turn:        ctx.turns,
 		ActorID:     actor.ID,
 		ActionName:  "ぼうぎょ",
-		Message:     fmt.Sprintf("%s は身を固めている！", actor.NameOrID()),
+		Kind:        "defend",
+		ActorName:   actor.NameOrID(),
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
 }
@@ -99,20 +98,19 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 		ctx.hpMap[target.ID] = 0
 	}
 
-	var msg string
+	immunity := ""
 	if isImmune {
+		immunity = "physical"
 		if isMagic {
-			msg = fmt.Sprintf("%s の %s！ %s は魔法をうけつけない！", actor.NameOrID(), actionName, target.NameOrID())
-		} else {
-			msg = fmt.Sprintf("%s の %s！ %s は攻撃をうけつけない！", actor.NameOrID(), actionName, target.NameOrID())
+			immunity = "magic"
 		}
-	} else if isCritical {
-		msg = fmt.Sprintf("%s の会心の一撃！！ %s に %d のダメージ！", actor.NameOrID(), target.NameOrID(), dmg)
-	} else if isCustom {
-		msg = fmt.Sprintf("%s 「%s」 %s！ %s に %d のダメージ！", actor.NameOrID(), incantation, actionName, target.NameOrID(), dmg)
-	} else {
-		msg = fmt.Sprintf("%s の %s！ %s に %d のダメージ！", actor.NameOrID(), actionName, target.NameOrID(), dmg)
 	}
+	source := ""
+	if isCustom {
+		source = "custom"
+	}
+	var revival *RevivalResult
+	buffsReset := false
 
 	if ctx.hpMap[target.ID] <= 0 {
 		if !ctx.banishedMap[target.ID] {
@@ -125,7 +123,7 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 				if rev.Status != "" {
 					ctx.statusMap[target.ID] = rev.Status
 				}
-				msg += " " + rev.Message
+				revival = &rev
 				if rev.Cursed {
 					ctx.abilitiesMap[target.ID] = append(ctx.abilitiesMap[target.ID], "cursed")
 				} else {
@@ -148,7 +146,7 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 			ctx.agilityBuff[target.ID] = 0
 			ctx.defendingMap[target.ID] = false
 			ctx.statusMap[target.ID] = ""
-			msg += fmt.Sprintf(" %s のステータスが元に戻った！", target.NameOrID())
+			buffsReset = true
 		}
 	}
 
@@ -159,7 +157,14 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 		TargetID:    target.ID,
 		DamageDealt: dmg,
 		IsCritical:  isCritical,
-		Message:     msg,
+		Kind:        "damage",
+		ActorName:   actor.NameOrID(),
+		TargetName:  target.NameOrID(),
+		Source:      source,
+		Incantation: incantation,
+		Immunity:    immunity,
+		Revival:     revival,
+		BuffsReset:  buffsReset,
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
 	return !isImmune
@@ -279,7 +284,9 @@ func (ctx *battleContext) executeNormalAttack(actor Participant, opponents []Par
 					TargetID:    target.ID,
 					DamageDealt: 0,
 					IsCritical:  false,
-					Message:     fmt.Sprintf("%s の %s！ ミス！%s は攻撃をかわした！", actor.NameOrID(), actionName, target.NameOrID()),
+					Kind:        "miss",
+					ActorName:   actor.NameOrID(),
+					TargetName:  target.NameOrID(),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 				return true

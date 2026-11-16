@@ -108,6 +108,7 @@ func (s *Service) settleWithBattleSettler(
 	}
 
 	updateTreasureDeliveries(crawlResult.TreasureBoxes, resp)
+	crawlResult.MonsterTames = resp.MonsterTames
 
 	lostDrops := make(map[string][]string)
 	if len(resp.LostDrops) > 0 {

@@ -36,7 +36,7 @@ func TestPartyBattle_StatusDofuu(t *testing.T) {
 
 	foundDofuuSkip := false
 	for _, l := range res.Logs {
-		if l.ActorID == "hero" && l.ActionName == "行動不能" && l.Message == "しかし、Hero は動くことができない！" {
+		if l.ActorID == "hero" && l.ActionName == "行動不能" && l.Kind == "immobilized" && l.Status == corebattle.StatusDofuu {
 			foundDofuuSkip = true
 			break
 		}
@@ -178,7 +178,7 @@ func TestPartyBattle_StatusSabaku(t *testing.T) {
 		foundSabakuCure := false
 		for _, l := range res.Logs {
 			if l.Turn == 1 && l.ActorID == "hero" && l.ActionName == "行動不能" {
-				if l.Message == "しかし、Hero は動くことができない！ Hero は鎖から解放された！" {
+				if l.Kind == "immobilized" && l.Status == corebattle.StatusSabaku && l.StatusCured {
 					foundSabakuCure = true
 					break
 				}
@@ -244,7 +244,7 @@ func TestPartyBattle_StatusSabaku(t *testing.T) {
 
 		foundBlockedLog := false
 		for _, l := range res.Logs {
-			if l.TargetID == "bound_hero" && l.Message == "BoundHero は鎖縛により能力があがらない！" {
+			if l.TargetID == "bound_hero" && l.Kind == "buff_blocked" && l.TargetName == "BoundHero" {
 				foundBlockedLog = true
 				break
 			}
@@ -286,7 +286,7 @@ func TestPartyBattle_StatusConfusion(t *testing.T) {
 
 		foundCureLog := false
 		for _, l := range res.Logs {
-			if l.ActorID == "hero" && l.ActionName == "回復" && l.Message == "Hero の混乱が治った！" {
+			if l.ActorID == "hero" && l.ActionName == "回復" && l.Kind == "status_cured" && l.Status == corebattle.StatusConfusion {
 				foundCureLog = true
 				break
 			}
@@ -384,7 +384,7 @@ func TestPartyBattle_StatusDeadlyPoison(t *testing.T) {
 
 	foundDeadlyPoisonDamage := false
 	for _, l := range res.Logs {
-		if l.ActorID == "hero" && l.ActionName == "毒ダメージ" && l.DamageDealt == 10 && l.Message == "Hero は猛毒により 10 のダメージをうけた！" {
+		if l.ActorID == "hero" && l.ActionName == "毒ダメージ" && l.DamageDealt == 10 && l.Kind == "status_damage" && l.Status == corebattle.StatusDeadlyPoison {
 			foundDeadlyPoisonDamage = true
 			break
 		}
@@ -395,7 +395,7 @@ func TestPartyBattle_StatusDeadlyPoison(t *testing.T) {
 
 	// Verify it did not naturally cure
 	for _, l := range res.Logs {
-		if l.ActorID == "hero" && l.ActionName == "回復" && l.Message == "Hero の毒が治った！" {
+		if l.ActorID == "hero" && l.ActionName == "回復" && l.Kind == "status_cured" && l.Status == corebattle.StatusPoison {
 			t.Fatalf("deadly poison must not cure naturally, but found cure log: %+v", l)
 		}
 	}
@@ -448,10 +448,10 @@ func TestPartyBattle_StatusVirulentPoison(t *testing.T) {
 		// Check the logs on turn 1
 		for _, l := range res.Logs {
 			if l.Turn == 1 {
-				if l.TargetID == "mage" && l.ActionName == "毒ダメージ" && l.DamageDealt == 10 && l.Message == "Mage は劇毒により 10 のダメージをうけた！" {
+				if l.TargetID == "mage" && l.ActionName == "毒ダメージ" && l.DamageDealt == 10 && l.Kind == "status_damage" && l.Status == corebattle.StatusVirulentPoison {
 					foundMageTickOnHeroTurn = true
 				}
-				if l.TargetID == "priest" && l.ActionName == "毒ダメージ" && l.DamageDealt == 20 && l.Message == "Priest は劇毒により 20 のダメージをうけた！" {
+				if l.TargetID == "priest" && l.ActionName == "毒ダメージ" && l.DamageDealt == 20 && l.Kind == "status_damage" && l.Status == corebattle.StatusVirulentPoison {
 					foundPriestTickOnHeroTurn = true
 				}
 			}
@@ -466,7 +466,7 @@ func TestPartyBattle_StatusVirulentPoison(t *testing.T) {
 
 		// Verify natural cure does NOT trigger
 		for _, l := range res.Logs {
-			if (l.TargetID == "mage" || l.TargetID == "priest") && l.ActionName == "回復" && (l.Message == "Mage の毒が治った！" || l.Message == "Priest の毒が治った！") {
+			if (l.TargetID == "mage" || l.TargetID == "priest") && l.ActionName == "回復" && (l.Kind == "status_cured" && l.Status == corebattle.StatusPoison) {
 				t.Fatalf("virulent poison must not cure naturally, but found cure log: %+v", l)
 			}
 		}
@@ -652,7 +652,7 @@ func TestPartyBattle_PoisonPostActionAndCure(t *testing.T) {
 					}
 					foundPoison = true
 				}
-				if l.ActionName == "回復" && l.Message == "Hero の毒が治った！" {
+				if l.ActionName == "回復" && l.Kind == "status_cured" && l.Status == corebattle.StatusPoison {
 					if !foundPoison {
 						t.Fatalf("poison cure occurred before damage")
 					}
@@ -730,10 +730,10 @@ func TestPartyBattle_DokuroAmuletRevivalAppliesDofuu(t *testing.T) {
 	foundRevive := false
 	foundDofuuSkip := false
 	for _, l := range res.Logs {
-		if l.ActorID == "hero" && l.ActionName == "行動不能" && l.Message == "しかし、Hero は動くことができない！" {
+		if l.ActorID == "hero" && l.ActionName == "行動不能" && l.Kind == "immobilized" && l.Status == corebattle.StatusDofuu {
 			foundDofuuSkip = true
 		}
-		if l.Message == "Heroは瀕死でよみがえった！" || (len(l.Message) > 0 && l.RemainingHP["hero"] == 25) {
+		if l.Revival != nil && l.Revival.Source == "dokuro_amulet" && l.Revival.HP == 25 {
 			foundRevive = true
 		}
 	}

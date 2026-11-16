@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	battleadapter "github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -71,5 +72,23 @@ func TestPartyAdventureResult_OmitsEmptyPostAdventureMessages(t *testing.T) {
 	}
 	if strings.Contains(string(data), "post_adventure_messages") {
 		t.Fatalf("empty messages must be omitted: %s", data)
+	}
+}
+
+func TestPartyAdventureConveysMonsterTames(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, chars, _, _ := setupPartyAdventureTestService(t, fixedBattleEngine{outcome: corebattle.OutcomeWin})
+	leader := corecharacter.Character{ID: "leader", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}}
+	ally := leader
+	ally.ID, ally.Name = "ally", "Ally"
+	partyID := createReadyParty(ctx, t, svc, repo, chars, leader, ally)
+	want := map[string][]battleadapter.MonsterTameResult{leader.ID: {{MonsterID: "monster-002", TamerName: leader.Name, Success: true}}, ally.ID: {{MonsterID: "monster-003", TamerName: ally.Name, BoxFull: true}}}
+	svc.battleSettler = &mockBattleSettler{resp: battleadapter.ApplyPostBattleResponse{MonsterTames: want}}
+	result, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(result.MonsterTames, want) {
+		t.Fatalf("lost member taming outcomes: %+v", result.MonsterTames)
 	}
 }

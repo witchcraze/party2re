@@ -3,7 +3,6 @@ package battle
 import (
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -228,7 +227,7 @@ func TestEngineResolvePartyBattle(t *testing.T) {
 	if resSameName.RemainingHP["char-1"] <= 0 || resSameName.RemainingHP["char-2"] <= 0 {
 		t.Fatalf("expected positive remaining HP for both distinct IDs, got %+v", resSameName.RemainingHP)
 	}
-	if len(resSameName.Logs) == 0 || !strings.Contains(resSameName.Logs[0].Message, "TwinHero") {
+	if len(resSameName.Logs) == 0 || resSameName.Logs[0].ActorName != "TwinHero" {
 		t.Fatalf("expected log message to contain display name TwinHero, got %+v", resSameName.Logs)
 	}
 

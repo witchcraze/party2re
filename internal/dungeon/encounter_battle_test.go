@@ -46,6 +46,10 @@ func TestActiveEncounterSharedResolver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if res.CombatOutcome != corebattle.OutcomeDraw || res.Monster == nil {
+		t.Fatalf("missing continuing encounter facts: %+v", res)
+	}
+
 	if res.BattleResult == nil || res.BattleResult.Outcome != corebattle.OutcomeDraw || res.Expedition.Encounter == nil {
 		t.Fatalf("expected real turn-limit draw: %+v", res)
 	}

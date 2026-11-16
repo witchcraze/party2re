@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -28,6 +29,11 @@ func WithReplay(r ReplayService) Option {
 	}
 }
 
+type replayResponse struct {
+	*replay.BattleReplay
+	TurnLogs []turnLogResponse `json:"turn_logs"`
+}
+
 func (h *Handler) handleGetReplay(w http.ResponseWriter, r *http.Request) {
 	if h.replay == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("replay service not configured"))
@@ -51,7 +57,19 @@ func (h *Handler) handleGetReplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, rep)
+	logs := []turnLogResponse(nil)
+	if len(rep.TurnLogs) > 0 {
+		if err := json.Unmarshal(rep.TurnLogs, &logs); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	for i := range logs {
+		if logs[i].Kind != "" {
+			logs[i].Message = battleLogMessage(logs[i].TurnLog)
+		}
+	}
+	writeJSON(w, http.StatusOK, replayResponse{BattleReplay: rep, TurnLogs: logs})
 }
 
 func (h *Handler) handleGetCharacterReplays(w http.ResponseWriter, r *http.Request) {

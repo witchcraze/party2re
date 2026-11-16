@@ -296,7 +296,7 @@ func (h *Handler) handleAdvanceGvGRound(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, gvgRoundResponse{RoundResolution: res, BattleLog: toTurnLogs(res.BattleLog)})
 	})
 }
 

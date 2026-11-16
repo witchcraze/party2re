@@ -53,7 +53,7 @@ func setupSettlementTest(t *testing.T, standingRepo gvg.StandingRepository) (*gv
 				"c1": 80,
 				"c2": 0,
 			},
-			Logs: []corebattle.TurnLog{{Turn: 1, Message: "Round combat concluded"}},
+			Logs: []corebattle.TurnLog{{Turn: 1, Kind: "damage"}},
 		},
 	}
 
@@ -196,7 +196,7 @@ func TestAdvanceRound_RecordMatchSettlement_Draw_ErrorPropagation(t *testing.T) 
 				"c1": 0,
 				"c2": 0,
 			},
-			Logs: []corebattle.TurnLog{{Turn: 1, Message: "Round draw"}},
+			Logs: []corebattle.TurnLog{{Turn: 1, Kind: "damage"}},
 		},
 	}
 

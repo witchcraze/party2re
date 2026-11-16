@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/witchcraze/party2re/internal/adventure"
+	battleadapter "github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -151,6 +152,8 @@ type PartyAdventureResult struct {
 	TreasureBoxes         []adventure.TreasureBox  `json:"treasure_boxes,omitempty"`
 	BattleResult          battle.PartyBattleResult `json:"battle_result"`
 	LostDrops             map[string][]string      `json:"lost_drops,omitempty"`
+
+	MonsterTames map[string][]battleadapter.MonsterTameResult `json:"monster_tames,omitempty"`
 }
 
 type PartyAdventureLog struct {

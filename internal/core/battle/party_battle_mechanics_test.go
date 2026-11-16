@@ -1,7 +1,6 @@
 package battle_test
 
 import (
-	"strings"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -252,7 +251,7 @@ func TestPartyBattle_MultiGemCustomSkill(t *testing.T) {
 		if l.ActorID != "sage" || l.ActionName != "トリニティバースト" {
 			continue
 		}
-		if strings.Contains(l.Message, "「万物を照らせ！」") {
+		if l.Source == "custom" && l.Incantation == "万物を照らせ！" {
 			foundIncantation = true
 		}
 		if l.TargetID == "orc" && l.DamageDealt > 0 {
@@ -667,7 +666,7 @@ func TestPartyBattle_Seal11_Kuu_Dispel(t *testing.T) {
 	foundDispelMsg := false
 	for _, l := range res.Logs {
 		if l.ActorID == "hero" && l.TargetID == "boss" {
-			if l.Message != "" && (containsSubstr(l.Message, "元に戻った") || containsSubstr(l.Message, "かき消された")) {
+			if l.BuffsReset {
 				foundDispelMsg = true
 				break
 			}
@@ -731,18 +730,7 @@ func TestPartyBattle_Seal12_Kotowari_MagicAttack(t *testing.T) {
 	}
 }
 
-func containsSubstr(s, substr string) bool {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-type crystalDropRNG struct {
-	intVal int
-}
+type crystalDropRNG struct{ intVal int }
 
 func (c crystalDropRNG) Intn(n int) int   { return c.intVal }
 func (c crystalDropRNG) IntN(n int) int   { return c.intVal }

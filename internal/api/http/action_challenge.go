@@ -15,7 +15,7 @@ type challengeExitService interface {
 }
 
 type challengeRetireResult struct {
-	*challenge.CommandResult
+	challengeCommandResultResponse
 	RecoveryPending bool `json:"recovery_pending"`
 }
 
@@ -33,7 +33,11 @@ func challengeRetireCommand(exits challengeExitService) Option {
 			if err != nil && !(pending && result != nil) {
 				return nil, err
 			}
-			return challengeRetireResult{CommandResult: result, RecoveryPending: pending}, nil
+			response := challengeRetireResult{challengeCommandResultResponse: challengeCommandResultResponse{CommandResult: result}, RecoveryPending: pending}
+			if result != nil {
+				response.Round = toChallengeRoundResult(result.Round)
+			}
+			return response, nil
 		}, challengeActionRejection)(h)
 		command := h.actionCommands["challenge_retire"]
 		command.replay = func(ctx context.Context, actor string, raw json.RawMessage) (bool, error) {

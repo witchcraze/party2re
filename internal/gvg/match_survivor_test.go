@@ -51,7 +51,7 @@ func TestGvG_3Guilds_ThirdGuildSurvives(t *testing.T) {
 				"char-2": 0,
 				"char-3": 60,
 			},
-			Logs: []corebattle.TurnLog{{Turn: 1, Message: "Battle finished"}},
+			Logs: []corebattle.TurnLog{{Turn: 1, Kind: "damage"}},
 		},
 	}
 
@@ -132,7 +132,7 @@ func TestGvG_AllGuildsFell_Draw(t *testing.T) {
 				"char-1": 0,
 				"char-2": 0,
 			},
-			Logs: []corebattle.TurnLog{{Turn: 1, Message: "Mutual wipeout"}},
+			Logs: []corebattle.TurnLog{{Turn: 1, Kind: "damage"}},
 		},
 	}
 

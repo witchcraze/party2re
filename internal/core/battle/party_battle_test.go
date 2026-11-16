@@ -1,7 +1,6 @@
 package battle_test
 
 import (
-	"strings"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -145,7 +144,7 @@ func TestPartyBattle_CustomSkillAndCMP(t *testing.T) {
 
 	foundIncantation := false
 	for _, l := range res.Logs {
-		if strings.Contains(l.Message, "すべてを灰燼に帰せ！") {
+		if l.Source == "custom" && l.Incantation == "すべてを灰燼に帰せ！" {
 			foundIncantation = true
 		}
 	}
@@ -238,7 +237,7 @@ func TestPartyBattle_DefeatAndRevival(t *testing.T) {
 
 	foundRevive := false
 	for _, l := range res.Logs {
-		if strings.Contains(l.Message, "不死の呪いでよみがえった") {
+		if l.Revival != nil && l.Revival.Source == "pharaoh" {
 			foundRevive = true
 		}
 	}
@@ -337,7 +336,7 @@ func TestPartyBattle_UndyingRevival(t *testing.T) {
 
 	foundRevive := false
 	for _, l := range res.Logs {
-		if strings.Contains(l.Message, "よみがえった") {
+		if l.Revival != nil && l.Revival.Revived {
 			foundRevive = true
 		}
 	}
@@ -526,9 +525,8 @@ func TestPartyBattle_DejonBanishment(t *testing.T) {
 	for _, log := range res.Logs {
 		if log.ActionName == "デジョン" && log.TargetID == "ally-1" {
 			foundDejonLog = true
-			expectedMsg := "Ally1 が異空間へと吸い込まれた！"
-			if log.Message != expectedMsg {
-				t.Errorf("expected log message %q, got %q", expectedMsg, log.Message)
+			if log.Kind != "banish" || log.TargetName != "Ally1" {
+				t.Errorf("expected banishment facts, got %+v", log)
 			}
 			break
 		}

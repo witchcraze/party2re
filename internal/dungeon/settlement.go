@@ -37,14 +37,13 @@ func (s *Service) Escape(ctx context.Context, characterID string) (ExpeditionSte
 		}
 		return ExpeditionStepResult{}, err
 	}
-	return s.handleEscape(ctx, exp, &char, "探索を中断し、戦利品を持って無事に脱出した！")
+	return s.handleEscape(ctx, exp, &char)
 }
 
 func (s *Service) handleEscape(
 	ctx context.Context,
 	exp *ActiveExpedition,
 	char *corecharacter.Character,
-	msg string,
 ) (ExpeditionStepResult, error) {
 	if err := s.freezeExpedition(ctx, exp, StatusEscaped); err != nil {
 		return ExpeditionStepResult{}, err
@@ -119,7 +118,6 @@ func (s *Service) handleEscape(
 		ExpEarned:  exp.AccumulatedExp,
 		GoldFound:  exp.AccumulatedGold,
 		IsFinished: true,
-		Message:    msg,
 	}, nil
 }
 
@@ -127,7 +125,6 @@ func (s *Service) handleWipeout(
 	ctx context.Context,
 	exp *ActiveExpedition,
 	char *corecharacter.Character,
-	msg string,
 ) (ExpeditionStepResult, error) {
 	if err := s.freezeExpedition(ctx, exp, StatusWipedOut); err != nil {
 		return ExpeditionStepResult{}, err
@@ -180,6 +177,5 @@ func (s *Service) handleWipeout(
 		Expedition: *exp,
 		EventType:  EventWipeout,
 		IsFinished: true,
-		Message:    msg,
 	}, nil
 }

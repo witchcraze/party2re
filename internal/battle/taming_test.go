@@ -271,9 +271,8 @@ func TestPostBattleMonsterTamingSuccess(t *testing.T) {
 	if res.MonsterName != "スライム" {
 		t.Errorf("expected MonsterName スライム, got %q", res.MonsterName)
 	}
-	expectedMsg := "なんと スライム が起き上がりこちらを見ている。スライムはうれしそうにアレックスのモンスター預かり所に向かった"
-	if res.Message != expectedMsg {
-		t.Errorf("expected message %q, got %q", expectedMsg, res.Message)
+	if res.TamerName != "アレックス" {
+		t.Errorf("unexpected tamer name: %q", res.TamerName)
 	}
 
 	if len(tamer.calls) != 1 || tamer.calls[0] != "c1:monster-002:スライム" {
@@ -356,9 +355,8 @@ func TestPostBattleMonsterTamingBoxFull(t *testing.T) {
 	if res.Success || !res.BoxFull {
 		t.Errorf("expected success=false, boxFull=true, got %+v", res)
 	}
-	expectedMsg := "なんと スライム が起き上がりこちらを見ている。しかし、アレックスのモンスター預かり所はいっぱいだった。スライムは悲しそうに去っていった…"
-	if res.Message != expectedMsg {
-		t.Errorf("expected message %q, got %q", expectedMsg, res.Message)
+	if res.TamerName != "アレックス" {
+		t.Errorf("unexpected tamer name: %q", res.TamerName)
 	}
 }
 

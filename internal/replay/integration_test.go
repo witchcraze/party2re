@@ -54,7 +54,11 @@ func TestReplayIntegrationFlow(t *testing.T) {
 	}
 
 	// Verify turn log integrity
-	lastLog := replayDoc.TurnLogs[len(replayDoc.TurnLogs)-1]
+	logs, err := replay.DecodeJSON[[]corebattle.TurnLog](string(replayDoc.TurnLogs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lastLog := logs[len(logs)-1]
 	if lastLog.Turn != battleRes.Turns {
 		t.Errorf("expected final turn index %d, got %d", battleRes.Turns, lastLog.Turn)
 	}

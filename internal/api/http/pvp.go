@@ -316,6 +316,6 @@ func (h *Handler) handleAdvancePvPRound(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, pvpRoundResponse{RoundResolution: res, BattleLog: toTurnLogs(res.BattleLog)})
 	})
 }

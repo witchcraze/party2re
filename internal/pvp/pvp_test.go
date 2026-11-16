@@ -83,7 +83,7 @@ func setupService(battleOutcome corebattle.Outcome) (*pvp.Service, *mockCharRepo
 		result: corebattle.PartyBattleResult{
 			Outcome: battleOutcome,
 			Turns:   3,
-			Logs:    []corebattle.TurnLog{{Turn: 1, Message: "Round combat concluded."}},
+			Logs:    []corebattle.TurnLog{{Turn: 1, Kind: "damage"}},
 		},
 	}
 	svc, _ := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()), pvp.WithPrizeRemitter(charRepo))

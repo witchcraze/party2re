@@ -1,9 +1,5 @@
 package battle
 
-import (
-	"fmt"
-)
-
 func isImmobilized(status string) bool {
 	return status == StatusParalyze || status == StatusSleep ||
 		status == StatusKinju || status == StatusSabaku || status == StatusDofuu ||
@@ -26,7 +22,9 @@ func (ctx *battleContext) checkConfusion(actor Participant) {
 			Turn:        ctx.turns,
 			ActorID:     actor.ID,
 			ActionName:  "回復",
-			Message:     fmt.Sprintf("%s の混乱が治った！", actor.NameOrID()),
+			Status:      StatusConfusion,
+			Kind:        "status_cured",
+			ActorName:   actor.NameOrID(),
 			RemainingHP: copyHPMap(ctx.hpMap),
 		})
 		return
@@ -35,7 +33,8 @@ func (ctx *battleContext) checkConfusion(actor Participant) {
 		Turn:        ctx.turns,
 		ActorID:     actor.ID,
 		ActionName:  "混乱",
-		Message:     fmt.Sprintf("%s は混乱している！", actor.NameOrID()),
+		Kind:        "confused",
+		ActorName:   actor.NameOrID(),
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
 }
@@ -83,7 +82,9 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 			Turn:        ctx.turns,
 			ActorID:     actor.ID,
 			ActionName:  "行動不能",
-			Message:     fmt.Sprintf("しかし、%s は動くことができない！", actor.NameOrID()),
+			Status:      StatusDofuu,
+			Kind:        "immobilized",
+			ActorName:   actor.NameOrID(),
 			RemainingHP: copyHPMap(ctx.hpMap),
 		})
 		return true
@@ -95,7 +96,9 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 				Turn:        ctx.turns,
 				ActorID:     actor.ID,
 				ActionName:  "回復",
-				Message:     fmt.Sprintf("%s の麻痺が治った！", actor.NameOrID()),
+				Status:      StatusParalyze,
+				Kind:        "status_cured",
+				ActorName:   actor.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 			return false
@@ -104,7 +107,9 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 			Turn:        ctx.turns,
 			ActorID:     actor.ID,
 			ActionName:  "行動不能",
-			Message:     fmt.Sprintf("%s は麻痺して動くことができない！", actor.NameOrID()),
+			Status:      StatusParalyze,
+			Kind:        "immobilized",
+			ActorName:   actor.NameOrID(),
 			RemainingHP: copyHPMap(ctx.hpMap),
 		})
 		return true
@@ -116,7 +121,9 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 				Turn:        ctx.turns,
 				ActorID:     actor.ID,
 				ActionName:  "起床",
-				Message:     fmt.Sprintf("%s は眠りから覚めた！", actor.NameOrID()),
+				Status:      StatusSleep,
+				Kind:        "status_cured",
+				ActorName:   actor.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 			return false
@@ -125,7 +132,9 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 			Turn:        ctx.turns,
 			ActorID:     actor.ID,
 			ActionName:  "眠り",
-			Message:     fmt.Sprintf("%s は眠っている！", actor.NameOrID()),
+			Status:      StatusSleep,
+			Kind:        "immobilized",
+			ActorName:   actor.NameOrID(),
 			RemainingHP: copyHPMap(ctx.hpMap),
 		})
 		return true
@@ -150,7 +159,7 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 			}
 			ctx.statusMap[actor.ID] = ""
 
-			msg := fmt.Sprintf("%s は禁呪により %d のダメージをうけた！", actor.NameOrID(), dmg)
+			var revival *RevivalResult
 			if ctx.hpMap[actor.ID] <= 0 {
 				rev := ctx.checkRevival(actor)
 				if rev.Revived {
@@ -161,7 +170,7 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 					if rev.Status != "" {
 						ctx.statusMap[actor.ID] = rev.Status
 					}
-					msg += " " + rev.Message
+					revival = &rev
 					if rev.Cursed {
 						ctx.abilitiesMap[actor.ID] = append(ctx.abilitiesMap[actor.ID], "cursed")
 					} else {
@@ -178,7 +187,10 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 				ActorID:     actor.ID,
 				ActionName:  "禁呪",
 				DamageDealt: dmg,
-				Message:     msg,
+				Kind:        "status_damage",
+				ActorName:   actor.NameOrID(),
+				Status:      StatusKinju,
+				Revival:     revival,
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 			return true
@@ -189,17 +201,20 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 	case StatusSabaku, "鎖縛":
 		// 25% chance to skip turn (legacy _battle.cgi:722-728)
 		if ctx.rng != nil && ctx.rng.Float64() < 0.25 {
-			msg := fmt.Sprintf("しかし、%s は動くことができない！", actor.NameOrID())
+			cured := false
 			// 50% chance to cure when skipped
 			if ctx.rng.Float64() < 0.50 {
 				ctx.statusMap[actor.ID] = ""
-				msg += fmt.Sprintf(" %s は鎖から解放された！", actor.NameOrID())
+				cured = true
 			}
 			ctx.logs = append(ctx.logs, TurnLog{
 				Turn:        ctx.turns,
 				ActorID:     actor.ID,
 				ActionName:  "行動不能",
-				Message:     msg,
+				Kind:        "immobilized",
+				ActorName:   actor.NameOrID(),
+				Status:      StatusSabaku,
+				StatusCured: cured,
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 			return true
@@ -212,7 +227,7 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 	}
 }
 
-func (ctx *battleContext) executePoisonTick(target Participant, statusName string) {
+func (ctx *battleContext) executePoisonTick(target Participant, status string) {
 	maxHP := target.MaxHP
 	if maxHP <= 0 {
 		maxHP = target.HP
@@ -230,7 +245,7 @@ func (ctx *battleContext) executePoisonTick(target Participant, statusName strin
 		ctx.hpMap[target.ID] = 0
 	}
 
-	msg := fmt.Sprintf("%s は%sにより %d のダメージをうけた！", target.NameOrID(), statusName, dotDmg)
+	var revival *RevivalResult
 
 	if ctx.hpMap[target.ID] <= 0 {
 		rev := ctx.checkRevival(target)
@@ -242,7 +257,7 @@ func (ctx *battleContext) executePoisonTick(target Participant, statusName strin
 			if rev.Status != "" {
 				ctx.statusMap[target.ID] = rev.Status
 			}
-			msg += " " + rev.Message
+			revival = &rev
 			if rev.Cursed {
 				ctx.abilitiesMap[target.ID] = append(ctx.abilitiesMap[target.ID], "cursed")
 			} else {
@@ -261,7 +276,11 @@ func (ctx *battleContext) executePoisonTick(target Participant, statusName strin
 		ActionName:  "毒ダメージ",
 		TargetID:    target.ID,
 		DamageDealt: dotDmg,
-		Message:     msg,
+		Kind:        "status_damage",
+		ActorName:   target.NameOrID(),
+		TargetName:  target.NameOrID(),
+		Status:      status,
+		Revival:     revival,
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
 }
@@ -278,7 +297,7 @@ func (ctx *battleContext) applyPartyVirulentPoison(actor Participant, allPartici
 		}
 		st := ctx.statusMap[p.ID]
 		if st == StatusVirulentPoison || st == "劇毒" {
-			ctx.executePoisonTick(p, "劇毒")
+			ctx.executePoisonTick(p, StatusVirulentPoison)
 		}
 	}
 }
@@ -296,14 +315,14 @@ func (ctx *battleContext) applyPostActionPoison(actor Participant) {
 		return
 	}
 
-	statusName := "毒"
+	status := StatusPoison
 	if isVirulent {
-		statusName = "劇毒"
+		status = StatusVirulentPoison
 	} else if isDeadly {
-		statusName = "猛毒"
+		status = StatusDeadlyPoison
 	}
 
-	ctx.executePoisonTick(actor, statusName)
+	ctx.executePoisonTick(actor, status)
 
 	// Natural cure roll: only standard poison has 20% natural cure chance (legacy _battle.cgi:851)
 	if isStandard && ctx.hpMap[actor.ID] > 0 {
@@ -314,7 +333,9 @@ func (ctx *battleContext) applyPostActionPoison(actor Participant) {
 				ActorID:     actor.ID,
 				ActionName:  "回復",
 				TargetID:    actor.ID,
-				Message:     fmt.Sprintf("%s の毒が治った！", actor.NameOrID()),
+				Status:      StatusPoison,
+				Kind:        "status_cured",
+				ActorName:   actor.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		}
