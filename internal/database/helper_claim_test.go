@@ -222,7 +222,7 @@ func TestHelperQuestClaimRollback(t *testing.T) {
 	if !errors.Is(err, failure) {
 		t.Fatalf("error = %v, want %v", err, failure)
 	}
-	if result.CompletedQuest != nil || result.NewQuest != nil || result.RenewedCount != 0 {
+	if result.CompletedQuest != nil || result.NewQuest != nil || len(result.Renewed) != 0 {
 		t.Fatalf("failed claim returned success result: %+v", result)
 	}
 	f.assertState(t, "")

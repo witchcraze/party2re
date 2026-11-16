@@ -1,47 +1,6 @@
-# Small Medal Exchange (メダル王)
+# Medal Castle (メダル伯爵の城)
 
-## Overview
-The Small Medal (ちいさなメダル) system allows players to exchange collected "Small Medals" for rare and exclusive items.
+The `medal` town scene reconstructs `lib/medal.cgi`'s Small Medal exchange. Prize tiers live in [`medal_rewards.json`](../../internal/medal/medal_rewards.json); delivery follows [Depot capacity](depot.md#delivery-capacity-by-caller).
 
-## Behavior Policy (Legacy Reconstruction)
-As directed by project requirements, this system faithfully recreates the deductive (消費型) behavior of the original Party2 `medal.cgi`.
-- Small Medals act as a special currency.
-- When a player exchanges medals for an item, the required medal cost is **deducted** from their balance.
-- Claimed prize items are directly delivered to the player's **depot** (`character_depots`), matching legacy specification (`medal.cgi:44-48`), rather than personal bag inventory.
-- Players can repeatedly purchase the same reward as long as they have sufficient medals and depot space.
-- The system enforces a strict pessimistic lock hierarchy (Rank 2: `characters` $\to$ Rank 5: `character_depots`) to ensure transaction integrity during the exchange.
-
-## Data Structures
-- **Medal Balance**: Stored in `characters.small_medals` (integer).
-- **Catalog**: Defined in `internal/medal/medal_rewards.json`.
-
-## Catalog Tiers
-| Cost | Item ID |
-|------|---------|
-| 3    | armor-32 |
-| 5    | item-013 |
-| 8    | armor-33 |
-| 10   | weapon-32 |
-| 15   | item-036 |
-| 20   | item-035 |
-| 25   | item-037 |
-| 30   | item-034 |
-| 35   | item-089 |
-| 40   | weapon-30 |
-| 45   | armor-35 |
-| 50   | armor-40 |
-| 60   | item-109 |
-| 77   | item-107 |
-| 100  | item-059 |
-
-## Acquisition Channels (入手手段)
-
-Small Medals are earned through various exploration and combat activities:
-1. **Dungeon Exploration (`internal/dungeon`)**:
-   - **Treasure Chests ('T')**: Each chest opened awards **+1 Small Medal**.
-   - **Dungeon Clear**: Completely clearing a dungeon awards bonus Small Medals equal to the dungeon Tier (Tier 1 = +1, Tier 2 = +2, Tier 3 = +3).
-   - Medals gathered during exploration are permanently committed to the character upon safe escape or dungeon clear.
-
-Milestone achievements award commemorative medals only, never Small Medals ([reward policy](achievements.md#reward-policy-1168)).
-
-Transport operations and schemas: [OpenAPI](../api/openapi.json).
+- **Clean-room names (rule 00 §3):** the legacy place `メダル王の城` and keeper `@メダル王` are Dragon Quest names. The reconstruction uses `メダル伯爵の城` and `@メダル伯爵`, also in the keeper's lines and the 小さなメダル item message.
+- **Approved extension:** achievements and commemorative medals have no legacy place; they are observed and claimed in this scene ([achievements](achievements.md)).

@@ -19,7 +19,6 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/ratelimit"
@@ -105,12 +104,6 @@ type ShopService interface {
 	InspectNPC(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
 	GetSaleOffer(ctx context.Context, shopType shop.ShopType, characterID string) (*shop.SaleOffer, error)
 	Synthesize(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error)
-}
-
-// HelperService defines the helper quest operations exposed over HTTP.
-type HelperService interface {
-	ListQuests(ctx context.Context, now time.Time) ([]helperquest.Quest, error)
-	CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (helperquest.CompletionResult, error)
 }
 
 // RescueService defines the emergency rescue operations exposed over HTTP.
@@ -221,13 +214,6 @@ func WithRateLimiter(limiter RateLimiter, cfg ...RateLimitConfig) Option {
 		} else {
 			h.rateLimitCfg = DefaultRateLimitConfig()
 		}
-	}
-}
-
-// WithHelper configures the helper quest service for the Handler.
-func WithHelper(helpers HelperService) Option {
-	return func(h *Handler) {
-		h.helpers = helpers
 	}
 }
 
@@ -358,12 +344,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /eventplaza/merchant/items", h.handleGetEventPlazaMerchantItems)
 	mux.HandleFunc("POST /eventplaza/merchant/purchase", h.handlePostEventPlazaMerchantPurchase)
 
-	mux.HandleFunc("GET /medals/rewards", h.handleGetMedalRewards)
-	mux.HandleFunc("POST /medals/claim", h.handleClaimMedalReward)
-
-	mux.HandleFunc("GET /helpers/quests", h.handleListHelperQuests)
-	mux.HandleFunc("POST /helpers/complete", h.handleCompleteHelperQuest)
-
 	mux.HandleFunc("GET /news", h.handleListNews)
 	mux.HandleFunc("GET /news/{id}", h.handleGetNews)
 	mux.HandleFunc("POST /news", h.handleCreateNews)
@@ -409,11 +389,6 @@ func (h *Handler) Router() http.Handler {
 	// Plantation
 
 	// Black Market
-
-	// Achievements & Commemorative Medals
-	mux.HandleFunc("GET /characters/{id}/achievements", h.handleGetCharacterAchievements)
-	mux.HandleFunc("POST /characters/{id}/achievements/{achievement_id}/claim", h.handleClaimAchievement)
-	mux.HandleFunc("GET /characters/{id}/medals", h.handleGetCharacterMedals)
 
 	// Combat & Challenges
 	mux.HandleFunc("GET /challenges/tiers", h.handleListChallengeTiers)

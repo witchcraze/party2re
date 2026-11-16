@@ -102,7 +102,7 @@ func TestCompleteQuest_RenewalOnlyExchangesExpiredRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.RenewedCount != 2 || res.CompletedQuest != nil || res.Character != nil || res.Depot != nil || res.NewQuest != nil {
+	if len(res.Renewed) != 2 || res.CompletedQuest != nil || res.Character != nil || res.Depot != nil || res.NewQuest != nil {
 		t.Fatalf("renewal-only result = %+v", res)
 	}
 
@@ -115,7 +115,7 @@ func TestCompleteQuest_RenewalOnlyExchangesExpiredRequests(t *testing.T) {
 	}
 
 	// A retry exchanges nothing more.
-	if res, err := svc.CompleteQuest(ctx, "char-1", "", now); err != nil || res.RenewedCount != 0 {
+	if res, err := svc.CompleteQuest(ctx, "char-1", "", now); err != nil || len(res.Renewed) != 0 {
 		t.Fatalf("retry = %+v, %v", res, err)
 	}
 	if len(repo.quests) != 2 {
@@ -134,7 +134,7 @@ func TestCompleteQuest_ExpiredTargetCompletes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.CompletedQuest.ID != "target" || res.Character.HelpCount != 1 || res.RenewedCount != 0 {
+	if res.CompletedQuest.ID != "target" || res.Character.HelpCount != 1 || len(res.Renewed) != 0 {
 		t.Fatalf("expired target completion = %+v", res)
 	}
 	if len(repo.quests) != 2 || repo.quests["target"].CompletedAt == nil {

@@ -78,7 +78,8 @@ type CompletionResult struct {
 	Depot          *depot.Depot             `json:"depot,omitempty"`
 	CompletedQuest *Quest                   `json:"completed_quest,omitempty"`
 	NewQuest       *Quest                   `json:"new_quest,omitempty"`
-	RenewedCount   int                      `json:"renewed_count"`
+	// Renewed lists the expired requests exchanged for replacements.
+	Renewed []Quest `json:"renewed"`
 }
 
 type Service struct {
@@ -198,7 +199,7 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 			if err := s.quests.Save(txCtx, replacement); err != nil {
 				return err
 			}
-			res.RenewedCount++
+			res.Renewed = append(res.Renewed, old)
 		}
 		return nil
 	})

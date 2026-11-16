@@ -59,8 +59,6 @@ func TestOpenAPIRescueRetirementKeepsGateway(t *testing.T) {
 		t.Error("retired RescuePenaltyResponse schema remains in OpenAPI")
 	}
 	for _, route := range []struct{ method, path string }{
-		{"get", "/helpers/quests"},
-		{"post", "/helpers/complete"},
 		{"post", "/admin/characters/{id}/unstuck"},
 		{"get", "/api/v1/characters/{id}/context"},
 		{"post", "/api/v1/characters/{id}/actions"},

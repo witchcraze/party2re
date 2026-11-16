@@ -448,6 +448,8 @@ func TestGameplayScenario_NoviceDepositPurchaseEquip(t *testing.T) {
 	if recovered := a.context(token, hero); recovered.Scene.LocationID != "bank" || recovered.Character.Gold != startingGold-10 || recovered.Scene.Data.Deposit != 10 {
 		t.Fatalf("restart lost session, scene or assets: %+v", recovered)
 	}
+	// The town hub pages its destinations only while it is the current scene.
+	town = a.command(token, hero, "scene_back", map[string]any{}, http.StatusOK).Context
 	shop := a.enter(token, hero, town, "shop_weapon")
 	if !shop.offers("shop_purchase") || len(shop.Scene.Data.Items) == 0 || shop.Scene.Data.SaleOffer != nil {
 		t.Fatalf("unexpected weapon shop: %+v", shop)
@@ -550,6 +552,7 @@ func TestGameplayScenario_AccountLogoutBanDeletion(t *testing.T) {
 		t.Fatalf("expected bank deposit 10, got %+v", deposited.Scene.Data)
 	}
 	a.elapseActionWait(charA)
+	townA = a.command(tokenA, charA, "scene_back", map[string]any{}, http.StatusOK).Context
 	shopA := a.enter(tokenA, charA, townA, "shop_weapon")
 	if !shopA.offers("shop_purchase") || len(shopA.Scene.Data.Items) == 0 {
 		t.Fatalf("unexpected weapon shop: %+v", shopA)
