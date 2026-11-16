@@ -208,7 +208,7 @@ func TestExchangeJobUnmasteredRecordedJobs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, updatedState, err := svc.ExchangeJob(context.Background(), char.ID, "job-01", "job-02", "item-168")
+	updated, updatedState, err := svc.ExchangeJob(context.Background(), char.ID, "job-01", "job-02")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestExchangeJobUnmasteredRecordedJobs(t *testing.T) {
 		t.Fatalf("expected item-168 consumed, got %d", invRepo.inventory.Quantity("item-168"))
 	}
 
-	restored, restoredState, err := svc.ExchangeJob(context.Background(), char.ID, "", "")
+	restored, restoredState, err := svc.RestoreJobMemory(context.Background(), char.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestExchangeJobRejectsUnrecordedAndUnknownSP(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := svc.ExchangeJob(ctx, char.ID, tc.target, tc.targetOld, "item-168")
+			_, _, err := svc.ExchangeJob(ctx, char.ID, tc.target, tc.targetOld)
 			if !errors.Is(err, corejob.ErrJobUnavailable) {
 				t.Fatalf("expected ErrJobUnavailable, got %v", err)
 			}

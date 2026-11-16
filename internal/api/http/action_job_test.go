@@ -41,8 +41,12 @@ func (f *jobTempleFixture) ChangeJob(ctx context.Context, actor, target string) 
 	return f.done(ctx, actor, "change "+target)
 }
 
-func (f *jobTempleFixture) ExchangeJob(ctx context.Context, actor, job, old string, item ...string) (corecharacter.Character, corejob.CharacterJob, error) {
-	return f.done(ctx, actor, fmt.Sprint("exchange ", job, old, item))
+func (f *jobTempleFixture) ExchangeJob(ctx context.Context, actor, job, old string) (corecharacter.Character, corejob.CharacterJob, error) {
+	return f.done(ctx, actor, "exchange "+job+" "+old)
+}
+
+func (f *jobTempleFixture) RestoreJobMemory(ctx context.Context, actor string) (corecharacter.Character, corejob.CharacterJob, error) {
+	return f.done(ctx, actor, "restore")
 }
 
 func (f *jobTempleFixture) RecallFutureMemory(ctx context.Context, actor, memory string) (corecharacter.Character, corejob.CharacterJob, error) {
@@ -54,7 +58,7 @@ func newJobTempleFixture(t *testing.T) (*jobTempleFixture, *gatewayNavigationSto
 	f := &jobTempleFixture{gatewayFixture: newGatewayFixture(t), status: jobapp.TempleStatus{
 		Changeable:     []corejob.Definition{{ID: "job-01", Name: "戦士"}},
 		Recallable:     []corejob.Definition{{ID: "job-01", Name: "戦士"}, {ID: "job-05", Name: "僧侶"}},
-		RecallItems:    []string{"item-168"},
+		RecallItem:     "item-168",
 		FutureMemories: []corecharacter.FutureMemory{{ID: "fm1", JobID: "job-05", OldJobID: "job-01", Level: 40, MaxHP: 300}},
 	}}
 	f.char.Name, f.char.MonsterKills, f.char.CasinoWins = "勇者", 12, 3
@@ -108,7 +112,7 @@ func TestJobTempleOffersMemoryCommandsByState(t *testing.T) {
 			f, _, router := newJobTempleFixture(t)
 			f.char.JobMemory = tc.memory
 			if tc.noItems {
-				f.status.RecallItems = nil
+				f.status.RecallItem = ""
 			}
 			_, observation := navigationGET(t, router)
 			for action, want := range tc.offer {
@@ -135,8 +139,8 @@ func TestJobTempleCommands(t *testing.T) {
 		{"job_change", `{"job_id":"job-05"}`, "change job-05", "勇者よ！僧侶となり新たな道を歩むが良い"},
 		// job_change.cgi:164-179 names the consumed item before the blessing.
 		{"job_change", `{"job_id":"job-33"}`, "change job-33", "賢者の悟りを使いました！ 勇者よ！僧侶となり新たな道を歩むが良い"},
-		{"job_recall", `{"job_id":"job-05","old_job_id":"job-01","item_id":"item-243"}`, "exchange job-05job-01[item-243]", "勇者の記憶を呼び起こしたぞ！"},
-		{"job_restore", `{}`, "exchange [] ", "勇者を元の職業に戻したぞ！"},
+		{"job_recall", `{"job_id":"job-05","old_job_id":"job-01"}`, "exchange job-05 job-01", "勇者の記憶を呼び起こしたぞ！"},
+		{"job_restore", `{}`, "restore", "勇者を元の職業に戻したぞ！"},
 		{"job_future_recall", `{"memory_id":"fm1"}`, "future fm1", "勇者の記憶を呼び起こしたぞ"},
 	} {
 		t.Run(tc.action+tc.call, func(t *testing.T) {
@@ -158,7 +162,7 @@ func TestJobTempleRejectsInvalidParams(t *testing.T) {
 	f, _, router := newJobTempleFixture(t)
 	for _, body := range []string{
 		saleGatewayBody("job_change", `{}`), saleGatewayBody("job_change", `{"job_id":"job-01","x":1}`),
-		saleGatewayBody("job_recall", `{"job_id":"job-05","old_job_id":"job-01"}`), saleGatewayBody("job_recall", `{"job_id":"job-05","old_job_id":"job-01","item_id":""}`),
+		saleGatewayBody("job_recall", `{"job_id":"job-05"}`), saleGatewayBody("job_recall", `{"job_id":"job-05","old_job_id":"job-01","item_id":"item-168"}`),
 		saleGatewayBody("job_future_recall", `{"memory_id":1}`),
 	} {
 		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", body, nil)

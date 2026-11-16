@@ -425,7 +425,7 @@ func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 		t.Fatalf("expected state CurrentJobID to be job-03, got updatedState=%s, repo=%s", updatedState.CurrentJobID, repo.value.CurrentJobID)
 	}
 
-	restored, restoredState, err := svc.ExchangeJob(context.Background(), char.ID, "", "")
+	restored, restoredState, err := svc.RestoreJobMemory(context.Background(), char.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

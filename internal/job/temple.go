@@ -10,15 +10,12 @@ import (
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 )
 
-// recallItems start a persistent and a temporary job memory (ExchangeJob).
-var recallItems = []string{"item-168", "item-243"}
-
 // TempleStatus is what the job temple offers a character right now. Every
 // list holds only choices the matching command would currently accept.
 type TempleStatus struct {
 	Changeable     []corejob.Definition
 	Recallable     []corejob.Definition
-	RecallItems    []string
+	RecallItem     string // the held recall item ExchangeJob would use, or ""
 	FutureMemories []corecharacter.FutureMemory
 }
 
@@ -50,9 +47,10 @@ func (s *Service) TempleStatus(ctx context.Context, characterID string) (TempleS
 		return TempleStatus{}, err
 	}
 	status := TempleStatus{FutureMemories: memories}
-	for _, item := range recallItems {
-		if inv.Quantity(item) > 0 {
-			status.RecallItems = append(status.RecallItems, item)
+	for _, id := range recallItemPreference {
+		if inv.Quantity(id) > 0 {
+			status.RecallItem = id
+			break
 		}
 	}
 	reqCtx := s.buildChangeContextNoItems(char, state)

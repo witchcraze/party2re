@@ -7230,23 +7230,18 @@
                 "params": {
                   "additionalProperties": false,
                   "properties": {
-                    "item_id": {
-                      "description": "One of recall_items: item-168 starts a memory reverted by job_restore, item-243 one that sleep reverts.",
-                      "type": "string"
-                    },
                     "job_id": {
                       "description": "One of the job temple scene's recall_jobs, recalled as the current job.",
                       "type": "string"
                     },
                     "old_job_id": {
-                      "description": "A different recall_jobs entry, recalled as the previous job.",
+                      "description": "A different recall_jobs entry, recalled as the previous job. The held recall_item is consumed and decides the memory kind.",
                       "type": "string"
                     }
                   },
                   "required": [
                     "job_id",
-                    "old_job_id",
-                    "item_id"
+                    "old_job_id"
                   ],
                   "type": "object"
                 }
@@ -12078,15 +12073,13 @@
             "const": "town",
             "type": "string"
           },
-          "recall_items": {
-            "items": {
-              "enum": [
-                "item-168",
-                "item-243"
-              ],
-              "type": "string"
-            },
-            "type": "array"
+          "recall_item": {
+            "description": "The held recall item, absent when none: item-168 starts a memory job_restore reverts, item-243 one that sleep reverts.",
+            "enum": [
+              "item-168",
+              "item-243"
+            ],
+            "type": "string"
           },
           "recall_jobs": {
             "items": {
@@ -12099,7 +12092,6 @@
           "parent",
           "jobs",
           "recall_jobs",
-          "recall_items",
           "future_memories"
         ],
         "type": "object"

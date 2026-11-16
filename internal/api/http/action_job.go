@@ -19,7 +19,8 @@ type JobService interface {
 	ListDefinitions() []corejob.Definition
 	TempleStatus(ctx context.Context, characterID string) (jobapp.TempleStatus, error)
 	ChangeJob(ctx context.Context, characterID string, targetJobID string) (corecharacter.Character, corejob.CharacterJob, error)
-	ExchangeJob(ctx context.Context, characterID string, targetJobID, targetOldJobID string, itemDefinitionID ...string) (corecharacter.Character, corejob.CharacterJob, error)
+	ExchangeJob(ctx context.Context, characterID string, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error)
+	RestoreJobMemory(ctx context.Context, characterID string) (corecharacter.Character, corejob.CharacterJob, error)
 	RecallFutureMemory(ctx context.Context, characterID, memoryID string) (corecharacter.Character, corejob.CharacterJob, error)
 	GetJobMastery(ctx context.Context, characterID string) (jobapp.CharacterJobMastery, error)
 }
@@ -31,7 +32,6 @@ type jobChangeRequest struct {
 type jobRecallRequest struct {
 	JobID    string `json:"job_id"`
 	OldJobID string `json:"old_job_id"`
-	ItemID   string `json:"item_id"`
 }
 
 type jobFutureRecallRequest struct {
@@ -62,7 +62,7 @@ type JobTempleSceneData struct {
 	Parent         string                      `json:"parent"`
 	Jobs           []JobOption                 `json:"jobs"`
 	RecallJobs     []JobOption                 `json:"recall_jobs"`
-	RecallItems    []string                    `json:"recall_items"`
+	RecallItem     string                      `json:"recall_item,omitempty"`
 	JobMemory      corecharacter.JobMemoryKind `json:"job_memory,omitempty"`
 	FutureMemories []JobFutureMemory           `json:"future_memories"`
 }
@@ -123,13 +123,10 @@ func WithJob(jobs JobService) Option {
 			}, nil
 		}}
 		withActionCommand("job_recall", func(ctx context.Context, actor string, p jobRecallRequest) (any, error) {
-			if p.ItemID == "" {
-				return nil, corejob.ErrJobUnavailable
-			}
-			return reply("%[1]sの記憶を呼び起こしたぞ！")(jobs.ExchangeJob(ctx, actor, p.JobID, p.OldJobID, p.ItemID))
+			return reply("%[1]sの記憶を呼び起こしたぞ！")(jobs.ExchangeJob(ctx, actor, p.JobID, p.OldJobID))
 		}, jobActionRejection)(h)
 		withActionCommand("job_restore", func(ctx context.Context, actor string, _ struct{}) (any, error) {
-			return reply("%[1]sを元の職業に戻したぞ！")(jobs.ExchangeJob(ctx, actor, "", ""))
+			return reply("%[1]sを元の職業に戻したぞ！")(jobs.RestoreJobMemory(ctx, actor))
 		}, jobActionRejection)(h)
 		withActionCommand("job_future_recall", func(ctx context.Context, actor string, p jobFutureRecallRequest) (any, error) {
 			return reply("%[1]sの記憶を呼び起こしたぞ")(jobs.RecallFutureMemory(ctx, actor, p.MemoryID))
@@ -158,7 +155,7 @@ func (h *Handler) jobTempleSceneData(ctx context.Context, r playercontext.Result
 		return nil, err
 	}
 	data := JobTempleSceneData{Parent: "town", Jobs: jobOptions(status.Changeable), RecallJobs: jobOptions(status.Recallable),
-		RecallItems: append([]string{}, status.RecallItems...), FutureMemories: make([]JobFutureMemory, 0, len(status.FutureMemories))}
+		RecallItem: status.RecallItem, FutureMemories: make([]JobFutureMemory, 0, len(status.FutureMemories))}
 	if memory := r.Snapshot.Character.JobMemory; memory != nil {
 		data.JobMemory = corecharacter.JobMemoryKindPersistent
 		if memory.IsTemporary() {
@@ -206,7 +203,7 @@ var jobTempleFacility = facility{
 		// job_change.cgi:118-127 offers only the memory commands that apply.
 		d := data.(JobTempleSceneData)
 		var hide []string
-		if d.JobMemory != "" || len(d.RecallItems) == 0 || len(d.RecallJobs) < 2 {
+		if d.JobMemory != "" || d.RecallItem == "" || len(d.RecallJobs) < 2 {
 			hide = append(hide, "job_recall")
 		}
 		if d.JobMemory != corecharacter.JobMemoryKindPersistent {

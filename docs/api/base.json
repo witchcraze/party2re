@@ -7052,18 +7052,13 @@
                     },
                     "old_job_id": {
                       "type": "string",
-                      "description": "A different recall_jobs entry, recalled as the previous job."
-                    },
-                    "item_id": {
-                      "type": "string",
-                      "description": "One of recall_items: item-168 starts a memory reverted by job_restore, item-243 one that sleep reverts."
+                      "description": "A different recall_jobs entry, recalled as the previous job. The held recall_item is consumed and decides the memory kind."
                     }
                   },
                   "additionalProperties": false,
                   "required": [
                     "job_id",
-                    "old_job_id",
-                    "item_id"
+                    "old_job_id"
                   ]
                 }
               },
@@ -18176,15 +18171,13 @@
               "$ref": "#/components/schemas/JobOption"
             }
           },
-          "recall_items": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": [
-                "item-168",
-                "item-243"
-              ]
-            }
+          "recall_item": {
+            "type": "string",
+            "enum": [
+              "item-168",
+              "item-243"
+            ],
+            "description": "The held recall item, absent when none: item-168 starts a memory job_restore reverts, item-243 one that sleep reverts."
           },
           "job_memory": {
             "type": "string",
@@ -18204,7 +18197,6 @@
           "parent",
           "jobs",
           "recall_jobs",
-          "recall_items",
           "future_memories"
         ]
       },

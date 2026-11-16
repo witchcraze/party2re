@@ -140,7 +140,7 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			// Master job-03 and job-04 so ExchangeJob(job-03, job-04, itemID) succeeds
+			// Master job-03 and job-04 so ExchangeJob(job-03, job-04) succeeds with the held item
 			initialJob.RecordMastery("job-03", 80, 80)
 			initialJob.RecordMastery("job-04", 100, 100)
 			if err := jobRepo.Save(ctx, initialJob); err != nil {
@@ -213,7 +213,7 @@ func TestChangeJob_Integration_RevalidateJobMemoryUnderLock(t *testing.T) {
 					case <-ctx.Done():
 						return ctx.Err()
 					}
-					_, _, err := svcExchange.ExchangeJob(ctx, char.ID, "job-03", "job-04", tc.itemID)
+					_, _, err := svcExchange.ExchangeJob(ctx, char.ID, "job-03", "job-04")
 					return err
 				},
 			)

@@ -35,67 +35,84 @@ func (s *Service) RestoreActiveJob(ctx context.Context, characterID, jobID strin
 	return s.repository.Save(ctx, state)
 }
 
-// ExchangeJob swaps a character's current and old job classes using item-168 (persistent) or item-243 (temporary).
-func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string, itemDefinitionID ...string) (corecharacter.Character, corejob.CharacterJob, error) {
-	if s.characters == nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("character repository not configured")
-	}
-	if s.economy == nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("economy service not configured")
-	}
-	char, err := s.characters.FindByID(ctx, characterID)
+// RestoreJobMemory returns from a persistent job memory to the remembered jobs
+// (job_change.cgi job_reverse). Like legacy job_exchange, it is refused while
+// limit-broken; a temporary memory reverts only on sleep (home.cgi:195).
+func (s *Service) RestoreJobMemory(ctx context.Context, characterID string) (corecharacter.Character, corejob.CharacterJob, error) {
+	char, err := s.preflightJobMemory(ctx, characterID)
 	if err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
-	if char.OverLevel {
+	if char.JobMemory == nil || char.JobMemory.IsTemporary() {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
-	if char.JobMemory != nil {
-		if len(itemDefinitionID) > 0 && itemDefinitionID[0] != "" {
-			// Overlapping start with an item is rejected while either memory kind is active.
-			return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+	req := economy.TransactionRequest{CharacterID: characterID}
+	var restored corecharacter.Character
+	var restoredState corejob.CharacterJob
+	_, err = s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		if tc.Character.JobMemory == nil || tc.Character.JobMemory.IsTemporary() {
+			return corejob.ErrJobUnavailable
 		}
-		if char.JobMemory.IsTemporary() {
-			// Temporary job memory (item-243) cannot be manually restored via exchange.
-			// It only reverts upon resting at home (legacy home.cgi:195, job_change.cgi:121).
-			return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+		memory := *tc.Character.JobMemory
+		if err := tc.Character.ApplyJobMemory(memory.JobID, memory.SP, memory.OldJobID, memory.OldSP); err != nil {
+			return err
 		}
-		req := economy.TransactionRequest{CharacterID: characterID}
-		var restored corecharacter.Character
-		var restoredState corejob.CharacterJob
-		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			if tc.Character.JobMemory == nil || tc.Character.JobMemory.IsTemporary() {
-				return corejob.ErrJobUnavailable
-			}
-			memory := *tc.Character.JobMemory
-			if err := tc.Character.ApplyJobMemory(memory.JobID, memory.SP, memory.OldJobID, memory.OldSP); err != nil {
-				return err
-			}
-			tc.Character.JobMemory = nil
-			// The trajectory snapshots SQL state before the economy runner's final save.
-			if err := s.characters.Update(tc.Context, tc.Character); err != nil {
-				return err
-			}
-			st, err := s.loadState(tc.Context, tc.Character)
-			if err != nil {
-				return err
-			}
-			st.RestoreCurrentJob(memory.JobID)
-			if err := s.repository.Save(tc.Context, st); err != nil {
-				return err
-			}
-			if err := s.memories.Record(tc.Context, characterID, corecharacter.MemoryJobRevert,
-				s.jobName(memory.JobID)+"と"+s.jobName(memory.OldJobID)+"に戻る"); err != nil {
-				return err
-			}
-			restored = tc.Character
-			restoredState = st
-			return nil
-		})
+		tc.Character.JobMemory = nil
+		// The trajectory snapshots SQL state before the economy runner's final save.
+		if err := s.characters.Update(tc.Context, tc.Character); err != nil {
+			return err
+		}
+		st, err := s.loadState(tc.Context, tc.Character)
 		if err != nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
+			return err
 		}
-		return restored, restoredState, nil
+		st.RestoreCurrentJob(memory.JobID)
+		if err := s.repository.Save(tc.Context, st); err != nil {
+			return err
+		}
+		if err := s.memories.Record(tc.Context, characterID, corecharacter.MemoryJobRevert,
+			s.jobName(memory.JobID)+"と"+s.jobName(memory.OldJobID)+"に戻る"); err != nil {
+			return err
+		}
+		restored = tc.Character
+		restoredState = st
+		return nil
+	})
+	if err != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, err
+	}
+	return restored, restoredState, nil
+}
+
+// preflightJobMemory loads the character for a memory start or restore and
+// applies legacy job_exchange's limit-break refusal (job_change.cgi:361-364).
+func (s *Service) preflightJobMemory(ctx context.Context, characterID string) (corecharacter.Character, error) {
+	if s.characters == nil {
+		return corecharacter.Character{}, errors.New("character repository not configured")
+	}
+	if s.economy == nil {
+		return corecharacter.Character{}, errors.New("economy service not configured")
+	}
+	char, err := s.characters.FindByID(ctx, characterID)
+	if err != nil {
+		return corecharacter.Character{}, err
+	}
+	if char.OverLevel {
+		return corecharacter.Character{}, corejob.ErrJobUnavailable
+	}
+	return char, nil
+}
+
+// ExchangeJob starts a job memory with the held recall item: item-243 a
+// temporary one, otherwise item-168 a persistent one (job_change.cgi:118-136
+// dispatches on the single held item). An active memory blocks another.
+func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error) {
+	char, err := s.preflightJobMemory(ctx, characterID)
+	if err != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, err
+	}
+	if char.JobMemory != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
 
 	state, err := s.loadState(ctx, char)
@@ -127,12 +144,9 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
 
-	reqItem := "item-168"
-	if len(itemDefinitionID) > 0 && itemDefinitionID[0] != "" {
-		reqItem = itemDefinitionID[0]
-	}
-	if reqItem != "item-168" && reqItem != "item-243" {
-		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+	reqItem, err := s.heldRecallItem(ctx, characterID)
+	if err != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 	kind := corecharacter.JobMemoryKindPersistent
 	if reqItem == "item-243" {
@@ -203,4 +217,26 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 	return updated, updatedState, nil
+}
+
+// recallItemPreference orders the recall items; legacy assigns the item-243
+// action last, so it wins (job_change.cgi:129-134).
+var recallItemPreference = []string{"item-243", "item-168"}
+
+// heldRecallItem is the recall item in the held field; the economy runner
+// re-checks it under lock when consuming it.
+func (s *Service) heldRecallItem(ctx context.Context, characterID string) (string, error) {
+	if s.inventories == nil {
+		return "", ErrRequiredItem
+	}
+	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return "", err
+	}
+	for _, id := range recallItemPreference {
+		if inv.Quantity(id) > 0 {
+			return id, nil
+		}
+	}
+	return "", ErrRequiredItem
 }

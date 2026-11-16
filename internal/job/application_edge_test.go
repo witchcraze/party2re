@@ -563,9 +563,9 @@ func TestExchangeJob_Comprehensive(t *testing.T) {
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: charWithMemory}
 	svc, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
-	restoredChar, _, err := svc.ExchangeJob(ctx, char.ID, "ignored", "ignored")
+	restoredChar, _, err := svc.RestoreJobMemory(ctx, char.ID)
 	if err != nil {
-		t.Fatalf("ExchangeJob restore failed: %v", err)
+		t.Fatalf("RestoreJobMemory failed: %v", err)
 	}
 	if restoredChar.JobMemory != nil {
 		t.Fatal("expected JobMemory to be cleared after restoration")
@@ -743,7 +743,7 @@ func TestExchangeJob_OverLevel_Rejected(t *testing.T) {
 	}
 	charRepoMemory := &charRepoStub{char: charWithMemory}
 	svcMemory, _ := NewService(repo, WithCharacterRepository(charRepoMemory), WithInventoryRepository(invRepo))
-	_, _, err = svcMemory.ExchangeJob(ctx, char.ID, "ignored", "ignored")
+	_, _, err = svcMemory.RestoreJobMemory(ctx, char.ID)
 	if !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("expected ErrJobUnavailable when restoring job memory for OverLevel character, got %v", err)
 	}

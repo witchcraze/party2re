@@ -148,7 +148,7 @@ func TestJobMemory_PersistentLifecycle_Item168(t *testing.T) {
 	invRepo.invs[charID] = inv
 
 	// 1. Start persistent memory using item-168
-	updatedChar, updatedJob, err := svc.ExchangeJob(ctx, charID, "job-03", "job-04", "item-168")
+	updatedChar, updatedJob, err := svc.ExchangeJob(ctx, charID, "job-03", "job-04")
 	if err != nil {
 		t.Fatalf("ExchangeJob with item-168 failed: %v", err)
 	}
@@ -190,13 +190,13 @@ func TestJobMemory_PersistentLifecycle_Item168(t *testing.T) {
 	item243, _ := item.NewInstance("item-243", 1)
 	_ = curInv.Add(item243)
 	invRepo.invs[charID] = curInv
-	_, _, err = svc.ExchangeJob(ctx, charID, "job-03", "job-04", "item-243")
+	_, _, err = svc.ExchangeJob(ctx, charID, "job-03", "job-04")
 	if !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("expected overlapping ExchangeJob with item-243 to be rejected, got %v", err)
 	}
 
 	// 4. Manual revert succeeds for persistent memory (job_change.cgi:369 job_reverse)
-	restoredChar, restoredJob, err := svc.ExchangeJob(ctx, charID, "ignored", "ignored")
+	restoredChar, restoredJob, err := svc.RestoreJobMemory(ctx, charID)
 	if err != nil {
 		t.Fatalf("manual revert of persistent JobMemory failed: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestJobMemory_TemporaryLifecycle_Item243(t *testing.T) {
 	invRepo.invs[charID] = inv
 
 	// 1. Start temporary memory using item-243
-	updatedChar, updatedJob, err := svc.ExchangeJob(ctx, charID, "job-03", "job-04", "item-243")
+	updatedChar, updatedJob, err := svc.ExchangeJob(ctx, charID, "job-03", "job-04")
 	if err != nil {
 		t.Fatalf("ExchangeJob with item-243 failed: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestJobMemory_TemporaryLifecycle_Item243(t *testing.T) {
 	}
 
 	// 3. Manual revert via ExchangeJob is rejected for temporary memory (job_change.cgi:121, 131)
-	_, _, err = svc.ExchangeJob(ctx, charID, "ignored", "ignored")
+	_, _, err = svc.RestoreJobMemory(ctx, charID)
 	if !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("expected manual revert of temporary JobMemory to be rejected, got %v", err)
 	}
@@ -295,7 +295,7 @@ func TestJobMemory_TemporaryLifecycle_Item243(t *testing.T) {
 	item168, _ := item.NewInstance("item-168", 1)
 	_ = curInv.Add(item168)
 	invRepo.invs[charID] = curInv
-	_, _, err = svc.ExchangeJob(ctx, charID, "job-03", "job-04", "item-168")
+	_, _, err = svc.ExchangeJob(ctx, charID, "job-03", "job-04")
 	if !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("expected overlapping ExchangeJob with item-168 to be rejected, got %v", err)
 	}
@@ -350,7 +350,7 @@ func TestJobMemory_FailureAtomicity(t *testing.T) {
 	invRepo.invs[charID] = inv
 
 	// 1. Missing item-243 -> ErrRequiredItem
-	_, _, err := svc.ExchangeJob(ctx, charID, "job-03", "job-04", "item-243")
+	_, _, err := svc.ExchangeJob(ctx, charID, "job-03", "job-04")
 	if !errors.Is(err, job.ErrRequiredItem) {
 		t.Fatalf("expected ErrRequiredItem for missing item-243, got %v", err)
 	}
@@ -360,7 +360,7 @@ func TestJobMemory_FailureAtomicity(t *testing.T) {
 	item243, _ := item.NewInstance("item-243", 1)
 	_ = curInv.Add(item243)
 	invRepo.invs[charID] = curInv
-	_, _, err = svc.ExchangeJob(ctx, charID, "job-05", "job-06", "item-243")
+	_, _, err = svc.ExchangeJob(ctx, charID, "job-05", "job-06")
 	if !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("expected ErrJobUnavailable for unmastered jobs, got %v", err)
 	}
@@ -372,7 +372,7 @@ func TestJobMemory_FailureAtomicity(t *testing.T) {
 	// 3. OverLevel -> ErrJobUnavailable
 	char.OverLevel = true
 	charRepo.chars[charID] = char
-	_, _, err = svc.ExchangeJob(ctx, charID, "job-03", "job-04", "item-243")
+	_, _, err = svc.ExchangeJob(ctx, charID, "job-03", "job-04")
 	if !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("expected ErrJobUnavailable for OverLevel character, got %v", err)
 	}

@@ -430,7 +430,7 @@ func TestExchangeJobUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, _, err = svc.ExchangeJob(ctx, char.ID, "job-01", "job-02", "item-168")
+		_, _, err = svc.ExchangeJob(ctx, char.ID, "job-01", "job-02")
 		if err == nil || !errors.Is(err, failErr) {
 			t.Fatalf("expected simulated error, got %v", err)
 		}
@@ -489,7 +489,7 @@ func TestExchangeJobUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		updatedChar, updatedJob, err := svc.ExchangeJob(ctx, char.ID, "job-01", "job-02", "item-168")
+		updatedChar, updatedJob, err := svc.ExchangeJob(ctx, char.ID, "job-01", "job-02")
 		if err != nil {
 			t.Fatalf("ExchangeJob failed: %v", err)
 		}
@@ -529,7 +529,7 @@ func TestExchangeJobUnmasteredSPDatabaseRoundTripAndRollback(t *testing.T) {
 		}
 
 		// Revert via ExchangeJob and reload from DB
-		restoredChar, restoredJob, err := svc.ExchangeJob(ctx, char.ID, "", "")
+		restoredChar, restoredJob, err := svc.RestoreJobMemory(ctx, char.ID)
 		if err != nil {
 			t.Fatalf("ExchangeJob revert failed: %v", err)
 		}
