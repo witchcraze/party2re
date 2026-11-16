@@ -6,6 +6,7 @@ Helper quests (`helper.cgi`) are a request board where players turn in Depot ite
 
 ## Helper quests
 
+- The `helper` town scene keeps the legacy title `手助けクエスト`; the clerk `@リッカ` is a Dragon Quest name, so the reconstruction uses `@ミモザ` (rule 00 §3).
 - Candidate ranges and reward weights follow `lib/helper.cgi:22–44,154–211`; repeated reward slots keep their weight. **Pitfall:** a monster target draws its primary slot first; a missing normal monster then draws uniformly from 1–3 and a missing rare monster from 160–165. Primary slots are not filtered or replaced with another pool. The native catalog has no 500–579 monsters yet, so rare monster requests always use that fallback.
 - Item turn-ins come from the **Depot** (`check_depot`), monsters from the ranch box (`check_farm`); rewards go to the Depot, past capacity if needed ([delivery capacity](depot.md#delivery-capacity-by-caller)).
 

@@ -403,26 +403,13 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"job_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "medal_claim",
-		Label:          "小さなメダル景品交換",
-		Category:       "growth",
-		OperationID:    "claimMedalReward",
-		RequiredParams: []string{"item_id"},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "medal_claim", Label: "小さなメダル景品交換", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "achievement_claim", Label: "記念メダルを受け取る", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"achievement_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
 	// Category: social (Companions, Quests & Public Facilities)
 	// =========================================================================
-	{
-		ID:             "helper_complete",
-		Label:          "何でも屋クエスト報告",
-		Category:       "social",
-		OperationID:    "completeHelperQuest",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
+	{ID: "helper_complete", Label: "手助けクエストを解決する", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	// Common しらべる on a player (lib/system.cgi shiraberu): usable in every
 	// scene, so it carries no location gate; the private $mes starts no wait.
 	{ID: "player_inspect", Label: "しらべる", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck, WaitExempt: WaitPrivate, GlobalSupport: true},

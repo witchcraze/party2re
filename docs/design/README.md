@@ -102,8 +102,8 @@ graph TD
 - [`bank.md`](bank.md) — Gold savings deposits and withdrawals with 999,999G wallet clamp.
 - [`black-market.md`](black-market.md) — Rare item sacrifice for Rare/U-Rare points and Depot-delivered prizes.
 - [`gemstore.md`](gemstore.md) — Dedicated gem box storage, 55+ synthesis formulas, and Depot orb appraisal.
-- [`medal.md`](medal.md) — Small Medal depot exchange and character lifetime milestone achievements.
-- [`achievements.md`](achievements.md) — Lifetime gameplay milestones, achievement categories, and tracking criteria.
+- [`medal.md`](medal.md) — Medal castle: Small Medal exchange and clean-room names.
+- [`achievements.md`](achievements.md) — Commemorative medal reward policy and claims.
 
 ### 5. Living, Towns & Crafting
 - [`home.md`](home.md) — Private town estate construction (towns 1–4), companion phrase training, player mailbox (independent deletion), and free sleep recovery (`sleep.cgi`).

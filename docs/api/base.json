@@ -2145,6 +2145,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/ContestSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MedalSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HelperSceneData"
                     }
                   ]
                 }
@@ -3288,6 +3294,66 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "medal"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/MedalSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "helper"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HelperSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       },
@@ -4308,7 +4374,9 @@
                         "takarakuji",
                         "plantation",
                         "oracle",
-                        "contest"
+                        "contest",
+                        "medal",
+                        "helper"
                       ]
                     }
                   },
@@ -4427,7 +4495,9 @@
                         "takarakuji",
                         "plantation",
                         "oracle",
-                        "contest"
+                        "contest",
+                        "medal",
+                        "helper"
                       ]
                     },
                     "offset": {
@@ -6963,6 +7033,105 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "medal_claim"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "description": "One of the medal scene's reward item IDs."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "achievement_claim"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "achievement_id": {
+                      "type": "string",
+                      "description": "A completed, unclaimed achievement from the medal scene."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "achievement_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "helper_complete"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "quest_id": {
+                      "type": "string",
+                      "description": "A request from the helper scene. Omitted or empty only exchanges expired requests."
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "npc_talk"
                 }
               },
@@ -8195,7 +8364,9 @@
               "takarakuji",
               "plantation",
               "oracle",
-              "contest"
+              "contest",
+              "medal",
+              "helper"
             ]
           },
           "offset": {
@@ -8341,7 +8512,9 @@
                   "takarakuji",
                   "plantation",
                   "oracle",
-                  "contest"
+                  "contest",
+                  "medal",
+                  "helper"
                 ]
               }
             },
@@ -14662,103 +14835,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "HelperQuestCompletionResult": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "completed_quest": {
-            "$ref": "#/components/schemas/HelperQuestQuest"
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotDepot"
-          },
-          "new_quest": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/HelperQuestQuest"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "renewed_count": {
-            "description": "Expired non-target requests exchanged; excludes the completed target replacement. Renewal-only results omit character, depot, completed_quest and new_quest.",
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "renewed_count"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "HelperQuestQuest": {
-        "properties": {
-          "completed_at": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "completed_by": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "is_guild": {
-            "type": "boolean"
-          },
-          "is_rare": {
-            "type": "boolean"
-          },
-          "kind": {
-            "type": "integer"
-          },
-          "required_count": {
-            "type": "integer"
-          },
-          "reward_item_id": {
-            "type": "string"
-          },
-          "target_id": {
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "kind",
-          "target_id",
-          "target_name",
-          "required_count",
-          "reward_item_id",
-          "is_rare",
-          "is_guild",
-          "expires_at",
-          "created_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "HomeCompanionPhrase": {
         "properties": {
           "character_id": {
@@ -15042,24 +15118,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "CharacterAchievementsResponse": {
-        "properties": {
-          "achievements": {
-            "items": {
-              "$ref": "#/components/schemas/MedalAchievementProgress"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "achievements"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "MedalAchievementProgress": {
         "properties": {
           "category": {
@@ -15134,30 +15192,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "ClaimAchievementResponse": {
-        "properties": {
-          "achievement_id": {
-            "type": "string"
-          },
-          "achievement_name": {
-            "type": "string"
-          },
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "medal": {
-            "$ref": "#/components/schemas/MedalCharacterMedal"
-          }
-        },
-        "required": [
-          "achievement_id",
-          "achievement_name",
-          "medal",
-          "character"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "MedalCharacterMedal": {
         "properties": {
           "awarded_at": {
@@ -15191,44 +15225,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "CharacterMedalsResponse": {
-        "properties": {
-          "medals": {
-            "items": {
-              "$ref": "#/components/schemas/MedalCharacterMedal"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "medals"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "ClaimMedalRewardResponse": {
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "delivered_to": {
-            "type": "string"
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotDepot"
-          }
-        },
-        "required": [
-          "character",
-          "depot",
-          "delivered_to"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "MedalReward": {
         "properties": {
           "cost": {
@@ -15236,11 +15232,15 @@
           },
           "item_id": {
             "type": "string"
+          },
+          "item_name": {
+            "type": "string"
           }
         },
         "required": [
           "cost",
-          "item_id"
+          "item_id",
+          "item_name"
         ],
         "type": "object",
         "additionalProperties": false
@@ -18150,6 +18150,134 @@
         "required": [
           "parent",
           "custom_skill"
+        ]
+      },
+      "HelperQuest": {
+        "properties": {
+          "completed_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_guild": {
+            "type": "boolean"
+          },
+          "is_rare": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "integer"
+          },
+          "required_count": {
+            "type": "integer"
+          },
+          "reward_item_id": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "reward_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "target_id",
+          "target_name",
+          "required_count",
+          "reward_item_id",
+          "is_rare",
+          "is_guild",
+          "expires_at",
+          "created_at",
+          "reward_name"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "MedalSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The medal castle: the actor's Small Medal balance, the prize tiers medal_claim exchanges (delivered to the Depot), achievement progress and the commemorative medals held. achievement_claim awards only the commemorative medal and never changes small_medals. NPC dialogue comes from npc_talk/npc_inspect. Observation never claims.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "small_medals": {
+            "type": "integer"
+          },
+          "rewards": {
+            "items": {
+              "$ref": "#/components/schemas/MedalReward"
+            },
+            "type": "array"
+          },
+          "achievements": {
+            "items": {
+              "$ref": "#/components/schemas/MedalAchievementProgress"
+            },
+            "type": "array"
+          },
+          "medals": {
+            "items": {
+              "$ref": "#/components/schemas/MedalCharacterMedal"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent",
+          "small_medals",
+          "rewards",
+          "achievements",
+          "medals"
+        ]
+      },
+      "HelperSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The shared helper request board, expired requests included; they remain resolvable until a helper_complete exchanges them. NPC dialogue comes from npc_talk/npc_inspect. Observation never renews or resolves.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "quests": {
+            "items": {
+              "$ref": "#/components/schemas/HelperQuest"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent",
+          "quests"
         ]
       }
     },

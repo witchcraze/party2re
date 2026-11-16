@@ -3520,24 +3520,6 @@
         ],
         "type": "object"
       },
-      "CharacterAchievementsResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "achievements": {
-            "items": {
-              "$ref": "#/components/schemas/MedalAchievementProgress"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "achievements"
-        ],
-        "type": "object"
-      },
       "CharacterActionFailure": {
         "additionalProperties": false,
         "properties": {
@@ -4349,7 +4331,9 @@
                         "takarakuji",
                         "plantation",
                         "oracle",
-                        "contest"
+                        "contest",
+                        "medal",
+                        "helper"
                       ],
                       "type": "string"
                     }
@@ -4496,7 +4480,9 @@
                         "takarakuji",
                         "plantation",
                         "oracle",
-                        "contest"
+                        "contest",
+                        "medal",
+                        "helper"
                       ],
                       "type": "string"
                     },
@@ -7004,6 +6990,105 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "medal_claim",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "One of the medal scene's reward item IDs.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "achievement_claim",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "achievement_id": {
+                      "description": "A completed, unclaimed achievement from the medal scene.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "achievement_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "helper_complete",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "quest_id": {
+                      "description": "A request from the helper scene. Omitted or empty only exchanges expired requests.",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "npc_talk",
                   "type": "string"
                 }
@@ -8033,24 +8118,6 @@
         ],
         "type": "object"
       },
-      "CharacterMedalsResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "medals": {
-            "items": {
-              "$ref": "#/components/schemas/MedalCharacterMedal"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "medals"
-        ],
-        "type": "object"
-      },
       "CharacterNamingHallDialogue": {
         "additionalProperties": false,
         "properties": {
@@ -8350,50 +8417,6 @@
           "attack",
           "defense",
           "agility"
-        ],
-        "type": "object"
-      },
-      "ClaimAchievementResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "achievement_id": {
-            "type": "string"
-          },
-          "achievement_name": {
-            "type": "string"
-          },
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "medal": {
-            "$ref": "#/components/schemas/MedalCharacterMedal"
-          }
-        },
-        "required": [
-          "achievement_id",
-          "achievement_name",
-          "medal",
-          "character"
-        ],
-        "type": "object"
-      },
-      "ClaimMedalRewardResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CharacterResponse"
-          },
-          "delivered_to": {
-            "type": "string"
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotDepot"
-          }
-        },
-        "required": [
-          "character",
-          "depot",
-          "delivered_to"
         ],
         "type": "object"
       },
@@ -11194,40 +11217,7 @@
         ],
         "type": "object"
       },
-      "HelperQuestCompletionResult": {
-        "additionalProperties": false,
-        "properties": {
-          "character": {
-            "$ref": "#/components/schemas/CoreCharacter"
-          },
-          "completed_quest": {
-            "$ref": "#/components/schemas/HelperQuestQuest"
-          },
-          "depot": {
-            "$ref": "#/components/schemas/DepotDepot"
-          },
-          "new_quest": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/HelperQuestQuest"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "renewed_count": {
-            "description": "Expired non-target requests exchanged; excludes the completed target replacement. Renewal-only results omit character, depot, completed_quest and new_quest.",
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "renewed_count"
-        ],
-        "type": "object"
-      },
-      "HelperQuestQuest": {
+      "HelperQuest": {
         "additionalProperties": false,
         "properties": {
           "completed_at": {
@@ -11266,6 +11256,9 @@
           "reward_item_id": {
             "type": "string"
           },
+          "reward_name": {
+            "type": "string"
+          },
           "target_id": {
             "type": "string"
           },
@@ -11287,7 +11280,29 @@
           "is_rare",
           "is_guild",
           "expires_at",
-          "created_at"
+          "created_at",
+          "reward_name"
+        ],
+        "type": "object"
+      },
+      "HelperSceneData": {
+        "additionalProperties": false,
+        "description": "The shared helper request board, expired requests included; they remain resolvable until a helper_complete exchanges them. NPC dialogue comes from npc_talk/npc_inspect. Observation never renews or resolves.",
+        "properties": {
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "quests": {
+            "items": {
+              "$ref": "#/components/schemas/HelperQuest"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent",
+          "quests"
         ],
         "type": "object"
       },
@@ -12301,11 +12316,54 @@
           },
           "item_id": {
             "type": "string"
+          },
+          "item_name": {
+            "type": "string"
           }
         },
         "required": [
           "cost",
-          "item_id"
+          "item_id",
+          "item_name"
+        ],
+        "type": "object"
+      },
+      "MedalSceneData": {
+        "additionalProperties": false,
+        "description": "The medal castle: the actor's Small Medal balance, the prize tiers medal_claim exchanges (delivered to the Depot), achievement progress and the commemorative medals held. achievement_claim awards only the commemorative medal and never changes small_medals. NPC dialogue comes from npc_talk/npc_inspect. Observation never claims.",
+        "properties": {
+          "achievements": {
+            "items": {
+              "$ref": "#/components/schemas/MedalAchievementProgress"
+            },
+            "type": "array"
+          },
+          "medals": {
+            "items": {
+              "$ref": "#/components/schemas/MedalCharacterMedal"
+            },
+            "type": "array"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "rewards": {
+            "items": {
+              "$ref": "#/components/schemas/MedalReward"
+            },
+            "type": "array"
+          },
+          "small_medals": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parent",
+          "small_medals",
+          "rewards",
+          "achievements",
+          "medals"
         ],
         "type": "object"
       },
@@ -14974,7 +15032,9 @@
                   "takarakuji",
                   "plantation",
                   "oracle",
-                  "contest"
+                  "contest",
+                  "medal",
+                  "helper"
                 ],
                 "type": "string"
               }
@@ -15177,7 +15237,9 @@
               "takarakuji",
               "plantation",
               "oracle",
-              "contest"
+              "contest",
+              "medal",
+              "helper"
             ],
             "type": "string"
           },
@@ -15337,6 +15399,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/ContestSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MedalSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HelperSceneData"
                     }
                   ]
                 }
@@ -16465,6 +16533,66 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/ContestSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "medal"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/MedalSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "helper"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HelperSceneData"
                 },
                 "support": {
                   "properties": {
@@ -18739,7 +18867,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep returns sleeping, duration_seconds, remaining_seconds, home_character_id and message; home_wake returns success, message and the actor's character. home_color returns the color set; home_item_use returns action (inspect or consumed), message, item_name, kind, consumed and the actor's character; home_phrase_teach returns the stored phrase; home_phrase_forget returns phrase_id; home_notice_ack returns the submitted notice_ids. home_letter_send returns the stored Letter; home_letter_read and home_letter_delete return letter_id. npc_talk in a home answers with a random resident's taught phrase, an empty dialogue when none is taught, or a private reply when nobody is home. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message. contest_enter returns the entry and the host's message (warning set when the entry committed but settlement scheduling failed); contest_vote returns the vote and message; contest_photo_delete returns the message."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep returns sleeping, duration_seconds, remaining_seconds, home_character_id and message; home_wake returns success, message and the actor's character. home_color returns the color set; home_item_use returns action (inspect or consumed), message, item_name, kind, consumed and the actor's character; home_phrase_teach returns the stored phrase; home_phrase_forget returns phrase_id; home_notice_ack returns the submitted notice_ids. home_letter_send returns the stored Letter; home_letter_read and home_letter_delete return letter_id. npc_talk in a home answers with a random resident's taught phrase, an empty dialogue when none is taught, or a private reply when nobody is home. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context. challenge_retire returns ChallengeRetireResult (actor-owned receipt plus recovery_pending); a committed receipt remains success when publication is pending. Identical explicit actor/run/revision retries use the domain receipt after departure. Clients recover lost responses or context refresh failures by GET active challenge, command receipt and context; never automatically replay POST. auction_send returns AuctionSendResult, preserving the actual recipient, gold or transferred item instance/definition/name/enhancement and message. player_inspect returns PlayerInspection: the public status of the target (never wallet money), guild, custom-skill gem IDs and aligned catalog names, login message, presence and coarse location. Offline location is null; actual activity reports quest before saved scene selection, otherwise the registered scene or Home owner is returned. Activity IDs, phases and members stay private; required source failures are unexpected execution errors. Gem Store commands return the service results: gem_box with the gem and cost (buy), payout (sell), created_gem and recipe (synthesize), identified_gem/is_gem/message (appraise). gemstore_send returns only the sender's gem_box, the sent gem and the recipient's recipient_character_id/recipient_character_name; the recipient's character state and gem box are never returned. Flea Market commands return the service results: listing (fleamarket_list, fleamarket_cancel); fleamarket_purchase returns the purchased listing, buyer_gold and item_instance; the seller's wallet balance or other seller state is never returned. altar_pray returns message, ramia_awakened and expires_at; altar_wish returns item_id, item_name, delivered_to (inventory or depot) and message. wishingwell_exchange returns stat, stat_name, sp_consumed, stat_increase, remaining_sp, message and the actor's character. god_wish returns the actor's character, the granted wish, message and the god's npc_speech; a refused joke wish returns the same shape and keeps the visit. tavern_order returns full (the legacy already-full refusal, no effect), the ordered item_id/item_name (order name), hp_healed, mp_healed, current_hp, current_mp, remaining_gold, tickets_awarded, total_tickets and the barkeep's message; tavern_delivery_reserve returns the delivery and message; tavern_delivery_cancel returns a null delivery and message. lottery_raffle returns raffle_type, tickets_used, roll, prize, transferred_to_depot, remaining_tickets and the clerk's message; takarakuji_buy returns purchased (false for the legacy sold-out and one-per-person replies, no effect), ticket, remaining_gold and message. plantation_sow and plantation_fertilize return the plot and the gardener's message; plantation_harvest returns withered, the yields delivered to the Depot and the message. oracle_buy returns item_no, item_name, price, delivered_to (inventory or depot) and the shopkeeper's message; oracle_wallpaper returns the wallpaper and message; oracle_blackmarket returns the black market selection and message. contest_enter returns the entry and the host's message (warning set when the entry committed but settlement scheduling failed); contest_vote returns the vote and message; contest_photo_delete returns the message. medal_claim returns the prize cost, item_id and item_name, the remaining small_medals and the keeper's message; achievement_claim returns achievement_id, achievement_name and the awarded commemorative medal. helper_complete returns completed_quest (null when only expired requests were exchanged), the exchanged expired requests in renewed and the clerk's message."
           },
           "400": {
             "content": {
@@ -19407,217 +19535,6 @@
         "summary": "Get character profile by ID",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/achievements": {
-      "get": {
-        "operationId": "getCharacterAchievements",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CharacterAchievementsResponse"
-                }
-              }
-            },
-            "description": "Character achievements list retrieved"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character achievements and lifetime milestone progress",
-        "tags": [
-          "Medals"
-        ]
-      }
-    },
-    "/characters/{id}/achievements/{achievement_id}/claim": {
-      "post": {
-        "operationId": "claimCharacterAchievement",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Achievement ID",
-            "in": "path",
-            "name": "achievement_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClaimAchievementResponse"
-                }
-              }
-            },
-            "description": "Achievement claimed successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character or achievement not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - achievement already claimed"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable entity - milestone threshold not yet completed"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Claim completed milestone achievement reward",
-        "tags": [
-          "Medals"
         ]
       }
     },
@@ -22305,97 +22222,6 @@
         "summary": "Start GvGMatch",
         "tags": [
           "Character"
-        ]
-      }
-    },
-    "/characters/{id}/medals": {
-      "get": {
-        "operationId": "getCharacterMedals",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CharacterMedalsResponse"
-                }
-              }
-            },
-            "description": "Character medals collection retrieved"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get character commemorative medals collection",
-        "tags": [
-          "Medals"
         ]
       }
     },
@@ -26136,165 +25962,6 @@
         ]
       }
     },
-    "/helpers/complete": {
-      "post": {
-        "description": "Completes the selected request even after its deadline, and exchanges expired non-target requests atomically. Omit quest_id or send an empty string for renewal only, without consuming materials or granting rewards. Renewal uses now \u003e expires_at and never seeds an empty store. Successful calls return renewed_count (excluding the completion replacement); completion fields are present only for a completed target. Fetch GET /helpers/quests after success. A rejected completion leaves the board and assets unchanged.",
-        "operationId": "completeHelperQuest",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  },
-                  "quest_id": {
-                    "description": "Target request ID. Omitted or empty means renewal only.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HelperQuestCompletionResult"
-                }
-              }
-            },
-            "description": "Completion or renewal-only result; renewed_count counts expired non-target exchanges"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Completion rejected (for example insufficient materials, guild membership required, unknown or completed target); board and assets unchanged."
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Complete helper quest",
-        "tags": [
-          "Helpers"
-        ]
-      }
-    },
-    "/helpers/quests": {
-      "get": {
-        "description": "Read-only board of all uncompleted requests, including expired requests; completed requests are excluded. Expired targets can still be completed. For renewal without turn-in, POST /helpers/complete with character_id and omit quest_id or send an empty string, then fetch this board again after success. An empty board returns [] and is never seeded.",
-        "operationId": "listHelperQuests",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/HelperQuestQuest"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Uncompleted helper quests, including expired requests"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List uncompleted helper delivery quests",
-        "tags": [
-          "Helpers"
-        ]
-      }
-    },
     "/homes/{id}": {
       "get": {
         "description": "Without visitor_id, returns only whitelisted public fields. A supplied visitor_id requires its owner session and is verified again by Home; it cannot authorize private fields by itself. Anonymous reads are supported. Supplying visitor_id requires Bearer authentication and visitor character ownership.",
@@ -26578,167 +26245,6 @@
         "summary": "Get system maintenance status",
         "tags": [
           "System"
-        ]
-      }
-    },
-    "/medals/claim": {
-      "post": {
-        "operationId": "claimMedalReward",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  },
-                  "item_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id",
-                  "item_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClaimMedalRewardResponse"
-                }
-              }
-            },
-            "description": "Reward claimed successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Claim reward using small medals",
-        "tags": [
-          "Medals"
-        ]
-      }
-    },
-    "/medals/rewards": {
-      "get": {
-        "operationId": "getMedalRewards",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/MedalReward"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "Medal exchange rewards catalog"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get small medal exchange rewards catalog",
-        "tags": [
-          "Medals"
         ]
       }
     },

@@ -102,7 +102,7 @@ func TestHelperCompletionAndRenewalRollbackTogether(t *testing.T) {
 			f.quests.replacements = nil // Count operation replacements, excluding seeded expired rows.
 			f.quests.failReplacement, f.quests.failReplacementAt = failure, failAt
 			res, err := f.service.CompleteQuest(ctx, f.characterIDs[0], f.quest.ID, f.now)
-			if !errors.Is(err, failure) || res.CompletedQuest != nil || res.RenewedCount != 0 {
+			if !errors.Is(err, failure) || res.CompletedQuest != nil || len(res.Renewed) != 0 {
 				t.Fatalf("failed operation result = %+v, %v", res, err)
 			}
 			after, err := f.quests.ListUncompleted(ctx)
@@ -115,7 +115,7 @@ func TestHelperCompletionAndRenewalRollbackTogether(t *testing.T) {
 			f.assertState(t, "")
 			f.quests.failReplacement = nil
 			res, err = f.service.CompleteQuest(ctx, f.characterIDs[0], f.quest.ID, f.now)
-			if err != nil || res.RenewedCount != 2 {
+			if err != nil || len(res.Renewed) != 2 {
 				t.Fatalf("retry result = %+v, %v", res, err)
 			}
 			// One completion replacement and two non-target replacements persist.
@@ -168,7 +168,7 @@ func TestHelperConcurrentCompletionAndRenewalConserveAssets(t *testing.T) {
 		if res.CompletedQuest != nil {
 			completed.Add(1)
 		}
-		renewed.Add(int32(res.RenewedCount))
+		renewed.Add(int32(len(res.Renewed)))
 		return nil
 	})
 	if result.Failures != 0 || completed.Load() != 2 || renewed.Load() != 2 {

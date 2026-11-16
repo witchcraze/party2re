@@ -427,7 +427,7 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 		if err := char.AddSmallMedals(1); err != nil {
 			return "", err
 		}
-		msg = "メダル王にメダルを１枚献上しました"
+		msg = "メダル伯爵にメダルを１枚献上しました"
 	case "水晶の原石":
 		if char.WeaponSeal <= 0 {
 			// No seal to remove: return the no-effect sentinel so the caller

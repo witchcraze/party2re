@@ -91,8 +91,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^POST /sessions$`),
 		regexp.MustCompile(`^DELETE /sessions$`),
 		regexp.MustCompile(`^GET /jobs$`),
-		regexp.MustCompile(`^GET /medals/rewards$`),
-		regexp.MustCompile(`^GET /helpers/quests$`),
 		regexp.MustCompile(`^GET /news$`),
 		regexp.MustCompile(`^GET /news/\{id\}$`),
 		regexp.MustCompile(`^GET /eventplaza$`),
@@ -382,9 +380,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleLeaveGuild":              "guild.go",
 		"handleKickGuildMember":         "guild.go",
 		"handleDisbandGuild":            "guild.go",
-		// Medal
-		"handleClaimMedalReward": "medal.go",
-		"handleClaimAchievement": "medal.go",
 		// Adventure
 		"handleStartAdventure": "handler.go",
 		// Monster
@@ -393,8 +388,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleRenameMonster":       "monster.go",
 		"handleSendMonster":         "monster.go",
 		"handleReleaseMonster":      "monster.go",
-		// Helper
-		"handleCompleteHelperQuest": "helper_rescue.go",
 	}
 
 	for handlerName, sourceFile := range requiredActionGuardHandlers {

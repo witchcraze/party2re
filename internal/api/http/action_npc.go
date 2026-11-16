@@ -131,7 +131,7 @@ func (h *Handler) npcAct(ctx context.Context, current playercontext.Result, talk
 	if len(words) == 0 {
 		return NPCResult{NPCName: npc.name, Dialogue: npcNoWords, Private: true}, nil
 	}
-	word := strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP), "{job}", h.jobName(char.JobID)).Replace(words[random.Intn(len(words))])
+	word := strings.NewReplacer("{name}", char.Name, "{sp}", strconv.Itoa(char.SP), "{medals}", strconv.Itoa(char.SmallMedals), "{job}", h.jobName(char.JobID)).Replace(words[random.Intn(len(words))])
 	h.appendNPCLog(ctx, current, command, npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
