@@ -297,6 +297,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			}
 
 			result = PartyAdventureResult{
+				MonsterTames:        crawlResult.MonsterTames,
 				PartyID:             partyID,
 				StageID:             p.StageID,
 				Outcome:             outcome,

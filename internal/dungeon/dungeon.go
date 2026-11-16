@@ -125,7 +125,8 @@ type DungeonExpeditionHistory struct {
 type ExpeditionStepResult struct {
 	Expedition    ActiveExpedition   `json:"expedition"`
 	EventType     TileEventType      `json:"event_type"`
-	Message       string             `json:"message"`
+	Monster       *DungeonMonster    `json:"monster,omitempty"`
+	CombatOutcome corebattle.Outcome `json:"combat_outcome,omitempty"`
 	BattleResult  *corebattle.Result `json:"battle_result,omitempty"`
 	DamageTaken   int                `json:"damage_taken,omitempty"`
 	MemberDamages map[string]int     `json:"member_damages,omitempty"`

@@ -111,7 +111,11 @@ func TestRecordMatchFromResult_Success(t *testing.T) {
 	if rep.Provenance != "" || rep.ArchiveRecipientID != "" {
 		t.Fatal("result adapter inferred archive provenance")
 	}
-	if rep.CombatType != replay.CombatTypeAdventure || rep.WinnerID != "hero" || rep.TotalTurns != 3 || len(rep.TurnLogs) != 3 {
+	logs, err := replay.DecodeJSON[[]corebattle.TurnLog](string(rep.TurnLogs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.CombatType != replay.CombatTypeAdventure || rep.WinnerID != "hero" || rep.TotalTurns != 3 || len(logs) != 3 {
 		t.Errorf("unexpected replay: %+v", rep)
 	}
 }

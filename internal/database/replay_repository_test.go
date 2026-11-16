@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -50,17 +51,17 @@ func TestReplayRepository(t *testing.T) {
 			{ID: "charA", Name: "Hero A", MaxHP: 100, Attack: 30, Defense: 10, Level: 10},
 			{ID: "charB", Name: "Hero B", MaxHP: 80, Attack: 20, Defense: 8, Level: 9},
 		},
-		TurnLogs: []corebattle.TurnLog{
+		TurnLogs: json.RawMessage(replay.EncodeJSON([]corebattle.TurnLog{
 			{
 				Turn:        1,
 				ActorID:     "charA",
 				ActionName:  "こうげき",
 				TargetID:    "charB",
 				DamageDealt: 22,
-				Message:     "Hero A の攻撃！ 22ダメージ！",
+				Kind:        "damage",
 				RemainingHP: map[string]int{"charA": 100, "charB": 58},
 			},
-		},
+		})),
 		CreatedAt: now,
 	}
 
@@ -74,7 +75,11 @@ func TestReplayRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByID failed: %v", err)
 	}
-	if fetched.ID != replayID || fetched.CombatType != replay.CombatTypePvP || len(fetched.TurnLogs) != 1 {
+	logs, err := replay.DecodeJSON[[]corebattle.TurnLog](string(fetched.TurnLogs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fetched.ID != replayID || fetched.CombatType != replay.CombatTypePvP || len(logs) != 1 {
 		t.Errorf("unexpected fetched replay: %#v", fetched)
 	}
 
@@ -131,7 +136,7 @@ func TestReplayRepository_ArchiveVisibilityAndCursorPredicates(t *testing.T) {
 			OpponentName:        "Other",
 			Outcome:             corebattle.OutcomeWin,
 			InitialParticipants: []replay.ParticipantSnapshot{{ID: "char-owner", Attack: 50}},
-			TurnLogs:            []corebattle.TurnLog{{Turn: 1, Message: "raw turn"}},
+			TurnLogs:            json.RawMessage(replay.EncodeJSON([]corebattle.TurnLog{{Turn: 1, Kind: "damage"}})),
 			CreatedAt:           now,
 		}
 		switch i {

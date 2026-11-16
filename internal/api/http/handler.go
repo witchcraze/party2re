@@ -753,19 +753,6 @@ type startAdventureRequest struct {
 	StageID     string `json:"stage_id"`
 }
 
-type adventureResponse struct {
-	PostAdventureMessages map[string]string `json:"post_adventure_messages,omitempty"`
-	ID                    string            `json:"id"`
-	CharacterID           string            `json:"character_id"`
-	StageID               string            `json:"stage_id"`
-	StartedAt             time.Time         `json:"started_at"`
-	FloorsCleared         int               `json:"floors_cleared"`
-	IsCleared             bool              `json:"is_cleared"`
-	PartySize             int               `json:"party_size"`
-	Resolved              bool              `json:"resolved"`
-	ExperienceReward      int               `json:"experience_reward"`
-}
-
 func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *startAdventureRequest) string {
 		return req.CharacterID
@@ -781,21 +768,6 @@ func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusCreated, toAdventureResponse(adv))
 	})
-}
-
-func toAdventureResponse(adv adventure.Adventure) adventureResponse {
-	return adventureResponse{
-		PostAdventureMessages: adv.PostAdventureMessages,
-		ID:                    adv.ID,
-		CharacterID:           adv.CharacterID,
-		StageID:               adv.StageID,
-		StartedAt:             adv.StartedAt,
-		FloorsCleared:         adv.FloorsCleared,
-		IsCleared:             adv.IsCleared,
-		PartySize:             adv.PartySize,
-		Resolved:              adv.Resolved,
-		ExperienceReward:      adv.ExperienceReward,
-	}
 }
 
 // -------------------------------------------------------------------

@@ -1,7 +1,6 @@
 package battle
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -399,7 +398,8 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			ctx.logs = append(ctx.logs, TurnLog{
 				Turn:        ctx.turns,
 				ActionName:  "刻印晶獲得",
-				Message:     fmt.Sprintf("刻印晶を手に入れた！ (%d個)", ctx.droppedCrystals),
+				Crystals:    ctx.droppedCrystals,
+				Kind:        "crystals",
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		}

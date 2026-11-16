@@ -450,6 +450,15 @@
           "is_cleared": {
             "type": "boolean"
           },
+          "monster_tames": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/BattleMonsterTameResult"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
           "party_size": {
             "type": "integer"
           },
@@ -1116,6 +1125,38 @@
         },
         "type": "object"
       },
+      "BattleMonsterTameResult": {
+        "additionalProperties": false,
+        "properties": {
+          "box_full": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "monster_id": {
+            "type": "string"
+          },
+          "monster_name": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "tamer_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "monster_id",
+          "monster_name",
+          "success",
+          "box_full",
+          "tamer_name",
+          "message"
+        ],
+        "type": "object"
+      },
       "BattlePartyBattleResult": {
         "additionalProperties": false,
         "properties": {
@@ -1350,6 +1391,57 @@
         ],
         "type": "object"
       },
+      "BattleRevivalResult": {
+        "additionalProperties": false,
+        "properties": {
+          "agility_buff": {
+            "type": "integer"
+          },
+          "attack_buff": {
+            "type": "integer"
+          },
+          "consumed_item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BattleConsumedItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cursed": {
+            "type": "boolean"
+          },
+          "defense_buff": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "revived": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revived",
+          "hp",
+          "source",
+          "cursed",
+          "status",
+          "attack_buff",
+          "defense_buff",
+          "agility_buff",
+          "consumed_item"
+        ],
+        "type": "object"
+      },
       "BattleReward": {
         "additionalProperties": false,
         "properties": {
@@ -1390,14 +1482,59 @@
           "actor_id": {
             "type": "string"
           },
+          "actor_name": {
+            "type": "string"
+          },
+          "buff_amount": {
+            "type": "integer"
+          },
+          "buff_stat": {
+            "type": "string"
+          },
+          "buffs_reset": {
+            "type": "boolean"
+          },
+          "crystals": {
+            "type": "integer"
+          },
           "damage_dealt": {
             "type": "integer"
+          },
+          "element": {
+            "type": "string"
           },
           "healing_done": {
             "type": "integer"
           },
+          "immunity": {
+            "type": "string"
+          },
+          "incantation": {
+            "type": "string"
+          },
           "is_critical": {
             "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "defend",
+              "miss",
+              "damage",
+              "heal",
+              "buff",
+              "buff_blocked",
+              "status",
+              "banish",
+              "field",
+              "anti_field",
+              "magic_sealed",
+              "confused",
+              "immobilized",
+              "status_cured",
+              "status_damage",
+              "crystals"
+            ],
+            "type": "string"
           },
           "message": {
             "type": "string"
@@ -1408,7 +1545,22 @@
             },
             "type": "object"
           },
+          "revival": {
+            "$ref": "#/components/schemas/BattleRevivalResult"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "status_cured": {
+            "type": "boolean"
+          },
           "target_id": {
+            "type": "string"
+          },
+          "target_name": {
             "type": "string"
           },
           "turn": {
@@ -9870,6 +10022,14 @@
           "chests_opened": {
             "type": "integer"
           },
+          "combat_outcome": {
+            "enum": [
+              "win",
+              "defeat",
+              "draw"
+            ],
+            "type": "string"
+          },
           "damage_taken": {
             "type": "integer"
           },
@@ -9902,6 +10062,9 @@
           },
           "message": {
             "type": "string"
+          },
+          "monster": {
+            "$ref": "#/components/schemas/DungeonMonster"
           }
         },
         "required": [
@@ -9968,6 +10131,49 @@
           "tiles",
           "formatted",
           "scouting_bonus_active"
+        ],
+        "type": "object"
+      },
+      "DungeonMonster": {
+        "additionalProperties": false,
+        "properties": {
+          "agility": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "drop_item_id": {
+            "type": "string"
+          },
+          "exp_reward": {
+            "type": "integer"
+          },
+          "gold_reward": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "hp",
+          "attack",
+          "defense",
+          "agility",
+          "exp_reward",
+          "gold_reward"
         ],
         "type": "object"
       },
@@ -12986,6 +13192,15 @@
               "object",
               "null"
             ]
+          },
+          "monster_tames": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/BattleMonsterTameResult"
+              },
+              "type": "array"
+            },
+            "type": "object"
           },
           "outcome": {
             "type": "string"

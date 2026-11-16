@@ -1,9 +1,5 @@
 package battle
 
-import (
-	"fmt"
-)
-
 func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyParty []Participant, opponents []Participant) error {
 	if err := ValidateItemAction(*it); err != nil {
 		return err
@@ -72,7 +68,10 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 				ActionName:  it.Name,
 				TargetID:    tgt.ID,
 				HealingDone: healAmt,
-				Message:     fmt.Sprintf("%s は %s をつかった！ %s のHPが %d 回復した！", actor.NameOrID(), it.Name, tgt.NameOrID(), healAmt),
+				Source:      "item",
+				Kind:        "heal",
+				ActorName:   actor.NameOrID(),
+				TargetName:  tgt.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		}
@@ -97,7 +96,8 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 					ActorID:     actor.ID,
 					ActionName:  it.Name,
 					TargetID:    tgt.ID,
-					Message:     fmt.Sprintf("%s は鎖縛により能力があがらない！", tgt.NameOrID()),
+					Kind:        "buff_blocked",
+					TargetName:  tgt.NameOrID(),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 				continue
@@ -119,7 +119,12 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 				ActorID:     actor.ID,
 				ActionName:  it.Name,
 				TargetID:    tgt.ID,
-				Message:     fmt.Sprintf("%s は %s をつかった！ %s の%sが %d 上がった！", actor.NameOrID(), it.Name, tgt.NameOrID(), stat, it.Power),
+				Source:      "item",
+				BuffStat:    stat,
+				BuffAmount:  it.Power,
+				Kind:        "buff",
+				ActorName:   actor.NameOrID(),
+				TargetName:  tgt.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		}
@@ -147,7 +152,11 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 				ActorID:     actor.ID,
 				ActionName:  it.Name,
 				TargetID:    tgt.ID,
-				Message:     fmt.Sprintf("%s は %s をつかった！ %s は状態異常（%s）になった！", actor.NameOrID(), it.Name, tgt.NameOrID(), it.Status),
+				Source:      "item",
+				Status:      it.Status,
+				Kind:        "status",
+				ActorName:   actor.NameOrID(),
+				TargetName:  tgt.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		}

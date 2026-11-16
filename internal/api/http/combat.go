@@ -57,8 +57,8 @@ type challengeSessionResponse struct {
 }
 
 type advanceChallengeResponse struct {
-	RoundResult *challenge.RoundResult      `json:"round_result"`
-	Session     *challenge.ChallengeSession `json:"session"`
+	RoundResult *challengeRoundResultResponse `json:"round_result"`
+	Session     *challenge.ChallengeSession   `json:"session"`
 }
 
 type challengeRecordsResponse struct {
@@ -227,7 +227,7 @@ func (h *Handler) handleAdvanceChallenge(w http.ResponseWriter, r *http.Request)
 		}
 
 		writeJSON(w, http.StatusOK, advanceChallengeResponse{
-			RoundResult: roundRes,
+			RoundResult: toChallengeRoundResult(roundRes),
 			Session:     session,
 		})
 	})

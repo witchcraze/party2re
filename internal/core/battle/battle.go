@@ -81,7 +81,20 @@ type TurnLog struct {
 	DamageDealt int            `json:"damage_dealt"`
 	HealingDone int            `json:"healing_done"`
 	IsCritical  bool           `json:"is_critical"`
-	Message     string         `json:"message"`
+	Kind        string         `json:"kind,omitempty"`
+	ActorName   string         `json:"actor_name,omitempty"`
+	TargetName  string         `json:"target_name,omitempty"`
+	Source      string         `json:"source,omitempty"`
+	Incantation string         `json:"incantation,omitempty"`
+	Status      string         `json:"status,omitempty"`
+	StatusCured bool           `json:"status_cured,omitempty"`
+	BuffStat    string         `json:"buff_stat,omitempty"`
+	BuffAmount  int            `json:"buff_amount,omitempty"`
+	Immunity    string         `json:"immunity,omitempty"`
+	BuffsReset  bool           `json:"buffs_reset,omitempty"`
+	Element     string         `json:"element,omitempty"`
+	Crystals    int            `json:"crystals,omitempty"`
+	Revival     *RevivalResult `json:"revival,omitempty"`
 	RemainingHP map[string]int `json:"remaining_hp"`
 }
 

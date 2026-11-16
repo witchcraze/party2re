@@ -50,9 +50,21 @@ func TestReplayArchiveMigrationPreservesUnknownRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Provenance != "" || stored.ArchiveRecipientID != "" || stored.InitialParticipants[0].Attack != 123 || stored.TurnLogs[0].Message != "preserved" {
+	if stored.Provenance != "" || stored.ArchiveRecipientID != "" || stored.InitialParticipants[0].Attack != 123 || !strings.Contains(string(stored.TurnLogs), `"message":"preserved"`) {
 		t.Fatalf("migration guessed ownership or changed payload: %+v", stored)
 	}
+	stored.ID = "historical-copy"
+	if err := repo.Save(ctx, *stored); err != nil {
+		t.Fatal(err)
+	}
+	copied, err := repo.FindByID(ctx, stored.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(copied.TurnLogs), `"message":"preserved"`) {
+		t.Fatalf("archive copy lost historical text: %s", copied.TurnLogs)
+	}
+
 	if _, err := repo.FindPersonalRecipient(ctx, "historical"); !errors.Is(err, replay.ErrReplayNotFound) {
 		t.Fatal(err)
 	}

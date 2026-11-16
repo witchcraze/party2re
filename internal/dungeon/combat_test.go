@@ -104,6 +104,10 @@ func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 	if res.EventType != dungeon.EventBattle {
 		t.Fatalf("expected EventBattle, got %v (wipeout=%v)", res.EventType, res.EventType == dungeon.EventWipeout)
 	}
+	if res.CombatOutcome != corebattle.OutcomeWin || res.Monster == nil || res.Monster.Name == "" {
+		t.Fatalf("missing combat outcome facts: %+v", res)
+	}
+
 	if res.BattleResult == nil {
 		t.Fatalf("expected non-nil BattleResult")
 	}

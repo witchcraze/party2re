@@ -3,7 +3,6 @@ package battle
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -22,7 +21,7 @@ type MonsterTameResult struct {
 	MonsterName string `json:"monster_name"`
 	Success     bool   `json:"success"`
 	BoxFull     bool   `json:"box_full"`
-	Message     string `json:"message"`
+	TamerName   string `json:"tamer_name"`
 }
 
 // MonsterTamer handles saving a tamed monster to storage.
@@ -264,28 +263,20 @@ func (s *Service) processMonsterTaming(
 
 		err := s.monsterTamer.TameMonster(ctx, char.ID, monsterID, baseName)
 		if errors.Is(err, ErrMonsterBoxFull) {
-			msg := fmt.Sprintf(
-				"なんと %s が起き上がりこちらを見ている。しかし、%sのモンスター預かり所はいっぱいだった。%sは悲しそうに去っていった…",
-				baseName, char.Name, baseName,
-			)
 			results = append(results, MonsterTameResult{
 				MonsterID:   monsterID,
 				MonsterName: baseName,
 				Success:     false,
 				BoxFull:     true,
-				Message:     msg,
+				TamerName:   char.Name,
 			})
 		} else if err == nil {
-			msg := fmt.Sprintf(
-				"なんと %s が起き上がりこちらを見ている。%sはうれしそうに%sのモンスター預かり所に向かった",
-				baseName, baseName, char.Name,
-			)
 			results = append(results, MonsterTameResult{
 				MonsterID:   monsterID,
 				MonsterName: baseName,
 				Success:     true,
 				BoxFull:     false,
-				Message:     msg,
+				TamerName:   char.Name,
 			})
 		}
 	}

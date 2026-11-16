@@ -27,6 +27,6 @@ func (h *Handler) handleFightDungeon(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, dungeonStepResponse{Result: res})
+		writeJSON(w, http.StatusOK, dungeonStepResponse{Result: toDungeonStepResult(res)})
 	})
 }

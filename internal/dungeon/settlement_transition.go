@@ -61,9 +61,9 @@ func (s *Service) resumeSettlement(ctx context.Context, exp *ActiveExpedition) (
 	}
 	switch exp.Status {
 	case StatusEscaped:
-		return s.handleEscape(ctx, exp, &char, "探索を中断し、戦利品を持って無事に脱出した！")
+		return s.handleEscape(ctx, exp, &char)
 	case StatusWipedOut:
-		return s.handleWipeout(ctx, exp, &char, "探索に失敗した…")
+		return s.handleWipeout(ctx, exp, &char)
 	default:
 		return ExpeditionStepResult{}, ErrNoActiveExpedition
 	}

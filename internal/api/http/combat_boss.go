@@ -38,7 +38,7 @@ type bossListResponse struct {
 }
 
 type bossChallengeResponse struct {
-	Result boss.ChallengeResult `json:"result"`
+	Result bossBattleResultResponse `json:"result"`
 }
 
 func (h *Handler) handleListBosses(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +94,7 @@ func (h *Handler) handleChallengeBoss(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, bossChallengeResponse{
-			Result: res,
+			Result: toBossBattleResult(res),
 		})
 	})
 }
@@ -108,7 +108,7 @@ type startSealingBattleRequest struct {
 }
 
 type sealingBattleResponse struct {
-	Result boss.SealingBattleResult `json:"result"`
+	Result bossBattleResultResponse `json:"result"`
 }
 
 // handleStartSealingBattle starts an authentic Party Sealing Battle (封印戦).
@@ -143,6 +143,6 @@ func (h *Handler) handleStartSealingBattle(w http.ResponseWriter, r *http.Reques
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, sealingBattleResponse{Result: res})
+		writeJSON(w, http.StatusOK, sealingBattleResponse{Result: toBossBattleResult(res)})
 	})
 }

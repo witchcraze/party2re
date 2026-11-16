@@ -55,7 +55,7 @@ type startDungeonResponse struct {
 }
 
 type dungeonStepResponse struct {
-	Result dungeon.ExpeditionStepResult `json:"result"`
+	Result dungeonStepResultResponse `json:"result"`
 }
 
 func (h *Handler) handleListDungeons(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +184,7 @@ func (h *Handler) handleMoveDungeon(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, dungeonStepResponse{
-			Result: res,
+			Result: toDungeonStepResult(res),
 		})
 	})
 }
@@ -211,7 +211,7 @@ func (h *Handler) handleEscapeDungeon(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, dungeonStepResponse{
-			Result: res,
+			Result: toDungeonStepResult(res),
 		})
 	})
 }

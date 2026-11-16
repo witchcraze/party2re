@@ -30,7 +30,7 @@ func TestColosseum_3Teams_ThirdTeamSurvives(t *testing.T) {
 				"char-2": 0,
 				"char-3": 75,
 			},
-			Logs: []corebattle.TurnLog{{Turn: 1, Message: "Combat finished"}},
+			Logs: []corebattle.TurnLog{{Turn: 1, Kind: "damage"}},
 		},
 	}
 	svc, err := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithPrizeRemitter(charRepo), pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))
@@ -100,7 +100,7 @@ func TestColosseum_AllTeamsFell_Draw(t *testing.T) {
 				"char-1": 0,
 				"char-2": 0,
 			},
-			Logs: []corebattle.TurnLog{{Turn: 1, Message: "Mutual annihilation"}},
+			Logs: []corebattle.TurnLog{{Turn: 1, Kind: "damage"}},
 		},
 	}
 	svc, err := pvp.NewService(roomRepo, charRepo, battleEngine, pvp.WithPrizeRemitter(charRepo), pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))

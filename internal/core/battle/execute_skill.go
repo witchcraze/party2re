@@ -1,7 +1,5 @@
 package battle
 
-import "fmt"
-
 func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill, allyParty []Participant, opponents []Participant, fullOpponents []Participant) error {
 	if err := ValidateSkillAction(*skill); err != nil {
 		return err
@@ -18,7 +16,9 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 					Turn:        ctx.turns,
 					ActorID:     actor.ID,
 					ActionName:  skill.Name,
-					Message:     fmt.Sprintf("%s は魔法が使えるようになりました！", actor.NameOrID()),
+					Status:      StatusMagicSeal,
+					Kind:        "status_cured",
+					ActorName:   actor.NameOrID(),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 			} else {
@@ -26,7 +26,8 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 					Turn:        ctx.turns,
 					ActorID:     actor.ID,
 					ActionName:  skill.Name,
-					Message:     fmt.Sprintf("しかし、%s は魔法が封じられていた", actor.NameOrID()),
+					Kind:        "magic_sealed",
+					ActorName:   actor.NameOrID(),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 				return nil
@@ -45,7 +46,8 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 					ActorID:     actor.ID,
 					ActionName:  skill.Name,
 					TargetID:    opp.ID,
-					Message:     fmt.Sprintf("%s が異空間へと吸い込まれた！", opp.NameOrID()),
+					Kind:        "banish",
+					TargetName:  opp.NameOrID(),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 			}
@@ -116,7 +118,9 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 				ActionName:  skill.Name,
 				TargetID:    tgt.ID,
 				HealingDone: healAmt,
-				Message:     fmt.Sprintf("%s の %s！ %s のHPが %d 回復した！", actor.NameOrID(), skill.Name, tgt.NameOrID(), healAmt),
+				Kind:        "heal",
+				ActorName:   actor.NameOrID(),
+				TargetName:  tgt.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 
@@ -150,7 +154,9 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 						ActionName:  skill.Name,
 						TargetID:    ally.ID,
 						HealingDone: actualSplash,
-						Message:     fmt.Sprintf("%s の %s！ %s のHPが %d 回復した！", actor.NameOrID(), skill.Name, ally.NameOrID(), actualSplash),
+						Kind:        "heal",
+						ActorName:   actor.NameOrID(),
+						TargetName:  ally.NameOrID(),
 						RemainingHP: copyHPMap(ctx.hpMap),
 					})
 				}
@@ -184,7 +190,8 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 					ActorID:     actor.ID,
 					ActionName:  skill.Name,
 					TargetID:    tgt.ID,
-					Message:     fmt.Sprintf("%s は鎖縛により能力があがらない！", tgt.NameOrID()),
+					Kind:        "buff_blocked",
+					TargetName:  tgt.NameOrID(),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 				continue
@@ -206,7 +213,11 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 				ActorID:     actor.ID,
 				ActionName:  skill.Name,
 				TargetID:    tgt.ID,
-				Message:     fmt.Sprintf("%s の %s！ %s の%sが %d 上がった！", actor.NameOrID(), skill.Name, tgt.NameOrID(), stat, skill.Power),
+				BuffStat:    stat,
+				BuffAmount:  skill.Power,
+				Kind:        "buff",
+				ActorName:   actor.NameOrID(),
+				TargetName:  tgt.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		}
@@ -234,7 +245,10 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 				ActorID:     actor.ID,
 				ActionName:  skill.Name,
 				TargetID:    tgt.ID,
-				Message:     fmt.Sprintf("%s の %s！ %s は状態異常（%s）になった！", actor.NameOrID(), skill.Name, tgt.NameOrID(), skill.Status),
+				Status:      skill.Status,
+				Kind:        "status",
+				ActorName:   actor.NameOrID(),
+				TargetName:  tgt.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		}
@@ -326,7 +340,11 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 				Turn:        ctx.turns,
 				ActorID:     actor.ID,
 				ActionName:  cs.Name,
-				Message:     fmt.Sprintf("%s 「%s」 %s！ %sの属性フィールドが展開された！", actor.NameOrID(), cs.Incantation, cs.Name, gem.Element),
+				Source:      "custom",
+				Incantation: cs.Incantation,
+				Element:     gem.Element,
+				Kind:        "field",
+				ActorName:   actor.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		case "anti_field":
@@ -335,7 +353,10 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 				Turn:        ctx.turns,
 				ActorID:     actor.ID,
 				ActionName:  cs.Name,
-				Message:     fmt.Sprintf("%s 「%s」 %s！ アンチフィールドが展開された！", actor.NameOrID(), cs.Incantation, cs.Name),
+				Source:      "custom",
+				Incantation: cs.Incantation,
+				Kind:        "anti_field",
+				ActorName:   actor.NameOrID(),
 				RemainingHP: copyHPMap(ctx.hpMap),
 			})
 		case ActionKindHeal:
@@ -370,7 +391,11 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 					ActionName:  cs.Name,
 					TargetID:    tgt.ID,
 					HealingDone: healAmt,
-					Message:     fmt.Sprintf("%s 「%s」 %s！ %s のHPが %d 回復した！", actor.NameOrID(), cs.Incantation, cs.Name, tgt.NameOrID(), healAmt),
+					Source:      "custom",
+					Incantation: cs.Incantation,
+					Kind:        "heal",
+					ActorName:   actor.NameOrID(),
+					TargetName:  tgt.NameOrID(),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 			}
@@ -394,7 +419,8 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 						ActorID:     actor.ID,
 						ActionName:  cs.Name,
 						TargetID:    tgt.ID,
-						Message:     fmt.Sprintf("%s は鎖縛により能力があがらない！", tgt.NameOrID()),
+						Kind:        "buff_blocked",
+						TargetName:  tgt.NameOrID(),
 						RemainingHP: copyHPMap(ctx.hpMap),
 					})
 					continue
@@ -416,7 +442,13 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 					ActorID:     actor.ID,
 					ActionName:  cs.Name,
 					TargetID:    tgt.ID,
-					Message:     fmt.Sprintf("%s 「%s」 %s！ %s の%sが %d 上がった！", actor.NameOrID(), cs.Incantation, cs.Name, tgt.NameOrID(), stat, gem.Power),
+					Source:      "custom",
+					Incantation: cs.Incantation,
+					BuffStat:    stat,
+					BuffAmount:  gem.Power,
+					Kind:        "buff",
+					ActorName:   actor.NameOrID(),
+					TargetName:  tgt.NameOrID(),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 			}

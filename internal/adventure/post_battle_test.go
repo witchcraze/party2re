@@ -1464,3 +1464,31 @@ func TestAdventure_Floor11Treasure_DeliveryFailureRollback(t *testing.T) {
 		t.Fatalf("expected 0 adventures persisted on delivery rollback, got %d", len(advRepo.adventures))
 	}
 }
+
+func TestStartStageConveysMonsterTames(t *testing.T) {
+	char, err := corecharacter.New("Tamer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 50
+	char.Stats.HP, char.Stats.MaxHP = 500, 500
+	want := map[string][]battle.MonsterTameResult{char.ID: {{MonsterID: "monster-002", MonsterName: "Slime", TamerName: char.Name, Success: true}}}
+	settler := &mockPostBattleSettler{respFn: func(battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+		return battle.ApplyPostBattleResponse{MonsterTames: want}, nil
+	}}
+	svc, _ := setupTestAdventureServiceWithBattle(t, char, settler, &mockCountingPartyBattleResolver{})
+	result, err := svc.StartStage(context.Background(), char.ID, adventure.StarterAdventure)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := result.MonsterTames[char.ID]; len(got) != 1 || got[0] != want[char.ID][0] {
+		t.Fatalf("lost taming result: %+v", result.MonsterTames)
+	}
+	stored, err := svc.Get(context.Background(), result.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.MonsterTames != nil {
+		t.Fatal("transient completion facts were persisted")
+	}
+}

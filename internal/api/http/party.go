@@ -353,6 +353,6 @@ func (h *Handler) handleStartPartyAdventure(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		writeJSON(w, http.StatusOK, result)
+		writeJSON(w, http.StatusOK, partyAdventureResponse{PartyAdventureResult: result, MonsterTames: toMonsterTames(result.MonsterTames), BattleResult: toPartyBattleResult(result.BattleResult)})
 	})
 }

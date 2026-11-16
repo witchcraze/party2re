@@ -2,7 +2,6 @@ package dungeon
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -202,13 +201,14 @@ func (s *Service) resolveMonsterCombat(
 		}
 
 		return ExpeditionStepResult{
-			Expedition:   stepRes.Expedition,
-			EventType:    eventType,
-			BattleResult: &battleRes,
-			ExpEarned:    leaderExpDelta,
-			GoldFound:    leaderGoldDelta,
-			ItemFound:    monster.DropItemID,
-			Message:      fmt.Sprintf("%s との戦闘に勝利した！ (EXP: +%d, G: +%d)", monster.Name, monster.ExpReward, monster.GoldReward),
+			Expedition:    stepRes.Expedition,
+			EventType:     eventType,
+			BattleResult:  &battleRes,
+			ExpEarned:     leaderExpDelta,
+			GoldFound:     leaderGoldDelta,
+			ItemFound:     monster.DropItemID,
+			Monster:       &monster,
+			CombatOutcome: corebattle.OutcomeWin,
 		}, nil
 	}
 
@@ -244,13 +244,16 @@ func (s *Service) resolveMonsterCombat(
 			return ExpeditionStepResult{}, err
 		}
 		if stepRes.Status == StatusWipedOut {
-			return s.handleWipeout(ctx, &stepRes.Expedition, char, fmt.Sprintf("%s との戦いが長引き、行動限界に達してしまった…", monster.Name))
+			result, err := s.handleWipeout(ctx, &stepRes.Expedition, char)
+			result.Monster, result.CombatOutcome = &monster, corebattle.OutcomeDraw
+			return result, err
 		}
 		return ExpeditionStepResult{
-			Expedition:   stepRes.Expedition,
-			EventType:    eventType,
-			BattleResult: &battleRes,
-			Message:      fmt.Sprintf("%s との戦いは時間切れで決着がつかなかった… (引き分け)", monster.Name),
+			Expedition:    stepRes.Expedition,
+			EventType:     eventType,
+			BattleResult:  &battleRes,
+			Monster:       &monster,
+			CombatOutcome: corebattle.OutcomeDraw,
 		}, nil
 	}
 
@@ -272,7 +275,9 @@ func (s *Service) resolveMonsterCombat(
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	return s.handleWipeout(ctx, &stepRes.Expedition, char, fmt.Sprintf("%s との戦いに敗れ、全滅してしまった…", monster.Name))
+	result, err := s.handleWipeout(ctx, &stepRes.Expedition, char)
+	result.Monster, result.CombatOutcome = &monster, corebattle.OutcomeDefeat
+	return result, err
 }
 
 // combatProgress: the round advances only on the move itself, and the party

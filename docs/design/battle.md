@@ -6,7 +6,7 @@ This document records the game rules of the Battle component (`internal/core/bat
 
 Battle is an independent, reusable domain component. It resolves combat between participants and determines outcomes without knowing why the battle was started (e.g., adventure quest, arena, dungeon, boss, or guild battle).
 
-Participant, action, field and request shapes, implemented formulas and log text are owned by the code and tests under `internal/core/battle` and `internal/battle`; this document does not repeat them.
+Domain contracts and formulas are owned by the code and tests under `internal/core/battle` and `internal/battle`; generated combat messages belong to `internal/api/http`.
 
 Evidence paths are under `party2/lib/` at revision `ff97fc549932a146cc945d7edf71b44c868a840e` unless stated otherwise. Numeric item, gem and job references are provenance identifiers, not authorization to reuse distinctive display names.
 
