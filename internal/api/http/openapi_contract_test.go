@@ -48,8 +48,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		{"GET", "/gvg/rooms/{room_id}", "", "", 200},
 		{"GET", "/gvg/leaderboard", "", "", 200},
 		{"GET", "/parties/{id}", "", "", 200},
-		{"GET", "/towns/{town_id}/houses", "", "", 200},
-		{"POST", "/towns/{town_id}/houses", `{"character_id":"c1","house_style":"001"}`, "session", 201},
 		{"GET", "/homes/{id}", "", "", 200},
 		{"DELETE", "/letters/{id}", "", "session", 204},
 	} {

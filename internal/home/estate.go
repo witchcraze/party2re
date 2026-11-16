@@ -3,7 +3,6 @@ package home
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -16,7 +15,7 @@ type GuildPointsRegistrar interface {
 	AddGuildPoints(ctx context.Context, characterID string, points int) error
 }
 
-func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*HomeCheckResult, error) {
+func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*TownHouse, error) {
 	t, ok := town.GetTown(townID)
 	if !ok {
 		return nil, ErrInvalidTownID
@@ -100,102 +99,15 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 		_ = s.timer.SetLock(ctx, timer.CategoryHouse, characterID, time.Duration(t.CycleDays)*24*time.Hour)
 	}
 
-	jstExpires := expiresAt.In(timer.JST)
-	msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", ownerName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
-
-	return &HomeCheckResult{
-		CharacterID: characterID,
-		OwnerName:   ownerName,
-		TownID:      t.ID,
-		TownName:    t.Name,
-		HouseStyle:  houseStyle,
-		ExpiresAt:   expiresAt,
-		Message:     msg,
-	}, nil
+	return &TownHouse{CharacterID: characterID, OwnerName: ownerName, TownID: t.ID, HouseStyle: houseStyle, ExpiresAt: expiresAt}, nil
 }
 
-func (s *Service) CheckHouse(ctx context.Context, targetNameOrID string) (*HomeCheckResult, error) {
-	now := s.nowFunc().UTC()
-
-	// Try find by character ID first
-	h, err := s.repo.FindActiveHomeByCharacterID(ctx, targetNameOrID, now)
-	var char corecharacter.Character
-	if err == nil {
-		char, err = s.charReader.FindByID(ctx, h.CharacterID)
-		if err != nil {
-			return nil, err
-		}
-	} else if errors.Is(err, ErrHouseNotFound) {
-		// Try find by character Name
-		var c corecharacter.Character
-		h, c, err = s.repo.FindActiveHomeByCharacterName(ctx, targetNameOrID, now)
-		if err != nil {
-			return nil, err
-		}
-		char = c
-	} else {
-		return nil, err
-	}
-
-	t, _ := town.GetTown(h.TownID)
-	townName := h.TownID
-	if t.Name != "" {
-		townName = t.Name
-	}
-
-	var expiresAt time.Time
-	if h.ExpiresAt != nil {
-		expiresAt = *h.ExpiresAt
-	}
-	jstExpires := expiresAt.In(timer.JST)
-	msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
-
-	return &HomeCheckResult{
-		CharacterID: char.ID,
-		OwnerName:   char.Name,
-		TownID:      h.TownID,
-		TownName:    townName,
-		HouseStyle:  h.HouseStyle,
-		ExpiresAt:   expiresAt,
-		Message:     msg,
-	}, nil
-}
-
-func (s *Service) ListTownHouses(ctx context.Context, townID string) ([]HomeCheckResult, error) {
-	t, ok := town.GetTown(townID)
-	if !ok {
+// ListTownHouses lists the active houses standing in a town, soonest expiry first.
+func (s *Service) ListTownHouses(ctx context.Context, townID string) ([]TownHouse, error) {
+	if _, ok := town.GetTown(townID); !ok {
 		return nil, ErrInvalidTownID
 	}
-	now := s.nowFunc().UTC()
-	homes, err := s.repo.ListActiveTownHouses(ctx, townID, now)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make([]HomeCheckResult, 0, len(homes))
-	for _, h := range homes {
-		char, err := s.charReader.FindByID(ctx, h.CharacterID)
-		ownerName := h.CharacterID
-		if err == nil {
-			ownerName = char.Name
-		}
-		var exp time.Time
-		if h.ExpiresAt != nil {
-			exp = *h.ExpiresAt
-		}
-		jstExpires := exp.In(timer.JST)
-		msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", ownerName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
-		results = append(results, HomeCheckResult{
-			CharacterID: h.CharacterID,
-			OwnerName:   ownerName,
-			TownID:      t.ID,
-			TownName:    t.Name,
-			HouseStyle:  h.HouseStyle,
-			ExpiresAt:   exp,
-			Message:     msg,
-		})
-	}
-	return results, nil
+	return s.repo.ListActiveTownHouses(ctx, townID, s.nowFunc().UTC())
 }
 
 func (s *Service) SetCharacterColor(ctx context.Context, characterID, color string) error {

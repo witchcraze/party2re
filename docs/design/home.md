@@ -16,13 +16,13 @@ Active registration: `lib/home.cgi:26–39,73–105` (call paths `138–201,237�
 
 ### Retained REST and deferred detail ownership
 
-Letters (#2162), reference views and custom skill (#2160), and estate (#2163) still use REST, as do the public view and the profile, adventure record and image links tracked by #949; route removal is #950.
+Letters (#2162), reference views and custom skill (#2160) still use REST, as do the public view and the profile, adventure record and image links tracked by #949; route removal is #950.
 
 ## Domain rules
 
 ### 1. Town house estate
 
-Four towns have different prices, lease cycles and style ranges, with at most ten houses per town and one house per character; house construction awards the guild `cycle days × 10` points in the same transaction. House construction and color changes are rejected during sleep or pending wake.
+Houses are listed, with their expiry, and built (`house_build`, legacy `たてる`) in the town scenes `town1`..`town4`. Legacy `ちぇっく` only reports the expiry of a house in the current town, which the observation already shows, so it has no command. A legacy town house is only a town-list entry (`lib/_town.cgi:69`) with no enter action, and any Home is visited with `ほーむ` (`lib/system.cgi:418–432`); a listed house's owner ID is therefore the Home `scene_select` target, not a second navigation path.
 
 ### 2. Player-to-player letters
 

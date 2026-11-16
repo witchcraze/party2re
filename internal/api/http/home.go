@@ -16,9 +16,8 @@ import (
 // HomeEstateService defines estate, item, and color operations.
 type HomeEstateService interface {
 	GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error)
-	BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
-	CheckHouse(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
-	ListTownHouses(ctx context.Context, townID string) ([]home.HomeCheckResult, error)
+	BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*home.TownHouse, error)
+	ListTownHouses(ctx context.Context, townID string) ([]home.TownHouse, error)
 	SetCharacterColor(ctx context.Context, characterID, color string) error
 	ListHomeItems(ctx context.Context, characterID string) ([]home.HomeUsableItem, error)
 	UseHomeItem(ctx context.Context, characterID, instanceID, source string) (*home.UseHomeItemResult, error)

@@ -91,19 +91,9 @@ func TestHomeRepository_Database(t *testing.T) {
 			t.Errorf("expected 1 active house in %s, got %d, err=%v", testTown, count, err)
 		}
 
-		activeHome, err := repo.FindActiveHomeByCharacterID(ctx, char1.ID, now)
-		if err != nil || activeHome.CharacterID != char1.ID {
-			t.Errorf("FindActiveHomeByCharacterID failed: %+v, err=%v", activeHome, err)
-		}
-
-		activeHomeName, charFound, err := repo.FindActiveHomeByCharacterName(ctx, char1.Name, now)
-		if err != nil || activeHomeName.CharacterID != char1.ID || charFound.ID != char1.ID {
-			t.Errorf("FindActiveHomeByCharacterName failed: %+v, char=%+v, err=%v", activeHomeName, charFound, err)
-		}
-
 		list, err := repo.ListActiveTownHouses(ctx, testTown, now)
-		if err != nil || len(list) != 1 {
-			t.Errorf("ListActiveTownHouses failed: len=%d, err=%v", len(list), err)
+		if err != nil || len(list) != 1 || list[0].CharacterID != char1.ID || list[0].OwnerName != char1.Name {
+			t.Errorf("ListActiveTownHouses failed: %+v, err=%v", list, err)
 		}
 	})
 

@@ -20,6 +20,11 @@ type wakeResponse struct {
 	Character characterResponse `json:"character"`
 }
 
+type houseBuildRequest struct {
+	TownID     string `json:"town_id"`
+	HouseStyle string `json:"house_style"`
+}
+
 type homeColorRequest struct {
 	Color string `json:"color"`
 }
@@ -64,6 +69,7 @@ func WithHome(service HomeService) Option {
 		if service == nil {
 			withActionCommand[sleepRequest]("home_sleep", nil, nil)(h)
 			withActionCommand[struct{}]("home_wake", nil, nil)(h)
+			withActionCommand[houseBuildRequest]("house_build", nil, nil)(h)
 			withActionCommand[homeColorRequest]("home_color", nil, nil)(h)
 			withActionCommand[homeItemUseRequest]("home_item_use", nil, nil)(h)
 			withActionCommand[homePhraseTeachRequest]("home_phrase_teach", nil, nil)(h)
@@ -80,6 +86,9 @@ func WithHome(service HomeService) Option {
 				return nil, err
 			}
 			return wakeResponse{Success: value.Success, Message: value.Message, Character: toCharacterResponse(value.Character)}, nil
+		}, homeActionRejection)(h)
+		withActionCommand("house_build", func(ctx context.Context, actor string, p houseBuildRequest) (any, error) {
+			return service.BuildHouse(ctx, actor, p.TownID, p.HouseStyle)
 		}, homeActionRejection)(h)
 		withActionCommand("home_color", func(ctx context.Context, actor string, p homeColorRequest) (any, error) {
 			if err := service.SetCharacterColor(ctx, actor, p.Color); err != nil {
@@ -141,10 +150,16 @@ func homeActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusConflict, ErrorDetail{Code: "HOME_WAKE_IN_PROGRESS", Message: "Wake recovery is already in progress."}
 	case errors.Is(err, home.ErrCharacterNotFound), errors.Is(err, corecharacter.ErrNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "CHARACTER_NOT_FOUND", Message: "Character not found."}
-	case errors.Is(err, home.ErrHouseNotFound):
-		return http.StatusNotFound, ErrorDetail{Code: "HOME_HOUSE_NOT_FOUND", Message: "Target house not found."}
-	case errors.Is(err, home.ErrHouseExpired):
-		return http.StatusNotFound, ErrorDetail{Code: "HOME_HOUSE_EXPIRED", Message: "Target house has expired."}
+	case errors.Is(err, home.ErrInvalidTownID):
+		return http.StatusBadRequest, ErrorDetail{Code: "HOME_INVALID_TOWN", Message: "Invalid town."}
+	case errors.Is(err, home.ErrInvalidHouseStyle):
+		return http.StatusBadRequest, ErrorDetail{Code: "HOME_INVALID_HOUSE_STYLE", Message: "This house style cannot be built in this town."}
+	case errors.Is(err, home.ErrInsufficientFunds):
+		return http.StatusBadRequest, ErrorDetail{Code: "HOME_INSUFFICIENT_GOLD", Message: "Insufficient gold."}
+	case errors.Is(err, home.ErrTownMaxHousesReached):
+		return http.StatusConflict, ErrorDetail{Code: "HOME_TOWN_FULL", Message: "This town has reached its house limit."}
+	case errors.Is(err, home.ErrAlreadyOwnsHouse):
+		return http.StatusConflict, ErrorDetail{Code: "HOME_ALREADY_OWNED", Message: "You already own a house."}
 	case errors.Is(err, corecharacter.ErrInvalidColor):
 		return http.StatusBadRequest, ErrorDetail{Code: "HOME_INVALID_COLOR", Message: "#から始まる(16進数の)カラーコードを記入してください"}
 	case errors.Is(err, home.ErrItemNotFound):

@@ -375,9 +375,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("DELETE /notifications/{id}", h.handleDeleteNotification)
 
 	mux.HandleFunc("GET /homes/{id}", h.handleGetHomeView)
-	mux.HandleFunc("POST /towns/{town_id}/houses", h.handleBuildHouse)
-	mux.HandleFunc("GET /towns/{town_id}/houses", h.handleListTownHouses)
-	mux.HandleFunc("GET /houses/check", h.handleCheckHouse)
 
 	mux.HandleFunc("POST /letters", h.handleSendLetter)
 	mux.HandleFunc("GET /letters/inbox", h.handleListInbox)

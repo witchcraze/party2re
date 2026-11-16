@@ -99,8 +99,8 @@ owns the approved lifecycle and delivery policies.
 #### CL-02D: Towns & Construction
 
 - **Scope / Legacy**: `lib/town1.cgi`〜`lib/town4.cgi`、`lib/_town.cgi`の`たてる` / `ちぇっく` / `みせ` / `はいる`。町の探索、住宅/商店の建設、容量、価格、所有期限、GP連動、所有者への遷移を確認する。
-- **Go / HTTP**: `internal/town/`、`internal/home/estate.go`の住宅建設/期限確認、`internal/store/service.go`の商店建設、`internal/api/http/home_estate.go`、`internal/api/http/scene_store.go`・`action_store.go`（町シーンと商店コマンド）。
-- **Contracts**: [design/home.md](../design/home.md)、[design/store.md](../design/store.md)、[api/paths/towns.json](../api/paths/towns.json)、[api/paths/houses.json](../api/paths/houses.json)。
+- **Go / HTTP**: `internal/town/`、`internal/home/estate.go`の住宅建設/一覧、`internal/store/service.go`の商店建設、`internal/api/http/scene_store.go`・`action_store.go`（町シーンと住宅/商店コマンド）。
+- **Contracts**: [design/home.md](../design/home.md)、[design/store.md](../design/store.md)。
 - **Boundary**: 商店の建設・入店までが本単位で、出品/購入/内装販売はCL-03。私有Homeへの訪問・睡眠と有料の町住宅契約を同一条件にしない。
 
 #### CL-02E: Home Item Use
@@ -129,7 +129,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/sleep.cgi` | 睡眠 (無料全快・日次リセット) | `internal/home/` | [design/home.md](../design/home.md)<br/>[api/paths/home.json](../api/paths/home.json) | Reconciling | CL-02B (#1117〜#1119, #1822)。有料宿屋は非存在。時間/人数・起床義務・訪問条件の契約は CL-02B および [design/home.md](../design/home.md) 参照。 |
 | `lib/park.cgi` | 交流広場 (@町娘) = town hub | `internal/api/http/scene_town.go` (NPC文言)<br/>`internal/api/http/action_npc.go` | [architecture/place-log.md](../architecture/place-log.md) | Review against source | 発言/ささやきは共有place log、`はなす`/`しらべる`/`うらない`はNPC Gateway。10G回復は非存在。 |
 | `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | [design/depot.md](../design/depot.md) | Reconciling | CL-02C。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |
-| `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (住宅建設)<br/>`internal/town/`<br/>`internal/store/` (商店建設)<br/>Client Presentation | [design/home.md](../design/home.md)<br/>[design/store.md](../design/store.md)<br/>[api/paths/towns.json](../api/paths/towns.json)<br/>[api/paths/houses.json](../api/paths/houses.json) | Reconciling | CL-02D (#1113, #1114, #1122)。町別上限・GP配線に未解決差分があり、設定/guardはCL-02A/Bと連動確認する。 |
+| `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (住宅建設)<br/>`internal/town/`<br/>`internal/store/` (商店建設)<br/>Client Presentation | [design/home.md](../design/home.md)<br/>[design/store.md](../design/store.md) | Review against source | CL-02D。住宅・商店は町シーン内で一覧・建設する。 |
 
 
 ---

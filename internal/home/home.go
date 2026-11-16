@@ -26,8 +26,6 @@ var (
 	ErrTownMaxHousesReached      = errors.New("town has reached maximum house capacity")
 	ErrInvalidTownID             = errors.New("invalid town ID")
 	ErrInvalidHouseStyle         = errors.New("invalid house style for town")
-	ErrHouseNotFound             = errors.New("house not found")
-	ErrHouseExpired              = errors.New("house has expired")
 	ErrInsufficientFunds         = errors.New("insufficient funds to build house")
 	ErrTransactionRunnerRequired = errors.New("transaction runner is required")
 	ErrItemNotFound              = errors.New("item not found")
@@ -153,15 +151,14 @@ type HomeView struct {
 	ResidentPets []HomePet         `json:"resident_pets,omitempty"`
 }
 
-// HomeCheckResult represents the response for the legacy "chekku" action.
-type HomeCheckResult struct {
+// TownHouse is an active house standing in a town. CharacterID is also the
+// owner's Home scene subject.
+type TownHouse struct {
 	CharacterID string    `json:"character_id"`
 	OwnerName   string    `json:"owner_name"`
 	TownID      string    `json:"town_id"`
-	TownName    string    `json:"town_name"`
 	HouseStyle  string    `json:"house_style"`
 	ExpiresAt   time.Time `json:"expires_at"`
-	Message     string    `json:"message"`
 }
 
 // HomeUsableItem represents an item inspected or usable from home (equipment or depot).

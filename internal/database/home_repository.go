@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/home"
 )
 
@@ -95,82 +94,27 @@ func (r *HomeRepository) CountActiveTownHouses(ctx context.Context, townID strin
 	return count, err
 }
 
-// FindActiveHomeByCharacterID retrieves active home details for a character if not expired.
-func (r *HomeRepository) FindActiveHomeByCharacterID(ctx context.Context, characterID string, now time.Time) (home.CharacterHome, error) {
-	var h home.CharacterHome
-	var expiresAt sql.NullTime
-
-	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT character_id, town_id, house_style, expires_at, bgimg, updated_at
-		FROM character_homes
-		WHERE character_id = ? AND expires_at > ?
-	`, characterID, now.UTC()).Scan(&h.CharacterID, &h.TownID, &h.HouseStyle, &expiresAt, &h.BgImg, &h.UpdatedAt)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return home.CharacterHome{}, home.ErrHouseNotFound
-	}
-	if err != nil {
-		return home.CharacterHome{}, err
-	}
-	if expiresAt.Valid {
-		t := expiresAt.Time
-		h.ExpiresAt = &t
-	}
-	return h, nil
-}
-
-// FindActiveHomeByCharacterName retrieves active home and owner by character name.
-func (r *HomeRepository) FindActiveHomeByCharacterName(ctx context.Context, characterName string, now time.Time) (home.CharacterHome, corecharacter.Character, error) {
-	var h home.CharacterHome
-	var expiresAt sql.NullTime
-	var charID, charName string
-
-	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT c.id, c.name, h.town_id, h.house_style, h.expires_at, h.bgimg, h.updated_at
-		FROM characters c
-		JOIN character_homes h ON c.id = h.character_id
-		WHERE c.name = ? AND h.expires_at > ?
-	`, characterName, now.UTC()).Scan(&charID, &charName, &h.TownID, &h.HouseStyle, &expiresAt, &h.BgImg, &h.UpdatedAt)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return home.CharacterHome{}, corecharacter.Character{}, home.ErrHouseNotFound
-	}
-	if err != nil {
-		return home.CharacterHome{}, corecharacter.Character{}, err
-	}
-	h.CharacterID = charID
-	if expiresAt.Valid {
-		t := expiresAt.Time
-		h.ExpiresAt = &t
-	}
-	return h, corecharacter.Character{ID: charID, Name: charName}, nil
-}
-
-// ListActiveTownHouses returns all active houses in the specified town sorted by expiration ascending.
-func (r *HomeRepository) ListActiveTownHouses(ctx context.Context, townID string, now time.Time) ([]home.CharacterHome, error) {
+// ListActiveTownHouses returns the active houses in a town with their owners' names, soonest expiry first.
+func (r *HomeRepository) ListActiveTownHouses(ctx context.Context, townID string, now time.Time) ([]home.TownHouse, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT character_id, town_id, house_style, expires_at, bgimg, updated_at
-		FROM character_homes
-		WHERE town_id = ? AND expires_at > ?
-		ORDER BY expires_at ASC
+		SELECT h.character_id, c.name, h.town_id, h.house_style, h.expires_at
+		FROM character_homes h
+		JOIN characters c ON c.id = h.character_id
+		WHERE h.town_id = ? AND h.expires_at > ?
+		ORDER BY h.expires_at ASC, h.character_id ASC
 	`, townID, now.UTC())
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var homes []home.CharacterHome
+	houses := []home.TownHouse{}
 	for rows.Next() {
-		var h home.CharacterHome
-		var expiresAt sql.NullTime
-		if err := rows.Scan(&h.CharacterID, &h.TownID, &h.HouseStyle, &expiresAt, &h.BgImg, &h.UpdatedAt); err != nil {
+		var h home.TownHouse
+		if err := rows.Scan(&h.CharacterID, &h.OwnerName, &h.TownID, &h.HouseStyle, &h.ExpiresAt); err != nil {
 			return nil, err
 		}
-		if expiresAt.Valid {
-			t := expiresAt.Time
-			h.ExpiresAt = &t
-		}
-		homes = append(homes, h)
+		houses = append(houses, h)
 	}
-	return homes, rows.Err()
+	return houses, rows.Err()
 }

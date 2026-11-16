@@ -127,10 +127,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /legends$`),
 		regexp.MustCompile(`^GET /legends/\{category\}$`),
 		regexp.MustCompile(`^GET /homes/\{id\}$`),
-		regexp.MustCompile(`^GET /towns/\{town_id\}/houses$`),
-		regexp.MustCompile(`^GET /houses/check$`),
-		regexp.MustCompile(`^GET /towns/\{town_id\}/stores$`),
-		regexp.MustCompile(`^GET /stores/\{store_id\}$`),
 	}
 
 	adminRoutes := map[string]bool{
@@ -395,7 +391,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Adventure
 		"handleStartAdventure": "handler.go",
 		// Home
-		"handleBuildHouse":   "home_estate.go",
 		"handleSendLetter":   "home.go",
 		"handleReadLetter":   "home.go",
 		"handleDeleteLetter": "home.go",

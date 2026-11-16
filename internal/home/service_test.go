@@ -117,30 +117,11 @@ func (m *mockHomeRepo) CountActiveTownHouses(ctx context.Context, townID string,
 	return count, nil
 }
 
-func (m *mockHomeRepo) FindActiveHomeByCharacterID(ctx context.Context, characterID string, now time.Time) (CharacterHome, error) {
-	h, ok := m.homes[characterID]
-	if !ok || !h.IsActive(now) {
-		return CharacterHome{}, ErrHouseNotFound
-	}
-	return h, nil
-}
-
-func (m *mockHomeRepo) FindActiveHomeByCharacterName(ctx context.Context, characterName string, now time.Time) (CharacterHome, corecharacter.Character, error) {
-	for _, h := range m.homes {
-		if h.IsActive(now) {
-			if c, ok := m.chars[h.CharacterID]; ok && c.Name == characterName {
-				return h, c, nil
-			}
-		}
-	}
-	return CharacterHome{}, corecharacter.Character{}, ErrHouseNotFound
-}
-
-func (m *mockHomeRepo) ListActiveTownHouses(ctx context.Context, townID string, now time.Time) ([]CharacterHome, error) {
-	var list []CharacterHome
+func (m *mockHomeRepo) ListActiveTownHouses(ctx context.Context, townID string, now time.Time) ([]TownHouse, error) {
+	list := []TownHouse{}
 	for _, h := range m.homes {
 		if h.TownID == townID && h.IsActive(now) {
-			list = append(list, h)
+			list = append(list, TownHouse{CharacterID: h.CharacterID, OwnerName: m.chars[h.CharacterID].Name, TownID: h.TownID, HouseStyle: h.HouseStyle, ExpiresAt: *h.ExpiresAt})
 		}
 	}
 	return list, nil
@@ -434,24 +415,6 @@ func TestHomeService(t *testing.T) {
 		_, err = service.BuildHouse(ctx, "char-2", "town2", "005")
 		if !errors.Is(err, ErrInsufficientFunds) {
 			t.Errorf("expected ErrInsufficientFunds, got %v", err)
-		}
-
-		// Check house by char ID
-		checkRes, err := service.CheckHouse(ctx, "char-1")
-		if err != nil {
-			t.Fatalf("CheckHouse failed: %v", err)
-		}
-		if checkRes.OwnerName != "Hero" {
-			t.Errorf("expected owner Hero, got %s", checkRes.OwnerName)
-		}
-
-		// Check house by character Name
-		checkResName, err := service.CheckHouse(ctx, "Hero")
-		if err != nil {
-			t.Fatalf("CheckHouse by name failed: %v", err)
-		}
-		if checkResName.CharacterID != "char-1" {
-			t.Errorf("expected char-1, got %s", checkResName.CharacterID)
 		}
 
 		// List town houses
