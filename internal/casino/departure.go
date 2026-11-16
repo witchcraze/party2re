@@ -10,7 +10,14 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
+const KickActionWait = 60 * time.Second
+
 var ErrDepartureRecovery = errors.New("casino departure requires recovery")
+
+// ActionWaitWriter extends a kicked member's action wait until an absolute deadline.
+type ActionWaitWriter interface {
+	ImposeActionWaitUntil(ctx context.Context, characterID string, until time.Time) error
+}
 
 // Departure retains the latest admission outcome, independently of live room TTL.
 type Departure struct {
@@ -20,6 +27,9 @@ type Departure struct {
 	PasswordHash string
 	ClaimedIDs   []string
 	Pending      bool
+	Kicked       bool
+	LeaderID     string
+	WaitUntil    time.Time
 }
 
 type DepartureRepository interface {
@@ -37,9 +47,23 @@ func WithDepartureRepository(repo DepartureRepository) Option {
 	return func(s *Service) { s.departures = repo }
 }
 
+func WithActionWait(writer ActionWaitWriter) Option {
+	return func(s *Service) { s.actionWait = writer }
+}
+
+// SetActionWait wires the kick wait writer after service construction.
+func (s *Service) SetActionWait(writer ActionWaitWriter) {
+	s.actionWait = writer
+}
+
 func (s *Service) publishDeparture(ctx context.Context, d Departure) error {
 	if err := s.roomRepo.PublishDeparture(ctx, d); err != nil {
 		return errors.Join(ErrDepartureRecovery, err)
+	}
+	if d.Kicked && !d.WaitUntil.IsZero() && s.actionWait != nil {
+		if err := s.actionWait.ImposeActionWaitUntil(ctx, d.Member.CharacterID, d.WaitUntil); err != nil {
+			return errors.Join(ErrDepartureRecovery, err)
+		}
 	}
 	if err := s.departures.AcknowledgeDeparture(ctx, d.Detail.Room.ID, d.Version); err != nil {
 		return errors.Join(ErrDepartureRecovery, err)
@@ -47,9 +71,15 @@ func (s *Service) publishDeparture(ctx context.Context, d Departure) error {
 	return nil
 }
 
+// RecoverCharacterDeparture finishes any pending room departure and kick wait
+// owned by a prior committed mutation for characterID.
+func (s *Service) RecoverCharacterDeparture(ctx context.Context, characterID string) error {
+	return s.recoverCharacterDeparture(ctx, characterID)
+}
+
 // Recover through commands only; owned observations must never publish or acknowledge.
 func (s *Service) recoverCharacterDeparture(ctx context.Context, characterID string) error {
-	if s.departures == nil {
+	if s.departures == nil || s.roomRepo == nil {
 		return nil
 	}
 	roomID, err := s.departures.FindPendingDeparture(ctx, characterID)
@@ -128,7 +158,7 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID, characterID string) err
 			return err
 		}
 		room, err := s.roomRepo.GetRoomForUpdate(lockedCtx, roomID)
-		if errors.Is(err, ErrRoomNotFound) && previous.Member.CharacterID == characterID {
+		if errors.Is(err, ErrRoomNotFound) && !previous.Kicked && previous.Member.CharacterID == characterID {
 			return nil
 		}
 		if err != nil {
@@ -140,7 +170,7 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID, characterID string) err
 		}
 		index := slices.IndexFunc(members, func(m RoomMember) bool { return m.CharacterID == characterID })
 		if index < 0 {
-			if previous.Member.CharacterID == characterID {
+			if !previous.Kicked && previous.Member.CharacterID == characterID {
 				return nil
 			}
 			return ErrMemberNotFound
@@ -152,10 +182,7 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID, characterID string) err
 		if previous.Member.CharacterID == characterID && previous.Member.JoinedAt.Equal(member.JoinedAt) {
 			return ErrDepartureRecovery
 		}
-		claimed := make([]string, 0, len(members))
-		for _, m := range members {
-			claimed = append(claimed, m.CharacterID)
-		}
+		claimed := departureClaimedIDs(members)
 		remaining := slices.Delete(members, index, index+1)
 		if !member.IsSpectator {
 			firstActive := slices.IndexFunc(remaining, func(m RoomMember) bool { return !m.IsSpectator })
@@ -169,43 +196,60 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID, characterID string) err
 		room.DepartureVersion = previous.Version + 1
 		d := Departure{Version: room.DepartureVersion, Member: member, Detail: RoomDetail{Room: *room, Members: remaining},
 			PasswordHash: room.PasswordHash, ClaimedIDs: claimed, Pending: true}
-		if err := s.departures.CommitDeparture(lockedCtx, d, func(txCtx context.Context) error {
-			return s.runInTx(txCtx, func(txCtx context.Context) error {
-				if s.charRepo == nil {
-					return nil
-				}
-				var char corecharacter.Character
-				if err := economy.LockInOrder(txCtx, claimed, func(txCtx context.Context, actorID string) error {
-					locked, err := s.charRepo.FindByIDForUpdate(txCtx, actorID)
-					if actorID == characterID {
-						char = locked
-					}
-					if err != nil {
-						return err
-					}
-					currentRoom, err := s.roomRepo.GetCharacterRoom(txCtx, actorID)
-					if errors.Is(err, ErrRoomNotFound) {
-						return nil
-					}
-					if err != nil {
-						return err
-					}
-					if currentRoom != roomID {
-						return ErrDepartureRecovery
-					}
-					return nil
-				}); err != nil {
-					return err
-				}
-				if member.IsSpectator {
-					return nil
-				}
-				char.AddTired(1)
-				return s.charRepo.Update(txCtx, char)
-			})
-		}); err != nil {
-			return errors.Join(ErrDepartureRecovery, err)
+		if err := s.commitDeparture(lockedCtx, d, !member.IsSpectator); err != nil {
+			return err
 		}
 		return s.publishDeparture(lockedCtx, d)
 	})
+}
+
+func departureClaimedIDs(members []RoomMember) []string {
+	claimed := make([]string, 0, len(members))
+	for _, m := range members {
+		claimed = append(claimed, m.CharacterID)
+	}
+	return claimed
+}
+
+func (s *Service) commitDeparture(ctx context.Context, d Departure, addFatigue bool) error {
+	roomID := d.Detail.Room.ID
+	characterID := d.Member.CharacterID
+	if err := s.departures.CommitDeparture(ctx, d, func(txCtx context.Context) error {
+		return s.runInTx(txCtx, func(txCtx context.Context) error {
+			if s.charRepo == nil {
+				return nil
+			}
+			var char corecharacter.Character
+			if err := economy.LockInOrder(txCtx, d.ClaimedIDs, func(txCtx context.Context, actorID string) error {
+				locked, err := s.charRepo.FindByIDForUpdate(txCtx, actorID)
+				if actorID == characterID {
+					char = locked
+				}
+				if err != nil {
+					return err
+				}
+				currentRoom, err := s.roomRepo.GetCharacterRoom(txCtx, actorID)
+				if errors.Is(err, ErrRoomNotFound) {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if currentRoom != roomID {
+					return ErrDepartureRecovery
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			if !addFatigue {
+				return nil
+			}
+			char.AddTired(1)
+			return s.charRepo.Update(txCtx, char)
+		})
+	}); err != nil {
+		return errors.Join(ErrDepartureRecovery, err)
+	}
+	return nil
 }

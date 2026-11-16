@@ -49,7 +49,7 @@ readiness. Introducing Cluster requires resolving those multi-key placements.
 | `party2:party:character:<character_id>` | Valkey Master | `String` | 15 minutes (`900s`), refreshed on activity | Party ID (`string`) | `internal/party` | `AddMember` (SET EX), `RemoveMember` / `DeleteParty` (DEL), `GetActivePartyByCharacter` (GET). O(1) single-party membership check. |
 | `party2:party:ready:<party_id>:<character_id>` | Valkey Master | `String` | 60 seconds (`60s` countdown) | Flag (`"1"`) | `internal/party` | `UpdateMemberReady` (SET EX 60 or DEL), `GetMembers` (EXISTS). Automatic ready countdown timeout. |
 | `party2:party:lock:adventure:<party_id>` | Valkey Master | `String` | 10 seconds (`10s`) safety TTL | Lock token (`id.New()`) | `internal/party` | Distributed lock for atomic adventure crawl execution serialization and concurrent start gating (Issue #653). Acquired via `SET NX EX 10`; released via atomic token-safe Lua script. |
-| `party2:timer:<category>:<id>` | Valkey Master | `String` | Dynamic (e.g. 60s–180s for sleep, 5d–20d for house estate lease, 365d for asleep cache; persistent without TTL when duration <= 0) | Flag (`"1"`) | `internal/core/timer` | `SetLock` (SET EX, SET without TTL when duration <= 0, or conditional `set_with_claim.lua` when `WithClaim` is present on context), `SetLockUntil` (SET PXAT), `ExtendLockUntil` (SET NX PXAT, PEXPIREAT GT), `IsLocked` (EXISTS), `GetRemainingLock` (TTL), `ReleaseLock` (DEL), `ReleaseLockWithClaim` (`release_with_claim.lua`). Legacy action wait (`action_wait`, `PARTY2_ACTION_WAIT_SECONDS`, [place log](place-log.md#action-wait)), sleep locks, asleep cache (durable recovery backed by MariaDB `characters.pending_wake`, Issue #1118), and house estate lease cache. |
+| `party2:timer:<category>:<id>` | Valkey Master | `String` | Dynamic (e.g. 60s–180s for sleep, 5d–20d for house estate lease, 365d for asleep cache; persistent without TTL when duration <= 0) | Flag (`"1"`) | `internal/core/timer` | `SetLock` (SET EX, SET without TTL when duration <= 0, or conditional `set_with_claim.lua` when `WithClaim` is present on context), `SetLockUntil` (SET PXAT), `ExtendLockUntil` (SET NX PXAT, PEXPIREAT GT), `ImposeLockUntil` (`impose_lock_until.lua`), `IsLocked` (EXISTS), `GetRemainingLock` (TTL), `ReleaseLock` (DEL), `ReleaseLockWithClaim` (`release_with_claim.lua`). Legacy action wait (`action_wait`, `PARTY2_ACTION_WAIT_SECONDS`, [place log](place-log.md#action-wait)), sleep locks, asleep cache (durable recovery backed by MariaDB `characters.pending_wake`, Issue #1118), and house estate lease cache. |
 | `party2:placelog:<kind>:<id>` | Valkey Master | `List` | Idle TTL (`PARTY2_PLACE_LOG_TTL_HOURS`, default 7 days), refreshed on every append | JSON rows, newest first, capped (`PARTY2_PLACE_LOG_LIMIT`, default 30) | `internal/placelog` | `Append` (`lua/append.lua`: LPUSH + LTRIM + EXPIRE), `Read` (LRANGE, viewer-filtered). Display-only place log; loss on Valkey failure is accepted. Contract: [place log](place-log.md). |
 | `party2:placemember:{<kind>:<id>}:joined` / `:expiry` / `:profile` / `:token`; `party2:placemember:character:<character_id>` | Valkey Master | `ZSet` (arrival) / `ZSet` (expiry) / `Hash` (appearance JSON) / `Hash` (ownership token); `String` (current place + token) | Member TTL + 1 s (`PARTY2_PLACE_MEMBER_SECONDS` + 1 s, default 301 s so keys survive the inclusive 300 s boundary), refreshed on every refresh | Per-place member list | `internal/placelog` | `Refresh` (`lua/refresh_member.lua` purges a bounded expired batch before listing), `Leave`, `Read` (never writes). Cleanup (`lua/remove_member.lua`) verifies the superseded token before deleting so delayed removals never erase a newer refresh. Display-only; loss is accepted. Contract: [members](place-log.md#members). |
 | `party2:timer:waking:<character_id>` | Distributed Coordination | `String` | 30 seconds (`30s`) safety TTL, actively renewed | Lock token (`id.New()`) | `internal/home` | Distributed exclusive lock serializing concurrent Sleep and Wake cycle transitions per character and protecting against double-recovery and successor cycle corruption (Issue #1118, Issue #1228, Issue #1450). Acquired via `TryLockWithToken` (`SET NX EX 30`), kept alive during both `Sleep` and `Wake` via periodic background heartbeat (`RenewLock` Lua script verifying token match and persisting lock when duration <= 0), and released via atomic `ReleaseLockWithToken` Lua script ensuring only the owning token can renew or release it. Conditional timer/quota write and cleanup operations (`SetLock` with `WithClaim` via `set_with_claim.lua`, `ResetDungeonOnceWithClaim`, `ReleaseLockWithClaim` via `release_with_claim.lua`) atomically verify the waking token before writing or deleting target locks and quotas, eliminating TOCTOU races across both forward paths and `Sleep` rollback. If claim ownership is lost, execution and stale rollback abort without modifying successor claims, quotas, locks, or SQL `pending_wake`. |
@@ -198,28 +198,35 @@ SQL finalization failures and lost game state still require separate settlement
 recovery.
 
 **Departure recovery** uses the SQL-first publication pattern described for
-[PvP](transient-run-state.md#pvp-financial-publication), limited to Casino departure.
-SQL commits participant fatigue and the admission's complete departure outcome
-together before room publication; spectators incur no fatigue. The latest receipt
-per room is retained indefinitely and replaced only by a later committed departure.
-Pending roster claims survive Valkey loss and are released only after all room,
-index and conditional mapping writes are acknowledged. Admission and departure
-claims serialize on character SQL row locks: admission rechecks pending evidence
-before publishing, and departure rejects a roster that has moved to another room.
-Subsequent Casino room
-commands resume pending publication under the existing room lock without replaying
-fatigue, wagers or progression, preserving later character updates. Recovery can
-restore lost pending room state only until the original departure deadline; after
-that it finishes cleanup without resurrecting the room. Already acknowledged
-receipts never republish or renew a room. A retry of the latest departure succeeds
-without another fatigue increment; after a new admission, an identity-free leave
-request denotes a new departure, as in PvP. Older outcomes superseded by another
-member's departure are not replayable. Owned activity/view GETs remain read-only
-and surface pending recovery rather than false idle state. Publication or SQL
-acknowledgement failures retain evidence and remain observable as
-`ErrDepartureRecovery` with the underlying error (HTTP 500). This protocol retains
-the existing room-lease boundary; broader multi-instance fencing remains outside
-its guarantee ([#1574](https://github.com/witchcraze/party2re/issues/1574)).
+[PvP](transient-run-state.md#pvp-financial-publication), limited to Casino
+departure and kick. SQL commits participant fatigue (none for spectators or
+kicks), the complete departure outcome and, for kicks, the target's 60-second
+action-wait deadline together before room and timer publication. The latest
+receipt per room is retained indefinitely and replaced only by a later committed
+departure or kick. Pending roster claims survive Valkey loss and are released
+only after room, index, conditional mapping and kick-wait writes are
+acknowledged. Admission and departure claims serialize on character SQL row
+locks: admission rechecks pending evidence before publishing, and departure
+rejects a roster that has moved to another room. Subsequent Casino room commands
+and Action Gateway mutations (`POST /actions`) resume pending publication under
+the existing room lock without replaying fatigue, wagers, progression or kick
+deadlines, preserving later character updates. Kick recovery extends
+`party2:timer:action_wait:<target>` via `ImposeLockUntil`, superseding any
+in-flight claim token so a failed concurrent command's release cannot erase the
+imposed wait, while neither shortening a longer active wait nor reviving an
+expired deadline. Recovery can restore lost
+pending room state only until the original departure deadline; after that it
+finishes cleanup without resurrecting the room. Already acknowledged receipts
+never republish or renew a room. A retry of the latest departure or kick
+succeeds without another fatigue increment or wait reset; after a new admission,
+an identity-free request denotes a new departure or kick, as in PvP. Older
+outcomes superseded by another member's departure are not replayable, and
+voluntary leaves are never treated as kick replays. Owned activity/view GETs
+remain read-only and surface pending recovery rather than false idle state or
+writing timers. Publication or SQL acknowledgement failures retain evidence and
+remain observable as `ErrDepartureRecovery` with the underlying error (HTTP 500).
+This protocol retains the existing room-lease boundary; broader multi-instance
+fencing remains outside its guarantee ([#1574](https://github.com/witchcraze/party2re/issues/1574)).
 
 Room creation/start and admission
 operations retain their own publication boundaries. `AddMember` / `RemoveMember`

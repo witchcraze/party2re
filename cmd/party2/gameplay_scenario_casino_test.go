@@ -99,3 +99,50 @@ func TestGameplayScenario_CasinoDoppelRoom(t *testing.T) {
 		t.Fatalf("leave: tired %d->%d %+v", settled.Character.Tired, left.Character.Tired, left.Scene.Data)
 	}
 }
+
+func TestGameplayScenario_CasinoKickWait(t *testing.T) {
+	a := newIsolatedScenarioApp(t)
+	leaderToken, leader := a.register()
+	childToken, child := a.register()
+
+	buyCoins := func(token, characterID string) {
+		t.Helper()
+		casino := a.enter(token, characterID, a.context(token, characterID), "casino")
+		a.offered(token, characterID, casino, "casino_exchange", map[string]any{"coins": 10}, http.StatusOK)
+	}
+	buyCoins(leaderToken, leader)
+	buyCoins(childToken, child)
+
+	a.elapseActionWait(leader)
+	opened := a.offered(leaderToken, leader, a.context(leaderToken, leader), "casino_room_create", map[string]any{
+		"name": "k" + leader[:7], "game_type": "indian", "speed": 18, "max_players": 2, "rate": 1, "allow_spectators": false,
+	}, http.StatusOK)
+	var room struct {
+		RoomID string `json:"room_id"`
+	}
+	if err := json.Unmarshal(opened.Result, &room); err != nil || room.RoomID == "" {
+		t.Fatalf("create: %s %v", opened.Result, err)
+	}
+
+	a.elapseActionWait(child)
+	selected := a.command(childToken, child, "scene_select", map[string]any{"target_kind": "room", "target_id": room.RoomID}, http.StatusOK).Context
+	a.offered(childToken, child, selected, "casino_room_join", nil, http.StatusOK)
+	a.elapseActionWait(leader)
+
+	kicked := a.offered(leaderToken, leader, a.context(leaderToken, leader), "casino_room_kick", map[string]any{"target_character_id": child}, http.StatusOK).Context
+	if kicked.Character.ActionWaitMS <= 4000 || kicked.Character.ActionWaitMS > 18000 {
+		t.Fatalf("leader kick wait %d ms, want room speed", kicked.Character.ActionWaitMS)
+	}
+
+	childCtx := a.context(childToken, child)
+	if childCtx.Scene.Data.Casino != nil || childCtx.Character.ActionWaitMS <= 50000 {
+		t.Fatalf("kicked child context: wait=%d scene=%+v", childCtx.Character.ActionWaitMS, childCtx.Scene)
+	}
+	rejected := a.command(childToken, child, "scene_enter", map[string]any{"destination": "town"}, http.StatusConflict)
+	if rejected.Error.Code != "ACTION_WAIT" {
+		t.Fatalf("expected ACTION_WAIT during kick wait, got %+v", rejected)
+	}
+
+	a.elapseActionWait(child)
+	a.offered(childToken, child, a.context(childToken, child), "scene_enter", map[string]any{"destination": "town"}, http.StatusOK)
+}
