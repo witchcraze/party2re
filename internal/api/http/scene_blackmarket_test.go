@@ -54,7 +54,7 @@ func blackMarketSceneRouter(t *testing.T, service BlackMarketService, jobLevel i
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "blackmarket"}}
 	pc := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithNavigation(store,
 		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "oracle", Parent: "town"},
-		playercontext.SceneDefinition{ID: "blackmarket", Parent: "oracle", Pageable: true, CanEnter: blackmarket.CheckEligibility}))
+		playercontext.SceneDefinition{ID: "blackmarket", Parent: "oracle", Pageable: true, CanEnter: playercontext.ByCharacter(blackmarket.CheckEligibility)}))
 	options := []Option{WithPlayerContext(pc), func(h *Handler) { h.homes = f }}
 	if service != nil {
 		options = append(options, WithBlackMarket(service))

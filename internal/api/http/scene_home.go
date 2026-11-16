@@ -115,10 +115,10 @@ var (
 	// home registers the living actions (home.cgi:26-42,73-105).
 	homeFacility = facility{title: "自宅", commands: homeOwnerCommands, subjectCommands: []string{"home_sleep"}, ownedSubjectCommands: homeOwnerCommands,
 		read: (*Handler).homeSceneData, npc: &npcProfile{talk: homeTalk}, placeLog: true,
-		place: func(r playercontext.Result) placelog.Place {
-			return placelog.Place{Kind: "home", ID: homeOwner(r.Navigation, r.Snapshot.Character.ID)}
+		place: func(_ *Handler, _ context.Context, r playercontext.Result) (placelog.Place, error) {
+			return placelog.Place{Kind: "home", ID: homeOwner(r.Navigation, r.Snapshot.Character.ID)}, nil
 		},
-		present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+		present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 			view := data.(HomeSceneData).View
 			title := view.Owner.Name + "の家"
 			p := scenePresentation{title: &title}
@@ -135,6 +135,6 @@ var (
 	homeOutboxFacility = facility{title: "送信箱", commands: []string{"home_letter_delete"}, read: (*Handler).homeMailboxSceneData, present: homeMailboxPresentation}
 )
 
-func homeMailboxPresentation(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+func homeMailboxPresentation(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 	return scenePresentation{next: data.(HomeMailboxSceneData).Page.Next}
 }

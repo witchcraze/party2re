@@ -63,8 +63,8 @@ type SceneDefinition struct {
 	// entry from the parent keeps that subject, back returns to it, and the
 	// scene has no selection of its own. It adopts the parent's subject adapters.
 	InheritsSubject bool
-	// CanEnter is a pure character qualification check; nil permits entry.
-	CanEnter         func(character.Character) bool
+	// CanEnter is a read-only qualification check with propagated errors; nil permits entry.
+	CanEnter         func(context.Context, character.Character) (bool, error)
 	SubjectAvailable func(ctx context.Context, actorID, targetID string) (bool, error)
 	// SubjectOwned is an optional read-only adapter telling whether the actor
 	// owns an available subject; nil means subjects are never owned.
@@ -193,15 +193,36 @@ func (s *Service) sceneActions(o *NavigationObservation) []string {
 
 // Enterable reports whether the observed actor may enter destination from the
 // observed scene. Enter enforces it; discovery offers only destinations it admits.
-func (s *Service) Enterable(r Result, destination string) error {
+func (s *Service) Enterable(ctx context.Context, r Result, destination string) error {
 	d, ok := s.scenes[destination]
 	if !ok {
 		return ErrInvalidSelection
 	}
-	if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
-		return ErrSceneAccessDenied
+	if err := qualify(ctx, d, r.Snapshot.Character); err != nil {
+		return err
 	}
 	if d.ParentOnly && (r.Navigation == nil || r.Navigation.Unavailable || r.Navigation.Selection.Destination != d.Parent) {
+		return ErrSceneAccessDenied
+	}
+	return nil
+}
+
+// ByCharacter adapts a pure character predicate to SceneDefinition.CanEnter.
+func ByCharacter(pure func(character.Character) bool) func(context.Context, character.Character) (bool, error) {
+	return func(_ context.Context, c character.Character) (bool, error) { return pure(c), nil }
+}
+
+// qualify applies the scene's CanEnter: ErrSceneAccessDenied when the actor does
+// not qualify, or the read error.
+func qualify(ctx context.Context, d SceneDefinition, actor character.Character) error {
+	if d.CanEnter == nil {
+		return nil
+	}
+	ok, err := d.CanEnter(ctx, actor)
+	if err != nil {
+		return fmt.Errorf("read scene qualification: %w", err)
+	}
+	if !ok {
 		return ErrSceneAccessDenied
 	}
 	return nil
@@ -242,9 +263,11 @@ func (s *Service) observeNavigation(ctx context.Context, actor character.Charact
 	}
 	d, ok := s.scenes[n.Destination]
 	observation := &NavigationObservation{Selection: n, Unavailable: !ok}
-	if d.CanEnter != nil && !d.CanEnter(actor) {
+	if err := qualify(ctx, d, actor); errors.Is(err, ErrSceneAccessDenied) {
 		observation.Unavailable = true
 		return observation, nil
+	} else if err != nil {
+		return nil, err
 	}
 	if n.Cursor != nil && !d.CursorPageable {
 		observation.Unavailable = true
@@ -316,7 +339,7 @@ func (s *Service) navigate(ctx context.Context, playerID, actorID string, transi
 
 func (s *Service) Enter(ctx context.Context, playerID, actorID, destination string) (Selection, error) {
 	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
-		if err := s.Enterable(r, destination); err != nil {
+		if err := s.Enterable(ctx, r, destination); err != nil {
 			return Selection{}, err
 		}
 		n := Selection{Destination: destination}
@@ -331,8 +354,8 @@ func (s *Service) Select(ctx context.Context, playerID, actorID string, subject 
 	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
 		n := r.Navigation.Selection
 		d, ok := s.scenes[n.Destination]
-		if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
-			return Selection{}, ErrSceneAccessDenied
+		if err := qualify(ctx, d, r.Snapshot.Character); err != nil {
+			return Selection{}, err
 		}
 		if !ok || d.InheritsSubject || d.SubjectAvailable == nil || d.SubjectKind != subject.Kind || !navigationID.MatchString(subject.ID) {
 			return Selection{}, ErrInvalidSelection
@@ -352,8 +375,8 @@ func (s *Service) Page(ctx context.Context, playerID, actorID string, p PagePara
 	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
 		n := r.Navigation.Selection
 		d, ok := s.scenes[n.Destination]
-		if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
-			return Selection{}, ErrSceneAccessDenied
+		if err := qualify(ctx, d, r.Snapshot.Character); err != nil {
+			return Selection{}, err
 		}
 		if !ok || !d.Pageable || p.Destination != n.Destination || n.Subject != (Subject{}) || (p.Cursor != nil && !d.CursorPageable) {
 			return Selection{}, ErrInvalidSelection

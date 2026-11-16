@@ -63,7 +63,7 @@ func TestFacilityScenePresentation(t *testing.T) {
 			result := playercontext.Result{Snapshot: playercontext.Snapshot{LocationID: tc.destination, SceneActions: choices}, AvailableActions: choices,
 				Navigation: &playercontext.NavigationObservation{Selection: playercontext.Selection{Destination: tc.destination}}}
 			service := playercontext.NewService(nil, nil, nil, playercontext.WithNavigation(&gatewayNavigationStore{},
-				playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "blackmarket", Parent: "town", CanEnter: func(corecharacter.Character) bool { return !tc.denied }}))
+				playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "blackmarket", Parent: "town", CanEnter: playercontext.ByCharacter(func(corecharacter.Character) bool { return !tc.denied })}))
 			h := &Handler{playerContext: service, actionCommands: map[string]actionCommand{}, sceneAdapters: map[string]sceneAdapter{
 				tc.destination: {facility: f, read: func(context.Context, playercontext.Result) (any, error) { return tc.data, nil }},
 			}}
@@ -149,7 +149,7 @@ func TestScenePresentationCannotAdmitCommands(t *testing.T) {
 			called := false
 			f := facility{title: "default", controlsOnly: tc.controls, placeLog: true,
 				read: func(*Handler, context.Context, playercontext.Result) (any, error) { return data, tc.readErr },
-				present: func(_ *Handler, _ playercontext.Result, observed any) scenePresentation {
+				present: func(_ *Handler, _ context.Context, _ playercontext.Result, observed any) scenePresentation {
 					called = true
 					if observed != data {
 						t.Fatalf("hook data: %+v", observed)

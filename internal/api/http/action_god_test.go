@@ -48,8 +48,8 @@ func (f *godGatewayFixture) router(t *testing.T, options ...Option) (*gatewayNav
 	}
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
 		playercontext.SceneDefinition{ID: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"},
-		playercontext.SceneDefinition{ID: "god", Parent: "town", CanEnter: visit(corecharacter.GodVisitHeaven)},
-		playercontext.SceneDefinition{ID: "u_god", Parent: "town", CanEnter: visit(corecharacter.GodVisitUnderworld)}),
+		playercontext.SceneDefinition{ID: "god", Parent: "town", CanEnter: playercontext.ByCharacter(visit(corecharacter.GodVisitHeaven))},
+		playercontext.SceneDefinition{ID: "u_god", Parent: "town", CanEnter: playercontext.ByCharacter(visit(corecharacter.GodVisitUnderworld))}),
 		playercontext.WithGodVisitForfeit(func(context.Context, string) error {
 			f.forfeits++
 			f.char.GodVisit = ""

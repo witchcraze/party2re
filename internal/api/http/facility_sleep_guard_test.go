@@ -111,16 +111,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"eventplaza_presence", http.MethodPost, "/eventplaza/presence", `{"character_id":"char-1"}`},
 		{"eventplaza_merchant_purchase", http.MethodPost, "/eventplaza/merchant/purchase", `{"character_id":"char-1","item_id":"item-1","quantity":1}`},
 		// Guild
-		{"guild_create", http.MethodPost, "/guilds", `{"character_id":"char-1","name":"Guild"}`},
-		{"guild_apply", http.MethodPost, "/guilds/guild-1/apply", `{"character_id":"char-1"}`},
-		{"guild_approve", http.MethodPost, "/guilds/guild-1/applications/char-2/approve", `{"character_id":"char-1"}`},
-		{"guild_reject", http.MethodPost, "/guilds/guild-1/applications/char-2/reject", `{"character_id":"char-1"}`},
-		{"guild_callout", http.MethodPost, "/guilds/guild-1/callout", `{"character_id":"char-1","message":"Hello"}`},
-		{"guild_assign_title", http.MethodPut, "/guilds/guild-1/members/char-2/title", `{"character_id":"char-1","title":"Officer"}`},
-		{"guild_customization", http.MethodPut, "/guilds/guild-1/customization", `{"character_id":"char-1","color":"#123456"}`},
-		{"guild_leave", http.MethodPost, "/guilds/guild-1/leave", `{"character_id":"char-1"}`},
-		{"guild_kick", http.MethodDelete, "/guilds/guild-1/members/char-2", `{"character_id":"char-1"}`},
-		{"guild_disband", http.MethodDelete, "/guilds/guild-1", `{"character_id":"char-1"}`},
+		{"guild_create", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"guild_create","params":{"name":"Guild"}}`},
 		// Home
 		{"house_build", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"house_build","params":{"town_id":"town1","house_style":"001"}}`},
 		// Store

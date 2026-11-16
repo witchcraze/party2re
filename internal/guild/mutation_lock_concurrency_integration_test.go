@@ -135,7 +135,7 @@ func (f *mutationLockFixture) executeOp(ctx context.Context, svc *guild.Service,
 	case "notice":
 		return svc.UpdateNotice(ctx, f.g.ID, f.leader.ID, "AuditNoticeUpdate")
 	case "mark":
-		_, err := svc.ChangeMark(ctx, f.g.ID, f.leader.ID, "99")
+		_, err := svc.ChangeMark(ctx, f.g.ID, f.leader.ID, "42")
 		return err
 	case "wallpaper":
 		_, err := svc.ChangeWallpaper(ctx, f.g.ID, f.leader.ID, "stage0")
@@ -230,7 +230,7 @@ func TestGuildMutationLock_TransferFirst(t *testing.T) {
 			if mode == "notice" && gDetail.Notice == "AuditNoticeUpdate" {
 				t.Fatal("notice was modified by former leader")
 			}
-			if mode == "mark" && gDetail.Mark == "99" {
+			if mode == "mark" && gDetail.Mark == "42" {
 				t.Fatal("mark was modified by former leader")
 			}
 			if mode == "wallpaper" && gDetail.Bgimg == "stage0.gif" {
@@ -312,8 +312,8 @@ func TestGuildMutationLock_MutationFirst(t *testing.T) {
 						t.Fatalf("notice = %s, want 'AuditNoticeUpdate'", gDetail.Notice)
 					}
 				case "mark":
-					if gDetail.Mark != "99" {
-						t.Fatalf("mark = %s, want '99'", gDetail.Mark)
+					if gDetail.Mark != "42" {
+						t.Fatalf("mark = %s, want '42'", gDetail.Mark)
 					}
 					if money := f.getLeaderMoney(t); money != f.initialMoney-guild.MarkChangeFee {
 						t.Fatalf("mark fee not deducted correctly: money = %d, want %d", money, f.initialMoney-guild.MarkChangeFee)
@@ -448,7 +448,7 @@ func TestGuildMutationLock_CharacterToGuildInterleaving(t *testing.T) {
 					t.Errorf("expected bgimg 'stage0.gif', got %s", gDetail.Bgimg)
 				}
 			} else {
-				if gDetail.Mark != "99" {
+				if gDetail.Mark != "42" {
 					t.Errorf("expected mark '99', got %s", gDetail.Mark)
 				}
 			}
@@ -475,7 +475,7 @@ func TestGuildMutationLock_PaidSettingsPairedConcurrency(t *testing.T) {
 			}
 
 			res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
-				val := "99"
+				val := "42"
 				if op%2 == 0 {
 					val = "42"
 				}
@@ -549,7 +549,7 @@ func TestGuildMutationLock_InsufficientFundsAtomicity(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if mode == "mark" && gDetail.Mark == "99" {
+			if mode == "mark" && gDetail.Mark == "42" {
 				t.Error("mark was modified despite insufficient funds")
 			}
 			if mode == "wallpaper" && gDetail.Bgimg == "stage0.gif" {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/blackmarket"
 	"github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
@@ -20,7 +21,7 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		{ID: "town", Pageable: true}, {ID: "alchemy", Parent: "town", Pageable: true},
 		{ID: "altar", Parent: "town"}, {ID: "auction", Parent: "town"}, {ID: "bank", Parent: "town"},
 		// Reached only through the Oracle shop's ＠やみいちば (goods.cgi).
-		{ID: "blackmarket", Parent: "oracle", ParentOnly: true, Pageable: true, CanEnter: blackmarket.CheckEligibility},
+		{ID: "blackmarket", Parent: "oracle", ParentOnly: true, Pageable: true, CanEnter: playercontext.ByCharacter(blackmarket.CheckEligibility)},
 		{ID: "blacksmith", Parent: "town"},
 		{ID: "chapel", Parent: "town"},
 		{ID: "depot", Parent: "town", Pageable: true},
@@ -28,9 +29,9 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		{ID: "fleamarket", Parent: "town", Pageable: true},
 		{ID: "gemstore", Parent: "town"}, {ID: "wishingwell", Parent: "town"}, {ID: "tavern", Parent: "town"}, {ID: "lottery", Parent: "town"}, {ID: "takarakuji", Parent: "town"}, {ID: "plantation", Parent: "town"}, {ID: "oracle", Parent: "town"}, {ID: "contest", Parent: "town"}, {ID: "medal", Parent: "town"}, {ID: "helper", Parent: "town"}, {ID: "job", Parent: "town"},
 		// Reached only by Home reins; the recorded visit, not navigation, admits.
-		{ID: "god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitHeaven }},
-		{ID: "u_god", Parent: "town", CanEnter: func(c character.Character) bool { return c.GodVisit == character.GodVisitUnderworld }},
-		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: secretshop.CheckEligibility,
+		{ID: "god", Parent: "town", CanEnter: playercontext.ByCharacter(func(c character.Character) bool { return c.GodVisit == character.GodVisitHeaven })},
+		{ID: "u_god", Parent: "town", CanEnter: playercontext.ByCharacter(func(c character.Character) bool { return c.GodVisit == character.GodVisitUnderworld })},
+		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: playercontext.ByCharacter(secretshop.CheckEligibility),
 			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
 				status, err := misc.secretshop.GetShopStatus(ctx, actorID)
 				if errors.Is(err, secretshop.ErrAccessDenied) {
@@ -48,6 +49,21 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 			}
 			return err == nil, err
 		}, SubjectOwned: func(_ context.Context, actorID, target string) (bool, error) { return actorID == target, nil }},
+		{ID: "join_guild", Parent: "town", SubjectKind: "guild", Pageable: true, SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
+			_, err := soc.guild.Get(ctx, target)
+			if errors.Is(err, guild.ErrGuildNotFound) {
+				return false, nil
+			}
+			return err == nil, err
+		}},
+		// ＠ぎるど: only an active member enters its own guild's room (system.cgi set_action).
+		{ID: "guild", Parent: "town", CanEnter: func(ctx context.Context, c character.Character) (bool, error) {
+			_, _, err := soc.guild.GetByCharacter(ctx, c.ID)
+			if errors.Is(err, guild.ErrCharacterNotInGuild) {
+				return false, nil
+			}
+			return err == nil, err
+		}},
 		{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
 		{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
 		{ID: "home_notices", Parent: "home", Pageable: true, CursorPageable: true},

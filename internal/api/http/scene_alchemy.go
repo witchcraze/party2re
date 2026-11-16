@@ -45,7 +45,7 @@ func (h *Handler) alchemySceneData(ctx context.Context, r playercontext.Result) 
 
 var alchemyFacility = facility{
 	title: "錬金場", commands: []string{"alchemy_synthesize", "alchemy_recipes"}, read: (*Handler).alchemySceneData, placeLog: true,
-	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+	present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 		return scenePresentation{next: data.(AlchemySceneData).Page.Next}
 	},
 	npc: &npcProfile{name: "@トロデ", words: []string{

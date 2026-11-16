@@ -10,10 +10,9 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
-// removeAuthorizedMember shares the locked removal workflow for expulsion and rejection.
-// pendingOnly restricts rejection to applicants; Kick selects the notification from
-// the target's state under the same lock, without re-entering an unlocked workflow.
-func (s *Service) removeAuthorizedMember(ctx context.Context, guildID, leaderID, targetID string, pendingOnly bool) error {
+// removeAuthorizedMember is the locked ＠あたえる>追放 removal. It reports whether the
+// target was a pending applicant, which also selects the rejection or expulsion letter.
+func (s *Service) removeAuthorizedMember(ctx context.Context, guildID, leaderID, targetID string) (bool, error) {
 	var g Guild
 	var pending bool
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
@@ -37,13 +36,7 @@ func (s *Service) removeAuthorizedMember(ctx context.Context, guildID, leaderID,
 			return ErrTargetNotMember
 		}
 		if target.Role == RoleLeader {
-			if pendingOnly {
-				return ErrMemberNotPending
-			}
 			return ErrCannotKickLeader
-		}
-		if pendingOnly && !target.IsPending {
-			return ErrMemberNotPending
 		}
 		if err := s.repo.RemoveMember(txCtx, guildID, targetID); err != nil {
 			return err
@@ -53,7 +46,7 @@ func (s *Service) removeAuthorizedMember(ctx context.Context, guildID, leaderID,
 		return nil
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Production letters persist through the incoming ambient context. An outer
@@ -70,7 +63,7 @@ func (s *Service) removeAuthorizedMember(ctx context.Context, guildID, leaderID,
 			_ = s.letterSender.SendLetter(ctx, leaderID, targetID, content)
 		}
 	}
-	return nil
+	return pending, nil
 }
 
 // errRosterChanged reports membership that changed between unlocked discovery and

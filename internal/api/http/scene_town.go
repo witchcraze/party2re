@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -10,7 +11,7 @@ import (
 var townFacility = facility{
 	title: "交流広場", commands: []string{"adventure_start", "park_divinate"}, read: (*Handler).townSceneData, placeLog: true,
 	controlsOnly: true,
-	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+	present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 		return scenePresentation{next: data.(TownSceneData).Page.Next}
 	},
 	npc: &npcProfile{name: parkNPCName, words: parkWords, inspectWords: parkInspectWords},

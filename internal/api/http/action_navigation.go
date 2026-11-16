@@ -85,7 +85,10 @@ func (h *Handler) registerNavigation(service *playercontext.Service) {
 		if err == nil {
 			next := current
 			next.Navigation = &playercontext.NavigationObservation{Selection: selection}
-			if h.scenePlace(current) != h.scenePlace(next) {
+			// An unresolved place counts as a move; the entry would expire anyway.
+			from, fromErr := h.scenePlace(ctx, current)
+			to, toErr := h.scenePlace(ctx, next)
+			if fromErr != nil || toErr != nil || from != to {
 				h.leavePlace(ctx, actor)
 			}
 		}

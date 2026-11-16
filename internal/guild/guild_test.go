@@ -716,14 +716,14 @@ func TestService_Kick(t *testing.T) {
 	svc, _ := guild.NewService(repo)
 
 	t.Run("Cannot kick leader", func(t *testing.T) {
-		err := svc.Kick(ctx, "g1", "leader1", "leader1")
+		err := assigned(svc.Assign(ctx, "g1", "leader1", "leader1", guild.RemovalTitle))
 		if err == nil {
 			t.Error("expected error kicking leader, got nil")
 		}
 	})
 
 	t.Run("Member cannot kick anyone", func(t *testing.T) {
-		err := svc.Kick(ctx, "g1", "member1", "leader1")
+		err := assigned(svc.Assign(ctx, "g1", "member1", "leader1", guild.RemovalTitle))
 		if !errors.Is(err, guild.ErrUnauthorized) {
 			t.Errorf("err = %v, want %v", err, guild.ErrUnauthorized)
 		}
@@ -737,7 +737,7 @@ func TestService_Kick(t *testing.T) {
 			}
 			return nil
 		}
-		if err := svc.Kick(ctx, "g1", "leader1", "member1"); err != nil {
+		if err := assigned(svc.Assign(ctx, "g1", "leader1", "member1", guild.RemovalTitle)); err != nil {
 			t.Errorf("Kick() unexpected error: %v", err)
 		}
 		if !kicked {
@@ -804,37 +804,37 @@ func TestService_AssignCustomRole(t *testing.T) {
 	svc, _ := guild.NewService(repo)
 
 	t.Run("Unauthorized when non-leader tries to assign custom role", func(t *testing.T) {
-		err := svc.AssignCustomRole(ctx, "g1", "member1", "member1", "隊長")
+		err := assigned(svc.Assign(ctx, "g1", "member1", "member1", "隊長"))
 		if !errors.Is(err, guild.ErrUnauthorized) {
 			t.Errorf("err = %v, want %v", err, guild.ErrUnauthorized)
 		}
 	})
 
 	t.Run("Cannot assign custom role to leader", func(t *testing.T) {
-		err := svc.AssignCustomRole(ctx, "g1", "leader1", "leader1", "大将軍")
+		err := assigned(svc.Assign(ctx, "g1", "leader1", "leader1", "大将軍"))
 		if !errors.Is(err, guild.ErrCannotAssignToLeader) {
 			t.Errorf("err = %v, want %v", err, guild.ErrCannotAssignToLeader)
 		}
 	})
 
 	t.Run("Target not member", func(t *testing.T) {
-		err := svc.AssignCustomRole(ctx, "g1", "leader1", "stranger", "親衛隊")
+		err := assigned(svc.Assign(ctx, "g1", "leader1", "stranger", "親衛隊"))
 		if !errors.Is(err, guild.ErrTargetNotMember) {
 			t.Errorf("err = %v, want %v", err, guild.ErrTargetNotMember)
 		}
 	})
 
 	t.Run("Invalid title validations", func(t *testing.T) {
-		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", ""); !errors.Is(err, guild.ErrInvalidRoleTitle) {
+		if err := assigned(svc.Assign(ctx, "g1", "leader1", "member1", "")); !errors.Is(err, guild.ErrInvalidRoleTitle) {
 			t.Errorf("expected ErrInvalidRoleTitle, got %v", err)
 		}
-		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", "ギルマス"); !errors.Is(err, guild.ErrReservedRoleTitle) {
+		if err := assigned(svc.Assign(ctx, "g1", "leader1", "member1", "ギルマス")); !errors.Is(err, guild.ErrReservedRoleTitle) {
 			t.Errorf("expected ErrReservedRoleTitle, got %v", err)
 		}
-		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", "参加申請中"); !errors.Is(err, guild.ErrReservedRoleTitle) {
+		if err := assigned(svc.Assign(ctx, "g1", "leader1", "member1", "参加申請中")); !errors.Is(err, guild.ErrReservedRoleTitle) {
 			t.Errorf("expected ErrReservedRoleTitle, got %v", err)
 		}
-		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", "一二三四五六七"); !errors.Is(err, guild.ErrRoleTitleTooLong) {
+		if err := assigned(svc.Assign(ctx, "g1", "leader1", "member1", "一二三四五六七")); !errors.Is(err, guild.ErrRoleTitleTooLong) {
 			t.Errorf("expected ErrRoleTitleTooLong, got %v", err)
 		}
 	})
@@ -847,7 +847,7 @@ func TestService_AssignCustomRole(t *testing.T) {
 			}
 			return nil
 		}
-		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", "親衛隊長"); err != nil {
+		if err := assigned(svc.Assign(ctx, "g1", "leader1", "member1", "親衛隊長")); err != nil {
 			t.Fatalf("AssignCustomRole failed: %v", err)
 		}
 		if assignedTitle != "親衛隊長" {
@@ -864,7 +864,7 @@ func TestService_AssignCustomRole(t *testing.T) {
 			}
 			return nil
 		}
-		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", decomposed); err != nil {
+		if err := assigned(svc.Assign(ctx, "g1", "leader1", "member1", decomposed)); err != nil {
 			t.Fatalf("AssignCustomRole failed: %v", err)
 		}
 		expected := norm.NFC.String(decomposed)
@@ -894,7 +894,7 @@ func TestService_AssignCustomRole(t *testing.T) {
 		}
 		pendingSvc, _ := guild.NewService(pendingRepo)
 		decomposed := strings.Repeat("e\u0301", 6)
-		if err := pendingSvc.AssignCustomRole(ctx, "g_pending", "leader1", "applicant1", decomposed); err != nil {
+		if err := assigned(pendingSvc.Assign(ctx, "g_pending", "leader1", "applicant1", decomposed)); err != nil {
 			t.Fatalf("AssignCustomRole on pending member failed: %v", err)
 		}
 		expected := norm.NFC.String(decomposed)
@@ -1169,3 +1169,6 @@ func TestValidateGuildName(t *testing.T) {
 		})
 	}
 }
+
+// assigned drops ＠あたえる's outcome where a test needs only the error.
+func assigned(_ guild.AssignOutcome, err error) error { return err }

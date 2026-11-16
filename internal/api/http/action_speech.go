@@ -131,7 +131,11 @@ func (h *Handler) speak(ctx context.Context, current playercontext.Result, text,
 	}
 	row := placelog.Entry{OccurredAt: time.Now().UTC(), SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: char.ID,
 		Name: char.Name, Color: char.Color, Text: text, RecipientCharacterID: recipientID}
-	if err := h.placeLog.Append(ctx, h.scenePlace(current), row); err != nil {
+	place, err := h.scenePlace(ctx, current)
+	if err != nil {
+		return SpeechResult{}, err
+	}
+	if err := h.placeLog.Append(ctx, place, row); err != nil {
 		return SpeechResult{}, err
 	}
 	return SpeechResult{Text: row.Text, Private: recipientID != ""}, nil

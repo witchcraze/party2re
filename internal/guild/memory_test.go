@@ -53,7 +53,7 @@ func TestService_RecordsMemories(t *testing.T) {
 	}{
 		{"found", func() error { _, _, _, err := svc.Create(ctx, "founder", "Knights"); return err },
 			[]string{"founder|guild_found|新ギルドKnightsを設立！"}},
-		{"approved applicant joins", func() error { return svc.ApproveApplication(ctx, "g1", "leader", "applicant", "新人") },
+		{"approved applicant joins", func() error { return assigned(svc.Assign(ctx, "g1", "leader", "applicant", "新人")) },
 			[]string{"applicant|guild_join|Knightsギルドに加入"}},
 		{"leave", func() error { return svc.Leave(ctx, "g1", "member") },
 			[]string{"member|guild_leave|Knightsから脱退する", "remove member"}},

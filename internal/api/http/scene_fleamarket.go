@@ -44,7 +44,7 @@ func (h *Handler) fleaMarketSceneData(ctx context.Context, r playercontext.Resul
 
 var fleaMarketFacility = facility{
 	title: "フリーマーケット", commands: []string{"fleamarket_list", "fleamarket_purchase", "fleamarket_cancel"}, read: (*Handler).fleaMarketSceneData, placeLog: true,
-	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+	present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 		return scenePresentation{next: data.(FleaMarketSceneData).Page.Next}
 	},
 	npc: &npcProfile{name: "@FMGKDP", words: []string{

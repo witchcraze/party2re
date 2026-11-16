@@ -55,6 +55,21 @@ func ValidateSingleLine(input string, maxRunes int) (string, error) {
 	return sanitized, nil
 }
 
+// markupChars are the characters legacy free-text settings reject (guild.cgi message).
+const markupChars = ",;\"'&<>"
+
+// ValidatePlainLine applies ValidateSingleLine and rejects the legacy markup characters , ; " ' & < >.
+func ValidatePlainLine(input string, maxRunes int) (string, error) {
+	sanitized, err := ValidateSingleLine(input, maxRunes)
+	if err != nil {
+		return "", err
+	}
+	if strings.ContainsAny(sanitized, markupChars) {
+		return "", ErrProhibitedCharacter
+	}
+	return sanitized, nil
+}
+
 // ValidateLegacyComment validates chat-style body text like the legacy comment field: line breaks are removed,
 // and maxLength applies to the length after the legacy HTML escaping, whatever form the caller stores.
 // It otherwise applies the ValidateSingleLine checks and returns the normalized text.

@@ -16,7 +16,7 @@ func TestNavigationQualificationAndSafeBack(t *testing.T) {
 	s := NewService(r, r, r, WithNavigation(store,
 		SceneDefinition{ID: "town"},
 		SceneDefinition{ID: "qualified", Parent: "town", Pageable: true, SubjectKind: "item",
-			CanEnter:         func(c character.Character) bool { return c.JobLevel >= 7 },
+			CanEnter:         ByCharacter(func(c character.Character) bool { return c.JobLevel >= 7 }),
 			SubjectAvailable: func(context.Context, string, string) (bool, error) { reads++; return true, nil }},
 	))
 	if _, err := s.Enter(r.ctx, "owner", "hero", "qualified"); !errors.Is(err, ErrSceneAccessDenied) || store.writes != 0 {
@@ -61,7 +61,7 @@ func TestParentOnlySceneIsEnteredOnlyFromItsParent(t *testing.T) {
 	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner", JobLevel: 15}, ctx: context.Background()}
 	store := &navigationStore{}
 	s := NewService(r, r, r, WithNavigation(store, SceneDefinition{ID: "town"}, SceneDefinition{ID: "oracle", Parent: "town"},
-		SceneDefinition{ID: "hidden", Parent: "oracle", ParentOnly: true, CanEnter: func(c character.Character) bool { return c.JobLevel >= 15 }}))
+		SceneDefinition{ID: "hidden", Parent: "oracle", ParentOnly: true, CanEnter: ByCharacter(func(c character.Character) bool { return c.JobLevel >= 15 })}))
 	if _, err := s.Enter(r.ctx, "owner", "hero", "hidden"); !errors.Is(err, ErrSceneAccessDenied) || store.writes != 0 {
 		t.Fatalf("entry from town: %v writes=%d", err, store.writes)
 	}

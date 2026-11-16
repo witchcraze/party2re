@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -170,4 +171,21 @@ func TestAdminDecayGuildPoints(t *testing.T) {
 			t.Errorf("expected 501 Not Implemented, got %d", rec.Code)
 		}
 	})
+}
+
+// stubGuildService serves only admin point decay; embedding panics on any other call.
+type stubGuildService struct {
+	apihttp.GuildService
+	decayGuildPointsFn func(ctx context.Context, factor float64) error
+}
+
+func (s *stubGuildService) DecayGuildPoints(ctx context.Context, factor float64) error {
+	if s.decayGuildPointsFn != nil {
+		return s.decayGuildPointsFn(ctx, factor)
+	}
+	return nil
+}
+
+func (s *stubGuildService) Create(context.Context, string, string) (guild.Guild, guild.Member, corecharacter.Character, error) {
+	return guild.Guild{}, guild.Member{}, corecharacter.Character{}, nil
 }

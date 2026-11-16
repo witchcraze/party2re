@@ -216,7 +216,7 @@ func (f *deletionFixture) createGuild(t *testing.T, leader corecharacter.Charact
 		if err := f.guilds.ApplyToJoin(ctx, g.ID, m.ID); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.guilds.ApproveApplication(ctx, g.ID, leader.ID, m.ID, "member"); err != nil {
+		if err := assigned(f.guilds.Assign(ctx, g.ID, leader.ID, m.ID, "member")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -604,3 +604,5 @@ func TestCharacterDeletionSerializesWithListingPurchase(t *testing.T) {
 		t.Fatal("listing survived seller deletion")
 	}
 }
+
+func assigned(_ guild.AssignOutcome, err error) error { return err }

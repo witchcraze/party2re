@@ -80,7 +80,7 @@ func (h *Handler) secretShopSceneData(ctx context.Context, r playercontext.Resul
 
 var secretShopFacility = facility{
 	title: "秘密の店", commands: []string{"secretshop_purchase", "secretshop_puffpuff"}, read: (*Handler).secretShopSceneData, placeLog: true,
-	present: func(_ *Handler, _ playercontext.Result, data any) scenePresentation {
+	present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 		switch data := data.(type) {
 		case SecretShopCatalogSceneData:
 			return scenePresentation{title: &data.Title, next: data.Page.Next}
