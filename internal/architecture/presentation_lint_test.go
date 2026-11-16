@@ -193,7 +193,27 @@ func presentationFieldViolations(repoRoot string, whitelist map[string]string) (
 				if f.Tag != nil {
 					jsonName = strings.Split(reflect.StructTag(stringLiteral(f.Tag)).Get("json"), ",")[0]
 				}
-				for _, name := range f.Names {
+				names := f.Names
+				if len(names) == 0 {
+					// Embedded fields have no Names; their field name comes from the type.
+					embedded := f.Type
+					if pointer, ok := embedded.(*ast.StarExpr); ok {
+						embedded = pointer.X
+					}
+					switch generic := embedded.(type) {
+					case *ast.IndexExpr:
+						embedded = generic.X
+					case *ast.IndexListExpr:
+						embedded = generic.X
+					}
+					switch embedded := embedded.(type) {
+					case *ast.Ident:
+						names = []*ast.Ident{embedded}
+					case *ast.SelectorExpr:
+						names = []*ast.Ident{embedded.Sel}
+					}
+				}
+				for _, name := range names {
 					if name.Name == "NPCMessage" || name.Name == "NPCSpeech" || name.Name == "Dialogue" || name.Name == "Message" || jsonName == "message" {
 						if (name.Name == "Message" || jsonName == "message") && presentationDataField(f) {
 							continue
