@@ -15,12 +15,20 @@ import (
 
 // equipmentRepoStub implements EquipmentRepository for tests.
 type equipmentRepoStub struct {
+	findErr   error
 	saveErr   error
 	equipment coreequipment.Equipment
 }
 
 func (e *equipmentRepoStub) FindByCharacterID(_ context.Context, _ string) (coreequipment.Equipment, error) {
+	if e.findErr != nil {
+		return coreequipment.Equipment{}, e.findErr
+	}
 	return e.equipment, nil
+}
+
+func (e *equipmentRepoStub) FindByCharacterIDForUpdate(ctx context.Context, id string) (coreequipment.Equipment, error) {
+	return e.FindByCharacterID(ctx, id)
 }
 
 func (e *equipmentRepoStub) Save(_ context.Context, value coreequipment.Equipment) error {

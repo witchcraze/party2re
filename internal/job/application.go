@@ -35,6 +35,7 @@ type InventoryRepository interface {
 
 type EquipmentRepository interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreequipment.Equipment, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreequipment.Equipment, error)
 	Save(ctx context.Context, value coreequipment.Equipment) error
 }
 

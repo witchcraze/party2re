@@ -320,6 +320,23 @@ func TestRequiresItemPossession(t *testing.T) {
 	if job.RequiresItemPossession(gambler, "job-46", "starter") {
 		t.Errorf("expected gambler NOT to require item if already gambler")
 	}
+	if job.RequiresItemPossession(gambler, "job-01", "job-46") {
+		t.Errorf("expected gambler NOT to require item if old job is gambler")
+	}
+
+	// IsItemExempt boundaries
+	if !job.IsItemExempt("job-33", "job-08", "starter") || !job.IsItemExempt("job-33", "job-01", "job-08") {
+		t.Errorf("expected sage consumption exempt from current/old asobinin")
+	}
+	if !job.IsItemExempt("job-46", "job-08", "starter") || !job.IsItemExempt("job-46", "job-01", "job-08") {
+		t.Errorf("expected gambler consumption exempt from current/old asobinin")
+	}
+	if !job.IsItemExempt("job-46", "job-46", "starter") || !job.IsItemExempt("job-46", "job-01", "job-46") {
+		t.Errorf("expected gambler consumption exempt when current/old is gambler")
+	}
+	if job.IsItemExempt("job-34", "job-08", "starter") {
+		t.Errorf("expected hero NOT consumption exempt from asobinin")
+	}
 
 	// FireFighter (job-84): uses armor, not standard item
 	fireFighter := job.Definition{ID: "job-84"}
