@@ -16,7 +16,7 @@ const DefaultActionWait = 4 * time.Second
 type ActionWaitWriter interface {
 	TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error)
 	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
-	ExtendLockUntil(ctx context.Context, category, targetID string, until time.Time) error
+	ImposeLockUntil(ctx context.Context, category, targetID string, until time.Time) error
 }
 
 // ActionWaitGate rejects every action while the legacy wait runs, except the
@@ -98,14 +98,14 @@ func (c ActionWaitClaim) Release(ctx context.Context) error {
 	return nil
 }
 
-// ImposeActionWaitUntil extends charID's wait at least until the given deadline,
-// preserving any longer active wait and avoiding reviving expired deadlines; a
-// disabled wait imposes nothing.
+// ImposeActionWaitUntil extends charID's wait at least until the given deadline
+// and supersedes any in-flight claim token, preserving any longer active wait
+// and avoiding reviving expired deadlines; a disabled wait imposes nothing.
 func (s *Service) ImposeActionWaitUntil(ctx context.Context, charID string, until time.Time) error {
 	if s.waitWriter == nil {
 		return nil
 	}
-	if err := s.waitWriter.ExtendLockUntil(ctx, timer.CategoryActionWait, charID, until); err != nil {
+	if err := s.waitWriter.ImposeLockUntil(ctx, timer.CategoryActionWait, charID, until); err != nil {
 		return fmt.Errorf("impose action wait: %w", err)
 	}
 	return nil

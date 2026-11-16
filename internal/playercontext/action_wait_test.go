@@ -130,8 +130,8 @@ func (w *waitTimers) TryLockWithToken(_ context.Context, category, id, token str
 	w.claims = append(w.claims, category+":"+id+":"+d.String())
 	return token != "", nil
 }
-func (w *waitTimers) ExtendLockUntil(_ context.Context, category, id string, until time.Time) error {
-	w.claims = append(w.claims, "extend:"+category+":"+id+":"+until.UTC().Format(time.RFC3339))
+func (w *waitTimers) ImposeLockUntil(_ context.Context, category, id string, until time.Time) error {
+	w.claims = append(w.claims, "impose:"+category+":"+id+":"+until.UTC().Format(time.RFC3339))
 	return w.err
 }
 func (w *waitTimers) ReleaseLockWithToken(context.Context, string, string, string) (bool, error) {
@@ -183,7 +183,7 @@ func TestQueryReadsAndClaimsActionWait(t *testing.T) {
 		t.Fatalf("a pace replaces the default: %v %v %v", ok, err, timers.claims)
 	}
 	until := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
-	if err := enabled.ImposeActionWaitUntil(ctx, "k", until); err != nil || timers.claims[2] != "extend:action_wait:k:2026-11-16T12:00:00Z" {
+	if err := enabled.ImposeActionWaitUntil(ctx, "k", until); err != nil || timers.claims[2] != "impose:action_wait:k:2026-11-16T12:00:00Z" {
 		t.Fatalf("impose: %v %v", err, timers.claims)
 	}
 	if err := disabled.ImposeActionWaitUntil(ctx, "k", until); err != nil || len(timers.claims) != 3 {

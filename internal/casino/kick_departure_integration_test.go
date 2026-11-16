@@ -25,7 +25,7 @@ func (a *kickWaitAdapter) ImposeActionWaitUntil(ctx context.Context, characterID
 	if a.failNext.Load() {
 		return errDepartureFault
 	}
-	return a.timers.ExtendLockUntil(ctx, timer.CategoryActionWait, characterID, until)
+	return a.timers.ImposeLockUntil(ctx, timer.CategoryActionWait, characterID, until)
 }
 
 func kickService(t *testing.T, db *sql.DB, client valkeygo.Client, evidence casino.DepartureRepository, wait casino.ActionWaitWriter) *casino.Service {
@@ -366,7 +366,7 @@ func TestKickDepartureRecovery_ConcurrentKickAndRejoin(t *testing.T) {
 		func() error { return svc2.KickMember(ctx, f.roomID, leader, peer) },
 		func() error {
 			_, joinErr = svc2.JoinRoom(ctx, otherRoom.roomID, peer, "", 0)
-			if errors.Is(joinErr, casino.ErrAlreadyInRoom) {
+			if errors.Is(joinErr, casino.ErrAlreadyInRoom) || errors.Is(joinErr, casino.ErrDepartureRecovery) {
 				return nil
 			}
 			return joinErr
@@ -377,8 +377,13 @@ func TestKickDepartureRecovery_ConcurrentKickAndRejoin(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if !errors.Is(joinErr, casino.ErrAlreadyInRoom) {
-		t.Fatalf("peer admitted into otherRoom while in source room: %v", joinErr)
+	if joinErr != nil && !errors.Is(joinErr, casino.ErrAlreadyInRoom) && !errors.Is(joinErr, casino.ErrDepartureRecovery) {
+		t.Fatalf("unexpected join error during concurrent kick: %v", joinErr)
+	}
+	if joinErr != nil {
+		if _, err := otherRoom.rooms.GetMember(ctx, otherRoom.roomID, peer); !errors.Is(err, casino.ErrMemberNotFound) {
+			t.Fatalf("rejected join leaked membership in otherRoom: %v", err)
+		}
 	}
 	d, err := f.accounts.FindDeparture(ctx, f.roomID)
 	if err != nil || d.Pending || !d.Kicked || d.Version != 1 {

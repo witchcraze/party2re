@@ -6,18 +6,24 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
+	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/testutil"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 // casinoCounter replaces the counter operations that need the economy.
@@ -288,11 +294,11 @@ type faultyKickWaitService struct {
 	failExtend atomic.Bool
 }
 
-func (w *faultyKickWaitService) ExtendLockUntil(ctx context.Context, category, targetID string, until time.Time) error {
+func (w *faultyKickWaitService) ImposeLockUntil(ctx context.Context, category, targetID string, until time.Time) error {
 	if category == timer.CategoryActionWait && targetID == w.target && w.failExtend.Load() {
 		return errors.New("injected target wait write failure")
 	}
-	return w.Service.ExtendLockUntil(ctx, category, targetID, until)
+	return w.Service.ImposeLockUntil(ctx, category, targetID, until)
 }
 
 type multiActorGateway struct {
@@ -549,4 +555,325 @@ func TestCasinoKickWaitFailureAndRecovery(t *testing.T) {
 			t.Fatalf("rejected kick created wait for peer2: %v", got)
 		}
 	})
+}
+
+type pausedLeaveCasinoService struct {
+	CasinoService
+	target       string
+	leaveEntered chan struct{}
+	leaveProceed chan struct{}
+	pausedOnce   atomic.Bool
+}
+
+func (s *pausedLeaveCasinoService) LeaveRoom(ctx context.Context, roomID, characterID string) error {
+	if (s.target == "" || characterID == s.target) && s.pausedOnce.CompareAndSwap(false, true) {
+		close(s.leaveEntered)
+		select {
+		case <-s.leaveProceed:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return s.CasinoService.LeaveRoom(ctx, roomID, characterID)
+}
+
+type raceSafeGatewayChars struct {
+	CharacterService
+	mu       sync.Mutex
+	chars    map[string]corecharacter.Character
+	accounts *casinoSceneAccounts
+}
+
+func (r *raceSafeGatewayChars) Authenticate(_ context.Context, token string) (coreplayer.Player, error) {
+	switch token {
+	case "session":
+		return coreplayer.Player{ID: "owner"}, nil
+	case "peer-session":
+		return coreplayer.Player{ID: "peer-owner"}, nil
+	default:
+		return coreplayer.Player{}, errors.New("invalid session")
+	}
+}
+
+func (r *raceSafeGatewayChars) Get(_ context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(context.Background(), id)
+}
+
+func (r *raceSafeGatewayChars) GetProfile(_ context.Context, id string) (character.ProfileView, error) {
+	c, err := r.FindByID(context.Background(), id)
+	if err != nil {
+		return character.ProfileView{}, err
+	}
+	return character.ProfileView{Character: c}, nil
+}
+
+func (r *raceSafeGatewayChars) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.chars[id]
+	if !ok {
+		return corecharacter.Character{}, corecharacter.ErrNotFound
+	}
+	return c, nil
+}
+
+func (r *raceSafeGatewayChars) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
+func (r *raceSafeGatewayChars) Update(_ context.Context, c corecharacter.Character) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.chars[c.ID] = c
+	return nil
+}
+
+func (r *raceSafeGatewayChars) FindPendingByActorID(context.Context, string) ([]scheduling.ScheduledAction, error) {
+	return nil, nil
+}
+
+func (r *raceSafeGatewayChars) GetAccount(_ context.Context, id string) (casino.Account, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.accounts.GetAccount(context.Background(), id)
+}
+
+func (r *raceSafeGatewayChars) GetAccountForUpdate(ctx context.Context, id string) (casino.Account, error) {
+	return r.GetAccount(ctx, id)
+}
+
+func (r *raceSafeGatewayChars) AdjustCoins(_ context.Context, id string, delta int64) (casino.Account, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.accounts.AdjustCoins(context.Background(), id, delta)
+}
+
+func (r *raceSafeGatewayChars) DeductBetAndCreditPayout(ctx context.Context, id string, bet, payout int64) (casino.Account, error) {
+	return r.AdjustCoins(ctx, id, payout-bet)
+}
+
+func (r *raceSafeGatewayChars) ListPlayers(context.Context, string) ([]coreplayer.Player, error) {
+	return nil, nil
+}
+func (r *raceSafeGatewayChars) BanPlayer(context.Context, string) error { return nil }
+func (r *raceSafeGatewayChars) Register(context.Context, string, string) (coreplayer.Player, error) {
+	return coreplayer.Player{}, nil
+}
+func (r *raceSafeGatewayChars) Login(context.Context, string, string, ...string) (coreplayer.Session, error) {
+	return coreplayer.Session{}, nil
+}
+func (r *raceSafeGatewayChars) Logout(context.Context, string) error { return nil }
+func (r *raceSafeGatewayChars) DeleteAccount(context.Context, string, string) error {
+	return nil
+}
+func (r *raceSafeGatewayChars) CreateAPIToken(context.Context, string, string, *time.Time) (coreplayer.APIToken, string, error) {
+	return coreplayer.APIToken{}, "", nil
+}
+func (r *raceSafeGatewayChars) ListAPITokens(context.Context, string) ([]coreplayer.APIToken, error) {
+	return nil, nil
+}
+func (r *raceSafeGatewayChars) RevokeAPIToken(context.Context, string, string) error { return nil }
+
+func newRaceSafeKickLeaveSetup(t *testing.T, useValkey bool, wrap func(CasinoService) CasinoService) (router http.Handler, waits timer.Service, chars *raceSafeGatewayChars, heroID, peerID, roomID string) {
+	t.Helper()
+	ctx := context.Background()
+	suffix := id.New()[:8]
+	heroID = "hero-" + suffix
+	peerID = "peer-" + suffix
+	roomID = "room-" + suffix
+
+	chars = &raceSafeGatewayChars{
+		accounts: &casinoSceneAccounts{},
+		chars: map[string]corecharacter.Character{
+			heroID: {ID: heroID, PlayerID: "owner", Name: "hero", Money: 100, Stats: corecharacter.Stats{HP: 50}},
+			peerID: {ID: peerID, PlayerID: "peer-owner", Name: "peer", Money: 100, Stats: corecharacter.Stats{HP: 50}},
+		},
+	}
+
+	var roomRepo casino.RoomRepository
+	if useValkey {
+		if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+			t.Skip("PARTY2_VALKEY_ADDR is not configured")
+		}
+		client, err := vk.NewClientWithConfig(vk.ConfigFromEnvironment())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(client.Close)
+		t.Cleanup(func() {
+			bg := context.Background()
+			_ = client.Do(bg, client.B().Del().Key(casino.DefaultRoomKeyPrefix+roomID).Build())
+			_ = client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build())
+			for _, actor := range []string{heroID, peerID} {
+				_ = client.Do(bg, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+actor).Build())
+				_ = client.Do(bg, client.B().Del().Key(timer.PrefixTimer+timer.CategoryActionWait+":"+actor).Build())
+			}
+		})
+		roomRepo, err = casino.NewValkeyRoomRepository(client, casino.WithValkeyCharacterRepository(chars))
+		if err != nil {
+			t.Fatal(err)
+		}
+		waits = timer.NewService(client)
+	} else {
+		roomRepo = casino.NewMemoryRoomRepository()
+		waits = timer.NewService(nil)
+	}
+
+	svc, err := casino.NewService(chars, casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()), casino.WithRoomRepository(roomRepo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().UTC()
+	if err := roomRepo.CreateRoom(ctx, casino.Room{
+		ID: roomID, Name: "Race-" + suffix, GameType: casino.GameTypeIndian, Status: casino.RoomStatusWaiting,
+		LeaderCharacterID: heroID, Rate: 10, MaxPlayers: 4, Speed: casino.SpeedNormal, AllowSpectators: true, CreatedAt: now, UpdatedAt: now,
+	}, casino.RoomMember{RoomID: roomID, CharacterID: heroID, Action: "待機中", Card: 2, JoinedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := roomRepo.AddMember(ctx, casino.RoomMember{RoomID: roomID, CharacterID: peerID, Action: "待機中", Card: 5, JoinedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	readActivities := func(ctx context.Context, owner, actor string) ([]playercontext.Activity, error) {
+		v, err := svc.GetCharacterRoomView(ctx, owner, actor)
+		if err != nil || v == nil {
+			return []playercontext.Activity{}, err
+		}
+		c, err := v.Controls(actor)
+		if err != nil {
+			return nil, err
+		}
+		a := playercontext.Activity{Kind: "casino", ID: v.Room.ID, Role: c.Role, Phase: string(v.Room.Status), Round: v.Room.Round, Actions: []string{"casino_room_leave"}, Pace: time.Duration(v.Room.Speed) * time.Second}
+		if c.CanStart {
+			a.Actions = append(a.Actions, "casino_room_start", "casino_room_kick")
+		}
+		return []playercontext.Activity{a}, nil
+	}
+	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "casino"}}
+	scene := playercontext.SceneDefinition{ID: "casino", Parent: "town"}
+	pc := playercontext.NewService(chars, chars, waits, playercontext.WithNavigation(store, playercontext.SceneDefinition{ID: "town"}, scene), playercontext.WithActivities(readActivities), playercontext.WithActionWait(waits, playercontext.DefaultActionWait))
+	svc.SetActionWait(pc)
+
+	var casinoHandler CasinoService = svc
+	if wrap != nil {
+		casinoHandler = wrap(svc)
+	}
+	h, err := NewHandler(chars, chars, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithPlayerContext(pc), WithCasino(casinoHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h.Router(), waits, chars, heroID, peerID, roomID
+}
+
+func TestCasinoKickWaitSurvivesConcurrentLeaveClaimRelease(t *testing.T) {
+	for _, useValkey := range []bool{false, true} {
+		name := "memory"
+		if useValkey {
+			name = "valkey"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			leaveEntered := make(chan struct{})
+			leaveProceed := make(chan struct{})
+			router, waits, _, heroID, peerID, roomID := newRaceSafeKickLeaveSetup(t, useValkey, func(base CasinoService) CasinoService {
+				return &pausedLeaveCasinoService{CasinoService: base, leaveEntered: leaveEntered, leaveProceed: leaveProceed}
+			})
+			// Match any non-leader leave target by routing peerID dynamically via target == "" check or setting target after creation.
+			_ = peerID
+
+			var leaveStatus int
+			var leaveRaw map[string]json.RawMessage
+			leaveDone := make(chan struct{})
+			go func() {
+				defer close(leaveDone)
+				leaveStatus, leaveRaw = gatewayRequest(t, router, peerID, "peer-session", "application/json", `{"action":"casino_room_leave","params":{"room_id":"`+roomID+`"}}`, ctx)
+			}()
+
+			select {
+			case <-leaveEntered:
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+
+			// Leader kicks peer while peer holds the 18s ActionWaitClaim.
+			kickStatus, kickRaw := gatewayRequest(t, router, heroID, "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"`+peerID+`"}}`, ctx)
+			if kickStatus != http.StatusOK {
+				close(leaveProceed)
+				<-leaveDone
+				t.Fatalf("kick failed: %d %s", kickStatus, kickRaw)
+			}
+
+			close(leaveProceed)
+			<-leaveDone
+			if leaveStatus != http.StatusNotFound || actionErrorCode(t, leaveRaw) != "CASINO_MEMBER_NOT_FOUND" {
+				t.Fatalf("expected failed leave after kick, got %d %s", leaveStatus, leaveRaw)
+			}
+
+			// Failed leave's claim.Release() must NOT delete the 60s kick wait.
+			rem, err := waits.GetRemainingLock(ctx, timer.CategoryActionWait, peerID)
+			if err != nil || rem <= 58*time.Second || rem > casino.KickActionWait {
+				t.Fatalf("kick wait lost after leave claim release: rem=%v err=%v", rem, err)
+			}
+			status, raw := gatewayRequest(t, router, peerID, "peer-session", "application/json", `{"action":"scene_enter","params":{"destination":"town"}}`, ctx)
+			if status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_WAIT" {
+				t.Fatalf("peer allowed to act during kick wait: %d %s", status, raw)
+			}
+		})
+	}
+}
+
+func TestCasinoKickAndLeaveGatewayRace(t *testing.T) {
+	for _, useValkey := range []bool{false, true} {
+		name := "memory"
+		if useValkey {
+			name = "valkey"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			router, waits, chars, heroID, peerID, roomID := newRaceSafeKickLeaveSetup(t, useValkey, nil)
+
+			var kickStatus, leaveStatus int
+			var kickRaw, leaveRaw map[string]json.RawMessage
+			_, _ = testutil.RunRace2(
+				func() error {
+					kickStatus, kickRaw = gatewayRequest(t, router, heroID, "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"`+peerID+`"}}`, ctx)
+					return nil
+				},
+				func() error {
+					leaveStatus, leaveRaw = gatewayRequest(t, router, peerID, "peer-session", "application/json", `{"action":"casino_room_leave","params":{"room_id":"`+roomID+`"}}`, ctx)
+					return nil
+				},
+			)
+
+			peerChar, err := chars.FindByID(ctx, peerID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rem, err := waits.GetRemainingLock(ctx, timer.CategoryActionWait, peerID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch {
+			case kickStatus == http.StatusOK && (leaveStatus == http.StatusNotFound || leaveStatus == http.StatusConflict):
+				if peerChar.Tired != 0 || rem <= 58*time.Second {
+					t.Fatalf("kick won but wait/tired wrong: tired=%d rem=%v kick=%s leave=%s", peerChar.Tired, rem, kickRaw, leaveRaw)
+				}
+				status, raw := gatewayRequest(t, router, peerID, "peer-session", "application/json", `{"action":"scene_enter","params":{"destination":"town"}}`, ctx)
+				if status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_WAIT" {
+					t.Fatalf("peer allowed after kick won: %d %s", status, raw)
+				}
+			case leaveStatus == http.StatusOK && kickStatus == http.StatusNotFound:
+				if peerChar.Tired != 1 || rem <= 0 || rem > time.Duration(casino.SpeedNormal)*time.Second {
+					t.Fatalf("leave won but wait/tired wrong: tired=%d rem=%v kick=%s leave=%s", peerChar.Tired, rem, kickRaw, leaveRaw)
+				}
+			default:
+				t.Fatalf("unexpected concurrent kick/leave outcome: kick=(%d,%s) leave=(%d,%s)", kickStatus, kickRaw, leaveStatus, leaveRaw)
+			}
+		})
+	}
 }
