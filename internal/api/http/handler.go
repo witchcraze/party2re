@@ -376,13 +376,6 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("GET /homes/{id}", h.handleGetHomeView)
 
-	mux.HandleFunc("POST /letters", h.handleSendLetter)
-	mux.HandleFunc("GET /letters/inbox", h.handleListInbox)
-	mux.HandleFunc("GET /letters/outbox", h.handleListOutbox)
-	mux.HandleFunc("GET /letters/unread-count", h.handleGetUnreadLetterCount)
-	mux.HandleFunc("POST /letters/{id}/read", h.handleReadLetter)
-	mux.HandleFunc("DELETE /letters/{id}", h.handleDeleteLetter)
-
 	mux.HandleFunc("GET /rankings/levels", h.handleGetLevelRanking)
 	mux.HandleFunc("GET /rankings/wealth", h.handleGetPlayerWealthRanking)
 	mux.HandleFunc("GET /rankings/characters-wealth", h.handleGetCharacterWealthRanking)

@@ -390,10 +390,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleClaimAchievement": "medal.go",
 		// Adventure
 		"handleStartAdventure": "handler.go",
-		// Home
-		"handleSendLetter":   "home.go",
-		"handleReadLetter":   "home.go",
-		"handleDeleteLetter": "home.go",
 		// Monster
 		"handleBringMonsterToHome":  "monster.go",
 		"handleDepositMonsterToBox": "monster.go",

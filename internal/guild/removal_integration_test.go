@@ -28,8 +28,8 @@ type removalFixture struct {
 // Use the same Home service letter path as production, including ambient SQL propagation.
 type removalLetterAdapter struct{ service *home.Service }
 
-func (a removalLetterAdapter) SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
-	_, err := a.service.SendLetter(ctx, senderID, recipientID, content, color)
+func (a removalLetterAdapter) SendLetter(ctx context.Context, senderID, recipientID, content string) error {
+	_, err := a.service.SendLetter(ctx, senderID, recipientID, content)
 	return err
 }
 

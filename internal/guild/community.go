@@ -60,10 +60,10 @@ func (s *Service) ApplyToJoin(ctx context.Context, guildID string, applicantID s
 	// Send application letter to the Guild Master (join_guild.cgi:216-219)
 	if s.letterSender != nil && s.charReader != nil {
 		applicantChar, errA := s.charReader.FindByID(ctx, applicantID)
-		leaderChar, errL := s.charReader.FindByID(ctx, g.LeaderCharacterID)
+		_, errL := s.charReader.FindByID(ctx, g.LeaderCharacterID)
 		if errA == nil && errL == nil {
 			content := "【＋参加申請＋】" + g.Name + " 入団希望者 " + applicantChar.Name
-			_ = s.letterSender.SendLetter(ctx, applicantID, applicantChar.Name, g.LeaderCharacterID, leaderChar.Name, content, applicantChar.Color)
+			_ = s.letterSender.SendLetter(ctx, applicantID, g.LeaderCharacterID, content)
 		}
 	}
 
@@ -153,11 +153,11 @@ func (s *Service) ApproveApplication(ctx context.Context, guildID string, leader
 	// transaction therefore rolls them back along with the membership mutation.
 	if s.letterSender != nil && s.charReader != nil {
 		leaderChar, errL := s.charReader.FindByID(ctx, leaderID)
-		applicantChar, errA := s.charReader.FindByID(ctx, applicantID)
+		_, errA := s.charReader.FindByID(ctx, applicantID)
 		if errL == nil && errA == nil {
 			content := "【＋参加許可証＋】" + g.Name + " (ギルマス " + leaderChar.Name + ") から参加許可をもらいました"
 			//lint:ignore error-swallow existing best-effort membership notification
-			_ = s.letterSender.SendLetter(ctx, leaderID, leaderChar.Name, applicantID, applicantChar.Name, content, leaderChar.Color)
+			_ = s.letterSender.SendLetter(ctx, leaderID, applicantID, content)
 		}
 	}
 
@@ -220,27 +220,10 @@ func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID
 		return ErrUnauthorized
 	}
 
-	senderName := senderID
-	senderColor := "#000000"
-	if s.charReader != nil {
-		if sc, err := s.charReader.FindByID(ctx, senderID); err == nil {
-			senderName = sc.Name
-			if sc.Color != "" {
-				senderColor = sc.Color
-			}
-		}
-	}
-
 	// Deliver letter to each member (including pending applicants in roster order)
 	if s.letterSender != nil {
 		for _, m := range members {
-			recName := m.CharacterID
-			if s.charReader != nil {
-				if rc, err := s.charReader.FindByID(ctx, m.CharacterID); err == nil {
-					recName = rc.Name
-				}
-			}
-			if err := s.letterSender.SendLetter(ctx, senderID, senderName, m.CharacterID, recName, sanitizedMessage, senderColor); err != nil {
+			if err := s.letterSender.SendLetter(ctx, senderID, m.CharacterID, sanitizedMessage); err != nil {
 				return err
 			}
 		}

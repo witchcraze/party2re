@@ -438,11 +438,11 @@ func TestHomeService(t *testing.T) {
 	})
 
 	t.Run("send and read letter", func(t *testing.T) {
-		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Let's party!", "#0088ff")
+		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Let's party!")
 		if err != nil {
 			t.Fatalf("SendLetter failed: %v", err)
 		}
-		if letter.SenderName != "Hero" || letter.RecipientName != "Mage" {
+		if letter.SenderName != "Hero" || letter.RecipientName != "Mage" || letter.Color != "#123456" {
 			t.Errorf("unexpected letter: %+v", letter)
 		}
 
@@ -498,7 +498,7 @@ func TestHomeService(t *testing.T) {
 	})
 
 	t.Run("sender deletes letter first without affecting recipient inbox", func(t *testing.T) {
-		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Secret mission!", "#ff5500")
+		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Secret mission!")
 		if err != nil {
 			t.Fatalf("SendLetter failed: %v", err)
 		}
@@ -546,31 +546,31 @@ func TestHomeService(t *testing.T) {
 
 	t.Run("send letter validation and NFC normalization", func(t *testing.T) {
 		// Control character rejection
-		_, err := service.SendLetter(ctx, "char-1", "char-2", "Hello\x00World", "")
+		_, err := service.SendLetter(ctx, "char-1", "char-2", "Hello\x00World")
 		if !errors.Is(err, validation.ErrControlCharacter) {
 			t.Errorf("expected ErrControlCharacter, got %v", err)
 		}
 
 		// Zero-width character rejection
-		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello\u200BWorld", "")
+		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello\u200BWorld")
 		if !errors.Is(err, validation.ErrZeroWidth) {
 			t.Errorf("expected ErrZeroWidth, got %v", err)
 		}
 
 		// Bidi override rejection
-		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello\u202EWorld", "")
+		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello\u202EWorld")
 		if !errors.Is(err, validation.ErrBidiOverride) {
 			t.Errorf("expected ErrBidiOverride, got %v", err)
 		}
 
 		// Zalgo rejection
-		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello Z\u0300\u0301\u0302algo", "")
+		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello Z\u0300\u0301\u0302algo")
 		if !errors.Is(err, validation.ErrZalgo) {
 			t.Errorf("expected ErrZalgo, got %v", err)
 		}
 
 		// NFC normalization: NFD "Cafe\u0301" becomes NFC "Café" (\u00e9)
-		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Cafe\u0301", "")
+		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Cafe\u0301")
 		if err != nil {
 			t.Fatalf("expected SendLetter to succeed, got %v", err)
 		}
@@ -921,7 +921,7 @@ func TestSendLetterStoresBodyWithoutLineBreaks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	letter, err := service.SendLetter(context.Background(), "char-1", "char-1", "1行目\r\n2行目", "")
+	letter, err := service.SendLetter(context.Background(), "char-1", "char-1", "1行目\r\n2行目")
 	if err != nil {
 		t.Fatalf("SendLetter failed: %v", err)
 	}
@@ -943,7 +943,7 @@ func TestSendLetterLimits(t *testing.T) {
 	}
 
 	send := func(length int) error {
-		_, err := service.SendLetter(ctx, "char-1", "char-2", strings.Repeat("あ", length), "")
+		_, err := service.SendLetter(ctx, "char-1", "char-2", strings.Repeat("あ", length))
 		return err
 	}
 	if err := send(DefaultLetterMaxLength); err != nil {

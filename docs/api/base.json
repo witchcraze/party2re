@@ -57,10 +57,6 @@
       "name": "Homes"
     },
     {
-      "description": "Player-to-player mailbox correspondence",
-      "name": "Letters"
-    },
-    {
       "description": "Category leaderboards and distributed ranking snapshots",
       "name": "Rankings"
     },
@@ -1270,35 +1266,6 @@
           "items": {
             "items": {
               "$ref": "#/components/schemas/ContestLegend"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "Offset from beginning of result set",
-            "type": "integer"
-          },
-          "total": {
-            "description": "Total number of records matching the query",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
-      "PageLetter": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/Letter"
             },
             "type": "array"
           },
@@ -4002,6 +3969,116 @@
                   "additionalProperties": false,
                   "required": [
                     "notice_ids"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "home_letter_send"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "recipient_name": {
+                      "type": "string",
+                      "description": "Exact recipient character name, as legacy addresses letters; may be the sender."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Letter body, validated as the Home letter body (line breaks removed, legacy-escaped length limit). The letter takes the sender's own color."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "recipient_name",
+                    "content"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "home_letter_read"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "letter_id": {
+                      "type": "string",
+                      "description": "An inbox letter ID; marks only the actor's copy read."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "letter_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "home_letter_delete"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "letter_id": {
+                      "type": "string",
+                      "description": "An inbox or outbox letter ID; removes only the actor's copy."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "letter_id"
                   ]
                 }
               },
@@ -14745,38 +14822,6 @@
           "character_id",
           "character_name",
           "inducted_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PaginationCursorPageHomeLetter": {
-        "properties": {
-          "has_more": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/Letter"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "limit": {
-            "type": "integer"
-          },
-          "next_cursor": {
-            "type": "string"
-          },
-          "prev_cursor": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "items",
-          "limit",
-          "has_more"
         ],
         "type": "object",
         "additionalProperties": false

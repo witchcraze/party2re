@@ -158,6 +158,10 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "home_item_use", Label: "つかう", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "home_phrase_teach", Label: "ことばをおしえる", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"phrase"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "home_phrase_forget", Label: "ことばをわすれさせる", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"phrase_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	// Letters (home.cgi tegamiwokaku/tegamiwoyomu); read and delete act on rows of the owner's mailbox scenes.
+	{ID: "home_letter_send", Label: "てがみをかく", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"recipient_name", "content"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "home_letter_read", Label: "てがみをよむ", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"letter_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "home_letter_delete", Label: "てがみをすてる", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"letter_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	// Legacy shows delivery notices while rendering the own home and clears them then (home.cgi:49-68).
 	{ID: "home_notice_ack", Label: "おしらせを確認する", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"notice_ids"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitReload},
 	// Shared NPC interaction in the current facility (docs/architecture/place-log.md).

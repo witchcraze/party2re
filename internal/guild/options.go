@@ -12,7 +12,7 @@ type CharacterReader interface {
 }
 
 type LetterSender interface {
-	SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error
+	SendLetter(ctx context.Context, senderID, recipientID, content string) error
 }
 
 type NewsPublisher interface {

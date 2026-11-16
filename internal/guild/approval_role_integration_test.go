@@ -31,8 +31,8 @@ type approvalRoleFixture struct {
 
 type approvalRoleLetterAdapter struct{ service *home.Service }
 
-func (a approvalRoleLetterAdapter) SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
-	_, err := a.service.SendLetter(ctx, senderID, recipientID, content, color)
+func (a approvalRoleLetterAdapter) SendLetter(ctx context.Context, senderID, recipientID, content string) error {
+	_, err := a.service.SendLetter(ctx, senderID, recipientID, content)
 	return err
 }
 

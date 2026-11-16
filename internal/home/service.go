@@ -166,8 +166,9 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 	return view, nil
 }
 
-// SendLetter sends a player-to-player letter to a recipient character.
-func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content, color string) (Letter, error) {
+// SendLetter sends a player-to-player letter in the sender's own color, as
+// legacy writes $m{color} (lib/system.cgi send_letter).
+func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content string) (Letter, error) {
 	validContent, err := ValidateLetter(senderID, recipientID, content, s.letterMaxLength)
 	if err != nil {
 		return Letter{}, err
@@ -189,14 +190,6 @@ func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content
 		return Letter{}, err
 	}
 
-	cleanColor := strings.TrimSpace(color)
-	if cleanColor == "" {
-		cleanColor = "#000000"
-	}
-	if len(cleanColor) > MaxColorLength {
-		cleanColor = cleanColor[:MaxColorLength]
-	}
-
 	now := s.nowFunc().UTC()
 	letter := Letter{
 		ID:                   id.New(),
@@ -205,7 +198,7 @@ func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content
 		RecipientCharacterID: recipient.ID,
 		RecipientName:        recipient.Name,
 		Content:              validContent,
-		Color:                cleanColor,
+		Color:                sender.Color,
 		IsRead:               false,
 		ReadAt:               nil,
 		CreatedAt:            now,

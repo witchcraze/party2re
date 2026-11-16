@@ -383,11 +383,11 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 	// Send acceptance letter to applicant if pending was approved (guild.cgi:236-237)
 	if approved && s.letterSender != nil && s.charReader != nil {
 		leaderChar, errL := s.charReader.FindByID(ctx, requesterCharID)
-		applicantChar, errA := s.charReader.FindByID(ctx, targetCharID)
+		_, errA := s.charReader.FindByID(ctx, targetCharID)
 		if errL == nil && errA == nil {
 			content := "【＋参加許可証＋】" + g.Name + " (ギルマス " + leaderChar.Name + ") から参加許可をもらいました"
 			//lint:ignore error-swallow existing best-effort membership notification
-			_ = s.letterSender.SendLetter(ctx, requesterCharID, leaderChar.Name, targetCharID, applicantChar.Name, content, leaderChar.Color)
+			_ = s.letterSender.SendLetter(ctx, requesterCharID, targetCharID, content)
 		}
 	}
 

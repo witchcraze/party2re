@@ -137,9 +137,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"medal_claim_achievement", http.MethodPost, "/characters/char-1/achievements/ach-1/claim", `{}`},
 		// Home
 		{"house_build", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"house_build","params":{"town_id":"town1","house_style":"001"}}`},
-		{"home_send_letter", http.MethodPost, "/letters", `{"sender_character_id":"char-1","recipient_character_id":"char-2","content":"hello"}`},
-		{"home_read_letter", http.MethodPost, "/letters/letter-1/read", `{"character_id":"char-1"}`},
-		{"home_delete_letter", http.MethodDelete, "/letters/letter-1?character_id=char-1", ``},
 		// Store
 		{"store_build", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_build","params":{"town_id":"town1","house_style":"001"}}`},
 		{"store_list_gold", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"store_list_gold","params":{"item_id":"inst-1","price":1000}}`},
@@ -273,82 +270,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 						tc.name, tc.method, tc.path, rec.Code, rec.Body.String())
 				}
 			})
-		}
-	})
-
-	t.Run("sleep lookup failure never invokes facility action callback", func(t *testing.T) {
-		called := false
-		player := coreplayer.Player{ID: "player-1", Username: "hero"}
-		char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
-		players := &stubPlayerService{
-			authenticateFn: func(_ context.Context, _ string) (coreplayer.Player, error) { return player, nil },
-		}
-		chars := &stubCharacterService{
-			getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
-		}
-		mockHome := &mockHomeService{
-			getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
-				return home.SleepStatus{}, errors.New("timer lookup failed")
-			},
-			sendLetterFn: func(_ context.Context, _, _, _, _ string) (home.Letter, error) {
-				called = true
-				return home.Letter{}, nil
-			},
-		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
-		if err != nil {
-			t.Fatal(err)
-		}
-		req := httptest.NewRequest(http.MethodPost, "/letters", bytes.NewReader([]byte(`{"sender_character_id":"char-1","recipient_character_id":"char-2","content":"hello"}`)))
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		h.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusInternalServerError {
-			t.Errorf("expected 500, got %d", rec.Code)
-		}
-		if called {
-			t.Error("expected letter callback not to be invoked on sleep lookup failure")
-		}
-	})
-
-	t.Run("canceled context during sleep lookup returns 500 and never invokes callback", func(t *testing.T) {
-		called := false
-		player := coreplayer.Player{ID: "player-1", Username: "hero"}
-		char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
-		players := &stubPlayerService{
-			authenticateFn: func(_ context.Context, _ string) (coreplayer.Player, error) { return player, nil },
-		}
-		chars := &stubCharacterService{
-			getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
-		}
-		mockHome := &mockHomeService{
-			getSleepStatusFn: func(ctx context.Context, _ string) (home.SleepStatus, error) {
-				return home.SleepStatus{}, ctx.Err()
-			},
-			sendLetterFn: func(_ context.Context, _, _, _, _ string) (home.Letter, error) {
-				called = true
-				return home.Letter{}, nil
-			},
-		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
-		if err != nil {
-			t.Fatal(err)
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		req := httptest.NewRequest(http.MethodPost, "/letters", bytes.NewReader([]byte(`{"sender_character_id":"char-1","recipient_character_id":"char-2","content":"hello"}`))).WithContext(ctx)
-		req.Header.Set("Authorization", "Bearer valid-session")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		h.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusInternalServerError {
-			t.Errorf("expected 500, got %d", rec.Code)
-		}
-		if called {
-			t.Error("expected letter callback not to be invoked on canceled context")
 		}
 	})
 
