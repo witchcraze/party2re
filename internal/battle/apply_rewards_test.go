@@ -2,6 +2,7 @@ package battle_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 func setupRewardTestService(blessing string, rngVal int) (*battle.Service, *mockCharRepo, *mockInvRepo) {
@@ -520,5 +522,110 @@ func TestApplyPostBattleResult_CombatDrop_PreservesInventoryDelivery(t *testing.
 	}
 	if len(resp.LostDrops[char.ID]) != 0 {
 		t.Errorf("expected 0 lost drops, got %d", len(resp.LostDrops[char.ID]))
+	}
+}
+
+func TestApplyPostBattleResult_BlessingReadError(t *testing.T) {
+	storageErr := errors.New("chapel storage unavailable")
+
+	for _, route := range []string{"single runner", "multi provider"} {
+		for _, scenario := range []string{"error", "canceled", "absent", "finalized"} {
+			t.Run(route+"/"+scenario, func(t *testing.T) {
+				ctx := context.Background()
+				charRepo := newMockCharRepo()
+				invRepo := newMockInvRepo()
+				equipRepo := newMockEquipRepo()
+				txProv := &markingTxProvider{}
+				blessingProv := &mockBlessingProvider{}
+
+				var wantErr error
+				switch scenario {
+				case "error":
+					wantErr = storageErr
+					blessingProv.err = wantErr
+				case "canceled":
+					wantErr = context.Canceled
+					blessingProv.err = wantErr
+				}
+
+				ids := []string{"c1"}
+				if route == "multi provider" {
+					ids = append(ids, "c2")
+				}
+				for _, id := range ids {
+					_ = charRepo.Update(ctx, corecharacter.Character{
+						ID:       id,
+						Name:     "キャラ-" + id,
+						Level:    1,
+						JobLevel: 1,
+						Money:    100,
+						Stats:    corecharacter.Stats{HP: 100, MaxHP: 100},
+					})
+					inv, _ := coreinventory.New(id)
+					_ = invRepo.Save(ctx, inv)
+				}
+
+				opts := []battle.Option{
+					battle.WithCharacterRepository(charRepo),
+					battle.WithInventoryRepository(invRepo),
+					battle.WithEquipmentRepository(equipRepo),
+					battle.WithBlessingProvider(blessingProv),
+					battle.WithRandomSource(fixedRNG{val: 0}),
+				}
+				if route == "single runner" {
+					runner, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+					if err != nil {
+						t.Fatal(err)
+					}
+					opts = append(opts, battle.WithTransactionRunner(runner))
+				} else {
+					opts = append(opts, battle.WithTransactionProvider(txProv))
+				}
+
+				svc := battle.NewService(opts...)
+				req := battle.ApplyPostBattleRequest{
+					CharacterIDs: ids,
+					BattleResult: corebattle.PartyBattleResult{
+						Outcome:     corebattle.OutcomeWin,
+						RemainingHP: map[string]int{"c1": 90, "c2": 90},
+						TotalReward: corebattle.Reward{Currency: 100, Experience: 50},
+					},
+				}
+				if scenario == "finalized" {
+					blessingProv.err = storageErr
+					req.RecipientRewards = map[string]corebattle.Reward{
+						"c1": {Currency: 100, Experience: 50},
+						"c2": {Currency: 100, Experience: 50},
+					}
+				}
+
+				resp, err := svc.ApplyPostBattleResult(ctx, req)
+				if wantErr != nil {
+					if !errors.Is(err, wantErr) {
+						t.Fatalf("error = %v, want %v", err, wantErr)
+					}
+					if txProv.committed != 0 || txProv.rolledBack != 1 {
+						t.Fatalf("expected rollback, got committed=%d rolledBack=%d", txProv.committed, txProv.rolledBack)
+					}
+					if route == "single runner" {
+						saved, _ := charRepo.FindByID(ctx, "c1")
+						if saved.Money != 100 || saved.Experience != 0 {
+							t.Fatalf("character mutated despite error: %+v", saved)
+						}
+					}
+					return
+				}
+
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if scenario == "finalized" && blessingProv.calls != 0 {
+					t.Fatalf("expected 0 blessing calls when rewards are finalized, got %d", blessingProv.calls)
+				}
+				if resp.GainedGold["c1"] != 100 {
+					t.Fatalf("gained gold = %d, want 100", resp.GainedGold["c1"])
+				}
+			})
+		}
 	}
 }

@@ -71,10 +71,6 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		LockInventory: true,
 	}
 
-	var finalChar corecharacter.Character
-	var finalInv coreinventory.Inventory
-	var finalEquip coreequipment.Equipment
-
 	_, err := s.txRunner.ExecuteTransaction(ctx, txReq, func(tc *economy.TxContext) error {
 		// 1. Load equipment (Rank 3) if available
 		var equip coreequipment.Equipment
@@ -148,20 +144,21 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			return err
 		}
 
+		if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
+			tames, err := s.processMonsterTaming(tc.Context, tc.Character, tc.Inventory, equip, req.DefeatedEnemies)
+			if err != nil {
+				return err
+			}
+			if len(tames) > 0 {
+				resp.MonsterTames[charID] = tames
+			}
+		}
+
 		resp.UpdatedCharacters[charID] = tc.Character
-		finalChar = tc.Character
-		finalInv = tc.Inventory
-		finalEquip = equip
 		return nil
 	})
 	if err != nil {
 		return ApplyPostBattleResponse{}, err
-	}
-
-	if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
-		if tames := s.processMonsterTaming(ctx, finalChar, finalInv, finalEquip, req.DefeatedEnemies); len(tames) > 0 {
-			resp.MonsterTames[charID] = tames
-		}
 	}
 
 	return resp, nil
@@ -169,10 +166,6 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 
 func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs []string, req ApplyPostBattleRequest) (ApplyPostBattleResponse, error) {
 	resp := newApplyPostBattleResponse(req.BattleResult)
-
-	var finalChars map[string]corecharacter.Character
-	var finalInvs map[string]coreinventory.Inventory
-	var finalEquips map[string]coreequipment.Equipment
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// Phase 1: Lock characters in ascending lexicographical order (Rank 2)
@@ -307,27 +300,26 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			return err
 		}
 
-		finalChars = chars
-		finalInvs = invs
-		finalEquips = equips
+		if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
+			recipientID := req.RecipientCharacterID
+			if recipientID == "" && len(sortedIDs) > 0 {
+				recipientID = sortedIDs[0]
+			}
+			if char, ok := chars[recipientID]; ok {
+				tames, err := s.processMonsterTaming(txCtx, char, invs[recipientID], equips[recipientID], req.DefeatedEnemies)
+				if err != nil {
+					return err
+				}
+				if len(tames) > 0 {
+					resp.MonsterTames[recipientID] = tames
+				}
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
 		return ApplyPostBattleResponse{}, err
-	}
-
-	if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
-		recipientID := req.RecipientCharacterID
-		if recipientID == "" && len(sortedIDs) > 0 {
-			recipientID = sortedIDs[0]
-		}
-		if char, ok := finalChars[recipientID]; ok {
-			inv := finalInvs[recipientID]
-			equip := finalEquips[recipientID]
-			if tames := s.processMonsterTaming(ctx, char, inv, equip, req.DefeatedEnemies); len(tames) > 0 {
-				resp.MonsterTames[recipientID] = tames
-			}
-		}
 	}
 
 	return resp, nil

@@ -165,15 +165,15 @@ func hasMonsterFoodItem(inv coreinventory.Inventory) bool {
 	return false
 }
 
-func (s *Service) queryBlessing(ctx context.Context, charID string) string {
+func (s *Service) queryBlessing(ctx context.Context, charID string) (string, error) {
 	if s.blessingProvider == nil {
-		return ""
+		return "", nil
 	}
 	blessing, err := s.blessingProvider.GetActiveBlessing(ctx, charID)
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return strings.ToLower(strings.TrimSpace(blessing))
+	return strings.ToLower(strings.TrimSpace(blessing)), nil
 }
 
 func isGoldBlessing(blessing string) bool {
@@ -204,8 +204,12 @@ func isMonsterBlessing(blessing string) bool {
 }
 
 // checkMonsterBlessing queries whether the character has an active monster blessing (wish 3).
-func (s *Service) checkMonsterBlessing(ctx context.Context, charID string) bool {
-	return isMonsterBlessing(s.queryBlessing(ctx, charID))
+func (s *Service) checkMonsterBlessing(ctx context.Context, charID string) (bool, error) {
+	blessing, err := s.queryBlessing(ctx, charID)
+	if err != nil {
+		return false, err
+	}
+	return isMonsterBlessing(blessing), nil
 }
 
 // processMonsterTaming handles post-battle monster rising and taming for a recipient character.
@@ -215,9 +219,9 @@ func (s *Service) processMonsterTaming(
 	inv coreinventory.Inventory,
 	equip coreequipment.Equipment,
 	defeatedEnemies []corebattle.Participant,
-) []MonsterTameResult {
+) ([]MonsterTameResult, error) {
 	if s.monsterTamer == nil || len(defeatedEnemies) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	eqStats := CalculateEquipmentStats(char, inv, equip, s.rng)
@@ -236,7 +240,10 @@ func (s *Service) processMonsterTaming(
 	playerStrong := Strong(char.Stats.MaxHP, char.Stats.MaxMP, playerAtk, playerDef, playerAgi)
 
 	hasFood := hasMonsterFoodItem(inv)
-	hasBlessing := s.checkMonsterBlessing(ctx, char.ID)
+	hasBlessing, err := s.checkMonsterBlessing(ctx, char.ID)
+	if err != nil {
+		return nil, err
+	}
 	hasDragonSet := hasDragonRulerEquipment(inv, equip)
 
 	var results []MonsterTameResult
@@ -270,16 +277,19 @@ func (s *Service) processMonsterTaming(
 				BoxFull:     true,
 				TamerName:   char.Name,
 			})
-		} else if err == nil {
-			results = append(results, MonsterTameResult{
-				MonsterID:   monsterID,
-				MonsterName: baseName,
-				Success:     true,
-				BoxFull:     false,
-				TamerName:   char.Name,
-			})
+			continue
 		}
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, MonsterTameResult{
+			MonsterID:   monsterID,
+			MonsterName: baseName,
+			Success:     true,
+			BoxFull:     false,
+			TamerName:   char.Name,
+		})
 	}
 
-	return results
+	return results, nil
 }

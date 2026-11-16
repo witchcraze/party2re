@@ -2,6 +2,7 @@ package battle_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -10,16 +11,41 @@ import (
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type mockMonsterTamer struct {
 	calls   []string
+	inTx    []bool
 	boxFull bool
 	err     error
+	fn      func(ctx context.Context, characterID, monsterID, customName string, callIndex int) error
+}
+
+type tameTxMarkerKey struct{}
+
+type markingTxProvider struct {
+	committed  int
+	rolledBack int
+}
+
+func (m *markingTxProvider) RunInTx(ctx context.Context, fn func(context.Context) error) error {
+	txCtx := context.WithValue(ctx, tameTxMarkerKey{}, true)
+	if err := fn(txCtx); err != nil {
+		m.rolledBack++
+		return err
+	}
+	m.committed++
+	return nil
 }
 
 func (m *mockMonsterTamer) TameMonster(ctx context.Context, characterID, monsterID, customName string) error {
+	idx := len(m.calls)
 	m.calls = append(m.calls, characterID+":"+monsterID+":"+customName)
+	m.inTx = append(m.inTx, ctx.Value(tameTxMarkerKey{}) == true)
+	if m.fn != nil {
+		return m.fn(ctx, characterID, monsterID, customName, idx)
+	}
 	if m.boxFull {
 		return battle.ErrMonsterBoxFull
 	}
@@ -28,9 +54,15 @@ func (m *mockMonsterTamer) TameMonster(ctx context.Context, characterID, monster
 
 type mockBlessingProvider struct {
 	blessing string
+	err      error
+	calls    int
 }
 
 func (m *mockBlessingProvider) GetActiveBlessing(ctx context.Context, characterID string) (string, error) {
+	m.calls++
+	if m.err != nil {
+		return "", m.err
+	}
 	return m.blessing, nil
 }
 
@@ -546,5 +578,267 @@ func TestPostBattleMonsterTaming_WithModifiers_MultiCharacterParty(t *testing.T)
 	}
 	if len(tamer.calls) != 1 || tamer.calls[0] != "c2:monster-010:ドラゴン" {
 		t.Errorf("unexpected tamer calls: %v", tamer.calls)
+	}
+}
+
+func TestPostBattleMonsterTamingStorageError(t *testing.T) {
+	storageErr := errors.New("monster storage unavailable")
+
+	for _, route := range []string{"single runner", "multi provider"} {
+		for _, scenario := range []string{"first fails", "second fails after success", "second fails after box full", "canceled"} {
+			t.Run(route+"/"+scenario, func(t *testing.T) {
+				ctx := context.Background()
+				charRepo := newMockCharRepo()
+				invRepo := newMockInvRepo()
+				equipRepo := newMockEquipRepo()
+				txProv := &markingTxProvider{}
+
+				ids := []string{"c1"}
+				if route == "multi provider" {
+					ids = append(ids, "c2")
+				}
+				for _, id := range ids {
+					_ = charRepo.Update(ctx, corecharacter.Character{
+						ID:    id,
+						Name:  "テイマー-" + id,
+						JobID: "job-01",
+						Money: 100,
+						Stats: corecharacter.Stats{
+							HP:      100,
+							MaxHP:   100,
+							MaxMP:   50,
+							Attack:  30,
+							Defense: 20,
+							Agility: 10,
+						},
+					})
+					inv, _ := coreinventory.New(id)
+					_ = invRepo.Save(ctx, inv)
+					equip, _ := coreequipment.New(id)
+					_ = equipRepo.Save(ctx, equip)
+				}
+
+				wantErr := storageErr
+				if scenario == "canceled" {
+					wantErr = context.Canceled
+				}
+
+				tamer := &mockMonsterTamer{
+					fn: func(_ context.Context, _, _, _ string, idx int) error {
+						switch scenario {
+						case "first fails", "canceled":
+							return wantErr
+						case "second fails after success":
+							if idx == 0 {
+								return nil
+							}
+							return wantErr
+						case "second fails after box full":
+							if idx == 0 {
+								return battle.ErrMonsterBoxFull
+							}
+							return wantErr
+						default:
+							return nil
+						}
+					},
+				}
+
+				opts := []battle.Option{
+					battle.WithCharacterRepository(charRepo),
+					battle.WithInventoryRepository(invRepo),
+					battle.WithEquipmentRepository(equipRepo),
+					battle.WithRandomSource(fixedRNG{val: 0}),
+					battle.WithMonsterTamer(tamer),
+				}
+				if route == "single runner" {
+					runner, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+					if err != nil {
+						t.Fatal(err)
+					}
+					opts = append(opts, battle.WithTransactionRunner(runner))
+				} else {
+					opts = append(opts, battle.WithTransactionProvider(txProv))
+				}
+
+				svc := battle.NewService(opts...)
+				enemies := []corebattle.Participant{
+					{ID: "monster-002-f1-1", Name: "スライムA", MaxHP: 10, Attack: 5, Defense: 5, Agility: 5},
+				}
+				if scenario == "second fails after success" || scenario == "second fails after box full" {
+					enemies = append(enemies, corebattle.Participant{
+						ID: "monster-003-f1-2", Name: "ゴブリンA", MaxHP: 10, Attack: 5, Defense: 5, Agility: 5,
+					})
+				}
+
+				resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+					CharacterIDs: ids,
+					BattleResult: corebattle.PartyBattleResult{
+						Outcome:     corebattle.OutcomeWin,
+						RemainingHP: map[string]int{"c1": 50, "c2": 60},
+						TotalReward: corebattle.Reward{Currency: 250},
+					},
+					DefeatedEnemies: enemies,
+				})
+				if !errors.Is(err, wantErr) {
+					t.Fatalf("error = %v, want %v", err, wantErr)
+				}
+				if len(resp.MonsterTames) != 0 || len(resp.UpdatedCharacters) != 0 {
+					t.Fatalf("expected empty response on failure, got %+v", resp)
+				}
+				if txProv.committed != 0 || txProv.rolledBack != 1 {
+					t.Fatalf("expected committed=0 rolledBack=1, got committed=%d rolledBack=%d", txProv.committed, txProv.rolledBack)
+				}
+				for i, inTx := range tamer.inTx {
+					if !inTx {
+						t.Fatalf("tamer call %d executed outside transaction boundary", i)
+					}
+				}
+				if route == "single runner" {
+					saved, _ := charRepo.FindByID(ctx, "c1")
+					if saved.Money != 100 || saved.Stats.HP != 100 {
+						t.Fatalf("single runner character mutated despite rollback: %+v", saved)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestPostBattleMonsterTamingBoxFullFollowedBySuccess(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	equipRepo := newMockEquipRepo()
+	txProv := &markingTxProvider{}
+	runner, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = charRepo.Update(ctx, corecharacter.Character{
+		ID:    "c1",
+		Name:  "アレックス",
+		JobID: "job-01",
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MaxMP: 50, Attack: 30, Defense: 20, Agility: 10},
+	})
+	inv, _ := coreinventory.New("c1")
+	_ = invRepo.Save(ctx, inv)
+	equip, _ := coreequipment.New("c1")
+	_ = equipRepo.Save(ctx, equip)
+
+	tamer := &mockMonsterTamer{
+		fn: func(_ context.Context, _, _, _ string, idx int) error {
+			if idx == 0 {
+				return battle.ErrMonsterBoxFull
+			}
+			return nil
+		},
+	}
+
+	svc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithTransactionRunner(runner),
+		battle.WithRandomSource(fixedRNG{val: 0}),
+		battle.WithMonsterTamer(tamer),
+	)
+
+	resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"c1"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"c1": 90},
+		},
+		DefeatedEnemies: []corebattle.Participant{
+			{ID: "monster-002-f1-1", Name: "スライムA", MaxHP: 10, Attack: 5, Defense: 5, Agility: 5},
+			{ID: "monster-003-f1-2", Name: "ゴブリンA", MaxHP: 10, Attack: 5, Defense: 5, Agility: 5},
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected nil error on BoxFull + Success, got %v", err)
+	}
+	if txProv.committed != 1 || txProv.rolledBack != 0 {
+		t.Fatalf("expected committed=1 rolledBack=0, got committed=%d rolledBack=%d", txProv.committed, txProv.rolledBack)
+	}
+	tames := resp.MonsterTames["c1"]
+	if len(tames) != 2 {
+		t.Fatalf("expected 2 tame results, got %+v", tames)
+	}
+	if !tames[0].BoxFull || tames[0].Success {
+		t.Errorf("expected first result BoxFull=true Success=false, got %+v", tames[0])
+	}
+	if !tames[1].Success || tames[1].BoxFull {
+		t.Errorf("expected second result Success=true BoxFull=false, got %+v", tames[1])
+	}
+}
+
+func TestPostBattleMonsterTamingBlessingReadError(t *testing.T) {
+	blessingErr := errors.New("blessing store unavailable")
+	for _, scenario := range []string{"error", "absent"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx := context.Background()
+			charRepo := newMockCharRepo()
+			invRepo := newMockInvRepo()
+			equipRepo := newMockEquipRepo()
+			txProv := &markingTxProvider{}
+			tamer := &mockMonsterTamer{}
+			blessingProv := &mockBlessingProvider{}
+			if scenario == "error" {
+				blessingProv.err = blessingErr
+			}
+
+			_ = charRepo.Update(ctx, corecharacter.Character{
+				ID:    "c1",
+				Name:  "アレックス",
+				JobID: "job-01",
+				Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MaxMP: 50, Attack: 30, Defense: 20, Agility: 10},
+			})
+			inv, _ := coreinventory.New("c1")
+			_ = invRepo.Save(ctx, inv)
+			equip, _ := coreequipment.New("c1")
+			_ = equipRepo.Save(ctx, equip)
+
+			runner, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc := battle.NewService(
+				battle.WithCharacterRepository(charRepo),
+				battle.WithInventoryRepository(invRepo),
+				battle.WithEquipmentRepository(equipRepo),
+				battle.WithTransactionRunner(runner),
+				battle.WithRandomSource(fixedRNG{val: 0}),
+				battle.WithMonsterTamer(tamer),
+				battle.WithBlessingProvider(blessingProv),
+			)
+
+			resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+				CharacterIDs:          []string{"c1"},
+				RecipientRewards:      map[string]corebattle.Reward{"c1": {}},
+				BattleResult:          corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, RemainingHP: map[string]int{"c1": 80}},
+				DefeatedEnemies:       []corebattle.Participant{{ID: "monster-002-f1-1", Name: "スライムA", MaxHP: 10, Attack: 5, Defense: 5, Agility: 5}},
+				PreserveEarnedRewards: true,
+			})
+			if scenario == "error" {
+				if !errors.Is(err, blessingErr) {
+					t.Fatalf("error = %v, want %v", err, blessingErr)
+				}
+				if len(tamer.calls) != 0 {
+					t.Fatalf("expected 0 tamer calls on blessing error, got %v", tamer.calls)
+				}
+				if txProv.committed != 0 || txProv.rolledBack != 1 {
+					t.Fatalf("expected rollback, got committed=%d rolledBack=%d", txProv.committed, txProv.rolledBack)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("absent blessing failed: %v", err)
+			}
+			if len(resp.MonsterTames["c1"]) != 1 || !resp.MonsterTames["c1"][0].Success {
+				t.Fatalf("expected taming success with absent blessing, got %+v", resp.MonsterTames)
+			}
+		})
 	}
 }
