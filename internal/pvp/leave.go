@@ -121,8 +121,10 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 
 		case StatusCompleted:
 			kind := "disband"
+			var preservedResult *RoundResolution
 			if hasRemaining {
 				kind = "leave"
+				preservedResult = last.Result
 			} else {
 				detail.Room.Status = StatusDisbanded
 			}
@@ -133,6 +135,8 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				ActorID:        characterID,
 				Detail:         detail,
 				RemovedIDs:     []string{char.ID},
+				Result:         preservedResult,
+				ForfeitedPool:  last.ForfeitedPool,
 				LastActivityAt: now,
 			}, func(context.Context) error { return nil })
 

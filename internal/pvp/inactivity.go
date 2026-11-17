@@ -96,7 +96,7 @@ func (s *Service) cleanupInactiveRoom(ctx context.Context, last Transition, now 
 		ActorID:        actorID,
 		Detail:         detail,
 		RemovedIDs:     memberIDs,
-		ForfeitedPool:  beforePool,
+		ForfeitedPool:  last.ForfeitedPool + beforePool,
 		LastActivityAt: now,
 		PenaltyUntil:   penaltyUntil,
 	}

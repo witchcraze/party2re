@@ -71,8 +71,8 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 	var result RoundResolution
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		last := lastTransitionFromContext(lockedCtx)
-		if last.Result != nil && last.Result.MatchCompleted {
-			if last.Detail.Room.Status != StatusDisbanded && s.isInactive(last.LastActivityAt, s.now()) {
+		if last.Result != nil && last.Result.MatchCompleted && last.Detail.Room.Status != StatusDisbanded {
+			if s.isInactive(last.LastActivityAt, s.now()) {
 				if _, roomErr := s.repo.GetRoom(lockedCtx, roomID); roomErr != nil && !errors.Is(roomErr, ErrRoomNotFound) {
 					return roomErr
 				}

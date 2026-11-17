@@ -34,5 +34,5 @@ func (s *Service) abandonLostRoom(ctx context.Context, characterID string, last 
 	detail.Room.PrizePool = 0
 	detail.Room.UpdatedAt = now
 	detail.Room.LastActivityAt = now
-	return s.commitTransition(ctx, Transition{Kind: "abandon", ActorID: characterID, Detail: detail, RemovedIDs: memberIDs, ForfeitedPool: beforePool, LastActivityAt: now}, func(context.Context) error { return nil })
+	return s.commitTransition(ctx, Transition{Kind: "abandon", ActorID: characterID, Detail: detail, RemovedIDs: memberIDs, ForfeitedPool: last.ForfeitedPool + beforePool, LastActivityAt: now}, func(context.Context) error { return nil })
 }
