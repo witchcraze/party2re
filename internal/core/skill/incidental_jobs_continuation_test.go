@@ -58,7 +58,7 @@ func TestIncidentalJobRealExtendedInvocationChargesAfterBody(t *testing.T) {
 	s, c, d := incidentalFixture()
 	s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-9", SP: 90}
 	s.Actors[0].MP = 20
-	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 	executeIncidental(t, &s, c, d, "extended", []string{"enemy", "ignored"}, 0, 0)
 	if s.Actors[0].MP != 0 || s.Actors[0].HP != 519 || s.Actors[1].HP != 878 || len(c.Arguments) != 0 {
 		t.Fatal(s, c)

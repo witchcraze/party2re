@@ -54,7 +54,7 @@ func TestInvocationProjectionCyclesStayConservative(t *testing.T) {
 	s, c := rosterFixture()
 	s.Actors[0].Jobs.OldJobID = "job-59"
 	d := CallbackCatalog{JobTables: map[int]CallbackTable{59: {Variants: [][]CallbackEntry{{{ID: "loop", Name: "summon"}}}}}, Entries: map[string]CallbackDefinition{
-		"loop": {Invocation: CallbackInvocation{Kind: "gem-87"}},
+		"loop": {Invocation: CallbackInvocation{Kind: "gem_call_summon"}},
 		"later": {Validate: func(*LifetimeState, *CallbackContext) error {
 			t.Fatal("cycle claimed a known transition")
 			return nil

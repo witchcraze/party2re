@@ -12,9 +12,9 @@ import (
 
 func TestStatusRevivalGemsAdmitOrderedContinuation(t *testing.T) {
 	for _, ids := range [][]string{
-		{"gem_cure_magic_seal", "gem-64", "gem_cure_sleep"},
-		{"gem-63", "gem_cure_all_abnormal", "gem-64"},
-		{"gem-65", "gem_cure_sleep", "gem-64"},
+		{"gem_cure_magic_seal", "gem_revive_sky_2", "gem_cure_sleep"},
+		{"gem_revive_sky_1", "gem_cure_all_abnormal", "gem_revive_sky_2"},
+		{"gem_revive_sky_3", "gem_cure_sleep", "gem_revive_sky_2"},
 	} {
 		t.Run(ids[0], func(t *testing.T) {
 			s, revival, d := revivalRegistryFixture()
@@ -170,7 +170,7 @@ func TestStatusRevivalGemFrozenReloadAndRebuiltPorts(t *testing.T) {
 			Arguments []string
 			Ops       []corebattle.CallbackInvocation
 			Draws     []float64
-		}{s, rc.TargetContext, []string{"fallen", "tail"}, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem-66"}, {Kind: "entry", EntryID: "gem_inflict_poison"}, {Kind: "entry", EntryID: "gem_status_cmp_3"}}, []float64{0, .8, 0, .59999}}
+		}{s, rc.TargetContext, []string{"fallen", "tail"}, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_sacrifice_soul"}, {Kind: "entry", EntryID: "gem_inflict_poison"}, {Kind: "entry", EntryID: "gem_status_cmp_3"}}, []float64{0, .8, 0, .59999}}
 		data, err := json.Marshal(input)
 		if err != nil {
 			t.Fatal(err)
@@ -260,7 +260,7 @@ func TestStatusGemRegisteredNoEffectSkipsMissingDefeatContext(t *testing.T) {
 }
 
 func TestStatusRevivalGemUnsupportedTailIsAtomicAndUnknownStaysGated(t *testing.T) {
-	for _, first := range []string{"gem_cure_sleep", "gem_cure_all_abnormal", "gem-63", "gem-64", "gem-65", "gem_inflict_poison"} {
+	for _, first := range []string{"gem_cure_sleep", "gem_cure_all_abnormal", "gem_revive_sky_1", "gem_revive_sky_2", "gem_revive_sky_3", "gem_inflict_poison"} {
 		s, rc, d := revivalRegistryFixture()
 		s.Actors[0].Status = corebattle.StatusSleep
 		s.Actors[1].HP, s.Actors[1].MaxHP = 100, 101
@@ -292,7 +292,7 @@ func TestStatusRevivalGemUnsupportedTailIsAtomicAndUnknownStaysGated(t *testing.
 		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
 	f := corebattle.CallbackContext{TargetContext: rc.TargetContext, Arguments: []string{"fallen"}}
-	assertAtomicAfterUnknown(t, &s, &f, d, "unknown", "gem-63")
+	assertAtomicAfterUnknown(t, &s, &f, d, "unknown", "gem_revive_sky_1")
 }
 
 func TestRegisteredInstantDeathRejectsUnsupportedAwakenedResetTailBeforeMutation(t *testing.T) {
@@ -378,7 +378,7 @@ func TestRevivalGemSealAlternativesAndItem195RejectUncheckedLaterDefense(t *test
 			t.Fatal(err)
 		}
 		// A failed cure leaves magic sealed: unchecked gem41 must reject.
-		if _, err = d.InvocationAction(&s, &f, []string{"gem-63", "gem_nullify_phys"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		if _, err = d.InvocationAction(&s, &f, []string{"gem_revive_sky_1", "gem_nullify_phys"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(activate, err)
 		}
 		after, err := json.Marshal(s)
@@ -398,7 +398,7 @@ func TestRevivalGemSealAlternativesAndItem195RejectUncheckedLaterDefense(t *test
 			if activate && draw < .25 {
 				draws = append(draws, .9)
 			} // Cure succeeds, activation fails.
-			ops, err := d.InvocationAction(&p, &f, []string{"gem-63", "gem_guard_1"}, noArithmeticDraws{t})
+			ops, err := d.InvocationAction(&p, &f, []string{"gem_revive_sky_1", "gem_guard_1"}, noArithmeticDraws{t})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -425,13 +425,13 @@ func TestSacrificeGemNativeContinuationAndEarlyRejection(t *testing.T) {
 			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"fallen", "tail"}}
 			before := s
 			before.Actors = append([]corebattle.LifetimeActor(nil), s.Actors...)
-			ids := []string{"gem-66", "missing"}
+			ids := []string{"gem_sacrifice_soul", "missing"}
 			_, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
 			if protect {
 				if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 					t.Fatal(err)
 				}
-				if err = s.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem-66"}, {Kind: "entry", EntryID: "missing"}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+				if err = s.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_sacrifice_soul"}, {Kind: "entry", EntryID: "missing"}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 					t.Fatal(err)
 				}
 				if !reflect.DeepEqual(before, s) || c.NativeDefeat.Cursor != (corebattle.TargetCursor{}) {
@@ -440,7 +440,7 @@ func TestSacrificeGemNativeContinuationAndEarlyRejection(t *testing.T) {
 			} else if err != nil {
 				t.Fatal("dead branch must skip unsupported later slot", err)
 			}
-			ids = []string{"gem-66", "gem_cure_sleep"}
+			ids = []string{"gem_sacrifice_soul", "gem_cure_sleep"}
 			ops, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
 			if err != nil {
 				t.Fatal(err)

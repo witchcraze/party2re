@@ -64,6 +64,36 @@ func (s *Service) BuildLifetimeActor(ctx context.Context, characterID, icon stri
 	p.HP = char.Stats.HP
 	jobs := corebattle.BattleJobs{JobID: char.JobID, SP: char.SP, OldJobID: char.OldJobID, OldSP: char.OldSP}
 	a := corebattle.LifetimeActor{Participant: p, Jobs: jobs, OriginalJobs: jobs, WeaponSeal: char.WeaponSeal, Tension: 1, Hit: 95}
+	provider := s.jobProvider
+	if provider == nil {
+		provider, err = corejob.InitialCatalog()
+		if err != nil {
+			return corebattle.LifetimeActor{}, err
+		}
+	}
+	var tiers [2]int
+	for i, id := range []string{char.JobID, char.OldJobID} {
+		if id == "" {
+			continue
+		}
+		job, err := provider.FindByID(id)
+		if err != nil {
+			return corebattle.LifetimeActor{}, err
+		}
+		tiers[i] = job.CMPTier
+	}
+	// quest.cgi:1191–1192 starts with the derived CMP pool full.
+	a.MaxCMP = char.CMP(tiers[0], tiers[1])
+	a.CMP = a.MaxCMP
+	if s.customSkills != nil {
+		custom, err := s.customSkills.FindCustomSkill(ctx, char.ID)
+		if err != nil {
+			return corebattle.LifetimeActor{}, err
+		}
+		if custom != nil {
+			a.Custom = &corebattle.CustomLoadout{Name: custom.Name, Gems: custom.Gems, Cost: custom.CMP}
+		}
+	}
 	if s.invRepo != nil {
 		inv, err := s.invRepo.FindByCharacterID(ctx, char.ID)
 		if err != nil {

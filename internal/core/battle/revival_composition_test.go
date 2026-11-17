@@ -20,10 +20,10 @@ func TestRevivalTargetHooksAndAbsorptionBeforeMPFormula(t *testing.T) {
 		{"absorption before MP revival", "job-75-entry-5", "", TemporaryAbsorbMagic, "fallen", []float64{0}, "fallen", 30, 15},
 		{"den absorption", "job-75-entry-5", "", TemporaryAbsorbMagic, "fallen", []float64{0}, "fallen", 1, 0},
 		{"tool bypasses magic seal", "tool-6", StatusMagicSeal, "", "fallen", nil, "fallen", 101, 0},
-		{"seal failed cure", "gem-64", StatusMagicSeal, "", "fallen", []float64{.25}, "fallen", 0, 0},
-		{"seal successful cure", "gem-64", StatusMagicSeal, "", "fallen", []float64{.249}, "fallen", 101, 0},
-		{"reflection to living caster", "gem-64", "", TemporaryReflectMagic, "fallen", nil, "fallen", 0, 0},
-		{"confusion revives fallen enemy", "gem-64", StatusConfusion, "", "fallen", []float64{.9}, "dead_enemy", 101, 0},
+		{"seal failed cure", "gem_revive_sky_2", StatusMagicSeal, "", "fallen", []float64{.25}, "fallen", 0, 0},
+		{"seal successful cure", "gem_revive_sky_2", StatusMagicSeal, "", "fallen", []float64{.249}, "fallen", 101, 0},
+		{"reflection to living caster", "gem_revive_sky_2", "", TemporaryReflectMagic, "fallen", nil, "fallen", 0, 0},
+		{"confusion revives fallen enemy", "gem_revive_sky_2", StatusConfusion, "", "fallen", []float64{.9}, "dead_enemy", 101, 0},
 		{"nonrevival last fallback", "job-50-entry-6", "", "", "fallen", nil, "fallen", 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -105,7 +105,7 @@ func TestRevivalClosureErrorsStopBeforeFinalMPWrite(t *testing.T) {
 	failure := errors.New("defeat failed")
 	s, c := revivalFixture()
 	c.Defeat = func(string) error { return failure }
-	if _, err := s.ApplyRevival(&c, "gem-66", "", &targetRNG{t: t}); !errors.Is(err, failure) || s.actor("self").MP != 3 {
+	if _, err := s.ApplyRevival(&c, "gem_sacrifice_soul", "", &targetRNG{t: t}); !errors.Is(err, failure) || s.actor("self").MP != 3 {
 		t.Fatal(s, err)
 	}
 	c.Deaths = &RevivalDeathCallbacks{

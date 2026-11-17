@@ -20,7 +20,7 @@ func TestInvocationWrapperNativeCopyExtendedAndReload(t *testing.T) {
 			Target    corebattle.TargetContext
 			Arguments []string
 			IDs       []string
-		}{s, c.TargetContext, []string{"ally", "tail"}, []string{"job-36-copy", "gem-86", "gem_guard_1"}}
+		}{s, c.TargetContext, []string{"ally", "tail"}, []string{"job-36-copy", "gem_secret_art_sky", "gem_guard_1"}}
 		data, err := json.Marshal(input)
 		if err != nil {
 			t.Fatal(err)
@@ -80,7 +80,7 @@ func TestInvocationWrapperNativeRepeatedExtendedHandledWithoutPorts(t *testing.T
 	d.RegisterNonJobInvocations()
 	d.RegisterDefenseGems()
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext}
-	ids := []string{"gem-86", "gem-86", "gem-86", "gem_guard_1"}
+	ids := []string{"gem_secret_art_sky", "gem_secret_art_sky", "gem_secret_art_sky", "gem_guard_1"}
 	ops, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func TestInvocationWrapperNativeDismissAndMergeRetainDeadActor(t *testing.T) {
 	for _, row := range []struct {
 		id, gem string
 		wantMP  int
-	}{{"job-59-dismiss", "gem-88", 20}, {"job-59-merge", "gem-92", 60}} {
+	}{{"job-59-dismiss", "gem_order_flee", 20}, {"job-59-merge", "gem_order_special_sky", 60}} {
 		t.Run(row.id, func(t *testing.T) {
 			s, c, d := rosterRegistryFixture()
 			s.Actors[0].RosterIdentity = "calling-59"

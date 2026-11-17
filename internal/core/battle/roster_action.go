@@ -15,7 +15,7 @@ func (s *LifetimeState) ValidateRoster(c *RosterContext, id, targetID string, rn
 	if id == "job-66-revive" {
 		return s.ValidateRevival(&RevivalContext{TargetContext: c.TargetContext}, id, targetID, rng)
 	}
-	if id == "tool-78" || id == "gem-82" || npcRosterCommand(id) == "summon" {
+	if id == "tool-78" || id == "gem_summon_sky" || npcRosterCommand(id) == "summon" {
 		return s.validateEnemySummon(c, id)
 	}
 	if npcRosterCommand(id) == "escape" {
@@ -190,7 +190,7 @@ func (s *LifetimeState) ApplyRoster(c *RosterContext, id, targetID string, rng r
 		v, err := s.ApplyRevival(&RevivalContext{TargetContext: c.TargetContext}, id, targetID, rng)
 		return RosterResult{Applied: v.Applied, HelperID: s.FindCallingHelper(c.TargetContext, 66), TargetConsumed: v.TargetConsumed, Effects: v.Applications}, err
 	}
-	if id == "tool-78" || id == "gem-82" || npcRosterCommand(id) == "summon" {
+	if id == "tool-78" || id == "gem_summon_sky" || npcRosterCommand(id) == "summon" {
 		return s.summonEnemy(c, id, rng)
 	}
 	if npcRosterCommand(id) == "escape" {

@@ -12,6 +12,14 @@ type NPCLoadout struct {
 	CustomCost int       `json:"custom_cost,omitempty"`
 }
 
+// CustomLoadout freezes a player's custom command at battle entry. Cost is the
+// persisted requirement, already floored at zero unlike an NPC's aggregate.
+type CustomLoadout struct {
+	Name string    `json:"name"`
+	Gems [3]string `json:"gems"`
+	Cost int       `json:"cost"`
+}
+
 // ValidateOrdinaryNPC excludes shared hooks with no ordinary producer proof.
 func (a LifetimeActor) ValidateOrdinaryNPC() error {
 	if !a.NPC {

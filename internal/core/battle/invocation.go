@@ -30,7 +30,7 @@ type CallbackContext struct {
 }
 
 // CallbackInvocation describes an invocation boundary, not a scalar attack kind.
-// Kinds are random, tool-84, gem-86..92, job-79-random, job-82-generated,
+// Kinds are random, tool-84, the gem_secret_art_sky/calling-order gems, job-79-random, job-82-generated,
 // and entry (by native ID). job-79-random retains its two calls and death guard.
 type CallbackInvocation struct {
 	Kind, EntryID string
@@ -226,7 +226,7 @@ func (s *LifetimeState) invokeCallback(c *CallbackContext, d CallbackCatalog, op
 			return err
 		}
 		return s.executeGenerated(c, d, child, rng)
-	case "gem-86":
+	case "gem_secret_art_sky":
 		a := s.actor(c.ActorID)
 		for _, job := range []struct {
 			id string
@@ -372,17 +372,17 @@ func callingJob(jobs BattleJobs) int {
 
 func callingCommand(kind string) (string, bool) {
 	switch kind {
-	case "gem-87":
+	case "gem_call_summon":
 		return "summon", true
-	case "gem-88":
+	case "gem_order_flee":
 		return "dismiss", true
-	case "gem-89":
+	case "gem_order_attack":
 		return "attack", true
-	case "gem-90":
+	case "gem_order_finisher":
 		return "special", true
-	case "gem-91":
+	case "gem_order_defend":
 		return "defend", true
-	case "gem-92":
+	case "gem_order_special_sky":
 		return "", true
 	}
 	return "", false

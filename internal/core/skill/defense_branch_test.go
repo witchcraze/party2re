@@ -150,7 +150,7 @@ func TestDefenseBranchesAdmitSkippedExtendedWithoutChildContext(t *testing.T) {
 		d.RegisterDefenseGems()
 		d.RegisterNonJobInvocations()
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"ally"}}
-		ops, err := d.InvocationAction(&s, &f, []string{"gem_guard_2", "gem-86"}, noArithmeticDraws{t})
+		ops, err := d.InvocationAction(&s, &f, []string{"gem_guard_2", "gem_secret_art_sky"}, noArithmeticDraws{t})
 		if err != nil {
 			t.Fatal(cured, err)
 		}

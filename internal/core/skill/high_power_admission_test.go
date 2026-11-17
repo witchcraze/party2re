@@ -164,7 +164,7 @@ func TestHighPowerEmptyRegistrationNoEffectAndIndirectCosts(t *testing.T) {
 	}
 	s, c, d = highPowerFixture()
 	s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP = "job-47", 160
-	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 	executeHighPower(t, &s, c, d, []string{"extended"}, []string{"ignored"})
 	if s.Actors[0].MP != 33 || s.Actors[0].Attack != 225 {
 		t.Fatal(s)

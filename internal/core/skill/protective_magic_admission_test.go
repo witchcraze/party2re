@@ -151,7 +151,7 @@ func TestProtectiveMagicEmptyAndIncompleteRegistration(t *testing.T) {
 }
 
 func TestProtectiveMagicIndirectCostsAndArguments(t *testing.T) {
-	for _, kind := range []string{"tool-84", "random", "gem-86"} {
+	for _, kind := range []string{"tool-84", "random", "gem_secret_art_sky"} {
 		s, c, d := protectiveMagicFixture()
 		s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP = "job-34", 0
 		s.Actors[0].MP = 0
@@ -168,7 +168,7 @@ func TestProtectiveMagicIndirectCostsAndArguments(t *testing.T) {
 			}
 			draws = []float64{33.0 / 87, 6.0 / 7, 0}
 		}
-		if kind == "gem-86" {
+		if kind == "gem_secret_art_sky" {
 			s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP, s.Actors[0].MP = "job-33", 160, 33
 			draws = nil
 		}
@@ -176,7 +176,7 @@ func TestProtectiveMagicIndirectCostsAndArguments(t *testing.T) {
 		if s.Actors[0].MP != 0 || s.Actors[0].CMP != 90 {
 			t.Fatal(kind, s)
 		}
-		if kind == "gem-86" {
+		if kind == "gem_secret_art_sky" {
 			if s.Actors[0].ExtendedTurns != 5 || len(c.Arguments) != 1 || c.Arguments[0] != "enemy" {
 				t.Fatal(s, c)
 			}
@@ -195,7 +195,7 @@ func TestProtectiveMagicExtendedDelegationBoundaries(t *testing.T) {
 	} {
 		s, c, d := protectiveMagicFixture()
 		s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP, s.Actors[0].MP = "job-33", row.sp, row.mp
-		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 		executeProtectiveMagic(t, &s, c, d, "extended", nil)
 		wantMP := row.mp
 		if row.applied {

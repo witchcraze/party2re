@@ -137,7 +137,7 @@ func TestArithmeticRegisteredDelegationCostsAndCompletePools(t *testing.T) {
 	s, c, d := arithmeticRegistryFixture()
 	s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP, s.Actors[0].MP = "job-31", 155, 40
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
-	if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "gem-86"}}, noArithmeticDraws{t}); err != nil || s.Actors[2].HP != 21 || s.Actors[0].MP != 5 {
+	if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "gem_secret_art_sky"}}, noArithmeticDraws{t}); err != nil || s.Actors[2].HP != 21 || s.Actors[0].MP != 5 {
 		t.Fatal(err, s)
 	}
 	for _, kind := range []string{"tool-84", "random"} {

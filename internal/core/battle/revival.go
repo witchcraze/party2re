@@ -83,11 +83,11 @@ func (s *LifetimeState) ValidateRevival(c *RevivalContext, id, targetID string, 
 		}
 	}
 	if b.mode == "sacrifice" || b.mode == "death-sacrifice" || b.mode == "last" {
-		if c.Defeat == nil && !(id == "gem-66" && c.NativeDefeat != nil) {
+		if c.Defeat == nil && !(id == "gem_sacrifice_soul" && c.NativeDefeat != nil) {
 			return ErrUnsupportedEffect
 		}
 	}
-	if id == "gem-66" && c.NativeDefeat != nil {
+	if id == "gem_sacrifice_soul" && c.NativeDefeat != nil {
 		_, err := s.ProjectRevivalGemBranches(c, id, targetID)
 		return err
 	}
@@ -211,7 +211,7 @@ func (s *LifetimeState) ApplyRevival(c *RevivalContext, id, targetID string, rng
 func (s *LifetimeState) finishSacrifice(c *RevivalContext, id string, r RevivalActionResult, rng random.Generator) (RevivalActionResult, error) {
 	// Do not clear HP first: defeat can prevent the sacrifice by reviving actor.
 	var err error
-	if id == "gem-66" && c.NativeDefeat != nil {
+	if id == "gem_sacrifice_soul" && c.NativeDefeat != nil {
 		c.NativeDefeat.TargetContext = c.TargetContext
 		_, err = s.ApplyDefeat(c.NativeDefeat, c.ActorID, rng)
 	} else {
@@ -221,7 +221,7 @@ func (s *LifetimeState) finishSacrifice(c *RevivalContext, id string, r RevivalA
 		return r, err
 	}
 	s.actor(c.ActorID).MP = 1
-	if id == "gem-66" {
+	if id == "gem_sacrifice_soul" {
 		s.actor(c.ActorID).MP = 0
 	}
 	r.Applied = true

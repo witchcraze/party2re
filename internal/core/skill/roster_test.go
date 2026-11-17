@@ -24,7 +24,7 @@ func rosterRegistryFixture() (corebattle.LifetimeState, corebattle.RosterContext
 func TestRosterDiscoveryDelegationOldJobAndListedCostWaiver(t *testing.T) {
 	s, c, d := rosterRegistryFixture()
 	d.RegisterCallingJobs(&c)
-	d.Invocations.Entries["calling"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-87"}}
+	d.Invocations.Entries["calling"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_call_summon"}}
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
 	if err := (BattleDefinitions{}).RosterAction(&s, &c, "job-59-summon", "", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func TestRosterDiscoveryDelegationOldJobAndListedCostWaiver(t *testing.T) {
 		t.Fatal(err)
 	}
 	frame.TargetContext = c.TargetContext
-	d.Invocations.Entries["first"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-92"}}
+	d.Invocations.Entries["first"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_order_special_sky"}}
 	ops, err = d.InvocationAction(&s, &frame, []string{"first"}, noArithmeticDraws{t})
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestRosterIndirectUnsupportedRejectsBeforeAnyMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-	d.Invocations.Entries["unsupported"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-90"}}
+	d.Invocations.Entries["unsupported"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_order_finisher"}}
 	d.Invocations.Entries["random"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "random"}}
 	before, _ := json.Marshal(s)
 	for _, ids := range [][]string{{"unsupported"}, {"random"}} {

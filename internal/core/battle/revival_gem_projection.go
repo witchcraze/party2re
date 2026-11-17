@@ -23,10 +23,10 @@ func (s *LifetimeState) ProjectRevivalGemBranches(c *RevivalContext, id, targetI
 	if s == nil || c == nil {
 		return nil, ErrInvalidRequest
 	}
-	if id != "gem-63" && id != "gem-64" && id != "gem-65" && id != "gem-66" {
+	if id != "gem_revive_sky_1" && id != "gem_revive_sky_2" && id != "gem_revive_sky_3" && id != "gem_sacrifice_soul" {
 		return nil, nil
 	}
-	if id != "gem-66" {
+	if id != "gem_sacrifice_soul" {
 		if err := s.ValidateRevival(c, id, targetID, random.Default()); err != nil {
 			return nil, err
 		}
@@ -42,7 +42,7 @@ func (s *LifetimeState) ProjectRevivalGemBranches(c *RevivalContext, id, targetI
 		targetID = c.ActorID
 	}
 	p := s.callbackCopy()
-	if id == "gem-66" {
+	if id == "gem_sacrifice_soul" {
 		if c.NativeDefeat == nil {
 			return nil, nil
 		}
@@ -66,7 +66,7 @@ func (s *LifetimeState) ProjectRevivalGemBranches(c *RevivalContext, id, targetI
 		}
 		return results, nil
 	}
-	if id == "gem-65" {
+	if id == "gem_revive_sky_3" {
 		states := []LifetimeState{p}
 		for _, target := range c.PartyIDs {
 			var next []LifetimeState
@@ -96,7 +96,7 @@ func (s *LifetimeState) ProjectRevivalGemBranches(c *RevivalContext, id, targetI
 			t := branch.State.actor(branch.Resolution.TargetID)
 			if t.HP <= 0 {
 				t.HP = t.MaxHP
-				if id == "gem-63" {
+				if id == "gem_revive_sky_1" {
 					t.HP /= 2
 				}
 			}

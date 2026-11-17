@@ -78,7 +78,7 @@ func TestEnemySummonProjectionDuplicateAndSkippedContexts(t *testing.T) {
 		if err != nil || len(branches) != 1 || !reflect.DeepEqual(branches[0].State, s) {
 			t.Fatal(reason, err, branches)
 		}
-		if _, err := s.ApplyRoster(&c, "gem-82", "", &targetRNG{t: t}); err != nil {
+		if _, err := s.ApplyRoster(&c, "gem_summon_sky", "", &targetRNG{t: t}); err != nil {
 			t.Fatal(reason, err)
 		}
 	}

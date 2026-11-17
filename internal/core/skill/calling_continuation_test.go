@@ -50,7 +50,7 @@ func TestCallingReloadRebuildsClosuresWithoutRepeatingIncarnation(t *testing.T) 
 			s.Actors[0].Jobs.OldJobID = fmt.Sprintf("job-%d", row.job)
 			d.RegisterCallingJobs(&c)
 			frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-			if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "gem-87"}}, random.NewDeterministic(9)); err != nil {
+			if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "gem_call_summon"}}, random.NewDeterministic(9)); err != nil {
 				t.Fatal(err)
 			}
 			c.TargetContext = frame.TargetContext
@@ -74,7 +74,7 @@ func TestCallingReloadRebuildsClosuresWithoutRepeatingIncarnation(t *testing.T) 
 			rebuilt := BattleDefinitions{}
 			rebuilt.RegisterCallingJobs(&context)
 			resumed := corebattle.CallbackContext{TargetContext: loaded.Target, Arguments: loaded.Arguments}
-			next := []corebattle.CallbackInvocation{{Kind: "gem-87"}, {Kind: "gem-91"}}
+			next := []corebattle.CallbackInvocation{{Kind: "gem_call_summon"}, {Kind: "gem_order_defend"}}
 			if err := s.ApplyInvocations(&frame, d.Invocations, next, random.NewDeterministic(frozen.Seed)); err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +91,7 @@ func TestCallingReloadRebuildsClosuresWithoutRepeatingIncarnation(t *testing.T) 
 func TestCallingDelegationUsesCompleteOrderedNativeContribution(t *testing.T) {
 	for _, row := range callingManifest {
 		for offset, command := range []string{"summon", "dismiss", "attack", "special", "defend", row.last} {
-			t.Run(fmt.Sprintf("%d/gem-%d", row.job, 87+offset), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%d/%s", row.job, callingGemIDs[87+offset]), func(t *testing.T) {
 				s, c, d := callingManifestFixture()
 				d.RegisterCallingJobs(&c)
 				s.Actors[0].Jobs.OldJobID = fmt.Sprintf("job-%d", row.job)
@@ -99,7 +99,7 @@ func TestCallingDelegationUsesCompleteOrderedNativeContribution(t *testing.T) {
 					addCallingManifestHelper(&s, &c, row.job)
 				}
 				frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "outer-trailing"}}
-				ops := []corebattle.CallbackInvocation{{Kind: fmt.Sprintf("gem-%d", 87+offset)}}
+				ops := []corebattle.CallbackInvocation{{Kind: callingGemIDs[87+offset]}}
 				id := fmt.Sprintf("job-%d-%s", row.job, command)
 				if !d.RosterSkills[id] {
 					if err := s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
@@ -133,7 +133,7 @@ func TestCallingContributionPreservesRevivalOwnerInEitherRegistrationOrder(t *te
 		d.RegisterCallingJobs(&c)
 		s.Actors[0].Jobs.OldJobID, s.Actors[0].Jobs.OldSP = "job-66", 150
 		frame := corebattle.CallbackContext{TargetContext: c.TargetContext}
-		if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "gem-86"}}, noArithmeticDraws{t}); err != nil {
+		if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "gem_secret_art_sky"}}, noArithmeticDraws{t}); err != nil {
 			t.Fatal(err)
 		}
 	}

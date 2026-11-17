@@ -31,7 +31,7 @@ func TestSummonGemRegisteredSkippedAndMissingPool(t *testing.T) {
 		d.RegisterSummonAppearanceGems(&c, &tc)
 		d.RegisterDefenseGems()
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self", "tail"}}
-		ids := []string{"gem-82", "gem_guard_1"}
+		ids := []string{"gem_summon_sky", "gem_guard_1"}
 		ops, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
 		if count == 1 || count == 9 {
 			if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
@@ -67,7 +67,7 @@ func TestSummonAppearanceRegisteredProjectionNeverRunsPorts(t *testing.T) {
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self", "tail"}, Damage: &c.DamageContext, ArithmeticDivisor: 11}
 	before, _ := json.Marshal(s)
 	poolBefore, _ := json.Marshal(c.EnemyPool)
-	for _, id := range []string{"gem-82", "gem-100-appearance"} {
+	for _, id := range []string{"gem_summon_sky", "gem-100-appearance"} {
 		if _, err := d.InvocationAction(&s, &f, []string{id, "gem_guard_1"}, noArithmeticDraws{t}); err != nil {
 			t.Fatal(id, err)
 		}
@@ -79,7 +79,7 @@ func TestSummonAppearanceRegisteredProjectionNeverRunsPorts(t *testing.T) {
 		if first.Context.Damage.DamageCalls != 7 || first.Context.Damage.TensionCalls != 3 || first.Context.ArithmeticDivisor != 11 {
 			t.Fatal("lost enclosing operation counters", id, first)
 		}
-		if id == "gem-82" {
+		if id == "gem_summon_sky" {
 			a := &first.State.Actors[2]
 			*a.Gear.WeaponAttack = 999
 			*a.JobHistory["job-7"] = 999
@@ -121,7 +121,7 @@ func TestSummonAppearanceFrozenPayloadReloadAndRebuiltPorts(t *testing.T) {
 	for _, reload := range []bool{false, true} {
 		s, c, tc, _ := summonAppearanceFixture()
 		saved := checkpoint{s, frozenInput{Pool: c.EnemyPool, Positions: c.AppearancePositions, Hard: c.Hard, EnemyTeamID: c.EnemyTeamID, Icons: tc.MonsterIcons, Target: c.TargetContext, Arguments: []string{"self", "tail"}, DamageCalls: 7}}
-		ids := []string{"gem-82", "gem_guard_1", "gem-100-appearance"}
+		ids := []string{"gem_summon_sky", "gem_guard_1", "gem-100-appearance"}
 		for saved.Input.Next < len(ids) {
 			in := &saved.Input
 			// Only resulting facts and frozen input are persisted, never closures.

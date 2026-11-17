@@ -59,7 +59,7 @@ func TestBeastCloneExtendedCostAndThreshold(t *testing.T) {
 		s, c, d := beastCloneFixture()
 		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-26", SP: row.sp}
 		s.Actors[0].MP = row.mp
-		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 		draws := []float64(nil)
 		if row.created {
 			draws = make([]float64, 5)

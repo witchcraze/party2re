@@ -136,7 +136,7 @@ func TestGuardianRegistrationAndRevivalOwners(t *testing.T) {
 }
 
 func TestGuardianIndirectCostsAndTargetArguments(t *testing.T) {
-	for _, kind := range []string{"random", "tool-84", "gem-86"} {
+	for _, kind := range []string{"random", "tool-84", "gem_secret_art_sky"} {
 		s, c, d := guardianFixture()
 		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-18", SP: 0}
 		s.Actors[0].MP = 0
@@ -154,7 +154,7 @@ func TestGuardianIndirectCostsAndTargetArguments(t *testing.T) {
 			// Extended position7 must redraw to ordinary position5.
 			draws = []float64{17.0 / 87, 7.0 / 8, 5.0 / 8, 0, 0}
 		}
-		if kind == "gem-86" {
+		if kind == "gem_secret_art_sky" {
 			s.Actors[0].MP, s.Actors[0].Jobs.SP, draws = 100, 120, []float64{0, 0, 0}
 		}
 		executeGuardian(t, &s, c, d, "indirect", []string{"enemy", "tail"}, draws...)
@@ -170,7 +170,7 @@ func TestGuardianIndirectCostsAndTargetArguments(t *testing.T) {
 				t.Fatal(s, c)
 			}
 			want := []string{"tail"}
-			if kind == "gem-86" {
+			if kind == "gem_secret_art_sky" {
 				want = nil
 			}
 			if fmt.Sprint(c.Arguments) != fmt.Sprint(want) {
@@ -185,7 +185,7 @@ func TestGuardianIndirectCostsAndTargetArguments(t *testing.T) {
 		s, c, d := guardianFixture()
 		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-18", SP: row.sp}
 		s.Actors[0].MP = row.mp
-		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 		draws := []float64(nil)
 		if row.applied {
 			draws = []float64{0, 0, 0}

@@ -44,7 +44,7 @@ func TestTreatmentChanceFrozenReloadWithoutReplay(t *testing.T) {
 }
 
 func TestTreatmentChanceRandomAndExtendedCosts(t *testing.T) {
-	for _, kind := range []string{"random", "gem-86"} {
+	for _, kind := range []string{"random", "gem_secret_art_sky"} {
 		s, c, d := chanceFixture()
 		s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP = "job-46", 140
 		d.Invocations.Entries["invoke"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: kind}}
@@ -61,7 +61,7 @@ func TestTreatmentChanceRandomAndExtendedCosts(t *testing.T) {
 			draws, wantMP = []float64{45.1 / 87, 5.1 / 6, 3.1 / 6, .5}, 80
 		}
 		executeChance(t, &s, c, d, "invoke", nil, draws...)
-		if s.Actors[0].MP != wantMP || kind == "gem-86" && s.Actors[0].HP != 250 || kind == "random" && s.Actors[1].HP != 0 {
+		if s.Actors[0].MP != wantMP || kind == "gem_secret_art_sky" && s.Actors[0].HP != 250 || kind == "random" && s.Actors[1].HP != 0 {
 			t.Fatal(kind, s.Actors)
 		}
 	}

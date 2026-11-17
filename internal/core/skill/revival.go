@@ -84,7 +84,7 @@ func (d BattleDefinitions) RevivalInvocation(c *corebattle.RevivalContext, id st
 				if state.Context.NativeDefeat != nil {
 					next.Defeat = state.Context.NativeDefeat
 				}
-				if (id == "gem-63" || id == "gem-64") && len(next.Arguments) > 0 {
+				if (id == "gem_revive_sky_1" || id == "gem_revive_sky_2") && len(next.Arguments) > 0 {
 					next.Arguments = next.Arguments[1:]
 				}
 				branches = append(branches, corebattle.CallbackContinuation{State: state.State, Context: next})

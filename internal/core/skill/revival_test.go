@@ -20,7 +20,7 @@ func revivalRegistryFixture() (corebattle.LifetimeState, corebattle.RevivalConte
 
 func TestRevivalRegistrationConcreteProducersAndMetadata(t *testing.T) {
 	s, c, d := revivalRegistryFixture()
-	if _, err := d.RevivalAction(&s, &c, "gem-63", "fallen", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+	if _, err := d.RevivalAction(&s, &c, "gem_revive_sky_1", "fallen", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatal(err)
 	}
 	d.RegisterRevivals(&c)
@@ -67,12 +67,12 @@ func TestRevivalRegistrationConcreteProducersAndMetadata(t *testing.T) {
 	if len(d.Invocations.JobTables) != 0 {
 		t.Fatal("registered partial job table")
 	}
-	entry, err := d.RevivalAction(&s, &c, "gem-63", "fallen", noArithmeticDraws{t})
-	if err != nil || entry.ID != "gem-63" {
+	entry, err := d.RevivalAction(&s, &c, "gem_revive_sky_1", "fallen", noArithmeticDraws{t})
+	if err != nil || entry.ID != "gem_revive_sky_1" {
 		t.Fatal(entry, err)
 	}
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"fallen", "tail"}}
-	ops, err := d.InvocationAction(&s, &frame, []string{"gem-63"}, noArithmeticDraws{t})
+	ops, err := d.InvocationAction(&s, &frame, []string{"gem_revive_sky_1"}, noArithmeticDraws{t})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRevivalRegistrationConcreteProducersAndMetadata(t *testing.T) {
 	var rebuilt BattleDefinitions
 	rebuilt.RegisterRevivals(&c)
 	frame.Arguments = []string{"fallen", "tail"}
-	if err = rebuilt.Invocations.Entries["gem-64"].Execute(&loaded, &frame, noArithmeticDraws{t}); err != nil || loaded.Actors[2].HP != 101 || !reflect.DeepEqual(frame.Arguments, []string{"tail"}) {
+	if err = rebuilt.Invocations.Entries["gem_revive_sky_2"].Execute(&loaded, &frame, noArithmeticDraws{t}); err != nil || loaded.Actors[2].HP != 101 || !reflect.DeepEqual(frame.Arguments, []string{"tail"}) {
 		t.Fatal(loaded, frame, err)
 	}
 }
@@ -109,7 +109,7 @@ func TestRevivalUnsupportedClosuresRejectBeforeRandomOrDelegatedExecution(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, ids := range [][]string{{"gem-66"}, {"job-7-entry-8"}, {"delegated"}, {"random"}, {"tool-110"}} {
+	for _, ids := range [][]string{{"gem_sacrifice_soul"}, {"job-7-entry-8"}, {"delegated"}, {"random"}, {"tool-110"}} {
 		if _, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(ids, err)
 		}
@@ -169,7 +169,7 @@ func TestSacrificeAutomaticRevivalControlsLaterSlotsAndCMP(t *testing.T) {
 			},
 		}
 		frame := corebattle.CallbackContext{TargetContext: c.TargetContext}
-		ops, err := d.InvocationAction(&s, &frame, []string{"gem-66", "later"}, noArithmeticDraws{t})
+		ops, err := d.InvocationAction(&s, &frame, []string{"gem_sacrifice_soul", "later"}, noArithmeticDraws{t})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -197,7 +197,7 @@ func TestRevivalOrdinaryFallenAndBanGatesRetainIndirectBodySemantics(t *testing.
 		if _, err := d.RevivalAction(&s, &c, "job-66-revive", "", noArithmeticDraws{t}); (err == nil) != (helperHP > 0) {
 			t.Fatal(helperHP, err)
 		}
-		if _, err := d.RevivalAction(&s, &c, "gem-64", "fallen", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		if _, err := d.RevivalAction(&s, &c, "gem_revive_sky_2", "fallen", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(err)
 		}
 	}

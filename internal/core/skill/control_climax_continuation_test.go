@@ -221,7 +221,7 @@ func TestControlReloadAndDelegatedCosts(t *testing.T) {
 	// gem86 debits after the extended callback, while a naked entry does not.
 	s, c, d = controlFixture()
 	s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP = "job-58", 160
-	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 	executeControl(t, &s, c, d, "extended", []string{"enemy"}, 0)
 	if s.Actors[0].MP != 42 || s.Actors[0].CMP != 90 || s.Actors[1].HP != 837 {
 		t.Fatal(s)

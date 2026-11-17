@@ -179,9 +179,9 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 			return p.allTables("tool-84")
 		}
 		return p.table(callbackJob(p.s.actor(p.c.ActorID).Jobs.JobID), "tool-84", false)
-	case "gem-86":
+	case "gem_secret_art_sky":
 		if afterEffects {
-			return p.allTables("gem-86")
+			return p.allTables("gem_secret_art_sky")
 		}
 		a := p.s.actor(p.c.ActorID)
 		for _, job := range []struct {
@@ -209,7 +209,7 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 			if entry.MPCost > a.MP || entry.RequiredSP > job.sp {
 				return nil // Handled without executing: no fallback/child context.
 			}
-			return p.table(id, "gem-86", false)
+			return p.table(id, "gem_secret_art_sky", false)
 		}
 		return nil
 	default:
@@ -258,7 +258,7 @@ func (p *callbackAdmission) allTables(kind string) error {
 }
 
 func (p *callbackAdmission) table(job int, kind string, afterEffects bool) error {
-	if _, calling := callingCommand(kind); calling || kind == "gem-86" {
+	if _, calling := callingCommand(kind); calling || kind == "gem_secret_art_sky" {
 		child := explicitCallbackTarget(p.c)
 		copy := *p
 		copy.c, copy.explicitTarget = &child, true
@@ -289,7 +289,7 @@ func (p *callbackAdmission) table(job int, kind string, afterEffects bool) error
 		if kind == "random" && len(entries) > 0 && !ordinary || (kind == "tool-84" || kind == "generated") && len(entries) == 0 {
 			return ErrUnsupportedEffect
 		}
-		if kind == "gem-86" {
+		if kind == "gem_secret_art_sky" {
 			if len(entries) == 0 || !entries[len(entries)-1].Extended {
 				continue
 			}

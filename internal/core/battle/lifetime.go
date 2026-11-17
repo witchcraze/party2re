@@ -26,6 +26,7 @@ type LifetimeActor struct {
 	NPC               bool            `json:"npc"`
 	EncounterIdentity string          `json:"encounter_identity,omitempty"` // Server-owned NPC collision identity, independent of display names.
 	NPCLoadout        *NPCLoadout     `json:"npc_loadout,omitempty"`
+	Custom            *CustomLoadout  `json:"custom,omitempty"`
 	RosterIdentity    string          `json:"roster_identity,omitempty"`
 	RosterDetached    bool            `json:"-"` // Dismissal changes color before the request's ordered arrays are rebuilt.
 	SummonForm        int             `json:"summon_form,omitempty"`

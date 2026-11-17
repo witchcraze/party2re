@@ -13,7 +13,7 @@ type SummonAppearanceGemEntry struct {
 // SummonAppearanceGemEntries retains intrinsic identities and outer CMP metadata
 // from ff97fc5:_data.cgi:2170,2188–2193. The consumer owns charging.
 func SummonAppearanceGemEntries() []SummonAppearanceGemEntry {
-	return []SummonAppearanceGemEntry{{"gem-82", 82, 18}, {"gem-100-appearance", 100, 0}}
+	return []SummonAppearanceGemEntry{{"gem_summon_sky", 82, 18}, {"gem-100-appearance", 100, 0}}
 }
 
 // RegisterSummonAppearanceGems binds the existing bodies and pure alternatives.
@@ -25,15 +25,15 @@ func (d *BattleDefinitions) RegisterSummonAppearanceGems(roster *corebattle.Rost
 	if d.RosterSkills == nil {
 		d.RosterSkills = make(map[string]bool)
 	}
-	d.RosterSkills["gem-82"] = true
-	summon := d.RosterInvocation(roster, "gem-82")
+	d.RosterSkills["gem_summon_sky"] = true
+	summon := d.RosterInvocation(roster, "gem_summon_sky")
 	summon.ProjectBranches = func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
 		if roster == nil {
 			return nil, corebattle.ErrUnsupportedEffect
 		}
 		return s.ProjectEnemySummon(roster, f)
 	}
-	d.Invocations.Entries["gem-82"] = summon
+	d.Invocations.Entries["gem_summon_sky"] = summon
 	d.Invocations.Entries["gem-100-appearance"] = corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
 			if appearance == nil {

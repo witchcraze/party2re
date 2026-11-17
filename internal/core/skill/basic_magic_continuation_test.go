@@ -72,7 +72,7 @@ func TestBasicMagicDelegatedExtendedThresholdsAndCosts(t *testing.T) {
 			} else {
 				s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP = row.jobID, row.sp
 			}
-			d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+			d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 			executeBasicMagic(t, &s, c, d, "extended", []string{"enemy", "tail"}, row.draws...)
 			if s.Actors[0].MP != row.remaining || s.Actors[1].HP != 900-row.damage {
 				t.Fatal(row, previous, s, c)
