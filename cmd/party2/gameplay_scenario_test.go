@@ -20,6 +20,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
+	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
@@ -238,6 +239,7 @@ type scenarioContext struct {
 			} `json:"pending_remittances"`
 			Listings      []fleamarket.Listing `json:"listings"`
 			OwnedListings []fleamarket.Listing `json:"owned_listings"`
+			Quests        []helperquest.Quest  `json:"quests"`
 			// Shop wares and Depot contents share the key.
 			Items []struct {
 				ID             string         `json:"id"`
