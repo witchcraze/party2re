@@ -90,7 +90,7 @@ func TestMartialIndirectTablesAndExtendedCharge(t *testing.T) {
 		s, c, d := martialFixture()
 		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-04", SP: 100}
 		s.Actors[0].MP = mp
-		d.Invocations.Entries["extension"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+		d.Invocations.Entries["extension"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 		executeMartial(t, &s, c, d, "extension", nil)
 		wantMP := 9
 		if mp == 10 {

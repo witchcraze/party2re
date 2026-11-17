@@ -10,7 +10,7 @@ func (s *LifetimeState) ProjectEnemySummon(c *RosterContext, frame *CallbackCont
 	}
 	child := *c
 	child.TargetContext = frame.TargetContext
-	if err := s.ValidateRoster(&child, "gem-82", "", random.Default()); err != nil {
+	if err := s.ValidateRoster(&child, "gem_summon_sky", "", random.Default()); err != nil {
 		return nil, err
 	}
 	if len(s.Actors) >= 10 || len(frame.EnemyIDs) > 1 {

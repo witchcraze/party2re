@@ -20,7 +20,7 @@ import (
 func TestWeaponSealAdapterPreservesAdmissionFactsOnReload(t *testing.T) {
 	ctx := context.Background()
 	chars, inventory, equipment := newMockCharRepo(), newMockInvRepo(), newMockEquipRepo()
-	char := corecharacter.Character{ID: "self", JobID: "job-1", WeaponSeal: 7, OldJobID: "job-2", OldSP: 90, Stats: corecharacter.Stats{HP: 1000, MaxHP: 1000, MP: 40}}
+	char := corecharacter.Character{ID: "self", JobID: "job-01", WeaponSeal: 7, OldJobID: "job-02", OldSP: 90, Stats: corecharacter.Stats{HP: 1000, MaxHP: 1000, MP: 40}}
 	chars.characters[char.ID] = char
 	weapon := coreitem.Instance{ID: "equipped-weapon", DefinitionID: "weapon-36", Quantity: 1}
 	if err := inventory.Save(ctx, coreinventory.Inventory{CharacterID: char.ID, Items: []coreitem.Instance{weapon}}); err != nil {

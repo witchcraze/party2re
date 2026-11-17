@@ -126,7 +126,7 @@ func TestInvocationWrapperProjectionExtendedNumericBoundaries(t *testing.T) {
 				return nil
 			}, Execute: d.Entries["noop"].Execute,
 		}
-		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: "gem-86"}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); err != nil {
+		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: "gem_secret_art_sky"}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); err != nil {
 			t.Fatal(row, err)
 		}
 	}
@@ -155,7 +155,7 @@ func TestInvocationWrapperProjectionExtendedNumericBoundaries(t *testing.T) {
 				return nil
 			}, Execute: d.Entries["noop"].Execute,
 		}
-		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: "gem-86"}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); err != nil {
+		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: "gem_secret_art_sky"}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); err != nil {
 			t.Fatal(row, err)
 		}
 	}

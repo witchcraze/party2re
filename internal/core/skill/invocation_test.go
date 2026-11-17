@@ -14,7 +14,7 @@ func TestInvocationRegistrySharesWholeActionAdmission(t *testing.T) {
 	s := corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{{Participant: corebattle.Participant{ID: "self", TeamID: "party", HP: 100, MP: 20, CMP: 20}, Jobs: corebattle.BattleJobs{JobID: "job-73"}}}}
 	c := corebattle.CallbackContext{TargetContext: corebattle.TargetContext{ActorID: "self", PartyIDs: []string{"self"}}}
 	d := BattleDefinitions{Invocations: corebattle.CallbackCatalog{Entries: map[string]corebattle.CallbackDefinition{
-		"extended": {Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}},
+		"extended": {Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}},
 		"book": {Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
 			Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error {
 				t.Fatal("preflight executed book")

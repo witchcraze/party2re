@@ -82,14 +82,14 @@ func TestTimeMixedMagicIndirectPoolsCostsAndMissingOwner(t *testing.T) {
 func TestTimeMixedMagicDelegatedExtendedCostAndExplicitTarget(t *testing.T) {
 	s, c, d := timeMagicFixture()
 	s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP = "job-30", 150
-	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 	executeTimeMagic(t, &s, c, d, "extended", []string{"enemy", "self"}, 0)
 	if s.Actors[0].MP != 22 || s.Actors[1].HP != 585 || len(c.Arguments) != 0 {
 		t.Fatal(s, c)
 	}
 	s, c, d = timeMagicFixture()
 	s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP, s.Actors[0].MP = "job-30", 149, 80
-	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 	executeTimeMagic(t, &s, c, d, "extended", []string{"enemy"})
 	if s.Actors[0].MP != 80 || s.Actors[1].HP != 900 {
 		t.Fatal(s)

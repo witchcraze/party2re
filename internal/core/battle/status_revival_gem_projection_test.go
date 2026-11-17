@@ -9,7 +9,7 @@ import (
 func TestRevivalGemIndependentPartyChanceAndHalfFullOracles(t *testing.T) {
 	s, c := revivalFixture()
 	s.actor("ally").HP = 0
-	branches, err := s.ProjectRevivalGemBranches(&c, "gem-65", "")
+	branches, err := s.ProjectRevivalGemBranches(&c, "gem_revive_sky_3", "")
 	if err != nil || len(branches) != 4 {
 		t.Fatal(len(branches), err)
 	}
@@ -26,7 +26,7 @@ func TestRevivalGemIndependentPartyChanceAndHalfFullOracles(t *testing.T) {
 		p := s.callbackCopy()
 		child := c
 		rng := &targetRNG{t: t, draws: draws}
-		if _, err = p.ApplyRevival(&child, "gem-65", "", rng); err != nil {
+		if _, err = p.ApplyRevival(&child, "gem_revive_sky_3", "", rng); err != nil {
 			t.Fatal(err)
 		}
 		rng.done()
@@ -34,10 +34,10 @@ func TestRevivalGemIndependentPartyChanceAndHalfFullOracles(t *testing.T) {
 			t.Fatal(p)
 		}
 	}
-	for _, id := range []string{"gem-63", "gem-64"} {
+	for _, id := range []string{"gem_revive_sky_1", "gem_revive_sky_2"} {
 		states, err := s.ProjectRevivalGemBranches(&c, id, "fallen")
 		want := 50
-		if id == "gem-64" {
+		if id == "gem_revive_sky_2" {
 			want = 101
 		}
 		if err != nil || len(states) != 1 || states[0].State.actor("fallen").HP != want {
@@ -54,7 +54,7 @@ func TestRevivalGemSealAbsorptionAndNestedIsolation(t *testing.T) {
 	s.actor("fallen").Gear.WeaponAttack = &weapon
 	s.actor("fallen").JobHistory = map[string]*int{"job-01": &sp}
 	c.NativeDefeat = &DefeatContext{EquipmentResetContext: EquipmentResetContext{RequesterLevel: &level, Seals: &WeaponSealTable{DragonAttack: 7}}}
-	states, err := s.ProjectRevivalGemBranches(&c, "gem-63", "fallen")
+	states, err := s.ProjectRevivalGemBranches(&c, "gem_revive_sky_1", "fallen")
 	if err != nil || len(states) != 21 {
 		t.Fatal(len(states), err)
 	}
@@ -210,13 +210,13 @@ func TestSacrificeGemAdmitsMissingContextOnlyWhenUnreachable(t *testing.T) {
 		Validate: func(*LifetimeState, TargetContext, string) error { return ErrUnsupportedEffect },
 		Apply:    func(*LifetimeState, TargetContext, string) error { t.Fatal("projection called Apply"); return nil },
 	}}
-	states, err := s.ProjectRevivalGemBranches(&c, "gem-66", "")
+	states, err := s.ProjectRevivalGemBranches(&c, "gem_sacrifice_soul", "")
 	if err != nil || len(states) != 1 || states[0].State.actor("self").HP != 101 || states[0].State.actor("self").MP != 0 || s.actor("fallen").HP != 0 {
 		t.Fatal(states, err)
 	}
 	s.actor("self").Gear.AccessoryID = "item-110"
 	before := s.callbackCopy()
-	if _, err = s.ApplyRevival(&c, "gem-66", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) {
+	if _, err = s.ApplyRevival(&c, "gem_sacrifice_soul", "", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) {
 		t.Fatal("unsupported reset ran after healing", err, s)
 	}
 }

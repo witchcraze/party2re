@@ -25,7 +25,7 @@ func TestRevivalSingleFormulasAndChances(t *testing.T) {
 		draws []float64
 	}{
 		{"tool-6", 101, nil}, {"book-173", 50, []float64{.499}}, {"book-173", 0, []float64{.5}},
-		{"book-196", 101, nil}, {"gem-63", 50, nil}, {"gem-64", 101, nil},
+		{"book-196", 101, nil}, {"gem_revive_sky_1", 50, nil}, {"gem_revive_sky_2", 101, nil},
 		{"job-5-entry-7", 50, []float64{0}}, {"job-39-entry-5", 0, []float64{.9}},
 		{"job-16-entry-6", 25, nil}, {"job-17-entry-6", 101, nil}, {"job-18-entry-6", 101, nil},
 		{"job-33-entry-6", 101, nil}, {"job-43-entry-6", 101, nil},
@@ -50,7 +50,7 @@ func TestRevivalSingleFormulasAndChances(t *testing.T) {
 }
 
 func TestRevivalPartyGuardsAndIndependentDraws(t *testing.T) {
-	for _, id := range []string{"gem-65", "job-18-entry-4", "job-70-entry-3", "job-51-entry-5", "extension-261", "job-32-entry-4"} {
+	for _, id := range []string{"gem_revive_sky_3", "job-18-entry-4", "job-70-entry-3", "job-51-entry-5", "extension-261", "job-32-entry-4"} {
 		t.Run(id, func(t *testing.T) {
 			s, c := revivalFixture()
 			s.actor("self").Status = StatusMagicSeal
@@ -159,7 +159,7 @@ func TestHelperRevivalBranchesBanAndReload(t *testing.T) {
 }
 
 func TestSacrificeAdmissionAndOrder(t *testing.T) {
-	for _, id := range []string{"gem-66", "job-3-entry-6", "job-14-entry-4", "job-17-entry-4", "job-76-entry-3", "job-50-entry-6", "job-7-entry-8"} {
+	for _, id := range []string{"gem_sacrifice_soul", "job-3-entry-6", "job-14-entry-4", "job-17-entry-4", "job-76-entry-3", "job-50-entry-6", "job-7-entry-8"} {
 		t.Run(id, func(t *testing.T) {
 			s, c := revivalFixture()
 			before := reloadLifetime(t, s)
@@ -197,7 +197,7 @@ func TestSacrificeAdmissionAndOrder(t *testing.T) {
 				t.Fatal(err)
 			}
 			wantMP := 1
-			if id == "gem-66" {
+			if id == "gem_sacrifice_soul" {
 				wantMP = 0
 			}
 			if s.actor("self").HP != 20 || s.actor("self").MP != wantMP || order[len(order)-1] != "defeat" {

@@ -92,9 +92,9 @@ func TestCallingProjectedCopyDeathAndSpawnSelectCurrentEligibility(t *testing.T)
 					return err
 				},
 			}
-			kind := "gem-87"
+			kind := "gem_call_summon"
 			if change == "spawn" {
-				kind = "gem-91"
+				kind = "gem_order_defend"
 			}
 			d.Invocations.Entries["calling"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: kind}}
 			ops, err := d.InvocationAction(&s, &frame, []string{"prior", "calling"}, noArithmeticDraws{t})

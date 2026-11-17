@@ -42,7 +42,7 @@ func TestInvocationExtendedHandledVersusFallback(t *testing.T) {
 			// A prior extended entry is never inspected, including when unsupported.
 			d.JobTables[1] = invocationTable(CallbackEntry{ID: "missing", Extended: true}, CallbackEntry{ID: "current", Extended: tc.currentEx, RequiredSP: 10, MPCost: 5})
 			d.JobTables[2] = invocationTable(CallbackEntry{ID: "previous", Extended: true, MPCost: 7})
-			if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: "gem-86"}}, &targetRNG{t: t}); err != nil || called != tc.want || a.MP != tc.wantMP {
+			if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: "gem_secret_art_sky"}}, &targetRNG{t: t}); err != nil || called != tc.want || a.MP != tc.wantMP {
 				t.Fatal(called, a, err)
 			}
 		})
@@ -50,7 +50,7 @@ func TestInvocationExtendedHandledVersusFallback(t *testing.T) {
 	// An unusable last extended callback needs neither an executor nor its context.
 	s, c, d := invocationFixture()
 	d.JobTables[1] = invocationTable(CallbackEntry{ID: "unsupported", Extended: true, RequiredSP: 100})
-	if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: "gem-86"}}, &targetRNG{t: t}); err != nil {
+	if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: "gem_secret_art_sky"}}, &targetRNG{t: t}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -64,7 +64,7 @@ func TestInvocationExtendedJob73(t *testing.T) {
 			d.JobTables[2] = invocationTable(CallbackEntry{ID: "missing", Extended: true})
 			// No SP, item admission or proxied table is required by this special case.
 			d.JobTables = map[int]CallbackTable{2: d.JobTables[2]}
-			if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: "gem-86"}}, &targetRNG{t: t}); err != nil {
+			if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: "gem_secret_art_sky"}}, &targetRNG{t: t}); err != nil {
 				t.Fatal(err)
 			}
 			want := attack
@@ -82,7 +82,7 @@ func TestInvocationCallingFirstMatchAndPreviousPreference(t *testing.T) {
 	for source := 87; source <= 92; source++ {
 		s, c, d := invocationFixture()
 		s.actor("self").Jobs = BattleJobs{JobID: "job-59", OldJobID: "job-60"}
-		kind := fmt.Sprintf("gem-%d", source)
+		kind := map[int]string{87: "gem_call_summon", 88: "gem_order_flee", 89: "gem_order_attack", 90: "gem_order_finisher", 91: "gem_order_defend", 92: "gem_order_special_sky"}[source]
 		name, _ := callingCommand(kind)
 		selected := ""
 		for _, id := range []string{"first", "duplicate", "current"} {

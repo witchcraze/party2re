@@ -73,7 +73,7 @@ func TestAdvancedMagicDelegatedExtendedCostAndNoEffect(t *testing.T) {
 	for _, sp := range []int{129, 130} {
 		s, c, d := advancedMagicFixture()
 		s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP = "job-15", sp
-		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 		draws := []float64{0}
 		if sp == 129 {
 			draws = nil

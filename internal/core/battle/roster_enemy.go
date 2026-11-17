@@ -3,7 +3,7 @@ package battle
 import "github.com/witchcraze/party2re/internal/core/random"
 
 func (s *LifetimeState) validateEnemySummon(c *RosterContext, id string) error {
-	if len(s.Actors) >= 10 || id == "gem-82" && len(c.EnemyIDs) > 1 {
+	if len(s.Actors) >= 10 || id == "gem_summon_sky" && len(c.EnemyIDs) > 1 {
 		return nil
 	}
 	if len(c.EnemyPool) == 0 || c.EnemyTeamID == "" {
@@ -37,7 +37,7 @@ func (s *LifetimeState) validateEnemySummon(c *RosterContext, id string) error {
 // extended effects, custom costs and rewards. Only source-listed fields scale.
 func (s *LifetimeState) summonEnemy(c *RosterContext, id string, rng random.Generator) (RosterResult, error) {
 	r := RosterResult{}
-	if len(s.Actors) >= 10 || id == "gem-82" && len(c.EnemyIDs) > 1 {
+	if len(s.Actors) >= 10 || id == "gem_summon_sky" && len(c.EnemyIDs) > 1 {
 		return r, nil
 	}
 	suffix := int(rng.Float64() * 18)

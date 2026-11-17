@@ -144,7 +144,7 @@ func TestRecoilDarkRegistrationNoEffectAndIndirectCosts(t *testing.T) {
 	}
 	s, c, d = recoilDarkFixture()
 	s.Actors[0].Jobs.JobID, s.Actors[0].Jobs.SP = "job-21", 110
-	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+	d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 	executeRecoilDark(t, &s, c, d, []string{"extended"}, nil)
 	if s.Actors[0].MP != 60 || s.Actors[0].Tension != 3 {
 		t.Fatal(s)

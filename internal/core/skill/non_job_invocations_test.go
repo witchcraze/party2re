@@ -30,9 +30,9 @@ func TestNonJobInvocationRegistration(t *testing.T) {
 		kind string
 		cost int
 	}{
-		"tool-84": {"tool-84", 0}, "tool-85": {"random", 0}, "gem-83": {"random", 5},
-		"gem-86": {"gem-86", 20}, "gem-87": {"gem-87", 15}, "gem-88": {"gem-88", 1},
-		"gem-89": {"gem-89", 15}, "gem-90": {"gem-90", 20}, "gem-91": {"gem-91", 15}, "gem-92": {"gem-92", 40},
+		"tool-84": {"tool-84", 0}, "tool-85": {"random", 0}, "gem_metronome": {"random", 5},
+		"gem_secret_art_sky": {"gem_secret_art_sky", 20}, "gem_call_summon": {"gem_call_summon", 15}, "gem_order_flee": {"gem_order_flee", 1},
+		"gem_order_attack": {"gem_order_attack", 15}, "gem_order_finisher": {"gem_order_finisher", 20}, "gem_order_defend": {"gem_order_defend", 15}, "gem_order_special_sky": {"gem_order_special_sky", 40},
 	}
 	if len(d.Invocations.Entries) != len(want) || len(NonJobInvocationEntries()) != len(want) {
 		t.Fatal("incomplete wrapper subset")
@@ -50,12 +50,15 @@ func TestNonJobInvocationRegistration(t *testing.T) {
 	}
 }
 
+// callingGemIDs maps source gem numbers to persisted catalog IDs.
+var callingGemIDs = map[int]string{87: "gem_call_summon", 88: "gem_order_flee", 89: "gem_order_attack", 90: "gem_order_finisher", 91: "gem_order_defend", 92: "gem_order_special_sky"}
+
 // Concrete calling bodies, not stand-ins: old59 wins over current60, then
 // non-calling old01 permits current59. SP0/MP0 waive listed child costs.
 func TestNonJobInvocationCallingBodies(t *testing.T) {
 	for _, previous := range []bool{false, true} {
 		for gem := 87; gem <= 92; gem++ {
-			t.Run(fmt.Sprintf("gem-%d/previous-%t", gem, previous), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/previous-%t", callingGemIDs[gem], previous), func(t *testing.T) {
 				s, c, d := callingManifestFixture()
 				s.Actors[0].MP = 0
 				if !previous {
@@ -67,7 +70,7 @@ func TestNonJobInvocationCallingBodies(t *testing.T) {
 					addCallingManifestHelper(&s, &c, 59)
 				}
 				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
-				runNonJobInvocation(t, &s, &f, d, []string{fmt.Sprintf("gem-%d", gem)}, callingZeroDraw{})
+				runNonJobInvocation(t, &s, &f, d, []string{callingGemIDs[gem]}, callingZeroDraw{})
 				name := map[int]string{87: "summon", 88: "dismiss", 89: "attack", 90: "special", 91: "defend", 92: "merge"}[gem]
 				checkCallingIntrinsic(t, &s, &c, name, 59, [5]int{63, 108, 45, 27, 108})
 				wantMP := 0
@@ -158,7 +161,7 @@ func TestNonJobInvocationExtendedGuards(t *testing.T) {
 			d.RegisterCallingJobs(&c)
 			d.RegisterNonJobInvocations()
 			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-			runNonJobInvocation(t, &s, &f, d, []string{"gem-86"}, callingZeroDraw{})
+			runNonJobInvocation(t, &s, &f, d, []string{"gem_secret_art_sky"}, callingZeroDraw{})
 			if (s.Actors[1].HP == 9914) != row.applied || s.Actors[0].MP != row.wantMP || len(s.Actors) != 4 {
 				t.Fatal(s)
 			}
@@ -172,7 +175,7 @@ func TestNonJobInvocationExtendedGuards(t *testing.T) {
 			var d BattleDefinitions
 			d.RegisterNonJobInvocations() // No item158, SP, tables or child ports.
 			f := corebattle.CallbackContext{TargetContext: c.TargetContext}
-			runNonJobInvocation(t, &s, &f, d, []string{"gem-86"}, noArithmeticDraws{t})
+			runNonJobInvocation(t, &s, &f, d, []string{"gem_secret_art_sky"}, noArithmeticDraws{t})
 			want := attack
 			if attack < 999 && mp > 0 {
 				want += 3
@@ -197,7 +200,7 @@ func TestNonJobInvocationMissingDescendantsRejectWithoutMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	args, party, gear := append([]string(nil), f.Arguments...), append([]string(nil), f.PartyIDs...), *s.Actors[0].Gear
-	for _, ids := range [][]string{{"tool-85"}, {"gem-83"}, {"gem-87", "gem-83"}, {"gem-87", "tool-110"}, {"gem-101"}, {"gem-102"}} {
+	for _, ids := range [][]string{{"tool-85"}, {"gem_metronome"}, {"gem_call_summon", "gem_metronome"}, {"gem_call_summon", "tool-110"}, {"gem-101"}, {"gem-102"}} {
 		if _, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(ids, err)
 		}

@@ -88,6 +88,10 @@ func (actor LifetimeActor) Clone() LifetimeActor {
 		loadout := *a.NPCLoadout
 		a.NPCLoadout = &loadout
 	}
+	if a.Custom != nil {
+		custom := *a.Custom
+		a.Custom = &custom
+	}
 	a.Abilities = slices.Clone(a.Abilities)
 	a.ItemDefinitionIDs = slices.Clone(a.ItemDefinitionIDs)
 	a.ConsumedItems = slices.Clone(a.ConsumedItems)
@@ -162,7 +166,7 @@ func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[Callbac
 			return nil, err
 		}
 		return p.projectSelection(callbackSelection{child: &child}, false, seen)
-	case "gem-86":
+	case "gem_secret_art_sky":
 		return p.projectExtended(seen)
 	}
 	name, calling := callingCommand(op.Kind)

@@ -162,7 +162,7 @@ func TestCounterResetEmptyRegistrationAndIndirectCosts(t *testing.T) {
 			t.Fatal(job, err)
 		}
 	}
-	for _, kind := range []string{"tool-84", "random", "gem-86"} {
+	for _, kind := range []string{"tool-84", "random", "gem_secret_art_sky"} {
 		s, c, d = counterResetFixture()
 		s.Actors[0].Jobs.JobID, s.Actors[0].MP = "job-37", 0
 		d.Invocations.Entries["indirect"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: kind}}
@@ -179,12 +179,12 @@ func TestCounterResetEmptyRegistrationAndIndirectCosts(t *testing.T) {
 			}
 			draws = []float64{36.0 / 87, 3.0 / 8}
 		}
-		if kind == "gem-86" {
+		if kind == "gem_secret_art_sky" {
 			draws = nil
 		}
 		executeCounterReset(t, &s, c, d, "indirect", []string{"enemy", "tail"}, draws...)
 		want := corebattle.TemporaryReduceMagic
-		if kind == "gem-86" {
+		if kind == "gem_secret_art_sky" {
 			want = ""
 		} // No extension: handled without effect.
 		if s.Actors[0].MP != 0 || s.Actors[0].Temporary != want {

@@ -134,7 +134,7 @@ func TestWeaponWeatherStanceCurrentPreviousCostAndNameCollisions(t *testing.T) {
 				d.Invocations.JobTables[job].Variants[0][i].Name = "shared-display-alias"
 			}
 		}
-		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 		draws := []float64(nil)
 		wantMP, wantHP := 65, 500
 		if current == "job-28" { // No current extended entry: use old job27.

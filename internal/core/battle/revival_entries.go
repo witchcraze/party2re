@@ -27,10 +27,10 @@ func RevivalEntries() []CallbackEntry {
 		{ID: "tool-6", Name: "蘇生の葉"},
 		{ID: "book-173", Name: "半蘇生の書", MPCost: 80},
 		{ID: "book-196", Name: "完全蘇生の書", MPCost: 180},
-		{ID: "gem-63", Name: "半蘇生の珠"},
-		{ID: "gem-64", Name: "完全蘇生の珠"},
-		{ID: "gem-65", Name: "蘇生の声の珠"},
-		{ID: "gem-66", Name: "献命の珠"},
+		{ID: "gem_revive_sky_1", Name: "半蘇生の珠"},
+		{ID: "gem_revive_sky_2", Name: "完全蘇生の珠"},
+		{ID: "gem_revive_sky_3", Name: "蘇生の声の珠"},
+		{ID: "gem_sacrifice_soul", Name: "献命の珠"},
 		{ID: "extension-261", Name: "呪いの蘇生"},
 	}
 }
@@ -43,14 +43,14 @@ type revivalBody struct {
 func revivalSpec(id string) (revivalBody, bool) {
 	b := revivalBody{mode: "single", fraction: 1, chance: 1}
 	switch id {
-	case "tool-6", "book-196", "gem-64", "job-17-entry-6", "job-18-entry-6", "job-33-entry-6", "job-43-entry-6":
+	case "tool-6", "book-196", "gem_revive_sky_2", "job-17-entry-6", "job-18-entry-6", "job-33-entry-6", "job-43-entry-6":
 	case "book-173", "job-5-entry-7", "job-39-entry-5", "job-57-entry-4":
 		b.fraction, b.chance = .5, .5
-	case "gem-63":
+	case "gem_revive_sky_1":
 		b.fraction = .5
 	case "job-16-entry-6":
 		b.fraction = .25
-	case "gem-65", "job-18-entry-4", "job-70-entry-3":
+	case "gem_revive_sky_3", "job-18-entry-4", "job-70-entry-3":
 		b.mode, b.fraction, b.chance = "party", .5, .5
 	case "job-32-entry-4":
 		b.mode, b.fraction = "party", .15
@@ -58,7 +58,7 @@ func revivalSpec(id string) (revivalBody, bool) {
 		b.mode, b.chance = "party", .2
 	case "extension-261":
 		b.mode = "party"
-	case "gem-66", "job-3-entry-6", "job-14-entry-4", "job-17-entry-4", "job-76-entry-3":
+	case "gem_sacrifice_soul", "job-3-entry-6", "job-14-entry-4", "job-17-entry-4", "job-76-entry-3":
 		b.mode = "sacrifice"
 	case "job-7-entry-8":
 		b.mode = "death-sacrifice"

@@ -169,7 +169,7 @@ func TestBaseGuardIndirectTablesAndCosts(t *testing.T) {
 		s, c, d := baseGuardFixture()
 		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-2", SP: 100}
 		s.Actors[0].MP = mp
-		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem-86"}}
+		d.Invocations.Entries["extended"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}}
 		draws := []float64(nil)
 		if mp == 49 {
 			draws = []float64{0}

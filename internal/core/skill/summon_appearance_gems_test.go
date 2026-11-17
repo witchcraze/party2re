@@ -34,7 +34,7 @@ func summonAppearanceFixture() (corebattle.LifetimeState, corebattle.RosterConte
 func TestSummonAppearanceGemBindingsAndGates(t *testing.T) {
 	s, c, tc, d := summonAppearanceFixture()
 	d.RegisterSummonAppearanceGems(&c, &tc)
-	want := []SummonAppearanceGemEntry{{"gem-82", 82, 18}, {"gem-100-appearance", 100, 0}}
+	want := []SummonAppearanceGemEntry{{"gem_summon_sky", 82, 18}, {"gem-100-appearance", 100, 0}}
 	if !reflect.DeepEqual(SummonAppearanceGemEntries(), want) || len(d.Invocations.Entries) != 2 {
 		t.Fatal(SummonAppearanceGemEntries(), d.Invocations)
 	}
@@ -69,7 +69,7 @@ func TestSummonGemBeforeRegisteredTargetHelper(t *testing.T) {
 	d.RegisterSummonAppearanceGems(&c, &tc)
 	d.RegisterRecoveryStatGems(&c.EffectContext)
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self", "tail"}}
-	ops, err := d.InvocationAction(&s, &f, []string{"gem-82", "gem_calm_orb"}, noArithmeticDraws{t})
+	ops, err := d.InvocationAction(&s, &f, []string{"gem_summon_sky", "gem_calm_orb"}, noArithmeticDraws{t})
 	if err != nil || len(s.Actors) != 2 || c.DamageCalls != 0 {
 		t.Fatal("discovery", err, s, c)
 	}
@@ -110,10 +110,10 @@ func TestSummonGemRejectsNewUnsupportedTargetBeforePrefix(t *testing.T) {
 	}
 	before, _ := json.Marshal(s)
 	for _, discovery := range []bool{true, false} {
-		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem-82"}, {Kind: "entry", EntryID: "job-69-small"}}
+		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_summon_sky"}, {Kind: "entry", EntryID: "job-69-small"}}
 		var err error
 		if discovery {
-			_, err = d.InvocationAction(&s, &f, []string{"gem-82", "job-69-small"}, noArithmeticDraws{t})
+			_, err = d.InvocationAction(&s, &f, []string{"gem_summon_sky", "job-69-small"}, noArithmeticDraws{t})
 		} else {
 			err = s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t})
 		}

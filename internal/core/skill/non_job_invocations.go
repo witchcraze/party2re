@@ -16,14 +16,14 @@ func NonJobInvocationEntries() []NonJobInvocationEntry {
 	return []NonJobInvocationEntry{
 		{"tool-84", 0, corebattle.CallbackInvocation{Kind: "tool-84"}},
 		{"tool-85", 0, corebattle.CallbackInvocation{Kind: "random"}},
-		{"gem-83", 5, corebattle.CallbackInvocation{Kind: "random"}},
-		{"gem-86", 20, corebattle.CallbackInvocation{Kind: "gem-86"}},
-		{"gem-87", 15, corebattle.CallbackInvocation{Kind: "gem-87"}},
-		{"gem-88", 1, corebattle.CallbackInvocation{Kind: "gem-88"}},
-		{"gem-89", 15, corebattle.CallbackInvocation{Kind: "gem-89"}},
-		{"gem-90", 20, corebattle.CallbackInvocation{Kind: "gem-90"}},
-		{"gem-91", 15, corebattle.CallbackInvocation{Kind: "gem-91"}},
-		{"gem-92", 40, corebattle.CallbackInvocation{Kind: "gem-92"}},
+		{"gem_metronome", 5, corebattle.CallbackInvocation{Kind: "random"}},
+		{"gem_secret_art_sky", 20, corebattle.CallbackInvocation{Kind: "gem_secret_art_sky"}},
+		{"gem_call_summon", 15, corebattle.CallbackInvocation{Kind: "gem_call_summon"}},
+		{"gem_order_flee", 1, corebattle.CallbackInvocation{Kind: "gem_order_flee"}},
+		{"gem_order_attack", 15, corebattle.CallbackInvocation{Kind: "gem_order_attack"}},
+		{"gem_order_finisher", 20, corebattle.CallbackInvocation{Kind: "gem_order_finisher"}},
+		{"gem_order_defend", 15, corebattle.CallbackInvocation{Kind: "gem_order_defend"}},
+		{"gem_order_special_sky", 40, corebattle.CallbackInvocation{Kind: "gem_order_special_sky"}},
 	}
 }
 

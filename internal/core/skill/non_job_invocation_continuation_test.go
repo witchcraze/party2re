@@ -13,7 +13,7 @@ import (
 // Full production tables and wrapper bodies; unrelated leaves use explicit
 // test ports from playerDispatchFixture, never production certification.
 func TestNonJobInvocationGeneralRandomFullTableBindings(t *testing.T) {
-	for _, id := range []string{"tool-85", "gem-83"} {
+	for _, id := range []string{"tool-85", "gem_metronome"} {
 		for _, row := range []struct{ job, size, position int }{{1, 7, 2}, {2, 9, 4}} {
 			t.Run(fmt.Sprintf("%s/job%d", id, row.job), func(t *testing.T) {
 				s, c, d := playerDispatchFixture()
@@ -58,7 +58,7 @@ func TestNonJobInvocationFrozenInputAndFactsReload(t *testing.T) {
 		Arguments []string
 		IDs       []string
 		Draws     []float64
-	}{s, f.TargetContext, f.Arguments, []string{"gem-89"}, []float64{0, 0, 0, 0, 0}}
+	}{s, f.TargetContext, f.Arguments, []string{"gem_order_attack"}, []float64{0, 0, 0, 0, 0}}
 	data, err := json.Marshal(input)
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +117,7 @@ func TestNonJobInvocationCallingNoEffectAndHiddenLaterChild(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		runNonJobInvocation(t, &s, &f, d, []string{fmt.Sprintf("gem-%d", gem)}, noArithmeticDraws{t})
+		runNonJobInvocation(t, &s, &f, d, []string{callingGemIDs[gem]}, noArithmeticDraws{t})
 		after, err := json.Marshal(s)
 		if err != nil || string(before) != string(after) {
 			t.Fatal(gem, "no effect changed state", err)

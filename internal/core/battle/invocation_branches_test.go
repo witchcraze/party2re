@@ -137,7 +137,7 @@ func TestInvocationUnknownProjectionDiscardsTentativeWrites(t *testing.T) {
 }
 
 func TestInvocationBranchesFollowExistingExplicitAndGeneratedEdges(t *testing.T) {
-	for _, kind := range []string{"entry", "gem-91", "captured-generated"} {
+	for _, kind := range []string{"entry", "gem_order_defend", "captured-generated"} {
 		s, c, d := invocationFixture()
 		c.Arguments = []string{"enemy", "tail"}
 		s.Actors[0].Jobs.OldJobID = "job-59"
@@ -146,7 +146,7 @@ func TestInvocationBranchesFollowExistingExplicitAndGeneratedEdges(t *testing.T)
 			Validate: d.Entries["noop"].Validate, Execute: d.Entries["noop"].Execute,
 			ProjectBranches: func(s *LifetimeState, c *CallbackContext) ([]CallbackContinuation, error) {
 				want := []string{"enemy", "tail"}
-				if kind == "gem-91" {
+				if kind == "gem_order_defend" {
 					want = []string{"enemy"}
 				}
 				if !reflect.DeepEqual(c.Arguments, want) {
@@ -157,7 +157,7 @@ func TestInvocationBranchesFollowExistingExplicitAndGeneratedEdges(t *testing.T)
 				return []CallbackContinuation{{State: *s, Context: *c}}, nil
 			},
 		}
-		d.Entries["alias"] = CallbackDefinition{Invocation: CallbackInvocation{Kind: "gem-91"}}
+		d.Entries["alias"] = CallbackDefinition{Invocation: CallbackInvocation{Kind: "gem_order_defend"}}
 		op := CallbackInvocation{Kind: "entry", EntryID: "alias"}
 		if kind == "entry" {
 			d.Entries["alias"] = d.Entries["branch"]
@@ -202,7 +202,7 @@ func TestInvocationBranchesResolveCurrentJobPerOutcome(t *testing.T) {
 
 func TestInvocationRetainsNewOperationContext(t *testing.T) {
 	// Synthetic callbacks check frame propagation only, not any concrete pool.
-	for _, kind := range []string{"entry", "gem-87"} {
+	for _, kind := range []string{"entry", "gem_call_summon"} {
 		s, c, d := invocationFixture()
 		s.actor(c.ActorID).Jobs.OldJobID = "job-59"
 		project := func(_ *LifetimeState, f *CallbackContext) (bool, error) {

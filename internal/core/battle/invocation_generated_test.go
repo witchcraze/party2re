@@ -105,7 +105,7 @@ func TestInvocationTableVariantsRebuiltAfterEarlierEffect(t *testing.T) {
 		}
 		return 0
 	}}
-	ops := []CallbackInvocation{{Kind: "gem-89"}, {Kind: "gem-89"}}
+	ops := []CallbackInvocation{{Kind: "gem_order_attack"}, {Kind: "gem_order_attack"}}
 	if err := s.ApplyInvocations(&c, d, ops, &targetRNG{t: t}); err != nil || !reflect.DeepEqual(selected, []int{0, 1}) {
 		t.Fatal(selected, err)
 	}

@@ -47,12 +47,12 @@ func TestEnemySummonScalingPayloadAndTwoSuffixAttempts(t *testing.T) {
 func TestEnemySummonSizeGemGuardAndNPCSide(t *testing.T) {
 	s, c := rosterFixture()
 	c.EnemyPool = []LifetimeActor{enemySummonPayload()}
-	r, err := s.ApplyRoster(&c, "gem-82", "", &targetRNG{t: t, draws: []float64{.5, 0}})
+	r, err := s.ApplyRoster(&c, "gem_summon_sky", "", &targetRNG{t: t, draws: []float64{.5, 0}})
 	if err != nil || !r.Applied {
 		t.Fatal(r, err)
 	}
 	c.EnemyPool = nil
-	if r, err := s.ApplyRoster(&c, "gem-82", "", &targetRNG{t: t}); err != nil || r.Applied {
+	if r, err := s.ApplyRoster(&c, "gem_summon_sky", "", &targetRNG{t: t}); err != nil || r.Applied {
 		t.Fatal(r, err)
 	}
 	c.EnemyPool = []LifetimeActor{enemySummonPayload()}
