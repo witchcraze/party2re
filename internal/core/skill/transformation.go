@@ -70,9 +70,6 @@ func (d BattleDefinitions) TransformationInvocation(c *corebattle.Transformation
 			if err != nil {
 				return err
 			}
-			if frame.AfterEffects && id != "job-36-copy" && id != "job-82-form" && id != "job-300-form" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return d.transformationGate(s, &child, id, target, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {

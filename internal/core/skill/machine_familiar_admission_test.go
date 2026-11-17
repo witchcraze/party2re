@@ -80,6 +80,11 @@ func TestMachineFamiliarRejectsCompleteClosureBeforeEffects(t *testing.T) {
 			case "prior-effect":
 				ids = []string{"job-82-entry-3", "job-82-entry-5"}
 			}
+			if bad == "prior-effect" {
+				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
+				assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+				return
+			}
 			before, err := json.Marshal(s)
 			if err != nil {
 				t.Fatal(err)

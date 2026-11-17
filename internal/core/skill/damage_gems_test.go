@@ -120,7 +120,7 @@ func TestDamageGemUnsupportedLaterSlotAndDelegationAreInert(t *testing.T) {
 		t.Fatal(err)
 	}
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-	for _, ids := range [][]string{{"gem_magic_atk_1"}, {"gem_magic_atk_1", "missing"}, {"random"}, {"delegated"}, {"gem_magic_atk_1", "gem_magic_atk_1"}} {
+	for _, ids := range [][]string{{"gem_magic_atk_1"}, {"gem_magic_atk_1", "missing"}, {"random"}, {"delegated"}} {
 		c.Defeat = defeat
 		if len(ids) == 1 {
 			c.Defeat = nil
@@ -143,6 +143,9 @@ func TestDamageGemUnsupportedLaterSlotAndDelegationAreInert(t *testing.T) {
 	if string(before) != string(after) || c.DamageCalls != 0 || c.AreaDamageCalls != 0 {
 		t.Fatal("rejected closure mutated state", s, c)
 	}
+	// A second slot after unknown damage runs against the actual state.
+	c.Defeat = defeat
+	assertAtomicAfterUnknown(t, &s, &frame, d, "gem_magic_atk_1", "gem_magic_atk_1")
 }
 
 func TestDamageGemRepeatAndReloadPreserveFactsWithoutReplaying(t *testing.T) {

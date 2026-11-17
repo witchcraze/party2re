@@ -30,7 +30,7 @@ func (d *BattleDefinitions) RegisterBasicMagic(c *corebattle.BasicMagicContext) 
 func basicMagicInvocation(c *corebattle.BasicMagicContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

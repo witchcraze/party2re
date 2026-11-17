@@ -87,11 +87,9 @@ func TestDualAgilityRegistrationMissingDescendantsAndExactProjection(t *testing.
 	if err := s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "job-83-entry-1"}, {Kind: "entry", EntryID: "missing"}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Hit != 50 {
 		t.Fatal(err, s)
 	}
-	// Opaque earlier effects cannot launder now-unreachable damage descendants.
+	// After opaque earlier effects the damage body runs against the actual state.
 	d.Invocations.Entries["opaque"] = corebattle.CallbackDefinition{Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil }, Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil }}
-	if _, err := d.InvocationAction(&s, &frame, []string{"opaque", "job-83-entry-5"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &frame, d, "opaque", "job-83-entry-5")
 }
 
 func TestDualAgilityEveryPositionAcceptsNoEnemyContext(t *testing.T) {

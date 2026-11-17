@@ -88,6 +88,11 @@ func TestSongDanceDrainWholeActionRejection(t *testing.T) {
 			case "gem102":
 				ids = []string{"job-14-entry-2", "gem-102"}
 			}
+			if bad == "opaque" {
+				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
+				assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+				return
+			}
 			before, err := json.Marshal(s)
 			if err != nil {
 				t.Fatal(err)

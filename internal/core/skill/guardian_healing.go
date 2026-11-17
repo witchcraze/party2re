@@ -41,9 +41,6 @@ func guardianHealingInvocation(c *corebattle.GuardianHealingContext, id string) 
 			if err != nil {
 				return err
 			}
-			if f.AfterEffects && id != "job-17-entry-2" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateGuardianHealing(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {

@@ -29,7 +29,7 @@ func (d *BattleDefinitions) RegisterTreatmentMischief(c *corebattle.TreatmentMis
 func treatmentMischiefInvocation(c *corebattle.TreatmentMischiefContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects && id != "job-51-entry-1" {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

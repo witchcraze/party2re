@@ -41,9 +41,6 @@ func counterResetInvocation(c *corebattle.CounterResetContext, id string) coreba
 			if err != nil {
 				return err
 			}
-			if f.AfterEffects && id != "job-35-entry-0" && id != "job-37-entry-3" && id != "job-36-entry-0" && id != "job-36-entry-1" && id != "job-36-entry-2" && id != "job-36-entry-3" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateCounterReset(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {

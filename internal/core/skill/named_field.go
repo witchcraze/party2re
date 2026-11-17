@@ -21,7 +21,7 @@ func (d *BattleDefinitions) RegisterNamedFields(c *corebattle.NamedFieldContext)
 		}
 		d.Invocations.Entries[id] = corebattle.CallbackDefinition{
 			Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-				if c == nil || f.AfterEffects {
+				if c == nil {
 					return corebattle.ErrUnsupportedEffect
 				}
 				child := context(f)

@@ -28,7 +28,7 @@ func (d *BattleDefinitions) RegisterSongDanceDrain(c *corebattle.SongDanceDrainC
 func songDanceDrainInvocation(c *corebattle.SongDanceDrainContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects && id != "job-14-entry-2" && id != "job-20-entry-2" {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

@@ -40,9 +40,6 @@ func weaponWeatherStanceInvocation(c *corebattle.WeaponWeatherStanceContext, id 
 			if err != nil {
 				return err
 			}
-			if f.AfterEffects && id != "job-24-entry-5" && id != "job-27-entry-5" && id != "job-28-entry-0" && id != "job-28-entry-2" && id != "job-28-entry-4" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateWeaponWeatherStance(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {

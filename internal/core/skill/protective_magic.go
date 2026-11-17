@@ -41,9 +41,6 @@ func protectiveMagicInvocation(c *corebattle.ProtectiveMagicContext, id string) 
 			if err != nil {
 				return err
 			}
-			if f.AfterEffects && id != "job-32-entry-2" && id != "job-32-entry-3" && id != "job-33-entry-0" && id != "job-33-entry-2" && id != "job-34-entry-4" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateProtectiveMagic(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {

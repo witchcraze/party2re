@@ -112,8 +112,9 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 			}
 		}
 		c := *p.c
-		c.AfterEffects = afterEffects
-		if def.Validate != nil {
+		// After an unknown predecessor only registration is checked here; the
+		// executor validates each callback against the actual state.
+		if def.Validate != nil && !afterEffects {
 			if err := def.Validate(p.s, &c); err != nil {
 				return err
 			}

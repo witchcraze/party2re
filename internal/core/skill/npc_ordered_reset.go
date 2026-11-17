@@ -24,7 +24,7 @@ func (d *BattleDefinitions) RegisterNPCOrderedReset(c *corebattle.NPCOrderedRese
 func npcOrderedResetInvocation(c *corebattle.NPCOrderedResetContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

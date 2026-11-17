@@ -42,7 +42,7 @@ func (d BattleDefinitions) DamageGemAction(s *corebattle.LifetimeState, c *coreb
 func (d BattleDefinitions) DamageGemInvocation(c *corebattle.DamageContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
-			if c == nil || frame.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

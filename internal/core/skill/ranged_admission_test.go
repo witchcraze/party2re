@@ -72,6 +72,11 @@ func TestRangedWholeActionRejection(t *testing.T) {
 			case "opaque":
 				ids = []string{"job-11-entry-8", "job-54-entry-1"}
 			}
+			if bad == "opaque" {
+				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
+				assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+				return
+			}
 			before, err := json.Marshal(s)
 			if err != nil {
 				t.Fatal(err)

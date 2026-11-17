@@ -27,10 +27,9 @@ func (d *BattleDefinitions) RegisterIncidentalJobs(c *corebattle.IncidentalJobCo
 }
 
 func incidentalJobInvocation(c *corebattle.IncidentalJobContext, id string) corebattle.CallbackDefinition {
-	raw := id == "job-8-entry-2" || id == "job-8-entry-3" || id == "job-8-entry-4" || id == "job-8-entry-7" || id == "job-8-entry-8"
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects && !raw {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

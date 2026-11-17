@@ -28,7 +28,7 @@ func (d *BattleDefinitions) RegisterSummonAppearanceGems(roster *corebattle.Rost
 	d.RosterSkills["gem-82"] = true
 	summon := d.RosterInvocation(roster, "gem-82")
 	summon.ProjectBranches = func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-		if roster == nil || f.AfterEffects {
+		if roster == nil {
 			return nil, corebattle.ErrUnsupportedEffect
 		}
 		return s.ProjectEnemySummon(roster, f)
@@ -36,7 +36,7 @@ func (d *BattleDefinitions) RegisterSummonAppearanceGems(roster *corebattle.Rost
 	d.Invocations.Entries["gem-82"] = summon
 	d.Invocations.Entries["gem-100-appearance"] = corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if appearance == nil || f.AfterEffects {
+			if appearance == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *appearance
@@ -44,7 +44,7 @@ func (d *BattleDefinitions) RegisterSummonAppearanceGems(roster *corebattle.Rost
 			return s.ValidateTransformation(&child, "gem-100-appearance", "", random.Default())
 		},
 		ProjectBranches: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-			if appearance == nil || f.AfterEffects {
+			if appearance == nil {
 				return nil, corebattle.ErrUnsupportedEffect
 			}
 			return s.ProjectAppearanceGem(appearance, f)

@@ -231,17 +231,51 @@ func TestBookDoubleUseCostDeathAndReturnOrder(t *testing.T) {
 
 func TestBookDoubleUseGatesBeforeMutation(t *testing.T) {
 	for name, prepare := range map[string]func(*corebattle.CallbackContext, *BattleDefinitions){
-		"one target":     func(f *corebattle.CallbackContext, _ *BattleDefinitions) { f.Arguments = []string{"enemy"} },
-		"foreign target": func(f *corebattle.CallbackContext, _ *BattleDefinitions) { f.Arguments = []string{"enemy", "stale"} },
-		// Concrete books have no projection yet, so the second use is unadmitted.
-		"concrete child": func(_ *corebattle.CallbackContext, d *BattleDefinitions) {
-			d.RegisterBooks(&corebattle.BookContext{})
-		},
+		"one target":         func(f *corebattle.CallbackContext, _ *BattleDefinitions) { f.Arguments = []string{"enemy"} },
+		"foreign target":     func(f *corebattle.CallbackContext, _ *BattleDefinitions) { f.Arguments = []string{"enemy", "stale"} },
 		"unregistered child": func(*corebattle.CallbackContext, *BattleDefinitions) {},
 	} {
 		s, f, d := heldBookFixture("item-169")
 		f.Arguments = []string{"enemy", "enemy"}
 		prepare(&f, &d)
 		t.Run(name, func(t *testing.T) { rejectBook(t, s, f, d, "job-86-entry-5") })
+	}
+}
+
+// Concrete children: the second use runs against the state the first left.
+func TestBookDoubleUseConcreteChildren(t *testing.T) {
+	for _, tc := range []struct {
+		name, held, first, second string
+		mp                        int
+		draws                     []float64
+		check                     func(*testing.T, corebattle.LifetimeState)
+	}{
+		// _heal (_skill.cgi:9103): int(30×.9)=27 per use at draw0; floor(6×1.5)=9 MP.
+		{"heal twice", "item-169", "self", "self", 20, []float64{0, 0}, func(t *testing.T, s corebattle.LifetimeState) {
+			if s.Actors[0].HP != 554 || s.Actors[0].MP != 11 {
+				t.Fatal(s.Actors[0])
+			}
+		}},
+		// The first use revives the fallen ally; the second finds it alive.
+		{"revive then living", "item-173", "fallen", "fallen", 120, []float64{0}, func(t *testing.T, s corebattle.LifetimeState) {
+			if s.Actors[2].HP <= 0 || s.Actors[0].MP != 0 {
+				t.Fatal(s.Actors)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, f, d := heldBookFixture(tc.held)
+			s.Actors[0].MP = tc.mp
+			s.Actors[2].MaxHP = 100
+			book := &corebattle.BookContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: f.TargetContext}}}
+			d.RegisterBooks(book)
+			d.RegisterRevivals(&corebattle.RevivalContext{TargetContext: f.TargetContext})
+			f.Arguments = []string{tc.first, tc.second}
+			executeJobAsset(t, &s, &f, d, "job-86-entry-5", tc.draws...)
+			tc.check(t, s)
+			if len(f.Assets.StoredOutcomes) != 1 || *f.Assets.HeldToolID != "" {
+				t.Fatal("book not returned", f.Assets)
+			}
+		})
 	}
 }

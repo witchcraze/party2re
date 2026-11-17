@@ -121,9 +121,7 @@ func TestNPC98RegistrationWholePoolAndUnsupportedDescendants(t *testing.T) {
 		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
 		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
-	if _, err := d.InvocationAction(&s, &f, []string{"opaque", "npc-job-98-position-0"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &f, d, "opaque", "npc-job-98-position-0")
 }
 
 func TestNPC98NoEnemiesAndDamageNullification(t *testing.T) {

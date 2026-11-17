@@ -52,9 +52,6 @@ func dualAgilityInvocation(c *corebattle.DualAgilityContext, id string) corebatt
 			if err != nil {
 				return err
 			}
-			if frame.AfterEffects && id != "job-83-entry-1" && id != "job-83-entry-4" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateDualAgility(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {

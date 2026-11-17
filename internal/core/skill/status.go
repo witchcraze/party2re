@@ -76,7 +76,7 @@ func (d BattleDefinitions) StatusInvocation(c *corebattle.StatusContext, reset *
 	}
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
-			if c == nil || frame.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := context(frame)
@@ -88,7 +88,7 @@ func (d BattleDefinitions) StatusInvocation(c *corebattle.StatusContext, reset *
 			return err
 		},
 		ProjectBranches: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-			if c == nil || frame.AfterEffects || !d.StatusSkills[id] {
+			if c == nil || !d.StatusSkills[id] {
 				return nil, corebattle.ErrUnsupportedEffect
 			}
 			child := context(frame)

@@ -15,7 +15,7 @@ func (d *BattleDefinitions) RegisterWeaponSeals(c *corebattle.DamageContext) {
 	for _, entry := range corebattle.WeaponSealEntries() {
 		d.Invocations.Entries[entry.ID] = corebattle.CallbackDefinition{
 			Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
-				if c == nil || frame.AfterEffects {
+				if c == nil {
 					return corebattle.ErrUnsupportedEffect
 				}
 				child := *c

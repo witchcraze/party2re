@@ -179,18 +179,12 @@ func TestHighPowerOrderedProjectionAndUnknownEffects(t *testing.T) {
 	}
 	s, c, d = highPowerFixture()
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-	for _, ids := range [][]string{{"job-47-entry-0", "job-48-entry-5"}, {"job-52-entry-3", "job-47-entry-0"}} {
-		if _, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-			t.Fatal(ids, err)
-		}
-	}
-	// A random accessory reset cannot be sampled to authorize a later hit.
-	s.Actors[2].Gear.AccessoryID = "item-159"
-	if _, err := d.InvocationAction(&s, &frame, []string{"job-48-entry-5", "job-47-entry-0"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
-	if s.Actors[2].HP != 0 || c.EquipmentReset.Cursor.Source != "" {
-		t.Fatal(s, c)
+	// After unknown damage or a random accessory reset the later hit runs on actual state.
+	for _, ids := range [][]string{{"job-47-entry-0", "job-48-entry-5"}, {"job-52-entry-3", "job-47-entry-0"}, {"job-48-entry-5", "job-47-entry-0"}} {
+		s, c, d = highPowerFixture()
+		frame = corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
+		s.Actors[2].Gear.AccessoryID = "item-159"
+		assertAtomicAfterUnknown(t, &s, &frame, d, ids...)
 	}
 }
 

@@ -30,7 +30,7 @@ func (d *BattleDefinitions) RegisterTimeMixedMagic(c *corebattle.TimeMixedMagicC
 func timeMixedMagicInvocation(c *corebattle.TimeMixedMagicContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

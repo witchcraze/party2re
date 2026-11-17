@@ -38,9 +38,6 @@ func highPowerInvocation(c *corebattle.HighPowerContext, id string) corebattle.C
 			if err != nil {
 				return err
 			}
-			if f.AfterEffects && id != "job-47-entry-5" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateHighPower(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {

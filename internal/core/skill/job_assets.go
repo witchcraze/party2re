@@ -14,8 +14,7 @@ func (d *BattleDefinitions) RegisterJobAssets(c *corebattle.JobAssetContext) {
 	for _, id := range []string{"job-7-entry-0", "job-7-entry-2", "job-8-entry-0", "job-28-entry-3", "job-50-entry-7", "job-78-entry-0", "job-78-entry-5", "job-81-entry-2", "job-86-entry-0", "job-86-entry-2", "job-86-entry-3", "job-86-entry-5"} {
 		d.Invocations.Entries[id] = corebattle.CallbackDefinition{
 			Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-				// shortcut: #1733 owns projections after arbitrary preceding callbacks.
-				if c == nil || f.AfterEffects {
+				if c == nil {
 					return corebattle.ErrUnsupportedEffect
 				}
 				child := *c

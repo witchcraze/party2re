@@ -111,10 +111,8 @@ func TestIncidentalJobResetProjectsLaterEligibility(t *testing.T) {
 	if s.Actors[1].Tension != 1.7 || c.TensionCalls != 1 {
 		t.Fatal(s, c)
 	}
-	// Unknown earlier outcomes cannot be treated as deterministic admission facts.
-	if _, err := d.InvocationAction(&s, &f, []string{"job-8-entry-2", "job-9-entry-7"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	// After unknown earlier outcomes the later body runs against the actual state.
+	assertAtomicAfterUnknown(t, &s, &f, d, "job-8-entry-2", "job-9-entry-7")
 }
 
 func TestIncidentalJobDefaultEmptyAndCompleteTableBoundaries(t *testing.T) {

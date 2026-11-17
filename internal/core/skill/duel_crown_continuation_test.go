@@ -109,17 +109,15 @@ func TestDuelCrownAdmissionPurityAndEarlierEffects(t *testing.T) {
 	}
 	s, c, d := duelFixture()
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-	// An exact earlier stance can be projected; an unknown earlier verdict
-	// cannot authorize later damage against stale target/actor eligibility.
+	// An exact earlier stance is projected; after an unknown verdict the later
+	// damage runs against the actual target/actor eligibility.
 	if _, err := d.InvocationAction(&s, &frame, []string{"job-74-entry-1", "job-74-entry-5"}, noArithmeticDraws{t}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.InvocationAction(&s, &frame, []string{"job-74-entry-4", "job-74-entry-5"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
-	if s.Actors[0].Temporary != "" || s.Actors[0].Status != "" {
-		t.Fatal(s)
-	}
+	unknown := frame
+	assertAtomicAfterUnknown(t, &s, &unknown, d, "job-74-entry-4", "job-74-entry-5")
+	s, c, d = duelFixture()
+	frame = corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
 	// Earlier hits consume a one-hit defense and activate confusion, exposing
 	// the other member's missing gear only on a later hit.
 	s, c, d = duelFixture()

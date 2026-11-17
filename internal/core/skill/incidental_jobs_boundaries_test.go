@@ -124,15 +124,13 @@ func TestIncidentalJobDrainRestoresAfterDefeatAndFailure(t *testing.T) {
 		if fail && !errors.Is(err, failure) || !fail && err != nil {
 			t.Fatal(err)
 		}
-		if s.Actors[0].Hit != 47 || s.Actors[1].Defense != 200 || s.Actors[1].HP != 0 || calls != 1 || rng.used != len(draws) {
-			t.Fatal(s, c, calls)
-		}
-		wantHP := 508
+		// A failed external tail restores the caller's whole state.
+		wantHP, wantTarget := 508, 0
 		if fail {
-			wantHP = 500
+			wantHP, wantTarget = 500, 1
 		}
-		if s.Actors[0].HP != wantHP {
-			t.Fatal(s)
+		if s.Actors[0].Hit != 47 || s.Actors[1].Defense != 200 || s.Actors[1].HP != wantTarget || calls != 1 || rng.used != len(draws) || s.Actors[0].HP != wantHP {
+			t.Fatal(s, c, calls)
 		}
 	}
 }

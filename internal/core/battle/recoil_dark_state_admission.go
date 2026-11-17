@@ -116,7 +116,7 @@ func (s *LifetimeState) validateRawRecoilStrike(c *RecoilDarkStateContext, rng r
 }
 
 // Only exact inline transitions are projected across an enclosing invocation.
-// Unknown damage/random results retain the existing AfterEffects gate.
+// Damage/random results stay unknown.
 func (s *LifetimeState) ProjectRecoilDarkState(c *RecoilDarkStateContext, id string) (bool, error) {
 	if err := s.ValidateRecoilDarkState(c, id, random.Default()); err != nil {
 		return false, err

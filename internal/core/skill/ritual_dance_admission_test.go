@@ -1,9 +1,7 @@
 package skill
 
 import (
-	"encoding/json"
 	"errors"
-	"reflect"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -27,36 +25,22 @@ func TestRitualDanceRegistrationAndWholeActionRejection(t *testing.T) {
 			t.Fatal(job, err)
 		}
 	}
+	// After the unknown first dance the later body meets its invalid tool
+	// category against the actual state: rejected and restored.
 	for _, id := range []string{"job-76-entry-2", "job-76-entry-5"} {
 		s, c, d := ritualDanceFixture()
 		c.ToolCategory.Source = "unknown"
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
-		c.Defeat = func(string) error { t.Fatal("preflight ran external hook"); return nil }
-		before, err := json.Marshal(s)
-		if err != nil {
-			t.Fatal(err)
-		}
-		gear, args := s.Actors[1].Gear, f.Arguments
-		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "job-75-entry-4"}, {Kind: "entry", EntryID: id}}
-		if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		if err := assertAtomicAfterUnknown(t, &s, &f, d, "job-75-entry-4", id); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(id, err)
 		}
-		after, err := json.Marshal(s)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(before) != string(after) || c.DamageCalls != 0 || c.ActorID != "self" || s.Actors[1].Gear != gear || !reflect.DeepEqual(args, []string{"enemy", "tail"}) {
-			t.Fatal(id, s, c, f)
-		}
 	}
-	// An opaque prefix cannot hide now-unreachable descendants.
+	// After an opaque prefix the later body runs against actual state.
 	d.Invocations.Entries["opaque"] = corebattle.CallbackDefinition{
 		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
 		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
-	if _, err := d.InvocationAction(&s, &f, []string{"opaque", "job-75-entry-2"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &f, d, "opaque", "job-75-entry-2")
 }
 
 func TestRitualDanceAcceptedNoEffectAndGuardBoundaries(t *testing.T) {

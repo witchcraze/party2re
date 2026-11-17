@@ -25,7 +25,7 @@ func (d *BattleDefinitions) RegisterRanged(c *corebattle.RangedContext) {
 func rangedInvocation(c *corebattle.RangedContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects && id != "job-11-entry-2" && id != "job-54-entry-2" {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

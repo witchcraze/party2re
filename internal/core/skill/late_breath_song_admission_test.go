@@ -90,6 +90,11 @@ func TestLateSongMissingDescendantsAndOrderedProjection(t *testing.T) {
 				s.Actors[1].Temporary, s.Actors[1].Gear = corebattle.TemporaryNullMagic, nil
 				ids = []string{"job-85-entry-2", "job-86-entry-4"}
 			}
+			if bad == "opaque" {
+				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: args}
+				assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+				return
+			}
 			before, err := json.Marshal(s)
 			if err != nil {
 				t.Fatal(err)

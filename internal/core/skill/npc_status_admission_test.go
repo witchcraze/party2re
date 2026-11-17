@@ -121,14 +121,9 @@ func TestNPCStatusRegistrationAndIndirectAdmission(t *testing.T) {
 	}
 	d.Invocations.Entries["opaque"] = corebattle.CallbackDefinition{
 		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-		Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error {
-			t.Fatal("executed before tail admission")
-			return nil
-		},
+		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
-	if _, err := d.InvocationAction(&s, &f, []string{"opaque", "npc-job-94-position-1"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &f, d, "opaque", "npc-job-94-position-1")
 	if _, err := d.InvocationAction(&s, &f, []string{"npc-job-88-position-3", "missing"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatal(err)
 	}

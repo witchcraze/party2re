@@ -38,7 +38,7 @@ func (d *BattleDefinitions) RegisterMachineFamiliar(c *corebattle.MachineFamilia
 func machineFamiliarInvocation(c *corebattle.MachineFamiliarContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

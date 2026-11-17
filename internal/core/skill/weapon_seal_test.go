@@ -127,11 +127,9 @@ func TestWeaponSealRegistrationAndWholeEffectRejection(t *testing.T) {
 	if string(before) != string(after) || c.AreaDamageCalls != 0 {
 		t.Fatal("rejected descendant changed state")
 	}
-	// A nontrivial earlier callback has no certified transition projection.
+	// After a nontrivial earlier callback the second runs on actual state.
 	d.RegisterWeaponSeals(&c)
-	if _, err := d.InvocationAction(&s, &frame, []string{"seal-7-breath", "seal-7-breath"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &frame, d, "seal-7-breath", "seal-7-breath")
 }
 
 func TestWeaponSealReloadAndOuterDebitAfterEffect(t *testing.T) {
