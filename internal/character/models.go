@@ -117,10 +117,8 @@ func ValidateBioData(bio map[string]string) error {
 		if strings.ContainsAny(v, ";<>") {
 			return ErrBioValueInvalid
 		}
-		if strings.TrimSpace(v) == "" {
-			continue
-		}
-		if _, err := validation.ValidateSingleLine(v, MaxBioFieldLength); err != nil {
+		// Legacy counts the submitted value untrimmed (#1098), as stored.
+		if err := validation.ValidateVerbatimLine(v, MaxBioFieldLength); err != nil {
 			if errors.Is(err, validation.ErrTooLong) {
 				return ErrBioValueTooLong
 			}

@@ -605,6 +605,13 @@ func TestService_UpdateProfile_RejectionsMakeZeroSaveCalls(t *testing.T) {
 		{"legacy separator", map[string]string{"hobby": "a;b"}, nil, ErrBioValueInvalid},
 		{"markup", map[string]string{"hobby": "<b>"}, nil, ErrBioValueInvalid},
 		{"newline", map[string]string{"hobby": "a\nb"}, nil, validation.ErrControlCharacter},
+		// #1098: bounds and safety apply to the stored value, edges included.
+		{"161 spaces", map[string]string{"hobby": strings.Repeat(" ", 161)}, nil, ErrBioValueTooLong},
+		{"160 runes plus edge space", map[string]string{"hobby": strings.Repeat("あ", 160) + " "}, nil, ErrBioValueTooLong},
+		{"edge space plus 160 runes", map[string]string{"hobby": " " + strings.Repeat("あ", 160)}, nil, ErrBioValueTooLong},
+		{"edge newline", map[string]string{"hobby": "a\n"}, nil, validation.ErrControlCharacter},
+		{"whitespace-only newline", map[string]string{"hobby": " \n "}, nil, validation.ErrControlCharacter},
+		{"edge control character", map[string]string{"hobby": "\x07a"}, nil, validation.ErrControlCharacter},
 		{"profile read failure", map[string]string{"hobby": "new"}, storageErr, storageErr},
 	} {
 		repo.saveProfileCalls, repo.getProfileErr = 0, tc.readErr
@@ -613,7 +620,7 @@ func TestService_UpdateProfile_RejectionsMakeZeroSaveCalls(t *testing.T) {
 		}
 	}
 	repo.getProfileErr = nil
-	for _, v := range []string{"", " ", strings.Repeat("あ", 160)} {
+	for _, v := range []string{"", " ", strings.Repeat(" ", 160), strings.Repeat("あ", 160), " " + strings.Repeat("あ", 158) + " "} {
 		if _, err := service.UpdateProfile(ctx, char.ID, map[string]string{"hobby": v}); err != nil || repo.profiles[char.ID].BioData["hobby"] != v {
 			t.Fatalf("%q: %v", v, err)
 		}
