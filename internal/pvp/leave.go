@@ -4,26 +4,36 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"time"
 )
 
 // LeaveRoom departs a live PvP room (@にげる) across recruiting, in-progress, and completed phases.
 func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID string) error {
 	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		last, err := s.transitions.FindTransition(lockedCtx, roomID)
-		if err != nil {
-			return err
-		}
+		last := lastTransitionFromContext(lockedCtx)
 		if (last.Kind == "disband" || last.Kind == "forfeit") && last.ActorID == characterID {
 			return nil
 		}
-		if last.Kind == "abandon" && slices.Contains(last.RemovedIDs, characterID) {
+		if (last.Kind == "abandon" || last.Kind == "timeout") && slices.Contains(last.RemovedIDs, characterID) {
 			return nil
 		}
 		detail, err := s.repo.GetRoom(lockedCtx, roomID)
 		if errors.Is(err, ErrRoomNotFound) {
-			if last.Detail.Room.Status == StatusCompleted && hasRoomMember(last.Detail.Members, characterID) {
-				return s.repo.DeleteCharacterRoom(lockedCtx, characterID, roomID)
+			if last.Version == 0 || last.Detail.Room.Status == StatusDisbanded {
+				return ErrRoomNotFound
+			}
+			if !hasRoomMember(last.Detail.Members, characterID) {
+				return ErrCharacterNotInRoom
+			}
+			claim, claimErr := s.transitions.FindCharacterClaim(lockedCtx, characterID)
+			if claimErr != nil {
+				return claimErr
+			}
+			if claim != last.Detail.Room.ID {
+				return ErrCharacterNotInRoom
+			}
+			if s.isInactive(last.LastActivityAt, s.now()) {
+				_, cleanErr := s.cleanupInactiveRoom(lockedCtx, last, s.now())
+				return cleanErr
 			}
 			return s.abandonLostRoom(lockedCtx, characterID, last)
 		}
@@ -49,13 +59,14 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 			if last.Kind == "leave" && last.ActorID == characterID {
 				return nil
 			}
-			if detail.Room.Status == StatusCompleted && hasRoomMember(last.Detail.Members, characterID) {
-				return s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID)
-			}
 			return ErrCharacterNotInRoom
 		}
 
-		now := time.Now().UTC()
+		now := s.now()
+		if last.Version > 0 && last.Detail.Room.Status != StatusDisbanded && s.isInactive(last.LastActivityAt, now) {
+			_, cleanErr := s.cleanupInactiveRoom(lockedCtx, last, now)
+			return cleanErr
+		}
 		hasRemaining := removeMemberAndTransferLeader(&detail, characterID, isLeader)
 
 		switch detail.Room.Status {
@@ -76,11 +87,13 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				detail.Room.PrizePool = 0
 			}
 			detail.Room.UpdatedAt = now
+			detail.Room.LastActivityAt = now
 			return s.commitTransition(lockedCtx, Transition{
-				Kind:       kind,
-				ActorID:    characterID,
-				Detail:     detail,
-				RemovedIDs: []string{char.ID},
+				Kind:           kind,
+				ActorID:        characterID,
+				Detail:         detail,
+				RemovedIDs:     []string{char.ID},
+				LastActivityAt: now,
 			}, func(txCtx context.Context) error {
 				return s.refundMembers(txCtx, []string{char.ID}, refundAmount)
 			})
@@ -96,26 +109,32 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				detail.Room.PrizePool = 0
 			}
 			detail.Room.UpdatedAt = now
+			detail.Room.LastActivityAt = now
 			return s.commitTransition(lockedCtx, Transition{
-				Kind:          kind,
-				ActorID:       characterID,
-				Detail:        detail,
-				RemovedIDs:    []string{char.ID},
-				ForfeitedPool: forfeitedPool,
+				Kind:           kind,
+				ActorID:        characterID,
+				Detail:         detail,
+				RemovedIDs:     []string{char.ID},
+				ForfeitedPool:  forfeitedPool,
+				LastActivityAt: now,
 			}, func(context.Context) error { return nil })
 
 		case StatusCompleted:
+			kind := "disband"
 			if hasRemaining {
-				detail.Room.UpdatedAt = now
-				if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
-					return err
-				}
+				kind = "leave"
 			} else {
-				if err := s.repo.DeleteRoom(lockedCtx, roomID); err != nil {
-					return err
-				}
+				detail.Room.Status = StatusDisbanded
 			}
-			return s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID)
+			detail.Room.UpdatedAt = now
+			detail.Room.LastActivityAt = now
+			return s.commitTransition(lockedCtx, Transition{
+				Kind:           kind,
+				ActorID:        characterID,
+				Detail:         detail,
+				RemovedIDs:     []string{char.ID},
+				LastActivityAt: now,
+			}, func(context.Context) error { return nil })
 
 		default:
 			return s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID)

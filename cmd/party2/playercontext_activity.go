@@ -68,6 +68,10 @@ func (r contextActivityReaders) ActivityKinds(ctx context.Context, owner, actor 
 	return kinds, nil
 }
 
+type pvpPendingPenaltyReader interface {
+	GetPendingSleepPenalty(context.Context, string) (time.Time, bool, error)
+}
+
 func (r contextActivityReaders) read(ctx context.Context, owner, actor string) ([]playercontext.Activity, error) {
 	facts := []playercontext.Activity{}
 	if r.normal != nil {
@@ -141,7 +145,15 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 			return nil, fmt.Errorf("pvp claim activity: %w", err)
 		}
 		if roomID != "" {
-			facts = append(facts, playercontext.Activity{Kind: "pvp", ID: roomID, Phase: "recovery_pending", Role: "member", Actions: []string{"pvp_leave"}})
+			blocksWake := false
+			if pr, ok := r.pvp.(pvpPendingPenaltyReader); ok {
+				_, pending, penErr := pr.GetPendingSleepPenalty(ctx, actor)
+				if penErr != nil {
+					return nil, fmt.Errorf("pvp penalty activity: %w", penErr)
+				}
+				blocksWake = pending
+			}
+			facts = append(facts, playercontext.Activity{Kind: "pvp", ID: roomID, Phase: "recovery_pending", Role: "member", BlocksWake: blocksWake, Actions: []string{"pvp_leave"}})
 		}
 	}
 	gv, err := r.gvg.GetCharacterRoom(ctx, actor)

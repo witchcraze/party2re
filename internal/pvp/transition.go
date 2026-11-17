@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"time"
+
+	"github.com/witchcraze/party2re/internal/core/timer"
 )
 
 var ErrTransitionConflict = errors.New("colosseum transition changed; retry the operation")
@@ -12,16 +15,18 @@ var ErrTransitionConflict = errors.New("colosseum transition changed; retry the 
 // Transition is the durable financial claim and the exact publication to retry.
 // PasswordHash is persisted separately because the public room DTO omits it.
 type Transition struct {
-	Version       int
-	Kind          string
-	ActorID       string
-	Detail        RoomDetail
-	PasswordHash  string
-	AddedID       string
-	RemovedIDs    []string
-	Result        *RoundResolution
-	ForfeitedPool int
-	Pending       bool
+	Version        int
+	Kind           string
+	ActorID        string
+	Detail         RoomDetail
+	PasswordHash   string
+	AddedID        string
+	RemovedIDs     []string
+	Result         *RoundResolution
+	ForfeitedPool  int
+	LastActivityAt time.Time
+	PenaltyUntil   time.Time
+	Pending        bool
 }
 
 // TransitionRepository commits a unique room version with its asset mutation.
@@ -31,6 +36,7 @@ type TransitionRepository interface {
 	FindCharacterClaim(context.Context, string) (string, error)
 	CommitTransition(context.Context, Transition, func(context.Context) error) error
 	AcknowledgeTransition(context.Context, string, int) error
+	TouchActivity(context.Context, string, int, time.Time) error
 }
 
 func WithTransitionRepository(repo TransitionRepository) Option {
@@ -54,6 +60,13 @@ func (s *Service) commitTransition(ctx context.Context, t Transition, mutate fun
 	t.Detail.Room.FinancialVersion = t.Version
 	t.Pending = true
 	t.PasswordHash = t.Detail.Room.PasswordHash
+	if t.LastActivityAt.IsZero() {
+		t.LastActivityAt = t.Detail.Room.LastActivityAt
+	}
+	if t.LastActivityAt.IsZero() {
+		t.LastActivityAt = t.Detail.Room.CreatedAt
+	}
+	t.Detail.Room.LastActivityAt = t.LastActivityAt
 	if err := s.transitions.CommitTransition(ctx, t, func(txCtx context.Context) error {
 		return s.runInTx(txCtx, mutate)
 	}); err != nil {
@@ -65,18 +78,52 @@ func (s *Service) commitTransition(ctx context.Context, t Transition, mutate fun
 func (s *Service) publishTransition(ctx context.Context, t Transition) error {
 	t.Detail.Room.PasswordHash = t.PasswordHash
 	t.Detail.Room.FinancialVersion = t.Version
+	t.Detail.Room.LastActivityAt = t.LastActivityAt
 	if t.Detail.Room.Status == StatusDisbanded {
 		if err := s.repo.DeleteRoom(ctx, t.Detail.Room.ID); err != nil {
 			return err
 		}
-	} else {
-		if err := s.repo.SaveRoom(ctx, t.Detail.Room, t.Detail.Members); err != nil {
-			return err
-		}
-		for _, m := range t.Detail.Members {
-			if err := s.repo.SetCharacterRoom(ctx, m.CharacterID, t.Detail.Room.ID); err != nil {
+		for _, characterID := range t.RemovedIDs {
+			if err := s.repo.DeleteCharacterRoom(ctx, characterID, t.Detail.Room.ID); err != nil {
 				return err
 			}
+		}
+		if t.Kind == "timeout" {
+			if s.timers == nil {
+				return ErrInvalidDependencies
+			}
+			for _, characterID := range t.RemovedIDs {
+				if err := s.timers.ExtendLockUntil(ctx, timer.CategorySleep, characterID, t.PenaltyUntil); err != nil {
+					return err
+				}
+			}
+		}
+		return s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version)
+	}
+
+	ttl := DefaultLobbyTTL
+	if !t.LastActivityAt.IsZero() {
+		ttl = t.LastActivityAt.Add(DefaultLobbyTTL).Sub(s.now())
+	}
+	if ttl <= 0 {
+		if err := s.repo.DeleteRoom(ctx, t.Detail.Room.ID); err != nil {
+			return err
+		}
+		for _, characterID := range t.RemovedIDs {
+			if err := s.repo.DeleteCharacterRoom(ctx, characterID, t.Detail.Room.ID); err != nil {
+				return err
+			}
+		}
+		return s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version)
+	}
+
+	ttlCtx := withRemainingTTL(ctx, ttl)
+	if err := s.repo.SaveRoom(ttlCtx, t.Detail.Room, t.Detail.Members); err != nil {
+		return err
+	}
+	for _, m := range t.Detail.Members {
+		if err := s.repo.SetCharacterRoom(ttlCtx, m.CharacterID, t.Detail.Room.ID); err != nil {
+			return err
 		}
 	}
 	for _, characterID := range t.RemovedIDs {
@@ -87,7 +134,8 @@ func (s *Service) publishTransition(ctx context.Context, t Transition) error {
 	return s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version)
 }
 
-// recoverCharacter also finds creation that failed before publishing a reverse mapping.
+// recoverCharacter also finds creation that failed before publishing a reverse mapping,
+// and triggers lazy inactivity cleanup when the claimed room's idle timeout has elapsed.
 func (s *Service) recoverCharacter(ctx context.Context, characterID string) (Transition, error) {
 	roomID, err := s.transitions.FindCharacterClaim(ctx, characterID)
 	if err != nil || roomID == "" {
@@ -96,13 +144,27 @@ func (s *Service) recoverCharacter(ctx context.Context, characterID string) (Tra
 	var recovered Transition
 	err = s.repo.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		t, err := s.transitions.FindTransition(lockedCtx, roomID)
-		if err != nil || !t.Pending {
+		if err != nil {
 			return err
 		}
-		if err := s.publishTransition(lockedCtx, t); err != nil {
-			return err
+		if t.Pending {
+			if err := s.publishTransition(lockedCtx, t); err != nil {
+				return err
+			}
+			t.Pending = false
+			recovered = t
 		}
-		recovered = t
+		if t.Version > 0 && t.Detail.Room.Status != StatusDisbanded && hasRoomMember(t.Detail.Members, characterID) && s.isInactive(t.LastActivityAt, s.now()) {
+			if _, roomErr := s.repo.GetRoom(lockedCtx, roomID); roomErr != nil && !errors.Is(roomErr, ErrRoomNotFound) {
+				return roomErr
+			}
+			lockedCtx = context.WithValue(lockedCtx, transitionVersionKey{}, t.Version)
+			timeoutT, err := s.cleanupInactiveRoom(lockedCtx, t, s.now())
+			if err != nil {
+				return err
+			}
+			recovered = timeoutT
+		}
 		return nil
 	})
 	return recovered, err
@@ -119,6 +181,17 @@ func NewMemoryTransitionRepository() *MemoryTransitionRepository {
 	return &MemoryTransitionRepository{states: make(map[string][]byte), claims: make(map[string]string)}
 }
 
+// CanTransitionFrom checks whether a transition kind is allowed from the prior room status.
+func CanTransitionFrom(prevStatus, kind string) bool {
+	if prevStatus == StatusDisbanded {
+		return false
+	}
+	if prevStatus == StatusCompleted {
+		return kind == "leave" || kind == "disband" || kind == "abandon" || kind == "timeout"
+	}
+	return true
+}
+
 func (r *MemoryTransitionRepository) FindTransition(_ context.Context, roomID string) (Transition, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -128,8 +201,12 @@ func (r *MemoryTransitionRepository) FindTransition(_ context.Context, roomID st
 			return Transition{}, err
 		}
 	}
+	if t.LastActivityAt.IsZero() {
+		t.LastActivityAt = t.Detail.Room.CreatedAt
+	}
 	t.Detail.Room.FinancialVersion = t.Version
 	t.Detail.Room.PasswordHash = t.PasswordHash
+	t.Detail.Room.LastActivityAt = t.LastActivityAt
 	return t, nil
 }
 
@@ -148,7 +225,7 @@ func (r *MemoryTransitionRepository) CommitTransition(ctx context.Context, t Tra
 			return err
 		}
 	}
-	if previous.Version+1 != t.Version || previous.Pending || previous.Detail.Room.Status == StatusCompleted || previous.Detail.Room.Status == StatusDisbanded {
+	if previous.Version+1 != t.Version || previous.Pending || !CanTransitionFrom(previous.Detail.Room.Status, t.Kind) {
 		return ErrTransitionConflict
 	}
 	if t.AddedID != "" && r.claims[t.AddedID] != "" {
@@ -183,18 +260,44 @@ func (r *MemoryTransitionRepository) AcknowledgeTransition(_ context.Context, ro
 			delete(r.claims, characterID)
 		}
 	}
-	if t.Detail.Room.Status == StatusCompleted {
-		for _, m := range t.Detail.Members {
-			if r.claims[m.CharacterID] == roomID {
-				delete(r.claims, m.CharacterID)
-			}
-		}
-	}
 	t.Pending = false
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err
 	}
 	r.states[roomID] = data
+	return nil
+}
+
+func (r *MemoryTransitionRepository) TouchActivity(_ context.Context, roomID string, version int, at time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	raw := r.states[roomID]
+	if len(raw) == 0 {
+		return ErrTransitionConflict
+	}
+	var t Transition
+	if err := json.Unmarshal(raw, &t); err != nil {
+		return err
+	}
+	if t.Version != version || t.Pending || t.Detail.Room.Status == StatusDisbanded || t.Detail.Room.Status == StatusCompleted {
+		return ErrTransitionConflict
+	}
+	last := t.LastActivityAt
+	if last.IsZero() {
+		last = t.Detail.Room.CreatedAt
+	}
+	if !last.IsZero() && at.After(last.Add(InactivityTimeout)) {
+		return ErrRoomInactive
+	}
+	if last.IsZero() || at.After(last) {
+		t.LastActivityAt = at
+		t.Detail.Room.LastActivityAt = at
+		data, err := json.Marshal(t)
+		if err != nil {
+			return err
+		}
+		r.states[roomID] = data
+	}
 	return nil
 }

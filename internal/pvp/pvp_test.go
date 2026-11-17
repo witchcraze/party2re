@@ -585,13 +585,18 @@ func TestColosseum_LeaveRoom_InProgress_AndForfeit(t *testing.T) {
 	if !res.MatchCompleted || res.OverallWinnerTeam != pvp.ColorBlue || res.PrizePerMember != 200 || charRepo.prizes[c2.ID] != 200 {
 		t.Fatalf("expected Bob to win 200G forfeited pool, got res=%+v prizes=%+v", res, charRepo.prizes)
 	}
+	if err := svc.LeaveRoom(ctx, c2.ID, d1.Room.ID); err != nil {
+		t.Fatalf("expected Bob to exit completed room before re-entering: %v", err)
+	}
 
 	// Case 2: Both members leave in_progress -> room closes with durable ForfeitedPool
 	d2, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Mutual Forfeit", Bet: 100, MaxMembers: 2, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = svc.JoinRoom(ctx, c2.ID, d2.Room.ID, "")
+	if _, err := svc.JoinRoom(ctx, c2.ID, d2.Room.ID, ""); err != nil {
+		t.Fatalf("JoinRoom d2: %v", err)
+	}
 	_, _ = svc.SelectTeam(ctx, c1.ID, d2.Room.ID, pvp.ColorRed)
 	_, _ = svc.SelectTeam(ctx, c2.ID, d2.Room.ID, pvp.ColorBlue)
 	_, _ = svc.StartMatch(ctx, c1.ID, d2.Room.ID)

@@ -98,7 +98,7 @@ func (h *Handler) handleCreatePvPRoom(w http.ResponseWriter, r *http.Request) {
 			}
 			if errors.Is(err, pvp.ErrInsufficientBetFunds) || errors.Is(err, pvp.ErrAlreadyInRoom) ||
 				errors.Is(err, pvp.ErrNeedJoinNotMet) || errors.Is(err, pvp.ErrCharacterUnconscious) ||
-				errors.Is(err, pvp.ErrCharacterExhausted) {
+				errors.Is(err, pvp.ErrCharacterExhausted) || errors.Is(err, pvp.ErrCharacterSleeping) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -182,7 +182,7 @@ func (h *Handler) handleJoinPvPRoom(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, pvp.ErrRoomFull) || errors.Is(err, pvp.ErrRoomNotRecruiting) ||
 				errors.Is(err, pvp.ErrAlreadyInRoom) || errors.Is(err, pvp.ErrInsufficientBetFunds) ||
 				errors.Is(err, pvp.ErrNeedJoinNotMet) || errors.Is(err, pvp.ErrCharacterUnconscious) ||
-				errors.Is(err, pvp.ErrCharacterExhausted) {
+				errors.Is(err, pvp.ErrCharacterExhausted) || errors.Is(err, pvp.ErrCharacterSleeping) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -211,6 +211,10 @@ func (h *Handler) handleLeavePvPRoom(w http.ResponseWriter, r *http.Request) {
 			}
 			if errors.Is(err, pvp.ErrCharacterNotInRoom) {
 				writeError(w, http.StatusUnprocessableEntity, err)
+				return
+			}
+			if errors.Is(err, pvp.ErrTransitionConflict) {
+				writeError(w, http.StatusConflict, err)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)
