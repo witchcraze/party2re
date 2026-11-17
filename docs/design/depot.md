@@ -26,7 +26,7 @@ no caller below departs from legacy behavior.
 |---|---|---|
 | Purchases from weapon, armor, item, accessory and secret shops, including batch buying and quantity > 1 (`weapon.cgi:65,148`, `armor.cgi:62`, `item.cgi:84,171`, `accessory.cgi:119`, `secret.cgi:55`) | none | Deliver |
 | Accessory synthesis product (`accessory.cgi:200`) | none | Deliver after the materials are consumed |
-| Black Market prizes (`black_market.cgi:118,137`), medal (`medal.cgi:80`) and casino (`casino.cgi:609–623`, one row per unit) prizes | none | Deliver |
+| Black Market prizes (`black_market.cgi:118,137`), medal (`medal.cgi:80`), casino (`casino.cgi:609–623`, one row per unit) and [contest](photo-contest.md#prizes) (`contest.cgi:203–219`) prizes | none | Deliver |
 | Flea Market purchase and cancel (`free.cgi:161–171,257–271`); Player Store purchase, barter (both sides) and withdrawal (`store.cgi:386–394,468–476,544–555`) | none | Deliver |
 | Costume goods (`goods.cgi:72`), altar wish (`reborn.cgi:104`), god wishes (`god.cgi:102–103`), event bazaar (`event.cgi:94`), helper quest reward (`helper.cgi:115`), raffle and lottery (`lot.cgi:134`, `takarakuzi.cgi:237`) | none | Hand when the existing path fills an empty hand, otherwise Deliver |
 | Alchemy completion (`alchemy.cgi:183–201`) and Plantation harvest (`plantation.cgi:197–204,249–262`) | none | Deliver |
@@ -56,8 +56,7 @@ Callers that pin a different representation keep their own owner:
 and the
 [Home bag/treasure/key contract](home.md#legacy-dispatch-and-consumption-contract)
 append separate instances without stacking (`AppendDelivery`).
-[Contest awards](photo-contest.md#approved-delivery-contract-and-implementation-gap)
-follow the Deliver rule. Still open: Auction gold
+Still open: Auction gold
 destination ([#1815](https://github.com/witchcraze/party2re/issues/1815)).
 
 ## Operations & Invariants

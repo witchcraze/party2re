@@ -41,21 +41,6 @@ const (
 	StatusSettled   = "settled"
 
 	ContestSettlementActorID = "contest:settlement"
-
-	VoterBonusSmallMedals = 1
-)
-
-// Prize defines rewards awarded to top contest winners.
-type Prize struct {
-	Gold        int `json:"gold"`
-	SmallMedals int `json:"small_medals"`
-	GuildPoints int `json:"guild_points"`
-}
-
-var (
-	PrizeFirst  = Prize{Gold: 15000, SmallMedals: 10, GuildPoints: 700}
-	PrizeSecond = Prize{Gold: 7000, SmallMedals: 6, GuildPoints: 300}
-	PrizeThird  = Prize{Gold: 3000, SmallMedals: 3, GuildPoints: 100}
 )
 
 // Photo represents a saved screenshot / captured moment for a character.
@@ -187,7 +172,6 @@ func ValidateComment(comment string) error {
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
-	Update(ctx context.Context, char corecharacter.Character) error
 }
 
 // GuildRef identifies the guild a character belonged to at a point in time.

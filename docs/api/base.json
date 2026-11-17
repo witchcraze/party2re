@@ -17720,14 +17720,15 @@
               "depot_transfer",
               "store_payment",
               "fleamarket_payment",
-              "pvp_prize"
+              "pvp_prize",
+              "contest_prize"
             ],
-            "description": "Why the gold is held; clients render the receipt message. For fleamarket_payment, render <sender_name>からフリーマーケットの支払い; for store_payment, render <sender_name>から店の支払い."
+            "description": "Why the gold is held; clients render the receipt message. For fleamarket_payment, render <sender_name>からフリーマーケットの支払い; for store_payment, render <sender_name>から店の支払い; for contest_prize, render <sender_name>の賞金."
           },
           "sender_name": {
             "type": "string",
             "maxLength": 50,
-            "description": "Sender's character name, or the arena name for pvp_prize, when the gold was sent."
+            "description": "Sender's character name, the arena name for pvp_prize, or the placement (第N回フォトコンテストM位) for contest_prize."
           }
         },
         "required": [

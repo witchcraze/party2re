@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -42,6 +44,49 @@ func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character)
 	defer m.mu.Unlock()
 	m.characters[char.ID] = char
 	return nil
+}
+
+// mockPrizes records deliveries; failOn makes the delivery to that character fail.
+type mockPrizes struct {
+	mu       sync.Mutex
+	calls    []string // "gold|id|amount|award" or "medals|id|quantity|notified" in call order
+	failOn   string
+	failWith error
+}
+
+func (m *mockPrizes) HoldGold(_ context.Context, id string, amount int, award string) error {
+	return m.record(id, fmt.Sprintf("gold|%s|%d|%s", id, amount, award))
+}
+
+func (m *mockPrizes) DeliverMedals(_ context.Context, c corecharacter.Character, quantity, notified int) error {
+	return m.record(c.ID, fmt.Sprintf("medals|%s|%d|%d", c.ID, quantity, notified))
+}
+
+func (m *mockPrizes) record(id, call string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id == m.failOn {
+		return m.failWith
+	}
+	m.calls = append(m.calls, call)
+	return nil
+}
+
+// gold returns the gold holds recorded for characterID.
+func (m *mockPrizes) gold(characterID string) []string {
+	var out []string
+	for _, call := range m.snapshot() {
+		if strings.HasPrefix(call, "gold|"+characterID+"|") {
+			out = append(out, call)
+		}
+	}
+	return out
+}
+
+func (m *mockPrizes) snapshot() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.calls...)
 }
 
 type mockContestRepo struct {
@@ -771,6 +816,7 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 	contestRepo := newMockContestRepo()
 	guildSvc := newMockGuildService()
 	newsPub := newMockNewsPublisher()
+	prizes := &mockPrizes{}
 
 	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	svc, _ := contest.NewService(
@@ -778,6 +824,7 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 		contestRepo,
 		contest.WithGuildService(guildSvc),
 		contest.WithNewsPublisher(newsPub),
+		contest.WithPrizeDelivery(prizes),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -837,81 +884,48 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 		contestRepo.SaveEntry(ctx, entries[i])
 	}
 
-	// Add 3 voters who voted for 1st place (entry-1)
-	voters := make([]corecharacter.Character, 3)
-	for i := 0; i < 3; i++ {
-		voters[i] = corecharacter.Character{
-			ID:          fmt.Sprintf("voter-%d", i+1),
-			Name:        fmt.Sprintf("Voter%d", i+1),
-			SmallMedals: 0,
+	// 3 outside voters, the self-voting champion and 2nd place vote for entry-1;
+	// 4th place votes for 2nd place and gets nothing.
+	voterIDs := []string{"voter-1", "voter-2", "voter-3", chars[0].ID, chars[1].ID}
+	for i, voterID := range voterIDs {
+		if i < 3 {
+			charRepo.Update(ctx, corecharacter.Character{ID: voterID, Name: fmt.Sprintf("Voter%d", i+1)})
 		}
-		charRepo.Update(ctx, voters[i])
-
-		vote := contest.ContestVote{
-			ID:                 fmt.Sprintf("vote-%d", i+1),
-			Round:              1,
-			EntryID:            entries[0].ID,
-			VoterCharacterID:   voters[i].ID,
-			VoterCharacterName: voters[i].Name,
-			Comment:            "Awesome!",
-		}
-		contestRepo.SaveVote(ctx, vote)
+		contestRepo.SaveVote(ctx, contest.ContestVote{
+			ID: fmt.Sprintf("vote-%d", i+1), Round: 1, EntryID: entries[0].ID, VoterCharacterID: voterID,
+		})
 	}
+	contestRepo.SaveVote(ctx, contest.ContestVote{ID: "vote-other", Round: 1, EntryID: entries[1].ID, VoterCharacterID: chars[3].ID})
 
-	// Settle contest
 	res, err := svc.SettleContest(ctx, false)
 	if err != nil {
 		t.Fatalf("SettleContest failed: %v", err)
 	}
-
-	if res.Postponed || !res.PrizesDistributed {
+	if res.Postponed || !res.PrizesDistributed || res.VotersRewarded != 5 {
 		t.Errorf("unexpected settlement result: %+v", res)
 	}
-	if res.VotersRewarded != 3 {
-		t.Errorf("expected 3 voters rewarded, got %d", res.VotersRewarded)
-	}
 
-	// Verify 1st place prizes: +15000 G, +10 Medals, +700 GP
-	firstChar, _ := charRepo.FindByID(ctx, chars[0].ID)
-	if firstChar.Money != 1000+15000 {
-		t.Errorf("expected 16000 G, got %d", firstChar.Money)
+	// Recipients in ID order: gold is held and medals go to the Depot (9/5/2 plus
+	// one noticed medal per champion vote); only the champion voter medal is noticed.
+	want := []string{
+		"gold|char-1|15000|第1回フォトコンテスト1位", "medals|char-1|10|1",
+		"gold|char-2|7000|第1回フォトコンテスト2位", "medals|char-2|6|1",
+		"gold|char-3|3000|第1回フォトコンテスト3位", "medals|char-3|2|0",
+		"medals|voter-1|1|1", "medals|voter-2|1|1", "medals|voter-3|1|1",
 	}
-	if firstChar.SmallMedals != 5+10 {
-		t.Errorf("expected 15 medals, got %d", firstChar.SmallMedals)
+	if got := prizes.snapshot(); !slices.Equal(got, want) {
+		t.Errorf("deliveries = %q, want %q", got, want)
 	}
-	if guildSvc.points["guild-1"] != 700 {
-		t.Errorf("expected 700 guild points for guild-1, got %d", guildSvc.points["guild-1"])
+	// Wallets and medal counters are untouched at settlement.
+	for _, c := range append(chars, corecharacter.Character{ID: "voter-1"}) {
+		after, _ := charRepo.FindByID(ctx, c.ID)
+		if after.Money != c.Money || after.SmallMedals != c.SmallMedals {
+			t.Errorf("%s wallet/medals changed: %d/%d", c.ID, after.Money, after.SmallMedals)
+		}
 	}
-
-	// Verify 2nd place prizes: +7000 G, +6 Medals, +300 GP
-	secondChar, _ := charRepo.FindByID(ctx, chars[1].ID)
-	if secondChar.Money != 1000+7000 {
-		t.Errorf("expected 8000 G, got %d", secondChar.Money)
-	}
-	if secondChar.SmallMedals != 5+6 {
-		t.Errorf("expected 11 medals, got %d", secondChar.SmallMedals)
-	}
-	if guildSvc.points["guild-2"] != 300 {
-		t.Errorf("expected 300 guild points for guild-2, got %d", guildSvc.points["guild-2"])
-	}
-
-	// Verify 3rd place prizes: +3000 G, +3 Medals, +100 GP
-	thirdChar, _ := charRepo.FindByID(ctx, chars[2].ID)
-	if thirdChar.Money != 1000+3000 {
-		t.Errorf("expected 4000 G, got %d", thirdChar.Money)
-	}
-	if thirdChar.SmallMedals != 5+3 {
-		t.Errorf("expected 8 medals, got %d", thirdChar.SmallMedals)
-	}
-	if guildSvc.points["guild-3"] != 100 {
-		t.Errorf("expected 100 guild points for guild-3, got %d", guildSvc.points["guild-3"])
-	}
-
-	// Verify voters received 1 medal each
-	for i := 0; i < 3; i++ {
-		v, _ := charRepo.FindByID(ctx, voters[i].ID)
-		if v.SmallMedals != 1 {
-			t.Errorf("expected voter %d to receive 1 medal, got %d", i+1, v.SmallMedals)
+	for guildID, points := range map[string]int64{"guild-1": 700, "guild-2": 300, "guild-3": 100, "guild-4": 0} {
+		if guildSvc.points[guildID] != points {
+			t.Errorf("%s points = %d, want %d", guildID, guildSvc.points[guildID], points)
 		}
 	}
 
@@ -1046,6 +1060,7 @@ func TestSettlement_GuildPointAttribution_TransferredMember(t *testing.T) {
 	svc, _ := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(&mockPrizes{}),
 		contest.WithGuildService(guildSvc),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
@@ -1132,6 +1147,7 @@ func TestSettlement_GuildPointAttribution_UnaffiliatedMemberJoinedLater(t *testi
 	svc, _ := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(&mockPrizes{}),
 		contest.WithGuildService(guildSvc),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
@@ -1210,6 +1226,7 @@ func TestSettlement_GuildPointAttribution_DisbandedGuildNotMisdelivered(t *testi
 	svc, _ := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(&mockPrizes{}),
 		contest.WithGuildService(guildSvc),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)

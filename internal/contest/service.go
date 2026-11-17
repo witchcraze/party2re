@@ -21,6 +21,7 @@ type Service struct {
 	guilds            GuildService
 	news              NewsPublisher
 	memories          corecharacter.MemoryRecorder
+	prizes            PrizeDelivery
 	scheduler         Scheduler
 	txProvider        TransactionProvider
 	nowFunc           func() time.Time

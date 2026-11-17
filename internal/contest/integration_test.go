@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -847,12 +848,14 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 	}
 
 	// Create two completely INDEPENDENT Service instances sharing storage
+	prizes := &mockPrizes{}
 	svc1, err := contest.NewService(
 		charRepo,
 		contestRepo,
 		contest.WithTransactionProvider(txProvider),
 		contest.WithServiceScheduler(schedService),
 		contest.WithSettlementActorID(testActorID),
+		contest.WithPrizeDelivery(prizes),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 	if err != nil {
@@ -864,6 +867,7 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 		contest.WithTransactionProvider(txProvider),
 		contest.WithServiceScheduler(schedService),
 		contest.WithSettlementActorID(testActorID),
+		contest.WithPrizeDelivery(prizes),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 	if err != nil {
@@ -998,36 +1002,27 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 		t.Errorf("legend record mismatch: round=%d char=%s, want round=1 char=%s", legends[0].Round, legends[0].CharacterID, chars[0].ID)
 	}
 
-	// ZERO duplicate prize awards:
-	// 1st place: exactly 10,000 gold and 3 small medals
-	c0After, err := charRepo.FindByID(ctx, chars[0].ID)
-	if err != nil {
-		t.Fatalf("FindByID char 0 failed: %v", err)
+	// ZERO duplicate prize awards: one held gold per placement.
+	assertGoldDeliveries := func() {
+		t.Helper()
+		var gold []string
+		for _, call := range prizes.snapshot() {
+			if strings.HasPrefix(call, "gold|") {
+				gold = append(gold, call)
+			}
+		}
+		want := []string{
+			fmt.Sprintf("gold|%s|%d|第1回フォトコンテスト1位", chars[0].ID, contest.PrizeFirst.Gold),
+			fmt.Sprintf("gold|%s|%d|第1回フォトコンテスト2位", chars[1].ID, contest.PrizeSecond.Gold),
+			fmt.Sprintf("gold|%s|%d|第1回フォトコンテスト3位", chars[2].ID, contest.PrizeThird.Gold),
+		}
+		slices.Sort(want)
+		slices.Sort(gold)
+		if !slices.Equal(gold, want) {
+			t.Errorf("held gold = %q, want %q (DUPLICATE REWARDS DETECTED?)", gold, want)
+		}
 	}
-	if c0After.Money != contest.PrizeFirst.Gold {
-		t.Errorf("char 0 money = %d, want %d (DUPLICATE REWARDS DETECTED!)", c0After.Money, contest.PrizeFirst.Gold)
-	}
-	if c0After.SmallMedals != contest.PrizeFirst.SmallMedals {
-		t.Errorf("char 0 medals = %d, want %d", c0After.SmallMedals, contest.PrizeFirst.SmallMedals)
-	}
-
-	// 2nd place: exactly 5,000 gold and 2 medals
-	c1After, err := charRepo.FindByID(ctx, chars[1].ID)
-	if err != nil {
-		t.Fatalf("FindByID char 1 failed: %v", err)
-	}
-	if c1After.Money != contest.PrizeSecond.Gold {
-		t.Errorf("char 1 money = %d, want %d", c1After.Money, contest.PrizeSecond.Gold)
-	}
-
-	// 3rd place: exactly 3,000 gold and 1 medal
-	c2After, err := charRepo.FindByID(ctx, chars[2].ID)
-	if err != nil {
-		t.Fatalf("FindByID char 2 failed: %v", err)
-	}
-	if c2After.Money != contest.PrizeThird.Gold {
-		t.Errorf("char 2 money = %d, want %d", c2After.Money, contest.PrizeThird.Gold)
-	}
+	assertGoldDeliveries()
 
 	// 5. Assertions on Valkey state:
 	// A. No pending actions remain for Round 1
@@ -1079,14 +1074,8 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 
 	worker1.ProcessAction(ctx, staleRound1Action)
 
-	// SQL state unchanged: Round 1 still settled, Char 0 funds unchanged
-	c0AfterStale, err := charRepo.FindByID(ctx, chars[0].ID)
-	if err != nil {
-		t.Fatalf("FindByID char 0 after stale action failed: %v", err)
-	}
-	if c0AfterStale.Money != contest.PrizeFirst.Gold {
-		t.Errorf("char 0 money altered by stale action = %d, want %d", c0AfterStale.Money, contest.PrizeFirst.Gold)
-	}
+	// SQL state unchanged: Round 1 still settled, no further prize
+	assertGoldDeliveries()
 
 	// Valkey state unchanged: Round 2 next reservation still present and pending
 	actionsAfterStale, err := schedRepo.FindPendingByActorID(ctx, testActorID)

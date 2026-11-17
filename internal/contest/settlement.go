@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"time"
-
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 // SettleContest concludes the active contest round, awards prizes to winners and voters,
@@ -215,50 +213,10 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			return entries[i].CreatedAt.Before(entries[j].CreatedAt)
 		})
 
-		// Assign ranks and distribute prizes to top 3
-		prizes := []Prize{PrizeFirst, PrizeSecond, PrizeThird}
 		for i := range entries {
-			rank := i + 1
-			entries[i].Ranking = rank
+			entries[i].Ranking = i + 1
 			if err := s.contests.SaveEntry(txCtx, entries[i]); err != nil {
 				return err
-			}
-
-			if i < len(prizes) {
-				prize := prizes[i]
-				char, err := s.characters.FindByIDForUpdate(txCtx, entries[i].CharacterID)
-				if err != nil {
-					if errors.Is(err, corecharacter.ErrNotFound) {
-						continue
-					}
-					return err
-				}
-
-				if err := char.AddMoney(prize.Gold); err != nil {
-					return err
-				}
-				if err := char.AddSmallMedals(prize.SmallMedals); err != nil {
-					return err
-				}
-				if err := s.characters.Update(txCtx, char); err != nil {
-					return err
-				}
-
-				if s.guilds != nil && entries[i].GuildID != "" {
-					if err := s.guilds.AddPoints(txCtx, entries[i].GuildID, int64(prize.GuildPoints)); err != nil {
-						return err
-					}
-				}
-				if err := s.memories.Record(txCtx, char.ID, corecharacter.MemoryContestPrize,
-					fmt.Sprintf("★第%d回フォトコンテスト%d位入賞★", activeRound.Round, rank)); err != nil {
-					return err
-				}
-
-				if s.news != nil {
-					newsContent := fmt.Sprintf("★第%d回フォトコンテスト%d位 %s★", activeRound.Round, rank, entries[i].CharacterName)
-					//lint:ignore error-swallow best-effort informational news does not invalidate contest prizes
-					_ = s.news.PublishNews(txCtx, "contest", "フォトコンテスト結果発表", newsContent, "ワコール", now)
-				}
 			}
 		}
 
@@ -283,32 +241,11 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			result.WinnerLegend = &legend
 		}
 
-		// Distribute voter bonus medals to characters who voted for 1st place
-		if len(entries) > 0 {
-			winner := entries[0]
-			votes, err := s.contests.ListVotesByEntryID(txCtx, winner.ID)
-			if err != nil {
-				return err
-			}
-			voterCount := 0
-			for _, v := range votes {
-				voterChar, err := s.characters.FindByIDForUpdate(txCtx, v.VoterCharacterID)
-				if err != nil {
-					if errors.Is(err, corecharacter.ErrNotFound) {
-						continue
-					}
-					return err
-				}
-				if err := voterChar.AddSmallMedals(VoterBonusSmallMedals); err != nil {
-					return err
-				}
-				if err := s.characters.Update(txCtx, voterChar); err != nil {
-					return err
-				}
-				voterCount++
-			}
-			result.VotersRewarded = voterCount
+		voters, err := s.awardPrizes(txCtx, activeRound.Round, entries, now)
+		if err != nil {
+			return err
 		}
+		result.VotersRewarded = voters
 
 		// Mark active round as settled
 		activeRound.Status = StatusSettled
