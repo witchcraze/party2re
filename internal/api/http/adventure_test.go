@@ -173,14 +173,6 @@ func TestHandleGetAdventureChronicle_Success(t *testing.T) {
 						TotalAttempts: 50,
 					},
 				},
-				Milestones: []adventure.Milestone{
-					{
-						Key:       "try_mode",
-						Name:      "トライモード (Try Mode)",
-						Threshold: 50,
-						Unlocked:  true,
-					},
-				},
 			}, nil
 		},
 	}
@@ -202,9 +194,6 @@ func TestHandleGetAdventureChronicle_Success(t *testing.T) {
 	}
 	if chronicle.CharacterID != "c1" || chronicle.TotalVictories != 50 || chronicle.WinRate != 1.0 {
 		t.Fatalf("unexpected chronicle response: %+v", chronicle)
-	}
-	if len(chronicle.Milestones) == 0 || !chronicle.Milestones[0].Unlocked {
-		t.Fatalf("expected unlocked milestone: %+v", chronicle.Milestones)
 	}
 }
 

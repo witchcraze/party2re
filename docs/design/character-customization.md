@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Character Customization & Naming Hall system (`internal/character`, legacy `name_change.cgi`, `profile.cgi`, `custom_image.cgi`, NPC `@マリナン`) allows players to change their character's name, update gender and appearance, edit a custom profile bio/comment, and upload or set an avatar image.
+The Character Customization & Naming Hall system (`internal/character`, legacy `name_change.cgi`, `profile.cgi`, `custom_image.cgi`, NPC `@マリナン`) allows players to change their character's name and gender, edit the legacy profile and set the image (aura and avatar).
 
 ---
 
@@ -51,13 +51,14 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 
 ---
 
-## 5. Profile Bio & Avatar Rules
+## 5. Profile & Image Rules
 
 ### 5.1 Profile Attributes (`character_profiles`)
-- **Self-Introduction Comment**: Up to 160 characters (`MaxCommentLength = 160`).
-- **Avatar URL**: Empty (no avatar) or exactly `https://i.imgur.com/<ID>.gif`, where `<ID>` is 5–10 ASCII letters/digits. Legacy `lib/custom_image.cgi:65–70` accepts only that imgur ID and stores this URL; there is no image upload, data URI or other host. Profile updates reject any other value with 400 and leave the stored avatar unchanged. Other external services are deferred to [#1923](https://github.com/witchcraze/party2re/issues/1923). Known gap: the God new-world wish still writes `chr/052.gif` here although legacy changes the icon, not the avatar ([#1924](https://github.com/witchcraze/party2re/issues/1924)).
-- **Aura Effect (`aura_effect`)**: Selectable visual aura effect (integer `0` through `8`). Restored from legacy `custom_image.cgi` (`effect1` / `@effects` in `_data.cgi`). `0`: None (default), `1`: Flame, `2`: Dark/Wings 1, `3`: Light/Wings 2, `4`: Thunder/Blue Flame, `5`: Wind/Black Flame, `6`: Rainbow/Wings 3, `7`: Star/Mysterious Object 1, `8`: Cherry Blossom/Mysterious Object 2. Validated with `0 <= aura_effect <= 8`.
-- **Bio Data**: Optional structured key-value map (e.g. `hobby`, `dream`, `like_food`, `dislike_food`, `blood_type`, `birthday`) with keys $\le 32$ characters (`MaxBioKeyLength = 32`) and values $\le 160$ Unicode characters (`MaxBioFieldLength = 160`). In parity with legacy Party2 (`lib/profile.cgi`), bio field values preserve original whitespace without arbitrary trimming, and length limits (0–160 characters) are enforced directly against persisted values.
+- **Profile fields**: the legacy profile form's fields (`lib/profile.cgi:6–30`), edited only by the owner in the [Home profile scene](home.md#observation-visibility-and-navigation); an edit replaces every field because the legacy form submits them all.
+- **Avatar URL**: Empty (no avatar) or exactly `https://i.imgur.com/<ID>.gif`, where `<ID>` is 5–10 ASCII letters/digits. Legacy `lib/custom_image.cgi:65–70` accepts only that imgur ID and stores this URL; there is no image upload, data URI or other host. Other external services are deferred to [#1923](https://github.com/witchcraze/party2re/issues/1923). Known gap: the God new-world wish still writes `chr/052.gif` here although legacy changes the icon, not the avatar ([#1924](https://github.com/witchcraze/party2re/issues/1924)).
+- **Aura Effect (`aura_effect`)**: legacy `effect1` (`custom_image.cgi`, `@effects` in `_data.cgi`), `0` (none) to `8`.
+- Legacy sets aura and, after the avatar unlock, the avatar in own-Home `いめーじ`; there is no setter yet ([#2332](https://github.com/witchcraze/party2re/issues/2332)).
+- **Comment**: no legacy counterpart; its removal is [#2333](https://github.com/witchcraze/party2re/issues/2333).
 
 ---
 
@@ -66,11 +67,6 @@ Transport schemas: [OpenAPI](../api/openapi.json). Storage key lifetimes: [Valke
 ## 7. Concurrency & Security Guarantees
 
 - **Atomicity & Locking**: Name changes, gender modifications, and profile updates lock the target character row with `SELECT ... FOR UPDATE` within a database transaction (`RunInTx`).
-- **Atomic Partial Profile Updates & Field Preservation**:
-  - `UpdateProfile` validates all submitted fields upfront, enters a database transaction (`RunInTx`), and acquires an exclusive row lock on `characters` (`findForUpdate`).
-  - Concurrent partial updates (e.g. updating `comment` in one request and `avatar_url` in another) serialize on the character row lock. Each transaction reads the latest committed profile state, merges its modified fields into the record, and UPSERTs the result, preserving disjoint fields without lost updates.
-  - Concurrent first-profile creation is safely serialized by the lock on `characters`, avoiding reliance on locking non-existent rows in `character_profiles`.
 - **IDOR Protection**: All mutating `/characters/{id}/*` endpoints enforce session token authentication and verify that the character belongs to the authenticated player (`withAuthenticatedCharacter`).
 - **Unique Name Integrity**: Character name uniqueness is validated and supported by an index on `characters(name)`.
-- **Profile Read & Update Integrity**: Querying or updating a profile propagates storage and cancellation errors; unreadable persisted data does not become a default profile. Partial updates require a successful prerequisite read of existing profile data, preventing silent overwrite of avatar or bio fields on storage failure.
 - **Public Profile Boundary**: Anonymous profile reads expose the character name and player-written profile only; account identifiers, balances and internal character state remain private. Legacy `lib/profile.cgi:58–78` uses the name as its heading and reads the bio entries separately; its editable `job` and `sex` entries are not the character's actual job or gender. [OpenAPI](../api/openapi.json) owns the response fields.

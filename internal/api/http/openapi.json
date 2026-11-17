@@ -266,15 +266,6 @@
           "character_id": {
             "type": "string"
           },
-          "milestones": {
-            "items": {
-              "$ref": "#/components/schemas/AdventureMilestone"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "stages": {
             "items": {
               "$ref": "#/components/schemas/AdventureStageClearStat"
@@ -319,8 +310,7 @@
           "total_turns",
           "total_exp_earned",
           "total_gold_earned",
-          "stages",
-          "milestones"
+          "stages"
         ],
         "type": "object"
       },
@@ -401,34 +391,6 @@
           "reward_experience",
           "reward_currency",
           "resolved"
-        ],
-        "type": "object"
-      },
-      "AdventureMilestone": {
-        "additionalProperties": false,
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "threshold": {
-            "type": "integer"
-          },
-          "unlocked": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "key",
-          "name",
-          "threshold",
-          "unlocked",
-          "description"
         ],
         "type": "object"
       },
@@ -4049,6 +4011,44 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "home_profile_update",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "bio_data": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "Every legacy profile field by key (home_profile fields); it replaces the stored profile, so omitted fields become empty. Values take up to 160 characters without ; \u003c or \u003e.",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "bio_data"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "home_item_use",
                   "type": "string"
                 }
@@ -4399,6 +4399,8 @@
                         "home_collection",
                         "home_monster_book",
                         "home_job_master",
+                        "home_profile",
+                        "home_adventure_record",
                         "home_custom_skill",
                         "casino",
                         "secretshop",
@@ -4551,6 +4553,8 @@
                         "home_collection",
                         "home_monster_book",
                         "home_job_master",
+                        "home_profile",
+                        "home_adventure_record",
                         "home_custom_skill",
                         "casino",
                         "secretshop",
@@ -11778,6 +11782,57 @@
         ],
         "type": "object"
       },
+      "HomeAdventureRecordSceneData": {
+        "additionalProperties": false,
+        "description": "The observed home owner's adventure record (legacy ぼうけんのきろく): clear counts of the cleared stages, stage26 per season, and their total.",
+        "properties": {
+          "owner_id": {
+            "type": "string"
+          },
+          "parent": {
+            "const": "home"
+          },
+          "stages": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "clear_count": {
+                  "type": "integer"
+                },
+                "season": {
+                  "type": "string"
+                },
+                "seasonal_sub_id": {
+                  "type": "integer"
+                },
+                "stage_id": {
+                  "type": "string"
+                },
+                "stage_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stage_id",
+                "stage_name",
+                "clear_count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total_clears": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parent",
+          "owner_id",
+          "stages",
+          "total_clears"
+        ],
+        "type": "object"
+      },
       "HomeCollectionSceneData": {
         "additionalProperties": false,
         "description": "The observed home owner's item collection (legacy アイテム図鑑): weapons, armors and items with their completion progress. Visitors see the owner's collection.",
@@ -12027,6 +12082,47 @@
         "required": [
           "id",
           "custom_name"
+        ],
+        "type": "object"
+      },
+      "HomeProfileSceneData": {
+        "additionalProperties": false,
+        "description": "The observed home owner's profile (legacy ぷろふぃーる): every profile field in form order, empty ones included. The owner may edit it with home_profile_update.",
+        "properties": {
+          "fields": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "parent": {
+            "const": "home"
+          }
+        },
+        "required": [
+          "parent",
+          "owner_id",
+          "fields"
         ],
         "type": "object"
       },
@@ -15420,6 +15516,8 @@
                   "home_collection",
                   "home_monster_book",
                   "home_job_master",
+                  "home_profile",
+                  "home_adventure_record",
                   "home_custom_skill",
                   "casino",
                   "secretshop",
@@ -15628,6 +15726,8 @@
               "home_collection",
               "home_monster_book",
               "home_job_master",
+              "home_profile",
+              "home_adventure_record",
               "home_custom_skill",
               "casino",
               "secretshop",
@@ -15739,6 +15839,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeProfileSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeAdventureRecordSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/HomeCustomSkillSceneData"
@@ -15861,6 +15967,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeProfileSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeAdventureRecordSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/ShopProductSceneData"
@@ -16083,6 +16195,58 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                },
+                "location_id": {
+                  "const": "home_profile"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeProfileSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                },
+                "location_id": {
+                  "const": "home_adventure_record"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeAdventureRecordSceneData"
                 }
               }
             }
@@ -23279,242 +23443,6 @@
         },
         "security": [],
         "summary": "Get character public profile",
-        "tags": [
-          "Character"
-        ]
-      },
-      "post": {
-        "description": "Updates bio comment, avatar URL, aura effect, and custom metadata for a character.",
-        "operationId": "updateCharacterProfile",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "aura_effect": {
-                    "maximum": 8,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "avatar_url": {
-                    "description": "Empty (no avatar) or https://i.imgur.com/\u003c5-10 alphanumerics\u003e.gif; anything else is rejected with 400.",
-                    "type": "string"
-                  },
-                  "bio_data": {
-                    "additionalProperties": {
-                      "maxLength": 160,
-                      "type": "string"
-                    },
-                    "type": "object"
-                  },
-                  "comment": {
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "aura_effect": {
-                      "maximum": 8,
-                      "minimum": 0,
-                      "type": "integer"
-                    },
-                    "avatar_url": {
-                      "type": "string"
-                    },
-                    "bio_data": {
-                      "additionalProperties": {
-                        "maxLength": 160,
-                        "type": "string"
-                      },
-                      "type": "object"
-                    },
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "comment": {
-                      "type": "string"
-                    },
-                    "updated_at": {
-                      "format": "date-time",
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Profile updated successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Invalid comment length, avatar URL, aura effect, or bio attributes"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Update character profile",
-        "tags": [
-          "Character"
-        ]
-      },
-      "put": {
-        "description": "Updates bio comment, avatar URL, aura effect, and custom metadata for a character.",
-        "operationId": "replaceCharacterProfile",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "aura_effect": {
-                    "maximum": 8,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "avatar_url": {
-                    "description": "Empty (no avatar) or https://i.imgur.com/\u003c5-10 alphanumerics\u003e.gif; anything else is rejected with 400.",
-                    "type": "string"
-                  },
-                  "bio_data": {
-                    "additionalProperties": {
-                      "maxLength": 160,
-                      "type": "string"
-                    },
-                    "type": "object"
-                  },
-                  "comment": {
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "aura_effect": {
-                      "maximum": 8,
-                      "minimum": 0,
-                      "type": "integer"
-                    },
-                    "avatar_url": {
-                      "type": "string"
-                    },
-                    "bio_data": {
-                      "additionalProperties": {
-                        "maxLength": 160,
-                        "type": "string"
-                      },
-                      "type": "object"
-                    },
-                    "character_id": {
-                      "type": "string"
-                    },
-                    "comment": {
-                      "type": "string"
-                    },
-                    "updated_at": {
-                      "format": "date-time",
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Profile updated successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Invalid comment length, avatar URL, aura effect, or bio attributes"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Replace or update character profile",
         "tags": [
           "Character"
         ]

@@ -16,7 +16,7 @@ import (
 // observed home owner's records to owner and visitors alike; ＠かすたむすきる
 // is offered only in one's own home. Every list is bounded by its catalog.
 var (
-	homeRecordScenes        = []string{"home_collection", "home_monster_book", "home_job_master"}
+	homeRecordScenes        = []string{"home_collection", "home_monster_book", "home_job_master", "home_profile", "home_adventure_record"}
 	homeCollectionFacility  = facility{title: "アイテム図鑑", read: (*Handler).homeCollectionSceneData}
 	homeMonsterBookFacility = facility{title: "モンスターブック", read: (*Handler).homeMonsterBookSceneData}
 	homeJobMasterFacility   = facility{title: "ジョブマスター", read: (*Handler).homeJobMasterSceneData}

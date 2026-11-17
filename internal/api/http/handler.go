@@ -80,7 +80,7 @@ type CharacterService interface {
 	ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
 	ChangeGender(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	GetProfile(ctx context.Context, characterID string) (character.ProfileView, error)
-	UpdateProfile(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
+	UpdateProfile(ctx context.Context, characterID string, bio map[string]string) (character.Profile, error)
 	Trajectory(ctx context.Context, characterID string) ([]character.Memory, error)
 	GetNamingHallDialogue() character.NamingHallDialogue
 	Delete(ctx context.Context, playerID, characterID string) error
@@ -289,7 +289,7 @@ func NewHandler(
 		shops:          shops,
 		allowedOrigins: make(map[string]struct{}),
 	}
-	for _, opt := range append([]Option{adventureStartCommand(adventures), shopCommands()}, opts...) {
+	for _, opt := range append([]Option{adventureStartCommand(adventures), shopCommands(), homeProfileCommand(characters)}, opts...) {
 		if opt != nil {
 			opt(h)
 		}
@@ -329,8 +329,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("DELETE /characters/{id}", h.handleDeleteCharacter)
 	mux.HandleFunc("GET /characters/{id}/profile", h.handleGetCharacterProfile)
 	mux.HandleFunc("GET /characters/{id}/trajectory", h.handleGetCharacterTrajectory)
-	mux.HandleFunc("POST /characters/{id}/profile", h.handleUpdateCharacterProfile)
-	mux.HandleFunc("PUT /characters/{id}/profile", h.handleUpdateCharacterProfile)
 	mux.HandleFunc("POST /characters/{id}/name", h.handleChangeCharacterName)
 	mux.HandleFunc("POST /characters/{id}/gender", h.handleChangeCharacterGender)
 	mux.HandleFunc("GET /naming-hall/dialogue", h.handleNamingHallDialogue)

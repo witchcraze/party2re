@@ -3,6 +3,7 @@ package character
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type mockRepository struct {
@@ -558,86 +560,69 @@ func TestService_ChangeGender(t *testing.T) {
 	}
 }
 
+// UpdateProfile replaces the legacy profile fields as the legacy form does,
+// keeping avatar, aura and comment written elsewhere.
 func TestService_ProfileOperations(t *testing.T) {
+	ctx := context.Background()
 	repo := newMockRepository()
 	service, _ := NewService(repo)
+	char, _ := service.CreateWithOptions(ctx, "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
+	repo.profiles[char.ID] = Profile{CharacterID: char.ID, Comment: "c", AvatarURL: "https://i.imgur.com/abc12.gif", AuraEffect: 3, BioData: map[string]string{"hobby": "Fishing", "goal": "old"}}
 
-	char, _ := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
-
-	// 1. Get default profile
-	view, err := service.GetProfile(context.Background(), char.ID)
+	updated, err := service.UpdateProfile(ctx, char.ID, map[string]string{"hobby": "Reading", "like_food": "Apple"})
 	if err != nil {
-		t.Fatalf("GetProfile() failed: %v", err)
+		t.Fatal(err)
 	}
-	if view.Character.ID != char.ID {
-		t.Fatalf("view character ID mismatch: %s != %s", view.Character.ID, char.ID)
+	want := map[string]string{"hobby": "Reading", "like_food": "Apple"}
+	stored := repo.profiles[char.ID]
+	if !maps.Equal(updated.BioData, want) || !maps.Equal(stored.BioData, want) || stored.Comment != "c" || stored.AvatarURL != "https://i.imgur.com/abc12.gif" || stored.AuraEffect != 3 {
+		t.Fatalf("returned %+v stored %+v", updated, stored)
 	}
+	view, err := service.GetProfile(ctx, char.ID)
+	if err != nil || view.Character.ID != char.ID || !maps.Equal(view.Profile.BioData, want) {
+		t.Fatalf("GetProfile = %+v, %v", view, err)
+	}
+}
 
-	// 2. Update profile
-	comment := "I am a mighty adventurer."
-	avatarURL := "https://i.imgur.com/AvATest.gif"
-	auraEffect := 3
-	bio := map[string]string{
-		"hobby":     "Fishing",
-		"like_food": "Apple",
+// Rejected updates never save, and a failed profile read keeps the stored profile.
+func TestService_UpdateProfile_RejectionsMakeZeroSaveCalls(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockRepository()
+	service, _ := NewService(repo)
+	char, _ := service.Create(ctx, "player-1", "Hero")
+	if _, err := service.UpdateProfile(ctx, char.ID, map[string]string{"hobby": "saved"}); err != nil {
+		t.Fatal(err)
 	}
-
-	updatedProfile, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment:    &comment,
-		AvatarURL:  &avatarURL,
-		AuraEffect: &auraEffect,
-		BioData:    bio,
-	})
-	if err != nil {
-		t.Fatalf("UpdateProfile() failed: %v", err)
-	}
-	if updatedProfile.Comment != comment || updatedProfile.AvatarURL != avatarURL || updatedProfile.AuraEffect != 3 || updatedProfile.BioData["hobby"] != "Fishing" {
-		t.Fatalf("unexpected profile data: %+v", updatedProfile)
-	}
-
-	// 3. Validation errors
-	tooLongComment := strings.Repeat("あ", 161)
-	if _, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment: &tooLongComment,
-	}); !errors.Is(err, ErrCommentTooLong) {
-		t.Fatalf("expected ErrCommentTooLong, got %v", err)
-	}
-
-	invalidURL := "ftp://invalid-url.com/img.png"
-	if _, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		AvatarURL: &invalidURL,
-	}); !errors.Is(err, ErrInvalidAvatarURL) {
-		t.Fatalf("expected ErrInvalidAvatarURL, got %v", err)
-	}
-
-	longKeyBio := map[string]string{
-		strings.Repeat("k", 33): "value",
-	}
-	if _, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		BioData: longKeyBio,
-	}); !errors.Is(err, ErrBioKeyTooLong) {
-		t.Fatalf("expected ErrBioKeyTooLong, got %v", err)
-	}
-
-	// 4. Aura effect validation (0..8 valid, < 0 or > 8 invalid)
-	validAuras := []int{0, 1, 8}
-	for _, aura := range validAuras {
-		val := aura
-		prof, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-			AuraEffect: &val,
-		})
-		if err != nil || prof.AuraEffect != aura {
-			t.Errorf("expected valid aura effect %d, got err %v", aura, err)
+	storageErr := errors.New("database connection lost")
+	for _, tc := range []struct {
+		name    string
+		bio     map[string]string
+		readErr error
+		want    error
+	}{
+		{"unknown field", map[string]string{"comment": "x"}, nil, ErrUnknownBioField},
+		{"161 runes", map[string]string{"hobby": strings.Repeat("あ", 161)}, nil, ErrBioValueTooLong},
+		{"legacy separator", map[string]string{"hobby": "a;b"}, nil, ErrBioValueInvalid},
+		{"markup", map[string]string{"hobby": "<b>"}, nil, ErrBioValueInvalid},
+		{"newline", map[string]string{"hobby": "a\nb"}, nil, validation.ErrControlCharacter},
+		// #1098: bounds and safety apply to the stored value, edges included.
+		{"161 spaces", map[string]string{"hobby": strings.Repeat(" ", 161)}, nil, ErrBioValueTooLong},
+		{"160 runes plus edge space", map[string]string{"hobby": strings.Repeat("あ", 160) + " "}, nil, ErrBioValueTooLong},
+		{"edge space plus 160 runes", map[string]string{"hobby": " " + strings.Repeat("あ", 160)}, nil, ErrBioValueTooLong},
+		{"edge newline", map[string]string{"hobby": "a\n"}, nil, validation.ErrControlCharacter},
+		{"whitespace-only newline", map[string]string{"hobby": " \n "}, nil, validation.ErrControlCharacter},
+		{"edge control character", map[string]string{"hobby": "\x07a"}, nil, validation.ErrControlCharacter},
+		{"profile read failure", map[string]string{"hobby": "new"}, storageErr, storageErr},
+	} {
+		repo.saveProfileCalls, repo.getProfileErr = 0, tc.readErr
+		if _, err := service.UpdateProfile(ctx, char.ID, tc.bio); !errors.Is(err, tc.want) || repo.saveProfileCalls != 0 || repo.profiles[char.ID].BioData["hobby"] != "saved" {
+			t.Fatalf("%s: err=%v saves=%d stored=%v", tc.name, err, repo.saveProfileCalls, repo.profiles[char.ID].BioData)
 		}
 	}
-
-	invalidAuras := []int{-1, 9, 100}
-	for _, aura := range invalidAuras {
-		val := aura
-		if _, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-			AuraEffect: &val,
-		}); !errors.Is(err, ErrInvalidAuraEffect) {
-			t.Errorf("expected ErrInvalidAuraEffect for %d, got %v", aura, err)
+	repo.getProfileErr = nil
+	for _, v := range []string{"", " ", strings.Repeat(" ", 160), strings.Repeat("あ", 160), " " + strings.Repeat("あ", 158) + " "} {
+		if _, err := service.UpdateProfile(ctx, char.ID, map[string]string{"hobby": v}); err != nil || repo.profiles[char.ID].BioData["hobby"] != v {
+			t.Fatalf("%q: %v", v, err)
 		}
 	}
 }
@@ -748,359 +733,25 @@ func TestService_Delete(t *testing.T) {
 	})
 }
 
-func TestService_Profile_ReadErrorPropagationAndPreservation(t *testing.T) {
+func TestService_GetProfile_ReadErrors(t *testing.T) {
 	repo := newMockRepository()
-	service, err := NewService(repo)
-	if err != nil {
-		t.Fatal(err)
-	}
+	service, _ := NewService(repo)
+	char, _ := service.Create(context.Background(), "player-1", "Hero")
 
-	char, err := service.Create(context.Background(), "player-1", "Hero")
-	if err != nil {
-		t.Fatal(err)
+	// A genuinely absent profile is the default profile.
+	if view, err := service.GetProfile(context.Background(), char.ID); err != nil || view.Profile.CharacterID != char.ID {
+		t.Fatalf("absent profile: %+v %v", view.Profile, err)
 	}
-
-	// 1. Initial healthy profile with avatar and bio
-	initialComment := "Initial comment"
-	initialAvatar := "https://i.imgur.com/AvBTest.gif"
-	initialBio := map[string]string{"key": "saved bio"}
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment:   &initialComment,
-		AvatarURL: &initialAvatar,
-		BioData:   initialBio,
-	})
-	if err != nil {
-		t.Fatalf("initial UpdateProfile failed: %v", err)
-	}
-
-	// 2. GetProfile propagates storage errors
 	storageErr := errors.New("database connection lost")
 	repo.getProfileErr = storageErr
-	_, err = service.GetProfile(context.Background(), char.ID)
-	if !errors.Is(err, storageErr) {
-		t.Fatalf("expected storageErr from GetProfile, got %v", err)
+	if _, err := service.GetProfile(context.Background(), char.ID); !errors.Is(err, storageErr) {
+		t.Fatalf("expected storageErr, got %v", err)
 	}
-
-	// 3. GetProfile propagates cancellation errors
 	repo.getProfileErr = nil
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = service.GetProfile(canceledCtx, char.ID)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled from GetProfile, got %v", err)
-	}
-
-	// 4. UpdateProfile fails when profile read fails, makes 0 SaveProfile calls, preserves existing data
-	repo.saveProfileCalls = 0
-	repo.getProfileErr = storageErr
-	newComment := "New comment attempting to overwrite"
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment: &newComment,
-	})
-	if !errors.Is(err, storageErr) {
-		t.Fatalf("expected storageErr from UpdateProfile, got %v", err)
-	}
-	if repo.saveProfileCalls != 0 {
-		t.Fatalf("expected 0 SaveProfile calls on read error, got %d", repo.saveProfileCalls)
-	}
-
-	// In storage, existing AvatarURL and BioData are still intact
-	stored := repo.profiles[char.ID]
-	if stored.AvatarURL != initialAvatar || stored.BioData["key"] != "saved bio" || stored.Comment != initialComment {
-		t.Fatalf("stored profile was corrupted or overwritten on read error: %+v", stored)
-	}
-
-	// 5. Healthy partial update preserves saved AvatarURL and BioData
-	repo.getProfileErr = nil
-	updatedComment := "Healthy updated comment"
-	updated, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment: &updatedComment,
-	})
-	if err != nil {
-		t.Fatalf("healthy UpdateProfile failed: %v", err)
-	}
-	if updated.Comment != updatedComment {
-		t.Errorf("comment not updated: %s", updated.Comment)
-	}
-	if updated.AvatarURL != initialAvatar {
-		t.Errorf("avatar not preserved in return: %s", updated.AvatarURL)
-	}
-	if updated.BioData["key"] != "saved bio" {
-		t.Errorf("bio data not preserved in return: %v", updated.BioData)
-	}
-
-	storedAfter := repo.profiles[char.ID]
-	if storedAfter.AvatarURL != initialAvatar || storedAfter.BioData["key"] != "saved bio" || storedAfter.Comment != updatedComment {
-		t.Fatalf("stored profile lost avatar or bio during partial update: %+v", storedAfter)
-	}
-
-	// 6. Genuinely absent profile returns default profile without error
-	absentChar, err := service.Create(context.Background(), "player-1", "AbsHero")
-	if err != nil {
-		t.Fatal(err)
-	}
-	absentView, err := service.GetProfile(context.Background(), absentChar.ID)
-	if err != nil {
-		t.Fatalf("expected nil error for absent profile, got %v", err)
-	}
-	if absentView.Profile.CharacterID != absentChar.ID || absentView.Profile.AvatarURL != "" {
-		t.Fatalf("unexpected default profile for absent char: %+v", absentView.Profile)
-	}
-}
-
-func TestService_UpdateProfile_ValidationFailureMakesZeroSaveCalls(t *testing.T) {
-	repo := newMockRepository()
-	service, err := NewService(repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	char, err := service.Create(context.Background(), "player-1", "Hero")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// 1. Initial profile
-	initComment := "Valid initial comment"
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment: &initComment,
-	})
-	if err != nil {
-		t.Fatalf("setup UpdateProfile failed: %v", err)
-	}
-	repo.saveProfileCalls = 0
-
-	// 2. Overlong comment
-	longComment := strings.Repeat("a", MaxCommentLength+1)
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment: &longComment,
-	})
-	if !errors.Is(err, ErrCommentTooLong) {
-		t.Fatalf("expected ErrCommentTooLong, got %v", err)
-	}
-	if repo.saveProfileCalls != 0 {
-		t.Errorf("expected 0 SaveProfile calls on invalid comment, got %d", repo.saveProfileCalls)
-	}
-
-	// 3. Invalid avatar URL
-	badAvatar := "ftp://example.com/avatar.png"
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		AvatarURL: &badAvatar,
-	})
-	if !errors.Is(err, ErrInvalidAvatarURL) {
-		t.Fatalf("expected ErrInvalidAvatarURL, got %v", err)
-	}
-	if repo.saveProfileCalls != 0 {
-		t.Errorf("expected 0 SaveProfile calls on invalid avatar, got %d", repo.saveProfileCalls)
-	}
-
-	// 4. Invalid aura effect
-	badAura := 99
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		AuraEffect: &badAura,
-	})
-	if !errors.Is(err, ErrInvalidAuraEffect) {
-		t.Fatalf("expected ErrInvalidAuraEffect, got %v", err)
-	}
-	if repo.saveProfileCalls != 0 {
-		t.Errorf("expected 0 SaveProfile calls on invalid aura, got %d", repo.saveProfileCalls)
-	}
-
-	// 5. Invalid bio key
-	longBioKey := map[string]string{strings.Repeat("k", MaxBioKeyLength+1): "val"}
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		BioData: longBioKey,
-	})
-	if !errors.Is(err, ErrBioKeyTooLong) {
-		t.Fatalf("expected ErrBioKeyTooLong, got %v", err)
-	}
-	if repo.saveProfileCalls != 0 {
-		t.Errorf("expected 0 SaveProfile calls on invalid bio key, got %d", repo.saveProfileCalls)
-	}
-
-	// 6. Invalid bio value
-	longBioVal := map[string]string{"valid_key": strings.Repeat("v", MaxBioFieldLength+1)}
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		BioData: longBioVal,
-	})
-	if !errors.Is(err, ErrBioValueTooLong) {
-		t.Fatalf("expected ErrBioValueTooLong, got %v", err)
-	}
-	if repo.saveProfileCalls != 0 {
-		t.Errorf("expected 0 SaveProfile calls on invalid bio value, got %d", repo.saveProfileCalls)
-	}
-
-	// Ensure stored profile remains unchanged
-	stored := repo.profiles[char.ID]
-	if stored.Comment != initComment {
-		t.Fatalf("stored profile was mutated after validation errors: %+v", stored)
-	}
-}
-
-func TestService_UpdateProfile_BioData_Bounds(t *testing.T) {
-	repo := newMockRepository()
-	service, _ := NewService(repo)
-
-	char, err := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
-	if err != nil {
-		t.Fatalf("CreateWithOptions() failed: %v", err)
-	}
-
-	// Setup initial profile
-	initialComment := "Initial comment"
-	initialBio := map[string]string{"hobby": "Reading"}
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment: &initialComment,
-		BioData: initialBio,
-	})
-	if err != nil {
-		t.Fatalf("setup UpdateProfile() failed: %v", err)
-	}
-	repo.saveProfileCalls = 0
-
-	cases := []struct {
-		name      string
-		key       string
-		val       string
-		wantErr   error
-		wantSaved bool
-	}{
-		{
-			name:      "0 characters value is valid",
-			key:       "hobby",
-			val:       "",
-			wantErr:   nil,
-			wantSaved: true,
-		},
-		{
-			name:      "160 ASCII characters is valid",
-			key:       "hobby",
-			val:       strings.Repeat("a", 160),
-			wantErr:   nil,
-			wantSaved: true,
-		},
-		{
-			name:      "161 ASCII characters is rejected",
-			key:       "hobby",
-			val:       strings.Repeat("a", 161),
-			wantErr:   ErrBioValueTooLong,
-			wantSaved: false,
-		},
-		{
-			name:      "160 Japanese characters is valid",
-			key:       "hobby",
-			val:       strings.Repeat("あ", 160),
-			wantErr:   nil,
-			wantSaved: true,
-		},
-		{
-			name:      "161 Japanese characters is rejected",
-			key:       "hobby",
-			val:       strings.Repeat("あ", 161),
-			wantErr:   ErrBioValueTooLong,
-			wantSaved: false,
-		},
-		{
-			name:      "single space is valid and preserved",
-			key:       "hobby",
-			val:       " ",
-			wantErr:   nil,
-			wantSaved: true,
-		},
-		{
-			name:      "160 spaces is valid and preserved",
-			key:       "hobby",
-			val:       strings.Repeat(" ", 160),
-			wantErr:   nil,
-			wantSaved: true,
-		},
-		{
-			name:      "161 spaces is rejected",
-			key:       "hobby",
-			val:       strings.Repeat(" ", 161),
-			wantErr:   ErrBioValueTooLong,
-			wantSaved: false,
-		},
-		{
-			name:      "edge whitespace totaling 160 runes is valid and preserved",
-			key:       "hobby",
-			val:       " " + strings.Repeat("あ", 158) + " ",
-			wantErr:   nil,
-			wantSaved: true,
-		},
-		{
-			name:      "leading whitespace exceeding 160 runes (1 + 160 = 161) is rejected",
-			key:       "hobby",
-			val:       " " + strings.Repeat("あ", 160),
-			wantErr:   ErrBioValueTooLong,
-			wantSaved: false,
-		},
-		{
-			name:      "trailing whitespace exceeding 160 runes (160 + 1 = 161) is rejected",
-			key:       "hobby",
-			val:       strings.Repeat("あ", 160) + " ",
-			wantErr:   ErrBioValueTooLong,
-			wantSaved: false,
-		},
-		{
-			name:      "32-rune key is valid",
-			key:       strings.Repeat("k", 32),
-			val:       "val",
-			wantErr:   nil,
-			wantSaved: true,
-		},
-		{
-			name:      "33-rune key is rejected",
-			key:       strings.Repeat("k", 33),
-			val:       "val",
-			wantErr:   ErrBioKeyTooLong,
-			wantSaved: false,
-		},
-		{
-			name:      "33-rune key with space (32 chars + 1 space) is rejected",
-			key:       strings.Repeat("k", 32) + " ",
-			val:       "val",
-			wantErr:   ErrBioKeyTooLong,
-			wantSaved: false,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			beforeProfile := repo.profiles[char.ID]
-			repo.saveProfileCalls = 0
-
-			prof, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-				BioData: map[string]string{tc.key: tc.val},
-			})
-
-			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("expected error %v, got %v", tc.wantErr, err)
-				}
-				if repo.saveProfileCalls != 0 {
-					t.Errorf("expected 0 SaveProfile calls on rejected update, got %d", repo.saveProfileCalls)
-				}
-				// Verify existing profile remains unchanged
-				afterProfile := repo.profiles[char.ID]
-				if afterProfile.Comment != beforeProfile.Comment || afterProfile.BioData["hobby"] != beforeProfile.BioData["hobby"] {
-					t.Fatalf("failed update corrupted profile: before=%+v, after=%+v", beforeProfile, afterProfile)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if tc.wantSaved {
-					if prof.BioData[tc.key] != tc.val {
-						t.Fatalf("returned profile bio[%q] = %q, want %q", tc.key, prof.BioData[tc.key], tc.val)
-					}
-					stored := repo.profiles[char.ID]
-					if stored.BioData[tc.key] != tc.val {
-						t.Fatalf("persisted profile bio[%q] = %q, want %q", tc.key, stored.BioData[tc.key], tc.val)
-					}
-				}
-			}
-		})
+	if _, err := service.GetProfile(canceledCtx, char.ID); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }
 
@@ -1130,10 +781,7 @@ func TestService_UpdateProfile_InvokesTransactionProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	comment := "Tx comment"
-	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment: &comment,
-	})
+	_, err = service.UpdateProfile(context.Background(), char.ID, map[string]string{"hobby": "tx"})
 	if err != nil {
 		t.Fatalf("UpdateProfile failed: %v", err)
 	}
@@ -1195,10 +843,7 @@ func TestService_UpdateProfile_NonexistentCharacterReturnsNotFound(t *testing.T)
 		t.Fatal(err)
 	}
 
-	comment := "Any comment"
-	_, err = service.UpdateProfile(context.Background(), "nonexistent-id", UpdateProfileRequest{
-		Comment: &comment,
-	})
+	_, err = service.UpdateProfile(context.Background(), "nonexistent-id", map[string]string{"hobby": "x"})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound for nonexistent character, got %v", err)
 	}
@@ -1244,37 +889,18 @@ func TestService_ReadExistingLongerNames(t *testing.T) {
 	}
 }
 
-// Avatars are validated exactly as submitted (#1921): only "" clears, anything
-// other than the canonical URL is rejected and keeps the stored avatar.
-func TestService_UpdateProfile_AvatarExactContract(t *testing.T) {
-	ctx := context.Background()
-	service, _ := NewService(newMockRepository())
-	char, _ := service.CreateWithOptions(ctx, "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
+// Avatars match exactly (#1921): only "" or the canonical URL.
+func TestValidateAvatarURL(t *testing.T) {
 	const saved = "https://i.imgur.com/abc12.gif"
-	set := func(v string) error {
-		_, err := service.UpdateProfile(ctx, char.ID, UpdateProfileRequest{AvatarURL: &v})
-		return err
-	}
-	stored := func() string {
-		view, err := service.GetProfile(ctx, char.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return view.Profile.AvatarURL
-	}
-	if err := set(saved); err != nil {
-		t.Fatal(err)
-	}
-	for _, bad := range []string{"   ", "\t", " " + saved, saved + " ", saved + "\n"} {
-		if err := set(bad); !errors.Is(err, ErrInvalidAvatarURL) {
-			t.Fatalf("%q: got %v, want ErrInvalidAvatarURL", bad, err)
-		}
-		if got := stored(); got != saved {
-			t.Fatalf("%q: rejected input changed avatar to %q", bad, got)
+	for _, ok := range []string{"", saved} {
+		if err := ValidateAvatarURL(ok); err != nil {
+			t.Fatalf("%q: %v", ok, err)
 		}
 	}
-	if err := set(""); err != nil || stored() != "" {
-		t.Fatalf("explicit empty must clear: err=%v avatar=%q", err, stored())
+	for _, bad := range []string{"   ", "\t", " " + saved, saved + " ", saved + "\n", "ftp://example.com/a.png"} {
+		if err := ValidateAvatarURL(bad); !errors.Is(err, ErrInvalidAvatarURL) {
+			t.Fatalf("%q: got %v", bad, err)
+		}
 	}
 }
 

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/adventure"
+	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -24,6 +26,43 @@ type homeSceneFixture struct {
 	livingErr   error
 	talk        map[string]home.CompanionTalkResult // by home owner; absent means nobody is home
 	pets        map[string][]home.HomePet
+	// Profile and adventure record sources by character; fail names the
+	// character whose reads fail.
+	bios          map[string]map[string]string
+	chronicles    map[string]adventure.AdventureChronicle
+	recordFail    string
+	profileReads  []string
+	profileWrites []string
+}
+
+func (f *homeSceneFixture) GetProfile(ctx context.Context, id string) (character.ProfileView, error) {
+	f.profileReads = append(f.profileReads, id)
+	if id == f.recordFail {
+		return character.ProfileView{}, errors.New("profile read failed")
+	}
+	view, err := f.homeGatewayFixture.GetProfile(ctx, id)
+	view.Profile.BioData = f.bios[id]
+	return view, err
+}
+
+func (f *homeSceneFixture) UpdateProfile(_ context.Context, id string, bio map[string]string) (character.Profile, error) {
+	if err := character.ValidateBioData(bio); err != nil {
+		return character.Profile{}, err
+	}
+	f.profileWrites = append(f.profileWrites, id)
+	return character.Profile{CharacterID: id, BioData: bio}, nil
+}
+
+type homeSceneAdventures struct {
+	AdventureService
+	f *homeSceneFixture
+}
+
+func (a homeSceneAdventures) GetChronicle(_ context.Context, id string) (adventure.AdventureChronicle, error) {
+	if id == a.f.recordFail {
+		return adventure.AdventureChronicle{}, errors.New("record read failed")
+	}
+	return a.f.chronicles[id], nil
 }
 
 type homeSceneRepository struct {
@@ -127,9 +166,11 @@ func homeSceneRouter(t *testing.T, options ...Option) (*homeSceneFixture, *gatew
 		playercontext.SceneDefinition{ID: "home_collection", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_monster_book", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_job_master", Parent: "home", InheritsSubject: true},
+		playercontext.SceneDefinition{ID: "home_profile", Parent: "home", InheritsSubject: true},
+		playercontext.SceneDefinition{ID: "home_adventure_record", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_custom_skill", Parent: "home"},
 	))
-	h, err := NewHandler(f.gatewayFixture, f.homeGatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, append([]Option{WithHome(f), WithPlayerContext(service)}, options...)...)
+	h, err := NewHandler(f.gatewayFixture, f, homeSceneAdventures{f: f}, &struct{ ShopService }{}, append([]Option{WithHome(f), WithPlayerContext(service)}, options...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +206,7 @@ func TestHomeScenesPublicOwnedTargetsAndRecovery(t *testing.T) {
 	f, store, router := homeSceneRouter(t)
 	status, response := navigationGET(t, router)
 	data := decodeHomeData(t, response)
-	if status != 200 || !data.View.IsOwner || data.View.Private == nil || len(data.Destinations) != 7 || response.Scene.Support.Observation != "details" {
+	if status != 200 || !data.View.IsOwner || data.View.Private == nil || len(data.Destinations) != 9 || response.Scene.Support.Observation != "details" {
 		t.Fatalf("owned: %d %+v", status, response)
 	}
 	before := f.repo.privateReads
@@ -176,7 +217,7 @@ func TestHomeScenesPublicOwnedTargetsAndRecovery(t *testing.T) {
 	refreshed := homeObservation(t, raw)
 	status, response = navigationGET(t, router)
 	data = decodeHomeData(t, response)
-	if status != 200 || !reflect.DeepEqual(refreshed.Scene, response.Scene) || response.Character.ID != "hero" || data.View.Owner.ID != "other" || data.View.IsOwner || data.View.Private != nil || len(data.Destinations) != 3 || f.repo.privateReads != before {
+	if status != 200 || !reflect.DeepEqual(refreshed.Scene, response.Scene) || response.Character.ID != "hero" || data.View.Owner.ID != "other" || data.View.IsOwner || data.View.Private != nil || len(data.Destinations) != 5 || f.repo.privateReads != before {
 		t.Fatalf("public: %+v", response)
 	}
 	for _, a := range response.AvailableActions {

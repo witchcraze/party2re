@@ -283,22 +283,6 @@ func TestGetChronicle(t *testing.T) {
 			t.Fatalf("unexpected first stage stat: %+v", chronicle.Stages[0])
 		}
 
-		// 80 victories: try_mode (50) unlocked, image_setting (100) locked
-		var tryModeUnlocked, imageSettingUnlocked bool
-		for _, m := range chronicle.Milestones {
-			if m.Key == "try_mode" {
-				tryModeUnlocked = m.Unlocked
-			}
-			if m.Key == "image_setting" {
-				imageSettingUnlocked = m.Unlocked
-			}
-		}
-		if !tryModeUnlocked {
-			t.Fatal("expected try_mode milestone to be unlocked at 80 victories")
-		}
-		if imageSettingUnlocked {
-			t.Fatal("expected image_setting milestone to be locked at 80 victories")
-		}
 	})
 }
 

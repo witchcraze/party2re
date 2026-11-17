@@ -158,6 +158,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "home_item_use", Label: "つかう", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "home_phrase_teach", Label: "ことばをおしえる", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"phrase"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "home_phrase_forget", Label: "ことばをわすれさせる", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"phrase_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "home_profile_update", Label: "ぷろふぃーるを変更する", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"bio_data"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	// Letters (home.cgi tegamiwokaku/tegamiwoyomu); read and delete act on rows of the owner's mailbox scenes.
 	{ID: "home_letter_send", Label: "てがみをかく", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"recipient_name", "content"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "home_letter_read", Label: "てがみをよむ", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"letter_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},

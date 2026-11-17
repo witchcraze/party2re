@@ -170,9 +170,6 @@ func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
 	if len(chronicle.Stages) == 0 || chronicle.Stages[0].StageID != adventure.StarterAdventure {
 		t.Fatalf("unexpected stage stats: %+v", chronicle.Stages)
 	}
-	if len(chronicle.Milestones) == 0 {
-		t.Fatal("expected milestones to be populated")
-	}
 }
 
 func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {

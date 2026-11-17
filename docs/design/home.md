@@ -8,7 +8,7 @@ The Home module (`internal/home`) covers the private home (`home.cgi`), town hou
 
 `home` observes the owned actor by default; `scene_select` with `target_kind:home` observes another character's home while the authenticated character stays the viewer and mutation actor. Public owner identity is limited to ID, name and color, never the wallet, account or private notices. Only an exact actor/target match adds the owner's unread-letter count, taught phrases, uncleared delivery notices and usable items, and public reads never fetch them. Required read failures fail the observation. A character without a home row gets defaults; observation never creates the row. A town estate lease is distinct from private Home existence.
 
-Every Home offers `home_collection`, `home_monster_book` and `home_job_master`, views of the observed owner's records, because legacy registers `あいてむずかん`, `もんすたーぶっく` and `じょぶますたー` in any home and shows `$m{home}`'s records. Own Home also offers `home_inbox`, `home_outbox`, `home_notices` and `home_custom_skill`, which always read the owned actor's mailbox, uncleared notices or custom skill. Selecting or observing never reads/clears a letter, acknowledges a notice or wakes the character. **Departure:** legacy rendering clears letter/money/item notices (`lib/home.cgi:45–67`); observation here never does, as the Gateway read contract requires. The owner acknowledges observed notices with `home_notice_ack`, which clears only the submitted IDs, so a notice arriving after the observation stays. Home Sleep templates carry the observed target ID, and a submitted command keeps that ID even if selection changes before submission.
+Every Home offers `home_collection`, `home_monster_book`, `home_job_master`, `home_profile` and `home_adventure_record`, views of the observed owner's records, because legacy registers `あいてむずかん`, `もんすたーぶっく`, `じょぶますたー`, `ぷろふぃーる` and `ぼうけんのきろく` in any home and shows `$m{home}`'s records. Only the owner is offered `home_profile_update` in `home_profile` (`lib/profile.cgi:40–47`). Own Home also offers `home_inbox`, `home_outbox`, `home_notices` and `home_custom_skill`, which always read the owned actor's mailbox, uncleared notices or custom skill. Selecting or observing never reads/clears a letter, acknowledges a notice or wakes the character. **Departure:** legacy rendering clears letter/money/item notices (`lib/home.cgi:45–67`); observation here never does, as the Gateway read contract requires. The owner acknowledges observed notices with `home_notice_ack`, which clears only the submitted IDs, so a notice arriving after the observation stays. Home Sleep templates carry the observed target ID, and a submitted command keeps that ID even if selection changes before submission.
 
 ### Scoped legacy action reconciliation
 
@@ -16,7 +16,7 @@ Active registration: `lib/home.cgi:26–39,73–105` (call paths `138–201,237�
 
 ### Retained REST and deferred detail ownership
 
-The public view and the profile, adventure record and image links tracked by #949 still use REST; route removal is #950.
+The public Home view still uses REST; route removal is #950. Own-Home `いめーじ` has no command yet ([#2332](https://github.com/witchcraze/party2re/issues/2332)).
 
 ## Domain rules
 

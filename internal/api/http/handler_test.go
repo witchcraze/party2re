@@ -98,7 +98,6 @@ type stubCharacterService struct {
 	changeNameFn            func(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
 	changeGenderFn          func(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	getProfileFn            func(ctx context.Context, characterID string) (character.ProfileView, error)
-	updateProfileFn         func(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
 	getNamingHallDialogueFn func() character.NamingHallDialogue
 	deleteFn                func(ctx context.Context, playerID, characterID string) error
 }
@@ -149,11 +148,8 @@ func (s *stubCharacterService) GetProfile(ctx context.Context, characterID strin
 	}
 	return character.ProfileView{Character: corecharacter.Character{ID: characterID}}, nil
 }
-func (s *stubCharacterService) UpdateProfile(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error) {
-	if s.updateProfileFn != nil {
-		return s.updateProfileFn(ctx, characterID, req)
-	}
-	return character.Profile{CharacterID: characterID}, nil
+func (s *stubCharacterService) UpdateProfile(_ context.Context, characterID string, bio map[string]string) (character.Profile, error) {
+	return character.Profile{CharacterID: characterID, BioData: bio}, nil
 }
 func (s *stubCharacterService) GetNamingHallDialogue() character.NamingHallDialogue {
 	if s.getNamingHallDialogueFn != nil {

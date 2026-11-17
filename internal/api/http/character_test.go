@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
@@ -22,7 +21,6 @@ type stubCharacterServiceExtended struct {
 	changeNameFn            func(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
 	changeGenderFn          func(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	getProfileFn            func(ctx context.Context, characterID string) (character.ProfileView, error)
-	updateProfileFn         func(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
 	getNamingHallDialogueFn func() character.NamingHallDialogue
 	deleteFn                func(ctx context.Context, playerID, characterID string) error
 }
@@ -81,37 +79,8 @@ func (s *stubCharacterServiceExtended) GetProfile(ctx context.Context, character
 	}, nil
 }
 
-func (s *stubCharacterServiceExtended) UpdateProfile(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error) {
-	if s.updateProfileFn != nil {
-		return s.updateProfileFn(ctx, characterID, req)
-	}
-	comment := ""
-	if req.Comment != nil {
-		comment = *req.Comment
-	}
-	avatarURL := ""
-	if req.AvatarURL != nil {
-		avatarURL = *req.AvatarURL
-	}
-	auraEffect := 0
-	if req.AuraEffect != nil {
-		if err := character.ValidateAuraEffect(*req.AuraEffect); err != nil {
-			return character.Profile{}, err
-		}
-		auraEffect = *req.AuraEffect
-	}
-	if req.BioData != nil {
-		if err := character.ValidateBioData(req.BioData); err != nil {
-			return character.Profile{}, err
-		}
-	}
-	return character.Profile{
-		CharacterID: characterID,
-		Comment:     comment,
-		AvatarURL:   avatarURL,
-		AuraEffect:  auraEffect,
-		BioData:     req.BioData,
-	}, nil
+func (s *stubCharacterServiceExtended) UpdateProfile(context.Context, string, map[string]string) (character.Profile, error) {
+	panic("profile writes are a Gateway command")
 }
 
 func (s *stubCharacterServiceExtended) GetNamingHallDialogue() character.NamingHallDialogue {
@@ -241,89 +210,17 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	}
 	charSvc.changeGenderFn = nil
 
-	// 6. PUT /characters/{id}/profile - Authenticated -> 200 OK
-	profBody, _ := json.Marshal(map[string]interface{}{
-		"comment":     "New bio comment",
-		"avatar_url":  "https://i.imgur.com/AvCTest.gif",
-		"aura_effect": 4,
-	})
-	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(profBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK for update profile, got %d (err: %v)", resp.StatusCode, err)
+	// 6. Profile writes moved to the Home home_profile_update command.
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
+		req, _ = http.NewRequest(method, server.URL+"/characters/char-1/profile", bytes.NewReader([]byte(`{"bio_data":{}}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		resp, err = client.Do(req)
+		if err != nil || resp.StatusCode != http.StatusMethodNotAllowed {
+			t.Fatalf("%s profile: expected retired route, got %d (err: %v)", method, resp.StatusCode, err)
+		}
+		resp.Body.Close()
 	}
-
-	var updatedProf character.Profile
-	_ = json.NewDecoder(resp.Body).Decode(&updatedProf)
-	resp.Body.Close()
-	if updatedProf.AuraEffect != 4 {
-		t.Fatalf("expected aura_effect 4, got %d", updatedProf.AuraEffect)
-	}
-
-	// 6b. PUT /characters/{id}/profile - Invalid Aura Effect -> 400 Bad Request
-	invalidProfBody, _ := json.Marshal(map[string]interface{}{
-		"aura_effect": 99,
-	})
-	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(invalidProfBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request for invalid aura_effect, got %d (err: %v)", resp.StatusCode, err)
-	}
-	resp.Body.Close()
-
-	// 6c. PUT /characters/{id}/profile - 161 spaces in bio_data -> 400 Bad Request
-	tooLongBioBody, _ := json.Marshal(map[string]interface{}{
-		"bio_data": map[string]string{
-			"hobby": strings.Repeat(" ", 161),
-		},
-	})
-	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(tooLongBioBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request for 161 spaces in bio_data, got %d (err: %v)", resp.StatusCode, err)
-	}
-	resp.Body.Close()
-
-	// 6d. PUT /characters/{id}/profile - 160 spaces in bio_data -> 200 OK
-	validSpacesBioBody, _ := json.Marshal(map[string]interface{}{
-		"bio_data": map[string]string{
-			"hobby": strings.Repeat(" ", 160),
-		},
-	})
-	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(validSpacesBioBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK for 160 spaces in bio_data, got %d (err: %v)", resp.StatusCode, err)
-	}
-	var spacesProf character.Profile
-	_ = json.NewDecoder(resp.Body).Decode(&spacesProf)
-	resp.Body.Close()
-	if spacesProf.BioData["hobby"] != strings.Repeat(" ", 160) {
-		t.Fatalf("expected preserved 160 spaces in bio_data, got %q", spacesProf.BioData["hobby"])
-	}
-
-	// 6e. PUT /characters/{id}/profile - Control character in bio_data -> 400 Bad Request
-	controlCharBioBody, _ := json.Marshal(map[string]interface{}{
-		"bio_data": map[string]string{
-			"hobby": "hello\x07world",
-		},
-	})
-	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(controlCharBioBody))
-	req.Header.Set("Authorization", "Bearer valid-session")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request for control character in bio_data, got %d (err: %v)", resp.StatusCode, err)
-	}
-	resp.Body.Close()
 
 	// 7. The data-URI avatar upload route is retired (legacy has no upload).
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/avatar", bytes.NewReader([]byte(`{"image_data":"x"}`)))

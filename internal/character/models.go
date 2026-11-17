@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/validation"
@@ -15,9 +15,7 @@ import (
 const (
 	NameChangeCost    = 500000 // 500,000 Gold
 	GenderChangeCost  = 10000  // 10,000 Gold
-	MaxCommentLength  = 160    // 160 runes
 	MaxBioFieldLength = 160    // 160 runes
-	MaxBioKeyLength   = 32     // 32 runes
 	// PersonalityBioKey is the legacy profile key for 性格・特徴 (lib/profile.cgi:18).
 	PersonalityBioKey = "character"
 )
@@ -33,8 +31,8 @@ var (
 	ErrSameGender                = errors.New("new gender is identical to current gender")
 	ErrInvalidGender             = errors.New("invalid gender: must be m or f")
 	ErrGenderIncompatibleWithJob = errors.New("gender is incompatible with current job")
-	ErrCommentTooLong            = errors.New("profile comment exceeds maximum length of 160 characters")
-	ErrBioKeyTooLong             = errors.New("bio field key exceeds maximum length of 32 characters")
+	ErrUnknownBioField           = errors.New("unknown profile field")
+	ErrBioValueInvalid           = errors.New("profile field contains ; < or >")
 	ErrBioValueTooLong           = errors.New("bio field value exceeds maximum length of 160 characters")
 	ErrInvalidAvatarURL          = errors.New("invalid avatar URL: must be https://i.imgur.com/<5-10 alphanumerics>.gif")
 	ErrForbidden                 = errors.New("forbidden: character does not belong to authenticated player")
@@ -57,12 +55,10 @@ type ProfileView struct {
 	Profile   Profile                 `json:"profile"`
 }
 
-// UpdateProfileRequest defines parameters for updating a character's profile.
-type UpdateProfileRequest struct {
-	Comment    *string           `json:"comment,omitempty"`
-	AvatarURL  *string           `json:"avatar_url,omitempty"`
-	AuraEffect *int              `json:"aura_effect,omitempty"`
-	BioData    map[string]string `json:"bio_data,omitempty"`
+// ProfileFields are the legacy profile form's keys in display order (lib/profile.cgi:6-30).
+var ProfileFields = []string{
+	"name", "sex", "blood", "birthday", "age", "job", "address", "hobby", "boom", "site", "dream",
+	PersonalityBioKey, "like", "dislike", "like_food", "dislike_food", "goal", "login", "boast", "reference", "message",
 }
 
 // NamingHallDialogue provides NPC dialogue and pricing information.
@@ -99,21 +95,6 @@ func ValidateGender(gender string) (string, error) {
 	return val, nil
 }
 
-// ValidateComment checks comment length and contents.
-func ValidateComment(comment string) error {
-	trimmed := strings.TrimSpace(comment)
-	if trimmed == "" {
-		return nil
-	}
-	if _, err := validation.ValidateMultiLine(trimmed, MaxCommentLength); err != nil {
-		if errors.Is(err, validation.ErrTooLong) {
-			return ErrCommentTooLong
-		}
-		return err
-	}
-	return nil
-}
-
 // avatarURLPattern is the only non-empty avatar: legacy stores an imgur image ID
 // (5–10 alphanumerics) as this URL (custom_image.cgi:65–70).
 var avatarURLPattern = regexp.MustCompile(`^https://i\.imgur\.com/[A-Za-z0-9]{5,10}\.gif$`)
@@ -126,33 +107,22 @@ func ValidateAvatarURL(avatarURL string) error {
 	return ErrInvalidAvatarURL
 }
 
-// ValidateBioData validates bio keys and values.
+// ValidateBioData accepts only legacy profile fields of at most 160 runes
+// without the characters legacy rejects (lib/profile.cgi:118-124).
 func ValidateBioData(bio map[string]string) error {
-	if bio == nil {
-		return nil
-	}
 	for k, v := range bio {
-		if utf8.RuneCountInString(k) > MaxBioKeyLength {
-			return ErrBioKeyTooLong
+		if !slices.Contains(ProfileFields, k) {
+			return ErrUnknownBioField
 		}
-		kTrimmed := strings.TrimSpace(k)
-		if _, err := validation.ValidateSingleLine(kTrimmed, MaxBioKeyLength); err != nil {
-			if errors.Is(err, validation.ErrTooLong) || errors.Is(err, validation.ErrEmpty) {
-				return ErrBioKeyTooLong
+		if strings.ContainsAny(v, ";<>") {
+			return ErrBioValueInvalid
+		}
+		// Legacy counts the submitted value untrimmed (#1098), as stored.
+		if err := validation.ValidateVerbatimLine(v, MaxBioFieldLength); err != nil {
+			if errors.Is(err, validation.ErrTooLong) {
+				return ErrBioValueTooLong
 			}
 			return err
-		}
-		if utf8.RuneCountInString(v) > MaxBioFieldLength {
-			return ErrBioValueTooLong
-		}
-		vTrimmed := strings.TrimSpace(v)
-		if vTrimmed != "" {
-			if _, err := validation.ValidateMultiLine(vTrimmed, MaxBioFieldLength); err != nil {
-				if errors.Is(err, validation.ErrTooLong) {
-					return ErrBioValueTooLong
-				}
-				return err
-			}
 		}
 	}
 	return nil
