@@ -585,13 +585,18 @@ func TestColosseum_LeaveRoom_InProgress_AndForfeit(t *testing.T) {
 	if !res.MatchCompleted || res.OverallWinnerTeam != pvp.ColorBlue || res.PrizePerMember != 200 || charRepo.prizes[c2.ID] != 200 {
 		t.Fatalf("expected Bob to win 200G forfeited pool, got res=%+v prizes=%+v", res, charRepo.prizes)
 	}
+	if err := svc.LeaveRoom(ctx, c2.ID, d1.Room.ID); err != nil {
+		t.Fatalf("expected Bob to exit completed room before re-entering: %v", err)
+	}
 
 	// Case 2: Both members leave in_progress -> room closes with durable ForfeitedPool
 	d2, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Mutual Forfeit", Bet: 100, MaxMembers: 2, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = svc.JoinRoom(ctx, c2.ID, d2.Room.ID, "")
+	if _, err := svc.JoinRoom(ctx, c2.ID, d2.Room.ID, ""); err != nil {
+		t.Fatalf("JoinRoom d2: %v", err)
+	}
 	_, _ = svc.SelectTeam(ctx, c1.ID, d2.Room.ID, pvp.ColorRed)
 	_, _ = svc.SelectTeam(ctx, c2.ID, d2.Room.ID, pvp.ColorBlue)
 	_, _ = svc.StartMatch(ctx, c1.ID, d2.Room.ID)
@@ -660,4 +665,79 @@ func TestColosseum_LeaveRoom_Completed(t *testing.T) {
 	if charRepo.prizes[c1.ID] != 200 || charRepo.prizes[c2.ID] != 0 {
 		t.Fatalf("expected single 200G prize without duplicates/refunds, got %+v", charRepo.prizes)
 	}
+}
+
+func TestColosseum_LeaveRoom_Completed_PreservesAdvanceRoundReplay(t *testing.T) {
+	ctx := context.Background()
+	t.Run("non-leader exits and remaining leader retries AdvanceRound", func(t *testing.T) {
+		svc, charRepo, _ := setupService(corebattle.OutcomeWin)
+		c1 := createTestCharacter("char-1", "Alice", 500)
+		c2 := createTestCharacter("char-2", "Bob", 500)
+		charRepo.add(c1)
+		charRepo.add(c2)
+
+		d, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Retry After Exit", Bet: 100, MaxMembers: 2, TargetWins: 1})
+		_, _ = svc.JoinRoom(ctx, c2.ID, d.Room.ID, "")
+		_, _ = svc.SelectTeam(ctx, c1.ID, d.Room.ID, pvp.ColorRed)
+		_, _ = svc.SelectTeam(ctx, c2.ID, d.Room.ID, pvp.ColorBlue)
+		_, _ = svc.StartMatch(ctx, c1.ID, d.Room.ID)
+		res, err := svc.AdvanceRound(ctx, c1.ID, d.Room.ID)
+		if err != nil || !res.MatchCompleted {
+			t.Fatalf("expected completed match, got %+v err=%v", res, err)
+		}
+
+		if err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
+			t.Fatalf("expected non-leader completed leave success, got %v", err)
+		}
+
+		replayed, err := svc.AdvanceRound(ctx, c1.ID, d.Room.ID)
+		if err != nil {
+			t.Fatalf("expected leader AdvanceRound retry after member exit to replay result, got %v", err)
+		}
+		if !replayed.MatchCompleted || replayed.WinnerTeam != res.WinnerTeam || replayed.PrizePerMember != res.PrizePerMember {
+			t.Fatalf("expected replayed resolution %+v, got %+v", res, replayed)
+		}
+		if charRepo.prizes[c1.ID] != 200 || charRepo.prizes[c2.ID] != 0 {
+			t.Fatalf("expected no duplicate prize on retry, got %+v", charRepo.prizes)
+		}
+	})
+
+	t.Run("leader exits and promoted remaining leader retries AdvanceRound until last exit", func(t *testing.T) {
+		svc, charRepo, _ := setupService(corebattle.OutcomeWin)
+		c1 := createTestCharacter("char-1", "Alice", 500)
+		c2 := createTestCharacter("char-2", "Bob", 500)
+		charRepo.add(c1)
+		charRepo.add(c2)
+
+		d, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Promoted Retry", Bet: 100, MaxMembers: 2, TargetWins: 1})
+		_, _ = svc.JoinRoom(ctx, c2.ID, d.Room.ID, "")
+		_, _ = svc.SelectTeam(ctx, c1.ID, d.Room.ID, pvp.ColorRed)
+		_, _ = svc.SelectTeam(ctx, c2.ID, d.Room.ID, pvp.ColorBlue)
+		_, _ = svc.StartMatch(ctx, c1.ID, d.Room.ID)
+		res, err := svc.AdvanceRound(ctx, c1.ID, d.Room.ID)
+		if err != nil || !res.MatchCompleted {
+			t.Fatalf("expected completed match, got %+v err=%v", res, err)
+		}
+
+		if err := svc.LeaveRoom(ctx, c1.ID, d.Room.ID); err != nil {
+			t.Fatalf("expected leader completed leave success, got %v", err)
+		}
+		if _, err := svc.AdvanceRound(ctx, c1.ID, d.Room.ID); !errors.Is(err, pvp.ErrNotRoomLeader) {
+			t.Fatalf("expected ErrNotRoomLeader for departed leader, got %v", err)
+		}
+		replayed, err := svc.AdvanceRound(ctx, c2.ID, d.Room.ID)
+		if err != nil {
+			t.Fatalf("expected promoted leader AdvanceRound retry to succeed, got %v", err)
+		}
+		if !replayed.MatchCompleted || replayed.WinnerTeam != res.WinnerTeam || replayed.PrizePerMember != res.PrizePerMember {
+			t.Fatalf("expected replayed resolution %+v, got %+v", res, replayed)
+		}
+
+		if err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
+			t.Fatalf("expected final completed leave success, got %v", err)
+		}
+		if _, err := svc.AdvanceRound(ctx, c2.ID, d.Room.ID); !errors.Is(err, pvp.ErrRoomNotFound) {
+			t.Fatalf("expected ErrRoomNotFound after final leave disbanded room, got %v", err)
+		}
+	})
 }

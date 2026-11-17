@@ -55,14 +55,16 @@ const (
 	StatusCompleted  = "completed"
 	StatusDisbanded  = "disbanded"
 
-	DefaultSpeed    = 18
-	MinMembers      = 2
-	MaxMembers      = 8
-	MinBet          = 10
-	MinTargetWins   = 1
-	MaxTargetWins   = 3
-	MaxRounds       = 10
-	DefaultLobbyTTL = 30 * time.Minute
+	DefaultSpeed            = 18
+	MinMembers              = 2
+	MaxMembers              = 8
+	MinBet                  = 10
+	MinTargetWins           = 1
+	MaxTargetWins           = 3
+	MaxRounds               = 10
+	DefaultLobbyTTL         = 30 * time.Minute
+	InactivityTimeout       = 1800 * time.Second
+	InactivitySleepDuration = 3600 * time.Second
 )
 
 // Domain Errors.
@@ -91,6 +93,8 @@ var (
 	ErrInvalidDependencies    = errors.New("pvp dependencies cannot be nil")
 	ErrInvalidRoomName        = errors.New("room name must be between 1 and 50 characters")
 	ErrAcquireRoomLockTimeout = errors.New("failed to acquire pvp room lock: timeout")
+	ErrCharacterSleeping      = errors.New("character is currently sleeping")
+	ErrRoomInactive           = errors.New("colosseum room expired due to inactivity")
 )
 
 // ColosseumRoom represents a real-time multiplayer 8-player colosseum room (quest.cgi:type=4, vs_player.cgi).
@@ -114,6 +118,7 @@ type ColosseumRoom struct {
 	PrizePerMember    int            `json:"prize_per_member,omitempty"`
 	CreatedAt         time.Time      `json:"created_at"`
 	UpdatedAt         time.Time      `json:"updated_at"`
+	LastActivityAt    time.Time      `json:"-"`
 	FinancialVersion  int            `json:"-"`
 }
 

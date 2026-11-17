@@ -118,6 +118,7 @@ func newCmbtServices(
 		pvp.WithTransactionProvider(core.txProvider),
 		pvp.WithTransitionRepository(pvpTransitions),
 		pvp.WithPrizeRemitter(pvpPrizeRemitter{remittances: econ.depotRepo, notifier: soc.home}),
+		pvp.WithTimerService(soc.timer),
 	)
 	if err != nil {
 		return nil, err
@@ -381,11 +382,25 @@ func newCmbtServices(
 		if err != nil {
 			return time.Time{}, false, err
 		}
+		var until time.Time
+		var pending bool
 		facts, err := normalService.GetActorPenalty(ctx, c.PlayerID, actor)
-		if err != nil || facts == nil {
+		if err != nil {
 			return time.Time{}, false, err
 		}
-		return facts.Recipient.PenaltyUntil, facts.Recipient.TimerPending, nil
+		if facts != nil {
+			until = facts.Recipient.PenaltyUntil
+			pending = facts.Recipient.TimerPending
+		}
+		pvpUntil, pvpPending, err := pvpService.GetPendingSleepPenalty(ctx, actor)
+		if err != nil {
+			return time.Time{}, false, err
+		}
+		if pvpUntil.After(until) {
+			until = pvpUntil
+		}
+		pending = pending || pvpPending
+		return until, pending, nil
 	})
 	dungeonService.ConfigureAdmission(admission)
 	advService.SetLegacyAdmission(admission.withMembers)

@@ -19,6 +19,19 @@ const (
 	DefaultRoomsIndexKey       = DefaultRoomsActiveIndexKey // Deprecated: alias for backward compatibility
 )
 
+type roomTTLContextKey struct{}
+
+func withRemainingTTL(ctx context.Context, ttl time.Duration) context.Context {
+	return context.WithValue(ctx, roomTTLContextKey{}, ttl)
+}
+
+func ttlFromContext(ctx context.Context) time.Duration {
+	if ttl, ok := ctx.Value(roomTTLContextKey{}).(time.Duration); ok && ttl > 0 {
+		return ttl
+	}
+	return DefaultLobbyTTL
+}
+
 // RoomRepository manages ephemeral colosseum room state.
 type RoomRepository interface {
 	SaveRoom(ctx context.Context, room ColosseumRoom, members []RoomMember) error
@@ -204,21 +217,26 @@ func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room ColosseumRoom,
 	detail := RoomDetail{Room: room, Members: members}
 	data, err := json.Marshal(struct {
 		RoomDetail
-		PasswordHash     string `json:"password_hash,omitempty"`
-		FinancialVersion int    `json:"financial_version,omitempty"`
-	}{detail, room.PasswordHash, room.FinancialVersion})
+		PasswordHash     string    `json:"password_hash,omitempty"`
+		FinancialVersion int       `json:"financial_version,omitempty"`
+		LastActivityAt   time.Time `json:"last_activity_at,omitempty"`
+	}{detail, room.PasswordHash, room.FinancialVersion, room.LastActivityAt})
 	if err != nil {
 		return err
 	}
 
 	key := DefaultRoomKeyPrefix + room.ID
-	cmd := v.client.B().Set().Key(key).Value(string(data)).Ex(DefaultLobbyTTL).Build()
+	cmd := v.client.B().Set().Key(key).Value(string(data)).Ex(ttlFromContext(ctx)).Build()
 	if err := v.client.Do(ctx, cmd).Error(); err != nil {
 		return err
 	}
 
+	scoreTime := room.UpdatedAt
+	if !room.LastActivityAt.IsZero() {
+		scoreTime = room.LastActivityAt
+	}
 	indexCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
-		ScoreMember(float64(room.UpdatedAt.Unix()), room.ID).Build()
+		ScoreMember(float64(scoreTime.Unix()), room.ID).Build()
 	return v.client.Do(ctx, indexCmd).Error()
 }
 
@@ -240,14 +258,16 @@ func (v *ValkeyRoomRepository) GetRoom(ctx context.Context, id string) (RoomDeta
 
 	var detail struct {
 		RoomDetail
-		PasswordHash     string `json:"password_hash,omitempty"`
-		FinancialVersion int    `json:"financial_version,omitempty"`
+		PasswordHash     string    `json:"password_hash,omitempty"`
+		FinancialVersion int       `json:"financial_version,omitempty"`
+		LastActivityAt   time.Time `json:"last_activity_at,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(str), &detail); err != nil {
 		return RoomDetail{}, err
 	}
 	detail.Room.PasswordHash = detail.PasswordHash
 	detail.Room.FinancialVersion = detail.FinancialVersion
+	detail.Room.LastActivityAt = detail.LastActivityAt
 	return detail.RoomDetail, nil
 }
 
@@ -289,6 +309,9 @@ func (v *ValkeyRoomRepository) ListRooms(ctx context.Context) ([]RoomSummary, er
 		if detail.Room.Status != StatusRecruiting {
 			continue
 		}
+		if !detail.Room.LastActivityAt.IsZero() && now.After(detail.Room.LastActivityAt.Add(DefaultLobbyTTL)) {
+			continue
+		}
 		summaries = append(summaries, RoomSummary{
 			ID:                detail.Room.ID,
 			Name:              detail.Room.Name,
@@ -325,7 +348,7 @@ func (v *ValkeyRoomRepository) GetCharacterRoom(ctx context.Context, characterID
 
 func (v *ValkeyRoomRepository) SetCharacterRoom(ctx context.Context, characterID string, roomID string) error {
 	key := DefaultCharacterKeyPrefix + characterID
-	cmd := v.client.B().Set().Key(key).Value(roomID).Ex(DefaultLobbyTTL).Build()
+	cmd := v.client.B().Set().Key(key).Value(roomID).Ex(ttlFromContext(ctx)).Build()
 	return v.client.Do(ctx, cmd).Error()
 }
 

@@ -2,8 +2,8 @@ package pvp
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
@@ -12,7 +12,7 @@ import (
 func (s *Service) StartMatch(ctx context.Context, leaderID string, roomID string) (RoomDetail, error) {
 	var result RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		detail, err := s.checkInactiveLocked(lockedCtx, roomID)
 		if err != nil {
 			return err
 		}
@@ -42,12 +42,22 @@ func (s *Service) StartMatch(ctx context.Context, leaderID string, roomID string
 			detail.Members[i].HP = detail.Members[i].MaxHP
 		}
 
-		now := time.Now().UTC()
+		now := s.now()
 		detail.Room.Status = StatusInProgress
 		detail.Room.Round = 1
 		detail.Room.UpdatedAt = now
+		detail.Room.LastActivityAt = now
 
-		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+		if err := s.transitions.TouchActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now); err != nil {
+			if errors.Is(err, ErrRoomInactive) {
+				if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, lastTransitionFromContext(lockedCtx), now); cleanErr != nil {
+					return cleanErr
+				}
+				return ErrRoomNotFound
+			}
+			return err
+		}
+		if err := s.saveLiveRoom(lockedCtx, detail); err != nil {
 			return err
 		}
 		result = detail
@@ -60,18 +70,24 @@ func (s *Service) StartMatch(ctx context.Context, leaderID string, roomID string
 func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID string) (RoundResolution, error) {
 	var result RoundResolution
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		last, err := s.transitions.FindTransition(lockedCtx, roomID)
-		if err != nil {
-			return err
-		}
-		if last.Result != nil && last.Result.MatchCompleted {
+		last := lastTransitionFromContext(lockedCtx)
+		if last.Result != nil && last.Result.MatchCompleted && last.Detail.Room.Status != StatusDisbanded {
+			if s.isInactive(last.LastActivityAt, s.now()) {
+				if _, roomErr := s.repo.GetRoom(lockedCtx, roomID); roomErr != nil && !errors.Is(roomErr, ErrRoomNotFound) {
+					return roomErr
+				}
+				if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, last, s.now()); cleanErr != nil {
+					return cleanErr
+				}
+				return ErrRoomNotFound
+			}
 			if last.Detail.Room.LeaderCharacterID != leaderID {
 				return ErrNotRoomLeader
 			}
 			result = *last.Result
 			return nil
 		}
-		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		detail, err := s.checkInactiveLocked(lockedCtx, roomID)
 		if err != nil {
 			return err
 		}
@@ -242,7 +258,9 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			}
 		}
 
-		detail.Room.UpdatedAt = time.Now().UTC()
+		now := s.now()
+		detail.Room.UpdatedAt = now
+		detail.Room.LastActivityAt = now
 		result = RoundResolution{
 			Round:               detail.Room.Round,
 			Outcome:             roundOutcome,
@@ -257,7 +275,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			BattleLog:           res.Logs,
 		}
 		if matchCompleted {
-			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &result, ForfeitedPool: forfeitedPool}, func(txCtx context.Context) error {
+			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &result, ForfeitedPool: forfeitedPool, LastActivityAt: now}, func(txCtx context.Context) error {
 				if err := s.awardPrizes(txCtx, awardedIDs, detail.Room.Name, prizePerMember); err != nil {
 					return err
 				}
@@ -265,8 +283,19 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			}); err != nil {
 				return err
 			}
-		} else if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
-			return err
+		} else {
+			if err := s.transitions.TouchActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now); err != nil {
+				if errors.Is(err, ErrRoomInactive) {
+					if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, lastTransitionFromContext(lockedCtx), now); cleanErr != nil {
+						return cleanErr
+					}
+					return ErrRoomNotFound
+				}
+				return err
+			}
+			if err := s.saveLiveRoom(lockedCtx, detail); err != nil {
+				return err
+			}
 		}
 		return nil
 	})

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +51,8 @@ type Service struct {
 	txProvider         TransactionProvider
 	transitions        TransitionRepository
 	prizes             PrizeRemitter
+	timers             TimerService
+	clock              func() time.Time
 }
 
 func NewService(
@@ -125,13 +128,24 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	if err != nil {
 		return RoomDetail{}, err
 	}
-	if recovered.Kind == "create" && recovered.ActorID == characterID {
+	if recovered.Kind == "timeout" && slices.Contains(recovered.RemovedIDs, characterID) {
+		return RoomDetail{}, ErrCharacterSleeping
+	}
+	if recovered.Kind == "create" && recovered.ActorID == characterID && recovered.Detail.Room.Status != StatusDisbanded {
 		recovered.Detail.Room.PasswordHash = recovered.PasswordHash
 		return recovered.Detail, nil
+	}
+	if sleeping, err := s.isCharacterSleeping(ctx, characterID); err != nil {
+		return RoomDetail{}, err
+	} else if sleeping {
+		return RoomDetail{}, ErrCharacterSleeping
 	}
 	char, err := s.characters.FindByID(ctx, characterID)
 	if err != nil {
 		return RoomDetail{}, err
+	}
+	if char.PendingWake {
+		return RoomDetail{}, ErrCharacterSleeping
 	}
 	if char.Stats.HP <= 0 {
 		return RoomDetail{}, ErrCharacterUnconscious
@@ -168,14 +182,14 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 
 	// Verify existing room
 	if existingRoomID, err := s.repo.GetCharacterRoom(ctx, char.ID); err == nil && existingRoomID != "" {
-		if existing, err := s.repo.GetRoom(ctx, existingRoomID); err == nil && existing.Room.Status != StatusCompleted && existing.Room.Status != StatusDisbanded {
+		if existing, err := s.repo.GetRoom(ctx, existingRoomID); err == nil && existing.Room.Status != StatusDisbanded {
 			return RoomDetail{}, ErrAlreadyInRoom
 		}
 	} else if err != nil && !errors.Is(err, ErrRoomNotFound) {
 		return RoomDetail{}, err
 	}
 
-	now := time.Now().UTC()
+	now := s.now()
 	roomID := id.New()
 	room := ColosseumRoom{
 		ID:                roomID,
@@ -195,6 +209,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 		TeamScores:        make(map[string]int),
 		CreatedAt:         now,
 		UpdatedAt:         now,
+		LastActivityAt:    now,
 	}
 
 	leaderMember := RoomMember{
@@ -214,7 +229,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	members := []RoomMember{leaderMember}
 	detail := RoomDetail{Room: room, Members: members}
 	if err := s.repo.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		return s.commitTransition(lockedCtx, Transition{Kind: "create", ActorID: char.ID, Detail: detail, AddedID: char.ID}, func(txCtx context.Context) error {
+		return s.commitTransition(lockedCtx, Transition{Kind: "create", ActorID: char.ID, Detail: detail, AddedID: char.ID, LastActivityAt: now}, func(txCtx context.Context) error {
 			return s.deductBet(txCtx, char.ID, req.Bet)
 		})
 	}); err != nil {
@@ -227,25 +242,36 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 
 // JoinRoom adds a character to an active colosseum room (quest.cgi:type=4).
 func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID string, password string) (RoomDetail, error) {
-	if _, err := s.recoverCharacter(ctx, characterID); err != nil {
+	recovered, err := s.recoverCharacter(ctx, characterID)
+	if err != nil {
 		return RoomDetail{}, err
 	}
+	if recovered.Kind == "timeout" && slices.Contains(recovered.RemovedIDs, characterID) {
+		return RoomDetail{}, ErrCharacterSleeping
+	}
+	if sleeping, err := s.isCharacterSleeping(ctx, characterID); err != nil {
+		return RoomDetail{}, err
+	} else if sleeping {
+		return RoomDetail{}, ErrCharacterSleeping
+	}
 	var result RoomDetail
-	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	err = s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		detail, err := s.checkInactiveLocked(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
 		char, err := s.characters.FindByID(lockedCtx, characterID)
 		if err != nil {
 			return err
+		}
+		if char.PendingWake {
+			return ErrCharacterSleeping
 		}
 		if char.Stats.HP <= 0 {
 			return ErrCharacterUnconscious
 		}
 		if char.Tired >= 100 {
 			return ErrCharacterExhausted
-		}
-
-		detail, err := s.repo.GetRoom(lockedCtx, roomID)
-		if err != nil {
-			return err
 		}
 		if detail.Room.Status != StatusRecruiting {
 			return ErrRoomNotRecruiting
@@ -261,7 +287,7 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 		}
 
 		if existingRoomID, err := s.repo.GetCharacterRoom(lockedCtx, char.ID); err == nil && existingRoomID != "" && existingRoomID != roomID {
-			if existing, err := s.repo.GetRoom(lockedCtx, existingRoomID); err == nil && existing.Room.Status != StatusCompleted && existing.Room.Status != StatusDisbanded {
+			if existing, err := s.repo.GetRoom(lockedCtx, existingRoomID); err == nil && existing.Room.Status != StatusDisbanded {
 				return ErrAlreadyInRoom
 			}
 		} else if err != nil && !errors.Is(err, ErrRoomNotFound) {
@@ -275,9 +301,19 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 			return err
 		}
 
-		now := time.Now().UTC()
+		now := s.now()
+		last := lastTransitionFromContext(lockedCtx)
+		lastActivity := last.LastActivityAt
+		if lastActivity.IsZero() {
+			lastActivity = detail.Room.LastActivityAt
+		}
+		if lastActivity.IsZero() {
+			lastActivity = detail.Room.CreatedAt
+		}
 		detail.Room.PrizePool += detail.Room.Bet
 		detail.Room.UpdatedAt = now
+		// Legacy quest.cgi:add_member writes to quest.cgi, not the room's log.cgi.
+		detail.Room.LastActivityAt = lastActivity
 
 		newMember := RoomMember{
 			RoomID:        roomID,
@@ -294,7 +330,7 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 		}
 
 		detail.Members = append(detail.Members, newMember)
-		if err := s.commitTransition(lockedCtx, Transition{Kind: "join", ActorID: char.ID, Detail: detail, AddedID: char.ID}, func(txCtx context.Context) error {
+		if err := s.commitTransition(lockedCtx, Transition{Kind: "join", ActorID: char.ID, Detail: detail, AddedID: char.ID, LastActivityAt: lastActivity}, func(txCtx context.Context) error {
 			return s.deductBet(txCtx, char.ID, detail.Room.Bet)
 		}); err != nil {
 			return err
@@ -316,7 +352,7 @@ func (s *Service) SelectTeam(ctx context.Context, characterID string, roomID str
 
 	var result RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		detail, err := s.checkInactiveLocked(lockedCtx, roomID)
 		if err != nil {
 			return err
 		}
@@ -336,8 +372,19 @@ func (s *Service) SelectTeam(ctx context.Context, characterID string, roomID str
 			return ErrCharacterNotInRoom
 		}
 
-		detail.Room.UpdatedAt = time.Now().UTC()
-		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+		now := s.now()
+		detail.Room.UpdatedAt = now
+		detail.Room.LastActivityAt = now
+		if err := s.transitions.TouchActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now); err != nil {
+			if errors.Is(err, ErrRoomInactive) {
+				if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, lastTransitionFromContext(lockedCtx), now); cleanErr != nil {
+					return cleanErr
+				}
+				return ErrRoomNotFound
+			}
+			return err
+		}
+		if err := s.saveLiveRoom(lockedCtx, detail); err != nil {
 			return err
 		}
 		result = detail

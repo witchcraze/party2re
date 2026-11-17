@@ -2,12 +2,11 @@ package pvp
 
 import (
 	"context"
-	"time"
 )
 
 // abandonLostRoom follows legacy missing-file recovery: release membership without a refund.
 func (s *Service) abandonLostRoom(ctx context.Context, characterID string, last Transition) error {
-	if last.Version == 0 || (last.Detail.Room.Status != StatusRecruiting && last.Detail.Room.Status != StatusInProgress) {
+	if last.Version == 0 || (last.Detail.Room.Status != StatusRecruiting && last.Detail.Room.Status != StatusInProgress && last.Detail.Room.Status != StatusCompleted) {
 		return ErrRoomNotFound
 	}
 	found := false
@@ -28,10 +27,12 @@ func (s *Service) abandonLostRoom(ctx context.Context, characterID string, last 
 	if claim != last.Detail.Room.ID {
 		return ErrCharacterNotInRoom
 	}
+	now := s.now()
 	beforePool := last.Detail.Room.PrizePool
 	detail := last.Detail
 	detail.Room.Status = StatusDisbanded
 	detail.Room.PrizePool = 0
-	detail.Room.UpdatedAt = time.Now().UTC()
-	return s.commitTransition(ctx, Transition{Kind: "abandon", ActorID: characterID, Detail: detail, RemovedIDs: memberIDs, ForfeitedPool: beforePool}, func(context.Context) error { return nil })
+	detail.Room.UpdatedAt = now
+	detail.Room.LastActivityAt = now
+	return s.commitTransition(ctx, Transition{Kind: "abandon", ActorID: characterID, Detail: detail, RemovedIDs: memberIDs, ForfeitedPool: last.ForfeitedPool + beforePool, LastActivityAt: now}, func(context.Context) error { return nil })
 }
