@@ -578,24 +578,6 @@ func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
 		t.Fatalf("expected CONTEXT_REFRESH_FAILED in context_error, got %s", got["context_error"])
 	}
 
-	// Verify UpdateProfile with only Comment fails during read error, makes zero SaveProfile calls,
-	// and preserves existing saved AvatarURL and BioData.
-	profileRepo.saveCalls = 0
-	newComment := "Attempted comment overwrite during failure"
-	_, err = realCharService.UpdateProfile(context.Background(), "hero", character.UpdateProfileRequest{
-		Comment: &newComment,
-	})
-	if !errors.Is(err, profileRepo.getProfileErr) {
-		t.Fatalf("expected profile read error from UpdateProfile, got %v", err)
-	}
-	if profileRepo.saveCalls != 0 {
-		t.Fatalf("expected 0 SaveProfile calls during failed read, got %d", profileRepo.saveCalls)
-	}
-	storedProfile := profileRepo.profiles["hero"]
-	if storedProfile.AvatarURL != "https://i.imgur.com/AvBTest.gif" || storedProfile.BioData["key"] != "saved bio" {
-		t.Fatalf("stored profile was corrupted or wiped during failed update: %+v", storedProfile)
-	}
-
 	// 2. Healthy-read contrast: clear error, deposit succeeds with full context, partial update preserves fields
 	profileRepo.getProfileErr = nil
 
@@ -615,21 +597,5 @@ func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
 	}
 	if observation.Character.IconURL != "https://i.imgur.com/AvBTest.gif" {
 		t.Fatalf("expected icon_url to match saved avatar, got %q", observation.Character.IconURL)
-	}
-
-	// Partial update succeeds and preserves AvatarURL and BioData
-	healthyComment := "Healthy updated comment"
-	updated, err := realCharService.UpdateProfile(context.Background(), "hero", character.UpdateProfileRequest{
-		Comment: &healthyComment,
-	})
-	if err != nil {
-		t.Fatalf("expected healthy UpdateProfile to succeed, got %v", err)
-	}
-	if updated.Comment != healthyComment || updated.AvatarURL != "https://i.imgur.com/AvBTest.gif" || updated.BioData["key"] != "saved bio" {
-		t.Fatalf("healthy partial update lost fields: %+v", updated)
-	}
-	storedHealthy := profileRepo.profiles["hero"]
-	if storedHealthy.Comment != healthyComment || storedHealthy.AvatarURL != "https://i.imgur.com/AvBTest.gif" || storedHealthy.BioData["key"] != "saved bio" {
-		t.Fatalf("stored profile lost fields after healthy partial update: %+v", storedHealthy)
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"maps"
 	"time"
 )
 
@@ -40,34 +40,12 @@ func (s *Service) GetProfile(ctx context.Context, characterID string) (ProfileVi
 	}, nil
 }
 
-// UpdateProfile modifies a character's custom bio, comment, and avatar URL.
-// It validates incoming fields, verifies the character exists and acquires a row
-// lock within a transaction, preserving concurrent unrelated fields across partial updates.
-// If reading the existing profile fails due to a repository error (other than absent profile),
-// the error is returned immediately without persisting changes, preserving existing profile fields.
-func (s *Service) UpdateProfile(ctx context.Context, characterID string, req UpdateProfileRequest) (Profile, error) {
-	if req.Comment != nil {
-		if err := ValidateComment(*req.Comment); err != nil {
-			return Profile{}, err
-		}
-	}
-
-	if req.AvatarURL != nil {
-		if err := ValidateAvatarURL(*req.AvatarURL); err != nil {
-			return Profile{}, err
-		}
-	}
-
-	if req.AuraEffect != nil {
-		if err := ValidateAuraEffect(*req.AuraEffect); err != nil {
-			return Profile{}, err
-		}
-	}
-
-	if req.BioData != nil {
-		if err := ValidateBioData(req.BioData); err != nil {
-			return Profile{}, err
-		}
+// UpdateProfile replaces the character's legacy profile fields, as the legacy
+// form submits every field (lib/profile.cgi:112-136). The row lock serializes it
+// with other profile writers, which keep their own columns.
+func (s *Service) UpdateProfile(ctx context.Context, characterID string, bio map[string]string) (Profile, error) {
+	if err := ValidateBioData(bio); err != nil {
+		return Profile{}, err
 	}
 
 	var result Profile
@@ -92,24 +70,9 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, req Upd
 			}
 		}
 
+		currentProfile.BioData = maps.Clone(bio)
 		if currentProfile.BioData == nil {
 			currentProfile.BioData = make(map[string]string)
-		}
-
-		if req.Comment != nil {
-			currentProfile.Comment = strings.TrimSpace(*req.Comment)
-		}
-
-		if req.AvatarURL != nil {
-			currentProfile.AvatarURL = *req.AvatarURL
-		}
-
-		if req.AuraEffect != nil {
-			currentProfile.AuraEffect = *req.AuraEffect
-		}
-
-		if req.BioData != nil {
-			currentProfile.BioData = req.BioData
 		}
 
 		currentProfile.UpdatedAt = time.Now().UTC()

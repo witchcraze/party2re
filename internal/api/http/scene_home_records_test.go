@@ -77,8 +77,8 @@ func TestHomeRecordScenesObserveTheHomeOwner(t *testing.T) {
 		name, owner  string
 		destinations []string
 	}{
-		{"owner", "hero", []string{"home_collection", "home_monster_book", "home_job_master", "home_inbox", "home_outbox", "home_notices", "home_custom_skill"}},
-		{"visitor", "other", []string{"home_collection", "home_monster_book", "home_job_master"}},
+		{"owner", "hero", []string{"home_collection", "home_monster_book", "home_job_master", "home_profile", "home_adventure_record", "home_inbox", "home_outbox", "home_notices", "home_custom_skill"}},
+		{"visitor", "other", []string{"home_collection", "home_monster_book", "home_job_master", "home_profile", "home_adventure_record"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store.selection = playercontext.Selection{Destination: "home"}

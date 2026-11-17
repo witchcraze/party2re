@@ -26,7 +26,7 @@ func (r *interceptingProfileRepo) GetProfile(ctx context.Context, characterID st
 }
 
 // TestCharacterService_ConcurrentProfilePatch_DisjointFields reproduces the interleaving
-// where two services update disjoint fields (Comment vs AvatarURL) concurrently.
+// where the profile form and the personality writer update the profile concurrently.
 // It verifies that Service 2 blocks on the character row lock while Service 1 is in-flight,
 // and after Service 1 commits, Service 2 applies its change over the committed state,
 // preserving both new fields as well as existing bio data.
@@ -48,7 +48,7 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 
 	// 1. Persist initial profile: AvatarURL and BioData
 	initialAvatar := "https://i.imgur.com/AvDTest.gif"
-	initialBio := map[string]string{"key": "saved"}
+	initialBio := map[string]string{"hobby": "saved"}
 	err = charRepo.SaveProfile(ctx, character.Profile{
 		CharacterID: char.ID,
 		AvatarURL:   initialAvatar,
@@ -96,14 +96,9 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newComment := "New comment from svc1"
-	newAvatar := "https://i.imgur.com/AvETest.gif"
-
 	svc1ErrChan := make(chan error, 1)
 	go func() {
-		_, err := svc1.UpdateProfile(context.Background(), char.ID, character.UpdateProfileRequest{
-			Comment: &newComment,
-		})
+		_, err := svc1.UpdateProfile(context.Background(), char.ID, map[string]string{"hobby": "new"})
 		svc1ErrChan <- err
 	}()
 
@@ -117,10 +112,7 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 	// Launch svc2 UpdateProfile concurrently
 	svc2ErrChan := make(chan error, 1)
 	go func() {
-		_, err := svc2.UpdateProfile(context.Background(), char.ID, character.UpdateProfileRequest{
-			AvatarURL: &newAvatar,
-		})
-		svc2ErrChan <- err
+		svc2ErrChan <- svc2.SetPersonality(context.Background(), char.ID, "x")
 	}()
 
 	// Assert that svc2 is blocked waiting on the lock held by svc1
@@ -154,20 +146,13 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 		t.Fatal("timed out waiting for svc2 to complete after svc1 commit")
 	}
 
-	// Assert persisted state in MariaDB: both new comment and new avatar are retained!
+	// Both writes and the untouched avatar are retained.
 	finalProf, err := charRepo.GetProfile(ctx, char.ID)
 	if err != nil {
 		t.Fatalf("GetProfile failed: %v", err)
 	}
-
-	if finalProf.Comment != newComment {
-		t.Errorf("comment mismatch: got %q, want %q", finalProf.Comment, newComment)
-	}
-	if finalProf.AvatarURL != newAvatar {
-		t.Errorf("avatar URL mismatch: got %q, want %q", finalProf.AvatarURL, newAvatar)
-	}
-	if finalProf.BioData["key"] != "saved" {
-		t.Errorf("bio data mismatch: got %v, want %v", finalProf.BioData, initialBio)
+	if finalProf.AvatarURL != initialAvatar || finalProf.BioData["hobby"] != "new" || finalProf.BioData[character.PersonalityBioKey] != "x" {
+		t.Errorf("lost update: %+v", finalProf)
 	}
 }
 
@@ -236,14 +221,9 @@ func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c1 := "First creation comment"
-	aura2 := 5
-
 	svc1ErrChan := make(chan error, 1)
 	go func() {
-		_, err := svc1.UpdateProfile(context.Background(), char.ID, character.UpdateProfileRequest{
-			Comment: &c1,
-		})
+		_, err := svc1.UpdateProfile(context.Background(), char.ID, map[string]string{"hobby": "first"})
 		svc1ErrChan <- err
 	}()
 
@@ -255,10 +235,7 @@ func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
 
 	svc2ErrChan := make(chan error, 1)
 	go func() {
-		_, err := svc2.UpdateProfile(context.Background(), char.ID, character.UpdateProfileRequest{
-			AuraEffect: &aura2,
-		})
-		svc2ErrChan <- err
+		svc2ErrChan <- svc2.SetPersonality(context.Background(), char.ID, "x")
 	}()
 
 	select {
@@ -293,131 +270,8 @@ func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
 		t.Fatalf("GetProfile failed: %v", err)
 	}
 
-	if finalProf.Comment != c1 {
-		t.Errorf("comment mismatch: got %q, want %q", finalProf.Comment, c1)
-	}
-	if finalProf.AuraEffect != aura2 {
-		t.Errorf("aura effect mismatch: got %d, want %d", finalProf.AuraEffect, aura2)
-	}
-}
-
-// TestCharacterService_ConcurrentAllOptionalFields verifies that Comment, AvatarURL,
-// AuraEffect, and BioData are all preserved across concurrent partial updates.
-func TestCharacterService_ConcurrentAllOptionalFields(t *testing.T) {
-	db := OpenTestDB(t)
-
-	ctx := context.Background()
-	char, err := CreateTestCharacter(ctx, db, "ProfAllFieldsTest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	RegisterCharacterCleanup(t, db, char)
-
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	txProvider := NewTransactionProvider(db)
-
-	svc1ReadDone := make(chan struct{})
-	svc1Resume := make(chan struct{})
-	var readOnce sync.Once
-	var resumeOnce sync.Once
-	closeResume := func() {
-		resumeOnce.Do(func() {
-			close(svc1Resume)
-		})
-	}
-	t.Cleanup(closeResume)
-
-	interceptingRepo := &interceptingProfileRepo{
-		ProfileRepository: charRepo,
-		afterGetProfile: func(ctx context.Context, charID string) {
-			readOnce.Do(func() {
-				close(svc1ReadDone)
-			})
-			<-svc1Resume
-		},
-	}
-
-	svc1, err := character.NewService(charRepo,
-		character.WithProfileRepository(interceptingRepo),
-		character.WithTransactionProvider(txProvider),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	svc2, err := character.NewService(charRepo,
-		character.WithTransactionProvider(txProvider),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Service 1 sets Comment and BioData
-	comment1 := "Comprehensive comment"
-	bio1 := map[string]string{"hobby": "fishing", "food": "ramen"}
-
-	// Service 2 sets AvatarURL and AuraEffect
-	avatar2 := "https://i.imgur.com/AvFTest.gif"
-	aura2 := 7
-
-	svc1ErrChan := make(chan error, 1)
-	go func() {
-		_, err := svc1.UpdateProfile(context.Background(), char.ID, character.UpdateProfileRequest{
-			Comment: &comment1,
-			BioData: bio1,
-		})
-		svc1ErrChan <- err
-	}()
-
-	select {
-	case <-svc1ReadDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for svc1 read")
-	}
-
-	svc2ErrChan := make(chan error, 1)
-	go func() {
-		_, err := svc2.UpdateProfile(context.Background(), char.ID, character.UpdateProfileRequest{
-			AvatarURL:  &avatar2,
-			AuraEffect: &aura2,
-		})
-		svc2ErrChan <- err
-	}()
-
-	select {
-	case err := <-svc2ErrChan:
-		t.Fatalf("svc2 completed prematurely: %v", err)
-	case <-time.After(100 * time.Millisecond):
-	}
-
-	closeResume()
-
-	if err := <-svc1ErrChan; err != nil {
-		t.Fatalf("svc1 failed: %v", err)
-	}
-	if err := <-svc2ErrChan; err != nil {
-		t.Fatalf("svc2 failed: %v", err)
-	}
-
-	finalProf, err := charRepo.GetProfile(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("GetProfile failed: %v", err)
-	}
-
-	if finalProf.Comment != comment1 {
-		t.Errorf("comment mismatch: got %q, want %q", finalProf.Comment, comment1)
-	}
-	if finalProf.AvatarURL != avatar2 {
-		t.Errorf("avatar URL mismatch: got %q, want %q", finalProf.AvatarURL, avatar2)
-	}
-	if finalProf.AuraEffect != aura2 {
-		t.Errorf("aura mismatch: got %d, want %d", finalProf.AuraEffect, aura2)
-	}
-	if finalProf.BioData["hobby"] != "fishing" || finalProf.BioData["food"] != "ramen" {
-		t.Errorf("bio data mismatch: got %v", finalProf.BioData)
+	if finalProf.BioData["hobby"] != "first" || finalProf.BioData[character.PersonalityBioKey] != "x" {
+		t.Errorf("lost update: %+v", finalProf)
 	}
 }
 
@@ -447,13 +301,8 @@ func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T)
 
 	// 1. Initial valid profile
 	initialComment := "Before corruption"
-	initialAvatar := "https://i.imgur.com/AvGTest.gif"
-	_, err = svc.UpdateProfile(ctx, char.ID, character.UpdateProfileRequest{
-		Comment:   &initialComment,
-		AvatarURL: &initialAvatar,
-	})
-	if err != nil {
-		t.Fatalf("initial UpdateProfile failed: %v", err)
+	if err := charRepo.SaveProfile(ctx, character.Profile{CharacterID: char.ID, Comment: initialComment, UpdatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("initial SaveProfile failed: %v", err)
 	}
 
 	// 2. Inject valid JSON with non-string values directly into database.
@@ -465,10 +314,7 @@ func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T)
 	}
 
 	// 3. Attempt UpdateProfile: must fail without overwriting existing row with defaults
-	newComment := "Attempted overwrite comment"
-	_, err = svc.UpdateProfile(ctx, char.ID, character.UpdateProfileRequest{
-		Comment: &newComment,
-	})
+	_, err = svc.UpdateProfile(ctx, char.ID, map[string]string{"hobby": "overwrite"})
 	if err == nil {
 		t.Fatal("expected UpdateProfile to fail on incompatible bio_data JSON, got nil")
 	}

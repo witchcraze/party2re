@@ -63,7 +63,7 @@ var facilities = func() map[string]facility {
 		"blackmarket": blackMarketFacility, "blacksmith": blacksmithFacility, "chapel": chapelFacility, "exile": exileFacility,
 		"depot": depotFacility, "fleamarket": fleaMarketFacility, "gemstore": gemStoreFacility, "secretshop": secretShopFacility,
 		"home": homeFacility, "home_inbox": homeInboxFacility, "home_outbox": homeOutboxFacility, "home_notices": homeNoticesFacility,
-		"home_collection": homeCollectionFacility, "home_monster_book": homeMonsterBookFacility, "home_job_master": homeJobMasterFacility, "home_custom_skill": homeCustomSkillFacility, "casino": casinoFacility, "tavern": tavernFacility, "lottery": lotteryFacility, "takarakuji": takarakujiFacility, "plantation": plantationFacility, "oracle": oracleFacility, "contest": contestFacility, "medal": medalFacility, "helper": helperFacility, "job": jobTempleFacility, "join_guild": guildAssociationFacility, "guild": guildRoomFacility,
+		"home_collection": homeCollectionFacility, "home_monster_book": homeMonsterBookFacility, "home_job_master": homeJobMasterFacility, "home_custom_skill": homeCustomSkillFacility, "home_profile": homeProfileFacility, "home_adventure_record": homeAdventureRecordFacility, "casino": casinoFacility, "tavern": tavernFacility, "lottery": lotteryFacility, "takarakuji": takarakujiFacility, "plantation": plantationFacility, "oracle": oracleFacility, "contest": contestFacility, "medal": medalFacility, "helper": helperFacility, "job": jobTempleFacility, "join_guild": guildAssociationFacility, "guild": guildRoomFacility,
 	}
 	for _, t := range town.AllTowns() {
 		m[t.ID] = townDistrictFacility(t.Name)
@@ -145,11 +145,12 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 				shared = append(shared, "npc_talk", "npc_inspect")
 			}
 			var subject, owned []string
+			// Clone keeps an empty non-nil list from falling back to commands.
 			if f.subjectCommands != nil {
-				subject = slices.Concat(f.subjectCommands, shared)
+				subject = append(slices.Clone(f.subjectCommands), shared...)
 			}
 			if f.ownedSubjectCommands != nil {
-				owned = slices.Concat(f.ownedSubjectCommands, shared)
+				owned = append(slices.Clone(f.ownedSubjectCommands), shared...)
 			}
 			service.AdmitSceneActions(definition.ID, slices.Concat(f.commands, shared), subject, owned)
 		}

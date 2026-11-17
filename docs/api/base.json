@@ -1947,6 +1947,12 @@
                       "$ref": "#/components/schemas/HomeJobMasterSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/HomeProfileSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeAdventureRecordSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/HomeCustomSkillSceneData"
                     },
                     {
@@ -2072,6 +2078,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeProfileSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeAdventureRecordSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/ShopProductSceneData"
@@ -2294,6 +2306,58 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeJobMasterSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home_profile"
+                },
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeProfileSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home_adventure_record"
+                },
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeAdventureRecordSceneData"
                 }
               }
             }
@@ -4010,6 +4074,44 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "home_profile_update"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "bio_data": {
+                      "type": "object",
+                      "description": "Every legacy profile field by key (home_profile fields); it replaces the stored profile, so omitted fields become empty. Values take up to 160 characters without ; < or >.",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "bio_data"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "home_item_use"
                 }
               },
@@ -4360,6 +4462,8 @@
                         "home_collection",
                         "home_monster_book",
                         "home_job_master",
+                        "home_profile",
+                        "home_adventure_record",
                         "home_custom_skill",
                         "casino",
                         "secretshop",
@@ -4484,6 +4588,8 @@
                         "home_collection",
                         "home_monster_book",
                         "home_job_master",
+                        "home_profile",
+                        "home_adventure_record",
                         "home_custom_skill",
                         "casino",
                         "secretshop",
@@ -8791,6 +8897,8 @@
               "home_collection",
               "home_monster_book",
               "home_job_master",
+              "home_profile",
+              "home_adventure_record",
               "home_custom_skill",
               "casino",
               "secretshop",
@@ -8942,6 +9050,8 @@
                   "home_collection",
                   "home_monster_book",
                   "home_job_master",
+                  "home_profile",
+                  "home_adventure_record",
                   "home_custom_skill",
                   "casino",
                   "secretshop",
@@ -11299,15 +11409,6 @@
           "character_id": {
             "type": "string"
           },
-          "milestones": {
-            "items": {
-              "$ref": "#/components/schemas/AdventureMilestone"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "stages": {
             "items": {
               "$ref": "#/components/schemas/AdventureStageClearStat"
@@ -11352,36 +11453,7 @@
           "total_turns",
           "total_exp_earned",
           "total_gold_earned",
-          "stages",
-          "milestones"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AdventureMilestone": {
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "threshold": {
-            "type": "integer"
-          },
-          "unlocked": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "key",
-          "name",
-          "threshold",
-          "unlocked",
-          "description"
+          "stages"
         ],
         "type": "object",
         "additionalProperties": false
@@ -18261,6 +18333,98 @@
         "required": [
           "parent",
           "mastery"
+        ]
+      },
+      "HomeProfileSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The observed home owner's profile (legacy ぷろふぃーる): every profile field in form order, empty ones included. The owner may edit it with home_profile_update.",
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "value"
+              ]
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "owner_id",
+          "fields"
+        ]
+      },
+      "HomeAdventureRecordSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The observed home owner's adventure record (legacy ぼうけんのきろく): clear counts of the cleared stages, stage26 per season, and their total.",
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "stage_id": {
+                  "type": "string"
+                },
+                "stage_name": {
+                  "type": "string"
+                },
+                "seasonal_sub_id": {
+                  "type": "integer"
+                },
+                "season": {
+                  "type": "string"
+                },
+                "clear_count": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "stage_id",
+                "stage_name",
+                "clear_count"
+              ]
+            }
+          },
+          "total_clears": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parent",
+          "owner_id",
+          "stages",
+          "total_clears"
         ]
       },
       "HomeCustomSkillSceneData": {

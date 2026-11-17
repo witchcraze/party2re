@@ -10,15 +10,6 @@ import (
 	"github.com/witchcraze/party2re/internal/pagination"
 )
 
-// Milestone represents a gameplay achievement milestone unlocked through adventure clears.
-type Milestone struct {
-	Key         string `json:"key"`
-	Name        string `json:"name"`
-	Threshold   int    `json:"threshold"`
-	Unlocked    bool   `json:"unlocked"`
-	Description string `json:"description"`
-}
-
 // StageStatData holds raw count data for a specific stage from the repository.
 type StageStatData struct {
 	StageID       string `json:"stage_id"`
@@ -62,7 +53,6 @@ type AdventureChronicle struct {
 	TotalExpEarned  int              `json:"total_exp_earned"`
 	TotalGoldEarned int              `json:"total_gold_earned"`
 	Stages          []StageClearStat `json:"stages"`
-	Milestones      []Milestone      `json:"milestones"`
 }
 
 // AdventureHistoryEntry represents an individual historical adventure record.
@@ -94,65 +84,6 @@ type PaginatedAdventures = pagination.Page[AdventureHistoryEntry]
 // NormalizePagination ensures limit and offset stay within allowed system boundaries.
 func NormalizePagination(limit, offset int) (int, int) {
 	return pagination.Normalize(limit, offset)
-}
-
-// DefaultMilestones evaluates milestone unlocking states based on total adventure victories.
-func DefaultMilestones(totalVictories int) []Milestone {
-	milestoneDefs := []struct {
-		key         string
-		name        string
-		threshold   int
-		description string
-	}{
-		{
-			key:         "try_mode",
-			name:        "トライモード (Try Mode)",
-			threshold:   50,
-			description: "クエストにトライモードを設定可能になる",
-		},
-		{
-			key:         "image_setting",
-			name:        "イメージ設定 (Image Setting)",
-			threshold:   100,
-			description: "ほーむからイメージを設定可能になる",
-		},
-		{
-			key:         "calm_mode",
-			name:        "カームモード (Calm Mode)",
-			threshold:   150,
-			description: "クエストにカームモードを設定可能になる",
-		},
-		{
-			key:         "hard_mode",
-			name:        "ハードモード (Hard Mode)",
-			threshold:   300,
-			description: "クエストにハードモードを設定可能になる",
-		},
-		{
-			key:         "avatar_setting",
-			name:        "アバター設定 (Avatar Setting)",
-			threshold:   500,
-			description: "イメージからアバターを設定可能になる",
-		},
-		{
-			key:         "extreme_mode",
-			name:        "エクストリームモード (Extreme Mode)",
-			threshold:   1000,
-			description: "クエストにエクストリームモードを設定可能になる",
-		},
-	}
-
-	result := make([]Milestone, 0, len(milestoneDefs))
-	for _, def := range milestoneDefs {
-		result = append(result, Milestone{
-			Key:         def.key,
-			Name:        def.name,
-			Threshold:   def.threshold,
-			Unlocked:    totalVictories >= def.threshold,
-			Description: def.description,
-		})
-	}
-	return result
 }
 
 // ListHistory retrieves paginated adventure history for a character, enriched with catalog metadata.
@@ -261,7 +192,7 @@ func (s *Service) buildHistoryEntry(adv Adventure) AdventureHistoryEntry {
 	}
 }
 
-// GetChronicle computes an aggregated statistical summary of past adventure runs and unlocked milestones.
+// GetChronicle computes an aggregated statistical summary of past adventure runs.
 func (s *Service) GetChronicle(ctx context.Context, characterID string) (AdventureChronicle, error) {
 	if characterID == "" {
 		return AdventureChronicle{}, corecharacter.ErrNotFound
@@ -306,8 +237,6 @@ func (s *Service) GetChronicle(ctx context.Context, characterID string) (Adventu
 		})
 	}
 
-	milestones := DefaultMilestones(rawStats.TotalVictories)
-
 	return AdventureChronicle{
 		CharacterID:     characterID,
 		TotalAdventures: rawStats.TotalAdventures,
@@ -319,6 +248,5 @@ func (s *Service) GetChronicle(ctx context.Context, characterID string) (Adventu
 		TotalExpEarned:  rawStats.TotalExpEarned,
 		TotalGoldEarned: rawStats.TotalGoldEarned,
 		Stages:          stages,
-		Milestones:      milestones,
 	}, nil
 }
