@@ -27,6 +27,7 @@ type LifetimeResult struct {
 // the next saved state. Poison/normal-action effects precede this operation;
 // source-specific modifier and death effects must already have been resolved.
 // Player and NPC tails intentionally differ. No clock or round tick is involved.
+// Player field ticks precede this tail and belong to ApplyPlayerOperation.
 func (s *LifetimeState) CompleteOperation(c LifetimeCompletion, partyIDs []string) (LifetimeResult, error) {
 	var result LifetimeResult
 	if !c.Accepted {
@@ -49,9 +50,6 @@ func (s *LifetimeState) CompleteOperation(c LifetimeCompletion, partyIDs []strin
 		if actor.CMPCharge >= actor.CMPNeedCharge && (c.CMPAmount < 1 || c.NextCMPThreshold < 3 || c.NextCMPThreshold > 9) {
 			return result, ErrInvalidRequest
 		}
-	}
-	if !c.NPC {
-		s.Fields.FinishOperation(c.EnemiesRemain, c.Suppressed)
 	}
 	if c.NPC || playerTail {
 		facts := c.Tail

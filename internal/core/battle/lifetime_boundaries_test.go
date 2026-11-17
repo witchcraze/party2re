@@ -36,8 +36,7 @@ func TestLifetimeOperationAdmissionAndTails(t *testing.T) {
 				}
 				return
 			}
-			fieldTick := reason != "suppressed" && reason != "no_enemy" && reason != "npc"
-			if (s.Fields.Turns == 1) != fieldTick {
+			if s.Fields.Turns != 2 { // the player step ticks fields earlier
 				t.Fatalf("field: %+v", s.Fields)
 			}
 			playerTail := reason == "incapacitated"
