@@ -174,6 +174,18 @@ func (s *Service) startRoster(
 	if len(dungeon.Variants) == 0 {
 		return nil, errors.New("dungeon has no layouts")
 	}
+	if dungeon.LeaderJobLevel > 0 {
+		leader, err := s.characterRepo.FindByID(ctx, leaderCharID)
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return nil, ErrCharacterNotFound
+		}
+		if err != nil {
+			return nil, err
+		}
+		if leader.JobLevel < dungeon.LeaderJobLevel {
+			return nil, ErrJobLevelRequired
+		}
+	}
 	// Legacy picks one initial layout; accepted start is the leader's
 	// initial advance from round 0 to 1 without a tile event.
 	variant, turns := s.rng.Intn(len(dungeon.Variants))+1, dungeon.RoundLimit-1

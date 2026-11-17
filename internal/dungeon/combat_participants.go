@@ -6,7 +6,9 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-func (s *Service) buildCombatAllies(ctx context.Context, exp *ActiveExpedition, char *corecharacter.Character) ([]corebattle.Participant, error) {
+// buildCombatAllies restores saved continuation statuses; a fresh event's allyStatus
+// (map3 confusion) overrides them because every move resets status first.
+func (s *Service) buildCombatAllies(ctx context.Context, exp *ActiveExpedition, char *corecharacter.Character, allyStatus string) ([]corebattle.Participant, error) {
 	if len(exp.Members) == 0 {
 		var playerPart corebattle.Participant
 		var err error
@@ -19,6 +21,9 @@ func (s *Service) buildCombatAllies(ctx context.Context, exp *ActiveExpedition, 
 			playerPart = buildFallbackParticipantWithHP(*char, exp.CurrentHP)
 		}
 		exp.Encounter.restoreParticipant(&playerPart)
+		if allyStatus != "" {
+			playerPart.Status = allyStatus
+		}
 		playerPart.TeamID = "allies"
 		return []corebattle.Participant{playerPart}, nil
 	}
@@ -58,6 +63,9 @@ func (s *Service) buildCombatAllies(ctx context.Context, exp *ActiveExpedition, 
 			return nil, err
 		}
 		exp.Encounter.restoreParticipant(&p)
+		if allyStatus != "" {
+			p.Status = allyStatus
+		}
 		p.TeamID = "allies"
 		allies = append(allies, p)
 	}

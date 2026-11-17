@@ -12,7 +12,7 @@ import (
 
 // DungeonService defines dungeon explorations operations exposed over HTTP.
 type DungeonService interface {
-	ListDungeons() []dungeon.Dungeon
+	ListDungeons(jobLevel int) []dungeon.Dungeon
 	StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
 	StartPartyExpedition(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
 	Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
@@ -65,8 +65,8 @@ func (h *Handler) handleListDungeons(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(coreplayer.Player, corecharacter.Character) {
-		writeJSON(w, http.StatusOK, dungeonListResponse{Dungeons: h.dungeons.ListDungeons()})
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		writeJSON(w, http.StatusOK, dungeonListResponse{Dungeons: h.dungeons.ListDungeons(char.JobLevel)})
 	})
 }
 
@@ -95,6 +95,10 @@ func (h *Handler) handleStartDungeon(w http.ResponseWriter, r *http.Request) {
 			}
 			if errors.Is(err, dungeon.ErrDungeonNotFound) || errors.Is(err, dungeon.ErrCharacterNotFound) {
 				writeError(w, http.StatusBadRequest, err)
+				return
+			}
+			if errors.Is(err, dungeon.ErrJobLevelRequired) {
+				writeError(w, http.StatusForbidden, err)
 				return
 			}
 			if errors.Is(err, dungeon.ErrActiveExpeditionExists) {
@@ -136,6 +140,10 @@ func (h *Handler) handleStartPartyDungeon(w http.ResponseWriter, r *http.Request
 			}
 			if errors.Is(err, dungeon.ErrDungeonNotFound) || errors.Is(err, dungeon.ErrCharacterNotFound) {
 				writeError(w, http.StatusBadRequest, err)
+				return
+			}
+			if errors.Is(err, dungeon.ErrJobLevelRequired) {
+				writeError(w, http.StatusForbidden, err)
 				return
 			}
 			if errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, dungeon.ErrTooManyPartyMembers) {

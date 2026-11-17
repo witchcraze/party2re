@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
@@ -20,6 +21,7 @@ const (
 	cellHidden   = 'H'
 	cellTreasure = 'C'
 	cellBoss     = 'B'
+	cellMist     = 'M' // map3 event_T: party confusion, then an encounter
 )
 
 // NativeMap0ID is the first native map (legacy map/0, six initial variants).
@@ -98,14 +100,25 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 	switch {
 	case cell == cellPassage:
 		// event_0: rand(2) <= 1 spawns.
-		if 2*s.rng.Float64() <= 1 && len(floor.Monsters) > 0 {
-			return s.resolveMonsterCombat(ctx, exp, char, floor.Monsters[s.rng.Intn(len(floor.Monsters))], EventBattle, x, y, "")
+		if 2*s.rng.Float64() <= 1 {
+			if pool := s.encounterPool(floor); len(pool.Monsters) > 0 {
+				return s.resolveMonsterCombat(ctx, exp, char, pool.monster(s.rng), EventBattle, x, y, "", "")
+			}
 		}
-	case cell == cellBoss && !consumed && floor.Boss != nil:
-		return s.resolveMonsterCombat(ctx, exp, char, *floor.Boss, EventBoss, x, y, key)
+	case cell == cellMist:
+		// Repeats on every entry; confusion reaches only the ensuing battle.
+		return s.resolveMonsterCombat(ctx, exp, char, s.encounterPool(floor).monster(s.rng), EventBattle, x, y, "", string(corebattle.StatusConfusion))
+	case cell == cellBoss && !consumed:
+		if pool := s.encounterPool(floor); pool.Boss != nil {
+			return s.resolveMonsterCombat(ctx, exp, char, *pool.Boss, EventBoss, x, y, key, "")
+		}
 	case cell == cellTreasure && !consumed:
 		step.EventKey = key
 		step.Encounter = treasureEncounter(exp, char.JobID, s.rng, x, y)
+	default:
+		if to, ok := floor.Warps[cell]; ok {
+			step.NewX, step.NewY = to[0], to[1]
+		}
 	}
 	out, err := s.activeStore.Step(ctx, char.ID, step)
 	if err != nil {
@@ -116,6 +129,23 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 		res.EventType = EventTreasure
 	}
 	return res, nil
+}
+
+// encounterPool draws the content pool for one event; a floor without pools
+// has one fixed pool and draws nothing.
+func (s *Service) encounterPool(f Floor) EncounterPool {
+	if len(f.Pools) == 0 {
+		return EncounterPool{Monsters: f.Monsters, Boss: f.Boss}
+	}
+	return f.Pools[s.rng.Intn(len(f.Pools))]
+}
+
+// monster draws one enemy through the weighted index list (add_monster).
+func (p EncounterPool) monster(rng RandomSource) DungeonMonster {
+	if len(p.Appears) > 0 {
+		return p.Monsters[p.Appears[rng.Intn(len(p.Appears))]]
+	}
+	return p.Monsters[rng.Intn(len(p.Monsters))]
 }
 
 // treasureEncounter creates unopened chests like add_treasure: one per living
