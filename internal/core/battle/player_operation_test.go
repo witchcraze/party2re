@@ -262,3 +262,34 @@ func TestPlayerOperationFlushesEndProcessingInTail(t *testing.T) {
 		}
 	}
 }
+
+// The step works on a copy: a reused op never inherits earlier facts or the
+// defeat cursor, and a missing defeat owner rejects before any mutation.
+func TestPlayerOperationLeavesCallerContextUnchanged(t *testing.T) {
+	s, op, _ := playerOperationFixture()
+	first := true
+	op.First.Execute = func(*LifetimeState, random.Generator) (PlayerActionFacts, error) {
+		facts := PlayerActionFacts{DamageCalls: 1}
+		if first {
+			debit := 40
+			facts.End.DarknessDebit = &debit
+		}
+		first = false
+		return facts, nil
+	}
+	tail, defeat := op.Tail, *op.Tail.DefeatContext
+	for i := 0; i < 2; i++ {
+		if _, err := s.ApplyPlayerOperation(op, &playerOperationRNG{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if s.Actors[0].HP != 60 || op.Tail.DamageCalls != 0 || op.Tail.End.DarknessDebit != nil || !reflect.DeepEqual(op.Tail.Completion, tail.Completion) || !reflect.DeepEqual(*op.Tail.DefeatContext, defeat) {
+		t.Fatal(s.Actors[0].HP, op.Tail)
+	}
+	s, op, calls := playerOperationFixture()
+	op.Tail.DefeatContext = nil
+	before := reloadLifetime(t, s)
+	if _, err := s.ApplyPlayerOperation(op, &playerOperationRNG{}); !errors.Is(err, ErrInvalidRequest) || *calls != 0 || !reflect.DeepEqual(before, s) {
+		t.Fatal(err, *calls)
+	}
+}

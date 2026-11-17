@@ -17,8 +17,10 @@ type PlayerAction struct {
 	Bow         bool // ticks the bow extended effect
 	MirrorShare bool // preserves an actor reflection at normal-action expiry
 	FallenSelf  bool // the only entry a fallen actor may execute
-	Validate    func(*LifetimeState) error
-	Execute     func(*LifetimeState, random.Generator) (PlayerActionFacts, error)
+	// A custom entry's listed cost is 0 and it is never whitelisted, so its
+	// bound ApplyPlayerCustomAction charges CMP in the source position.
+	Validate func(*LifetimeState) error
+	Execute  func(*LifetimeState, random.Generator) (PlayerActionFacts, error)
 }
 
 // PlayerActionFacts are recorded by the bound callback's own contexts.
@@ -49,7 +51,9 @@ type PlayerOperation struct {
 }
 
 // PlayerOperationResult reports reached blocks. ResponseReached means the
-// eligible tail ran, so the consumer may process one NPC response.
+// eligible tail ran, so the consumer may process one NPC response. Defeats
+// reach the consumer in order through Tail.DefeatContext.Rewards, and consumed
+// items stay on the actors' ConsumedItems.
 type PlayerOperationResult struct {
 	Accepted, NormalAction, Suppressed, ResponseReached bool
 	LifetimeResult
@@ -66,7 +70,7 @@ func (s *LifetimeState) ApplyPlayerOperation(op *PlayerOperation, rng random.Gen
 		return PlayerOperationResult{}, err
 	}
 	a := s.actor(op.Tail.ActorID)
-	if a.NPC || op.Tail.RequesterLevel == nil {
+	if a.NPC || op.Tail.RequesterLevel == nil || op.Tail.DefeatContext == nil {
 		return PlayerOperationResult{}, ErrInvalidRequest
 	}
 	if (a.HP <= 0 && !op.First.FallenSelf) || s.SkillBans[op.First.EntryID] > 0 {
@@ -80,8 +84,13 @@ func (s *LifetimeState) ApplyPlayerOperation(op *PlayerOperation, rng random.Gen
 			return PlayerOperationResult{}, err
 		}
 	}
+	// Tails write operation facts and the defeat cursor; the caller's op and
+	// state stay unchanged on failure, and reuse never inherits earlier facts.
+	work := *op
+	defeat := *op.Tail.DefeatContext
+	work.Tail.DefeatContext = &defeat
 	saved := s.callbackCopy()
-	result, err := s.applyPlayerOperation(op, rng)
+	result, err := s.applyPlayerOperation(&work, rng)
 	if err != nil || !result.Accepted {
 		*s = saved
 		return PlayerOperationResult{}, err
@@ -110,9 +119,6 @@ func (s *LifetimeState) applyPlayerOperation(op *PlayerOperation, rng random.Gen
 		s.actor(id).EnterSealField()
 	}
 	defeat := func(target string) error {
-		if c.DefeatContext == nil {
-			return ErrUnsupportedEffect
-		}
 		_, err := s.ApplyDefeat(c.DefeatContext, target, rng)
 		return err
 	}
