@@ -6,7 +6,19 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // original graph (including cycles and generated, tool/book/helper descendants)
 // without selecting a random child or changing resources, arguments or counters.
 func (s *LifetimeState) ValidateInvocations(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, rng random.Generator) error {
-	if s == nil || c == nil || len(ops) == 0 {
+	if c == nil {
+		return ErrInvalidRequest
+	}
+	arguments := make([][]string, len(ops))
+	for i := range arguments {
+		arguments[i] = c.Arguments
+	}
+	return s.validateSequence(c, d, ops, arguments, rng)
+}
+
+// validateSequence is ValidateInvocations with each slot's own arguments.
+func (s *LifetimeState) validateSequence(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, rng random.Generator) error {
+	if s == nil || c == nil || len(ops) == 0 || len(arguments) != len(ops) {
 		return ErrInvalidRequest
 	}
 	if err := s.validateTargetContext(c.TargetContext, rng); err != nil {
@@ -17,15 +29,15 @@ func (s *LifetimeState) ValidateInvocations(c *CallbackContext, d CallbackCatalo
 	remaining := maxInvocationContinuations
 	context.admissionBudget = &remaining
 	p := callbackAdmission{s: &state, c: &context, d: d, remaining: &remaining}
-	return p.sequence(ops, c.Arguments, true)
+	return p.sequence(ops, arguments, true)
 }
 
-func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments []string, known bool) error {
+func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments [][]string, known bool) error {
 	p.c.admissionBudget = p.remaining
 	for i, op := range ops {
 		// Visits depend on the projected state, not just entry identity.
 		p.seen = map[callbackVisit]bool{}
-		p.c.Arguments = append([]string(nil), arguments...)
+		p.c.Arguments = append([]string(nil), arguments[i]...)
 		if err := p.visit(op, !known); err != nil {
 			return err
 		}
@@ -53,7 +65,7 @@ func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments []strin
 					continue
 				}
 				child := callbackAdmission{s: &state, c: &context, d: p.d, remaining: p.remaining}
-				if err := child.sequence(ops[i+1:], arguments, true); err != nil {
+				if err := child.sequence(ops[i+1:], arguments[i+1:], true); err != nil {
 					return err
 				}
 			}

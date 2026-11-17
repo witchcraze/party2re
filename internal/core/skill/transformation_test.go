@@ -61,10 +61,10 @@ func TestTransformationRegistrationAndOrderedTables(t *testing.T) {
 			}
 		}
 	}
-	if len(d.TransformationSkills) != 8 || len(d.Invocations.Entries) != 8 {
+	if len(d.TransformationSkills) != 9 || len(d.Invocations.Entries) != 9 {
 		t.Fatal(d)
 	}
-	for _, id := range []string{"job-36-copy", "job-79-breath", "job-79-speed", "job-82-form", "job-300-tune", "job-300-strike", "job-300-burst", "job-300-form"} {
+	for _, id := range []string{"job-36-copy", "job-79-breath", "job-79-speed", "job-82-form", "job-300-tune", "job-300-strike", "job-300-burst", "job-300-form", "book-211-copy"} {
 		if !d.TransformationSkills[id] || d.Invocations.Entries[id].Execute == nil {
 			t.Fatal(id)
 		}

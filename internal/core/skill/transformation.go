@@ -5,7 +5,8 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-// RegisterTransformations binds eight bodies at seven source positions. Other
+// RegisterTransformations binds eight bodies at seven source positions and the
+// tableless copy book. Other
 // bodies in these complete tables remain with their own registration owners.
 func (d *BattleDefinitions) RegisterTransformations(c *corebattle.TransformationContext) {
 	if d.TransformationSkills == nil {
@@ -20,7 +21,7 @@ func (d *BattleDefinitions) RegisterTransformations(c *corebattle.Transformation
 	for job, table := range transformationTables(c) {
 		d.Invocations.JobTables[job] = table
 	}
-	for _, id := range []string{"job-36-copy", "job-79-breath", "job-79-speed", "job-82-form", "job-300-tune", "job-300-strike", "job-300-burst", "job-300-form"} {
+	for _, id := range []string{"job-36-copy", "job-79-breath", "job-79-speed", "job-82-form", "job-300-tune", "job-300-strike", "job-300-burst", "job-300-form", "book-211-copy"} {
 		d.TransformationSkills[id] = true
 		d.Invocations.Entries[id] = d.TransformationInvocation(c, id)
 	}
@@ -72,8 +73,7 @@ func (d BattleDefinitions) TransformationInvocation(c *corebattle.Transformation
 			if frame.AfterEffects && id != "job-36-copy" && id != "job-82-form" && id != "job-300-form" {
 				return corebattle.ErrUnsupportedEffect
 			}
-			_, err = d.TransformationAction(s, &child, id, target, random.Default())
-			return err
+			return d.transformationGate(s, &child, id, target, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {
 			child, target, err := context(frame)
@@ -88,7 +88,7 @@ func (d BattleDefinitions) TransformationInvocation(c *corebattle.Transformation
 				return err
 			}
 			c.TargetContext = frame.TargetContext
-			if _, err := d.TransformationAction(s, c, id, target, rng); err != nil {
+			if err := d.transformationGate(s, c, id, target, rng); err != nil {
 				return err
 			}
 			_, err = s.ApplyTransformation(c, id, target, rng)
@@ -99,4 +99,13 @@ func (d BattleDefinitions) TransformationInvocation(c *corebattle.Transformation
 			return err
 		},
 	}
+}
+
+// The copy book has no job table; its holder/cost gate belongs to its invoker.
+func (d BattleDefinitions) transformationGate(s *corebattle.LifetimeState, c *corebattle.TransformationContext, id, target string, rng random.Generator) error {
+	if id == "book-211-copy" {
+		return s.ValidateTransformation(c, id, target, rng)
+	}
+	_, err := d.TransformationAction(s, c, id, target, rng)
+	return err
 }

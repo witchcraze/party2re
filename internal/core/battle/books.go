@@ -17,25 +17,70 @@ func (c *BookContext) shift() string {
 	return id
 }
 
-// BookEntries is the certified subset of the source book table
-// (ff97fc5:_skill.cgi:479–736). Revival and copy keep their separate owners.
-// MPCost is the listed cost before the item249 modifier.
+// bookPositions is the ordered source book table (ff97fc5:_skill.cgi:479–736):
+// held item, native callback identity and listed MP before item249.
+var bookPositions = [...]struct {
+	item, id string
+	mp       int
+}{
+	{"item-169", "book-169", 6}, {"item-170", "book-170", 20}, {"item-171", "book-171", 50},
+	{"item-172", "book-172", 36}, {"item-173", "book-173", 80}, {"item-174", "book-174", 15},
+	{"item-175", "book-175", 9}, {"item-176", "book-176", 21}, {"item-177", "book-177", 9},
+	{"item-178", "book-178", 18}, {"item-179", "book-179", 48}, {"item-218", "book-218", 8},
+	{"item-219", "book-219", 15}, {"item-220", "book-220", 12}, {"item-221", "book-221", 35},
+	{"item-222", "book-222", 6}, {"item-223", "book-223", 17}, {"item-224", "book-224", 46},
+	{"item-225", "book-225", 11}, {"item-226", "book-226", 24}, {"item-227", "book-227", 40},
+	{"item-228", "book-228", 19}, {"item-229", "book-229", 24}, {"item-230", "book-230", 24},
+	{"item-196", "book-196", 180}, {"item-211", "book-211-copy", 200}, {"item-250", "book-250", 120},
+}
+
+// bookEntry is the first position for the held item, else position0 like the
+// source's initialized index (_skill.cgi:6876–6882).
+func bookEntry(item string) (string, int) {
+	for _, p := range bookPositions {
+		if p.item == item {
+			return p.id, p.mp
+		}
+	}
+	return bookPositions[0].id, bookPositions[0].mp
+}
+
+// heldBookKind classifies a held item by the source's book name patterns:
+// forbidden books, other books (including the unlisted item92) or none.
+func heldBookKind(item string) string {
+	switch item {
+	case "item-196", "item-211", "item-250":
+		return "forbidden"
+	case "item-092":
+		return "ordinary"
+	}
+	for _, p := range bookPositions {
+		if p.item == item {
+			return "ordinary"
+		}
+	}
+	return "none"
+}
+
+// BookEntries is the certified subset of the source book table. Revival and
+// copy keep their separate owners. MPCost is the listed cost before item249.
 func BookEntries() []CallbackEntry {
-	entry := func(number string, name string, mp int) CallbackEntry {
+	entry := func(number string, name string) CallbackEntry {
+		_, mp := bookEntry("item-" + number)
 		return CallbackEntry{ID: "book-" + number, Name: name, MPCost: mp}
 	}
 	return []CallbackEntry{
-		entry("169", "book-heal-30", 6), entry("170", "book-heal-90", 20),
-		entry("171", "book-party-heal-120", 50), entry("172", "book-heal-180", 36),
-		entry("175", "book-defense-up", 9), entry("176", "book-party-defense-up", 21),
-		entry("177", "book-agility-up", 9), entry("178", "book-party-agility-up", 18),
-		entry("179", "book-attack-up", 48), entry("250", "book-party-heal-999", 120),
-		entry("174", "book-magic-reflection", 15), entry("218", "book-poison-cure", 8),
-		entry("219", "book-party-paralysis-cure", 15), entry("220", "book-party-sleep-cure", 12),
-		entry("221", "book-current-status-cure", 35),
-		entry("222", "book-magic-20", 6), entry("223", "book-magic-70", 17), entry("224", "book-magic-220", 46),
-		entry("225", "book-magic-wave-25", 11), entry("226", "book-magic-wave-60", 24), entry("227", "book-magic-wave-125", 40),
-		entry("228", "book-sleep", 19), entry("229", "book-area-confusion", 24), entry("230", "book-area-magic-seal", 24),
+		entry("169", "book-heal-30"), entry("170", "book-heal-90"),
+		entry("171", "book-party-heal-120"), entry("172", "book-heal-180"),
+		entry("175", "book-defense-up"), entry("176", "book-party-defense-up"),
+		entry("177", "book-agility-up"), entry("178", "book-party-agility-up"),
+		entry("179", "book-attack-up"), entry("250", "book-party-heal-999"),
+		entry("174", "book-magic-reflection"), entry("218", "book-poison-cure"),
+		entry("219", "book-party-paralysis-cure"), entry("220", "book-party-sleep-cure"),
+		entry("221", "book-current-status-cure"),
+		entry("222", "book-magic-20"), entry("223", "book-magic-70"), entry("224", "book-magic-220"),
+		entry("225", "book-magic-wave-25"), entry("226", "book-magic-wave-60"), entry("227", "book-magic-wave-125"),
+		entry("228", "book-sleep"), entry("229", "book-area-confusion"), entry("230", "book-area-magic-seal"),
 	}
 }
 

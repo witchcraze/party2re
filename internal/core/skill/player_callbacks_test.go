@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -75,24 +74,15 @@ func TestPlayerCallbackManifest(t *testing.T) {
 	}
 }
 
-func TestPlayerCallbackRegistrationKeepsAssetOwnersExplicit(t *testing.T) {
+func TestPlayerCallbackRegistrationBindsEveryPosition(t *testing.T) {
 	var d BattleDefinitions
 	d.RegisterPlayerCallbacks(PlayerCallbackContexts{}, 3)
-	var missing []string
 	for _, table := range d.Invocations.JobTables {
 		for _, entry := range table.Variants[0] {
 			if _, ok := d.Invocations.Entries[entry.ID]; !ok {
-				missing = append(missing, entry.ID)
+				t.Error("unbound position", entry.ID)
 			}
 		}
-	}
-	slices.Sort(missing)
-	want := []string{
-		"job-86-entry-0", "job-86-entry-2", "job-86-entry-3", "job-86-entry-5",
-	}
-	slices.Sort(want)
-	if !slices.Equal(missing, want) {
-		t.Fatalf("missing bindings=%v want explicit asset owners=%v", missing, want)
 	}
 }
 

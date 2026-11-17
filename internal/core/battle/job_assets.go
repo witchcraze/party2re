@@ -36,6 +36,8 @@ type JobAssetContext struct {
 	Frame   *CallbackContext
 	Catalog CallbackCatalog
 	Travel  *StoredToolTravel
+	// ResponseSuppressed is job86.3's successful withdrawal output for the tail.
+	ResponseSuppressed bool
 }
 
 func (c *JobAssetContext) shift() string {
@@ -92,6 +94,9 @@ func (s *LifetimeState) ApplyJobAssets(c *JobAssetContext, id string, rng random
 	}
 	if id == "job-50-entry-7" {
 		return s.applyStoredTool(c, rng)
+	}
+	if strings.HasPrefix(id, "job-86-") {
+		return s.applyBookAssets(c, id, rng)
 	}
 	power := c.power(s.actor(c.ActorID), id)
 	if id == "job-28-entry-3" {
