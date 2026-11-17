@@ -28,11 +28,27 @@ type homeSceneFixture struct {
 	pets        map[string][]home.HomePet
 	// Profile and adventure record sources by character; fail names the
 	// character whose reads fail.
-	bios          map[string]map[string]string
-	chronicles    map[string]adventure.AdventureChronicle
-	recordFail    string
-	profileReads  []string
-	profileWrites []string
+	bios              map[string]map[string]string
+	chronicles        map[string]adventure.AdventureChronicle
+	recordFail        string
+	profileReads      []string
+	profileWrites     []string
+	recordEntries     int
+	recordEntryResult adventure.RecordEntryResult
+	recordEntryErr    error
+	afterRecordEntry  func()
+}
+
+func (f *homeSceneFixture) OpenOwnRecord(ctx context.Context, playerID, actor string) (adventure.RecordEntryResult, error) {
+	f.checkContext(ctx)
+	if playerID != "owner" || actor != "hero" {
+		f.t.Fatalf("record entry identity: %s %s", playerID, actor)
+	}
+	f.recordEntries++
+	if f.afterRecordEntry != nil {
+		f.afterRecordEntry()
+	}
+	return f.recordEntryResult, f.recordEntryErr
 }
 
 func (f *homeSceneFixture) GetProfile(ctx context.Context, id string) (character.ProfileView, error) {
@@ -170,7 +186,7 @@ func homeSceneRouter(t *testing.T, options ...Option) (*homeSceneFixture, *gatew
 		playercontext.SceneDefinition{ID: "home_adventure_record", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_custom_skill", Parent: "home"},
 	))
-	h, err := NewHandler(f.gatewayFixture, f, homeSceneAdventures{f: f}, &struct{ ShopService }{}, append([]Option{WithHome(f), WithPlayerContext(service)}, options...)...)
+	h, err := NewHandler(f.gatewayFixture, f, homeSceneAdventures{f: f}, &struct{ ShopService }{}, append([]Option{WithHome(f), WithAdventureRecord(f), WithPlayerContext(service)}, options...)...)
 	if err != nil {
 		t.Fatal(err)
 	}

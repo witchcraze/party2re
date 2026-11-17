@@ -123,6 +123,7 @@ type Handler struct {
 	players        PlayerService
 	characters     CharacterService
 	adventures     AdventureService
+	recordEntry    AdventureRecordService
 	shops          ShopService
 	medals         MedalService
 	helpers        HelperService

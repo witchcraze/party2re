@@ -35,6 +35,7 @@ type cmbtServices struct {
 	customSkill *customskill.Service
 	party       *party.Service
 	adv         *adventure.Service
+	record      *adventure.RecordService
 	normal      *adventure.NormalRunService
 	battle      *battle.Service
 }
@@ -213,6 +214,10 @@ func newCmbtServices(
 	customSkillService.ConfigureGemSynthesis(customSkillGemCatalog{catalog: gemCatalog}, econ.gemBoxRepo, core.txProvider)
 
 	adventureRepo, err := database.NewAdventureRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	recordService, err := adventure.NewRecordService(adventureRepo, core.charRepo, core.txProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -404,6 +409,7 @@ func newCmbtServices(
 		customSkill: customSkillService,
 		party:       partyService,
 		adv:         advService,
+		record:      recordService,
 		normal:      normalService,
 		battle:      battleAdapter,
 	}, nil

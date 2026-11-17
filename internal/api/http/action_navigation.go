@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -78,7 +79,7 @@ func (h *Handler) registerNavigation(service *playercontext.Service) {
 			return sceneEnterResult{}, err
 		}
 		h.leavePlace(ctx, actor)
-		return h.deliverOnEntry(ctx, actor, selection)
+		return h.deliverOnEntry(ctx, owner, actor, selection)
 	})
 	navigationCommand(h, "scene_select", func(ctx context.Context, owner, actor string, p playercontext.Subject, current playercontext.Result) (playercontext.Selection, error) {
 		selection, err := service.Select(ctx, owner, actor, p)
@@ -114,7 +115,7 @@ func navigationRejection(err error) (int, ErrorDetail) {
 		return http.StatusNotFound, ErrorDetail{Code: "SELECTION_NOT_FOUND", Message: "Selected subject is unavailable."}
 	case errors.Is(err, playercontext.ErrSceneAccessDenied):
 		return http.StatusForbidden, ErrorDetail{Code: "SCENE_ACCESS_DENIED", Message: "Character does not qualify for the selected scene."}
-	case errors.Is(err, playercontext.ErrNavigationForbidden):
+	case errors.Is(err, playercontext.ErrNavigationForbidden), errors.Is(err, adventure.ErrRecordForbidden):
 		return http.StatusForbidden, ErrorDetail{Code: "NAVIGATION_FORBIDDEN", Message: "Character is not owned."}
 	case errors.Is(err, playercontext.ErrNavigationUnavailable):
 		return http.StatusConflict, ErrorDetail{Code: "ACTION_UNAVAILABLE", Message: "Navigation is unavailable during recovery or unfinished work."}
