@@ -7,7 +7,6 @@ import (
 
 	"github.com/witchcraze/party2re/internal/alchemy"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
 // AlchemyService is the Alchemy surface used by the scene, command and entry delivery.
@@ -60,29 +59,4 @@ func alchemyActionRejection(err error) (int, ErrorDetail) {
 	default:
 		return 0, ErrorDetail{}
 	}
-}
-
-// sceneEnterResult keeps the selection fields and adds what entry itself delivered.
-type sceneEnterResult struct {
-	playercontext.Selection
-	AlchemyClaim *alchemy.ClaimResult `json:"alchemy_claim,omitempty"`
-}
-
-// deliverOnEntry runs after the selection is saved, so a rejected entry never
-// claims and a repeated entry cannot deliver twice. GET never reaches it.
-func (h *Handler) deliverOnEntry(ctx context.Context, actor string, selection playercontext.Selection) (sceneEnterResult, error) {
-	result := sceneEnterResult{Selection: selection}
-	if selection.Destination != "alchemy" || h.alchemy == nil {
-		return result, nil
-	}
-	claim, err := h.alchemy.Claim(ctx, actor)
-	switch {
-	case err == nil:
-		result.AlchemyClaim = &claim
-	case errors.Is(err, alchemy.ErrNoActiveSynthesis), errors.Is(err, alchemy.ErrSynthesisNotReady):
-		// Nothing to deliver: an ordinary entry.
-	default:
-		return sceneEnterResult{}, err
-	}
-	return result, nil
 }

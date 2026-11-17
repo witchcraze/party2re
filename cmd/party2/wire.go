@@ -321,6 +321,7 @@ func newHTTPHandler(
 		http.WithSecretShop(misc.secretshop),
 		http.WithTavern(misc.tavern),
 		http.WithAlchemy(econ.alchemy),
+		http.WithAdventureRecord(cmbt.record),
 		http.WithPlantation(econ.plantation),
 		http.WithBlackMarket(misc.blackmarket),
 		http.WithFleaMarket(econ.fleamarket),

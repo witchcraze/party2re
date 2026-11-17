@@ -17037,7 +17037,7 @@
       "SceneEnterResult": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis to the Depot regardless of its capacity; alchemy_claim carries the delivery.",
+        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis to the Depot regardless of its capacity; alchemy_claim carries the delivery. Entering home_adventure_record in the actor's own home saves eligible unlocks; adventure_record reports saved permissions and newly unlocked items. Visitor entry, GET and scene_back do not unlock.",
         "properties": {
           "destination": {
             "type": "string"
@@ -17065,6 +17065,9 @@
           },
           "alchemy_claim": {
             "$ref": "#/components/schemas/AlchemyClaimResult"
+          },
+          "adventure_record": {
+            "$ref": "#/components/schemas/RecordEntryResult"
           }
         },
         "required": [
@@ -18998,6 +19001,66 @@
           "gold_reward"
         ],
         "additionalProperties": false
+      },
+      "RecordUnlocks": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Saved adventure-record permissions; clear counts alone do not unlock them.",
+        "properties": {
+          "try": {
+            "type": "boolean"
+          },
+          "calm": {
+            "type": "boolean"
+          },
+          "hard": {
+            "type": "boolean"
+          },
+          "image": {
+            "type": "boolean"
+          },
+          "avatar": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "try",
+          "calm",
+          "hard",
+          "image",
+          "avatar"
+        ]
+      },
+      "RecordEntryResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "total_clears": {
+            "type": "integer"
+          },
+          "unlocks": {
+            "$ref": "#/components/schemas/RecordUnlocks"
+          },
+          "newly_unlocked": {
+            "type": "array",
+            "description": "New unlocks in notification order. Empty on repeated entry.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "try",
+                "calm",
+                "hard",
+                "image",
+                "avatar"
+              ]
+            }
+          }
+        },
+        "required": [
+          "total_clears",
+          "unlocks",
+          "newly_unlocked"
+        ]
       }
     },
     "securitySchemes": {

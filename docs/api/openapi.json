@@ -15258,6 +15258,66 @@
         ],
         "type": "object"
       },
+      "RecordEntryResult": {
+        "additionalProperties": false,
+        "properties": {
+          "newly_unlocked": {
+            "description": "New unlocks in notification order. Empty on repeated entry.",
+            "items": {
+              "enum": [
+                "try",
+                "calm",
+                "hard",
+                "image",
+                "avatar"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_clears": {
+            "type": "integer"
+          },
+          "unlocks": {
+            "$ref": "#/components/schemas/RecordUnlocks"
+          }
+        },
+        "required": [
+          "total_clears",
+          "unlocks",
+          "newly_unlocked"
+        ],
+        "type": "object"
+      },
+      "RecordUnlocks": {
+        "additionalProperties": false,
+        "description": "Saved adventure-record permissions; clear counts alone do not unlock them.",
+        "properties": {
+          "avatar": {
+            "type": "boolean"
+          },
+          "calm": {
+            "type": "boolean"
+          },
+          "hard": {
+            "type": "boolean"
+          },
+          "image": {
+            "type": "boolean"
+          },
+          "try": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "try",
+          "calm",
+          "hard",
+          "image",
+          "avatar"
+        ],
+        "type": "object"
+      },
       "RefreshRankingsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -15568,8 +15628,11 @@
       },
       "SceneEnterResult": {
         "additionalProperties": false,
-        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis to the Depot regardless of its capacity; alchemy_claim carries the delivery.",
+        "description": "Gateway scene_enter result in CharacterActionSuccess.result. Entering alchemy delivers a completed synthesis to the Depot regardless of its capacity; alchemy_claim carries the delivery. Entering home_adventure_record in the actor's own home saves eligible unlocks; adventure_record reports saved permissions and newly unlocked items. Visitor entry, GET and scene_back do not unlock.",
         "properties": {
+          "adventure_record": {
+            "$ref": "#/components/schemas/RecordEntryResult"
+          },
           "alchemy_claim": {
             "$ref": "#/components/schemas/AlchemyClaimResult"
           },

@@ -5,9 +5,18 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
+
+type AdventureRecordService interface {
+	OpenOwnRecord(context.Context, string, string) (adventure.RecordEntryResult, error)
+}
+
+func WithAdventureRecord(service AdventureRecordService) Option {
+	return func(h *Handler) { h.recordEntry = service }
+}
 
 // ＠ぷろふぃーる and ＠ぼうけんのきろく are offered in every home and show the
 // observed owner (home.cgi:26-39,164-178); only the owner edits the profile
