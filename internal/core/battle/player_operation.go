@@ -51,7 +51,8 @@ type PlayerOperation struct {
 }
 
 // PlayerOperationResult reports reached blocks. ResponseReached means the
-// eligible tail ran, so the consumer may process one NPC response. Defeats
+// eligible tail ran with ResponseEnabled, so the consumer processes at most one
+// NPC response (_battle.cgi:1169–1171). Defeats
 // reach the consumer in order through Tail.DefeatContext.Rewards, and consumed
 // items stay on the actors' ConsumedItems.
 type PlayerOperationResult struct {
@@ -323,6 +324,6 @@ func (s *LifetimeState) finishPlayerOperation(op *PlayerOperation, result Player
 		}
 	}
 	c.End.Flush(s.actor(c.ActorID))
-	result.ResponseReached = true
+	result.ResponseReached = op.ResponseEnabled
 	return result, nil
 }

@@ -145,9 +145,9 @@ func TestPlayerOperationPartyPoisonPrecedesActorPoison(t *testing.T) {
 }
 
 func TestPlayerOperationTailBarriers(t *testing.T) {
-	for _, reason := range []string{"suppressed", "levelup", "comment", "no_enemy", "last_enemy_fell"} {
+	for _, reason := range []string{"suppressed", "levelup", "comment", "no_enemy", "last_enemy_fell", "response_disabled"} {
 		s, op, _ := playerOperationFixture()
-		tail := reason == "last_enemy_fell"
+		tail := reason == "last_enemy_fell" || reason == "response_disabled"
 		switch reason {
 		case "suppressed":
 			op.First.Execute = func(*LifetimeState, random.Generator) (PlayerActionFacts, error) {
@@ -163,9 +163,12 @@ func TestPlayerOperationTailBarriers(t *testing.T) {
 			s.Fields.AntiTurns = 2
 		case "last_enemy_fell":
 			s.Actors[2].HP = 10
+		case "response_disabled":
+			op.ResponseEnabled = false
 		}
 		result, err := s.ApplyPlayerOperation(op, &playerOperationRNG{})
-		if err != nil || !result.Accepted || result.ResponseReached != tail || result.Suppressed != (reason == "suppressed") {
+		// The tail runs without the response flag; only the NPC response needs it.
+		if err != nil || !result.Accepted || result.ResponseReached != (tail && op.ResponseEnabled) || result.Suppressed != (reason == "suppressed") {
 			t.Fatal(reason, result, err)
 		}
 		if (s.Actors[0].CMPCharge == 1) != tail || (s.SkillBans["other"] == 1) != tail {
