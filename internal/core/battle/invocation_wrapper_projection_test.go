@@ -46,7 +46,7 @@ func TestInvocationWrapperProjectionRandomAlternativesAndMP(t *testing.T) {
 		counts := map[int]int{}
 		d.Entries["later"] = CallbackDefinition{
 			Validate: func(s *LifetimeState, c *CallbackContext) error {
-				if c.AfterEffects || !reflect.DeepEqual(c.Arguments, []string{"ally", "tail"}) {
+				if !reflect.DeepEqual(c.Arguments, []string{"ally", "tail"}) {
 					t.Fatal("lost certified facts/original arguments", kind, c)
 				}
 				if c.ArithmeticDivisor == 7 {
@@ -87,17 +87,24 @@ func TestInvocationWrapperProjectionUnknownAndCyclesAreAllOrUnknown(t *testing.T
 			}
 			d.Entries["unknown"] = unknown
 			d.JobTables[1] = invocationTable(CallbackEntry{ID: "noop"}, CallbackEntry{ID: "unknown"})
+			// Rejected only at execution, against the actual state; the executor
+			// then restores the caller's state and context.
+			validated := 0
 			d.Entries["later"] = CallbackDefinition{
-				Validate: func(s *LifetimeState, c *CallbackContext) error {
-					if !c.AfterEffects || s.actor("self").MP != 20 || c.Arguments[0] != "ally" {
-						t.Fatal("partial projection escaped", kind, cycle, s, c)
-					}
+				Validate: func(*LifetimeState, *CallbackContext) error {
+					validated++
 					return ErrUnsupportedEffect
 				}, Execute: d.Entries["noop"].Execute,
 			}
 			before := s.callbackCopy()
-			if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: kind}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || c.Arguments[0] != "ally" {
-				t.Fatal(kind, cycle, err, s, c)
+			if cycle {
+				if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: kind}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); err != nil || validated != 0 {
+					t.Fatal(kind, err, validated)
+				}
+				continue // A synthetic always-recursive cycle never terminates at execution.
+			}
+			if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: kind}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t, draws: []float64{0, 0, 0}}); !errors.Is(err, ErrUnsupportedEffect) || validated != 1 || !reflect.DeepEqual(s, before) || c.Arguments[0] != "ally" {
+				t.Fatal(kind, err, validated, s, c)
 			}
 		}
 	}
@@ -113,7 +120,7 @@ func TestInvocationWrapperProjectionExtendedNumericBoundaries(t *testing.T) {
 		d.JobTables[59] = invocationTable(CallbackEntry{ID: "missing", Extended: true})
 		d.Entries["later"] = CallbackDefinition{
 			Validate: func(s *LifetimeState, c *CallbackContext) error {
-				if c.AfterEffects || s.actor("self").MP != row.wantMP || s.actor("self").Attack != row.wantAttack {
+				if s.actor("self").MP != row.wantMP || s.actor("self").Attack != row.wantAttack {
 					t.Fatal(row, s, c)
 				}
 				return nil
@@ -142,7 +149,7 @@ func TestInvocationWrapperProjectionExtendedNumericBoundaries(t *testing.T) {
 		}
 		d.Entries["later"] = CallbackDefinition{
 			Validate: func(s *LifetimeState, c *CallbackContext) error {
-				if c.AfterEffects || s.actor("self").MP != row.want {
+				if s.actor("self").MP != row.want {
 					t.Fatal(row, s, c)
 				}
 				return nil
@@ -189,7 +196,7 @@ func TestInvocationWrapperProjectionGeneratedGuardAndCapture(t *testing.T) {
 							want = 7
 						}
 					}
-					if c.AfterEffects || c.ArithmeticDivisor != want || s.actor("self").MP != mp {
+					if c.ArithmeticDivisor != want || s.actor("self").MP != mp {
 						t.Fatal(captured, mp, s, c)
 					}
 					return nil
@@ -207,11 +214,8 @@ func TestInvocationWrapperProjectionExplorationCounts(t *testing.T) {
 	projectedNoop(&d)
 	visits := 0
 	d.Entries["later"] = CallbackDefinition{
-		Validate: func(_ *LifetimeState, c *CallbackContext) error {
-			if c.AfterEffects {
-				t.Fatal("unknown transition")
-			}
-			visits++
+		Validate: func(*LifetimeState, *CallbackContext) error {
+			visits++ // Every projected branch is known, so each validates later.
 			return nil
 		}, Execute: func(*LifetimeState, *CallbackContext, random.Generator) error { return nil },
 	}
@@ -245,7 +249,7 @@ func TestInvocationWrapperProjectionCurrent300AndLaterRejection(t *testing.T) {
 	d.JobTables[300] = invocationTable(CallbackEntry{ID: "grow", Extended: true})
 	d.Entries["later"] = CallbackDefinition{
 		Validate: func(s *LifetimeState, c *CallbackContext) error {
-			if c.AfterEffects || s.actor(c.ActorID).Jobs.JobID != "job-300" || s.actor(c.ActorID).MP != 20 || len(s.Actors) != 4 || len(c.PartyIDs) != 3 {
+			if s.actor(c.ActorID).Jobs.JobID != "job-300" || s.actor(c.ActorID).MP != 20 || len(s.Actors) != 4 || len(c.PartyIDs) != 3 {
 				t.Fatal("lost current300 or roster transition", s, c)
 			}
 			return nil

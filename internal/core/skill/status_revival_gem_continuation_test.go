@@ -284,20 +284,15 @@ func TestStatusRevivalGemUnsupportedTailIsAtomicAndUnknownStaysGated(t *testing.
 			t.Fatal(first, "caller mutated", err)
 		}
 	}
-	// An arbitrary effect without a projection never acquires certification.
+	// After an arbitrary unprojected effect the revival runs on actual state.
 	s, rc, d := revivalRegistryFixture()
 	d.RegisterRevivals(&rc)
 	d.Invocations.Entries["unknown"] = corebattle.CallbackDefinition{
 		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-		Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error {
-			t.Fatal("unknown prefix executed")
-			return nil
-		},
+		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
 	f := corebattle.CallbackContext{TargetContext: rc.TargetContext, Arguments: []string{"fallen"}}
-	if _, err := d.InvocationAction(&s, &f, []string{"unknown", "gem-63"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &f, d, "unknown", "gem-63")
 }
 
 func TestRegisteredInstantDeathRejectsUnsupportedAwakenedResetTailBeforeMutation(t *testing.T) {

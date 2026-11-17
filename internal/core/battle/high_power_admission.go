@@ -134,7 +134,7 @@ func (s *LifetimeState) ProjectHighPower(c *HighPowerContext, id string) (bool, 
 		return true, nil
 	case "job-48-entry-5":
 		// Equipment callbacks can draw or change the package target cursor.
-		// Without their exact transition, keep the existing unknown-effect gate.
+		// Without their exact transition, the projection stays unknown.
 		for _, a := range s.Actors {
 			if a.Gear.AccessoryID != "" || a.Gear.WeaponID == "weapon-71" {
 				return false, nil

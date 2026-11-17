@@ -113,12 +113,12 @@ func TestBaseGuardOrderedEligibilityAndConservativeUnknown(t *testing.T) {
 	if s.Actors[1].HP != 1000 || s.Actors[0].Temporary != corebattle.TemporaryDouble || c.DamageCalls != 0 {
 		t.Fatal(s, c)
 	}
-	// Unknown damage/reset outcomes cannot authorize a later context-dependent body.
+	// After unknown damage/reset outcomes the later body runs against the actual state.
 	s, c, d = baseGuardFixture()
 	f = corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-	if _, err := d.InvocationAction(&s, &f, []string{"job-1-entry-1", "job-2-entry-8"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &f, d, "job-1-entry-1", "job-2-entry-8")
+	s, c, d = baseGuardFixture()
+	f = corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
 	// Capped first party buff leaves tension for the later item205 helper.
 	s.Actors[0].Defense, s.Actors[0].Tension = 200, 3
 	s.Actors[2].ItemDefinitionIDs = []string{"item-205"}

@@ -55,7 +55,7 @@ func (d BattleDefinitions) RevivalInvocation(c *corebattle.RevivalContext, id st
 	}
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
-			if c == nil || frame.AfterEffects || !d.RevivalSkills[id] {
+			if c == nil || !d.RevivalSkills[id] {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := context(frame)
@@ -66,7 +66,7 @@ func (d BattleDefinitions) RevivalInvocation(c *corebattle.RevivalContext, id st
 			return s.ValidateRevival(&child, id, target, random.Default())
 		},
 		ProjectBranches: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-			if c == nil || frame.AfterEffects || !d.RevivalSkills[id] {
+			if c == nil || !d.RevivalSkills[id] {
 				return nil, corebattle.ErrUnsupportedEffect
 			}
 			child := context(frame)

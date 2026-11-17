@@ -31,7 +31,7 @@ func (c *DuelCrownContext) shift() string {
 }
 
 // ProjectDuelCrown projects only the exact inline stance; random outcomes stay
-// behind the invocation owner's AfterEffects gate.
+// unknown.
 func (s *LifetimeState) ProjectDuelCrown(c *DuelCrownContext, id string) (bool, error) {
 	if err := s.ValidateDuelCrown(c, id, random.Default()); err != nil {
 		return false, err

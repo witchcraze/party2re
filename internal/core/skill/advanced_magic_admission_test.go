@@ -42,8 +42,8 @@ func TestAdvancedMagicDefaultEmptyAndWholeActionRejection(t *testing.T) {
 		assertAdvancedMagicRejected(t, &s, c, definitions, "job-15-entry-1")
 	}
 	assertAdvancedMagicRejected(t, &s, c, d, "job-16-entry-4", "unbound")
-	// A supported registration cannot claim arbitrary unprojected prior effects.
-	assertAdvancedMagicRejected(t, &s, c, d, "job-15-entry-1", "job-16-entry-8")
+	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
+	assertAtomicAfterUnknown(t, &s, &f, d, "job-15-entry-1", "job-16-entry-8")
 }
 
 func TestAdvancedMagicPoisonAdmitsNewlyActivatedConfusionTargets(t *testing.T) {

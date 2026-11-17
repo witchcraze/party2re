@@ -44,10 +44,6 @@ func (d *BattleDefinitions) RegisterJobEncounters(c *corebattle.JobEncounterCont
 				if err != nil {
 					return err
 				}
-				// shortcut: #1733 owns room/order predecessor projections.
-				if f.AfterEffects {
-					return corebattle.ErrUnsupportedEffect
-				}
 				// Admission traverses declared children without an executable port.
 				child.Invoke = func(corebattle.CallbackInvocation) error { return corebattle.ErrUnsupportedEffect }
 				return s.ValidateJobEncounter(&child, id, random.Default())

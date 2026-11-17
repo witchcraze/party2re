@@ -61,9 +61,6 @@ func (d BattleDefinitions) DefenseGemAction(s *corebattle.LifetimeState, c coreb
 func (d BattleDefinitions) DefenseGemInvocation(ids []string) corebattle.CallbackDefinition {
 	ids = slices.Clone(ids)
 	bind := func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) ([]int, string, error) {
-		if f.AfterEffects {
-			return nil, "", corebattle.ErrUnsupportedEffect
-		}
 		target := ""
 		if len(f.Arguments) > 0 {
 			target = f.Arguments[0]

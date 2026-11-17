@@ -28,7 +28,7 @@ func (d *BattleDefinitions) RegisterAdvancedMagic(c *corebattle.AdvancedMagicCon
 func advancedMagicInvocation(c *corebattle.AdvancedMagicContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

@@ -158,7 +158,7 @@ func TestPlayerGeneratedProjectionCarriesEarlierEligibility(t *testing.T) {
 	d.Invocations.Entries["job-3-entry-4"] = baseGuardInvocation(c, "job-3-entry-4")
 	d.Invocations.Entries["later"] = corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if f.AfterEffects || s.Actors[0].Temporary != corebattle.TemporaryStrongDefense {
+			if s.Actors[0].Temporary != corebattle.TemporaryStrongDefense {
 				return corebattle.ErrUnsupportedEffect
 			}
 			return nil

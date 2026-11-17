@@ -87,8 +87,7 @@ func (s *LifetimeState) validateBookAssets(c *JobAssetContext, id string, rng ra
 		if err != nil {
 			return err
 		}
-		// shortcut: children without a projection admit the second use only
-		// after arbitrary effects, which they reject; #1733 owns projections.
+		// An unprojected first use leaves the second to execution-time validation.
 		op := CallbackInvocation{Kind: "entry", EntryID: entry}
 		return s.validateSequence(&frame, c.Catalog, []CallbackInvocation{op, op}, [][]string{targets[:1], targets[1:]}, rng)
 	}

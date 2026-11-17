@@ -112,15 +112,14 @@ func TestControlOrderedAdmission(t *testing.T) {
 	if _, err := d.InvocationAction(&s, &f, []string{"job-70-entry-4"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatal(err)
 	}
-	// An unknown earlier callback cannot authorize a later body against stale facts.
+	// After an unknown earlier callback the later body runs against actual facts.
 	s, c, d = controlFixture()
 	f.TargetContext = c.TargetContext
-	if _, err := d.InvocationAction(&s, &f, []string{"job-58-entry-1", "job-70-entry-4"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
-	if s.Actors[0].Status != "" || s.Actors[0].Attack != 100 {
-		t.Fatal(s)
-	}
+	unknown := f
+	unknown.Arguments = []string{"enemy"}
+	assertAtomicAfterUnknown(t, &s, &unknown, d, "job-58-entry-1", "job-70-entry-4")
+	s, c, d = controlFixture()
+	f.TargetContext = c.TargetContext
 	// A reflected magic seal replaces sleep; a later cure leaves the actor
 	// eligible for195 confusion before the third status helper.
 	s, c, d = controlFixture()

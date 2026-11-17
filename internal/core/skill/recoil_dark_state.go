@@ -43,9 +43,6 @@ func recoilDarkStateInvocation(c *corebattle.RecoilDarkStateContext, id string) 
 			if err != nil {
 				return err
 			}
-			if f.AfterEffects && id != "job-21-entry-1" && id != "job-38-entry-2" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateRecoilDarkState(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {

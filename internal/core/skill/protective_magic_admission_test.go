@@ -67,6 +67,11 @@ func TestProtectiveMagicRejectsCompleteAction(t *testing.T) {
 			case "unknown-transition":
 				ids = []string{"job-32-entry-0", "job-34-entry-6"}
 			}
+			if bad == "unknown-transition" {
+				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
+				assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+				return
+			}
 			before, err := json.Marshal(s)
 			if err != nil {
 				t.Fatal(err)

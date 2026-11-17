@@ -22,7 +22,7 @@ func (d *BattleDefinitions) RegisterOrdinaryTools(c *corebattle.OrdinaryToolCont
 func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool bool) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects && id != "tool-130" && id != "job-9-entry-6" && id != "job-16-entry-1" {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

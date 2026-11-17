@@ -174,10 +174,8 @@ func TestRecoilDarkOrderedProjection(t *testing.T) {
 	if s.Actors[0].HP != 500 || s.Actors[1].HP != 900 || c.DamageCalls != 0 {
 		t.Fatal(s, c)
 	}
-	// Unknown earlier random effects cannot authorize a later damage callback.
+	// After unknown earlier random effects the later damage runs on actual state.
 	s, c, d = recoilDarkFixture()
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-	if _, err := d.InvocationAction(&s, &f, []string{"job-21-entry-5", "job-38-entry-0"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &f, d, "job-21-entry-5", "job-38-entry-0")
 }

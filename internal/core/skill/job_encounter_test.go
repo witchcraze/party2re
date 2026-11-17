@@ -241,6 +241,10 @@ func TestJobEncounterAdmissionRejectsMissingContextBeforeDraw(t *testing.T) {
 			ids[0] = id
 			s.Actors[0].NPC = true
 		}
+		if mode == "unknown-prior" {
+			assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+			continue
+		}
 		before, err := json.Marshal(s)
 		if err != nil {
 			t.Fatal(err)
@@ -259,7 +263,7 @@ func TestJobEncounterAdmissionRejectsMissingContextBeforeDraw(t *testing.T) {
 }
 
 // Full table shapes with stand-in child bodies isolate this wrapper's draw/
-// death contract. They do not certify the native descendant bodies for #1733.
+// death contract. They do not certify the native descendant bodies.
 func TestJobEncounterTimeNPCDoubleRandomStopsAfterDeath(t *testing.T) {
 	for _, die := range []bool{false, true} {
 		t.Run(map[bool]string{false: "two-calls", true: "death-after-first"}[die], func(t *testing.T) {

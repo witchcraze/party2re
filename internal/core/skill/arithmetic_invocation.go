@@ -66,18 +66,6 @@ func (d BattleDefinitions) ArithmeticInvocation(c *corebattle.ArithmeticContext,
 					return corebattle.ErrUnsupportedEffect
 				}
 			}
-			if frame.AfterEffects {
-				// Earlier unknown effects may change HP, MP, base defense, or
-				// the operation divisor, making a previously safe member lethal.
-				if id == "job-31-reverse" {
-					return corebattle.ErrUnsupportedEffect
-				}
-				if selected == "job-31-death" || selected == "job-72-death" || selected == "job-72-damage" || id == "job-72-death" || id == "job-72-damage" {
-					if child.Defeat == nil {
-						return corebattle.ErrUnsupportedEffect
-					}
-				}
-			}
 			_, err = d.ArithmeticAction(s, &child, id, target, random.Default())
 			return err
 		},

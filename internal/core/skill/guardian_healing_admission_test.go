@@ -59,11 +59,15 @@ func TestGuardianAdmissionIsInertAndRejectsCompleteAction(t *testing.T) {
 			case "unknown-transition":
 				ids = []string{"job-18-entry-7", "job-18-entry-7"}
 			}
+			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
+			if reason == "unknown-transition" {
+				assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+				return
+			}
 			before, err := json.Marshal(s)
 			if err != nil {
 				t.Fatal(err)
 			}
-			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
 			ops := make([]corebattle.CallbackInvocation, len(ids))
 			for i, id := range ids {
 				ops[i] = corebattle.CallbackInvocation{Kind: "entry", EntryID: id}

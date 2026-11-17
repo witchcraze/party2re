@@ -76,6 +76,11 @@ func TestWeaponWeatherStanceRejectsMissingDescendantsBeforeMutation(t *testing.T
 			case "unknown-after-damage":
 				ids = append(ids, "job-27-entry-3")
 			}
+			if bad == "unknown-after-damage" {
+				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
+				assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+				return
+			}
 			before, err := json.Marshal(s)
 			if err != nil {
 				t.Fatal(err)

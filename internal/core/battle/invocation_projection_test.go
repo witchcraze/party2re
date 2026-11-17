@@ -55,16 +55,18 @@ func TestInvocationProjectionCyclesStayConservative(t *testing.T) {
 	s.Actors[0].Jobs.OldJobID = "job-59"
 	d := CallbackCatalog{JobTables: map[int]CallbackTable{59: {Variants: [][]CallbackEntry{{{ID: "loop", Name: "summon"}}}}}, Entries: map[string]CallbackDefinition{
 		"loop": {Invocation: CallbackInvocation{Kind: "gem-87"}},
-		"later": {Validate: func(_ *LifetimeState, c *CallbackContext) error {
-			if !c.AfterEffects {
-				t.Fatal("cycle claimed a known transition")
-			}
-			return ErrUnsupportedEffect
+		"later": {Validate: func(*LifetimeState, *CallbackContext) error {
+			t.Fatal("cycle claimed a known transition")
+			return nil
 		}, Execute: func(*LifetimeState, *CallbackContext, random.Generator) error { return nil }},
 	}}
 	frame := CallbackContext{TargetContext: c.TargetContext}
-	if err := s.ValidateInvocations(&frame, d, []CallbackInvocation{{Kind: "entry", EntryID: "loop"}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {
+	if err := s.ValidateInvocations(&frame, d, []CallbackInvocation{{Kind: "entry", EntryID: "loop"}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); err != nil {
 		t.Fatal(err)
+	}
+	delete(d.Entries, "later")
+	if err := s.ValidateInvocations(&frame, d, []CallbackInvocation{{Kind: "entry", EntryID: "loop"}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {
+		t.Fatal("unregistered later admitted", err)
 	}
 }
 
@@ -74,11 +76,10 @@ func TestRandomAndGeneratedAdmissionKeepKnownInitialState(t *testing.T) {
 		for job := 1; job <= 87; job++ {
 			d.JobTables[job] = invocationTable(CallbackEntry{ID: "initial"})
 		}
+		validated := 0
 		d.Entries["initial"] = CallbackDefinition{
-			Validate: func(_ *LifetimeState, frame *CallbackContext) error {
-				if frame.AfterEffects {
-					return ErrUnsupportedEffect
-				}
+			Validate: func(*LifetimeState, *CallbackContext) error {
+				validated++
 				return nil
 			},
 			Execute: func(*LifetimeState, *CallbackContext, random.Generator) error { return nil },
@@ -90,8 +91,10 @@ func TestRandomAndGeneratedAdmissionKeepKnownInitialState(t *testing.T) {
 		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: kind}}, &targetRNG{t: t}); err != nil {
 			t.Fatal(kind, err)
 		}
-		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: "entry", EntryID: "unknown"}, {Kind: kind}}, &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {
-			t.Fatal(kind, err)
+		// After an unknown predecessor only registration is checked.
+		validated = 0
+		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: "entry", EntryID: "unknown"}, {Kind: kind}}, &targetRNG{t: t}); err != nil || validated != 0 {
+			t.Fatal(kind, err, validated)
 		}
 	}
 }

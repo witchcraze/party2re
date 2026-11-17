@@ -94,6 +94,11 @@ func TestBeastCloneMissingDescendantsRejectBeforeMutation(t *testing.T) {
 			case "unknown-transition":
 				ids = []string{"job-26-entry-8", "job-10-entry-8"}
 			}
+			if bad == "unknown-transition" {
+				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
+				assertAtomicAfterUnknown(t, &s, &f, d, ids...)
+				return
+			}
 			before, err := json.Marshal(s)
 			if err != nil {
 				t.Fatal(err)

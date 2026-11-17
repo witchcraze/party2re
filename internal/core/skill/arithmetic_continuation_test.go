@@ -83,18 +83,11 @@ func TestArithmeticUnknownEarlierEffectsRequireReachableDefeat(t *testing.T) {
 				return nil
 			},
 		}
-		// Current members are safe; an unknown earlier effect may lower HP,
-		// raise MP, revive a member, or supply a divisor before the later body.
+		// An unknown earlier effect may make a member lethal; the later body is
+		// validated against the actual state when it runs, not at admission.
 		s.Actors[2].HP, s.Actors[2].MP = 1000, 0
 		frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-		_, err := d.InvocationAction(&s, &frame, []string{"prior", id}, noArithmeticDraws{t})
-		reject := id == "job-31-death" || id == "job-31-reverse" || id == "job-72-damage" || id == "job-72-death"
-		if errors.Is(err, corebattle.ErrUnsupportedEffect) != reject || err != nil && !reject {
-			t.Fatal(id, err)
-		}
-		c.Defeat = func(string) error { t.Fatal("admission ran defeat"); return nil }
-		_, err = d.InvocationAction(&s, &frame, []string{"prior", id}, noArithmeticDraws{t})
-		if (err != nil) != (id == "job-31-reverse") {
+		if _, err := d.InvocationAction(&s, &frame, []string{"prior", id}, noArithmeticDraws{t}); err != nil {
 			t.Fatal(id, err)
 		}
 	}

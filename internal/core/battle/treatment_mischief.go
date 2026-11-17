@@ -53,7 +53,7 @@ func treatmentAreaDamage(id string, a *LifetimeActor) (TargetEffect, bool) {
 }
 
 // ProjectTreatmentMischief supplies only the exact, unconditional inline body.
-// All random transitions retain the invocation owner's conservative gate.
+// Random transitions stay unknown.
 func (s *LifetimeState) ProjectTreatmentMischief(c *TreatmentMischiefContext, id string) bool {
 	if id != "job-51-entry-1" {
 		return false

@@ -14,7 +14,7 @@ func (d *BattleDefinitions) RegisterBooks(c *corebattle.BookContext) {
 	for _, entry := range corebattle.BookEntries() {
 		d.Invocations.Entries[entry.ID] = corebattle.CallbackDefinition{
 			Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-				if c == nil || f.AfterEffects {
+				if c == nil {
 					return corebattle.ErrUnsupportedEffect
 				}
 				child := *c

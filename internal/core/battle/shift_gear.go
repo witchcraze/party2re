@@ -18,7 +18,7 @@ func ShiftGearCallback(previous bool) CallbackDefinition {
 		if previous {
 			job, sp = a.Jobs.OldJobID, a.Jobs.OldSP
 		}
-		if c.AfterEffects || job != "job-73" || sp == 0 || !slices.Contains(a.ItemDefinitionIDs, "item-158") || a.MP < 1 {
+		if job != "job-73" || sp == 0 || !slices.Contains(a.ItemDefinitionIDs, "item-158") || a.MP < 1 {
 			return ErrUnsupportedEffect
 		}
 		return nil

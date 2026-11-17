@@ -40,9 +40,6 @@ func baseGuardInvocation(c *corebattle.BaseGuardContext, id string) corebattle.C
 			if err != nil {
 				return err
 			}
-			if f.AfterEffects && id != "job-0-entry-4" && id != "job-2-entry-3" && id != "job-3-entry-4" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateBaseGuard(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {

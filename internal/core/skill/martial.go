@@ -37,9 +37,6 @@ func martialInvocation(c *corebattle.MartialContext, id string) corebattle.Callb
 			if err != nil {
 				return err
 			}
-			if f.AfterEffects && id != "job-4-entry-1" && id != "job-25-entry-3" && id != "job-25-entry-4" && id != "job-25-entry-6" && id != "job-25-entry-7" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateMartial(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {

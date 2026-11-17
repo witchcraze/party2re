@@ -157,7 +157,8 @@ func TestResourceRejectsUnsupportedClosureBeforeEffects(t *testing.T) {
 	d.RegisterResources(&c)
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"ally"}}
 	before, _ := json.Marshal(s)
-	for _, ids := range [][]string{{"gem_mp_heal_sky_1", "missing"}, {"gem_mp_heal_sky_1", "gem_mp_burst"}} {
+	assertAtomicAfterUnknown(t, &s, &f, d, "gem_mp_heal_sky_1", "gem_mp_burst")
+	for _, ids := range [][]string{{"gem_mp_heal_sky_1", "missing"}} {
 		_, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
 		if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(err)

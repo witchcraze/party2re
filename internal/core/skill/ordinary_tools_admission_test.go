@@ -126,39 +126,21 @@ func TestOrdinaryToolLaterUnsupportedAndUnknownEffects(t *testing.T) {
 	s, c, d := ordinaryToolFixture()
 	c.EquipmentReset = nil
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self"}}
-	before, err := json.Marshal(s)
-	if err != nil {
+	// The reset after the random heal lacks its context: rejected and restored.
+	if err := assertAtomicAfterUnknown(t, &s, &f, d, "tool-1", "tool-87"); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatal(err)
-	}
-	ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "tool-1"}, {Kind: "entry", EntryID: "tool-87"}}
-	if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
-	after, err := json.Marshal(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(before) != string(after) || len(c.Results) != 0 || c.HealCalls != 0 {
-		t.Fatal(s, c)
 	}
 	for _, id := range []string{"tool-110", "gem-101", "gem-102", "tool-999"} {
 		if _, err := d.InvocationAction(&s, &f, []string{id}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(id, err)
 		}
 	}
-	// Unknown preceding effects can replace the roster or cursor. Reject before
-	// executing them rather than discover missing inspection facts afterwards.
-	executed := false
+	// Inspection after unknown preceding effects runs against the actual roster.
 	d.Invocations.Entries["prior"] = corebattle.CallbackDefinition{
 		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-		Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error {
-			executed = true
-			return nil
-		},
+		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
-	if _, err := d.InvocationAction(&s, &f, []string{"prior", "tool-151"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || executed {
-		t.Fatal(err, executed)
-	}
+	assertAtomicAfterUnknown(t, &s, &f, d, "prior", "tool-151")
 }
 
 func TestOrdinaryToolReset188PassPrecedesRefill(t *testing.T) {

@@ -1,7 +1,6 @@
 package skill
 
 import (
-	"errors"
 	"reflect"
 	"testing"
 
@@ -57,18 +56,12 @@ func TestCallingOrderedDismissThenAttackAndMissingProjection(t *testing.T) {
 	if err := s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); err != nil || s.Actors[2].HP != 0 || s.Actors[1].HP != 1000 {
 		t.Fatal(err, s)
 	}
-	// An arbitrary earlier body has no certified transition, even if its current
-	// execution fixture happens to do nothing.
+	// After an arbitrary earlier body the attack runs against the actual state.
 	d.Invocations.Entries["opaque"] = corebattle.CallbackDefinition{
 		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-		Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error {
-			t.Fatal("executed during rejection")
-			return nil
-		},
+		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
-	if _, err := d.InvocationAction(&s, &frame, []string{"opaque", "job-59-attack"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
-	}
+	assertAtomicAfterUnknown(t, &s, &frame, d, "opaque", "job-59-attack")
 }
 
 func TestCallingProjectedCopyDeathAndSpawnSelectCurrentEligibility(t *testing.T) {

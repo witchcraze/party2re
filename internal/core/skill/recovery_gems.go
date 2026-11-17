@@ -76,7 +76,7 @@ func (d BattleDefinitions) RecoveryStatInvocation(c *corebattle.EffectContext, i
 	}
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
-			if c == nil || frame.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := context(frame)
@@ -88,7 +88,7 @@ func (d BattleDefinitions) RecoveryStatInvocation(c *corebattle.EffectContext, i
 			return err
 		},
 		ProjectBranches: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-			if c == nil || frame.AfterEffects {
+			if c == nil {
 				return nil, corebattle.ErrUnsupportedEffect
 			}
 			child := context(frame)

@@ -101,10 +101,8 @@ func TestDefenseBranchesKeepAbsorptionUnknown(t *testing.T) {
 	var d BattleDefinitions
 	d.RegisterDefenseGems()
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"ally"}}
-	before := s.Actors[2]
-	if _, err := d.InvocationAction(&s, &f, []string{"gem_guard_2", "gem_guard_1"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(s.Actors[2], before) {
-		t.Fatal("resource-incomplete projection was certified", err, s)
-	}
+	// The absorption resource change is unprojected; the later slot runs on actual state.
+	assertAtomicAfterUnknown(t, &s, &f, d, "gem_guard_2", "gem_guard_1")
 }
 
 func TestDefenseBranchesPreserveConfusionCoverAndFallenPaths(t *testing.T) {

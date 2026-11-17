@@ -10,11 +10,10 @@ import (
 
 // CallbackContext retains the actual actor and remaining arguments. Naked
 // invocation shares Arguments, including a child's consumed arguments. Command
-// stays the outer command. AfterEffects is set only during conservative preflight.
+// stays the outer command.
 type CallbackContext struct {
 	TargetContext
-	Arguments    []string
-	AfterEffects bool
+	Arguments []string
 	// Damage supplies an enclosing intrinsic operation's counters and hit facts.
 	// Definitions that accept it write back only during execution.
 	Damage *DamageContext
@@ -55,8 +54,8 @@ type CallbackTable struct {
 }
 
 // CallbackDefinition certifies the entire callback and its transitive helper,
-// book and tool edges. Validate must be pure and cover earlier reachable effects
-// when AfterEffects is true. Invocation supplies a native invoking body instead
+// book and tool edges. Validate must be pure; the executor also runs it against
+// the actual state immediately before Execute. Invocation supplies a native invoking body instead
 // of Execute; neither a kind nor an entry's presence certifies a legacy table.
 type CallbackDefinition struct {
 	Invocation CallbackInvocation
@@ -100,6 +99,17 @@ func (s *LifetimeState) ApplyInvocations(c *CallbackContext, d CallbackCatalog, 
 	if err := s.ValidateInvocations(c, d, ops, rng); err != nil {
 		return err
 	}
+	// A callback rejected against the actual state restores the caller's state
+	// and context; the consumer commits nothing.
+	saved, context := s.callbackCopy(), cloneCallbackContext(*c)
+	if err := s.applySequence(c, d, ops, rng); err != nil {
+		*s, *c = saved, context
+		return err
+	}
+	return nil
+}
+
+func (s *LifetimeState) applySequence(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, rng random.Generator) error {
 	for _, op := range ops {
 		child := *c
 		child.Arguments = slices.Clone(c.Arguments) // Each custom gem receives the original target.
@@ -300,6 +310,11 @@ func (s *LifetimeState) executeCallback(c *CallbackContext, d CallbackCatalog, e
 	}
 	if def.Invocation.Kind != "" {
 		return s.invokeCallback(c, d, def.Invocation, rng)
+	}
+	if def.Validate != nil {
+		if err := def.Validate(s, c); err != nil {
+			return err
+		}
 	}
 	delegates := []CallbackInvocation(nil)
 	if def.Delegates != nil {

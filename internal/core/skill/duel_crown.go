@@ -37,9 +37,6 @@ func duelCrownInvocation(c *corebattle.DuelCrownContext, id string) corebattle.C
 			if err != nil {
 				return err
 			}
-			if frame.AfterEffects && id != "job-74-entry-1" && id != "job-74-entry-4" {
-				return corebattle.ErrUnsupportedEffect
-			}
 			return s.ValidateDuelCrown(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {

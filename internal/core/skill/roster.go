@@ -31,7 +31,7 @@ func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id stri
 			return nil
 		},
 		Validate: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) error {
-			if c == nil || frame.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

@@ -1,7 +1,6 @@
 package skill
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
@@ -179,10 +178,8 @@ func TestHybridBreathAreaOrderAndActorDeath(t *testing.T) {
 			t.Fatal(s, c)
 		}
 	}
-	// An unknown transition remains gated before the first supported slot runs.
+	// After an unknown transition the later slot runs on actual state.
 	s, c, d := hybridBreathFixture()
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-	if _, err := d.InvocationAction(&s, &f, []string{"job-44-entry-1", "job-44-entry-2"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Defense != 80 {
-		t.Fatal(err, s)
-	}
+	assertAtomicAfterUnknown(t, &s, &f, d, "job-44-entry-1", "job-44-entry-2")
 }

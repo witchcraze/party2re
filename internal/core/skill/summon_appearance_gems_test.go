@@ -47,11 +47,6 @@ func TestSummonAppearanceGemBindingsAndGates(t *testing.T) {
 		if _, err := d.InvocationAction(&s, &f, []string{e.ID}, noArithmeticDraws{t}); err != nil {
 			t.Fatal(e, err)
 		}
-		unknown := f
-		unknown.AfterEffects = true
-		if err := def.Validate(&s, &unknown); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-			t.Fatal(e, "unknown predecessors must remain gated", err)
-		}
 		var empty BattleDefinitions
 		empty.RegisterSummonAppearanceGems(nil, nil)
 		if _, err := empty.InvocationAction(&s, &f, []string{e.ID}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {

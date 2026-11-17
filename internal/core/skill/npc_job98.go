@@ -25,7 +25,7 @@ func (d *BattleDefinitions) RegisterNPCJob98(c *corebattle.NPCJob98Context) {
 func npcJob98Invocation(c *corebattle.NPCJob98Context, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

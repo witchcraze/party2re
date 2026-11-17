@@ -25,7 +25,7 @@ func resourceInvocation(c *corebattle.DamageContext, e corebattle.ResourceEntry)
 	}
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || (f.AfterEffects && e.SourceID != 103 && e.SourceID != 104) {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

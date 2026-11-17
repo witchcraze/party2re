@@ -29,7 +29,7 @@ func (d *BattleDefinitions) RegisterLateBreathSong(c *corebattle.LateBreathSongC
 func lateBreathSongInvocation(c *corebattle.LateBreathSongContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
-			if c == nil || f.AfterEffects && id != "job-84-entry-0" && id != "job-85-entry-2" {
+			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c

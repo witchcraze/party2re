@@ -165,9 +165,12 @@ type RunAdmission interface {
 	CheckSoloAdmission(context.Context, string) error
 }
 
-// RunCombat is the explicit command seam owned by #1329. It must validate the
-// whole action before effects, use the ambient transaction, and return only new
-// earnings/consumption. No batch resolver is a fallback for this port.
+// RunCombat is the explicit command seam owned by #1329. It must admit the
+// action before effects, use the ambient transaction, and return only new
+// earnings/consumption. It must return an execution-time rejection or failure
+// rather than absorb it: core restores only the battle state, so Command then
+// saves neither this run copy (travel/room changes included) nor a receipt.
+// No batch resolver is a fallback for this port.
 type RunCombat interface {
 	PrepareAdvance(context.Context, *NormalRun, string) error
 	PrepareBossField(context.Context, *NormalRun, string) error

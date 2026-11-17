@@ -87,7 +87,10 @@ func TestTreatmentMischiefMissingDescendantsRejectBeforeEarlierHeal(t *testing.T
 			}
 			ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: id}}
 			if bad == "later-MP" || bad == "later-status" {
-				ops = append([]corebattle.CallbackInvocation{{Kind: "entry", EntryID: "job-50-entry-0"}}, ops...)
+				// After the unknown heal the later body runs against actual state.
+				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: args}
+				assertAtomicAfterUnknown(t, &s, &f, d, "job-50-entry-0", id)
+				return
 			}
 			before, err := json.Marshal(s)
 			if err != nil {

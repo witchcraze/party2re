@@ -3,6 +3,7 @@ package battle
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -68,7 +69,7 @@ func TestInvocationBranchesIsolateSiblingsAndNestedReferents(t *testing.T) {
 	visited := []int{}
 	d.Entries["later"] = CallbackDefinition{
 		Validate: func(s *LifetimeState, c *CallbackContext) error {
-			if c.AfterEffects || *s.actor("self").Gear.WeaponAttack != 51 || *s.actor("self").JobHistory["job-01"] != 31 || *c.Damage.RequesterLevel != 100 || *c.Damage.End.DarknessDebit != 8 || c.Damage.DamageCalls != 1 || s.SkillHistory["self"]["original"] || !reflect.DeepEqual(c.Arguments, []string{"ally", "tail"}) {
+			if *s.actor("self").Gear.WeaponAttack != 51 || *s.actor("self").JobHistory["job-01"] != 31 || *c.Damage.RequesterLevel != 100 || *c.Damage.End.DarknessDebit != 8 || c.Damage.DamageCalls != 1 || s.SkillHistory["self"]["original"] || !reflect.DeepEqual(c.Arguments, []string{"ally", "tail"}) {
 				t.Fatal("incorrect predecessor or shared sibling", s, c)
 			}
 			visited = append(visited, c.ArithmeticDivisor)
@@ -117,16 +118,20 @@ func TestInvocationUnknownProjectionDiscardsTentativeWrites(t *testing.T) {
 			}
 		}
 		d.Entries["prior"] = prior
+		// After an unknown predecessor admission checks registration only;
+		// the executor validates later against the actual state.
 		d.Entries["later"] = CallbackDefinition{
-			Validate: func(s *LifetimeState, c *CallbackContext) error {
-				if !c.AfterEffects || s.actor("self").MP != 20 || c.ArithmeticDivisor != 0 || c.Arguments[0] != "ally" {
-					t.Fatal("unknown projection leaked tentative facts", s, c)
-				}
+			Validate: func(*LifetimeState, *CallbackContext) error {
+				t.Fatal("later validated against an unknown predecessor")
 				return nil
 			}, Execute: d.Entries["noop"].Execute,
 		}
+		before, arguments := s.callbackCopy(), slices.Clone(c.Arguments)
 		if err := s.ValidateInvocations(&c, d, []CallbackInvocation{{Kind: "entry", EntryID: "prior"}, {Kind: "entry", EntryID: "later"}}, &targetRNG{t: t}); err != nil {
 			t.Fatal(branched, err)
+		}
+		if !reflect.DeepEqual(s, before) || !slices.Equal(c.Arguments, arguments) || c.ArithmeticDivisor != 0 {
+			t.Fatal("unknown projection leaked tentative facts", s, c)
 		}
 	}
 }
@@ -162,7 +167,7 @@ func TestInvocationBranchesFollowExistingExplicitAndGeneratedEdges(t *testing.T)
 		}
 		d.Entries["later"] = CallbackDefinition{
 			Validate: func(_ *LifetimeState, c *CallbackContext) error {
-				if c.AfterEffects || c.ArithmeticDivisor != 13 || !reflect.DeepEqual(c.Arguments, []string{"enemy", "tail"}) {
+				if c.ArithmeticDivisor != 13 || !reflect.DeepEqual(c.Arguments, []string{"enemy", "tail"}) {
 					t.Fatal(kind, "lost projected context or original target", c)
 				}
 				return nil
@@ -214,7 +219,7 @@ func TestInvocationRetainsNewOperationContext(t *testing.T) {
 		}
 		d.JobTables[59] = invocationTable(CallbackEntry{ID: "created", Name: "summon"})
 		check := func(_ *LifetimeState, f *CallbackContext) error {
-			if f.AfterEffects || f.Damage == nil || f.Damage.TensionCalls != 1 {
+			if f.Damage == nil || f.Damage.TensionCalls != 1 {
 				t.Fatal(kind, "lost newly created operation context", f)
 			}
 			return nil
