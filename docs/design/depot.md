@@ -58,9 +58,7 @@ and the
 append separate instances without stacking (`AppendDelivery`).
 [Contest awards](photo-contest.md#approved-delivery-contract-and-implementation-gap)
 follow the Deliver rule. Still open: Auction gold
-destination ([#1815](https://github.com/witchcraze/party2re/issues/1815)) and
-native combat book execution
-([#1370](https://github.com/witchcraze/party2re/issues/1370)).
+destination ([#1815](https://github.com/witchcraze/party2re/issues/1815)).
 
 ## Operations & Invariants
 

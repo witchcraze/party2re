@@ -155,12 +155,7 @@ func (s *LifetimeState) applyStoredTool(c *JobAssetContext, rng random.Generator
 		if err := s.ApplyInvocations(frame, c.Catalog, ops, rng); err != nil {
 			return err
 		}
-		c.TargetContext = frame.TargetContext
-		c.Frame.Damage, c.Frame.Status, c.Frame.Defeat = frame.Damage, frame.Status, frame.Defeat
-		c.Frame.ArithmeticDivisor = frame.ArithmeticDivisor
-		if frame.Damage != nil {
-			c.DamageContext = *frame.Damage
-		}
+		c.adoptFrame(frame)
 	} else if err := c.Travel.Validate(row.DefinitionID, target); errors.Is(err, ErrUnsupportedEffect) {
 		return err
 	} else if err != nil {

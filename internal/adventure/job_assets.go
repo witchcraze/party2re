@@ -14,6 +14,7 @@ import (
 // operation. Call once inside Command, including NPC/delegated effects; the run
 // lock/receipt and economy runner share the ambient SQL transaction. The
 // command's TargetID and Input are job50's outer stored-tool selector and target.
+// Job86 withdrawals swap in place; returns deliver even over capacity.
 // A selection error commits no assets; stored-tool history stays in the run.
 // Transaction: ExecuteTransaction within Command. Lock Order: prelocked run(0) -> prelocked sorted characters(2) -> requester inventory(3) -> requester depot(5).
 func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd RunCommand, apply func(*corebattle.JobAssets) error) error {
@@ -70,6 +71,8 @@ func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd 
 					_, err = stored.ConsumeOne(o.InstanceID)
 				case corebattle.StoredToolExchanged:
 					previousHeld, err = exchangeStoredTool(tc, stored, o.InstanceID, previousHeld)
+				case corebattle.BookReturned:
+					previousHeld, err = returnHeldTool(tc, stored, previousHeld)
 				}
 				if err != nil {
 					return err
@@ -144,4 +147,18 @@ func exchangeStoredTool(tc *economy.TxContext, d *depot.Depot, instanceID, held 
 		tc.AddGrant(economy.ResourceGrant{ItemDefinitionID: taken.DefinitionID, ItemQuantity: 1})
 	}
 	return taken.DefinitionID, err
+}
+
+// returnHeldTool delivers the durable held unit to the requester depot: it
+// merges into an eligible stack or appends, even at or over capacity.
+func returnHeldTool(tc *economy.TxContext, d *depot.Depot, held string) (string, error) {
+	if held == "" {
+		return held, ErrRunConflict
+	}
+	unit, err := tc.Inventory.ConsumeOneItem(tc.Inventory.Items[0].ID)
+	if err != nil {
+		return held, err
+	}
+	d.Deliver(unit)
+	return "", nil
 }
