@@ -56,6 +56,23 @@ present, `add_battle_action` registers only `しらべる`, so the dispatcher al
 rejects movement (`vs_dungeon.cgi:37–48,77–80`; `_battle.cgi:640`). Escape stays
 a separate action; letting movement abandon chests would be a departure.
 
+## Start admission
+
+**Decision (#1774, #1955).** Original players saw the selection menu, so its
+thresholds apply rather than the looser server formula (`quest.cgi:526–537`).
+Only the leader is checked; joiners are not gated by job level
+(`add_member`, `quest.cgi:928–1079`). The listing shows only maps the viewer may
+start as leader, and a start below the threshold is rejected.
+
+| Dungeon | Leader job level | Menu evidence (`quest.cgi`) |
+|---|---|---|
+| 0 | any | always listed |
+| 1–12 (i) | ≥ 2i + 1 | `233–236` |
+| 13 / 14 / 15 / 17 | ≥ 80 / 30 / 50 / 40 | `@ex_dungeon`, `209,237–241` |
+| 16 | any, while the once quota is free | `get_limited_dungeons`, `1224–1228` |
+
+Open: dungeon 16's once quota (#1955).
+
 ## Retired synthetic catalog
 
 **Decision (#1958).** The synthetic `dungeon-01`–`dungeon-03` catalog had no legacy counterpart and was removed, together with its per-character record table. `dungeon_expedition_history` keeps old catalog rows because it is the settlement claim; history reads never resolve `dungeon_id` against the catalog.
@@ -173,9 +190,29 @@ Native map0 has six independently authored 5×5 layouts (legacy has six initial 
 - Treasure chests block all movement until opened and are never auto-opened.
 - Boss victory grants the monster's rewards only and does not complete the expedition.
 - The hidden passage is always shown as a wall; observation lists all four directions while movement is allowed, so it reveals nothing.
-- Legacy dungeon 0 has no job-level gate, so native map0 has none.
 
-Open: chest contents, inspection and the blessing-4 chest (#2119), encounter group size and scaling (#1954), and the per-character exit gaps under [Remaining limits](#remaining-limits).
+Open: chest contents, inspection and the blessing-4 chest (#2119), encounter group size, scaling and the stage 0/1 pool choice (#1954), enemy battle data (#2351), and the per-character exit gaps under [Remaining limits](#remaining-limits).
+
+### Map3 implementation
+
+Native map3 has eight independently authored 9×9 layouts with round limit 60
+(legacy: eight initial variants, `map/3/1.cgi`–`8.cgi`). Non-obvious findings:
+
+- **No hidden passage.** `5.cgi`–`8.cgi` define `event_I`, but no cell uses `I`.
+- **Warp landing dispatches nothing.** A move dispatches only the entered cell
+  (`vs_dungeon.cgi:96–101`); a warp only rewrites the position. Legacy targets
+  include the warp's own cell (`5.cgi` `C`, `E`), a partner warp, start, treasure,
+  boss and `T` cells; each stays untriggered until entered by a later move.
+- **Two bosses.** The base `B` and the map's `b` are independent once events.
+- **`T` repeats.** It has no once flag; it confuses every allied member and always
+  spawns. Every move resets status first (`_battle.cgi:1390–1430`), so confusion
+  reaches only the ensuing battle and its continuation.
+- **Content pools.** Each request loads stage 5–8 at random (`int(rand(4)+5)`), and
+  a move dispatches one event, so native draws one pool per spawning event.
+  Weights follow each stage's `@appears`; stage 7 has none and is uniform.
+
+Open: legacy boss groups (stages 5 and 7 spawn three bosses), group size and
+scaling (#1954), enemy battle data beyond the base stats (#2351), chest contents (#2119).
 
 ### Map1 key and door unit
 
@@ -284,11 +321,7 @@ Contents and inspection: [treasure contract](#treasure-inspection-and-delivery).
 Groups/scaling: [#1954](https://github.com/witchcraze/party2re/issues/1954).
 Rewards: [#1957](https://github.com/witchcraze/party2re/issues/1957).
 Per-character combat: [#1865](https://github.com/witchcraze/party2re/issues/1865).
-Start admission: the original player experience applies, so the leader needs
-job level ≥ 80, the menu threshold (`quest.cgi:209`). The server formula's lower
-bound of 25 (`quest.cgi:530–536`) is not adopted. Joining members are not gated
-by job level (`add_member`, `quest.cgi:928–1079`). The thresholds for all dungeons and
-their enforcement: [#1955](https://github.com/witchcraze/party2re/issues/1955). Map13 adds no
+Start admission follows the [leader job-level table](#start-admission) (≥ 80). Map13 adds no
 map-specific action (no `add_battle_action2` override). Start, Move, observation and
 Escape reuse the native use cases above. The map stays unlisted and start-rejected
 until both destinations are implemented, so players never meet a partial map.
@@ -304,7 +337,6 @@ content; this table does not authorize their automatic rollout.
 | Map / evidence | Events and round limits | Follow-up verification boundary |
 |---|---|---|
 | [2 / #1763](https://github.com/witchcraze/party2re/issues/1763): `map/2/1.cgi:18–23`, `_1.cgi:18–21`, `__1.cgi:21–23`, `___1.cgi:20–23` | `F` routes, `7/8` floor bosses, `T` pitfall/damage, `2/3/4` treasure, `Q` no-op; limits 30/40/50 | First establish cross-map round/position/flag carry, then independently author the branching floors; test route RNG, pitfall return and bases 30/70/40, and no boss-as-clear assumption. |
-| [3 / #1764](https://github.com/witchcraze/party2re/issues/1764): `map/3/1.cgi:18–30`, variants `2..8.cgi` | `A/C/D/E/F/G` warps, `T` confusion/encounter, `b` boss, `2/3` treasure; some variants `I`; limit 60 | Verify each warp destination and variant's hidden passages; status must reach the ensuing encounter in order. |
 | [4 / #1765](https://github.com/witchcraze/party2re/issues/1765): `map/4/1.cgi:20–34`, variants `2..7.cgi` | Passage damages actor by rounded 2% MaxHP, `M` message, `H` once healing choice, `b` boss, `2/3/4` treasure; limit 70 | Verify actor-only attrition and death, no inherited passage encounter, and the actual healing target/helper behavior before implementation. |
 | [5 / #1766](https://github.com/witchcraze/party2re/issues/1766): `map/5/1.cgi:18–54`, variants `2..4.cgi` | `L` lever/boss, `I` display depends on lever, `T` poison/encounter, `t` damage base 80, `H` job-43 party recovery, treasure; limit 60 | Separate lever/visibility from hazard/recovery if useful; test lever replay, status ordering, actor qualification and all members' vitality. |
 | [6 / #1767](https://github.com/witchcraze/party2re/issues/1767): `map/6/1.cgi:20–43`, variants `2..5.cgi` | Exclusive `A/B`, `C/D`, `E/F` choices, message markers `5/6/7`, `X` boss, treasure; limit 30 | Test mutually exclusive branch flags, encounter pools and ordered currency/heal/trap alternatives; audit negative-money behavior rather than silently normalizing it. |

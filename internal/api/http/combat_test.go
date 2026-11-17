@@ -134,9 +134,11 @@ type stubDungeonService struct {
 
 	startPartyExpeditionFn func(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
 	observeExpeditionFn    func(ctx context.Context, characterID string) (*dungeon.ExpeditionObservation, error)
+	listedJobLevel         int
 }
 
-func (s *stubDungeonService) ListDungeons() []dungeon.Dungeon {
+func (s *stubDungeonService) ListDungeons(jobLevel int) []dungeon.Dungeon {
+	s.listedJobLevel = jobLevel
 	return []dungeon.Dungeon{{ID: "d1", Name: "Cave"}}
 }
 func (s *stubDungeonService) StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error) {

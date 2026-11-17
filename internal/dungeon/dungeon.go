@@ -26,6 +26,7 @@ var (
 	ErrImpassableWall            = errors.New("cannot move into wall or out of map bounds")
 	ErrExpeditionAlreadyFinished = errors.New("expedition is already completed")
 	ErrMovementExhausted         = errors.New("movement limit reached; escape to leave the dungeon")
+	ErrJobLevelRequired          = errors.New("leader job level is too low for this dungeon")
 )
 
 type ExpeditionStatus string
@@ -77,6 +78,17 @@ type Floor struct {
 	Grid        []string         `json:"grid"`
 	Monsters    []DungeonMonster `json:"monsters"`
 	Boss        *DungeonMonster  `json:"boss,omitempty"`
+	// Warps send a party entering the keyed cell to (x, y) without dispatching the landing cell.
+	Warps map[byte][2]int `json:"-"`
+	// Pools, when set, replace Monsters/Boss: each event draws one pool, as legacy maps load one stage file per request.
+	Pools []EncounterPool `json:"-"`
+}
+
+// EncounterPool is one stage's content; Appears weights monster indices (empty: uniform).
+type EncounterPool struct {
+	Monsters []DungeonMonster
+	Appears  []int
+	Boss     *DungeonMonster
 }
 
 type Dungeon struct {
@@ -84,6 +96,8 @@ type Dungeon struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	RoundLimit  int    `json:"round_limit"`
+	// LeaderJobLevel is the leader's minimum job level to start; joiners are not gated.
+	LeaderJobLevel int `json:"-"`
 	// Variants stay private because their grids disclose hidden passages.
 	Variants []Floor `json:"-"`
 }
@@ -327,8 +341,16 @@ func NewService(
 	return s, nil
 }
 
-// ListDungeons returns the enterable maps; admission is not yet modeled (#1955).
-func (s *Service) ListDungeons() []Dungeon { return s.dungeons }
+// ListDungeons returns the maps a leader of jobLevel may start, like the legacy menu.
+func (s *Service) ListDungeons(jobLevel int) []Dungeon {
+	out := make([]Dungeon, 0, len(s.dungeons))
+	for _, d := range s.dungeons {
+		if jobLevel >= d.LeaderJobLevel {
+			out = append(out, d)
+		}
+	}
+	return out
+}
 
 func (s *Service) GetHistory(ctx context.Context, characterID string, limit int) ([]DungeonExpeditionHistory, error) {
 	if characterID == "" {

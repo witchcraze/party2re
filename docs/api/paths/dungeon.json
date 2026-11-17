@@ -22,7 +22,7 @@
               }
             }
           },
-          "description": "Dungeon overviews"
+          "description": "Dungeon overviews this character may start as leader (filtered by job level)"
         },
         "400": {
           "content": {
@@ -472,7 +472,7 @@
               }
             }
           },
-          "description": "Only the saved party leader may start the run"
+          "description": "Only the saved party leader may start the run, and the leader's job level must meet the dungeon's threshold; other members are not gated"
         },
         "404": {
           "$ref": "#/components/responses/Error",
@@ -593,7 +593,7 @@
               }
             }
           },
-          "description": "Forbidden - player does not own requested character or lacks permission"
+          "description": "Forbidden - player does not own requested character, or the character's job level is below the dungeon's leader threshold"
         },
         "404": {
           "$ref": "#/components/responses/Error",

@@ -14,8 +14,9 @@ func (s *Service) resolveEncounter(
 	exp *ActiveExpedition,
 	char *corecharacter.Character,
 	monster DungeonMonster,
+	allyStatus string,
 ) (corebattle.Result, *corebattle.FieldState, bool, map[string]int, map[string]int, map[string][]corebattle.ConsumedItem, int, error) {
-	allies, err := s.buildCombatAllies(ctx, exp, char)
+	allies, err := s.buildCombatAllies(ctx, exp, char, allyStatus)
 	if err != nil {
 		return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
 	}
@@ -154,9 +155,10 @@ func (s *Service) resolveMonsterCombat(
 	eventType TileEventType,
 	newX, newY int,
 	eventKey string,
+	allyStatus string,
 ) (ExpeditionStepResult, error) {
 	turns, stayX, stayY := exp.combatProgress(newX, newY)
-	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, monster)
+	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, monster, allyStatus)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
