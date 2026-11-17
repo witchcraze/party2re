@@ -349,6 +349,7 @@ func newMiscServices(
 		contest.WithTransactionProvider(core.txProvider),
 		contest.WithGuildService(contestGuildAdapter{guild: soc.guild}),
 		contest.WithMemoryRecorder(core.memories.AppendMemory),
+		contest.WithPrizeDelivery(contestPrizeDelivery{econ.depotRepo, econ.depotRepo, soc.home, core.itemCatalog}),
 		contest.WithNewsPublisher(contest.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err

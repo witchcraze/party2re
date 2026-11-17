@@ -129,6 +129,7 @@ func TestContestSettlementHandler_SettleSuccess(t *testing.T) {
 	svc, err := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(&mockPrizes{}),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 	if err != nil {
@@ -459,6 +460,7 @@ func TestContestSettlementHandler_ScheduleFailureReturnsError(t *testing.T) {
 	svc, err := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(&mockPrizes{}),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 	if err != nil {

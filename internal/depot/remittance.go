@@ -19,6 +19,9 @@ const RemittanceStorePayment RemittanceSource = "store_payment"
 
 const RemittanceFleaMarketPayment RemittanceSource = "fleamarket_payment"
 
+// RemittanceContestPrize names the placement, e.g. 第1回フォトコンテスト1位, in SenderName.
+const RemittanceContestPrize RemittanceSource = "contest_prize"
+
 // Remittance is gold held for CharacterID until collected at the Depot.
 type Remittance struct {
 	ID          string

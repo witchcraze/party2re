@@ -108,96 +108,37 @@ func setupContestForSettlement(
 	}
 }
 
-func TestSettleContest_WinnerUpdateErrorPropagates(t *testing.T) {
-	charRepo := newInjectableCharRepo()
-	contestRepo := newMockContestRepo()
-	txProvider := &trackingTxProvider{}
+// A failed winner gold hold or voter medal delivery rolls back the whole settlement.
+func TestSettleContest_PrizeDeliveryErrorRollsBack(t *testing.T) {
+	for _, failOn := range []string{"char-1", "voter-1"} {
+		t.Run(failOn, func(t *testing.T) {
+			charRepo := newInjectableCharRepo()
+			contestRepo := newMockContestRepo()
+			txProvider := &trackingTxProvider{}
+			now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+			setupContestForSettlement(t, charRepo, contestRepo, now)
+			_ = charRepo.Update(context.Background(), corecharacter.Character{ID: "voter-1", Name: "Voter One"})
+			_ = contestRepo.SaveVote(context.Background(), contest.ContestVote{ID: "vote-1", Round: 1, EntryID: "entry-1", VoterCharacterID: "voter-1"})
 
-	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
-	setupContestForSettlement(t, charRepo, contestRepo, now)
-
-	// Inject error when saving 1st-place winner ("char-1")
-	charRepo.updateFailIDs["char-1"] = true
-	charRepo.updateErr = errors.New("database connection reset on winner update")
-
-	svc, err := contest.NewService(
-		charRepo,
-		contestRepo,
-		contest.WithTransactionProvider(txProvider),
-		contest.WithNowFunc(func() time.Time { return now }),
-	)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	_, err = svc.SettleContest(context.Background(), false)
-	if err == nil {
-		t.Fatal("expected error when winner update fails, got nil")
-	}
-	if !strings.Contains(err.Error(), "database connection reset on winner update") {
-		t.Fatalf("expected injected error, got: %v", err)
-	}
-
-	if !txProvider.rollbackCalled {
-		t.Error("expected transaction rollback to be triggered")
-	}
-
-	// Verify active round was not committed as settled
-	round, _ := contestRepo.GetRoundByNumber(context.Background(), 1)
-	if round.Status == contest.StatusSettled {
-		t.Errorf("expected round status NOT to be settled on failure, got %v", round.Status)
-	}
-}
-
-func TestSettleContest_VoterUpdateErrorPropagates(t *testing.T) {
-	charRepo := newInjectableCharRepo()
-	contestRepo := newMockContestRepo()
-	txProvider := &trackingTxProvider{}
-
-	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
-	setupContestForSettlement(t, charRepo, contestRepo, now)
-
-	// Add voter who voted for 1st-place entry ("entry-1")
-	voterChar := corecharacter.Character{
-		ID:    "voter-1",
-		Name:  "Voter One",
-		Money: 500,
-	}
-	_ = charRepo.Update(context.Background(), voterChar)
-
-	vote := contest.ContestVote{
-		ID:               "vote-1",
-		Round:            1,
-		EntryID:          "entry-1",
-		VoterCharacterID: "voter-1",
-		CreatedAt:        now.Add(-2 * 24 * time.Hour),
-	}
-	_ = contestRepo.SaveVote(context.Background(), vote)
-
-	// Inject error when saving voter
-	charRepo.updateFailIDs["voter-1"] = true
-	charRepo.updateErr = errors.New("database deadlock on voter medal award")
-
-	svc, err := contest.NewService(
-		charRepo,
-		contestRepo,
-		contest.WithTransactionProvider(txProvider),
-		contest.WithNowFunc(func() time.Time { return now }),
-	)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	_, err = svc.SettleContest(context.Background(), false)
-	if err == nil {
-		t.Fatal("expected error when voter update fails, got nil")
-	}
-	if !strings.Contains(err.Error(), "database deadlock on voter medal award") {
-		t.Fatalf("expected injected error, got: %v", err)
-	}
-
-	if !txProvider.rollbackCalled {
-		t.Error("expected transaction rollback to be triggered")
+			injected := errors.New("database connection reset on prize delivery")
+			svc, err := contest.NewService(charRepo, contestRepo,
+				contest.WithTransactionProvider(txProvider),
+				contest.WithPrizeDelivery(&mockPrizes{failOn: failOn, failWith: injected}),
+				contest.WithNowFunc(func() time.Time { return now }),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.SettleContest(context.Background(), false); !errors.Is(err, injected) {
+				t.Fatalf("SettleContest error = %v, want injected", err)
+			}
+			if !txProvider.rollbackCalled {
+				t.Error("expected transaction rollback to be triggered")
+			}
+			if round, _ := contestRepo.GetRoundByNumber(context.Background(), 1); round.Status == contest.StatusSettled {
+				t.Errorf("round committed as settled after failure")
+			}
+		})
 	}
 }
 
@@ -214,9 +155,11 @@ func TestSettleContest_DeletedCharacterIsSkippedGracefully(t *testing.T) {
 	charRepo.mu.Unlock()
 
 	var memories []string
+	prizes := &mockPrizes{}
 	svc, err := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(prizes),
 		contest.WithNowFunc(func() time.Time { return now }),
 		contest.WithMemoryRecorder(func(_ context.Context, id string, kind corecharacter.MemoryKind, content string) error {
 			memories = append(memories, id+"|"+string(kind)+"|"+content)
@@ -236,10 +179,10 @@ func TestSettleContest_DeletedCharacterIsSkippedGracefully(t *testing.T) {
 		t.Errorf("expected prizes to be distributed")
 	}
 
-	// 1st place winner still received prizes
-	winner, _ := charRepo.FindByID(context.Background(), "char-1")
-	if winner.Money != 1000+contest.PrizeFirst.Gold {
-		t.Errorf("expected winner money %d, got %d", 1000+contest.PrizeFirst.Gold, winner.Money)
+	// The remaining winners still receive their prizes.
+	want := []string{"gold|char-1|15000|第1回フォトコンテスト1位", "medals|char-1|9|0", "gold|char-3|3000|第1回フォトコンテスト3位", "medals|char-3|2|0"}
+	if got := prizes.snapshot(); !slices.Equal(got, want) {
+		t.Errorf("deliveries = %q, want %q", got, want)
 	}
 
 	// Each prize winner that still exists gets one trajectory entry with its rank.
@@ -531,6 +474,7 @@ func TestActiveRoundSettlement_RetainsUnderQuorumPreparingEntries(t *testing.T) 
 	svc, _ := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(&mockPrizes{}),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -634,9 +578,11 @@ func TestSettlement_ActiveUnderQuorumWithPreparingQuorum_AdvancesWithPrizesAndPr
 	contestRepo := newMockContestRepo()
 
 	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	prizes := &mockPrizes{}
 	svc, err := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(prizes),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 	if err != nil {
@@ -710,9 +656,8 @@ func TestSettlement_ActiveUnderQuorumWithPreparingQuorum_AdvancesWithPrizesAndPr
 	}
 
 	// Entrants in Round 1 must have received their prizes
-	winnerChar, _ := charRepo.FindByID(ctx, "char-active-1")
-	if winnerChar.Money != 1000+15000 {
-		t.Errorf("expected 1st place winner to receive 15000 gold, got %d", winnerChar.Money)
+	if got := prizes.gold("char-active-1"); !slices.Equal(got, []string{"gold|char-active-1|15000|第1回フォトコンテスト1位"}) {
+		t.Errorf("1st place gold = %q", got)
 	}
 
 	// Active round entries must be preserved (3 entries)
@@ -1041,6 +986,7 @@ func TestSettlement_HappyPathAndDuplicateExecution(t *testing.T) {
 	svc, err := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(&mockPrizes{}),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 	if err != nil {
@@ -1087,9 +1033,11 @@ func TestSettlement_MultipleConsecutiveCyclesAdvanceWithoutStallingOrDuplicateRe
 	contestRepo := newMockContestRepo()
 
 	currentTime := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	prizes := &mockPrizes{}
 	svc, err := contest.NewService(
 		charRepo,
 		contestRepo,
+		contest.WithPrizeDelivery(prizes),
 		contest.WithNowFunc(func() time.Time { return currentTime }),
 	)
 	if err != nil {
@@ -1153,9 +1101,8 @@ func TestSettlement_MultipleConsecutiveCyclesAdvanceWithoutStallingOrDuplicateRe
 	}
 
 	// Verify Round 1 winner received prize
-	w1, _ := charRepo.FindByID(ctx, "char-r1-1")
-	if w1.Money != 1000+15000 {
-		t.Errorf("expected R1 winner to have 16000 money, got %d", w1.Money)
+	if got := prizes.gold("char-r1-1"); len(got) != 1 {
+		t.Errorf("R1 winner gold = %q, want one hold", got)
 	}
 
 	// Verify Round 1 is settled, Round 2 is active
@@ -1208,16 +1155,12 @@ func TestSettlement_MultipleConsecutiveCyclesAdvanceWithoutStallingOrDuplicateRe
 		t.Fatalf("expected cycle 2 settled round 2, next round 3; got round %d, next %d", res2.Round, res2.NextRound)
 	}
 
-	// Verify Round 2 winner received prize once (2000 + 15000 = 17000)
-	w2, _ := charRepo.FindByID(ctx, "char-r2-1")
-	if w2.Money != 2000+15000 {
-		t.Errorf("expected R2 winner to have 17000 money, got %d", w2.Money)
+	// Round 2 winner receives its prize once; Round 1 winner gets no duplicate.
+	if got := prizes.gold("char-r2-1"); !slices.Equal(got, []string{"gold|char-r2-1|15000|第2回フォトコンテスト1位"}) {
+		t.Errorf("R2 winner gold = %q", got)
 	}
-
-	// Verify Round 1 winner did NOT receive duplicate prizes (still 16000)
-	w1AfterCycle2, _ := charRepo.FindByID(ctx, "char-r1-1")
-	if w1AfterCycle2.Money != 1000+15000 {
-		t.Errorf("expected R1 winner money unchanged after cycle 2, got %d", w1AfterCycle2.Money)
+	if got := prizes.gold("char-r1-1"); len(got) != 1 {
+		t.Errorf("R1 winner gold after cycle 2 = %q, want one hold", got)
 	}
 
 	// Verify Round 2 winner was archived to Legend because Round 2 had 5 entries
