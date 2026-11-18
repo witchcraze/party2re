@@ -4,7 +4,7 @@
 
 This document defines the initial architecture for the new Party2 OSS implementation.
 
-The project is a clean-room reconstruction: the existing Party2 implementation is a behavioral and functional reference only. Its source code and assets are not reused.
+The project is a clean-room reconstruction: the existing Party2 implementation is a behavioral and functional reference only. Its Perl code and image/sound assets are not reused; [rule 00](../../.agents/rules/00-migration-constraints.md) defines what may be transcribed.
 
 ## Core architectural goals
 

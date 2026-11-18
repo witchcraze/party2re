@@ -3,6 +3,7 @@ package dungeon
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -137,9 +138,14 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 					symbol = "■" // out of bounds / wall
 				} else {
 					tileChar := floor.Grid[targetY][targetX]
-					if tileChar == cellWall || tileChar == cellHidden {
+					switch {
+					case tileChar == cellWall || tileChar == cellHidden:
 						symbol = "■" // wall
-					} else {
+					case tileChar == cellKey && !slices.Contains(exp.ConsumedEvents, string(cellKey)):
+						symbol = "★"
+					case tileChar == cellDoor && !slices.Contains(exp.ConsumedEvents, string(cellDoor)):
+						symbol = "扉"
+					default:
 						symbol = "□" // path
 					}
 				}

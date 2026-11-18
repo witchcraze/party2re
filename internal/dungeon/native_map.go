@@ -22,7 +22,17 @@ const (
 	cellTreasure = 'C'
 	cellBoss     = 'B'
 	cellMist     = 'M' // map3 event_T: party confusion, then an encounter
+	cellKey      = 'K' // map1: picked up once; never consumed by the door
+	cellDoor     = 'D' // map1: opens with the key or an acting job 9
 )
+
+// symbolEvents share one state per symbol, like legacy flags: map1 repeats K
+// and 3. Other events key by cell, since map0/map3 spell their independent
+// repeats with distinct legacy symbols.
+const symbolEvents = "KD23"
+
+// jobLockpick (legacy job 9) opens a locked door for the acting character only.
+const jobLockpick = "job-09"
 
 // NativeMap0ID is the first native map (legacy map/0, six initial variants).
 const NativeMap0ID = "native-map-0"
@@ -87,6 +97,9 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 	exp.Encounter = nil
 	cell := floor.Grid[y][x]
 	key := fmt.Sprintf("%c:%d:%d", cell, x, y)
+	if strings.IndexByte(symbolEvents, cell) >= 0 {
+		key = string(cell)
+	}
 	consumed := slices.Contains(exp.ConsumedEvents, key)
 	step := StepParams{
 		ExpectedExpeditionID: exp.ID,
@@ -112,7 +125,16 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 		if pool := s.encounterPool(floor); pool.Boss != nil {
 			return s.resolveMonsterCombat(ctx, exp, char, *pool.Boss, EventBoss, x, y, key, "")
 		}
-	case cell == cellTreasure && !consumed:
+	case cell == cellKey && !consumed:
+		step.EventKey = key
+	case cell == cellDoor && !consumed:
+		if char.JobID == jobLockpick || slices.Contains(exp.ConsumedEvents, string(cellKey)) {
+			step.EventKey = key
+		} else {
+			// Locked: the round is spent and the party returns to its only approach.
+			step.NewX, step.NewY = exp.PosX, exp.PosY
+		}
+	case (cell == cellTreasure || cell == '2' || cell == '3') && !consumed:
 		step.EventKey = key
 		step.Encounter = treasureEncounter(exp, char.JobID, s.rng, x, y)
 	default:
@@ -131,11 +153,14 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 	return res, nil
 }
 
-// encounterPool draws the content pool for one event; a floor without pools
-// has one fixed pool and draws nothing.
+// encounterPool draws the content pool for one event; a floor with no or one
+// pool draws nothing.
 func (s *Service) encounterPool(f Floor) EncounterPool {
-	if len(f.Pools) == 0 {
+	switch len(f.Pools) {
+	case 0:
 		return EncounterPool{Monsters: f.Monsters, Boss: f.Boss}
+	case 1:
+		return f.Pools[0]
 	}
 	return f.Pools[s.rng.Intn(len(f.Pools))]
 }

@@ -35,15 +35,20 @@ func map3Hero(id string, hp, attack, defense int) corecharacter.Character {
 // placeMap3 starts on the given variant, then rewrites position and round.
 func (f *nativeFixture) placeMap3(t *testing.T, id string, variant, x, y, round int) {
 	t.Helper()
+	f.placeNative(t, dungeon.NativeMap3ID, 60, id, variant, x, y, round)
+}
+
+func (f *nativeFixture) placeNative(t *testing.T, mapID string, limit int, id string, variant, x, y, round int) {
+	t.Helper()
 	f.rng.ints = []int{variant - 1}
-	if _, err := f.svc.StartExpedition(context.Background(), id, dungeon.NativeMap3ID); err != nil {
+	if _, err := f.svc.StartExpedition(context.Background(), id, mapID); err != nil {
 		t.Fatal(err)
 	}
 	exp := f.reload(t, id)
 	if exp.MapVariant != variant {
 		t.Fatalf("variant %d, want %d", exp.MapVariant, variant)
 	}
-	exp.PosX, exp.PosY, exp.TurnsRemaining = x, y, 60-round
+	exp.PosX, exp.PosY, exp.TurnsRemaining = x, y, limit-round
 	if err := f.store.SaveActiveExpedition(context.Background(), exp); err != nil {
 		t.Fatal(err)
 	}
@@ -357,10 +362,13 @@ func TestNativeMap3_LeaderJobLevelAdmission(t *testing.T) {
 		}
 		return out
 	}
-	if got := ids(f.svc.ListDungeons(6)); !slices.Equal(got, []string{dungeon.NativeMap0ID}) {
+	if got := ids(f.svc.ListDungeons(2)); !slices.Equal(got, []string{dungeon.NativeMap0ID}) {
+		t.Fatalf("job level 2 listing %v", got)
+	}
+	if got := ids(f.svc.ListDungeons(6)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID}) {
 		t.Fatalf("job level 6 listing %v", got)
 	}
-	if got := ids(f.svc.ListDungeons(7)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap3ID}) {
+	if got := ids(f.svc.ListDungeons(7)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID, dungeon.NativeMap3ID}) {
 		t.Fatalf("job level 7 listing %v", got)
 	}
 

@@ -26,10 +26,6 @@ The base wall event leaves coordinates unchanged; map8 overrides it with a warp.
 | `2`, `3`, etc. | Map-owned events, such as one-time treasure triggers |
 | Other letters/numbers | Map-specific keys, doors, stairs, bosses, hazards, or routes |
 
-For example `map/1/1.cgi` has key `K` and conditional door `D`; `map/2/1.cgi`
-uses `F` to choose a next map and `7` for its floor boss. It is incorrect to
-universally interpret `D` as stairs or `I` as an impassable wall.
-
 Each map supplies `$max_round` (examples range from 20 to 200); there is no
 universal 25–35-turn floor budget. At the limit, further movement is blocked
 and the legacy message requests escape/disbandment. Do not equate that guard
@@ -81,8 +77,6 @@ Open: dungeon 16's once quota (#1955).
 
 **Decision (#1202).** It extends the existing Dungeon owner and ports, without a
 script engine, legacy runtime or a second run store.
-Native map geometry and presentation must be independently authored, preserving
-verified dimensions and event behavior without copying legacy grids or assets.
 
 ### Native schema and transition boundary
 
@@ -180,7 +174,6 @@ full map or combat parity. It covers the map-local handlers (in addition to the
 base passage/wall/start/boss events); each follow-up must inspect every reachable
 variant, selected enemy/treasure data and enclosing dispatch before coding.
 Numeric and letter identifiers here are evidence pointers, not native enums.
-Legacy grids, dialogue and monster/asset names are not implementation inputs.
 
 ### Map0 implementation
 
@@ -214,19 +207,23 @@ Native map3 has eight independently authored 9×9 layouts with round limit 60
 Open: legacy boss groups (stages 5 and 7 spawn three bosses), group size and
 scaling (#1954), enemy battle data beyond the base stats (#2351), chest contents (#2119).
 
-### Map1 key and door unit
+### Map1 implementation
 
-[Map1 implementation #1761](https://github.com/witchcraze/party2re/issues/1761) is separate and builds on the map0 transition contract.
-Independently author 9×9 native layouts; legacy has seven initial variants and
-a round limit of 50 (`map/1/1.cgi` through `7.cgi`). Its `2` and `3` treasure
-events have independent once flags; `I` retains the hidden-wall presentation.
-Test `K` acquisition once, opening `D` with the key or acting job 9, persistence
-of opened-door state, and repeat entry without new rewards/consumption. The
-legacy key is an event fact and is not consumed on opening. Without either
-qualification, the event undoes the horizontal entry while spending the move's
-round (`map/1/1.cgi:18–38`); distinguish this from a pre-movement wall rejection.
-Verify every variant's entry direction before defining the native return
-position. This event does not advance a floor.
+Native map1 transcribes the seven 9×9 initial variants (`map/1/1.cgi`–`7.cgi`)
+with round limit 50. Non-obvious findings:
+
+- **Locked-door reversal is not always horizontal.** Legacy `event_D` undoes the
+  entry with `++$px` in variants 1, 2 and 5 but `--$py` in 3, 4, 6 and 7. Every
+  locked door has exactly one open neighbour, so native returns the party to the
+  cell it came from. The round is spent, unlike a wall hit.
+- **Flags are per symbol.** Several variants repeat `K` or `3` under one flag,
+  so the second cell does nothing. Native keys `K`, `D`, `2` and `3` by symbol.
+- **Only the actor qualifies.** `D` opens for the acting character's job 9
+  (`$m{job}`) or the picked-up key; another member's job does not count. The key
+  is never consumed.
+
+Open: chest contents (#2119), group size and scaling (#1954), enemy battle data
+(#2351), and event narration, which belongs to the Dungeon log owner (#948).
 
 ### Map13 channel puzzle and routes
 
@@ -238,8 +235,7 @@ EX destination and start enablement [#1961](https://github.com/witchcraze/party2
 
 **Main floor** (`1.cgi`). Only one initial variant exists: entry skips `_` files (`quest.cgi:673–703`).
 The floor is 9×9 with round limit 80. The start's only exit is the altar `A`, so the first
-move always reaches it. Native layouts are independently authored under the
-[layout constraints](#map13-layout-constraints) below. Passages use the base spawn with the floor pool. The map overrides base `event_B`
+move always reaches it. Native layouts transcribe the legacy floors. Passages use the base spawn with the floor pool. The map overrides base `event_B`
 (`1.cgi:59`), so this floor has no boss or treasure.
 
 | Event | Rule |
@@ -266,43 +262,6 @@ The round continues, the limit stays 80, and event state is one run-scoped recor
 Channels and target freeze after the transfer. Native state is typed: channels, target,
 activation, disclosure, selected destination and per-event once facts. Accepted draws
 are stored with their revision-checked step and never redrawn on reload or retry.
-
-#### Map13 layout constraints
-
-These are the movement costs measured on the legacy floors (`1.cgi:8–19`, `_1.cgi:8–19`,
-`_EX.cgi:8–19`). The cells themselves are not reproduced. A native layout may use any
-cells, walls and passage count, but it must keep these 9×9 bounds, the adjacency and the
-shortest move counts, because they set the 80-round budget and the event order.
-Distances count successful moves. "Avoiding" means the path enters no event cell other
-than its two endpoints.
-
-- Main floor: the start has exactly one open neighbour, the altar. Every other main-floor
-  cell is reachable only through the altar, so each event's distance from the start is
-  1 + its distance from the altar. Every pair of main-floor events is connected by an
-  avoiding path with the shortest lengths below. Unrestricted shortest paths equal these,
-  except B–Y, which is 4 through the altar. Re-toggling a channel costs two moves
-  (step off, step back).
-
-  | Avoiding | A | B | C | R | W | Y |
-  |---|---|---|---|---|---|---|
-  | A | 0 | 2 | 2 | 6 | 6 | 2 |
-  | B | 2 | 0 | 4 | 4 | 8 | 6 |
-  | C | 2 | 4 | 0 | 4 | 4 | 4 |
-  | R | 6 | 4 | 4 | 0 | 4 | 8 |
-  | W | 6 | 8 | 4 | 4 | 0 | 4 |
-  | Y | 2 | 6 | 4 | 8 | 4 | 0 |
-
-- Destinations (both routes): the arrival is a passage at the altar's coordinate,
-  with exactly one open neighbour. The floor has exactly 11 reachable cells with these
-  adjacencies and no others:
-  - a corridor: arrival – first cell (alternate boss, or a passage on EX) – recovery – boss – center treasure;
-  - center – west, center – east, center – north;
-  - north – top;
-  - west corner adjacent to both west and north; east corner adjacent to both east and north.
-
-  Shortest distances from the arrival: first cell 1, recovery 2, boss 3, center 4,
-  west/east/north 5, corners/top 6. No treasure is reachable without passing the
-  recovery, the boss and the center treasure cell.
 
 **Destinations** (`_1.cgi`, `_EX.cgi`). From arrival, a corridor runs north: alternate
 boss `Z` (normal) or a passage (EX), then recovery `Q`, then boss `V`. Above it lie a treasure
@@ -336,7 +295,7 @@ content; this table does not authorize their automatic rollout.
 
 | Map / evidence | Events and round limits | Follow-up verification boundary |
 |---|---|---|
-| [2 / #1763](https://github.com/witchcraze/party2re/issues/1763): `map/2/1.cgi:18–23`, `_1.cgi:18–21`, `__1.cgi:21–23`, `___1.cgi:20–23` | `F` routes, `7/8` floor bosses, `T` pitfall/damage, `2/3/4` treasure, `Q` no-op; limits 30/40/50 | First establish cross-map round/position/flag carry, then independently author the branching floors; test route RNG, pitfall return and bases 30/70/40, and no boss-as-clear assumption. |
+| [2 / #1763](https://github.com/witchcraze/party2re/issues/1763): `map/2/1.cgi:18–23`, `_1.cgi:18–21`, `__1.cgi:21–23`, `___1.cgi:20–23` | `F` routes, `7/8` floor bosses, `T` pitfall/damage, `2/3/4` treasure, `Q` no-op; limits 30/40/50 | First establish cross-map round/position/flag carry, then transcribe the branching floors; test route RNG, pitfall return and bases 30/70/40, and no boss-as-clear assumption. |
 | [4 / #1765](https://github.com/witchcraze/party2re/issues/1765): `map/4/1.cgi:20–34`, variants `2..7.cgi` | Passage damages actor by rounded 2% MaxHP, `M` message, `H` once healing choice, `b` boss, `2/3/4` treasure; limit 70 | Verify actor-only attrition and death, no inherited passage encounter, and the actual healing target/helper behavior before implementation. |
 | [5 / #1766](https://github.com/witchcraze/party2re/issues/1766): `map/5/1.cgi:18–54`, variants `2..4.cgi` | `L` lever/boss, `I` display depends on lever, `T` poison/encounter, `t` damage base 80, `H` job-43 party recovery, treasure; limit 60 | Separate lever/visibility from hazard/recovery if useful; test lever replay, status ordering, actor qualification and all members' vitality. |
 | [6 / #1767](https://github.com/witchcraze/party2re/issues/1767): `map/6/1.cgi:20–43`, variants `2..5.cgi` | Exclusive `A/B`, `C/D`, `E/F` choices, message markers `5/6/7`, `X` boss, treasure; limit 30 | Test mutually exclusive branch flags, encounter pools and ordered currency/heal/trap alternatives; audit negative-money behavior rather than silently normalizing it. |
