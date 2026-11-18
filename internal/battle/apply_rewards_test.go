@@ -9,8 +9,11 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
@@ -628,4 +631,380 @@ func TestApplyPostBattleResult_BlessingReadError(t *testing.T) {
 			})
 		}
 	}
+}
+
+type scriptedFloatRNG struct {
+	values []float64
+	index  int
+}
+
+func (r *scriptedFloatRNG) Intn(n int) (int, error) {
+	if n <= 0 {
+		return 0, nil
+	}
+	return int(r.Float64() * float64(n)), nil
+}
+
+func (r *scriptedFloatRNG) Float64() float64 {
+	v := r.values[r.index]
+	if r.index < len(r.values)-1 {
+		r.index++
+	}
+	return v
+}
+
+func setupOrbSettlementService(
+	t *testing.T,
+	useRunner bool,
+	rng corecharacter.RandomSource,
+	jobs mockJobProvider,
+) (*battle.Service, *mockCharRepo, *mockInvRepo, *mockEquipRepo) {
+	t.Helper()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	equipRepo := newMockEquipRepo()
+	depotRepo := newMockDepotRepo()
+	txProv := &mockTxProvider{}
+
+	opts := []battle.Option{
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithDepotRepository(depotRepo),
+		battle.WithJobDefinitionProvider(jobs),
+		battle.WithRandomSource(rng),
+	}
+	if useRunner {
+		runner, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+		if err != nil {
+			t.Fatal(err)
+		}
+		opts = append(opts, battle.WithTransactionRunner(runner))
+	} else {
+		opts = append(opts, battle.WithTransactionProvider(txProv))
+	}
+	return battle.NewService(opts...), charRepo, invRepo, equipRepo
+}
+
+func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
+	standardJob, err := job.NewDefinition("job-01", "見習い", 2, 2, 2, 2, 2, 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	highHPJob, err := job.NewDefinition("job-high", "重戦士", 9, 2, 2, 2, 2, 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs := mockJobProvider{
+		"job-01":   standardJob,
+		"job-high": highHPJob,
+	}
+
+	t.Run("equipped stat orb applies with cap re-roll while bag orbs do not", func(t *testing.T) {
+		for _, useRunner := range []bool{true, false} {
+			ctx := context.Background()
+			// HP (job-high, HPGrowth=9 + item-152 => bound 11): 0.95 -> 10 (>9) -> re-roll 0.4 -> int(0.4*9)+1 = 4 (+1 HP min = 5).
+			// Other stats (growth=2): int(0.99 * 3) = 2 (no bonus from bag item-154).
+			rng := &scriptedFloatRNG{values: []float64{0.95, 0.4, 0.99, 0.99, 0.99, 0.99}}
+			svc, charRepo, invRepo, equipRepo := setupOrbSettlementService(t, useRunner, rng, jobs)
+
+			char := corecharacter.Character{
+				ID:    "char-active-stat",
+				Name:  "宝珠使い",
+				JobID: "job-high",
+				Level: 1,
+				Stats: corecharacter.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6},
+			}
+			_ = charRepo.Update(ctx, char)
+
+			inv, _ := coreinventory.New(char.ID)
+			lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)
+			powerOrb, _ := coreitem.NewInstance(progression.ItemPowerStatOrb, 1)
+			skillOrb, _ := coreitem.NewInstance(battle.ItemSkillOrb, 1)
+			_ = inv.Add(lifeOrb)
+			_ = inv.Add(powerOrb)
+			_ = inv.Add(skillOrb)
+			_ = invRepo.Save(ctx, inv)
+
+			equip, _ := coreequipment.New(char.ID)
+			equip.Slots[coreitem.SlotAccessory] = lifeOrb.ID
+			_ = equipRepo.Save(ctx, equip)
+
+			resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+				CharacterIDs: []string{char.ID},
+				BattleResult: corebattle.PartyBattleResult{
+					Outcome:     corebattle.OutcomeWin,
+					RemainingHP: map[string]int{char.ID: 30},
+					TotalReward: corebattle.Reward{Experience: 10},
+				},
+			})
+			if err != nil {
+				t.Fatalf("ApplyPostBattleResult failed: %v", err)
+			}
+			if resp.LevelUpResults[char.ID].LevelsGained != 1 {
+				t.Fatalf("LevelsGained = %d, want 1", resp.LevelUpResults[char.ID].LevelsGained)
+			}
+			updated, _ := charRepo.FindByID(ctx, char.ID)
+			if updated.SP != 1 {
+				t.Fatalf("SP = %d, want 1 (inactive bag skill orb must not grant bonus SP)", updated.SP)
+			}
+			// MaxHP: 30 + (4 + 1) = 35; Attack: 6 + 2 = 8 (no bonus from bag power orb).
+			want := corecharacter.Stats{MaxHP: 35, HP: 30, MaxMP: 8, MP: 6, Attack: 8, Defense: 8, Agility: 8}
+			if updated.Stats != want {
+				t.Fatalf("stats (useRunner=%v) = %+v, want %+v", useRunner, updated.Stats, want)
+			}
+		}
+	})
+
+	t.Run("single held tool stat orb applies without SlotAccessory", func(t *testing.T) {
+		ctx := context.Background()
+		rng := &scriptedFloatRNG{values: []float64{0.99}}
+		svc, charRepo, invRepo, _ := setupOrbSettlementService(t, true, rng, jobs)
+
+		char := corecharacter.Character{
+			ID:    "char-held-stat",
+			Name:  "単体宝珠",
+			JobID: "job-01",
+			Level: 1,
+			Stats: corecharacter.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6},
+		}
+		_ = charRepo.Update(ctx, char)
+
+		inv, _ := coreinventory.New(char.ID)
+		lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)
+		_ = inv.Add(lifeOrb)
+		_ = invRepo.Save(ctx, inv)
+
+		_, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs: []string{char.ID},
+			BattleResult: corebattle.PartyBattleResult{
+				Outcome:     corebattle.OutcomeWin,
+				RemainingHP: map[string]int{char.ID: 30},
+				TotalReward: corebattle.Reward{Experience: 10},
+			},
+		})
+		if err != nil {
+			t.Fatalf("ApplyPostBattleResult failed: %v", err)
+		}
+		updated, _ := charRepo.FindByID(ctx, char.ID)
+		// MaxHP: bound 4 -> int(0.99*4)=3 + 1 = +4 (34). Other stats: bound 3 -> +2.
+		want := corecharacter.Stats{MaxHP: 34, HP: 30, MaxMP: 8, MP: 6, Attack: 8, Defense: 8, Agility: 8}
+		if updated.Stats != want {
+			t.Fatalf("stats = %+v, want %+v", updated.Stats, want)
+		}
+	})
+
+	t.Run("active skill orb grants bonus SP without applying bag stat orbs", func(t *testing.T) {
+		for _, equipped := range []bool{true, false} {
+			ctx := context.Background()
+			// Draw 0.0 for skill orb (triggers +1 SP), then 0.99 for all 5 stat rolls.
+			rng := &scriptedFloatRNG{values: []float64{0.0, 0.99}}
+			svc, charRepo, invRepo, equipRepo := setupOrbSettlementService(t, true, rng, jobs)
+
+			char := corecharacter.Character{
+				ID:    "char-skill-orb",
+				Name:  "スキル宝珠",
+				JobID: "job-01",
+				Level: 1,
+				Stats: corecharacter.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6},
+			}
+			_ = charRepo.Update(ctx, char)
+
+			inv, _ := coreinventory.New(char.ID)
+			skillOrb, _ := coreitem.NewInstance(battle.ItemSkillOrb, 1)
+			_ = inv.Add(skillOrb)
+			if equipped {
+				lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)
+				_ = inv.Add(lifeOrb)
+				equip, _ := coreequipment.New(char.ID)
+				equip.Slots[coreitem.SlotAccessory] = skillOrb.ID
+				_ = equipRepo.Save(ctx, equip)
+			}
+			_ = invRepo.Save(ctx, inv)
+
+			_, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+				CharacterIDs: []string{char.ID},
+				BattleResult: corebattle.PartyBattleResult{
+					Outcome:     corebattle.OutcomeWin,
+					RemainingHP: map[string]int{char.ID: 30},
+					TotalReward: corebattle.Reward{Experience: 10},
+				},
+			})
+			if err != nil {
+				t.Fatalf("ApplyPostBattleResult failed: %v", err)
+			}
+			updated, _ := charRepo.FindByID(ctx, char.ID)
+			if updated.SP != 2 {
+				t.Fatalf("SP (equipped=%v) = %d, want 2", equipped, updated.SP)
+			}
+			// Even with life orb in bag (when equipped=true), MaxHP gets no stat orb bonus: 30 + (2+1) = 33.
+			want := corecharacter.Stats{MaxHP: 33, HP: 30, MaxMP: 8, MP: 6, Attack: 8, Defense: 8, Agility: 8}
+			if updated.Stats != want {
+				t.Fatalf("stats (equipped=%v) = %+v, want %+v", equipped, updated.Stats, want)
+			}
+		}
+	})
+
+	t.Run("inactive or ambiguous bag orbs grant no stat or SP bonus", func(t *testing.T) {
+		for _, tc := range []struct {
+			name         string
+			equippedDef  string
+			consumeEquip bool
+		}{
+			{name: "other accessory active while orbs in bag", equippedDef: battle.ItemPrayerRing},
+			{name: "ambiguous multi-item bag with no accessory slot", equippedDef: ""},
+			{name: "active non-orb consumed leaving bag orb as sole item", equippedDef: battle.ItemPrayerRing, consumeEquip: true},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				ctx := context.Background()
+				// 0.0 would trigger skill orb if active; 0.99 for stats would hit +1 orb bound if active.
+				rng := &scriptedFloatRNG{values: []float64{0.99}}
+				svc, charRepo, invRepo, equipRepo := setupOrbSettlementService(t, true, rng, jobs)
+
+				char := corecharacter.Character{
+					ID:    "char-bag-only",
+					Name:  "鞄の宝珠",
+					JobID: "job-01",
+					Level: 1,
+					Stats: corecharacter.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6},
+				}
+				_ = charRepo.Update(ctx, char)
+
+				inv, _ := coreinventory.New(char.ID)
+				lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)
+				powerOrb, _ := coreitem.NewInstance(progression.ItemPowerStatOrb, 1)
+				_ = inv.Add(lifeOrb)
+
+				var consumed []corebattle.ConsumedItem
+				if tc.equippedDef != "" {
+					ring, _ := coreitem.NewInstance(tc.equippedDef, 1)
+					_ = inv.Add(ring)
+					equip, _ := coreequipment.New(char.ID)
+					equip.Slots[coreitem.SlotAccessory] = ring.ID
+					_ = equipRepo.Save(ctx, equip)
+					if tc.consumeEquip {
+						consumed = append(consumed, corebattle.ConsumedItem{ID: ring.DefinitionID, InstanceID: ring.ID, Quantity: 1})
+					} else {
+						_ = inv.Add(powerOrb)
+					}
+				} else {
+					skillOrb, _ := coreitem.NewInstance(battle.ItemSkillOrb, 1)
+					_ = inv.Add(skillOrb)
+					_ = inv.Add(powerOrb)
+				}
+				_ = invRepo.Save(ctx, inv)
+
+				// Also verify skill orb does not trigger with draw 0.0 when inactive (consumed by HP instead).
+				wantMaxHP := 33
+				if !tc.consumeEquip {
+					rng.values = []float64{0.0, 0.99}
+					wantMaxHP = 31
+				}
+
+				_, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+					CharacterIDs: []string{char.ID},
+					BattleResult: corebattle.PartyBattleResult{
+						Outcome:       corebattle.OutcomeWin,
+						RemainingHP:   map[string]int{char.ID: 30},
+						TotalReward:   corebattle.Reward{Experience: 10},
+						ConsumedItems: map[string][]corebattle.ConsumedItem{char.ID: consumed},
+					},
+				})
+				if err != nil {
+					t.Fatalf("ApplyPostBattleResult failed: %v", err)
+				}
+				updated, _ := charRepo.FindByID(ctx, char.ID)
+				if updated.SP != 1 {
+					t.Fatalf("SP = %d, want 1", updated.SP)
+				}
+				want := corecharacter.Stats{MaxHP: wantMaxHP, HP: 30, MaxMP: 8, MP: 6, Attack: 8, Defense: 8, Agility: 8}
+				if updated.Stats != want {
+					t.Fatalf("stats = %+v, want %+v", updated.Stats, want)
+				}
+			})
+		}
+	})
+}
+
+func TestApplyPostBattleResult_Job49PreservesRequestStartSP(t *testing.T) {
+	onionDef := job.Definition{ID: "job-49", Name: "たまねぎ剣士"}
+	jobs := mockJobProvider{"job-49": onionDef}
+
+	t.Run("SP 25 uses fractional bound 1.5", func(t *testing.T) {
+		ctx := context.Background()
+		rng := &scriptedFloatRNG{values: []float64{0.8}}
+		svc, charRepo, invRepo, _ := setupOrbSettlementService(t, true, rng, jobs)
+
+		char := corecharacter.Character{
+			ID:    "char-onion-25",
+			Name:  "若芽25",
+			JobID: "job-49",
+			Level: 1,
+			SP:    25,
+			Stats: corecharacter.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6},
+		}
+		_ = charRepo.Update(ctx, char)
+		inv, _ := coreinventory.New(char.ID)
+		_ = invRepo.Save(ctx, inv)
+
+		_, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs: []string{char.ID},
+			BattleResult: corebattle.PartyBattleResult{
+				Outcome:     corebattle.OutcomeWin,
+				RemainingHP: map[string]int{char.ID: 30},
+				TotalReward: corebattle.Reward{Experience: 10},
+			},
+		})
+		if err != nil {
+			t.Fatalf("ApplyPostBattleResult failed: %v", err)
+		}
+		updated, _ := charRepo.FindByID(ctx, char.ID)
+		want := corecharacter.Stats{MaxHP: 32, HP: 30, MaxMP: 7, MP: 6, Attack: 7, Defense: 7, Agility: 7}
+		if updated.Stats != want || updated.SP != 26 || updated.Level != 2 {
+			t.Fatalf("updated = %+v, want stats %+v SP 26 Level 2", updated, want)
+		}
+	})
+
+	t.Run("SP 49 across two levels with active skill orb preserves bound 1.98", func(t *testing.T) {
+		ctx := context.Background()
+		rng := &scriptedFloatRNG{values: []float64{
+			0.0, 0.502, 0.502, 0.502, 0.502, 0.502,
+			0.0, 0.502, 0.502, 0.502, 0.502, 0.502,
+		}}
+		svc, charRepo, invRepo, equipRepo := setupOrbSettlementService(t, false, rng, jobs)
+
+		char := corecharacter.Character{
+			ID:    "char-onion-49",
+			Name:  "若芽49",
+			JobID: "job-49",
+			Level: 1,
+			SP:    49,
+			Stats: corecharacter.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6},
+		}
+		_ = charRepo.Update(ctx, char)
+		inv, _ := coreinventory.New(char.ID)
+		skillOrb, _ := coreitem.NewInstance(battle.ItemSkillOrb, 1)
+		_ = inv.Add(skillOrb)
+		_ = invRepo.Save(ctx, inv)
+		equip, _ := coreequipment.New(char.ID)
+		equip.Slots[coreitem.SlotAccessory] = skillOrb.ID
+		_ = equipRepo.Save(ctx, equip)
+
+		_, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs: []string{char.ID},
+			BattleResult: corebattle.PartyBattleResult{
+				Outcome:     corebattle.OutcomeWin,
+				RemainingHP: map[string]int{char.ID: 30},
+				TotalReward: corebattle.Reward{Experience: 40},
+			},
+		})
+		if err != nil {
+			t.Fatalf("ApplyPostBattleResult failed: %v", err)
+		}
+		updated, _ := charRepo.FindByID(ctx, char.ID)
+		want := corecharacter.Stats{MaxHP: 32, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6}
+		if updated.Stats != want || updated.SP != 53 || updated.Level != 3 {
+			t.Fatalf("updated = %+v, want stats %+v SP 53 Level 3", updated, want)
+		}
+	})
 }

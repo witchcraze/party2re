@@ -12,7 +12,6 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/job"
-	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -419,31 +418,6 @@ func TestBuildParticipantWithCurrentHP(t *testing.T) {
 	}
 	if part.HP != 42 {
 		t.Errorf("part.HP = %d, want 42", part.HP)
-	}
-}
-
-func TestExtractStatOrbOptions(t *testing.T) {
-	inv, _ := coreinventory.New("char-1")
-	lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)
-	powerOrb, _ := coreitem.NewInstance(progression.ItemPowerStatOrb, 1)
-	skillOrb, _ := coreitem.NewInstance(battle.ItemSkillOrb, 1)
-
-	_ = inv.Add(lifeOrb)
-	_ = inv.Add(powerOrb)
-	_ = inv.Add(skillOrb)
-
-	opts := battle.ExtractStatOrbOptions(inv)
-	if !opts.HasSkillOrb {
-		t.Errorf("expected HasSkillOrb = true")
-	}
-	if !opts.StatOrbItems[progression.ItemLifeStatOrb] {
-		t.Errorf("expected ItemLifeStatOrb = true")
-	}
-	if !opts.StatOrbItems[progression.ItemPowerStatOrb] {
-		t.Errorf("expected ItemPowerStatOrb = true")
-	}
-	if opts.StatOrbItems[progression.ItemMagicStatOrb] {
-		t.Errorf("expected ItemMagicStatOrb = false")
 	}
 }
 

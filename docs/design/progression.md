@@ -31,60 +31,11 @@ $$\text{RequiredExp}(\text{level}) = \text{level}^2 \times 10$$
 - Multiple levels can be gained simultaneously if awarded experience exceeds multiple cumulative thresholds.
 - When maximum level (99, or 150 with OverLevel) is reached, no further level advancement occurs.
 
-## Skill Points (SP) & Skill Acquisition
+## Level-Up Growth & Orb Timing
 
-In the original Party2 CGI (`party2/lib/_battle.cgi`), characters gain Skill Points upon leveling up and learn skills when their accumulated SP matches a skill's requirement.
-
-### SP Gain on Level-Up
-For each level gained:
-1. `SP` is incremented by 1 (`SP++`).
-2. If the character possesses "スキルの宝珠" (Skill Orb, item ID `157`), there is a 25% chance to gain an additional +1 SP (`roll < 1` out of 4).
-
-### SP-Based Skill Learning
-When a character levels up (or gains SP), the system inspects the skill definitions for the character's current job:
-- A skill is automatically learned when the character's accumulated SP exactly equals the skill's required SP:
-  $$\text{character.SP} == \text{skill.RequiredSP}$$
-- Skill learning is governed strictly by SP thresholds, not character level.
-
-## Job-Based Stat Growth
-
-When a character levels up, stat increases are determined by the character's assigned `JobDefinition`.
-
-For each level gained:
-- $\Delta\text{HP} = \text{growthValue}(\text{HPGrowth}) + 1$ (HP always gains a guaranteed minimum of +1)
-- $\Delta\text{MP} = \text{growthValue}(\text{MPGrowth})$
-- $\Delta\text{Attack} = \text{growthValue}(\text{AttackGrowth})$
-- $\Delta\text{Defense} = \text{growthValue}(\text{DefenseGrowth})$
-- $\Delta\text{Agility} = \text{growthValue}(\text{AgilityGrowth})$
-
-### Stat Growth Formula & Cap Re-roll
-The growth value is generated from a uniform random range $[0, \text{MaxGrowth}]$. If the resulting increase exceeds 9, the legacy CGI formula re-rolls the value within $[1, 9]$:
-
-```text
-v = random(0, max)
-if v > 9:
-    v = random(1, 9)
-```
-
-### Current HP/MP Preservation
-Level advancement increases maximum HP and maximum MP (`MaxHP`, `MaxMP`). It deliberately does **not** restore current HP and MP (`HP`, `MP`). Recovery must be achieved through healing items or free sleep recovery at Home ([home.md](home.md)).
-
-### Stat Orb Growth Modifiers
-
-The legacy stat orbs add one to the random growth upper bound for exactly one
-stat on each level-up:
-
-| Item | Stat |
-| --- | --- |
-| `item-152` | MaxHP |
-| `item-153` | MaxMP |
-| `item-154` | Attack |
-| `item-155` | Defense |
-| `item-156` | Agility |
-
-The normal cap re-roll still applies after the bonus is added. Stat ceilings are
-999 for HP/MP and 255 for Attack/Defense/Agility. When `OverLevel` is enabled
-and the character is above level 99, those ceilings are doubled.
+- **Active-hand orb scope (`_battle.cgi:316,327,1747–1760`)**: Level-up orb modifiers (`item-152`–`item-157`) inspect only the active combat hand (`$ms{$m}{ite}`), not unequipped or ambiguous bag items.
+- **Request-start Job-49 bound (`party.cgi:11–13`, `_data.cgi:145–153`, `_battle.cgi:314–330`)**: Job 49 (`たまねぎ剣士`) growth bounds (`$m{sp} * 0.02`) are evaluated once when `_data.cgi` loads after `read_user`, so every level gained in that request reuses the fractional request-start SP instead of recomputing after `lv_up` increments `$m{sp}`.
+- **Current HP/MP preservation**: Level advancement raises `MaxHP` and `MaxMP` without restoring current `HP` or `MP` (recovery belongs to healing items and [Home](home.md)).
 
 ## Celestial OverLevel (天界限界突破)
 

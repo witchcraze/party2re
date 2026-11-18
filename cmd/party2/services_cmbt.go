@@ -61,6 +61,10 @@ func (productionRandomSource) Intn(max int) (int, error) {
 	return random.Intn(max), nil
 }
 
+func (productionRandomSource) Float64() float64 {
+	return random.Float64()
+}
+
 func newCmbtServices(
 	db *sql.DB,
 	core *coreServices,

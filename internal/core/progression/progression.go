@@ -138,7 +138,12 @@ func ApplyExperienceWithJob(value *character.Character, amount int, definition j
 func ApplyExperienceWithJobFull(value *character.Character, amount int, definition job.Definition, rng character.RandomSource, opts ApplyExperienceOptions) (LevelUpResult, error) {
 	var roll growthRoll
 	if rng != nil {
-		roll = func(bound float64) (int, error) { return rng.Intn(int(bound)) }
+		roll = func(bound float64) (int, error) {
+			if f, ok := rng.(interface{ Float64() float64 }); ok {
+				return int(f.Float64() * bound), nil
+			}
+			return rng.Intn(int(bound))
+		}
 	}
 	return applyExperience(value, amount, definition, roll, opts, nil)
 }
@@ -225,11 +230,8 @@ func applyExperience(value *character.Character, amount int, definition job.Defi
 		}
 
 		if definition.ID != "" {
-			spGrowth := float64(int(float64(value.SP) * .02))
-			if stock != nil {
-				// The fractional job-49 growth is read at CGI data load (party.cgi:12–13).
-				spGrowth = float64(startingSP) * .02
-			}
+			// The fractional job-49 growth is read at CGI data load (party.cgi:12–13).
+			spGrowth := float64(startingSP) * .02
 			growth, err := rollGrowth(definition, spGrowth, roll, opts.StatOrbItems)
 			if err != nil {
 				return result, err
