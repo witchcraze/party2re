@@ -59,6 +59,9 @@ type SceneDefinition struct {
 	// ParentOnly admits entry only from Parent: a place legacy reaches through
 	// a facility action instead of ＠いどう.
 	ParentOnly bool
+	// OwnedParentOnly is ParentOnly where the parent shows no subject or an
+	// owned one: an action legacy registers only in the actor's own place.
+	OwnedParentOnly bool
 	// InheritsSubject makes the scene a view of its parent's selected subject:
 	// entry from the parent keeps that subject, back returns to it, and the
 	// scene has no selection of its own. It adopts the parent's subject adapters.
@@ -201,7 +204,10 @@ func (s *Service) Enterable(ctx context.Context, r Result, destination string) e
 	if err := qualify(ctx, d, r.Snapshot.Character); err != nil {
 		return err
 	}
-	if d.ParentOnly && (r.Navigation == nil || r.Navigation.Unavailable || r.Navigation.Selection.Destination != d.Parent) {
+	if (d.ParentOnly || d.OwnedParentOnly) && (r.Navigation == nil || r.Navigation.Unavailable || r.Navigation.Selection.Destination != d.Parent) {
+		return ErrSceneAccessDenied
+	}
+	if d.OwnedParentOnly && r.Navigation.Selection.Subject != (Subject{}) && !r.Navigation.SubjectOwned {
 		return ErrSceneAccessDenied
 	}
 	return nil

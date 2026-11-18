@@ -81,6 +81,35 @@ func TestParentOnlySceneIsEnteredOnlyFromItsParent(t *testing.T) {
 	}
 }
 
+func TestOwnedParentOnlySceneIsEnteredOnlyFromTheActorsOwnParent(t *testing.T) {
+	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner"}, ctx: context.Background()}
+	store := &navigationStore{}
+	s := NewService(r, r, r, WithNavigation(store, SceneDefinition{ID: "town"},
+		SceneDefinition{ID: "home", Parent: "town", SubjectKind: "home",
+			SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil },
+			SubjectOwned:     func(_ context.Context, actor, target string) (bool, error) { return actor == target, nil }},
+		SceneDefinition{ID: "mine", Parent: "home", OwnedParentOnly: true}))
+	for _, tc := range []struct {
+		name string
+		from Selection
+		ok   bool
+	}{
+		{"town", Selection{Destination: "town"}, false},
+		{"visited home", Selection{Destination: "home", Subject: Subject{Kind: "home", ID: "other"}}, false},
+		{"own home", Selection{Destination: "home"}, true},
+		{"selected own home", Selection{Destination: "home", Subject: Subject{Kind: "home", ID: "hero"}}, true},
+	} {
+		store.selection = tc.from
+		_, err := s.Enter(r.ctx, "owner", "hero", "mine")
+		if (err == nil) != tc.ok || (!tc.ok && (!errors.Is(err, ErrSceneAccessDenied) || store.selection != tc.from)) {
+			t.Fatalf("%s: %v %+v", tc.name, err, store.selection)
+		}
+	}
+	if _, err := s.Back(r.ctx, "owner", "hero"); err != nil || store.selection.Destination != "home" {
+		t.Fatalf("back: %v %+v", err, store.selection)
+	}
+}
+
 func TestOwnedSubjectAdmitsOwnerActionsAndPropagatesReadFailure(t *testing.T) {
 	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner", Money: 1}, ctx: context.Background()}
 	store := &navigationStore{selection: Selection{Destination: "district", Subject: Subject{Kind: "store", ID: "mine"}}}

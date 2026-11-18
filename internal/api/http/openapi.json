@@ -4011,6 +4011,47 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "home_image_update",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "aura_effect": {
+                      "description": "Effect ID from the home_image effects.",
+                      "maximum": 8,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "avatar_id": {
+                      "description": "imgur image ID (5-10 letters or digits), stored as https://i.imgur.com/\u003cid\u003e.gif; empty or omitted removes the avatar. Accepted only after the avatar unlock; before it a non-empty value is rejected and the stored avatar is kept.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "aura_effect"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "home_profile_update",
                   "type": "string"
                 }
@@ -4402,6 +4443,7 @@
                         "home_profile",
                         "home_adventure_record",
                         "home_custom_skill",
+                        "home_image",
                         "casino",
                         "secretshop",
                         "town1",
@@ -4556,6 +4598,7 @@
                         "home_profile",
                         "home_adventure_record",
                         "home_custom_skill",
+                        "home_image",
                         "casino",
                         "secretshop",
                         "town1",
@@ -11945,6 +11988,53 @@
         ],
         "type": "object"
       },
+      "HomeImageSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's own image (legacy いめーじ), offered in their own home after the adventure record's image unlock, with home_image_update.",
+        "properties": {
+          "aura_effect": {
+            "type": "integer"
+          },
+          "avatar_unlocked": {
+            "description": "Whether home_image_update accepts avatar_id.",
+            "type": "boolean"
+          },
+          "avatar_url": {
+            "type": "string"
+          },
+          "effects": {
+            "description": "Selectable effects in the legacy form's order.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "parent": {
+            "const": "home"
+          }
+        },
+        "required": [
+          "parent",
+          "aura_effect",
+          "avatar_url",
+          "avatar_unlocked",
+          "effects"
+        ],
+        "type": "object"
+      },
       "HomeJobMasterSceneData": {
         "additionalProperties": false,
         "description": "The observed home owner's job mastery. Visitors see the owner's mastery.",
@@ -15580,6 +15670,7 @@
                   "home_profile",
                   "home_adventure_record",
                   "home_custom_skill",
+                  "home_image",
                   "casino",
                   "secretshop",
                   "town1",
@@ -15793,6 +15884,7 @@
               "home_profile",
               "home_adventure_record",
               "home_custom_skill",
+              "home_image",
               "casino",
               "secretshop",
               "town1",
@@ -15912,6 +16004,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeCustomSkillSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeImageSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/ShopCatalogSceneData"
@@ -16334,6 +16429,29 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeCustomSkillSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "home_image"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeImageSceneData"
                 }
               }
             }

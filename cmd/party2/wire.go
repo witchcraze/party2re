@@ -15,6 +15,7 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/contest"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
@@ -55,7 +56,11 @@ func wireApp(
 	soc.placeLog = placelog.New(valkeyClient, cfg.PlaceLog)
 	soc.placeMembers = placelog.NewMembers(valkeyClient, cfg.PlaceMemberTTL)
 	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}
-	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, soc.exileRepo, referrals.DeliverReferral, cfg.Player.MaxPlayers, logger); err != nil {
+	adventureRecords, err := database.NewAdventureRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, soc.exileRepo, referrals.DeliverReferral, imageUnlocks{adventureRecords}, cfg.Player.MaxPlayers, logger); err != nil {
 		return nil, err
 	}
 	cmbt, err := newCmbtServices(db, core, soc, econ, valkeyClient)
@@ -317,6 +322,7 @@ func newHTTPHandler(
 		http.WithNotification(soc.notification),
 		http.WithHome(soc.home),
 		http.WithCustomSkill(cmbt.customSkill),
+		http.WithHomeImage(core.charService),
 		http.WithEventPlaza(misc.eventplaza),
 		http.WithSecretShop(misc.secretshop),
 		http.WithTavern(misc.tavern),

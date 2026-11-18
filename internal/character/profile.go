@@ -54,33 +54,17 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, bio map
 			return err
 		}
 
-		currentProfile := Profile{
-			CharacterID: characterID,
-			BioData:     make(map[string]string),
+		currentProfile, err := s.storedProfile(txCtx, characterID)
+		if err != nil {
+			return err
 		}
-
-		if s.profileRepo != nil {
-			stored, err := s.profileRepo.GetProfile(txCtx, characterID)
-			if err != nil {
-				if !errors.Is(err, ErrNotFound) {
-					return err
-				}
-			} else if stored.CharacterID != "" {
-				currentProfile = stored
-			}
-		}
-
 		currentProfile.BioData = maps.Clone(bio)
 		if currentProfile.BioData == nil {
 			currentProfile.BioData = make(map[string]string)
 		}
-
 		currentProfile.UpdatedAt = time.Now().UTC()
-
-		if s.profileRepo != nil {
-			if err := s.profileRepo.SaveProfile(txCtx, currentProfile); err != nil {
-				return err
-			}
+		if err := s.profileRepo.SaveProfile(txCtx, currentProfile); err != nil {
+			return err
 		}
 
 		result = currentProfile
@@ -104,18 +88,9 @@ func (s *Service) SetPersonality(ctx context.Context, characterID, personality s
 		if err != nil {
 			return err
 		}
-		if s.profileRepo == nil {
-			return errors.New("profile repository is not configured")
-		}
-		profile, err := s.profileRepo.GetProfile(ctx, characterID)
-		if errors.Is(err, ErrNotFound) || (err == nil && profile.CharacterID == "") {
-			profile, err = Profile{CharacterID: characterID}, nil
-		}
+		profile, err := s.storedProfile(ctx, characterID)
 		if err != nil {
 			return err
-		}
-		if profile.BioData == nil {
-			profile.BioData = make(map[string]string)
 		}
 		profile.BioData[PersonalityBioKey] = personality
 		profile.UpdatedAt = time.Now().UTC()
@@ -128,4 +103,22 @@ func (s *Service) SetPersonality(ctx context.Context, characterID, personality s
 		msg := fmt.Sprintf("%sが%sになりました！", char.Name, personality)
 		return s.news.PublishNews(ctx, "character", msg, msg, char.Name, time.Now().UTC())
 	})
+}
+
+// storedProfile is the stored profile, or an empty one with a non-nil BioData.
+func (s *Service) storedProfile(ctx context.Context, characterID string) (Profile, error) {
+	if s.profileRepo == nil {
+		return Profile{}, errors.New("profile repository is not configured")
+	}
+	profile, err := s.profileRepo.GetProfile(ctx, characterID)
+	if errors.Is(err, ErrNotFound) || (err == nil && profile.CharacterID == "") {
+		profile, err = Profile{CharacterID: characterID}, nil
+	}
+	if err != nil {
+		return Profile{}, err
+	}
+	if profile.BioData == nil {
+		profile.BioData = make(map[string]string)
+	}
+	return profile, nil
 }

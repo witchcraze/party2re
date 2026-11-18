@@ -123,6 +123,7 @@ func (c *coreServices) initPlayerAndChar(
 	notificationService *notification.Service,
 	exileChecker character.ExileChecker,
 	referralDelivery character.ReferralDelivery,
+	images character.ImageUnlockReader,
 	maxPlayers int,
 	logger logging.Logger,
 ) error {
@@ -145,6 +146,7 @@ func (c *coreServices) initPlayerAndChar(
 		})),
 		character.WithJobDefinitionProvider(c.jobCatalog),
 		character.WithExileChecker(exileChecker),
+		character.WithImageUnlocks(images),
 	)
 
 	if guildService != nil {
@@ -195,4 +197,12 @@ func guildMembership(lookup func(context.Context, string) (guild.Guild, guild.Me
 		}
 		return err == nil, err
 	}
+}
+
+// imageUnlocks reads the adventure record unlocks that gate own-Home いめーじ.
+type imageUnlocks struct{ records *database.AdventureRepository }
+
+func (u imageUnlocks) ImageUnlocks(ctx context.Context, characterID string) (character.ImageUnlocks, error) {
+	unlocks, err := u.records.GetRecordUnlocks(ctx, characterID)
+	return character.ImageUnlocks{Image: unlocks.Image, Avatar: unlocks.Avatar}, err
 }

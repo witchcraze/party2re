@@ -241,8 +241,9 @@ the owned actor's existing Shop catalog, including its eligibility filters.
 Home registers `target_kind:home` with a character ID validated by the public
 Home service. Entering `home` observes the actor; selecting another ID observes
 that target without changing the actor/viewer. Home sub-scenes have `home` as
-their parent; the owner-only ones always read the owned actor, without a target
-input, and public Home detail never offers them. An `InheritsSubject` destination
+their parent; the owner-only ones are `OwnedParentOnly`, entered only from the
+actor's own Home (no subject or an owned one), and always read the owned actor
+without a target input. An `InheritsSubject` destination
 is a view of its parent's selected subject: entry from the parent keeps that
 subject, back returns to the parent with it, and it offers no `scene_select`
 ([Home](../design/home.md#observation-visibility-and-navigation)). Other subject
@@ -527,7 +528,7 @@ facility operation has a replacement.
 | --- | --- |
 | Economy | No Economy REST route remains ([#947](https://github.com/witchcraze/party2re/issues/947)); remaining legacy differences are children of [#2063](https://github.com/witchcraze/party2re/issues/2063). Feature-owned mappings: [Shops](../design/shops.md#scoped-legacy-actioncall-path-reconciliation), [Bank](../design/bank.md#observation-and-retained-routes), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [Auction](../design/auction.md#gateway-and-retained-reads), [Black Market](../design/black-market.md#gateway-and-retained-routes), [Blacksmith](../design/blacksmith.md#5-gateway-commands-and-observation), [Alchemy](../design/alchemy.md#gateway-and-observation), [Flea Market](../design/fleamarket.md#1-legacy-actions-reconciliation-table), [Gem Store](../design/gemstore.md#gatewayと参照未移行操作), [Player Store](../design/store.md#town-scenes-and-commands). |
 | [Combat/Adventure #948](https://github.com/witchcraze/party2re/issues/948) | Run/room/Party commands, owned observations, monsters and Replay. Adopt [run authority and recovery](transient-run-state.md), [Adventure](../design/adventure.md) and [Replay visibility](../design/replay.md); generic activity facts do not replace maps, explicit battle choices or receipt reads. |
-| [Town/Faith/Social #949](https://github.com/witchcraze/party2re/issues/949) | Home, Casino, faith and social facilities. [Home](../design/home.md#retained-rest-and-deferred-detail-ownership) and [Casino](../design/casino.md#scoped-legacy-dispatch-reconciliation) own their visibility/action mappings; observation does not connect mutations. |
+| [Town/Faith/Social #949](https://github.com/witchcraze/party2re/issues/949) | Home, Casino, faith and social facilities. [Home](../design/home.md#scoped-legacy-action-reconciliation) and [Casino](../design/casino.md#scoped-legacy-dispatch-reconciliation) own their visibility/action mappings; observation does not connect mutations. |
 | [Final cleanup #950](https://github.com/witchcraze/party2re/issues/950) | Final router/OpenAPI cleanup, deliberate exceptions and otherwise unassigned core profile/inventory/equipment, Event Plaza, ranking/news/notification surfaces. Assign remaining gameplay replacements to bounded children before deleting them. |
 
 Each implementation unit identifies the exact retained operation, direct public
