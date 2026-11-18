@@ -58,6 +58,13 @@ func (h *Handler) homeSceneData(ctx context.Context, r playercontext.Result) (an
 	if view.IsOwner {
 		data.ColorSamples = homeColorSamples
 		destinations = append(slices.Clone(homeRecordScenes), "home_inbox", "home_outbox", "home_notices", "home_custom_skill")
+		ok, err := h.enterable(ctx, r, "home_image")
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			destinations = append(destinations, "home_image")
+		}
 	}
 	for _, id := range destinations {
 		if adapter, ok := h.sceneAdapters[id]; ok {

@@ -1956,6 +1956,9 @@
                       "$ref": "#/components/schemas/HomeCustomSkillSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/HomeImageSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/ShopCatalogSceneData"
                     },
                     {
@@ -2381,6 +2384,29 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeCustomSkillSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home_image"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeImageSceneData"
                 }
               }
             }
@@ -4074,6 +4100,47 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "home_image_update"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "aura_effect": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 8,
+                      "description": "Effect ID from the home_image effects."
+                    },
+                    "avatar_id": {
+                      "type": "string",
+                      "description": "imgur image ID (5-10 letters or digits), stored as https://i.imgur.com/<id>.gif; empty or omitted removes the avatar. Accepted only after the avatar unlock; before it a non-empty value is rejected and the stored avatar is kept."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "aura_effect"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "home_profile_update"
                 }
               },
@@ -4465,6 +4532,7 @@
                         "home_profile",
                         "home_adventure_record",
                         "home_custom_skill",
+                        "home_image",
                         "casino",
                         "secretshop",
                         "town1",
@@ -4591,6 +4659,7 @@
                         "home_profile",
                         "home_adventure_record",
                         "home_custom_skill",
+                        "home_image",
                         "casino",
                         "secretshop",
                         "town1",
@@ -8900,6 +8969,7 @@
               "home_profile",
               "home_adventure_record",
               "home_custom_skill",
+              "home_image",
               "casino",
               "secretshop",
               "town1",
@@ -9053,6 +9123,7 @@
                   "home_profile",
                   "home_adventure_record",
                   "home_custom_skill",
+                  "home_image",
                   "casino",
                   "secretshop",
                   "town1",
@@ -18429,6 +18500,53 @@
           "owner_id",
           "stages",
           "total_clears"
+        ]
+      },
+      "HomeImageSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's own image (legacy いめーじ), offered in their own home after the adventure record's image unlock, with home_image_update.",
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "aura_effect": {
+            "type": "integer"
+          },
+          "avatar_url": {
+            "type": "string"
+          },
+          "avatar_unlocked": {
+            "type": "boolean",
+            "description": "Whether home_image_update accepts avatar_id."
+          },
+          "effects": {
+            "type": "array",
+            "description": "Selectable effects in the legacy form's order.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "aura_effect",
+          "avatar_url",
+          "avatar_unlocked",
+          "effects"
         ]
       },
       "HomeCustomSkillSceneData": {

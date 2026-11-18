@@ -19,6 +19,10 @@ func TestProductionSceneRegistryMatchesNavigationSchemas(t *testing.T) {
 		if d.ID == "blackmarket" && (d.Parent != "oracle" || !d.ParentOnly || d.CanEnter == nil) {
 			t.Fatalf("the black market must be entered only from the Oracle shop by qualified characters: %+v", d)
 		}
+		// Legacy registers these only in one's own home (home.cgi:26-42,73-105).
+		if slices.Contains([]string{"home_inbox", "home_outbox", "home_notices", "home_custom_skill", "home_image"}, d.ID) && (d.Parent != "home" || !d.OwnedParentOnly) {
+			t.Fatalf("own-Home scenes must be entered only from the actor's own home: %+v", d)
+		}
 		if d.SubjectKind == "store" && d.SubjectOwned == nil {
 			t.Fatalf("store scenes must tell the owner from visitors: %+v", d)
 		}

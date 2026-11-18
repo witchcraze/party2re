@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -63,7 +64,14 @@ func (h *Handler) contextAction(ctx context.Context, id string, template map[str
 	if id == "scene_enter" {
 		values := make([]string, 0, len(h.sceneAdapters))
 		for destination, adapter := range h.sceneAdapters {
-			if adapter.read != nil && h.playerContext.Enterable(ctx, result, destination) == nil {
+			if adapter.read == nil {
+				continue
+			}
+			ok, err := h.enterable(ctx, result, destination)
+			if err != nil {
+				return ContextAction{}, err
+			}
+			if ok {
 				values = append(values, destination)
 			}
 		}
@@ -105,4 +113,14 @@ func (h *Handler) contextAction(ctx context.Context, id string, template map[str
 	}
 	return ContextAction{Action: id, Label: def.Label, Category: def.Category, Style: style,
 		RequiredParams: append([]string{}, def.RequiredParams...), ParamsSchema: encoded, ParamsTemplate: template}, nil
+}
+
+// enterable separates a destination the actor may not enter, or one the
+// registry lacks, from a failed qualification read, which it returns.
+func (h *Handler) enterable(ctx context.Context, result playercontext.Result, destination string) (bool, error) {
+	err := h.playerContext.Enterable(ctx, result, destination)
+	if errors.Is(err, playercontext.ErrSceneAccessDenied) || errors.Is(err, playercontext.ErrInvalidSelection) {
+		return false, nil
+	}
+	return err == nil, err
 }

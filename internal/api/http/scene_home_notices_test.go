@@ -112,9 +112,9 @@ func TestHomeNoticesRejectsSpoofing(t *testing.T) {
 	if status != 200 {
 		t.Fatalf("visit: %d %s", status, raw)
 	}
-	// Entering notices from a visited home still reads only the authenticated actor.
+	// Notices are an own-Home action (home.cgi:26-42): a visited home does not admit them.
 	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"home_notices"}}`, nil)
-	if status != 200 || store.selection.Subject.ID != "" {
-		t.Fatalf("owned notices after visit: %d %s", status, raw)
+	if status != 403 || store.selection.Subject.ID != "other" {
+		t.Fatalf("notices from a visited home: %d %s", status, raw)
 	}
 }

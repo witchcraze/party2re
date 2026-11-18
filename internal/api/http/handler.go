@@ -124,6 +124,7 @@ type Handler struct {
 	characters     CharacterService
 	adventures     AdventureService
 	recordEntry    AdventureRecordService
+	homeImages     HomeImageService
 	shops          ShopService
 	medals         MedalService
 	helpers        HelperService

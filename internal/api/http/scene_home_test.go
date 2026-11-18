@@ -13,6 +13,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/character"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -37,6 +38,9 @@ type homeSceneFixture struct {
 	recordEntryResult adventure.RecordEntryResult
 	recordEntryErr    error
 	afterRecordEntry  func()
+	imageUnlocks      character.ImageUnlocks
+	imageWrites       []string
+	imageUnlockErr    error
 }
 
 func (f *homeSceneFixture) OpenOwnRecord(ctx context.Context, playerID, actor string) (adventure.RecordEntryResult, error) {
@@ -176,15 +180,18 @@ func homeSceneRouter(t *testing.T, options ...Option) (*homeSceneFixture, *gatew
 			}
 			return err == nil, err
 		}, SubjectOwned: func(_ context.Context, actorID, target string) (bool, error) { return actorID == target, nil }},
-		playercontext.SceneDefinition{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
-		playercontext.SceneDefinition{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
-		playercontext.SceneDefinition{ID: "home_notices", Parent: "home", Pageable: true, CursorPageable: true},
+		playercontext.SceneDefinition{ID: "home_inbox", Parent: "home", OwnedParentOnly: true, Pageable: true, CursorPageable: true},
+		playercontext.SceneDefinition{ID: "home_outbox", Parent: "home", OwnedParentOnly: true, Pageable: true, CursorPageable: true},
+		playercontext.SceneDefinition{ID: "home_notices", Parent: "home", OwnedParentOnly: true, Pageable: true, CursorPageable: true},
 		playercontext.SceneDefinition{ID: "home_collection", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_monster_book", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_job_master", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_profile", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_adventure_record", Parent: "home", InheritsSubject: true},
-		playercontext.SceneDefinition{ID: "home_custom_skill", Parent: "home"},
+		playercontext.SceneDefinition{ID: "home_custom_skill", Parent: "home", OwnedParentOnly: true},
+		playercontext.SceneDefinition{ID: "home_image", Parent: "home", OwnedParentOnly: true, CanEnter: func(context.Context, corecharacter.Character) (bool, error) {
+			return f.imageUnlocks.Image, f.imageUnlockErr
+		}},
 	))
 	h, err := NewHandler(f.gatewayFixture, f, homeSceneAdventures{f: f}, &struct{ ShopService }{}, append([]Option{WithHome(f), WithAdventureRecord(f), WithPlayerContext(service)}, options...)...)
 	if err != nil {

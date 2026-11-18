@@ -121,6 +121,7 @@ type Service struct {
 	jobProvider      corejob.DefinitionProvider
 	referralDelivery ReferralDelivery
 	memories         MemoryRepository
+	imageUnlocks     ImageUnlockReader
 }
 
 type CreationOptions struct {

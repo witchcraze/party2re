@@ -56,8 +56,8 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 ### 5.1 Profile Attributes (`character_profiles`)
 - **Profile fields**: the legacy profile form's fields (`lib/profile.cgi:6–30`), edited only by the owner in the [Home profile scene](home.md#observation-visibility-and-navigation); an edit replaces every field because the legacy form submits them all.
 - **Avatar URL**: Empty (no avatar) or exactly `https://i.imgur.com/<ID>.gif`, where `<ID>` is 5–10 ASCII letters/digits. Legacy `lib/custom_image.cgi:65–70` accepts only that imgur ID and stores this URL; there is no image upload, data URI or other host. Other external services are deferred to [#1923](https://github.com/witchcraze/party2re/issues/1923). Known gap: the God new-world wish still writes `chr/052.gif` here although legacy changes the icon, not the avatar ([#1924](https://github.com/witchcraze/party2re/issues/1924)).
-- **Aura Effect (`aura_effect`)**: legacy `effect1` (`custom_image.cgi`, `@effects` in `_data.cgi`), `0` (none) to `8`.
-- Legacy sets aura and, after the avatar unlock, the avatar in own-Home `いめーじ`; there is no setter yet ([#2332](https://github.com/witchcraze/party2re/issues/2332)).
+- **Aura Effect (`aura_effect`)**: legacy `effect1` (`custom_image.cgi`, `@effects` in `_data.cgi`), `0` (none) to `8`; legacy stores the submitted value unchecked (`custom_image.cgi:71`).
+- Own-Home `いめーじ` sets the aura and, after the avatar unlock, the avatar. Before that unlock legacy clears the avatar on every save because its form has no avatar input (`custom_image.cgi:54,68–70`); Go keeps it, which differs only for an avatar not set through this form.
 - **Comment**: no legacy counterpart; its removal is [#2333](https://github.com/witchcraze/party2re/issues/2333).
 
 ---
