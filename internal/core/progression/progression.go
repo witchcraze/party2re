@@ -5,6 +5,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
 )
 
@@ -134,7 +135,47 @@ func ApplyExperienceWithJob(value *character.Character, amount int, definition j
 // ApplyExperienceWithJobFull is the canonical implementation: awards experience,
 // increments SP on each level-up (with 25% bonus for item 157), detects
 // SP-threshold skill learning, and applies job stat growth.
-func ApplyExperienceWithJobFull(value *character.Character, amount int, definition job.Definition, random character.RandomSource, opts ApplyExperienceOptions) (LevelUpResult, error) {
+func ApplyExperienceWithJobFull(value *character.Character, amount int, definition job.Definition, rng character.RandomSource, opts ApplyExperienceOptions) (LevelUpResult, error) {
+	var roll growthRoll
+	if rng != nil {
+		roll = func(bound float64) (int, error) { return rng.Intn(int(bound)) }
+	}
+	return applyExperience(value, amount, definition, roll, opts, nil)
+}
+
+// ApplyStockLevels advances using saved EXP and returns the uncapped growth
+// at each level for the active battle projection. A skipped stock callback
+// can still reach the ordinary single-level tail.
+func ApplyStockLevels(value *character.Character, definition job.Definition, rng random.Generator, held string, single bool) ([]character.Stats, error) {
+	if value == nil {
+		return nil, ErrNilCharacter
+	}
+	if definition.ID == "" || rng == nil {
+		return nil, ErrInvalidGrowth
+	}
+	next := *value
+	stock := stockLevels{single: single}
+	opts := ApplyExperienceOptions{HasSkillOrb: held == "item-157", StatOrbItems: map[string]bool{held: true}}
+	roll := func(bound float64) (int, error) { return int(rng.Float64() * bound), nil }
+	if _, err := applyExperience(&next, 0, definition, roll, opts, &stock); err != nil {
+		return nil, err
+	}
+	if len(stock.growth) > 0 {
+		// The character write caps once against the final level (system.cgi:49–67).
+		next.Stats.Clamp(next.OverLevel, next.Level)
+		*value = next
+	}
+	return stock.growth, nil
+}
+
+type growthRoll func(bound float64) (int, error)
+
+type stockLevels struct {
+	single bool
+	growth []character.Stats
+}
+
+func applyExperience(value *character.Character, amount int, definition job.Definition, roll growthRoll, opts ApplyExperienceOptions, stock *stockLevels) (LevelUpResult, error) {
 	if value == nil {
 		return LevelUpResult{}, ErrNilCharacter
 	}
@@ -145,11 +186,12 @@ func ApplyExperienceWithJobFull(value *character.Character, amount int, definiti
 	if value.Level < character.InitialLevel || value.Level > maxLvl {
 		return LevelUpResult{}, ErrInvalidCharacterLevel
 	}
-	if definition.ID != "" && random == nil {
+	if definition.ID != "" && roll == nil {
 		return LevelUpResult{}, ErrInvalidGrowth
 	}
 
 	value.Experience += amount
+	startingSP := value.SP
 	var result LevelUpResult
 	for value.Level < maxLvl {
 		threshold, err := ExperienceForNextLevelWithMax(value.Level, maxLvl)
@@ -166,11 +208,11 @@ func ApplyExperienceWithJobFull(value *character.Character, amount int, definiti
 
 		// スキルの宝珠 (item 157): 25% chance of +1 additional SP.
 		if opts.HasSkillOrb {
-			roll, err := random.Intn(4)
+			bonus, err := roll(4)
 			if err != nil {
 				return result, err
 			}
-			if roll < 1 {
+			if bonus < 1 {
 				value.SP++
 			}
 		}
@@ -183,86 +225,74 @@ func ApplyExperienceWithJobFull(value *character.Character, amount int, definiti
 		}
 
 		if definition.ID != "" {
-			if err := applyGrowth(&value.Stats, definition, value.SP, random, opts.StatOrbItems, value.OverLevel, value.Level); err != nil {
+			spGrowth := float64(int(float64(value.SP) * .02))
+			if stock != nil {
+				// The fractional job-49 growth is read at CGI data load (party.cgi:12–13).
+				spGrowth = float64(startingSP) * .02
+			}
+			growth, err := rollGrowth(definition, spGrowth, roll, opts.StatOrbItems)
+			if err != nil {
 				return result, err
+			}
+			value.Stats.MaxHP += growth.MaxHP
+			value.Stats.MaxMP += growth.MaxMP
+			value.Stats.Attack += growth.Attack
+			value.Stats.Defense += growth.Defense
+			value.Stats.Agility += growth.Agility
+			if stock == nil {
+				value.Stats.Clamp(value.OverLevel, value.Level)
+			} else {
+				stock.growth = append(stock.growth, growth)
 			}
 		}
 		result.LevelsGained++
+		if stock != nil && stock.single {
+			break
+		}
 	}
 	return result, nil
 }
 
-func applyGrowth(stats *character.Stats, definition job.Definition, sp int, random character.RandomSource, statOrbItems map[string]bool, overLevel bool, level int) error {
-	hpGrowth := definition.HPGrowth
-	mpGrowth := definition.MPGrowth
-	atkGrowth := definition.AttackGrowth
-	defGrowth := definition.DefenseGrowth
-	agiGrowth := definition.AgilityGrowth
-
-	// たまねぎ剣士 (job-49): stat growth is SP-linked: int(sp * 0.02) across all 5 stats (_data.cgi:148-152).
-	if definition.ID == "job-49" {
-		spGrowth := int(float64(sp) * 0.02)
-		hpGrowth, mpGrowth, atkGrowth, defGrowth, agiGrowth = spGrowth, spGrowth, spGrowth, spGrowth, spGrowth
+func rollGrowth(definition job.Definition, spGrowth float64, roll growthRoll, statOrbItems map[string]bool) (character.Stats, error) {
+	growths := [5]float64{
+		float64(definition.HPGrowth), float64(definition.MPGrowth), float64(definition.AttackGrowth),
+		float64(definition.DefenseGrowth), float64(definition.AgilityGrowth),
 	}
-
-	growths := []int{
-		hpGrowth,
-		mpGrowth,
-		atkGrowth,
-		defGrowth,
-		agiGrowth,
+	if definition.ID == "job-49" {
+		growths = [5]float64{spGrowth, spGrowth, spGrowth, spGrowth, spGrowth}
 	}
 	for _, growth := range growths {
 		if growth < 0 {
-			return ErrInvalidGrowth
+			return character.Stats{}, ErrInvalidGrowth
 		}
 	}
-
-	hp, err := growthValue(hpGrowth, random, statOrbItems[ItemLifeStatOrb])
-	if err != nil {
-		return err
+	orbs := [5]string{ItemLifeStatOrb, ItemMagicStatOrb, ItemPowerStatOrb, ItemDefenseStatOrb, ItemAgilityStatOrb}
+	var gains [5]int
+	for i, maxGrowth := range growths {
+		gain, err := growthValue(maxGrowth, roll, statOrbItems[orbs[i]])
+		if err != nil {
+			return character.Stats{}, err
+		}
+		gains[i] = gain
 	}
-	hp++ // HP minimum +1 guaranteed (旧CGI: ++$v for hp)
-	mp, err := growthValue(mpGrowth, random, statOrbItems[ItemMagicStatOrb])
-	if err != nil {
-		return err
-	}
-	attack, err := growthValue(atkGrowth, random, statOrbItems[ItemPowerStatOrb])
-	if err != nil {
-		return err
-	}
-	defense, err := growthValue(defGrowth, random, statOrbItems[ItemDefenseStatOrb])
-	if err != nil {
-		return err
-	}
-	agility, err := growthValue(agiGrowth, random, statOrbItems[ItemAgilityStatOrb])
-	if err != nil {
-		return err
-	}
-	stats.MaxHP += hp
-	stats.MaxMP += mp
-	stats.Attack += attack
-	stats.Defense += defense
-	stats.Agility += agility
-	stats.Clamp(overLevel, level)
-	return nil
+	return character.Stats{MaxHP: gains[0] + 1, MaxMP: gains[1], Attack: gains[2], Defense: gains[3], Agility: gains[4]}, nil
 }
 
-// growthValue returns a random growth amount in [0, max].
+// growthValue truncates the draw using the job's growth bound.
 // If the result exceeds growthCap (9), it is re-rolled as rand(1, 9)
 // to match the original CGI formula: $v > 9 → int(rand(9)+1).
-func growthValue(max int, random character.RandomSource, statOrb ...bool) (int, error) {
-	bonus := 0
-	if len(statOrb) > 0 && statOrb[0] {
-		bonus = 1
+func growthValue(max float64, roll growthRoll, statOrb bool) (int, error) {
+	bound := max + 1
+	if statOrb {
+		bound++
 	}
-	value, err := random.Intn(max + 1 + bonus)
+	value, err := roll(bound)
 	if err != nil {
 		return 0, err
 	}
 	if value > growthCap {
 		// Re-roll: rand(9)+1 → [1, 9]
-		value, err = random.Intn(growthCap)
+		value, err = roll(growthCap)
 		if err != nil {
 			return 0, err
 		}

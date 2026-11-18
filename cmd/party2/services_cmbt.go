@@ -346,6 +346,7 @@ func newCmbtServices(
 	normalService, err := adventure.NewNormalRunService(adventure.NormalRunConfig{
 		Store: normalRepo, Characters: core.charRepo, Inventories: core.invRepo, Builder: battleAdapter, Settler: battleAdapter, History: adventureRepo,
 		Stages: adventureStages, Monsters: adventureMonsters, Admission: normalAdmissionAdapter{service: partyService, store: partyRepo},
+		Jobs:    core.jobCatalog,
 		Penalty: normalPenaltyAdapter{timers: soc.timer}, Clock: adventure.RealClock{}, CheckEntry: admission.busy,
 		EntryLocks: soc.timer,
 	})

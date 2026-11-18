@@ -535,7 +535,7 @@ func TestApplyExperienceSkillOrbNoExtraSPWhenRollFails(t *testing.T) {
 func TestGrowthValueCapsBeyondNineWithReroll(t *testing.T) {
 	// First Intn(max+1) returns 10 (> growthCap=9), then re-roll Intn(9) returns 4 → value = 5.
 	random := &sequenceRandomSource{values: []int{10, 4}}
-	value, err := growthValue(15, random)
+	value, err := growthValue(15, func(bound float64) (int, error) { return random.Intn(int(bound)) }, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,7 +546,7 @@ func TestGrowthValueCapsBeyondNineWithReroll(t *testing.T) {
 
 func TestGrowthValueNoCapWhenBelowOrEqualNine(t *testing.T) {
 	random := &sequenceRandomSource{values: []int{9}}
-	value, err := growthValue(9, random)
+	value, err := growthValue(9, func(bound float64) (int, error) { return random.Intn(int(bound)) }, false)
 	if err != nil {
 		t.Fatal(err)
 	}
