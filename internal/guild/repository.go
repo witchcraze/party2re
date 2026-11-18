@@ -17,6 +17,7 @@ type GuildReader interface {
 	ListInactiveGuilds(ctx context.Context, cutoff time.Time, limit int) ([]Guild, error)
 	LockCharacterForUpdate(ctx context.Context, characterID string) error
 	ListDecorations(ctx context.Context, guildID string) ([]Decoration, error)
+	GetListing(ctx context.Context) (Listing, error)
 }
 
 // GuildMemberWriter defines mutation operations on guild memberships and role titles.
@@ -44,6 +45,7 @@ type GuildStateWriter interface {
 
 // GuildPointsWriter defines point decay and batch point manipulation on guilds.
 type GuildPointsWriter interface {
+	// DecayGuildPoints decays points and records the public list snapshot atomically (login.cgi write_guild_list_html).
 	DecayGuildPoints(ctx context.Context, factor float64) error
 }
 

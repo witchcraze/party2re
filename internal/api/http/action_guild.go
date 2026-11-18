@@ -20,6 +20,7 @@ type GuildReader interface {
 	Get(ctx context.Context, guildID string) (guild.Detail, error)
 	GetByCharacter(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)
 	List(ctx context.Context, offset, limit int) ([]guild.Guild, error)
+	Listing(ctx context.Context) (guild.Listing, error)
 }
 
 // GuildManager covers membership and the guild room.

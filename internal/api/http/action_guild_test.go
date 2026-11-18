@@ -58,6 +58,10 @@ func (f *guildFixture) List(context.Context, int, int) ([]guild.Guild, error) {
 	return append([]guild.Guild{f.g}, f.others...), f.readErr
 }
 
+func (f *guildFixture) Listing(context.Context) (guild.Listing, error) {
+	return guild.Listing{}, f.readErr
+}
+
 func (f *guildFixture) record(ctx context.Context, call string) error {
 	f.calls = append(f.calls, call)
 	_, err := f.execute(ctx, "hero", 0)
