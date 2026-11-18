@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -81,11 +82,11 @@ func newNativeFixture(t *testing.T, hero corecharacter.Character) *nativeFixture
 
 // place starts on variant 1 and then rewrites position and round; variant 1:
 //
-//	S0001
-//	110H1
-//	0B000
-//	01110
-//	00C10
+//	00002
+//	11B11
+//	00000
+//	I1110
+//	00S00
 func (f *nativeFixture) place(t *testing.T, id string, x, y, round int) dungeon.ActiveExpedition {
 	t.Helper()
 	ctx := context.Background()
@@ -114,51 +115,31 @@ func strongHero(id string) corecharacter.Character {
 	return createTestChar(id, 30, 5000, 900, 900)
 }
 
-func TestNativeMap0_LayoutsAreIndependentFiveByFiveVariants(t *testing.T) {
+func TestNativeMap0_LayoutsMatchLegacy(t *testing.T) {
+	// Raw map/0/1.cgi–6.cgi grids, in variant order.
+	legacy := []string{
+		"00002 11B11 00000 I1110 00S00",
+		"00002 11B11 00000 0111I 00S00",
+		"0I002 01B11 0I000 01110 00S00",
+		"01002 01B11 0I000 01110 00S00",
+		"20000 11B11 00000 11110 00S00",
+		"20000 11B11 00000 01111 00S00",
+	}
+	nativeCells := strings.NewReplacer("I", "H", "2", "C")
 	d := nativeMap0Def(t)
-	if d.RoundLimit != 20 || len(d.Variants) != 6 {
+	if d.RoundLimit != 20 || len(d.Variants) != len(legacy) {
 		t.Fatalf("limit=%d variants=%d", d.RoundLimit, len(d.Variants))
 	}
 	for i, f := range d.Variants {
-		counts := map[byte]int{}
-		for _, row := range f.Grid {
-			if len(row) != 5 {
-				t.Fatalf("variant %d row %q is not 5 wide", i+1, row)
-			}
-			for j := range len(row) {
-				counts[row[j]]++
-			}
+		want := strings.Fields(nativeCells.Replace(legacy[i]))
+		if !slices.Equal(f.Grid, want) || f.Width != 5 || f.Height != 5 {
+			t.Fatalf("variant %d grid %v (%dx%d), want %v (5x5)", i+1, f.Grid, f.Width, f.Height, want)
 		}
-		if len(f.Grid) != 5 || f.Width != 5 || f.Height != 5 || counts['S'] != 1 || counts['B'] != 1 || counts['C'] != 1 {
-			t.Fatalf("variant %d counts %v", i+1, counts)
-		}
-		if hidden := counts['H'] > 0; hidden != (i < 4) {
+		if hidden := len(cellOf(f, 'H')) > 0; hidden != (i < 4) {
 			t.Fatalf("variant %d hidden passage presence %v", i+1, hidden)
 		}
 		if f.Grid[f.StartY][f.StartX] != 'S' || f.Boss == nil || len(f.Monsters) == 0 {
 			t.Fatalf("variant %d start/content invalid", i+1)
-		}
-		// Boss and treasure are reachable through passable cells.
-		seen := map[[2]int]bool{{f.StartX, f.StartY}: true}
-		queue := [][2]int{{f.StartX, f.StartY}}
-		for len(queue) > 0 {
-			p := queue[0]
-			queue = queue[1:]
-			for _, d := range [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
-				n := [2]int{p[0] + d[0], p[1] + d[1]}
-				if n[0] < 0 || n[1] < 0 || n[0] > 4 || n[1] > 4 || seen[n] || f.Grid[n[1]][n[0]] == '1' {
-					continue
-				}
-				seen[n] = true
-				queue = append(queue, n)
-			}
-		}
-		for y, row := range f.Grid {
-			for x := range len(row) {
-				if (row[x] == 'B' || row[x] == 'C') && !seen[[2]int{x, y}] {
-					t.Fatalf("variant %d event %c at %d,%d unreachable", i+1, row[x], x, y)
-				}
-			}
 		}
 	}
 	// Listing never discloses variant grids or hidden passages.
@@ -199,12 +180,12 @@ func TestNativeMap0_StartSelectsSavedVariantAtRoundOne(t *testing.T) {
 func TestNativeMap0_RoundLimitAndWalls(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, strongHero("limit"))
-	f.place(t, "limit", 1, 4, 19)
+	f.place(t, "limit", 3, 0, 19)
 
 	// A wall/bound spends no round and draws nothing.
 	before := f.reload(t, "limit")
 	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionSouth); !errors.Is(err, dungeon.ErrImpassableWall) {
-		t.Fatalf("bound move err=%v", err)
+		t.Fatalf("wall move err=%v", err)
 	}
 	if after := f.reload(t, "limit"); after.Round != before.Round || after.Revision != before.Revision || f.rng.calls() != 0 {
 		t.Fatalf("wall changed state %+v rng=%d", after, f.rng.calls())
@@ -232,7 +213,7 @@ func TestNativeMap0_RoundLimitAndWalls(t *testing.T) {
 		}
 	}
 	after := f.reload(t, "limit")
-	if after.Revision != exp.Revision || after.PosX != 2 || after.PosY != 4 || len(after.ConsumedEvents) != 1 || after.Status != dungeon.StatusExploring || f.rng.calls() != 0 {
+	if after.Revision != exp.Revision || after.PosX != 4 || after.PosY != 0 || len(after.ConsumedEvents) != 1 || after.Status != dungeon.StatusExploring || f.rng.calls() != 0 {
 		t.Fatalf("limit rejection changed state %+v rng=%d", after, f.rng.calls())
 	}
 	if after.Controls("limit").CanMove || len(f.repo.histories["limit"]) != 0 {
@@ -279,9 +260,9 @@ func TestNativeMap0_NonPassageEventsDrawNoPassageRNG(t *testing.T) {
 		dir      dungeon.Direction
 		consumed []string
 	}{
-		{"start", 1, 0, dungeon.DirectionWest, nil},
-		{"hidden", 3, 0, dungeon.DirectionSouth, nil},
-		{"consumed treasure", 1, 4, dungeon.DirectionEast, []string{"C:2:4"}},
+		{"start", 3, 4, dungeon.DirectionWest, nil},
+		{"hidden", 0, 4, dungeon.DirectionNorth, nil},
+		{"consumed treasure", 3, 0, dungeon.DirectionEast, []string{"C:4:0"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newNativeFixture(t, strongHero("quiet"))
@@ -304,7 +285,7 @@ func TestNativeMap0_NonPassageEventsDrawNoPassageRNG(t *testing.T) {
 func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, strongHero("chest"))
-	start := f.place(t, "chest", 1, 4, 3)
+	start := f.place(t, "chest", 3, 0, 3)
 
 	res, err := f.svc.Move(ctx, "chest", dungeon.DirectionEast)
 	if err != nil {
@@ -313,7 +294,7 @@ func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) 
 	exp := f.reload(t, "chest")
 	if res.EventType != dungeon.EventTreasure || exp.Encounter == nil || len(exp.Encounter.Chests) != 1 ||
 		exp.AccumulatedGold != start.AccumulatedGold || len(exp.AccumulatedItems) != 0 ||
-		len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "C:2:4" || exp.Round != 4 {
+		len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "C:4:0" || exp.Round != 4 {
 		t.Fatalf("treasure trigger %+v", exp)
 	}
 
@@ -360,7 +341,7 @@ func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Expedition.Encounter != nil || res.Expedition.PosX != 1 || res.Expedition.Round != 5 {
+	if res.Expedition.Encounter != nil || res.Expedition.PosX != 3 || res.Expedition.Round != 5 {
 		t.Fatalf("released move %+v", res.Expedition)
 	}
 
@@ -372,7 +353,7 @@ func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) 
 
 	// Escape stays available behind unopened chests and keeps the stock.
 	g := newNativeFixture(t, strongHero("flee"))
-	g.place(t, "flee", 1, 4, 3)
+	g.place(t, "flee", 3, 0, 3)
 	if _, err := g.svc.Move(ctx, "flee", dungeon.DirectionEast); err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +373,7 @@ func TestNativeMap0_TreasureCountFollowsLivingRosterAndJob78(t *testing.T) {
 		t.Fatal(err)
 	}
 	exp := f.reload(t, "hunter")
-	exp.PosX, exp.PosY, exp.MapVariant = 1, 4, 1
+	exp.PosX, exp.PosY, exp.MapVariant = 3, 0, 1
 	exp.Members[2].CurrentHP = 0
 	if err := f.store.SaveActiveExpedition(ctx, exp); err != nil {
 		t.Fatal(err)
@@ -413,25 +394,25 @@ func TestNativeMap0_TreasureCountFollowsLivingRosterAndJob78(t *testing.T) {
 func TestNativeMap0_BossTriggersOnceWithoutClearing(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, strongHero("boss"))
-	f.place(t, "boss", 0, 2, 4)
+	f.place(t, "boss", 2, 2, 4)
 	boss := nativeMap0Def(t).Variants[0].Boss
 
-	res, err := f.svc.Move(ctx, "boss", dungeon.DirectionEast)
+	res, err := f.svc.Move(ctx, "boss", dungeon.DirectionNorth)
 	if err != nil {
 		t.Fatal(err)
 	}
 	exp := f.reload(t, "boss")
 	if res.EventType != dungeon.EventBoss || exp.Status != dungeon.StatusExploring || exp.Encounter != nil ||
-		exp.AccumulatedExp != boss.ExpReward || len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "B:1:2" {
+		exp.AccumulatedExp != boss.ExpReward || len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "B:2:1" {
 		t.Fatalf("boss victory %+v / %+v", res, exp)
 	}
 	if len(f.repo.histories["boss"]) != 0 {
 		t.Fatal("boss victory must not finalize the expedition")
 	}
-	if _, err := f.svc.Move(ctx, "boss", dungeon.DirectionEast); err != nil {
+	if _, err := f.svc.Move(ctx, "boss", dungeon.DirectionSouth); err != nil {
 		t.Fatal(err)
 	}
-	if res, err = f.svc.Move(ctx, "boss", dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventMove || res.Expedition.Encounter != nil {
+	if res, err = f.svc.Move(ctx, "boss", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove || res.Expedition.Encounter != nil {
 		t.Fatalf("boss revisit %+v err=%v", res, err)
 	}
 }
@@ -439,8 +420,8 @@ func TestNativeMap0_BossTriggersOnceWithoutClearing(t *testing.T) {
 func TestNativeMap0_BossDrawResumesWithoutSpendingRounds(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, createTestChar("stall", 30, 1_000_000, 1, 1_000_000))
-	f.place(t, "stall", 0, 2, 4)
-	res, err := f.svc.Move(ctx, "stall", dungeon.DirectionEast)
+	f.place(t, "stall", 2, 2, 4)
+	res, err := f.svc.Move(ctx, "stall", dungeon.DirectionNorth)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +429,7 @@ func TestNativeMap0_BossDrawResumesWithoutSpendingRounds(t *testing.T) {
 	if res.BattleResult == nil || res.BattleResult.Outcome != corebattle.OutcomeDraw || exp.Encounter == nil || exp.Encounter.EventType != dungeon.EventBoss {
 		t.Fatalf("expected a pending boss draw, got %+v", res)
 	}
-	if exp.PosX != 1 || exp.PosY != 2 || exp.Round != 5 || len(exp.ConsumedEvents) != 1 {
+	if exp.PosX != 2 || exp.PosY != 1 || exp.Round != 5 || len(exp.ConsumedEvents) != 1 {
 		t.Fatalf("boss trigger state %+v", exp)
 	}
 	if !exp.Controls("stall").CanFight || exp.Controls("stall").CanMove {
@@ -465,7 +446,7 @@ func TestNativeMap0_BossDrawResumesWithoutSpendingRounds(t *testing.T) {
 func TestNativeMap0_HiddenPassageAlwaysLooksLikeAWall(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, strongHero("seek"))
-	f.place(t, "seek", 3, 0, 2)
+	f.place(t, "seek", 0, 4, 2)
 	observe := func() [][]string {
 		t.Helper()
 		before := f.reload(t, "seek")
@@ -487,20 +468,20 @@ func TestNativeMap0_HiddenPassageAlwaysLooksLikeAWall(t *testing.T) {
 		}
 		return view.Map.Tiles
 	}
-	// Radius 1 around (3,0): row 0 is out of bounds, (3,1) below is hidden.
+	// Radius 1 around (0,4): the row below is out of bounds and (0,3) is hidden.
 	if tiles := observe(); tiles[2][1] != "■" || tiles[0][1] != "■" || tiles[1][1] != "●" {
 		t.Fatalf("before traversal %v", tiles)
 	}
-	if _, err := f.svc.Move(ctx, "seek", dungeon.DirectionSouth); err != nil {
+	if _, err := f.svc.Move(ctx, "seek", dungeon.DirectionNorth); err != nil {
 		t.Fatalf("hidden passage is traversable: %v", err)
 	}
-	if tiles := observe(); tiles[1][1] != "●" || tiles[2][1] != "□" {
+	if tiles := observe(); tiles[1][1] != "●" || tiles[0][1] != "□" {
 		t.Fatalf("on hidden passage %v", tiles)
 	}
-	if _, err := f.svc.Move(ctx, "seek", dungeon.DirectionSouth); err != nil {
+	if _, err := f.svc.Move(ctx, "seek", dungeon.DirectionNorth); err != nil {
 		t.Fatal(err)
 	}
-	if tiles := observe(); tiles[0][1] != "■" {
+	if tiles := observe(); tiles[2][1] != "■" {
 		t.Fatalf("after traversal %v", tiles)
 	}
 }

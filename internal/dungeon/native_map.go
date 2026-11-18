@@ -21,6 +21,7 @@ const (
 	cellHidden   = 'H'
 	cellTreasure = 'C'
 	cellBoss     = 'B'
+	cellMap3Boss = 'b' // independent of B
 	cellMist     = 'M' // map3 event_T: party confusion, then an encounter
 	cellKey      = 'K' // map1: picked up once; never consumed by the door
 	cellDoor     = 'D' // map1: opens with the key or an acting job 9
@@ -45,23 +46,22 @@ const jobLockpick = "job-09"
 // NativeMap0ID is the first native map (legacy map/0, six initial variants).
 const NativeMap0ID = "native-map-0"
 
-// nativeMap0 holds independently authored 5×5 layouts with the legacy map0
-// event semantics and round limit 20 (map/0/1.cgi–6.cgi). Variants 5 and 6
-// have no hidden passage, like their legacy counterparts.
+// nativeMap0 uses the layouts and round limit from map/0/1.cgi–6.cgi.
+// Legacy I and 2 map to the native hidden passage H and treasure C.
 func nativeMap0() Dungeon {
 	monsters := []DungeonMonster{
 		{ID: "nm0-rat", Name: "洞窟ネズミ", HP: 8, Attack: 7, Defense: 2, Agility: 8, ExpReward: 2, GoldReward: 3},
 		{ID: "nm0-bat", Name: "大コウモリ", HP: 10, Attack: 8, Defense: 3, Agility: 12, ExpReward: 3, GoldReward: 4},
 		{ID: "nm0-ooze", Name: "緑の粘体", HP: 14, Attack: 9, Defense: 5, Agility: 5, ExpReward: 4, GoldReward: 5},
 	}
-	boss := &DungeonMonster{ID: "nm0-boss", Name: "洞窟の大粘体", HP: 280, Attack: 32, Defense: 12, Agility: 35, ExpReward: 55, GoldReward: 25}
+	boss := &DungeonMonster{ID: "nm0-boss", Name: "ビックスライム", HP: 280, Attack: 32, Defense: 12, Agility: 35, ExpReward: 55, GoldReward: 25}
 	grids := [][]string{
-		{"S0001", "110H1", "0B000", "01110", "00C10"},
-		{"1000S", "1H110", "0000B", "01011", "C0000"},
-		{"C0001", "01110", "0H0B0", "01110", "S0000"},
-		{"0S010", "01010", "0H0B0", "11010", "C0000"},
-		{"00B0C", "01111", "00000", "11110", "S0000"},
-		{"S0000", "11110", "C0B00", "01111", "00000"},
+		{"0000C", "11B11", "00000", "H1110", "00S00"},
+		{"0000C", "11B11", "00000", "0111H", "00S00"},
+		{"0H00C", "01B11", "0H000", "01110", "00S00"},
+		{"0100C", "01B11", "0H000", "01110", "00S00"},
+		{"C0000", "11B11", "00000", "11110", "00S00"},
+		{"C0000", "11B11", "00000", "01111", "00S00"},
 	}
 	variants := make([]Floor, len(grids))
 	for i, grid := range grids {
@@ -126,7 +126,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 	case cell == cellMist:
 		// Repeats on every entry; confusion reaches only the ensuing battle.
 		return s.resolveMonsterCombat(ctx, exp, char, s.encounterPool(floor).monster(s.rng), EventBattle, x, y, "", string(corebattle.StatusConfusion))
-	case cell == cellBoss && !consumed:
+	case (cell == cellBoss || cell == cellMap3Boss) && !consumed:
 		if pool := s.encounterPool(floor); pool.Boss != nil {
 			return s.resolveMonsterCombat(ctx, exp, char, *pool.Boss, EventBoss, x, y, key, "")
 		}
