@@ -380,6 +380,26 @@ func TestNPCDistinctSourceNamesWithSameDisplayStringStaySeparate(t *testing.T) {
 			t.Fatalf("draw=%v: res=%+v actor=%+v enemy=%+v err=%v", tc.draw, res, s.Actors[0], s.Actors[1], err)
 		}
 	}
+
+	// Custom skill sharing an ambiguous Go display name must not overwrite either distinct-source job entry.
+	s, f, d = setup()
+	d.RegisterDefenseGems()
+	s.Actors[0].CMP = 100
+	s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+		CustomName: "agile-strike",
+		Gems:       [3]string{"gem_guard_1"},
+		GemCosts:   [3]int{20},
+		CustomCost: 20,
+	}
+	choices, err = d.NPCChoices(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+	if err != nil || len(choices) != 4 {
+		t.Fatalf("ambiguous custom display name choices=%+v err=%v", choices, err)
+	}
+	if choices[1].ID != "job-2-entry-1" || choices[1].Custom ||
+		choices[2].ID != "job-83-entry-0" || choices[2].Custom ||
+		!choices[3].Custom {
+		t.Fatalf("ambiguous custom display name overwrote job entries: %+v", choices)
+	}
 }
 
 func TestNPCContextDependentSourceNamesAndCustomCollision(t *testing.T) {
@@ -409,29 +429,41 @@ func TestNPCContextDependentSourceNamesAndCustomCollision(t *testing.T) {
 		}
 	}
 
-	// job-84 burn-strike context switches source name key and custom-name collision.
+	// job-84 frozen BurnStrike (both false and true) stays consistent across NPCChoices and execution even if state mutates afterward.
 	for _, tc := range []struct {
-		name, field, gender, custom string
-		burnFlag                    bool
-		wantCollide                 bool
+		name, initField, postField, initIcon, postIcon, gender, custom string
+		burnOverride                                                   *bool
+		wantBurn, wantCollide                                          bool
+		wantEnemyHP                                                    int
 	}{
-		{"non-burn gender mismatch collides base", "burn", "f", "ほのおのこぶし", false, true},
-		{"non-burn gender mismatch ignores burn name", "burn", "f", "ブレイズストライク", false, false},
-		{"burn active collides burn name", "burn", "m", "ブレイズストライク", false, true},
-		{"burn active ignores base name", "burn", "m", "ほのおのこぶし", false, false},
-		{"frozen burn flag overrides empty field", "", "f", "ブレイズストライク", true, true},
+		{"frozen false before burn field keeps base name and 2.0x damage", "", "burn", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "m", "ほのおのこぶし", nil, false, true, 892},
+		{"frozen false ignores burn name even after burn field", "", "burn", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "m", "ブレイズストライク", nil, false, false, 892},
+		{"frozen false by gender mismatch stays false", "burn", "burn", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "f", "ほのおのこぶし", nil, false, true, 892},
+		{"frozen true stays burn name and 2.5x damage after field clears", "burn", "", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "changed", "m", "ブレイズストライク", nil, true, true, 888},
+		{"frozen true ignores base name after field clears", "burn", "", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "changed", "m", "ほのおのこぶし", nil, true, false, 888},
+		{"explicit frozen false overrides active burn state", "burn", "burn", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "m", "ブレイズストライク", new(false), false, false, 892},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, c, f, d := npcSelectionFixture()
-			d.RegisterTransformations(&corebattle.TransformationContext{RequesterGender: tc.gender})
+			s.Actors[1].Defense, s.Actors[1].BaseStats.Defense = 0, 0
+			s.Fields.Temporary = tc.initField
+			s.Actors[0].Icon = tc.initIcon
+			burn := s.Actors[0].LateBreathSongBurn(s.Fields.Current(), tc.gender)
+			if tc.burnOverride != nil {
+				burn = *tc.burnOverride
+			}
+			if burn != tc.wantBurn {
+				t.Fatalf("burn=%v want %v", burn, tc.wantBurn)
+			}
 			d.RegisterLateBreathSong(&corebattle.LateBreathSongContext{
 				DamageContext: c.DamageContext,
-				BurnStrike:    tc.burnFlag,
+				BurnStrike:    burn,
 				HeldBooks:     map[string]string{"self": "none"},
 			})
 			d.RegisterDefenseGems()
-			s.Fields.Temporary = tc.field
-			s.Actors[0].Icon = "assets/images/placeholders/battle/forms.svg#job-84-ex-m"
+			// Mutate state after freezing context to verify NPCChoices honors the frozen BurnStrike value.
+			s.Fields.Temporary = tc.postField
+			s.Actors[0].Icon = tc.postIcon
 			s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-84", SP: 50, OldJobID: "starter"}
 			s.Actors[0].MP, s.Actors[0].CMP = 30, 100
 			s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
@@ -446,6 +478,12 @@ func TestNPCContextDependentSourceNamesAndCustomCollision(t *testing.T) {
 			}
 			if choices[3].Custom != tc.wantCollide || !choices[4].Custom {
 				t.Fatalf("wantCollide=%v got pos3=%+v pos4=%+v", tc.wantCollide, choices[3], choices[4])
+			}
+			if !tc.wantCollide {
+				res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &damageGemDraws{t: t, draws: []float64{3.0 / 5.0, 0, 0}})
+				if err != nil || res.ID != "job-84-entry-2" || s.Actors[1].HP != tc.wantEnemyHP {
+					t.Fatalf("execution mismatch: res=%+v enemyHP=%d want=%d err=%v", res, s.Actors[1].HP, tc.wantEnemyHP, err)
+				}
 			}
 		})
 	}

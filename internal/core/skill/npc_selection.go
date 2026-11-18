@@ -56,14 +56,11 @@ func (d BattleDefinitions) npcTable(s *corebattle.LifetimeState, c *corebattle.C
 }
 
 func (d BattleDefinitions) npcBurnStrike(s *corebattle.LifetimeState, a *corebattle.LifetimeActor) bool {
-	if d.lateBreathSong != nil && d.lateBreathSong.BurnStrike {
-		return true
+	if d.lateBreathSong != nil {
+		return d.lateBreathSong.BurnStrike
 	}
 	if s == nil || a == nil {
 		return false
-	}
-	if d.transformations != nil && d.transformations.RequesterGender != "" {
-		return a.LateBreathSongBurn(s.Fields.Current(), d.transformations.RequesterGender)
 	}
 	return a.LateBreathSongBurn(s.Fields.Current(), "m") || a.LateBreathSongBurn(s.Fields.Current(), "f")
 }
@@ -100,7 +97,11 @@ func (d BattleDefinitions) NPCChoices(s *corebattle.LifetimeState, c *corebattle
 		}
 		positions = append(positions, key)
 		bindings[key] = NPCChoice{CallbackBinding: e}
-		byDisplay[e.Name] = key
+		if prev, ok := byDisplay[e.Name]; !ok {
+			byDisplay[e.Name] = key
+		} else if prev != key {
+			byDisplay[e.Name] = ""
+		}
 	}
 	current, err := d.npcTable(s, c, a.Jobs.JobID)
 	if err != nil {
@@ -126,7 +127,7 @@ func (d BattleDefinitions) NPCChoices(s *corebattle.LifetimeState, c *corebattle
 		if len(choice.Invocations) > 0 {
 			key := OperationNameKey(load.CustomName)
 			if _, ok := bindings[key]; !ok {
-				if displayKey, ok := byDisplay[load.CustomName]; ok {
+				if displayKey := byDisplay[load.CustomName]; displayKey != "" {
 					key = displayKey
 				}
 			}

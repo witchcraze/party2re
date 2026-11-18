@@ -9,7 +9,6 @@ import (
 // tableless copy book. Other
 // bodies in these complete tables remain with their own registration owners.
 func (d *BattleDefinitions) RegisterTransformations(c *corebattle.TransformationContext) {
-	d.transformations = c
 	if d.TransformationSkills == nil {
 		d.TransformationSkills = make(map[string]bool)
 	}

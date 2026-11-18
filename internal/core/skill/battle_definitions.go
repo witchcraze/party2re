@@ -22,7 +22,6 @@ type BattleDefinitions struct {
 	PlayerTails          map[string]bool
 	EquipmentTails       map[string]bool
 	Invocations          corebattle.CallbackCatalog
-	transformations      *corebattle.TransformationContext
 	lateBreathSong       *corebattle.LateBreathSongContext
 }
 
