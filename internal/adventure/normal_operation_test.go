@@ -319,7 +319,7 @@ func TestNormalOperationSourceKeysCoverRegisteredTablePositions(t *testing.T) {
 	for job, table := range ctx.Definitions.Invocations.JobTables {
 		for _, variant := range table.Variants {
 			for _, entry := range variant {
-				if entry.ID != "job-82-entry-0" && normalOperationNames.Names[entry.ID] == "" {
+				if entry.ID != "job-82-entry-0" && skill.EntrySourceKey(entry.ID, false) == "" {
 					t.Errorf("job %d entry %s missing its source name key", job, entry.ID)
 				}
 			}

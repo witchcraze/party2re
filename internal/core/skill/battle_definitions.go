@@ -22,6 +22,7 @@ type BattleDefinitions struct {
 	PlayerTails          map[string]bool
 	EquipmentTails       map[string]bool
 	Invocations          corebattle.CallbackCatalog
+	lateBreathSong       *corebattle.LateBreathSongContext
 }
 
 func (d BattleDefinitions) JobAction(def Definition) (corebattle.ActionSkill, error) {

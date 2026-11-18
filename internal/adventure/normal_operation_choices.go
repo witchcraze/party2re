@@ -180,11 +180,11 @@ func (o *normalOperations) add(c runOperationCandidate) {
 }
 
 func (o *normalOperations) addSpecial(action, source string, kind RunOperationKind) {
-	o.add(runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: action, Name: action, Kind: kind}, key: operationNameKey(source)})
+	o.add(runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: action, Name: action, Kind: kind}, key: skill.OperationNameKey(source)})
 }
 
 func (o *normalOperations) addBattle(action, name, source, entry string) {
-	c := runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: action, Name: name, Kind: RunOperationBattle}, key: operationNameKey(source)}
+	c := runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: action, Name: name, Kind: RunOperationBattle}, key: skill.OperationNameKey(source)}
 	if entry != "" {
 		c.binding.Invocation = corebattle.CallbackInvocation{Kind: "entry", EntryID: entry}
 	}
@@ -232,13 +232,6 @@ func (o *normalOperations) extendedJob(id string) bool {
 	return false
 }
 
-func (o *normalOperations) sourceKey(id string) string {
-	if id == "job-84-entry-2" && o.ctx.Requester != nil && o.actor.LateBreathSongBurn(o.run.Battle.Fields.Current(), o.ctx.Requester.Gender) {
-		id += "-burn"
-	}
-	return normalOperationNames.Names[id]
-}
-
 func (o *normalOperations) addListed(entry corebattle.CallbackEntry, sp int) {
 	o.addBinding(corebattle.CallbackBinding{
 		CallbackEntry: entry,
@@ -251,16 +244,14 @@ func (o *normalOperations) addBinding(binding corebattle.CallbackBinding, sp int
 	if entry.RequiredSP > sp {
 		return
 	}
-	key := o.sourceKey(entry.ID)
-	if child := binding.Invocation.GeneratedChildID; child != "" {
-		key = "generated:" + o.sourceKey(child)
-	}
+	burn := o.ctx.Requester != nil && o.actor.LateBreathSongBurn(o.run.Battle.Fields.Current(), o.ctx.Requester.Gender)
+	key := skill.BindingSourceKey(binding, burn)
 	if key == "" {
 		key = "unavailable:" + entry.ID
 	}
 	cost := entry.MPCost
 	if slices.Contains(o.actor.ItemDefinitionIDs, "item-249") {
-		if slices.Contains(normalOperationNames.Magician, key) {
+		if skill.IsMagicianOperationKey(key) {
 			cost /= 2
 		} else {
 			cost *= 2
@@ -274,7 +265,7 @@ func (o *normalOperations) addBinding(binding corebattle.CallbackBinding, sp int
 		binding:            binding,
 		key:                key,
 	}
-	if key == normalOperationNames.Call && slices.Contains(o.actor.ItemDefinitionIDs, "item-165") {
+	if skill.IsCallOperationKey(key) && slices.Contains(o.actor.ItemDefinitionIDs, "item-165") {
 		c.MPCost = 0
 	}
 	o.add(c)
@@ -283,7 +274,7 @@ func (o *normalOperations) addBinding(binding corebattle.CallbackBinding, sp int
 func (o *normalOperations) addGear() {
 	a := o.actor
 	for _, id := range a.ItemDefinitionIDs {
-		if gear, ok := normalOperationNames.Gear[id]; ok {
+		if gear, ok := skill.OperationGear(id); ok {
 			o.addListed(corebattle.CallbackEntry{ID: gear.ID, Name: gear.ID, MPCost: gear.MP}, a.Jobs.OldSP)
 		}
 	}
@@ -318,7 +309,7 @@ func (o *normalOperations) addHeldTool() error {
 	if err != nil {
 		return err
 	}
-	key := operationNameKey("どうぐ")
+	key := skill.OperationNameKey("どうぐ")
 	o.addBattle("tool", "tool", "どうぐ", "tool-"+strconv.Itoa(n))
 	candidate := o.byKey[key]
 	candidate.heldTool = *held
@@ -365,8 +356,8 @@ func (o *normalOperations) addCustom() {
 		return
 	}
 	name := a.Custom.Name
-	key := operationNameKey(name)
-	if _, exists := o.byKey[key]; exists || key == operationNameKey("br") && (a.Jobs.SP != 0 || a.Jobs.OldSP != 0) {
+	key := skill.OperationNameKey(name)
+	if _, exists := o.byKey[key]; exists || key == skill.OperationNameKey("br") && (a.Jobs.SP != 0 || a.Jobs.OldSP != 0) {
 		return
 	}
 	o.add(runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: "custom", Name: name, Kind: RunOperationBattle}, key: key, custom: true})

@@ -55,6 +55,16 @@ func (d BattleDefinitions) npcTable(s *corebattle.LifetimeState, c *corebattle.C
 	return s.CallbackBindings(c, d.Invocations, job)
 }
 
+func (d BattleDefinitions) npcBurnStrike(s *corebattle.LifetimeState, a *corebattle.LifetimeActor) bool {
+	if d.lateBreathSong != nil {
+		return d.lateBreathSong.BurnStrike
+	}
+	if s == nil || a == nil {
+		return false
+	}
+	return a.LateBreathSongBurn(s.Fields.Current(), "m") || a.LateBreathSongBurn(s.Fields.Current(), "f")
+}
+
 // NPCChoices applies NPC-only SP/MP/extension predicates in source order. Every
 // eligible last binding must be supported: filtering missing bodies would alter
 // the random pool. Primitive batch definitions cannot certify NPC callbacks.
@@ -73,14 +83,25 @@ func (d BattleDefinitions) NPCChoices(s *corebattle.LifetimeState, c *corebattle
 	if err := a.ValidateOrdinaryNPC(); err != nil {
 		return nil, err
 	}
+	burn := d.npcBurnStrike(s, a)
 	var positions []string
 	bindings := map[string]NPCChoice{}
+	byDisplay := map[string]string{}
 	appendEntry := func(e corebattle.CallbackBinding, sp int, job string) {
 		if e.RequiredSP > sp || e.MPCost > a.MP || (e.Extended && (!slices.Contains(a.ItemDefinitionIDs, "item-158") || job == "job-73")) {
 			return
 		}
-		positions = append(positions, e.Name)
-		bindings[e.Name] = NPCChoice{CallbackBinding: e}
+		key := BindingSourceKey(e, burn)
+		if key == "" {
+			key = "id:" + e.ID
+		}
+		positions = append(positions, key)
+		bindings[key] = NPCChoice{CallbackBinding: e}
+		if prev, ok := byDisplay[e.Name]; !ok {
+			byDisplay[e.Name] = key
+		} else if prev != key {
+			byDisplay[e.Name] = ""
+		}
 	}
 	current, err := d.npcTable(s, c, a.Jobs.JobID)
 	if err != nil {
@@ -104,13 +125,19 @@ func (d BattleDefinitions) NPCChoices(s *corebattle.LifetimeState, c *corebattle
 			}
 		}
 		if len(choice.Invocations) > 0 {
-			positions = append(positions, load.CustomName)
-			bindings[load.CustomName] = choice
+			key := OperationNameKey(load.CustomName)
+			if _, ok := bindings[key]; !ok {
+				if displayKey := byDisplay[load.CustomName]; displayKey != "" {
+					key = displayKey
+				}
+			}
+			positions = append(positions, key)
+			bindings[key] = choice
 		}
 	}
 	choices := make([]NPCChoice, 0, len(positions))
-	for _, name := range positions {
-		choice := bindings[name]
+	for _, key := range positions {
+		choice := bindings[key]
 		frame := *c
 		frame.Arguments = nil // NPC callbacks receive no player selector/extension list.
 		frame.Custom = choice.Custom
@@ -187,7 +214,7 @@ func (d BattleDefinitions) ApplyNPCAction(s *corebattle.LifetimeState, c *coreba
 		return NPCActionResult{}, err
 	}
 	a.MP = max(0, a.MP-choice.MPCost)
-	if load := a.NPCLoadout; load != nil && choice.Name == load.CustomName {
+	if load := a.NPCLoadout; load != nil && (choice.Custom || choice.Name == load.CustomName) {
 		a.CMP -= load.CustomCost
 	}
 	return NPCActionResult{NPCChoice: choice, NextSeed: nextSeed}, nil

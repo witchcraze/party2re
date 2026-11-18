@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -268,5 +269,245 @@ func TestNPCEXOnlyJobsRemainWholeActionGates(t *testing.T) {
 		if after, _ := json.Marshal(s); string(after) != string(before) || rng.calls != 0 {
 			t.Fatal(job, "gate mutated or drew")
 		}
+	}
+}
+
+func TestNPCSourceNameLastWriteAcrossDifferentDisplayStrings(t *testing.T) {
+	setup := func() (corebattle.LifetimeState, corebattle.CallbackContext, BattleDefinitions) {
+		s, c, f, d := npcSelectionFixture()
+		d.RegisterProtectiveMagic(&corebattle.ProtectiveMagicContext{DamageContext: c.DamageContext})
+		d.RegisterControlClimax(&corebattle.ControlClimaxContext{DamageContext: c.DamageContext})
+		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-34", SP: 90, OldJobID: "job-70", OldSP: 150}
+		s.Actors[0].MP = 40
+		return s, f, d
+	}
+
+	s, f, d := setup()
+	choices, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotIDs := make([]string, len(choices))
+	for i, ch := range choices {
+		gotIDs[i] = ch.ID
+	}
+	wantIDs := []string{
+		"npc-normal-attack",
+		"job-34-entry-0",
+		"job-34-entry-1",
+		"job-70-entry-0",
+		"job-70-entry-2",
+		"job-70-entry-0",
+		"job-70-entry-1",
+		"job-70-entry-2",
+	}
+	if !slices.Equal(gotIDs, wantIDs) {
+		t.Fatalf("choice order/resolution = %v, want %v", gotIDs, wantIDs)
+	}
+	if choices[3].Name != "meditation" || choices[5].Name != "meditation" ||
+		choices[4].Name != "magic-storm" || choices[7].Name != "magic-storm" {
+		t.Fatalf("unexpected resolved display names: %+v", choices)
+	}
+
+	// Deterministic selection at both duplicate positions (index 4 originally 34.3, index 7 originally 70.2).
+	for _, draw := range []float64{4.0 / 8.0, 7.0 / 8.0} {
+		s, f, d := setup()
+		beforeEnemyHP := s.Actors[1].HP
+		res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: draw})
+		if err != nil || res.ID != "job-70-entry-2" || res.Name != "magic-storm" || s.Actors[0].MP != 0 || s.Actors[1].HP >= beforeEnemyHP {
+			t.Fatalf("draw=%v: res=%+v actor=%+v enemy=%+v err=%v", draw, res, s.Actors[0], s.Actors[1], err)
+		}
+	}
+
+	// Index 3 (originally 34.2) also resolves to 70.0.
+	s, f, d = setup()
+	s.Actors[0].HP = 50
+	res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: 3.0 / 8.0})
+	if err != nil || res.ID != "job-70-entry-0" || res.Name != "meditation" || s.Actors[0].MP != 15 || s.Actors[0].HP <= 50 {
+		t.Fatalf("index 3 resolution: res=%+v actor=%+v err=%v", res, s.Actors[0], err)
+	}
+
+	// Unavailable-descendant whole-pool gate: removing the overwritten 34.3 succeeds; removing the final 70.2 rejects atomically.
+	s, f, d = setup()
+	delete(d.Invocations.Entries, "job-34-entry-3")
+	if _, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{}); err != nil {
+		t.Fatalf("overwritten 34.3 gated valid 70.2: %v", err)
+	}
+
+	s, f, d = setup()
+	delete(d.Invocations.Entries, "job-70-entry-2")
+	before, _ := json.Marshal(s)
+	rng := &npcSelectionRNG{}
+	if _, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatalf("missing 70.2 must gate whole pool, got %v", err)
+	}
+	if after, _ := json.Marshal(s); string(after) != string(before) || rng.calls != 0 {
+		t.Fatal("gate mutated state or consumed RNG")
+	}
+}
+
+func TestNPCDistinctSourceNamesWithSameDisplayStringStaySeparate(t *testing.T) {
+	setup := func() (corebattle.LifetimeState, corebattle.CallbackContext, BattleDefinitions) {
+		s, c, f, d := npcSelectionFixture()
+		d.RegisterDualAgility(&corebattle.DualAgilityContext{DamageContext: c.DamageContext})
+		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-02", SP: 5, OldJobID: "job-83", OldSP: 5}
+		s.Actors[0].MP = 3
+		return s, f, d
+	}
+
+	s, f, d := setup()
+	choices, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+	if err != nil || len(choices) != 3 {
+		t.Fatalf("choices=%+v err=%v", choices, err)
+	}
+	if choices[0].ID != "npc-normal-attack" ||
+		choices[1].ID != "job-2-entry-1" || choices[1].Name != "agile-strike" ||
+		choices[2].ID != "job-83-entry-0" || choices[2].Name != "agile-strike" {
+		t.Fatalf("coincident display names collapsed: %+v", choices)
+	}
+
+	for _, tc := range []struct {
+		draw   float64
+		wantID string
+	}{
+		{0.4, "job-2-entry-1"},
+		{0.7, "job-83-entry-0"},
+	} {
+		s, f, d := setup()
+		beforeEnemyHP := s.Actors[1].HP
+		res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: tc.draw})
+		if err != nil || res.ID != tc.wantID || s.Actors[0].MP != 0 || s.Actors[1].HP >= beforeEnemyHP {
+			t.Fatalf("draw=%v: res=%+v actor=%+v enemy=%+v err=%v", tc.draw, res, s.Actors[0], s.Actors[1], err)
+		}
+	}
+
+	// Custom skill sharing an ambiguous Go display name must not overwrite either distinct-source job entry.
+	s, f, d = setup()
+	d.RegisterDefenseGems()
+	s.Actors[0].CMP = 100
+	s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+		CustomName: "agile-strike",
+		Gems:       [3]string{"gem_guard_1"},
+		GemCosts:   [3]int{20},
+		CustomCost: 20,
+	}
+	choices, err = d.NPCChoices(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+	if err != nil || len(choices) != 4 {
+		t.Fatalf("ambiguous custom display name choices=%+v err=%v", choices, err)
+	}
+	if choices[1].ID != "job-2-entry-1" || choices[1].Custom ||
+		choices[2].ID != "job-83-entry-0" || choices[2].Custom ||
+		!choices[3].Custom {
+		t.Fatalf("ambiguous custom display name overwrote job entries: %+v", choices)
+	}
+}
+
+func TestNPCContextDependentSourceNamesAndCustomCollision(t *testing.T) {
+	// job-77 temporary variant switches source name and custom-name collision.
+	for _, temp := range []corebattle.TemporaryEffect{"", corebattle.TemporaryDefense} {
+		for _, customName := range []string{"triple-strike", "release-six-strikes"} {
+			s, c, f, d := npcSelectionFixture()
+			d.RegisterDualAgility(&corebattle.DualAgilityContext{DamageContext: c.DamageContext})
+			d.RegisterDefenseGems()
+			s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-77", SP: 130, OldJobID: "starter"}
+			s.Actors[0].MP, s.Actors[0].CMP = 37, 100
+			s.Actors[0].Temporary = temp
+			s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+				CustomName: customName,
+				Gems:       [3]string{"gem_guard_1"},
+				GemCosts:   [3]int{20},
+				CustomCost: 20,
+			}
+			choices, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+			if err != nil || len(choices) != 6 {
+				t.Fatalf("temp=%q custom=%q choices=%+v err=%v", temp, customName, choices, err)
+			}
+			wantCollide := (temp == "" && customName == "triple-strike") || (temp != "" && customName == "release-six-strikes")
+			if choices[4].Custom != wantCollide || !choices[5].Custom {
+				t.Fatalf("temp=%q custom=%q wantCollide=%v got pos4=%+v pos5=%+v", temp, customName, wantCollide, choices[4], choices[5])
+			}
+		}
+	}
+
+	// job-84 frozen BurnStrike (both false and true) stays consistent across NPCChoices and execution even if state mutates afterward.
+	for _, tc := range []struct {
+		name, initField, postField, initIcon, postIcon, gender, custom string
+		burnOverride                                                   *bool
+		wantBurn, wantCollide                                          bool
+		wantEnemyHP                                                    int
+	}{
+		{"frozen false before burn field keeps base name and 2.0x damage", "", "burn", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "m", "ほのおのこぶし", nil, false, true, 892},
+		{"frozen false ignores burn name even after burn field", "", "burn", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "m", "ブレイズストライク", nil, false, false, 892},
+		{"frozen false by gender mismatch stays false", "burn", "burn", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "f", "ほのおのこぶし", nil, false, true, 892},
+		{"frozen true stays burn name and 2.5x damage after field clears", "burn", "", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "changed", "m", "ブレイズストライク", nil, true, true, 888},
+		{"frozen true ignores base name after field clears", "burn", "", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "changed", "m", "ほのおのこぶし", nil, true, false, 888},
+		{"explicit frozen false overrides active burn state", "burn", "burn", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "assets/images/placeholders/battle/forms.svg#job-84-ex-m", "m", "ブレイズストライク", new(false), false, false, 892},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, c, f, d := npcSelectionFixture()
+			s.Actors[1].Defense, s.Actors[1].BaseStats.Defense = 0, 0
+			s.Fields.Temporary = tc.initField
+			s.Actors[0].Icon = tc.initIcon
+			burn := s.Actors[0].LateBreathSongBurn(s.Fields.Current(), tc.gender)
+			if tc.burnOverride != nil {
+				burn = *tc.burnOverride
+			}
+			if burn != tc.wantBurn {
+				t.Fatalf("burn=%v want %v", burn, tc.wantBurn)
+			}
+			d.RegisterLateBreathSong(&corebattle.LateBreathSongContext{
+				DamageContext: c.DamageContext,
+				BurnStrike:    burn,
+				HeldBooks:     map[string]string{"self": "none"},
+			})
+			d.RegisterDefenseGems()
+			// Mutate state after freezing context to verify NPCChoices honors the frozen BurnStrike value.
+			s.Fields.Temporary = tc.postField
+			s.Actors[0].Icon = tc.postIcon
+			s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-84", SP: 50, OldJobID: "starter"}
+			s.Actors[0].MP, s.Actors[0].CMP = 30, 100
+			s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+				CustomName: tc.custom,
+				Gems:       [3]string{"gem_guard_1"},
+				GemCosts:   [3]int{20},
+				CustomCost: 20,
+			}
+			choices, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+			if err != nil || len(choices) != 5 {
+				t.Fatalf("choices=%+v err=%v", choices, err)
+			}
+			if choices[3].Custom != tc.wantCollide || !choices[4].Custom {
+				t.Fatalf("wantCollide=%v got pos3=%+v pos4=%+v", tc.wantCollide, choices[3], choices[4])
+			}
+			if !tc.wantCollide {
+				res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &damageGemDraws{t: t, draws: []float64{3.0 / 5.0, 0, 0}})
+				if err != nil || res.ID != "job-84-entry-2" || s.Actors[1].HP != tc.wantEnemyHP {
+					t.Fatalf("execution mismatch: res=%+v enemyHP=%d want=%d err=%v", res, s.Actors[1].HP, tc.wantEnemyHP, err)
+				}
+			}
+		})
+	}
+}
+
+func TestNPCSourceKeysCoverRegisteredTables(t *testing.T) {
+	if EntrySourceKey("npc-normal-attack", false) == "" {
+		t.Fatal("npc-normal-attack missing source name key")
+	}
+	for _, job := range []int{88, 90, 91, 92, 93, 94, 95, 97, 98, 99, 402, 403} {
+		entries := corebattle.NPCJobEntries(job)
+		if len(entries) == 0 {
+			t.Fatalf("job %d returned no NPC entries", job)
+		}
+		for _, entry := range entries {
+			if EntrySourceKey(entry.ID, false) == "" {
+				t.Errorf("NPC job %d entry %s missing source name key", job, entry.ID)
+			}
+		}
+	}
+	if EntrySourceKey("job-77-entry-4-temporary", false) == "" {
+		t.Fatal("job-77-entry-4-temporary missing source name key")
+	}
+	if k1, k2 := EntrySourceKey("job-84-entry-2", false), EntrySourceKey("job-84-entry-2", true); k1 == "" || k2 == "" || k1 == k2 {
+		t.Fatalf("unexpected job-84-entry-2 source keys: %q vs %q", k1, k2)
 	}
 }
