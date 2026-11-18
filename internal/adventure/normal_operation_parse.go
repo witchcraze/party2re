@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
 )
@@ -134,14 +135,14 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 			}
 		case "chest":
 			if o.run.Floor != TreasureRoomFloor || !slices.ContainsFunc(o.run.Boxes, func(box TreasureBox) bool {
-				return box.OpenedBy == "" && (target == "" || box.ID == target)
+				return box.isUnopened() && (action.TargetID == "" || box.ID == action.TargetID)
 			}) {
 				return ParsedRunAction{}, ErrNoUnopenedTreasure
 			}
 		}
 		return action, nil
 	}
-	if o.banned(c) || o.treasure && !takesSelector(c) {
+	if o.banned(c) {
 		return ParsedRunAction{}, ErrRunUnavailable
 	}
 	if action.EntryID == stockLevelAction {
@@ -155,7 +156,7 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 		assets.StoredItem, assets.StoredTarget = action.TargetID, action.Input
 		frame.Assets = &assets
 	}
-	state := &o.run.Battle
+	state := &o.battle
 	rng := random.Default()
 	switch {
 	case c.custom:
@@ -194,9 +195,38 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 	if c.custom {
 		entry = "custom"
 	}
+	if c.Action == "chest" && legacy && target != "" {
+		if idx := slices.IndexFunc(o.run.Boxes, func(b TreasureBox) bool {
+			return b.isUnopened() && (b.Name == target || "@"+b.Name == target)
+		}); idx >= 0 {
+			target = o.run.Boxes[idx].ID
+		} else if idx := slices.IndexFunc(o.run.Boxes, func(b TreasureBox) bool {
+			return b.Name == target || "@"+b.Name == target
+		}); idx >= 0 {
+			target = o.run.Boxes[idx].ID
+		}
+	}
 	scoped := c.Kind == RunOperationBattle || c.Action == "kick"
-	if entry == "job-50-entry-7" || entry == "job-86-entry-0" || entry == "job-86-entry-3" || takesSelector(c) {
+	if entry == "job-50-entry-7" || entry == "job-86-entry-0" || entry == "job-86-entry-3" || entry == "job-78-entry-1" || takesSelector(c) {
 		scoped = false
+	}
+	if entry == "job-78-entry-1" {
+		if target != "" && input != "" {
+			return ParsedRunAction{}, ErrRunConflict
+		}
+		if target != "" {
+			if resolved := o.participantID(target, legacy); resolved != "" {
+				target = resolved
+			} else if !legacy || slices.ContainsFunc(o.run.Boxes, func(b TreasureBox) bool {
+				return b.ID == target || b.Name == target || "@"+b.Name == target
+			}) {
+				return ParsedRunAction{}, ErrRunConflict
+			} else if def, ok := findCatalogItemByLegacyInput(target); ok {
+				input, target = def.ID, ""
+			} else {
+				return ParsedRunAction{}, ErrRunConflict
+			}
+		}
 	}
 	if scoped && target != "" {
 		target = o.participantID(target, legacy)
@@ -215,7 +245,7 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 	if bookSelector && input != "" && target != "" {
 		return ParsedRunAction{}, ErrRunConflict
 	}
-	if (takesSelector(c) || bookSelector) && input != "" {
+	if (takesSelector(c) || bookSelector || entry == "job-78-entry-1") && input != "" {
 		args = []string{input}
 	} else if target != "" || input != "" {
 		args = []string{target}
@@ -235,17 +265,31 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 }
 
 func (o *normalOperations) participantID(target string, legacy bool) string {
-	if o.run.actor(target) != nil {
+	if slices.ContainsFunc(o.battle.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == target }) {
 		return target
 	}
 	if legacy {
-		for _, a := range o.run.Battle.Actors {
-			if a.Name == target {
+		for _, a := range o.battle.Actors {
+			if a.Name == target || "@"+a.Name == target {
 				return a.ID
 			}
 		}
 	}
 	return ""
+}
+
+func findCatalogItemByLegacyInput(input string) (item.Definition, bool) {
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		return item.Definition{}, false
+	}
+	if def, err := catalog.FindByID(input); err == nil {
+		return def, true
+	}
+	if def, err := catalog.FindByName(input); err == nil {
+		return def, true
+	}
+	return item.Definition{}, false
 }
 
 func (o *normalOperations) registered(c runOperationCandidate) bool {

@@ -22,6 +22,9 @@ type CallbackContext struct {
 	Status *StatusContext
 	Defeat *DefeatContext
 	Assets *JobAssets
+	// Inspection carries operation-local frozen reward metadata for current
+	// encounter members and projected treasure boxes.
+	Inspection map[string]InspectionContent
 	// ArithmeticDivisor is shared by nested callbacks in this operation only.
 	ArithmeticDivisor int
 	// Invoke executes a declared child in the current argument/actor frame. It

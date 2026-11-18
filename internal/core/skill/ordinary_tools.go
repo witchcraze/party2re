@@ -19,6 +19,20 @@ func (d *BattleDefinitions) RegisterOrdinaryTools(c *corebattle.OrdinaryToolCont
 	}
 }
 
+func mergeInspection(base, overlay map[string]corebattle.InspectionContent) map[string]corebattle.InspectionContent {
+	if len(base) == 0 {
+		return overlay
+	}
+	merged := make(map[string]corebattle.InspectionContent, len(base)+len(overlay))
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range overlay {
+		merged[k] = v
+	}
+	return merged
+}
+
 func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool bool) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
@@ -27,6 +41,7 @@ func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool b
 			}
 			child := *c
 			child.TargetContext, child.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
+			child.Inspection = mergeInspection(f.Inspection, c.Inspection)
 			return s.ValidateOrdinaryTool(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
@@ -37,7 +52,10 @@ func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool b
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			savedInspection := c.Inspection
 			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
+			c.Inspection = mergeInspection(f.Inspection, savedInspection)
+			defer func() { c.Inspection = savedInspection }()
 			var err error
 			if tool {
 				err = s.ApplyOrdinaryTool(c, id, rng)

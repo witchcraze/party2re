@@ -129,6 +129,13 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			request.UnsealDemonKing = effects.UnsealDemonKing
 			r.recordCreditedDefeats(effects.CreditedDefeats, s.cfg.RNG)
 			for _, id := range effects.MemberOnlyIDs {
+				if idx := slices.IndexFunc(r.Boxes, func(b TreasureBox) bool { return b.ID == id }); idx >= 0 {
+					if r.Boxes[idx].isUnopened() {
+						box := r.Boxes[idx]
+						r.Boxes = append(slices.Delete(slices.Clone(r.Boxes), idx, idx+1), box)
+					}
+					continue
+				}
 				a, actor := r.actor(id), r.actor(cmd.ActorID)
 				if a == nil || actor == nil || a.TeamID == actor.TeamID || slices.Contains(r.Enemies, id) {
 					return ErrRunConflict

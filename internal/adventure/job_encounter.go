@@ -31,12 +31,12 @@ func (s *NormalRunService) PrepareJobEncounters(ctx context.Context, r *NormalRu
 	if reset != nil {
 		c.Cursor = reset.Cursor
 	}
-	transition := &CombatTravelTransition{ResponseSuppressed: r.Floor == TreasureRoomFloor}
+	transition := &CombatTravelTransition{ResponseSuppressed: r.Floor == TreasureRoomFloor || r.Floor == EXBossFloor+1}
 	_, modeErr := ValidateCrawlMode(r.Mode)
 	room := &corebattle.JobRoomContext{ActorID: actor, NormalStage: modeErr == nil, Floor: r.Floor}
 	room.Cursor = c.Cursor
 	for _, box := range r.Boxes {
-		if box.OpenedBy == "" {
+		if box.isUnopened() {
 			room.TreasureIDs = append(room.TreasureIDs, box.ID)
 		}
 	}
@@ -84,6 +84,12 @@ func (s *NormalRunService) PrepareJobEncounters(ctx context.Context, r *NormalRu
 		t.UnsealDemonKing = r.Stage.ID == "stage-19" && floor == TreasureRoomFloor
 		*transition = t
 		room.Floor = r.Floor
+		room.TreasureIDs = nil
+		for _, box := range r.Boxes {
+			if box.isUnopened() {
+				room.TreasureIDs = append(room.TreasureIDs, box.ID)
+			}
+		}
 		frame.EnemyIDs, frame.MemberOnlyIDs = slices.Clone(r.Enemies), nil
 		if reset != nil {
 			room.Cursor = reset.Cursor

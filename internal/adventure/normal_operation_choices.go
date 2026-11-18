@@ -49,12 +49,12 @@ type runOperationCandidate struct {
 }
 
 type normalOperations struct {
-	run      *NormalRun
-	actor    *corebattle.LifetimeActor
-	ctx      NormalOperationContext
-	order    []string
-	byKey    map[string]runOperationCandidate
-	treasure bool
+	run    *NormalRun
+	battle corebattle.LifetimeState
+	actor  *corebattle.LifetimeActor
+	ctx    NormalOperationContext
+	order  []string
+	byKey  map[string]runOperationCandidate
 }
 
 // DiscoverNormalOperations uses saved encounter membership and the same
@@ -99,26 +99,27 @@ func (r *NormalRun) normalOperations(actorID string, ctx NormalOperationContext)
 		return nil, ErrRunForbidden
 	}
 
-	frame := &ops.ctx.Callback.TargetContext
-	frame.ActorID = actorID
-	frame.PartyIDs, frame.EnemyIDs, frame.MemberOnlyIDs = nil, nil, nil
-	for _, id := range r.Enemies {
-		if enemy := r.actor(id); enemy != nil && enemy.HP > 0 {
-			frame.EnemyIDs = append(frame.EnemyIDs, id)
+	battleState, frame, inspection, err := r.ProjectCombat(actorID)
+	if err != nil {
+		return nil, err
+	}
+	if len(ops.ctx.Callback.Inspection) > 0 {
+		for k, v := range ops.ctx.Callback.Inspection {
+			inspection[k] = v
 		}
 	}
-	for _, member := range r.Battle.Actors {
-		switch {
-		case member.TeamID == a.TeamID:
-			frame.PartyIDs = append(frame.PartyIDs, member.ID)
-		case !slices.Contains(frame.EnemyIDs, member.ID):
-			frame.MemberOnlyIDs = append(frame.MemberOnlyIDs, member.ID)
-		}
+	ops.battle = battleState
+	ops.ctx.Callback.Inspection = inspection
+	ops.ctx.Callback.TargetContext = frame
+	actorIdx := slices.IndexFunc(ops.battle.Actors, func(member corebattle.LifetimeActor) bool { return member.ID == actorID })
+	if actorIdx < 0 {
+		return nil, ErrNotParticipant
 	}
+	ops.actor = &ops.battle.Actors[actorIdx]
+	a = ops.actor
 
 	cursed := slices.Contains(a.Abilities, "cursed")
-	ops.treasure = slices.ContainsFunc(r.Boxes, func(box TreasureBox) bool { return box.OpenedBy == "" })
-	enemies := len(frame.EnemyIDs) > 0 || ops.treasure
+	enemies := len(frame.EnemyIDs) > 0
 	combat := r.Floor > 0 && enemies
 	jobs := a.Jobs
 	if combat {
@@ -157,11 +158,11 @@ func (r *NormalRun) normalOperations(actorID string, ctx NormalOperationContext)
 			}
 		}
 	}
-	if !r.livingEnemies() && (r.Floor != 0 || r.LeaderID == actorID) && (r.Floor < TreasureRoomFloor || r.HasEX() && r.Floor <= EXBossFloor) {
-		ops.addSpecial("advance", "すすむ", RunOperationRoom)
-	}
 	if r.Floor == TreasureRoomFloor || r.Floor == EXBossFloor+1 {
 		ops.addSpecial("chest", "しらべる", RunOperationRoom)
+	}
+	if !r.livingEnemies() && (r.Floor != 0 || r.LeaderID == actorID) && (r.Floor < TreasureRoomFloor || r.HasEX() && r.Floor <= EXBossFloor) {
+		ops.addSpecial("advance", "すすむ", RunOperationRoom)
 	}
 	if enemies && !cursed {
 		ops.addCustom()
@@ -195,7 +196,7 @@ func (o *normalOperations) addJob(id string, sp int, previous bool) {
 	if sp == 0 {
 		return
 	}
-	entries, err := o.ctx.Definitions.PlayerCallbackTable(&o.run.Battle, &o.ctx.Callback, id)
+	entries, err := o.ctx.Definitions.PlayerCallbackTable(&o.battle, &o.ctx.Callback, id)
 	if err != nil {
 		// An unavailable table must be visible even while its metadata cannot
 		// be constructed. It is neither an executable choice nor a random pool.
@@ -318,7 +319,7 @@ func (o *normalOperations) addHeldTool() error {
 }
 
 func (o *normalOperations) addBetweenEncounter() {
-	if len(o.ctx.Callback.EnemyIDs) != 0 || o.treasure {
+	if len(o.ctx.Callback.EnemyIDs) != 0 {
 		return
 	}
 	a := o.actor
@@ -338,7 +339,7 @@ func (o *normalOperations) addBetweenEncounter() {
 		if len(corebattle.RosterEntries(n)) == 0 {
 			continue
 		}
-		table, err := o.ctx.Definitions.PlayerCallbackTable(&o.run.Battle, &o.ctx.Callback, id)
+		table, err := o.ctx.Definitions.PlayerCallbackTable(&o.battle, &o.ctx.Callback, id)
 		if err != nil || len(table) < 2 {
 			o.addBattle(id, id, id, id)
 			continue

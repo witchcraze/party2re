@@ -251,7 +251,12 @@ func (r *NormalRun) discardEncounter() {
 	for _, id := range r.Enemies {
 		delete(r.LastActions, id)
 	}
-	r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return slices.Contains(r.Enemies, a.ID) })
+	for _, box := range r.Boxes {
+		delete(r.LastActions, box.ID)
+	}
+	r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool {
+		return slices.Contains(r.Enemies, a.ID) || slices.ContainsFunc(r.Boxes, func(b TreasureBox) bool { return b.ID == a.ID })
+	})
 	r.Enemies = nil
 	r.Boxes = nil
 }

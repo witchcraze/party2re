@@ -130,7 +130,7 @@ func (s *NormalRunService) claimChest(ctx context.Context, r *NormalRun, actorID
 		return nil, nil, ErrUnconsciousCharacter
 	}
 	i := slices.IndexFunc(r.Boxes, func(b TreasureBox) bool { return b.ID == boxID })
-	if i < 0 || r.Boxes[i].OpenedBy != "" {
+	if i < 0 || !r.Boxes[i].isUnopened() {
 		return nil, nil, ErrNoUnopenedTreasure
 	}
 	p := r.Recipients[actorID]
@@ -158,6 +158,7 @@ func (s *NormalRunService) claimChest(ctx context.Context, r *NormalRun, actorID
 	p.Inspected++
 	r.Recipients[actorID] = p
 	r.Boxes[i].OpenedBy = actorID
+	r.Boxes[i].Combat = nil
 	return &r.Boxes[i], consumed, nil
 }
 

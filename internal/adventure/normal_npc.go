@@ -8,6 +8,9 @@ import (
 // NextNPC selects in semantic order, including skipped heads. It is a read:
 // rejected/ineligible operations and GET never change order or timestamps.
 func (r *NormalRun) NextNPC(now time.Time) string {
+	if r.Floor == TreasureRoomFloor || r.Floor == EXBossFloor+1 {
+		return ""
+	}
 	for _, id := range r.Enemies {
 		a := r.actor(id)
 		if a != nil && a.NPC && a.HP > 0 && now.Sub(r.LastActions[id]) >= time.Duration(r.Admission.Speed)*time.Second {

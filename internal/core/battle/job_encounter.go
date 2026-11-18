@@ -45,10 +45,32 @@ func (s *LifetimeState) treasureView(c *JobEncounterContext) (LifetimeState, Tar
 	p.Actors = slices.Clone(s.Actors)
 	frame.EnemyIDs = slices.Clone(frame.EnemyIDs)
 	for _, id := range c.Room.TreasureIDs {
-		if id == "" || p.actor(id) != nil {
+		if id == "" {
 			return p, frame, ErrUnsupportedEffect
 		}
-		p.Actors = append(p.Actors, LifetimeActor{Participant: Participant{ID: id, TeamID: "job-treasure", HP: 1, MaxHP: 1}, NPC: true})
+		if existing := p.actor(id); existing != nil {
+			actor := p.actor(c.ActorID)
+			if (actor != nil && existing.TeamID == actor.TeamID) || !slices.Contains(frame.EnemyIDs, id) {
+				return p, frame, ErrUnsupportedEffect
+			}
+			continue
+		}
+		p.Actors = append(p.Actors, LifetimeActor{
+			Participant: Participant{
+				ID:        id,
+				TeamID:    "job-treasure",
+				HP:        1000,
+				MaxHP:     1000,
+				Defense:   1000,
+				BaseStats: BattleBaseStats{Defense: 1000},
+				Gear:      &BattleGearStats{},
+			},
+			Jobs:         BattleJobs{JobID: "starter", OldJobID: "starter"},
+			OriginalJobs: BattleJobs{JobID: "starter", OldJobID: "starter"},
+			NPC:          true,
+			Tension:      1,
+			Temporary:    TemporaryNullMagic,
+		})
 		frame.EnemyIDs = append(frame.EnemyIDs, id)
 	}
 	return p, frame, nil

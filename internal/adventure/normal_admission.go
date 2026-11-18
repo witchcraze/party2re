@@ -341,7 +341,7 @@ func (s *NormalRunService) WithWaitingLobby(ctx context.Context, partyID string,
 // livingEnemies uses persisted encounter membership, never coordinate-derived IDs.
 func (r *NormalRun) livingEnemies() bool {
 	for _, box := range r.Boxes {
-		if box.OpenedBy == "" {
+		if box.isUnopened() {
 			return true
 		}
 	}

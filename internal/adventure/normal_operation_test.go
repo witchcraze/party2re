@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -23,6 +24,7 @@ func operationFixture() (*NormalRun, NormalOperationContext) {
 	}
 	level := 10
 	damage := corebattle.DamageContext{EffectContext: corebattle.EffectContext{RequesterLevel: &level}}
+	tools := &corebattle.OrdinaryToolContext{DamageContext: damage}
 	ctx := NormalOperationContext{Callback: corebattle.CallbackContext{Damage: &damage}}
 	ctx.Definitions.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{
 		BaseGuard:       &corebattle.BaseGuardContext{DamageContext: damage},
@@ -30,7 +32,9 @@ func operationFixture() (*NormalRun, NormalOperationContext) {
 		ProtectiveMagic: &corebattle.ProtectiveMagicContext{DamageContext: damage},
 		Transformations: &corebattle.TransformationContext{},
 		Revival:         &corebattle.RevivalContext{},
+		Tools:           tools,
 	}, 2)
+	ctx.Definitions.RegisterOrdinaryTools(tools)
 	return r, ctx
 }
 
@@ -283,15 +287,299 @@ func TestDiscoverFallenAndSpectatorOperations(t *testing.T) {
 	}
 }
 
-func TestDiscoverOrdinaryTreasureKeepsUnrepresentedCombatGated(t *testing.T) {
+func TestOrdinaryTreasureDiscoveryAndTargetBinding(t *testing.T) {
 	r, ctx := operationFixture()
+	a := r.actor("a")
+	a.Attack = 100
+	a.Gear = &corebattle.BattleGearStats{}
+	a.Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 20, OldJobID: "job-16", OldSP: 10}
+	a.HeldToolID = new("item-151")
+	r.actor("b").Gear = &corebattle.BattleGearStats{}
+	r.Admission.Speed = 3
+	r.Stage = Stage{ID: "stage-00", TreasureItems: []string{"item-001", "item-005"}}
 	r.Floor, r.Enemies = TreasureRoomFloor, nil
-	r.Boxes = []TreasureBox{{ID: "first-box"}}
+	r.Battle.Actors = r.Battle.Actors[:2]
+	svc := &NormalRunService{cfg: NormalRunConfig{Clock: &testClock{now: time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)}, RNG: &ordinaryRNG{}}}
+	if err := svc.createTreasureEncounter(r, "a", ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Boxes) != 3 {
+		t.Fatalf("expected 3 generated boxes with job-78, got %+v", r.Boxes)
+	}
+	r.Boxes[1].OpenedBy = "b"
+	r.Boxes[2].Defeated = true
+	unopened, opened, defeated := r.Boxes[0], r.Boxes[1], r.Boxes[2]
 	ctx.Requester = &corecharacter.Character{Level: 1, Experience: 10}
+	defeatCtx := &corebattle.DefeatContext{}
+	ctx.Callback.Damage.Defeat = func(string) error { return nil }
+	ctx.Callback.Defeat = defeatCtx
+
+	if !r.livingEnemies() {
+		t.Fatal("expected livingEnemies true with unopened box")
+	}
+	if npc := r.NextNPC(svc.cfg.Clock.Now().Add(time.Minute)); npc != "" {
+		t.Fatalf("expected no NPC response on treasure floor, got %q", npc)
+	}
+	state, frame, inspection, err := r.ProjectCombat("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(frame.EnemyIDs, []string{unopened.ID}) || len(frame.MemberOnlyIDs) != 0 {
+		t.Fatalf("unexpected projected enemies: %+v", frame)
+	}
+	if len(r.Battle.Actors) != 2 {
+		t.Fatalf("ProjectCombat leaked boxes into durable Battle.Actors: %+v", r.Battle.Actors)
+	}
+	var boxActor *corebattle.LifetimeActor
+	for i := range state.Actors {
+		if state.Actors[i].ID == unopened.ID {
+			boxActor = &state.Actors[i]
+		}
+	}
+	if boxActor == nil || boxActor.HP != 1000 || boxActor.MaxHP != 1000 || boxActor.Defense != 1000 || boxActor.BaseStats.Defense != 1000 ||
+		boxActor.Tension != 1 || boxActor.Temporary != corebattle.TemporaryNullMagic || !boxActor.NPC {
+		t.Fatalf("unexpected projected box actor: %+v", boxActor)
+	}
+	if content := inspection[unopened.ID]; !content.Treasure || content.DefinitionID != "item-001" {
+		t.Fatalf("unexpected box inspection content: %+v", content)
+	}
+
 	choices, err := r.DiscoverNormalOperations(RunCommand{ActorID: "a"}, ctx)
-	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "attack" && c.Gated }) ||
-		slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "stock-level" }) {
-		t.Fatalf("treasure discovery: %+v %v", choices, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"attack", "defend", "tension", "job-78-entry-1", "job-16-entry-1", "tool", "chest"} {
+		if !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == action && !c.Gated }) {
+			t.Fatalf("expected ungated choice %s, got %+v", action, choices)
+		}
+	}
+	for _, hidden := range []string{"stock-level", "between-encounter-survival", "advance"} {
+		if slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == hidden }) {
+			t.Fatalf("unexpected between-encounter/advance choice %s while box unopened: %+v", hidden, choices)
+		}
+	}
+
+	for _, cmd := range []RunCommand{
+		{ActorID: "a", Action: "attack", TargetID: unopened.ID},
+		{ActorID: "a", Action: "job-16-entry-1", TargetID: unopened.ID},
+		{ActorID: "a", Action: "job-78-entry-1", TargetID: unopened.ID},
+		{ActorID: "a", Action: "job-78-entry-1", Input: unopened.ItemID},
+		{ActorID: "a", Input: "＠こうげき>" + unopened.Name},
+		{ActorID: "a", Input: "＠トレハンのかん>@" + unopened.Name},
+		{ActorID: "a", Input: "＠トレハンのかん>薬草"},
+		{ActorID: "a", Action: "chest", TargetID: unopened.ID},
+		{ActorID: "a", Input: "＠しらべる>" + unopened.Name},
+	} {
+		parsed, err := r.ParseNormalOperation(cmd, ctx)
+		if err != nil {
+			t.Fatalf("ParseNormalOperation(%+v) failed: %v", cmd, err)
+		}
+		if cmd.Action == "job-78-entry-1" && cmd.Input != "" && !slices.Equal(parsed.First.Arguments, []string{unopened.ItemID}) {
+			t.Fatalf("expected reward-search argument %s, got %+v", unopened.ItemID, parsed.First)
+		}
+	}
+
+	before, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rejected := range []struct {
+		cmd     RunCommand
+		wantErr error
+	}{
+		{RunCommand{ActorID: "a", Action: "attack", TargetID: opened.ID}, ErrRunConflict},
+		{RunCommand{ActorID: "a", Action: "attack", TargetID: defeated.ID}, ErrRunConflict},
+		{RunCommand{ActorID: "a", Action: "job-16-entry-1", TargetID: opened.ID}, ErrRunConflict},
+		{RunCommand{ActorID: "a", Action: "job-78-entry-1", TargetID: opened.ID}, ErrRunConflict},
+		{RunCommand{ActorID: "a", Action: "job-78-entry-1", TargetID: defeated.ID}, ErrRunConflict},
+		{RunCommand{ActorID: "a", Input: "＠こうげき>" + opened.Name}, ErrRunConflict},
+		{RunCommand{ActorID: "a", Input: "＠トレハンのかん>" + opened.Name}, ErrRunConflict},
+		{RunCommand{ActorID: "a", Action: "chest", TargetID: opened.ID}, ErrNoUnopenedTreasure},
+		{RunCommand{ActorID: "a", Action: "chest", TargetID: defeated.ID}, ErrNoUnopenedTreasure},
+		{RunCommand{ActorID: "a", Input: "＠しらべる>" + opened.Name}, ErrNoUnopenedTreasure},
+	} {
+		if _, err := r.ParseNormalOperation(rejected.cmd, ctx); !errors.Is(err, rejected.wantErr) {
+			t.Fatalf("ParseNormalOperation(%+v) = %v, want %v", rejected.cmd, err, rejected.wantErr)
+		}
+	}
+	after, err := json.Marshal(r)
+	if err != nil || string(before) != string(after) {
+		t.Fatalf("rejected parse mutated run: err=%v", err)
+	}
+
+	r.Boxes[0].Defeated = true
+	if r.livingEnemies() {
+		t.Fatal("expected livingEnemies false after all boxes opened or defeated")
+	}
+	state, frame, _, err = r.ProjectCombat("a")
+	if err != nil || len(frame.EnemyIDs) != 0 || len(state.Actors) != 2 {
+		t.Fatalf("expected empty enemy projection after all boxes cleared: frame=%+v actors=%+v err=%v", frame, state.Actors, err)
+	}
+	choices, err = r.DiscoverNormalOperations(RunCommand{ActorID: "a"}, ctx)
+	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == stockLevelAction && !c.Gated }) {
+		t.Fatalf("expected stock-level after boxes cleared, got %+v %v", choices, err)
+	}
+}
+
+func TestOrdinaryTreasureInspectionAndHostileCombatLifecycle(t *testing.T) {
+	r, ctx := operationFixture()
+	a := r.actor("a")
+	a.Attack = 200
+	a.Gear = &corebattle.BattleGearStats{}
+	a.Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 20, OldJobID: "job-16", OldSP: 10}
+	r.actor("b").Gear = &corebattle.BattleGearStats{}
+	r.Floor, r.Enemies = TreasureRoomFloor, nil
+	r.Battle.Actors = r.Battle.Actors[:2]
+	r.Boxes = []TreasureBox{
+		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-005"},
+		{ID: "box-2", Name: "青い宝箱B", ItemID: "item-001", OpenedBy: "b"},
+	}
+
+	// Register a minimal defeat/rewards port alongside tools and magic.
+	level := 10
+	tools := &corebattle.OrdinaryToolContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{RequesterLevel: &level}}}
+	magic := &corebattle.BasicMagicContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{RequesterLevel: &level}}}
+	ctx.Definitions.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{
+		BasicMagic: magic,
+		Tools:      tools,
+	}, 2)
+	ctx.Definitions.RegisterOrdinaryTools(tools)
+	ctx.Callback.Damage = &magic.DamageContext
+
+	runInspection := func(entryID string, args ...string) corebattle.OrdinaryToolResult {
+		t.Helper()
+		state, frame, inspection, err := r.ProjectCombat("a")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := corebattle.CallbackContext{TargetContext: frame, Arguments: args, Inspection: inspection}
+		ops, err := ctx.Definitions.InvocationAction(&state, &f, []string{entryID}, random.NewDeterministic(1))
+		if err != nil {
+			t.Fatal(entryID, err)
+		}
+		if err := state.ApplyInvocations(&f, ctx.Definitions.Invocations, ops, random.NewDeterministic(1)); err != nil {
+			t.Fatal(entryID, err)
+		}
+		r.ReconcileCombat(state, &f.TargetContext)
+		return tools.Results[len(tools.Results)-1]
+	}
+
+	statFact := runInspection("job-16-entry-1", "box-1").Facts[0]
+	if statFact.Kind != "stats" || statFact.TargetID != "box-1" || statFact.HP != 1000 || statFact.MaxHP != 1000 || statFact.BaseStats.Defense != 1000 {
+		t.Fatalf("unexpected stat inspection fact: %+v", statFact)
+	}
+	valFact := runInspection("job-78-entry-1", "box-1").Facts[0]
+	if valFact.Kind != "valuation" || valFact.TargetID != "box-1" || valFact.Band != 2 {
+		t.Fatalf("unexpected valuation fact: %+v", valFact)
+	}
+	foundFact := runInspection("job-78-entry-1", "item-005").Facts[0]
+	if foundFact.Kind != "reward-search" || !foundFact.Found || foundFact.TargetID != "box-1" {
+		t.Fatalf("unexpected reward-search hit fact: %+v", foundFact)
+	}
+	missFact := runInspection("job-78-entry-1", "item-001").Facts[0]
+	if missFact.Kind != "reward-search" || missFact.Found {
+		t.Fatalf("opened box item leaked into reward search: %+v", missFact)
+	}
+	toolFact := runInspection("tool-151").Facts
+	if len(toolFact) != 1 || toolFact[0].Kind != "content" || toolFact[0].DefinitionID != "item-005" || toolFact[0].RewardKind != 3 {
+		t.Fatalf("unexpected tool-151 facts: %+v", toolFact)
+	}
+	if r.Boxes[0].Combat != nil || r.Boxes[0].OpenedBy != "" || r.Boxes[0].Defeated {
+		t.Fatalf("inspection mutated box state: %+v", r.Boxes[0])
+	}
+
+	// Hostile magic is blocked by initial TemporaryNullMagic.
+	state, frame, inspection, err := r.ProjectCombat("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewardApplies := 0
+	defeatCtx := corebattle.DefeatContext{
+		EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: frame, RequesterLevel: &level},
+		Rewards: &corebattle.DefeatRewards{
+			Validate: func(*corebattle.LifetimeState, corebattle.TargetContext, string) error { return nil },
+			Apply:    func(*corebattle.LifetimeState, corebattle.TargetContext, string) error { rewardApplies++; return nil },
+		},
+	}
+	magic.TargetContext = frame
+	magic.Defeat = func(id string) error {
+		_, err := state.ApplyDefeat(&defeatCtx, id, random.NewDeterministic(1))
+		return err
+	}
+	f := corebattle.CallbackContext{TargetContext: frame, Arguments: []string{"box-1"}, Inspection: inspection, Damage: &magic.DamageContext, Defeat: &defeatCtx}
+	ops, err := ctx.Definitions.InvocationAction(&state, &f, []string{"job-6-entry-1"}, random.NewDeterministic(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := state.ApplyInvocations(&f, ctx.Definitions.Invocations, ops, random.NewDeterministic(1)); err != nil {
+		t.Fatal(err)
+	}
+	r.ReconcileCombat(state, &f.TargetContext)
+	if r.Boxes[0].Combat != nil || r.Boxes[0].Defeated {
+		t.Fatalf("magic should be nullified by TemporaryNullMagic, got %+v", r.Boxes[0])
+	}
+
+	// Non-lethal physical damage persists across serialize/reload in Boxes[0].Combat.
+	state, frame, _, err = r.ProjectCombat("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defeatCtx.TargetContext = frame
+	dmgCtx := corebattle.DamageContext{
+		EffectContext: corebattle.EffectContext{TargetContext: frame, RequesterLevel: &level},
+		GuaranteedHit: true,
+		Defeat: func(id string) error {
+			_, err := state.ApplyDefeat(&defeatCtx, id, random.NewDeterministic(1))
+			return err
+		},
+	}
+	if _, err := state.ApplyDamage(&dmgCtx, corebattle.TargetEffect{TargetID: "box-1", Payload: corebattle.CallbackPayload{Number: 1200}, Category: corebattle.CategoryPhysical}, &ordinaryRNG{}); err != nil {
+		t.Fatal(err)
+	}
+	r.ReconcileCombat(state, &dmgCtx.TargetContext)
+	if len(r.Battle.Actors) != 2 || r.Boxes[0].Combat == nil || r.Boxes[0].Combat.HP >= 1000 || r.Boxes[0].Combat.HP <= 0 || r.Boxes[0].Defeated {
+		t.Fatalf("expected persisted partial box damage without leaking Battle.Actors: box=%+v actors=%+v", r.Boxes[0], r.Battle.Actors)
+	}
+	raw, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reloaded NormalRun
+	if err := json.Unmarshal(raw, &reloaded); err != nil {
+		t.Fatal(err)
+	}
+	*r = reloaded
+	state, frame, _, err = r.ProjectCombat("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idx := slices.IndexFunc(state.Actors, func(x corebattle.LifetimeActor) bool { return x.ID == "box-1" }); idx < 0 || state.Actors[idx].HP != r.Boxes[0].Combat.HP {
+		t.Fatalf("reloaded projection lost damaged box HP: %+v", state.Actors)
+	}
+
+	// Lethal damage marks the box defeated without prize delivery and excludes it from later frames/claims.
+	defeatCtx.TargetContext = frame
+	dmgCtx = corebattle.DamageContext{
+		EffectContext: corebattle.EffectContext{TargetContext: frame, RequesterLevel: &level},
+		GuaranteedHit: true,
+		Defeat: func(id string) error {
+			_, err := state.ApplyDefeat(&defeatCtx, id, random.NewDeterministic(1))
+			return err
+		},
+	}
+	if _, err := state.ApplyDamage(&dmgCtx, corebattle.TargetEffect{TargetID: "box-1", Payload: corebattle.CallbackPayload{Number: 3000}, Category: corebattle.CategoryBreath}, &ordinaryRNG{}); err != nil {
+		t.Fatal(err)
+	}
+	r.ReconcileCombat(state, &dmgCtx.TargetContext)
+	if !r.Boxes[0].Defeated || r.Boxes[0].Combat != nil || r.Boxes[0].OpenedBy != "" || r.Boxes[0].DeliveredTo != "" || r.livingEnemies() || len(r.Battle.Actors) != 2 {
+		t.Fatalf("expected defeated box with no delivery: box=%+v actors=%+v", r.Boxes[0], r.Battle.Actors)
+	}
+	svc := &NormalRunService{}
+	if _, _, err := svc.claimChest(t.Context(), r, "a", "box-1"); !errors.Is(err, ErrNoUnopenedTreasure) {
+		t.Fatalf("expected claim on defeated box to fail with ErrNoUnopenedTreasure, got %v", err)
+	}
+	if rewardApplies != 1 {
+		t.Fatalf("expected defeat reward hook reached once on defeat, got %d", rewardApplies)
 	}
 }
 
