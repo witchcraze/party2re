@@ -8,6 +8,7 @@ import (
 // RegisterLateBreathSong contributes complete tables84–86 and binds only this
 // owner's ten bodies. Field and book-asset registrations remain independent.
 func (d *BattleDefinitions) RegisterLateBreathSong(c *corebattle.LateBreathSongContext) {
+	d.lateBreathSong = c
 	if d.Invocations.Entries == nil {
 		d.Invocations.Entries = make(map[string]corebattle.CallbackDefinition)
 	}

@@ -3,10 +3,10 @@ package adventure
 import (
 	"regexp"
 	"slices"
-	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/core/skill"
 )
 
 // ParsedRunOperation carries dispatch and the frozen player entries. The
@@ -72,7 +72,7 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 	if len(matches) == 0 {
 		return comment, nil
 	}
-	c, ok := ops.byKey[operationNameKey(matches[1])]
+	c, ok := ops.byKey[skill.OperationNameKey(matches[1])]
 	if !ok || ops.banned(c) {
 		return comment, nil
 	}
@@ -82,7 +82,7 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 	}
 	result := ParsedRunOperation{Kind: c.Kind, First: first}
 	if c.Kind == RunOperationBattle && len(matches) == 5 {
-		secondKey := operationNameKey(matches[3])
+		secondKey := skill.OperationNameKey(matches[3])
 		second, listed := ops.byKey[secondKey]
 		if listed && second.Kind == RunOperationBattle {
 			action, err := ops.parseEntry(second, matches[4], "", true)
@@ -94,7 +94,7 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 			}
 			action.Cost = second.binding.MPCost
 			result.Second = &action
-		} else if slices.Contains(normalOperationNames.Second, secondKey) {
+		} else if skill.IsSecondOperationKey(secondKey) {
 			if first.Whitelisted {
 				return ParsedRunOperation{}, ErrRunUnavailable
 			}
@@ -227,8 +227,8 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 		Action: c.Action, TargetID: target, Input: input, Arguments: args, Invocation: c.binding.Invocation, Custom: c.custom,
 		PlayerAction: corebattle.PlayerAction{
 			EntryID: entry, Cost: c.MPCost, FallenSelf: entry == "job-66-revive",
-			Whitelisted: !c.custom && slices.Contains(normalOperationNames.Second, c.key),
-			Bow:         !c.custom && (slices.Contains(normalOperationNames.Bow, c.key) || strings.HasPrefix(c.key, "generated:") && slices.Contains(normalOperationNames.Bow, strings.TrimPrefix(c.key, "generated:"))),
+			Whitelisted: !c.custom && skill.IsSecondOperationKey(c.key),
+			Bow:         !c.custom && skill.IsBowOperationKey(c.key),
 			MirrorShare: entry == "extension-163",
 		},
 	}, nil
