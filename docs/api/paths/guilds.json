@@ -1,0 +1,33 @@
+{
+  "/guilds": {
+    "get": {
+      "description": "Snapshot recorded with the daily guild point decay; pending applicants are excluded. generated_at is null and guilds empty before the first snapshot.",
+      "operationId": "getGuildListing",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuildListing"
+              }
+            }
+          },
+          "description": "Ranked guild list"
+        },
+        "500": {
+          "$ref": "#/components/responses/Error",
+          "description": "Internal server error"
+        },
+        "501": {
+          "$ref": "#/components/responses/Error",
+          "description": "Not Implemented"
+        }
+      },
+      "security": [],
+      "summary": "Public guild list (guild_list.cgi): guilds ranked by points, then active member count",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  }
+}

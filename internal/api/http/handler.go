@@ -314,6 +314,7 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /admin/players/{id}/ban", h.handleAdminBanPlayer)
 	mux.HandleFunc("POST /admin/characters/{id}/unstuck", h.handleAdminUnstuckCharacter)
 	mux.HandleFunc("POST /admin/guilds/decay-points", h.handleAdminDecayGuildPoints)
+	mux.HandleFunc("GET /guilds", h.handleGetGuildListing)
 
 	mux.HandleFunc("POST /players", h.handleRegisterPlayer)
 	mux.HandleFunc("DELETE /players/me", h.handleDeletePlayerMe)

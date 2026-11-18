@@ -175,6 +175,30 @@ type Member struct {
 	JoinedAt    time.Time `json:"joined_at"`
 }
 
+// ListingMember is an active member shown on the public guild list.
+type ListingMember struct {
+	Name  string `json:"name"`
+	Title string `json:"title"`
+}
+
+// ListingEntry is one guild on the public guild list, without internal IDs.
+type ListingEntry struct {
+	Name  string `json:"name"`
+	Mark  string `json:"mark"`
+	Color string `json:"color"`
+	//lint:ignore presentation player-authored guild message (めっせーじ)
+	Message string          `json:"message"`
+	Points  int64           `json:"points"`
+	Members []ListingMember `json:"members"`
+}
+
+// Listing is the public guild list snapshot in rank order (guild_list.cgi).
+// GeneratedAt is nil until the first daily decay records a snapshot.
+type Listing struct {
+	GeneratedAt *time.Time     `json:"generated_at"`
+	Guilds      []ListingEntry `json:"guilds"`
+}
+
 type Detail struct {
 	Guild       Guild        `json:"guild"`
 	Members     []Member     `json:"members"`

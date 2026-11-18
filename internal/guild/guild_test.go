@@ -193,6 +193,10 @@ func (m *mockGuildRepo) DisbandGuild(ctx context.Context, guildID string) error 
 	return nil
 }
 
+func (m *mockGuildRepo) GetListing(context.Context) (guild.Listing, error) {
+	return guild.Listing{}, nil
+}
+
 func (m *mockGuildRepo) DecayGuildPoints(ctx context.Context, factor float64) error {
 	if m.decayGuildPointsFn != nil {
 		return m.decayGuildPointsFn(ctx, factor)

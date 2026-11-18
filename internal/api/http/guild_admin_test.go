@@ -5,6 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
+	"slices"
+	"time"
+
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"net/http"
 	"net/http/httptest"
@@ -177,6 +181,11 @@ func TestAdminDecayGuildPoints(t *testing.T) {
 type stubGuildService struct {
 	apihttp.GuildService
 	decayGuildPointsFn func(ctx context.Context, factor float64) error
+	listing            guild.Listing
+}
+
+func (s *stubGuildService) Listing(context.Context) (guild.Listing, error) {
+	return s.listing, nil
 }
 
 func (s *stubGuildService) DecayGuildPoints(ctx context.Context, factor float64) error {
@@ -188,4 +197,39 @@ func (s *stubGuildService) DecayGuildPoints(ctx context.Context, factor float64)
 
 func (s *stubGuildService) Create(context.Context, string, string) (guild.Guild, guild.Member, corecharacter.Character, error) {
 	return guild.Guild{}, guild.Member{}, corecharacter.Character{}, nil
+}
+
+func TestGetGuildListingIsAnonymousAndSanitized(t *testing.T) {
+	at := time.Date(2026, 11, 18, 15, 0, 0, 0, time.UTC)
+	svc := &stubGuildService{listing: guild.Listing{GeneratedAt: &at, Guilds: []guild.ListingEntry{{
+		Name: "銀の盾", Mark: "3", Color: "#33CCFF", Message: "よろしく", Points: 80,
+		Members: []guild.ListingMember{{Name: "勇者", Title: guild.DefaultTitleLeader}},
+	}}}}
+	h, err := apihttp.NewHandler(&stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{}, apihttp.WithGuild(svc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.Router().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/guilds", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body)
+	}
+	var body struct {
+		GeneratedAt string           `json:"generated_at"`
+		Guilds      []map[string]any `json:"guilds"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.GeneratedAt != "2026-11-18T15:00:00Z" || len(body.Guilds) != 1 {
+		t.Fatalf("body=%s", rec.Body)
+	}
+	keys := slices.Sorted(maps.Keys(body.Guilds[0]))
+	if want := []string{"color", "mark", "members", "message", "name", "points"}; !slices.Equal(keys, want) {
+		t.Fatalf("guild fields=%v want %v", keys, want)
+	}
+	member := body.Guilds[0]["members"].([]any)[0].(map[string]any)
+	if len(member) != 2 || member["name"] != "勇者" || member["title"] != guild.DefaultTitleLeader {
+		t.Fatalf("member=%v", member)
+	}
 }

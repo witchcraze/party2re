@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -25,7 +26,7 @@ type guildDecayFixture struct {
 
 func newGuildDecayFixture(t *testing.T, points ...int64) guildDecayFixture {
 	t.Helper()
-	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "guilds", "guild_members", "gvg_standings", "gvg_match_transitions")
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "guilds", "guild_members", "guild_list_snapshot", "gvg_standings", "gvg_match_transitions")
 	guilds, err := database.NewGuildRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -143,6 +144,57 @@ func TestGuildRepository_DecayGuildPoints(t *testing.T) {
 	}
 	if err := f.db.QueryRow("SELECT updated_at FROM guilds WHERE id = ?", f.guildIDs[2]).Scan(&updated); err != nil || updated.Year() == 2000 {
 		t.Fatalf("positive GP decayed to zero without timestamp update: updated=%v err=%v", updated, err)
+	}
+}
+
+func TestGuildRepository_DecayRecordsGuildListing(t *testing.T) {
+	// Guild 0 and 1 tie on decayed points; guild 1 has more active members. Guild 2 leads.
+	f := newGuildDecayFixture(t, 50, 50, 100)
+	ctx := context.Background()
+	listing, err := f.guilds.GetListing(ctx)
+	if err != nil || listing.GeneratedAt != nil || listing.Guilds == nil || len(listing.Guilds) != 0 {
+		t.Fatalf("before first decay: %+v err=%v", listing, err)
+	}
+	join := func(guildID, title string, pending bool) string {
+		c, err := database.CreateTestCharacterWithFunds(ctx, f.db, "M"+id.New()[:8], 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.guilds.AddMember(ctx, guild.Member{GuildID: guildID, CharacterID: c.ID, Role: guild.RoleMember, Title: title, IsPending: pending, JoinedAt: time.Now().UTC().Add(time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+		return c.Name
+	}
+	member := join(f.guildIDs[1], "隊長", false)
+	join(f.guildIDs[0], "", true) // pending applicants are not listed and do not count
+	join(f.guildIDs[0], "", true)
+	if err := f.guilds.DecayGuildPoints(ctx, .8); err != nil {
+		t.Fatal(err)
+	}
+	listing, err = f.guilds.GetListing(ctx)
+	if err != nil || listing.GeneratedAt == nil {
+		t.Fatalf("listing=%+v err=%v", listing, err)
+	}
+	var names []string
+	var points []int64
+	var counts []int
+	for _, e := range listing.Guilds {
+		names, points, counts = append(names, e.Name), append(points, e.Points), append(counts, len(e.Members))
+	}
+	var want []string
+	for _, i := range []int{2, 1, 0} {
+		var name string
+		if err := f.db.QueryRow("SELECT name FROM guilds WHERE id = ?", f.guildIDs[i]).Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		want = append(want, name)
+	}
+	if !slices.Equal(names, want) || !slices.Equal(points, []int64{80, 40, 40}) || !slices.Equal(counts, []int{1, 2, 1}) {
+		t.Fatalf("order=%v points=%v counts=%v want order=%v", names, points, counts, want)
+	}
+	second := listing.Guilds[1].Members
+	if second[0].Title != guild.DefaultTitleLeader || second[1] != (guild.ListingMember{Name: member, Title: "隊長"}) {
+		t.Fatalf("members=%+v", second)
 	}
 }
 

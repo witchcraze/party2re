@@ -31,6 +31,11 @@ func (s *Service) DecayGuildPoints(ctx context.Context, factor float64) error {
 	return s.repo.DecayGuildPoints(ctx, factor)
 }
 
+// Listing returns the public guild list snapshot taken by the last daily decay.
+func (s *Service) Listing(ctx context.Context) (Listing, error) {
+	return s.repo.GetListing(ctx)
+}
+
 // AddPoints increments guild points directly by guild ID.
 func (s *Service) AddPoints(ctx context.Context, guildID string, points int64) error {
 	if guildID == "" || points <= 0 {

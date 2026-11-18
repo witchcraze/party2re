@@ -11173,6 +11173,79 @@
         ],
         "type": "object"
       },
+      "GuildListing": {
+        "additionalProperties": false,
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guilds": {
+            "description": "Rank order; rank is the 1-based position.",
+            "items": {
+              "$ref": "#/components/schemas/GuildListingEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "guilds"
+        ],
+        "type": "object"
+      },
+      "GuildListingEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "mark": {
+            "type": "string"
+          },
+          "members": {
+            "description": "Active members in roster order; the member count is its length.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "title"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "points": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "mark",
+          "color",
+          "message",
+          "points",
+          "members"
+        ],
+        "type": "object"
+      },
       "GuildMemberView": {
         "additionalProperties": false,
         "description": "One roster row as ＠めんばー lists it (name＠title); pending applicants included.",
@@ -24968,6 +25041,37 @@
         ]
       }
     },
+    "/guilds": {
+      "get": {
+        "description": "Snapshot recorded with the daily guild point decay; pending applicants are excluded. generated_at is null and guilds empty before the first snapshot.",
+        "operationId": "getGuildListing",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuildListing"
+                }
+              }
+            },
+            "description": "Ranked guild list"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error",
+            "description": "Internal server error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error",
+            "description": "Not Implemented"
+          }
+        },
+        "security": [],
+        "summary": "Public guild list (guild_list.cgi): guilds ranked by points, then active member count",
+        "tags": [
+          "Guilds"
+        ]
+      }
+    },
     "/gvg/leaderboard": {
       "get": {
         "operationId": "getGvgLeaderboard",
@@ -28804,6 +28908,10 @@
     {
       "description": "System health and OpenAPI specification discovery",
       "name": "System"
+    },
+    {
+      "description": "Public guild list",
+      "name": "Guilds"
     },
     {
       "description": "Player account registration and authentication sessions",

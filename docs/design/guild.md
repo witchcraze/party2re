@@ -32,7 +32,7 @@ Dissolution happens on removal from a roster of at most one row, on manual disba
 ## Inactivity and point decay
 
 - Guilds with no member activity for 20 days (`auto_delete_guild_day = 20`) are disbanded; inactivity is rechecked under the guild lock before deletion. Legacy measures the age of the room's member list (`lib/join_guild.cgi:423–433`), which every request inside the guild room rewrites, so presence alone keeps a guild alive. Go therefore counts every command a member sends from the guild room, as well as guild mutations.
-- Daily maintenance decays points: `$gpoint = int($gpoint * 0.8)` (`login.cgi:448`).
+- Daily maintenance decays points and, in the same step, records the public guild list (`guild_list.cgi`) that stays unchanged until the next run (`login.cgi` `write_guild_list_html`). **Decision:** the list remains this daily snapshot, as legacy players saw it, not a live read. Legacy runs the step on the first login at least a day after the previous run, and skips it when the player list is due; Go runs it with the scheduled daily decay.
 
 ## Operator policy for duplicate affiliations
 

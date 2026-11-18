@@ -17,6 +17,10 @@
       "name": "System"
     },
     {
+      "description": "Public guild list",
+      "name": "Guilds"
+    },
+    {
       "description": "Player account registration and authentication sessions",
       "name": "Auth"
     },
@@ -13028,6 +13032,41 @@
         ],
         "type": "object",
         "additionalProperties": false
+      },
+      "GuildListing": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["generated_at", "guilds"],
+        "properties": {
+          "generated_at": { "type": ["string", "null"], "format": "date-time" },
+          "guilds": {
+            "type": "array",
+            "description": "Rank order; rank is the 1-based position.",
+            "items": { "$ref": "#/components/schemas/GuildListingEntry" }
+          }
+        }
+      },
+      "GuildListingEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "mark", "color", "message", "points", "members"],
+        "properties": {
+          "name": { "type": "string" },
+          "mark": { "type": "string" },
+          "color": { "type": "string" },
+          "message": { "type": "string" },
+          "points": { "type": "integer" },
+          "members": {
+            "type": "array",
+            "description": "Active members in roster order; the member count is its length.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "title"],
+              "properties": { "name": { "type": "string" }, "title": { "type": "string" } }
+            }
+          }
+        }
       },
       "Guild": {
         "properties": {

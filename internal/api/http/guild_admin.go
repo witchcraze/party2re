@@ -52,3 +52,17 @@ func (h *Handler) handleAdminDecayGuildPoints(w http.ResponseWriter, r *http.Req
 		Factor: factor,
 	})
 }
+
+// handleGetGuildListing serves the anonymous public guild list (guild_list.cgi).
+func (h *Handler) handleGetGuildListing(w http.ResponseWriter, r *http.Request) {
+	if h.guild == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("guild service not configured"))
+		return
+	}
+	listing, err := h.guild.Listing(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, listing)
+}
