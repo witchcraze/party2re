@@ -47,6 +47,12 @@ func (s *Service) resolveRound(ctx context.Context, session *ChallengeSession, l
 		if err != nil {
 			return corebattle.Result{}, false, err
 		}
+		if m.MaxHP > 0 {
+			p.MaxHP = m.MaxHP
+		}
+		if m.MaxMP > 0 {
+			p.MaxMP = m.MaxMP
+		}
 		if m.CharacterCurrentMP != nil {
 			p.MP = *m.CharacterCurrentMP
 		}

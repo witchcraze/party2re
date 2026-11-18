@@ -278,6 +278,7 @@ func BuildParticipantFromDataWithRNG(
 		return corebattle.Participant{}, err
 	}
 	p.Gear = &eqStats.Gear
+	p.MaxHP, p.MaxMP = HeldVitalityMaxima(inv, p.MaxHP, p.MaxMP)
 	return p, nil
 }
 

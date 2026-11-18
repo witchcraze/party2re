@@ -6,6 +6,8 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/dungeon"
 )
 
@@ -15,6 +17,7 @@ func TestPartyCombat_MultiMemberBattleAndVitalityTracking(t *testing.T) {
 
 	c1 := createTestChar("lead", 10, 100, 40, 25)
 	c1.Stats.MP = 30
+	c1.Stats.MaxMP = 50
 	c2 := createTestChar("ally", 10, 80, 35, 20)
 	c2.Stats.MP = 20
 
@@ -71,14 +74,24 @@ func TestPartyCombat_MultiMemberBattleAndVitalityTracking(t *testing.T) {
 		},
 	}
 
+	inventory := &mockInventoryRepo{invs: map[string]coreinventory.Inventory{
+		c1.ID: {CharacterID: c1.ID, Items: []coreitem.Instance{{ID: "ring", DefinitionID: "item-114", Quantity: 1}}},
+	}}
+	engine := &corebattle.Engine{}
 	svc, err := dungeon.NewService(
 		repo,
 		charRepo,
-		&corebattle.Engine{},
+		&customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+			if len(req.Allies) != 2 || req.Allies[0].ID != c1.ID || req.Allies[0].MaxMP != 150 || req.Allies[0].MP != 30 {
+				t.Fatalf("expected stored maximum MP of 150 and current MP of 30 for %s, got %+v", c1.ID, req.Allies)
+			}
+			return engine.ResolvePartyBattle(req)
+		}},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
 		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
+		dungeon.WithInventoryProvider(inventory),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)

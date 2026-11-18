@@ -56,6 +56,8 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			if err != nil {
 				return err
 			}
+			// The retained solo endpoint does not enroll in a quest room.
+			p.MaxHP, p.MaxMP = char.Stats.MaxHP, char.Stats.MaxMP
 		} else {
 			p = buildFallbackParticipant(char)
 		}

@@ -24,7 +24,7 @@ Derived from the authentic Party2 Perl CGI `@ites` table (`$ites[no][3]`), every
 - **`UsageCategoryCombatOnly` (`1`)**: Usable strictly during active battle commands (`＠どうぐ`).
 - **`UsageCategoryAnytime` (`2`)**: Usable anytime / at Home (`＠ほーむ`) (seeds, medals, fight elixir, recipes).
 - **`UsageCategoryCombatPassive` (`3`)**: Automatically triggers or provides passive protection in combat (charms, talismans, elemental orbs).
-- **`UsageCategoryDepotAfterAction` (`4`)**: Quest equipment callbacks or deferred Home Depot callbacks (`item-113`, `item-114`, `item-259`). The quest-join max HP/MP bonus of a held 113/114 is not yet applied ([#2367](https://github.com/witchcraze/party2re/issues/2367)). The [Home consumption contract](home.md#legacy-dispatch-and-consumption-contract) distinguishes held and Depot behavior.
+- **`UsageCategoryDepotAfterAction` (`4`)**: Quest equipment callbacks or deferred Home Depot callbacks (`item-113`, `item-114`, `item-259`). The [Home consumption contract](home.md#legacy-dispatch-and-consumption-contract) distinguishes held and Depot behavior.
 
 ### Usage Location Validation Rules
 - **Combat Action Command (`＠どうぐ`)**: Active item execution in combat (`ActionItem`) is strictly restricted to `UsageCategoryCombatOnly` (`1`). Non-combat items (seeds, medals, materials, passives; categories `0`, `2`, `3`, `4`) are rejected with `ErrCannotUseInCombat` (`item cannot be used in combat`) and are never consumed in battle.

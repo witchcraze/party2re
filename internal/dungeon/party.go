@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
@@ -246,6 +247,7 @@ func (s *Service) startRoster(
 			if err != nil {
 				return nil, err
 			}
+			maxHP, maxMP = battle.HeldVitalityMaxima(inv, maxHP, maxMP)
 			for _, it := range inv.Items {
 				if it.Quantity > 0 {
 					itemIDs = append(itemIDs, it.DefinitionID)

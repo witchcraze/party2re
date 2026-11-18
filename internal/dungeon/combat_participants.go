@@ -53,14 +53,17 @@ func (s *Service) buildCombatAllies(ctx context.Context, exp *ActiveExpedition, 
 				p = buildFallbackParticipantWithHP(memberChar, m.CurrentHP)
 				if m.HasCurrentMP() {
 					p.MP = m.CurrentMP
-					if m.MaxMP > 0 {
-						p.MaxMP = m.MaxMP
-					}
 				}
 			}
 		}
 		if err != nil {
 			return nil, err
+		}
+		if m.MaxHP > 0 {
+			p.MaxHP = m.MaxHP
+		}
+		if m.MaxMP > 0 {
+			p.MaxMP = m.MaxMP
 		}
 		exp.Encounter.restoreParticipant(&p)
 		if allyStatus != "" {

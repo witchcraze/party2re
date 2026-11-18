@@ -11466,6 +11466,9 @@
           "max_hp": {
             "type": "integer"
           },
+          "max_mp": {
+            "type": "integer"
+          },
           "room_id": {
             "type": "string"
           }
@@ -14891,6 +14894,9 @@
             "type": "integer"
           },
           "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
             "type": "integer"
           },
           "ready_state": {

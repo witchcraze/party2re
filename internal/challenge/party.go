@@ -155,6 +155,18 @@ func (s *Service) startRoster(
 		if maxMP <= 0 {
 			maxMP = char.Stats.MP
 		}
+		if s.participantBuilder != nil {
+			hp, mp, err := s.participantBuilder.BuildBattleMaxima(ctx, char)
+			if err != nil {
+				return nil, err
+			}
+			if hp > 0 {
+				maxHP = hp
+			}
+			if mp > 0 {
+				maxMP = mp
+			}
+		}
 
 		members = append(members, ChallengeMember{
 			CharacterID:        char.ID,
