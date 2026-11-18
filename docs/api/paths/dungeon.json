@@ -274,7 +274,7 @@
   },
   "/characters/{id}/dungeons/move": {
     "post": {
-      "description": "Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at their round limit with 409 while the run stays active for escape; walls and bounds spend no round.",
+      "description": "Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at their round limit with 409 while the run stays active for escape; walls and bounds spend no round, while a locked door spends the round and leaves the party in place.",
       "operationId": "moveDungeonExpedition",
       "parameters": [
         {

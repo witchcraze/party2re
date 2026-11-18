@@ -26,10 +26,6 @@ The base wall event leaves coordinates unchanged; map8 overrides it with a warp.
 | `2`, `3`, etc. | Map-owned events, such as one-time treasure triggers |
 | Other letters/numbers | Map-specific keys, doors, stairs, bosses, hazards, or routes |
 
-For example `map/1/1.cgi` has key `K` and conditional door `D`; `map/2/1.cgi`
-uses `F` to choose a next map and `7` for its floor boss. It is incorrect to
-universally interpret `D` as stairs or `I` as an impassable wall.
-
 Each map supplies `$max_round` (examples range from 20 to 200); there is no
 universal 25–35-turn floor budget. At the limit, further movement is blocked
 and the legacy message requests escape/disbandment. Do not equate that guard
@@ -214,19 +210,23 @@ Native map3 has eight independently authored 9×9 layouts with round limit 60
 Open: legacy boss groups (stages 5 and 7 spawn three bosses), group size and
 scaling (#1954), enemy battle data beyond the base stats (#2351), chest contents (#2119).
 
-### Map1 key and door unit
+### Map1 implementation
 
-[Map1 implementation #1761](https://github.com/witchcraze/party2re/issues/1761) is separate and builds on the map0 transition contract.
-Independently author 9×9 native layouts; legacy has seven initial variants and
-a round limit of 50 (`map/1/1.cgi` through `7.cgi`). Its `2` and `3` treasure
-events have independent once flags; `I` retains the hidden-wall presentation.
-Test `K` acquisition once, opening `D` with the key or acting job 9, persistence
-of opened-door state, and repeat entry without new rewards/consumption. The
-legacy key is an event fact and is not consumed on opening. Without either
-qualification, the event undoes the horizontal entry while spending the move's
-round (`map/1/1.cgi:18–38`); distinguish this from a pre-movement wall rejection.
-Verify every variant's entry direction before defining the native return
-position. This event does not advance a floor.
+Native map1 has seven independently authored 9×9 layouts with round limit 50
+(legacy: seven initial variants, `map/1/1.cgi`–`7.cgi`). Non-obvious findings:
+
+- **Locked-door reversal is not always horizontal.** Legacy `event_D` undoes the
+  entry with `++$px` in variants 1, 2 and 5 but `--$py` in 3, 4, 6 and 7. Every
+  locked door has exactly one open neighbour, so native returns the party to the
+  cell it came from. The round is spent, unlike a wall hit.
+- **Flags are per symbol.** Several variants repeat `K` or `3` under one flag,
+  so the second cell does nothing. Native keys `K`, `D`, `2` and `3` by symbol.
+- **Only the actor qualifies.** `D` opens for the acting character's job 9
+  (`$m{job}`) or the picked-up key; another member's job does not count. The key
+  is never consumed.
+
+Open: chest contents (#2119), group size and scaling (#1954), enemy battle data
+(#2351), and event narration, which belongs to the Dungeon log owner (#948).
 
 ### Map13 channel puzzle and routes
 
