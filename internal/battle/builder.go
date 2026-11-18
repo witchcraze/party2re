@@ -11,7 +11,6 @@ import (
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/customskill"
 )
@@ -299,29 +298,4 @@ func BuildPartyBattleRequest(
 		DefeatReward:  defeatReward,
 		DrawReward:    drawReward,
 	}
-}
-
-// ExtractStatOrbOptions inspects the character's inventory and builds ApplyExperienceOptions
-// binding Stat Orb items (item-152 to item-156) and Skill Orb (item-157).
-func ExtractStatOrbOptions(inv coreinventory.Inventory) progression.ApplyExperienceOptions {
-	opts := progression.ApplyExperienceOptions{
-		StatOrbItems: make(map[string]bool),
-	}
-	for _, inst := range inv.Items {
-		switch inst.DefinitionID {
-		case progression.ItemLifeStatOrb:
-			opts.StatOrbItems[progression.ItemLifeStatOrb] = true
-		case progression.ItemMagicStatOrb:
-			opts.StatOrbItems[progression.ItemMagicStatOrb] = true
-		case progression.ItemPowerStatOrb:
-			opts.StatOrbItems[progression.ItemPowerStatOrb] = true
-		case progression.ItemDefenseStatOrb:
-			opts.StatOrbItems[progression.ItemDefenseStatOrb] = true
-		case progression.ItemAgilityStatOrb:
-			opts.StatOrbItems[progression.ItemAgilityStatOrb] = true
-		case ItemSkillOrb:
-			opts.HasSkillOrb = true
-		}
-	}
-	return opts
 }

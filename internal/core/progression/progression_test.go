@@ -611,7 +611,7 @@ func TestApplyExperience_Job49DynamicSPGrowth(t *testing.T) {
 		t.Fatal(err)
 	}
 	char.Level = 20
-	char.SP = 300 // at level-up SP becomes 301, growth = int(301 * 0.02) = 6
+	char.SP = 300 // request-start growth = 300 * 0.02 = 6
 	char.Experience = 4000
 	beforeHP := char.Stats.MaxHP
 	beforeAtk := char.Stats.Attack
@@ -637,6 +637,141 @@ func TestApplyExperience_Job49DynamicSPGrowth(t *testing.T) {
 	if char.Stats.Attack != beforeAtk+6 {
 		t.Errorf("expected Attack gain of 6, got %d", char.Stats.Attack-beforeAtk)
 	}
+}
+
+type sequenceFloatRandomSource struct {
+	values []float64
+	index  int
+}
+
+func (s *sequenceFloatRandomSource) Intn(max int) (int, error) {
+	return int(s.Float64() * float64(max)), nil
+}
+
+func (s *sequenceFloatRandomSource) Float64() float64 {
+	v := s.values[s.index]
+	if s.index < len(s.values)-1 {
+		s.index++
+	}
+	return v
+}
+
+func TestApplyExperienceJob49PreservesFractionalRequestStartSP(t *testing.T) {
+	onionDef := job.Definition{ID: "job-49", Name: "たまねぎ剣士"}
+
+	t.Run("fractional bound uses request-start SP 25 with float draw", func(t *testing.T) {
+		char, err := character.New("Onion25")
+		if err != nil {
+			t.Fatal(err)
+		}
+		char.JobID = "job-49"
+		char.SP = 25
+		char.Stats = character.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6}
+
+		// bound = 25*0.02 + 1 = 1.5 -> int(0.8 * 1.5) = 1 (+1 HP min = +2)
+		res, err := ApplyExperienceWithJobFull(&char, 10, onionDef, &sequenceFloatRandomSource{values: []float64{0.8}}, ApplyExperienceOptions{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.LevelsGained != 1 || char.Level != 2 || char.SP != 26 {
+			t.Fatalf("level/SP mismatch: gained=%d char=%+v", res.LevelsGained, char)
+		}
+		want := character.Stats{MaxHP: 32, HP: 30, MaxMP: 7, MP: 6, Attack: 7, Defense: 7, Agility: 7}
+		if char.Stats != want {
+			t.Fatalf("stats = %+v, want %+v", char.Stats, want)
+		}
+	})
+
+	t.Run("multi-level SP crossing 50 preserves request-start bound 49", func(t *testing.T) {
+		for _, hasSkillOrb := range []bool{false, true} {
+			char, err := character.New("Onion49")
+			if err != nil {
+				t.Fatal(err)
+			}
+			char.JobID = "job-49"
+			char.SP = 49
+			char.Stats = character.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6}
+
+			var draws []float64
+			if hasSkillOrb {
+				// Level 1: skill orb 0.0 (bonus SP -> 51), 5 stat rolls 0.502.
+				// Level 2: skill orb 0.0 (bonus SP -> 53), 5 stat rolls 0.502.
+				draws = []float64{
+					0.0, 0.502, 0.502, 0.502, 0.502, 0.502,
+					0.0, 0.502, 0.502, 0.502, 0.502, 0.502,
+				}
+			} else {
+				draws = []float64{0.502}
+			}
+
+			res, err := ApplyExperienceWithJobFull(&char, 40, onionDef, &sequenceFloatRandomSource{values: draws}, ApplyExperienceOptions{
+				HasSkillOrb: hasSkillOrb,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error (hasSkillOrb=%v): %v", hasSkillOrb, err)
+			}
+			wantSP := 51
+			if hasSkillOrb {
+				wantSP = 53
+			}
+			if res.LevelsGained != 2 || char.Level != 3 || char.SP != wantSP {
+				t.Fatalf("level/SP (hasSkillOrb=%v): gained=%d level=%d sp=%d", hasSkillOrb, res.LevelsGained, char.Level, char.SP)
+			}
+			// bound stays 49*0.02 + 1 = 1.98; int(0.502 * 1.98) = 0 on both levels.
+			want := character.Stats{MaxHP: 32, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6}
+			if char.Stats != want {
+				t.Fatalf("stats (hasSkillOrb=%v) = %+v, want %+v", hasSkillOrb, char.Stats, want)
+			}
+		}
+	})
+
+	t.Run("matching stat orb and cap re-roll with job 49", func(t *testing.T) {
+		// Part A: SP=25 with Power Orb (Attack bound = 0.5 + 1 + 1 = 2.5, draw 0.8 -> Attack +2).
+		char, err := character.New("OnionOrb")
+		if err != nil {
+			t.Fatal(err)
+		}
+		char.JobID = "job-49"
+		char.SP = 25
+		char.Stats = character.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6}
+
+		_, err = ApplyExperienceWithJobFull(&char, 10, onionDef, &sequenceFloatRandomSource{values: []float64{0.8}}, ApplyExperienceOptions{
+			StatOrbItems: map[string]bool{ItemPowerStatOrb: true},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := character.Stats{MaxHP: 32, HP: 30, MaxMP: 7, MP: 6, Attack: 8, Defense: 7, Agility: 7}
+		if char.Stats != want {
+			t.Fatalf("orb stats = %+v, want %+v", char.Stats, want)
+		}
+
+		// Part B: SP=450 (spGrowth=9.0) + Power Orb (Attack bound=11.0): 0.95 -> 10 (>9) -> re-roll 0.5 -> 5.
+		capChar, err := character.New("OnionCap")
+		if err != nil {
+			t.Fatal(err)
+		}
+		capChar.JobID = "job-49"
+		capChar.SP = 450
+		capChar.Stats = character.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6}
+
+		draws := []float64{
+			0.0,        // HP
+			0.0,        // MP
+			0.95, 0.50, // Attack: int(0.95*11)=10 > 9 -> int(0.5*9)+1 = 5
+			0.0, // Defense
+			0.0, // Agility
+		}
+		_, err = ApplyExperienceWithJobFull(&capChar, 10, onionDef, &sequenceFloatRandomSource{values: draws}, ApplyExperienceOptions{
+			StatOrbItems: map[string]bool{ItemPowerStatOrb: true},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error on cap reroll: %v", err)
+		}
+		if capChar.Stats.Attack != 11 {
+			t.Fatalf("expected Attack = 11 after cap re-roll (+5), got %d", capChar.Stats.Attack)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------

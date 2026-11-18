@@ -5,6 +5,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/job"
@@ -59,10 +60,33 @@ func (req ApplyPostBattleRequest) designatedRecipient() string {
 	return ""
 }
 
+func activeHeldInstanceID(inv coreinventory.Inventory, equip coreequipment.Equipment) string {
+	if instID, ok := equip.Equipped(coreitem.SlotAccessory); ok {
+		if _, found := inv.Find(instID); found {
+			return instID
+		}
+	}
+	if inv.HeldToolID() != nil && len(inv.Items) == 1 {
+		return inv.Items[0].ID
+	}
+	return ""
+}
+
+func activeHeldDefinitionID(inv coreinventory.Inventory, instID string) string {
+	if instID == "" {
+		return ""
+	}
+	if inst, found := inv.Find(instID); found {
+		return inst.DefinitionID
+	}
+	return ""
+}
+
 func (s *Service) applyRewardsForCharacter(
 	ctx context.Context,
 	char *corecharacter.Character,
 	inv *coreinventory.Inventory,
+	held string,
 	reward corebattle.Reward,
 	drops []dropItem,
 	finalized bool,
@@ -94,7 +118,10 @@ func (s *Service) applyRewardsForCharacter(
 		if isExpBlessing(blessing) && s.rollIntn(4) == 0 {
 			gainedEXP = int(float64(gainedEXP) * 1.5)
 		}
-		opts := ExtractStatOrbOptions(*inv)
+		opts := progression.ApplyExperienceOptions{
+			HasSkillOrb:  held == ItemSkillOrb,
+			StatOrbItems: map[string]bool{held: true},
+		}
 		if s.skillProvider != nil && char.JobID != "" {
 			opts.JobSkills = s.skillProvider.SkillsForJob(char.JobID)
 		}

@@ -87,6 +87,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		s.applyResourceUpdates(&tc.Character, charID, req.BattleResult, req.ExitFatigue)
 
 		// 3. Process item consumption
+		heldInstID := activeHeldInstanceID(tc.Inventory, equip)
 		slots := equip.Slots
 		if err := consumeBufferedItems(&tc.Inventory, &equip, req.BattleResult.ConsumedItems[charID]); err != nil {
 			return err
@@ -111,6 +112,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 				tc.Context,
 				&tc.Character,
 				&tc.Inventory,
+				activeHeldDefinitionID(tc.Inventory, heldInstID),
 				req.rewardForCharacter(charID),
 				charDrops,
 				req.RecipientRewards != nil,
@@ -212,6 +214,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 
 			s.applyResourceUpdates(&char, id, req.BattleResult, req.ExitFatigue)
 
+			heldInstID := activeHeldInstanceID(inv, equip)
 			slots := equip.Slots
 			if err := consumeBufferedItems(&inv, &equip, req.BattleResult.ConsumedItems[id]); err != nil {
 				return err
@@ -233,6 +236,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 					txCtx,
 					&char,
 					&inv,
+					activeHeldDefinitionID(inv, heldInstID),
 					req.rewardForCharacter(id),
 					charDrops,
 					req.RecipientRewards != nil,
