@@ -36,6 +36,7 @@ type BattleEngine interface {
 // ParticipantBuilder constructs a Participant from character ID with current HP.
 type ParticipantBuilder interface {
 	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+	BuildBattleMaxima(ctx context.Context, char corecharacter.Character) (hp, mp int, err error)
 }
 
 // Option configures Service dependencies.
@@ -208,6 +209,10 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 		UpdatedAt:         now,
 	}
 
+	leaderMaxHP, leaderMaxMP, err := s.battleMaxima(ctx, char)
+	if err != nil {
+		return RoomDetail{}, err
+	}
 	member := GvGMember{
 		RoomID:        roomID,
 		CharacterID:   char.ID,
@@ -215,7 +220,8 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 		JobID:         char.JobID,
 		Level:         char.Level,
 		HP:            char.Stats.HP,
-		MaxHP:         char.Stats.MaxHP,
+		MaxHP:         leaderMaxHP,
+		MaxMP:         leaderMaxMP,
 		GuildID:       g.ID,
 		GuildName:     g.Name,
 		GuildColor:    g.Color,
@@ -305,6 +311,10 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 		}
 
 		now := time.Now().UTC()
+		maxHP, maxMP, err := s.battleMaxima(lockedCtx, char)
+		if err != nil {
+			return err
+		}
 		newMember := GvGMember{
 			RoomID:        roomID,
 			CharacterID:   char.ID,
@@ -312,7 +322,8 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 			JobID:         char.JobID,
 			Level:         char.Level,
 			HP:            char.Stats.HP,
-			MaxHP:         char.Stats.MaxHP,
+			MaxHP:         maxHP,
+			MaxMP:         maxMP,
 			GuildID:       g.ID,
 			GuildName:     g.Name,
 			GuildColor:    g.Color,
@@ -430,4 +441,16 @@ func (s *Service) GetLeaderboard(ctx context.Context, limit int) ([]GvGStanding,
 		limit = 50
 	}
 	return s.standings.GetLeaderboard(ctx, limit)
+}
+
+func (s *Service) battleMaxima(ctx context.Context, char corecharacter.Character) (int, *int, error) {
+	hp, mp := char.Stats.MaxHP, char.Stats.MaxMP
+	if s.participantBuilder != nil {
+		var err error
+		hp, mp, err = s.participantBuilder.BuildBattleMaxima(ctx, char)
+		if err != nil {
+			return 0, nil, err
+		}
+	}
+	return hp, &mp, nil
 }

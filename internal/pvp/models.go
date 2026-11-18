@@ -131,6 +131,7 @@ type RoomMember struct {
 	Level         int       `json:"level"`
 	HP            int       `json:"hp"`
 	MaxHP         int       `json:"max_hp"`
+	MaxMP         *int      `json:"max_mp,omitempty"`
 	TeamColor     string    `json:"team_color"`
 	IsLeader      bool      `json:"is_leader"`
 	ReadyState    bool      `json:"ready_state"`

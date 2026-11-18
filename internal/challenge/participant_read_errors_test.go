@@ -50,6 +50,36 @@ type observedRoundEngine struct {
 	request corebattle.PartyBattleRequest
 }
 
+func TestChallengeRoundKeepsHeldVitalityFromEntry(t *testing.T) {
+	ctx := context.Background()
+	char := createPartyTestChar("hero", 30, 200, 1000, 1000)
+	char.Stats.MP, char.Stats.MaxMP = 30, 50
+	chars := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
+	inventory := &participantReadInventory{value: coreinventory.Inventory{
+		CharacterID: char.ID,
+		Items:       []coreitem.Instance{{ID: "ring", DefinitionID: "item-114", Quantity: 1}},
+	}}
+	builder := battle.NewService(battle.WithCharacterRepository(participantReadCharacters{chars: chars}),
+		battle.WithInventoryRepository(inventory))
+	engine := &observedRoundEngine{}
+	svc, err := challenge.NewService(newMockChallengeRepo(), chars, engine, challenge.WithParticipantBuilder(builder),
+		challenge.WithActiveSessionStore(challenge.NewMemorySessionRepository()), challenge.WithRNG(zeroRNG{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := svc.StartSession(ctx, char.ID, "0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventory.value.Items = nil
+	if _, _, err := svc.AdvanceRound(ctx, char.ID, run.ID, run.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if len(engine.request.Allies) != 1 || engine.request.Allies[0].MaxMP != 150 || engine.request.Allies[0].MP != 30 {
+		t.Fatalf("expected stored maximum MP of 150 and current MP of 30, got %+v", engine.request.Allies)
+	}
+}
+
 func (e *observedRoundEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 	e.calls++
 	e.request = req
@@ -104,8 +134,11 @@ func TestChallengeParticipantReadErrorsPreserveRound(t *testing.T) {
 				case "equipment canceled":
 					wantErr, equips.err = context.Canceled, context.Canceled
 				}
+				// The join snapshot reads storage too; inject the failure for the round only.
+				invErr, equipErr := invs.err, equips.err
+				invs.err, equips.err = nil, nil
 				builder := battle.NewService(battle.WithCharacterRepository(participantReadCharacters{chars: chars}),
-					battle.WithInventoryRepository(invs), battle.WithEquipmentRepository(equips))
+					battle.WithInventoryRepository(&invs), battle.WithEquipmentRepository(&equips))
 				store := challenge.NewMemorySessionRepository()
 				repo := &observedRoundRepository{mockChallengeRepo: newMockChallengeRepo()}
 				engine := &observedRoundEngine{}
@@ -119,6 +152,7 @@ func TestChallengeParticipantReadErrorsPreserveRound(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				invs.err, equips.err = invErr, equipErr
 				if buffered {
 					mp := 7
 					run.CurrentRound, run.CharacterCurrentHP = 2, 150

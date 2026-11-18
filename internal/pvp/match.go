@@ -142,6 +142,9 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 				p.MaxMP = char.Stats.MaxMP
 				p.Agility = char.Stats.Agility
 			}
+			if m.MaxMP != nil {
+				p.MaxHP, p.MaxMP = m.MaxHP, *m.MaxMP
+			}
 			if m.HP > 0 {
 				p.HP = m.HP
 			} else if p.HP <= 0 {

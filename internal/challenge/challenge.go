@@ -226,6 +226,7 @@ type Repository interface {
 // ParticipantBuilder reconstructs a participant from its buffered resources and consumptions.
 type ParticipantBuilder interface {
 	BuildParticipantWithState(ctx context.Context, characterID string, hp int, mp *int, consumed []corebattle.ConsumedItem) (corebattle.Participant, error)
+	BuildBattleMaxima(ctx context.Context, char corecharacter.Character) (hp, mp int, err error)
 }
 
 type Service struct {

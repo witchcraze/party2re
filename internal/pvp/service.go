@@ -31,6 +31,7 @@ type BattleEngine interface {
 // ParticipantBuilder constructs a Participant from character ID with current HP.
 type ParticipantBuilder interface {
 	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+	BuildBattleMaxima(ctx context.Context, char corecharacter.Character) (hp, mp int, err error)
 }
 
 // Option configures Service dependencies.
@@ -212,6 +213,10 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 		LastActivityAt:    now,
 	}
 
+	leaderMaxHP, leaderMaxMP, err := s.battleMaxima(ctx, char)
+	if err != nil {
+		return RoomDetail{}, err
+	}
 	leaderMember := RoomMember{
 		RoomID:        roomID,
 		CharacterID:   char.ID,
@@ -219,7 +224,8 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 		JobID:         char.JobID,
 		Level:         char.Level,
 		HP:            char.Stats.HP,
-		MaxHP:         char.Stats.MaxHP,
+		MaxHP:         leaderMaxHP,
+		MaxMP:         leaderMaxMP,
 		TeamColor:     "",
 		IsLeader:      true,
 		ReadyState:    false,
@@ -315,6 +321,10 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 		// Legacy quest.cgi:add_member writes to quest.cgi, not the room's log.cgi.
 		detail.Room.LastActivityAt = lastActivity
 
+		maxHP, maxMP, err := s.battleMaxima(lockedCtx, char)
+		if err != nil {
+			return err
+		}
 		newMember := RoomMember{
 			RoomID:        roomID,
 			CharacterID:   char.ID,
@@ -322,7 +332,8 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 			JobID:         char.JobID,
 			Level:         char.Level,
 			HP:            char.Stats.HP,
-			MaxHP:         char.Stats.MaxHP,
+			MaxHP:         maxHP,
+			MaxMP:         maxMP,
 			TeamColor:     "",
 			IsLeader:      false,
 			ReadyState:    false,
@@ -414,4 +425,16 @@ func (s *Service) GetCharacterRoom(ctx context.Context, characterID string) (Roo
 		return RoomDetail{}, ErrRoomNotFound
 	}
 	return detail, nil
+}
+
+func (s *Service) battleMaxima(ctx context.Context, char corecharacter.Character) (int, *int, error) {
+	hp, mp := char.Stats.MaxHP, char.Stats.MaxMP
+	if s.participantBuilder != nil {
+		var err error
+		hp, mp, err = s.participantBuilder.BuildBattleMaxima(ctx, char)
+		if err != nil {
+			return 0, nil, err
+		}
+	}
+	return hp, &mp, nil
 }
