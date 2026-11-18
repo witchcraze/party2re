@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -86,5 +87,27 @@ func TestHomeImageSceneAndCommand(t *testing.T) {
 				t.Fatalf("update: %d %s writes=%v", status, raw, f.imageWrites)
 			}
 		})
+	}
+}
+
+// A failed unlock read fails the observation instead of hiding the scene; a
+// locked image is an ordinary 200 without it.
+func TestHomeImageUnlockReadFailurePropagates(t *testing.T) {
+	f, store, router := homeSceneRouter(t, withFixtureHomeImage)
+	if status, response := navigationGET(t, router); status != 200 || slices.ContainsFunc(decodeHomeData(t, response).Destinations, func(d SceneDestination) bool { return d.ID == "home_image" }) {
+		t.Fatalf("locked: %d %+v", status, response.Scene)
+	}
+	f.imageUnlockErr = errors.New("unlock read failed")
+	if status, _ := navigationGET(t, router); status != 500 {
+		t.Fatalf("read failure observed as %d", status)
+	}
+	// The offered scene_enter enum checks every destination, from any scene.
+	store.selection = playercontext.Selection{Destination: "town"}
+	if status, _ := navigationGET(t, router); status != 500 {
+		t.Fatalf("scene_enter enum hid the read failure: %d", status)
+	}
+	f.imageUnlockErr = nil
+	if status, response := navigationGET(t, router); status != 200 || response.Scene.Kind != "town" {
+		t.Fatalf("town after recovery: %d %+v", status, response.Scene)
 	}
 }
