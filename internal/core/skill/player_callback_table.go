@@ -2,7 +2,6 @@ package skill
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -43,7 +42,7 @@ func (d BattleDefinitions) PlayerCallbackTable(s *corebattle.LifetimeState, c *c
 		return entries, nil
 	}
 	for _, a := range s.Actors {
-		if a.ID != c.ActorID || a.MP < 1 || !slices.Contains(a.ItemDefinitionIDs, "item-158") {
+		if a.ID != c.ActorID || a.MP < 1 || !a.HasExtendedSkillAmulet() {
 			continue
 		}
 		for _, slot := range []struct {
