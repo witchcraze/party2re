@@ -119,23 +119,23 @@ func TestNativeMap1_LayoutsSealTheBossBehindOneDoorApproach(t *testing.T) {
 	}
 }
 
-// Variant 1: K at (4,0); door (3,8) entered west from (4,8); boss (1,8); 2 at (0,8).
+// Variant 1: K at (8,0); door (3,0) entered west from (4,0); boss (1,0); 2 at (0,0).
 func TestNativeMap1_KeyOpensDoorWithoutBeingConsumed(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("key", "job-01"))
-	f.placeMap1(t, "key", 1, 3, 0, 1)
-	if res, err := f.svc.Move(ctx, "key", dungeon.DirectionEast); err != nil || res.EventType != dungeon.EventMove {
+	f.placeMap1(t, "key", 1, 8, 1, 1)
+	if res, err := f.svc.Move(ctx, "key", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove {
 		t.Fatalf("key %+v err=%v", res, err)
 	}
 	if exp := f.reload(t, "key"); !slices.Equal(exp.ConsumedEvents, []string{"K"}) || f.rng.calls() != 0 {
 		t.Fatalf("key events %v rng=%d", exp.ConsumedEvents, f.rng.calls())
 	}
-	f.moveTo(t, "key", 4, 8)
+	f.moveTo(t, "key", 4, 0)
 	if _, err := f.svc.Move(ctx, "key", dungeon.DirectionWest); err != nil {
 		t.Fatal(err)
 	}
 	exp := f.reload(t, "key")
-	if exp.PosX != 3 || exp.PosY != 8 || !slices.Equal(exp.ConsumedEvents, []string{"K", "D"}) || exp.TurnsRemaining != 47 {
+	if exp.PosX != 3 || exp.PosY != 0 || !slices.Equal(exp.ConsumedEvents, []string{"K", "D"}) || exp.TurnsRemaining != 47 {
 		t.Fatalf("opened %+v", exp)
 	}
 	// Re-entering the open door is a plain move: no event, spawn roll or new state.
@@ -154,15 +154,15 @@ func TestNativeMap1_KeyOpensDoorWithoutBeingConsumed(t *testing.T) {
 func TestNativeMap1_EveryKeyCellSharesOneKey(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("keys", "job-01"))
-	f.placeMap1(t, "keys", 2, 3, 0, 1) // variant 2 keys at (4,0) and (1,8)
-	if _, err := f.svc.Move(ctx, "keys", dungeon.DirectionEast); err != nil {
+	f.placeMap1(t, "keys", 3, 1, 1, 1) // variant 3 keys at (1,0) and (6,8)
+	if _, err := f.svc.Move(ctx, "keys", dungeon.DirectionNorth); err != nil {
 		t.Fatal(err)
 	}
-	f.moveTo(t, "keys", 0, 8)
-	if _, err := f.svc.Move(ctx, "keys", dungeon.DirectionEast); err != nil {
+	f.moveTo(t, "keys", 6, 7)
+	if _, err := f.svc.Move(ctx, "keys", dungeon.DirectionSouth); err != nil {
 		t.Fatal(err)
 	}
-	if exp := f.reload(t, "keys"); exp.PosX != 1 || !slices.Equal(exp.ConsumedEvents, []string{"K"}) || f.rng.calls() != 0 {
+	if exp := f.reload(t, "keys"); exp.PosX != 6 || exp.PosY != 8 || !slices.Equal(exp.ConsumedEvents, []string{"K"}) || f.rng.calls() != 0 {
 		t.Fatalf("second key %+v rng=%d", exp, f.rng.calls())
 	}
 }
@@ -172,7 +172,7 @@ func TestNativeMap1_LockedDoorSpendsTheRoundAndReturns(t *testing.T) {
 	for _, tc := range []struct {
 		variant, x, y int
 		dir           dungeon.Direction
-	}{{1, 4, 8, dungeon.DirectionWest}, {3, 7, 4, dungeon.DirectionSouth}} {
+	}{{1, 4, 0, dungeon.DirectionWest}, {3, 8, 4, dungeon.DirectionSouth}} {
 		t.Run(fmt.Sprint(tc.variant), func(t *testing.T) {
 			f := newNativeFixture(t, map1Hero("locked", "job-01"))
 			f.placeMap1(t, "locked", tc.variant, tc.x, tc.y, 10)
@@ -188,9 +188,9 @@ func TestNativeMap1_LockedDoorSpendsTheRoundAndReturns(t *testing.T) {
 	}
 	// An ordinary wall spends nothing.
 	f := newNativeFixture(t, map1Hero("wall", "job-01"))
-	f.placeMap1(t, "wall", 1, 4, 8, 10)
+	f.placeMap1(t, "wall", 1, 4, 0, 10)
 	before := f.reload(t, "wall")
-	if _, err := f.svc.Move(ctx, "wall", dungeon.DirectionSouth); !errors.Is(err, dungeon.ErrImpassableWall) {
+	if _, err := f.svc.Move(ctx, "wall", dungeon.DirectionNorth); !errors.Is(err, dungeon.ErrImpassableWall) {
 		t.Fatalf("wall err=%v", err)
 	}
 	if after := f.reload(t, "wall"); after.Revision != before.Revision || after.TurnsRemaining != 40 {
@@ -201,7 +201,7 @@ func TestNativeMap1_LockedDoorSpendsTheRoundAndReturns(t *testing.T) {
 func TestNativeMap1_OnlyTheActingJob9OpensWithoutKey(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("thief", "job-09"))
-	f.placeMap1(t, "thief", 1, 4, 8, 1)
+	f.placeMap1(t, "thief", 1, 4, 0, 1)
 	if _, err := f.svc.Move(ctx, "thief", dungeon.DirectionWest); err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestNativeMap1_OnlyTheActingJob9OpensWithoutKey(t *testing.T) {
 	if _, err := g.svc.StartPartyExpedition(ctx, "lead", []string{"lead", "ally"}, dungeon.NativeMap1ID, "p"); err != nil {
 		t.Fatal(err)
 	}
-	g.moveTo(t, "lead", 4, 8)
+	g.moveTo(t, "lead", 4, 0)
 	if _, err := g.svc.Move(ctx, "lead", dungeon.DirectionWest); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestNativeMap1_OnlyTheActingJob9OpensWithoutKey(t *testing.T) {
 func TestNativeMap1_LockedDoorAtRoundLimit(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("limit", "job-01"))
-	f.placeMap1(t, "limit", 1, 4, 8, 49)
+	f.placeMap1(t, "limit", 1, 4, 0, 49)
 	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionWest); err != nil {
 		t.Fatalf("round 49 -> 50: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestNativeMap1_LockedDoorAtRoundLimit(t *testing.T) {
 	if before.TurnsRemaining != 0 || before.PosX != 4 || before.Status != dungeon.StatusExploring {
 		t.Fatalf("at limit %+v", before)
 	}
-	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionEast); !errors.Is(err, dungeon.ErrMovementExhausted) {
+	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionSouth); !errors.Is(err, dungeon.ErrMovementExhausted) {
 		t.Fatalf("limit err=%v", err)
 	}
 	if after := f.reload(t, "limit"); after.Revision != before.Revision || f.rng.calls() != 0 || !after.Controls("limit").CanEscape {
@@ -243,11 +243,11 @@ func TestNativeMap1_LockedDoorAtRoundLimit(t *testing.T) {
 	}
 }
 
-// Variant 3: 3 at (0,0) and (0,8) share one flag; 2 at (7,8) below the boss.
+// Variant 3: 3 at (8,0) and (0,8), reached through hidden passages, share one flag; 2 at (8,8) below the boss.
 func TestNativeMap1_TreasureSymbolsAreIndependentOnceTriggers(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("chest", "job-01"))
-	f.placeMap1(t, "chest", 3, 0, 1, 1)
+	f.placeMap1(t, "chest", 3, 8, 1, 1)
 	if res, err := f.svc.Move(ctx, "chest", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventTreasure {
 		t.Fatalf("first 3 %+v err=%v", res, err)
 	}
@@ -259,11 +259,11 @@ func TestNativeMap1_TreasureSymbolsAreIndependentOnceTriggers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	clear(0, 7)
-	if res, err := f.svc.Move(ctx, "chest", dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventMove || res.Expedition.Encounter != nil {
+	clear(1, 8)
+	if res, err := f.svc.Move(ctx, "chest", dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventMove || res.Expedition.Encounter != nil {
 		t.Fatalf("second 3 %+v err=%v", res, err)
 	}
-	clear(7, 7)
+	clear(8, 7)
 	if res, err := f.svc.Move(ctx, "chest", dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventTreasure {
 		t.Fatalf("2 %+v err=%v", res, err)
 	}
@@ -275,7 +275,7 @@ func TestNativeMap1_TreasureSymbolsAreIndependentOnceTriggers(t *testing.T) {
 func TestNativeMap1_ObservationFollowsKeyAndDoorState(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("look", "job-01"))
-	f.placeMap1(t, "look", 1, 3, 0, 1)
+	f.placeMap1(t, "look", 1, 8, 1, 1)
 	tile := func(row, col int) string {
 		t.Helper()
 		before := f.reload(t, "look")
@@ -288,29 +288,29 @@ func TestNativeMap1_ObservationFollowsKeyAndDoorState(t *testing.T) {
 		}
 		return view.Map.Tiles[row][col]
 	}
-	if got := tile(1, 2); got != "★" {
+	if got := tile(0, 1); got != "★" {
 		t.Fatalf("key before pickup %q", got)
 	}
-	if _, err := f.svc.Move(ctx, "look", dungeon.DirectionEast); err != nil {
+	if _, err := f.svc.Move(ctx, "look", dungeon.DirectionNorth); err != nil {
 		t.Fatal(err)
 	}
-	f.moveTo(t, "look", 3, 0)
-	if got := tile(1, 2); got != "□" {
+	f.moveTo(t, "look", 8, 1)
+	if got := tile(0, 1); got != "□" {
 		t.Fatalf("key after pickup %q", got)
 	}
-	f.moveTo(t, "look", 4, 8)
+	f.moveTo(t, "look", 4, 0)
 	if got := tile(1, 0); got != "扉" {
 		t.Fatalf("closed door %q", got)
 	}
 	if _, err := f.svc.Move(ctx, "look", dungeon.DirectionWest); err != nil {
 		t.Fatal(err)
 	}
-	f.moveTo(t, "look", 4, 8)
+	f.moveTo(t, "look", 4, 0)
 	if got := tile(1, 0); got != "□" {
 		t.Fatalf("open door %q", got)
 	}
-	// Hidden passage (1,1) looks like a wall before and after crossing it.
-	f.moveTo(t, "look", 1, 0)
+	// Hidden passage (1,7) looks like a wall before and after crossing it.
+	f.moveTo(t, "look", 1, 6)
 	if got := tile(2, 1); got != "■" {
 		t.Fatalf("hidden before %q", got)
 	}
@@ -356,11 +356,11 @@ func TestNativeMap1_ValkeyKeyAndDoorState(t *testing.T) {
 		}
 		return *exp
 	}
-	place(3, 0)
-	if _, err := svc.Move(ctx, charID, dungeon.DirectionEast); err != nil {
+	place(8, 1)
+	if _, err := svc.Move(ctx, charID, dungeon.DirectionNorth); err != nil {
 		t.Fatal(err)
 	}
-	stale := place(4, 8)
+	stale := place(4, 0)
 	if _, err := svc.Move(ctx, charID, dungeon.DirectionWest); err != nil {
 		t.Fatal(err)
 	}
@@ -370,12 +370,12 @@ func TestNativeMap1_ValkeyKeyAndDoorState(t *testing.T) {
 	}
 	rev := stale.Revision
 	if _, err := store.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: got.ID, ExpectedRevision: &rev,
-		NewX: 3, NewY: 8, TurnsDelta: -1, EventKey: "D", Now: time.Now().UTC()}); !errors.Is(err, dungeon.ErrExpeditionStateChanged) {
+		NewX: 3, NewY: 0, TurnsDelta: -1, EventKey: "D", Now: time.Now().UTC()}); !errors.Is(err, dungeon.ErrExpeditionStateChanged) {
 		t.Fatalf("stale door err=%v", err)
 	}
 	rev = got.Revision
 	out, err := store.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: got.ID, ExpectedRevision: &rev,
-		NewX: 3, NewY: 8, TurnsDelta: -1, EventKey: "K", Now: time.Now().UTC()})
+		NewX: 3, NewY: 0, TurnsDelta: -1, EventKey: "K", Now: time.Now().UTC()})
 	if err != nil || out.EventConsumed || !slices.Equal(out.Expedition.ConsumedEvents, []string{"K", "D"}) {
 		t.Fatalf("key replay %+v err=%v", out, err)
 	}

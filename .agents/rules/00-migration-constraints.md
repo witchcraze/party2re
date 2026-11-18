@@ -9,11 +9,11 @@ This project is currently rebuilding Party2 toward Version 1.0. These are transi
 
 ## 1. Clean-room reconstruction
 
-- Do not copy, port, translate, or mechanically rewrite existing Party2 source code.
+- Do not copy, port, translate, or mechanically rewrite legacy Perl code.
+- Game data in the legacy files (map layouts, numeric parameters, tables) MAY be transcribed into native data formats; the Perl logic around it remains subject to the previous item.
 - Do not preserve the old implementation's architecture merely for compatibility.
-- Use the existing game only as a source of behavioral and functional requirements.
+- Use the existing game only as a source of behavioral and functional requirements and of the game data above.
 - Reconstruct the implementation from the desired domain model and requirements.
-- The existing Party2 implementation is a behavioral/design reference only.
 - During reconstruction, the original project's observable behavior is authoritative for game specifications. Current Go code, tests, and documentation MUST NOT be used to justify a conflicting game rule.
 - When legacy behavior, the written specification, and the Go implementation differ, MUST record the legacy reference, the intended rule, and the implementation gap separately. Only an explicitly approved change may supersede the legacy behavior.
 
@@ -23,7 +23,7 @@ This project is currently rebuilding Party2 toward Version 1.0. These are transi
 
 ## 3. Asset and Intellectual Property Rules
 
-- Existing Party2 source code is not reused.
+- Legacy Perl code is not reused.
 - Existing Party2 images, visual assets, and sounds are not reused.
 - **Copyrighted / Distinctive Names:** Asset names or job/skill names that contain distinctive proper names or other terms strongly associated with a specific game (e.g., Final Fantasy, Dragon Quest) are **not reused**. Such names must be replaced with generic terminology (e.g., replace "赤魔道士" with generic terms).
 
