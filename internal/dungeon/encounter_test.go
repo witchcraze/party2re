@@ -172,7 +172,7 @@ func TestEncounterStepCAS(t *testing.T) {
 				}
 			})
 			enc := &dungeon.ActiveEncounter{Monster: dungeon.DungeonMonster{ID: "enemy", HP: 100}, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 70, 10, 10)}, EventType: dungeon.EventBattle, X: 1}
-			params := dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &exp.Revision, Combat: true, Encounter: enc, TurnsDelta: -1, Now: time.Now().UTC()}
+			params := dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &exp.Revision, Combat: true, Encounter: enc, RoundDelta: 1, Now: time.Now().UTC()}
 			if _, err := store.Step(ctx, exp.CharacterID, params); err != nil {
 				t.Fatal(err)
 			}
@@ -219,7 +219,7 @@ func TestEncounterStepCAS(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if active.Encounter != nil || active.AccumulatedExp != 17 || active.AccumulatedGold != 23 || len(active.AccumulatedItems) != 1 || len(active.ConsumedEvents) != 0 || active.TurnsRemaining != 48 {
+			if active.Encounter != nil || active.AccumulatedExp != 17 || active.AccumulatedGold != 23 || len(active.AccumulatedItems) != 1 || len(active.ConsumedEvents) != 0 || active.Round != 2 {
 				t.Fatalf("duplicate or lost update: %+v", active)
 			}
 		})

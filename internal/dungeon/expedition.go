@@ -72,12 +72,12 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		return ExpeditionStepResult{}, err
 	}
 
-	_, floor, err := s.activeFloor(exp)
+	d, floor, err := s.activeFloor(exp)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
 	// The limit rejects before any state, RNG or wall event changes.
-	if exp.TurnsRemaining <= 0 {
+	if exp.Round >= exp.RoundLimit {
 		return ExpeditionStepResult{}, ErrMovementExhausted
 	}
 
@@ -103,5 +103,5 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	if tileChar == cellWall {
 		return ExpeditionStepResult{}, ErrImpassableWall
 	}
-	return s.moveNative(ctx, exp, &char, floor, newX, newY)
+	return s.moveNative(ctx, exp, &char, d, floor, newX, newY)
 }

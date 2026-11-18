@@ -144,7 +144,6 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	exp.Encounter = cloneEncounter(params.Encounter)
 
 	currentHP := exp.CurrentHP + params.HPDelta
-	turnsRemaining := exp.TurnsRemaining + params.TurnsDelta
 
 	if len(params.MemberHPDeltas) > 0 {
 		allDead := true
@@ -213,8 +212,6 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		currentHP = 0
 		finalStatus = StatusWipedOut
 	}
-	// Exhausted runs stay active; Escape remains available.
-	turnsRemaining = max(turnsRemaining, 0)
 
 	if params.FinishStatus != "" {
 		finalStatus = params.FinishStatus
@@ -222,7 +219,10 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	exp.PosX = params.NewX
 	exp.PosY = params.NewY
 	exp.CurrentHP = currentHP
-	exp.TurnsRemaining = turnsRemaining
+	exp.Round += params.RoundDelta
+	if params.MapVariant > 0 {
+		exp.MapVariant, exp.RoundLimit = params.MapVariant, params.RoundLimit
+	}
 	exp.Status = finalStatus
 
 	eventConsumed := true

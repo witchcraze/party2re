@@ -93,7 +93,7 @@ func (f *nativeFixture) place(t *testing.T, id string, x, y, round int) dungeon.
 		t.Fatal(err)
 	}
 	exp := f.reload(t, id)
-	exp.PosX, exp.PosY, exp.TurnsRemaining = x, y, 20-round
+	exp.PosX, exp.PosY, exp.Round = x, y, round
 	if err := f.store.SaveActiveExpedition(ctx, exp); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestNativeMap0_RoundLimitAndWalls(t *testing.T) {
 	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionSouth); !errors.Is(err, dungeon.ErrImpassableWall) {
 		t.Fatalf("bound move err=%v", err)
 	}
-	if after := f.reload(t, "limit"); after.TurnsRemaining != before.TurnsRemaining || after.Revision != before.Revision || f.rng.calls() != 0 {
+	if after := f.reload(t, "limit"); after.Round != before.Round || after.Revision != before.Revision || f.rng.calls() != 0 {
 		t.Fatalf("wall changed state %+v rng=%d", after, f.rng.calls())
 	}
 
@@ -215,7 +215,7 @@ func TestNativeMap0_RoundLimitAndWalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.EventType != dungeon.EventTreasure || res.Expedition.TurnsRemaining != 0 || res.Expedition.Status != dungeon.StatusExploring {
+	if res.EventType != dungeon.EventTreasure || res.Expedition.Round != 20 || res.Expedition.Status != dungeon.StatusExploring {
 		t.Fatalf("round 20 step %+v", res)
 	}
 
@@ -265,7 +265,7 @@ func TestNativeMap0_PassageEncounterBoundary(t *testing.T) {
 			if !tc.spawn && f.rng.calls() != 1 {
 				t.Fatalf("non-spawn draws=%d", f.rng.calls())
 			}
-			if got := f.reload(t, "pass"); got.PosX != 1 || got.TurnsRemaining != 18 {
+			if got := f.reload(t, "pass"); got.PosX != 1 || got.Round != 2 {
 				t.Fatalf("passage step %+v", got)
 			}
 		})
@@ -294,7 +294,7 @@ func TestNativeMap0_NonPassageEventsDrawNoPassageRNG(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.EventType != dungeon.EventMove || res.Expedition.Encounter != nil || f.rng.calls() != 0 || res.Expedition.TurnsRemaining != 14 {
+			if res.EventType != dungeon.EventMove || res.Expedition.Encounter != nil || f.rng.calls() != 0 || res.Expedition.Round != 6 {
 				t.Fatalf("result %+v rng=%d", res, f.rng.calls())
 			}
 		})
@@ -313,7 +313,7 @@ func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) 
 	exp := f.reload(t, "chest")
 	if res.EventType != dungeon.EventTreasure || exp.Encounter == nil || len(exp.Encounter.Chests) != 1 ||
 		exp.AccumulatedGold != start.AccumulatedGold || len(exp.AccumulatedItems) != 0 ||
-		len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "C:2:4" || exp.TurnsRemaining != 16 {
+		len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "C:2:4" || exp.Round != 4 {
 		t.Fatalf("treasure trigger %+v", exp)
 	}
 
@@ -337,7 +337,7 @@ func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) 
 			t.Fatalf("%s: treasure resolved as combat: %v", label, err)
 		}
 		after := f.reload(t, "chest")
-		if after.Revision != before.Revision || after.PosX != before.PosX || after.TurnsRemaining != before.TurnsRemaining ||
+		if after.Revision != before.Revision || after.PosX != before.PosX || after.Round != before.Round ||
 			len(after.ConsumedEvents) != len(before.ConsumedEvents) || f.rng.calls() != 0 {
 			t.Fatalf("%s: rejection changed state %+v rng=%d", label, after, f.rng.calls())
 		}
@@ -360,7 +360,7 @@ func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Expedition.Encounter != nil || res.Expedition.PosX != 1 || res.Expedition.TurnsRemaining != 15 {
+	if res.Expedition.Encounter != nil || res.Expedition.PosX != 1 || res.Expedition.Round != 5 {
 		t.Fatalf("released move %+v", res.Expedition)
 	}
 
@@ -448,7 +448,7 @@ func TestNativeMap0_BossDrawResumesWithoutSpendingRounds(t *testing.T) {
 	if res.BattleResult == nil || res.BattleResult.Outcome != corebattle.OutcomeDraw || exp.Encounter == nil || exp.Encounter.EventType != dungeon.EventBoss {
 		t.Fatalf("expected a pending boss draw, got %+v", res)
 	}
-	if exp.PosX != 1 || exp.PosY != 2 || exp.TurnsRemaining != 15 || len(exp.ConsumedEvents) != 1 {
+	if exp.PosX != 1 || exp.PosY != 2 || exp.Round != 5 || len(exp.ConsumedEvents) != 1 {
 		t.Fatalf("boss trigger state %+v", exp)
 	}
 	if !exp.Controls("stall").CanFight || exp.Controls("stall").CanMove {
@@ -457,7 +457,7 @@ func TestNativeMap0_BossDrawResumesWithoutSpendingRounds(t *testing.T) {
 	if _, err := f.svc.Fight(ctx, "stall"); err != nil {
 		t.Fatal(err)
 	}
-	if after := f.reload(t, "stall"); after.TurnsRemaining != 15 || after.Status != dungeon.StatusExploring || len(after.ConsumedEvents) != 1 {
+	if after := f.reload(t, "stall"); after.Round != 5 || after.Status != dungeon.StatusExploring || len(after.ConsumedEvents) != 1 {
 		t.Fatalf("resume changed rounds or cleared: %+v", after)
 	}
 }

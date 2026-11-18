@@ -134,7 +134,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				next.PosX, next.TurnsRemaining, next.AccumulatedGold = 2, 17, 77
+				next.PosX, next.Round, next.AccumulatedGold = 2, 33, 77
 				replacementID = next.ID
 				next.Members = append(next.Members, dungeon.ExpeditionMember{CharacterID: member, Name: follower.Name, Level: follower.Level, CurrentHP: follower.Stats.HP, MaxHP: follower.Stats.MaxHP, JobID: follower.JobID})
 				if err := store.SaveActiveExpedition(ctx, *next); err != nil {
@@ -159,7 +159,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 				GetActiveExpedition(context.Context, string) (*dungeon.ActiveExpedition, error)
 			}{store, repo} {
 				next, err := source.GetActiveExpedition(ctx, char.ID)
-				if err != nil || next == nil || next.ID != replacementID || next.PosX != 2 || next.TurnsRemaining != 17 || next.AccumulatedGold != 77 {
+				if err != nil || next == nil || next.ID != replacementID || next.PosX != 2 || next.Round != 33 || next.AccumulatedGold != 77 {
 					t.Fatalf("replacement lost: %+v, err=%v", next, err)
 				}
 			}

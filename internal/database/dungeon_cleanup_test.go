@@ -34,21 +34,21 @@ func TestDungeonRepository_RunQualifiedCleanup(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	old := dungeon.ActiveExpedition{ID: id.New(), CharacterID: char.ID, DungeonID: "dungeon-01", Status: dungeon.StatusExploring, CurrentHP: char.Stats.HP, TurnsRemaining: 20, StartedAt: time.Now().UTC().Truncate(time.Second)}
+	old := dungeon.ActiveExpedition{ID: id.New(), CharacterID: char.ID, DungeonID: "dungeon-01", Status: dungeon.StatusExploring, CurrentHP: char.Stats.HP, Round: 30, RoundLimit: 50, StartedAt: time.Now().UTC().Truncate(time.Second)}
 	if err := repo.SaveActiveExpedition(ctx, old); err != nil {
 		t.Fatal(err)
 	}
 	next := old
 	next.ID, next.DungeonID = id.New(), "dungeon-02"
 	next.StartedAt = next.StartedAt.Add(time.Hour)
-	next.PosX, next.TurnsRemaining, next.AccumulatedGold = 2, 17, 77
+	next.PosX, next.Round, next.AccumulatedGold = 2, 33, 77
 	if err := repo.SaveActiveExpedition(ctx, next); err != nil {
 		t.Fatal(err)
 	}
 	assertReplacement := func() {
 		t.Helper()
 		got, err := repo.GetActiveExpedition(ctx, char.ID)
-		if err != nil || got == nil || got.ID != next.ID || got.DungeonID != next.DungeonID || !got.StartedAt.Equal(next.StartedAt) || got.PosX != 2 || got.TurnsRemaining != 17 || got.AccumulatedGold != 77 {
+		if err != nil || got == nil || got.ID != next.ID || got.DungeonID != next.DungeonID || !got.StartedAt.Equal(next.StartedAt) || got.PosX != 2 || got.Round != 33 || got.AccumulatedGold != 77 {
 			t.Fatalf("SQL replacement identity/state changed: %+v %v", got, err)
 		}
 	}

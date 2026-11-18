@@ -307,7 +307,7 @@ func TestPartyCombat_OutcomeDraw_DoesNotWipeOut_PreventsMovement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartPartyExpedition failed: %v", err)
 	}
-	initialTurns := exp.TurnsRemaining
+	initialRound := exp.Round
 
 	// Attempt move east onto golem tile (1, 0)
 	res, err := svc.Move(ctx, "lead-stalemate", dungeon.DirectionEast)
@@ -333,9 +333,9 @@ func TestPartyCombat_OutcomeDraw_DoesNotWipeOut_PreventsMovement(t *testing.T) {
 		t.Errorf("expected player position (1, 0), got (%d, %d)", res.Expedition.PosX, res.Expedition.PosY)
 	}
 
-	// 4. Turns budget is consumed (-1)
-	if res.Expedition.TurnsRemaining != initialTurns-1 {
-		t.Errorf("expected TurnsRemaining %d, got %d", initialTurns-1, res.Expedition.TurnsRemaining)
+	// 4. The move spends one round
+	if res.Expedition.Round != initialRound+1 {
+		t.Errorf("expected Round %d, got %d", initialRound+1, res.Expedition.Round)
 	}
 
 	// 5. HP/MP deltas from the 100-turn battle are applied to members

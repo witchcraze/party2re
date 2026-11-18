@@ -39,7 +39,7 @@ func nativeMap1() Dungeon {
 	pools := []EncounterPool{nativeMap1Pool()}
 	variants := make([]Floor, len(nativeMap1Grids))
 	for i, rows := range nativeMap1Grids {
-		f := Floor{FloorNumber: 1, Width: 9, Height: 9, Grid: rows[:], Pools: pools}
+		f := Floor{FloorNumber: 1, Width: 9, Height: 9, Grid: rows[:], Pools: pools, Marks: map[byte]string{cellKey: "★", cellDoor: "扉"}}
 		for y, row := range rows {
 			if x := strings.IndexByte(row, cellStart); x >= 0 {
 				f.StartX, f.StartY = x, y

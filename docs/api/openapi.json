@@ -10139,15 +10139,20 @@
             "description": "Revision used by the service for atomic step validation.",
             "type": "integer"
           },
+          "round": {
+            "description": "Current shared round; it carries over floor changes.",
+            "type": "integer"
+          },
+          "round_limit": {
+            "description": "The current floor's round limit; a pitfall can leave round above it.",
+            "type": "integer"
+          },
           "started_at": {
             "format": "date-time",
             "type": "string"
           },
           "status": {
             "type": "string"
-          },
-          "turns_remaining": {
-            "type": "integer"
           },
           "updated_at": {
             "format": "date-time",
@@ -10161,7 +10166,8 @@
           "pos_x",
           "pos_y",
           "current_hp",
-          "turns_remaining",
+          "round",
+          "round_limit",
           "accumulated_exp",
           "accumulated_gold",
           "accumulated_items",
@@ -10293,6 +10299,10 @@
           "dungeon_id": {
             "type": "string"
           },
+          "floor": {
+            "description": "Floor number of the current layout (1 on single-floor maps).",
+            "type": "integer"
+          },
           "id": {
             "type": "string"
           },
@@ -10320,7 +10330,7 @@
             "type": "integer"
           },
           "round_limit": {
-            "description": "Movement rejects once round reaches this limit.",
+            "description": "The current floor's limit; movement rejects once round reaches it, and a pitfall can leave round above it.",
             "type": "integer"
           },
           "status": {
@@ -10330,9 +10340,6 @@
               "wiped_out"
             ],
             "type": "string"
-          },
-          "turns_remaining": {
-            "type": "integer"
           }
         },
         "required": [
@@ -10340,7 +10347,6 @@
           "leader_id",
           "dungeon_id",
           "revision",
-          "turns_remaining",
           "status",
           "map",
           "directions",
@@ -21895,7 +21901,7 @@
     },
     "/characters/{id}/dungeons/move": {
       "post": {
-        "description": "Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming turns or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at their round limit with 409 while the run stays active for escape; walls and bounds spend no round, while a locked door spends the round and leaves the party in place.",
+        "description": "Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming rounds or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at the current floor's round limit with 409 while the run stays active for escape; walls and bounds spend no round, while a locked door spends the round and leaves the party in place. Stairs and pitfalls switch the floor at the same position and round; a pitfall reports member_damages and can leave the round above the new floor's limit.",
         "operationId": "moveDungeonExpedition",
         "parameters": [
           {

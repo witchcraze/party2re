@@ -48,7 +48,7 @@ func (f *nativeFixture) placeNative(t *testing.T, mapID string, limit int, id st
 	if exp.MapVariant != variant {
 		t.Fatalf("variant %d, want %d", exp.MapVariant, variant)
 	}
-	exp.PosX, exp.PosY, exp.TurnsRemaining = x, y, limit-round
+	exp.PosX, exp.PosY, exp.Round = x, y, round
 	if err := f.store.SaveActiveExpedition(context.Background(), exp); err != nil {
 		t.Fatal(err)
 	}
@@ -171,10 +171,10 @@ func TestNativeMap3_EveryWarpBinding(t *testing.T) {
 				t.Fatalf("variant %d warp %c: %v", vi+1, sym, err)
 			}
 			exp := f.reload(t, "warp")
-			if exp.PosX != to[0] || exp.PosY != to[1] || exp.TurnsRemaining != 49 || exp.Encounter != nil || len(exp.ConsumedEvents) != 0 ||
+			if exp.PosX != to[0] || exp.PosY != to[1] || exp.Round != 11 || exp.Encounter != nil || len(exp.ConsumedEvents) != 0 ||
 				res.EventType != dungeon.EventMove || f.rng.calls() != 0 {
 				t.Fatalf("variant %d warp %c -> %v: got (%d,%d) turns=%d enc=%v consumed=%v rng=%d",
-					vi+1, sym, to, exp.PosX, exp.PosY, exp.TurnsRemaining, exp.Encounter, exp.ConsumedEvents, f.rng.calls())
+					vi+1, sym, to, exp.PosX, exp.PosY, exp.Round, exp.Encounter, exp.ConsumedEvents, f.rng.calls())
 			}
 		}
 	}
@@ -228,11 +228,11 @@ func TestNativeMap3_MistConfusesTheEnsuingBattle(t *testing.T) {
 		t.Fatal("confusion did not reach the ensuing battle")
 	}
 	exp := f.reload(t, "mist")
-	if exp.Encounter == nil || exp.Encounter.Statuses["mist"] != string(corebattle.StatusConfusion) || exp.TurnsRemaining != 51 || len(exp.ConsumedEvents) != 0 {
+	if exp.Encounter == nil || exp.Encounter.Statuses["mist"] != string(corebattle.StatusConfusion) || exp.Round != 9 || len(exp.ConsumedEvents) != 0 {
 		t.Fatalf("pending mist encounter %+v", exp)
 	}
 	res, err = f.svc.Fight(ctx, "mist")
-	if err != nil || confusedTurns(res, "mist") == 0 || res.Expedition.TurnsRemaining != 51 {
+	if err != nil || confusedTurns(res, "mist") == 0 || res.Expedition.Round != 9 {
 		t.Fatalf("resumed battle lost confusion: %+v err=%v", res, err)
 	}
 
@@ -326,7 +326,7 @@ func TestNativeMap3_RoundLimitRejectsWarpWithoutChange(t *testing.T) {
 		t.Fatalf("round 59 -> 60 warp: %v", err)
 	}
 	exp := f.reload(t, "limit")
-	if exp.TurnsRemaining != 0 || exp.PosX != 0 || exp.PosY != 8 || exp.Status != dungeon.StatusExploring {
+	if exp.Round != 60 || exp.PosX != 0 || exp.PosY != 8 || exp.Status != dungeon.StatusExploring {
 		t.Fatalf("at limit %+v", exp)
 	}
 	exp.PosX, exp.PosY = 3, 3
@@ -365,10 +365,13 @@ func TestNativeMap3_LeaderJobLevelAdmission(t *testing.T) {
 	if got := ids(f.svc.ListDungeons(2)); !slices.Equal(got, []string{dungeon.NativeMap0ID}) {
 		t.Fatalf("job level 2 listing %v", got)
 	}
-	if got := ids(f.svc.ListDungeons(6)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID}) {
+	if got := ids(f.svc.ListDungeons(4)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID}) {
+		t.Fatalf("job level 4 listing %v", got)
+	}
+	if got := ids(f.svc.ListDungeons(6)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID, dungeon.NativeMap2ID}) {
 		t.Fatalf("job level 6 listing %v", got)
 	}
-	if got := ids(f.svc.ListDungeons(7)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID, dungeon.NativeMap3ID}) {
+	if got := ids(f.svc.ListDungeons(7)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID, dungeon.NativeMap2ID, dungeon.NativeMap3ID}) {
 		t.Fatalf("job level 7 listing %v", got)
 	}
 
@@ -390,7 +393,7 @@ func TestNativeMap3_ConfusedContinuationStoreContract(t *testing.T) {
 	run := func(t *testing.T, store dungeon.ActiveExpeditionStore, charID string) {
 		ctx := context.Background()
 		exp := sampleExpedition("map3-"+charID, charID, dungeon.NativeMap3ID)
-		exp.MapVariant, exp.TurnsRemaining = 5, 30
+		exp.MapVariant, exp.Round, exp.RoundLimit = 5, 30, 60
 		if err := store.SaveActiveExpedition(ctx, exp); err != nil {
 			t.Fatal(err)
 		}
@@ -405,7 +408,7 @@ func TestNativeMap3_ConfusedContinuationStoreContract(t *testing.T) {
 			Statuses: map[string]string{charID: string(corebattle.StatusConfusion)}}
 		step := func(rev int, x int) error {
 			_, err := store.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &rev, Combat: true,
-				NewX: x, NewY: 7, TurnsDelta: -1, Encounter: enc, Now: time.Now().UTC()})
+				NewX: x, NewY: 7, RoundDelta: 1, Encounter: enc, Now: time.Now().UTC()})
 			return err
 		}
 		if err := step(rev, 0); err != nil {
@@ -415,7 +418,7 @@ func TestNativeMap3_ConfusedContinuationStoreContract(t *testing.T) {
 			t.Fatalf("stale step err=%v", err)
 		}
 		got, err = store.GetActiveExpedition(ctx, charID)
-		if err != nil || got.PosX != 0 || got.TurnsRemaining != 29 || got.MapVariant != 5 || got.Encounter == nil ||
+		if err != nil || got.PosX != 0 || got.Round != 31 || got.MapVariant != 5 || got.Encounter == nil ||
 			got.Encounter.Statuses[charID] != string(corebattle.StatusConfusion) {
 			t.Fatalf("reload %+v err=%v", got, err)
 		}

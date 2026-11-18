@@ -82,6 +82,21 @@ type Floor struct {
 	Warps map[byte][2]int `json:"-"`
 	// Pools, when set, replace Monsters/Boss: each event draws one pool, as legacy maps load one stage file per request.
 	Pools []EncounterPool `json:"-"`
+	// RoundLimit overrides the dungeon's limit on this floor (legacy $max_round per map file).
+	RoundLimit int `json:"-"`
+	// Exits switch floors: entering the keyed cell picks a uniform candidate variant.
+	Exits map[byte]FloorExit `json:"-"`
+	// Bosses are map-owned once bosses with fixed content, keyed by cell.
+	Bosses map[byte]DungeonMonster `json:"-"`
+	// Marks show a cell's symbol in the map view until its once event is consumed.
+	Marks map[byte]string `json:"-"`
+}
+
+// FloorExit is a route or pitfall: the round carries over and the position is
+// kept; Trap is the party damage base (_trap_d), 0 for none.
+type FloorExit struct {
+	Variants []int
+	Trap     int
 }
 
 // EncounterPool is one stage's content; Appears weights monster indices (empty: uniform).
@@ -100,6 +115,15 @@ type Dungeon struct {
 	LeaderJobLevel int `json:"-"`
 	// Variants stay private because their grids disclose hidden passages.
 	Variants []Floor `json:"-"`
+	// Initial counts the leading variants a run may start on; 0 means all.
+	Initial int `json:"-"`
+}
+
+func (d Dungeon) limitOf(f Floor) int {
+	if f.RoundLimit > 0 {
+		return f.RoundLimit
+	}
+	return d.RoundLimit
 }
 
 type ActiveExpedition struct {
@@ -115,7 +139,8 @@ type ActiveExpedition struct {
 	PosX             int                `json:"pos_x"`
 	PosY             int                `json:"pos_y"`
 	CurrentHP        int                `json:"current_hp"`
-	TurnsRemaining   int                `json:"turns_remaining"`
+	Round            int                `json:"round"`
+	RoundLimit       int                `json:"round_limit"` // the current floor's limit
 	AccumulatedExp   int                `json:"accumulated_exp"`
 	AccumulatedGold  int                `json:"accumulated_gold"`
 	AccumulatedItems []string           `json:"accumulated_items"`
@@ -166,12 +191,15 @@ type StepParams struct {
 	MemberExpDeltas      map[string]int
 	MemberGoldDeltas     map[string]int
 	ConsumedItems        map[string][]corebattle.ConsumedItem
-	TurnsDelta           int
-	ExpDelta             int
-	GoldDelta            int
-	RewardItemID         string
-	EventKey             string
-	Now                  time.Time
+	RoundDelta           int
+	// MapVariant, when nonzero, moves the run to that floor with its RoundLimit.
+	MapVariant   int
+	RoundLimit   int
+	ExpDelta     int
+	GoldDelta    int
+	RewardItemID string
+	EventKey     string
+	Now          time.Time
 }
 
 // StepOutcome represents the result of executing an atomic step against the active expedition store.

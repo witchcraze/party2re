@@ -188,7 +188,11 @@ func (s *Service) startRoster(
 	}
 	// Legacy picks one initial layout; accepted start is the leader's
 	// initial advance from round 0 to 1 without a tile event.
-	variant, turns := s.rng.Intn(len(dungeon.Variants))+1, dungeon.RoundLimit-1
+	initial := dungeon.Initial
+	if initial == 0 {
+		initial = len(dungeon.Variants)
+	}
+	variant := s.rng.Intn(initial) + 1
 	firstFloor := dungeon.Variants[variant-1]
 	members := make([]ExpeditionMember, 0, len(memberIDs))
 	leaderHP := 0
@@ -274,7 +278,8 @@ func (s *Service) startRoster(
 		PosX:             firstFloor.StartX,
 		PosY:             firstFloor.StartY,
 		CurrentHP:        leaderHP,
-		TurnsRemaining:   turns,
+		Round:            1,
+		RoundLimit:       dungeon.limitOf(firstFloor),
 		AccumulatedExp:   0,
 		AccumulatedGold:  0,
 		AccumulatedItems: []string{},

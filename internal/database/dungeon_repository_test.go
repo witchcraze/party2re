@@ -34,13 +34,13 @@ func TestDungeonRepository(t *testing.T) {
 	now := time.Now().UTC()
 	expID := fmt.Sprintf("exp_%016x", now.UnixNano())
 	exp := dungeon.ActiveExpedition{
-		ID:               expID,
-		CharacterID:      char.ID,
-		DungeonID:        "dungeon-01",
-		PosX:             2,
-		PosY:             0,
-		CurrentHP:        char.Stats.HP,
-		TurnsRemaining:   20,
+		ID:          expID,
+		CharacterID: char.ID,
+		DungeonID:   "dungeon-01",
+		PosX:        2,
+		PosY:        0,
+		CurrentHP:   char.Stats.HP,
+		Round:       30, RoundLimit: 50,
 		AccumulatedExp:   150,
 		AccumulatedGold:  300,
 		AccumulatedItems: []string{"potion", "ether"},

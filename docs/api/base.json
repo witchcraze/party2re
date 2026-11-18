@@ -14689,8 +14689,13 @@
           "status": {
             "type": "string"
           },
-          "turns_remaining": {
-            "type": "integer"
+          "round": {
+            "type": "integer",
+            "description": "Current shared round; it carries over floor changes."
+          },
+          "round_limit": {
+            "type": "integer",
+            "description": "The current floor's round limit; a pitfall can leave round above it."
           },
           "updated_at": {
             "format": "date-time",
@@ -14711,7 +14716,8 @@
           "pos_x",
           "pos_y",
           "current_hp",
-          "turns_remaining",
+          "round",
+          "round_limit",
           "accumulated_exp",
           "accumulated_gold",
           "accumulated_items",
@@ -16937,16 +16943,17 @@
           "revision": {
             "type": "integer"
           },
-          "turns_remaining": {
-            "type": "integer"
-          },
           "round": {
             "type": "integer",
             "description": "Current shared round (1 after start)."
           },
           "round_limit": {
             "type": "integer",
-            "description": "Movement rejects once round reaches this limit."
+            "description": "The current floor's limit; movement rejects once round reaches it, and a pitfall can leave round above it."
+          },
+          "floor": {
+            "type": "integer",
+            "description": "Floor number of the current layout (1 on single-floor maps)."
           },
           "status": {
             "type": "string",
@@ -16987,7 +16994,6 @@
           "leader_id",
           "dungeon_id",
           "revision",
-          "turns_remaining",
           "status",
           "map",
           "directions",

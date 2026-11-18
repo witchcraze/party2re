@@ -18,19 +18,19 @@ func nativeStoreContract(t *testing.T, store dungeon.ActiveExpeditionStore, char
 	t.Helper()
 	ctx := context.Background()
 	exp := sampleExpedition("native-"+charID, charID, dungeon.NativeMap0ID)
-	exp.MapVariant, exp.TurnsRemaining, exp.Revision = 2, 1, 7
+	exp.MapVariant, exp.Round, exp.RoundLimit, exp.Revision = 2, 49, 50, 7
 	if err := store.SaveActiveExpedition(ctx, exp); err != nil {
 		t.Fatal(err)
 	}
 	got, err := store.GetActiveExpedition(ctx, charID)
-	if err != nil || got == nil || got.MapVariant != 2 || got.TurnsRemaining != 1 {
+	if err != nil || got == nil || got.MapVariant != 2 || got.Round != 49 {
 		t.Fatalf("reload %+v err=%v", got, err)
 	}
 	stale := got.Revision
-	step := func(rev int, key string, enc *dungeon.ActiveEncounter, turns int) (dungeon.StepOutcome, error) {
+	step := func(rev int, key string, enc *dungeon.ActiveEncounter, rounds int) (dungeon.StepOutcome, error) {
 		return store.Step(ctx, charID, dungeon.StepParams{
 			ExpectedExpeditionID: exp.ID, ExpectedRevision: &rev, NewX: 1, NewY: 0,
-			TurnsDelta: turns, EventKey: key, Encounter: enc, Now: time.Now().UTC(),
+			RoundDelta: rounds, EventKey: key, Encounter: enc, Now: time.Now().UTC(),
 		})
 	}
 	chests := func(n int) *dungeon.ActiveEncounter {
@@ -38,16 +38,16 @@ func nativeStoreContract(t *testing.T, store dungeon.ActiveExpeditionStore, char
 	}
 
 	// Reaching the limit keeps the native run active; the trigger saves its chests.
-	out, err := step(stale, "C:1:0", chests(2), -1)
+	out, err := step(stale, "C:1:0", chests(2), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Status != dungeon.StatusExploring || out.Expedition.TurnsRemaining != 0 || out.Expedition.MapVariant != 2 || !out.EventConsumed ||
+	if out.Status != dungeon.StatusExploring || out.Expedition.Round != 50 || out.Expedition.MapVariant != 2 || !out.EventConsumed ||
 		out.Expedition.Encounter == nil || len(out.Expedition.Encounter.Chests) != 2 {
 		t.Fatalf("limit step %+v", out)
 	}
 	// A stale competitor cannot replay the trigger.
-	if _, err := step(stale, "C:1:0", chests(2), -1); !errors.Is(err, dungeon.ErrExpeditionStateChanged) && !errors.Is(err, dungeon.ErrCombatActive) {
+	if _, err := step(stale, "C:1:0", chests(2), 1); !errors.Is(err, dungeon.ErrExpeditionStateChanged) && !errors.Is(err, dungeon.ErrCombatActive) {
 		t.Fatalf("stale step err=%v", err)
 	}
 	got, err = store.GetActiveExpedition(ctx, charID)
@@ -118,7 +118,7 @@ func TestNativeMap0_EscapeAtLimitThroughSQLFinalizer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp.TurnsRemaining = 0
+	exp.Round = exp.RoundLimit
 	exp.AccumulatedGold, exp.AccumulatedExp = 150, 30
 	for i := range exp.Members {
 		exp.Members[i].AccumulatedGold, exp.Members[i].AccumulatedExp = 150, 30

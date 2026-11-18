@@ -95,9 +95,14 @@ in their own units.
 
 For map0, initialize the round to 1 as part of accepted start, representing the
 leader's initial advance through the existing Start use case. Do not add a new
-public advance command solely to reproduce two legacy requests. Map changes,
-where introduced later, must specify their own position/round/event carry rules;
-neither generic floor increment nor a universal budget reset is implied.
+public advance command solely to reproduce two legacy requests.
+
+**Floor changes.** The selected map, round, position and flags are one saved
+header (`_battle.cgi:464,521`); the next request loads the new map file with its
+own `$max_round` (`vs_dungeon.cgi:23–28`). A map change resets none of them, so
+the party keeps its coordinate unless the event also sets one (map17), the round
+continues under the destination's limit, and flags stay run-wide across floors. As with a warp, the landing cell
+dispatches nothing until a later move enters it.
 
 ### Observation and API ownership
 
@@ -225,6 +230,25 @@ with round limit 50. Non-obvious findings:
 Open: chest contents (#2119), group size and scaling (#1954), enemy battle data
 (#2351), and event narration, which belongs to the Dungeon log owner (#948).
 
+### Map2 implementation
+
+Native map2 transcribes all eleven floors of `map/2/`. Non-obvious findings:
+
+- **Pitfalls can exceed the limit.** A floor-2 or floor-3 pitfall drops to a floor
+  with a lower limit. A run past round 30 or 40 lands with its round above the new
+  limit, so only Escape remains; the round is shown as is (e.g. 35/30).
+- **Pitfalls can land in a wall.** The floor-2 pitfalls drop to the same coordinate
+  on a random first floor, which is a wall in `1.cgi` (from `_2`/`_4`) and `3.cgi`
+  (from `_1`/`_3`). Movement checks only the target, so the party walks out.
+  A `___3` pitfall lands on `__1`'s own pitfall without triggering it.
+- **`_4` is reachable only by falling.** The first floor's stairs draw `_1`–`_3`;
+  only the third floor's pitfall draws `_1`–`_4`.
+- **Dead event.** The second floor defines `event_2` but has no `2` cell.
+
+Open: a pitfall that fells every member wipes the run out, whereas legacy keeps
+the fallen party until it escapes (#2364); chest contents (#2119), group size and
+scaling (#1954), enemy battle data (#2351), narration (#948).
+
 ### Map13 channel puzzle and routes
 
 **Decision (#1774)**; this is a target specification, not current behavior. Evidence is static, relative to
@@ -255,10 +279,8 @@ NPC members, `_battle.cgi:482–490`). The route is EX if n ≥ 5 or k = 4. Othe
 n ≥ 2 it is EX iff `k >= rand(5)`, so P = k/5; a solo party takes the normal route. Players
 are capped at 4 (`quest.cgi:21`), so n ≥ 5 needs allied NPCs, which native rosters lack.
 
-**Carry.** The selected map is a saved header field (`_battle.cgi:464,521`) loaded
-at the start of the next request (`_skill.cgi:23`, `vs_dungeon.cgi:23–28`). The altar step
-spends its round and keeps the coordinate, which is a passage on both destinations.
-The round continues, the limit stays 80, and event state is one run-scoped record.
+**Carry** follows the [floor-change rule](#native-schema-and-transition-boundary). The
+altar's coordinate is a passage on both destinations, and both keep limit 80.
 Channels and target freeze after the transfer. Native state is typed: channels, target,
 activation, disclosure, selected destination and per-event once facts. Accepted draws
 are stored with their revision-checked step and never redrawn on reload or retry.
@@ -295,7 +317,6 @@ content; this table does not authorize their automatic rollout.
 
 | Map / evidence | Events and round limits | Follow-up verification boundary |
 |---|---|---|
-| [2 / #1763](https://github.com/witchcraze/party2re/issues/1763): `map/2/1.cgi:18–23`, `_1.cgi:18–21`, `__1.cgi:21–23`, `___1.cgi:20–23` | `F` routes, `7/8` floor bosses, `T` pitfall/damage, `2/3/4` treasure, `Q` no-op; limits 30/40/50 | First establish cross-map round/position/flag carry, then transcribe the branching floors; test route RNG, pitfall return and bases 30/70/40, and no boss-as-clear assumption. |
 | [4 / #1765](https://github.com/witchcraze/party2re/issues/1765): `map/4/1.cgi:20–34`, variants `2..7.cgi` | Passage damages actor by rounded 2% MaxHP, `M` message, `H` once healing choice, `b` boss, `2/3/4` treasure; limit 70 | Verify actor-only attrition and death, no inherited passage encounter, and the actual healing target/helper behavior before implementation. |
 | [5 / #1766](https://github.com/witchcraze/party2re/issues/1766): `map/5/1.cgi:18–54`, variants `2..4.cgi` | `L` lever/boss, `I` display depends on lever, `T` poison/encounter, `t` damage base 80, `H` job-43 party recovery, treasure; limit 60 | Separate lever/visibility from hazard/recovery if useful; test lever replay, status ordering, actor qualification and all members' vitality. |
 | [6 / #1767](https://github.com/witchcraze/party2re/issues/1767): `map/6/1.cgi:20–43`, variants `2..5.cgi` | Exclusive `A/B`, `C/D`, `E/F` choices, message markers `5/6/7`, `X` boss, treasure; limit 30 | Test mutually exclusive branch flags, encounter pools and ordered currency/heal/trap alternatives; audit negative-money behavior rather than silently normalizing it. |
@@ -317,7 +338,7 @@ This decision does not certify the whole Dungeon cluster.
 Per-character combat action dispatch is scoped in
 [#1865](https://github.com/witchcraze/party2re/issues/1865). Independent participant
 departure and fatigue/equipment exit effects remain unscheduled gaps; whole-party
-Escape and a shared movement counter do not supply them. Exact content and cross-map semantics beyond the
-map0/map1 evidence above require their row's scoped investigation. Idle expiry,
+Escape and a shared movement counter do not supply them. Maps without a section
+above require their row's scoped investigation. Idle expiry,
 Valkey-loss recovery and multi-instance guarantees retain their existing limits
 in the [run-state architecture](../architecture/transient-run-state.md).

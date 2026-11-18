@@ -5,7 +5,7 @@ local expected_expedition_id = ARGV[1]
 local new_x = ARGV[2]
 local new_y = ARGV[3]
 local hp_delta = tonumber(ARGV[4]) or 0
-local turns_delta = tonumber(ARGV[5]) or 0
+local round_delta = tonumber(ARGV[5]) or 0
 local exp_delta = tonumber(ARGV[6]) or 0
 local gold_delta = tonumber(ARGV[7]) or 0
 local reward_item = ARGV[8]
@@ -46,12 +46,11 @@ end
 revision = revision + 1
 encounter = ARGV[19] or ''
 
--- 4. Calculate new HP and turns budget
+-- 4. Calculate new HP and round
 local current_hp = tonumber(redis.call('HGET', state_key, 'current_hp') or '0')
-local turns_remaining = tonumber(redis.call('HGET', state_key, 'turns_remaining') or '0')
+local round = tonumber(redis.call('HGET', state_key, 'round') or '0') + round_delta
 
 current_hp = current_hp + hp_delta
-turns_remaining = turns_remaining + turns_delta
 
 local members_str = redis.call('HGET', state_key, 'members') or '[]'
 local members = {}
@@ -163,10 +162,6 @@ else
         final_status = 'wiped_out'
     end
 end
--- Exhausted runs stay active; Escape remains available.
-if turns_remaining < 0 then
-    turns_remaining = 0
-end
 
 if ARGV[20] and ARGV[20] ~= '' then
     final_status = ARGV[20]
@@ -250,12 +245,18 @@ redis.call('HMSET', state_key,
     'pos_x', new_x,
     'pos_y', new_y,
     'current_hp', tostring(current_hp),
-    'turns_remaining', tostring(turns_remaining),
+    'round', tostring(round),
     'status', final_status,
     'consumed_events', new_events_str,
     'updated_at', now_timestamp,
     'members', members_str
 )
+
+-- A floor change carries the round and switches the limit with the layout.
+local map_variant = tonumber(ARGV[21]) or 0
+if map_variant > 0 then
+    redis.call('HSET', state_key, 'map_variant', tostring(map_variant), 'round_limit', ARGV[22])
+end
 
 -- 7. Update rewards hash
 if event_consumed == 0 then
@@ -298,7 +299,7 @@ return {
     new_x,
     new_y,
     tostring(current_hp),
-    tostring(turns_remaining),
+    tostring(round),
     tostring(total_exp),
     tostring(total_gold),
     new_items_str,
@@ -312,5 +313,6 @@ return {
     tostring(event_consumed),
     encounter,
     tostring(revision),
-    redis.call('HGET', state_key, 'map_variant') or ''
+    redis.call('HGET', state_key, 'map_variant') or '',
+    redis.call('HGET', state_key, 'round_limit') or ''
 }
