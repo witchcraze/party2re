@@ -366,3 +366,67 @@ func TestNativeMap2_ValkeyFloorChange(t *testing.T) {
 		t.Fatalf("stale floor change err=%v", err)
 	}
 }
+
+// A pitfall keeps the run's leader HP equal to the leader's member HP, solo and in a party.
+func TestNativeMap2_PitfallKeepsLeaderHPInSync(t *testing.T) {
+	run := func(t *testing.T, store dungeon.ActiveExpeditionStore, lead string, roster []string) {
+		ctx := context.Background()
+		chars := &mockCharRepo{chars: map[string]corecharacter.Character{}}
+		for _, id := range roster {
+			chars.chars[id] = map2Hero(id, 500)
+		}
+		rng := &scriptedRNG{ints: []int{0}}
+		svc, err := dungeon.NewService(newMockDungeonRepo(), chars, corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store),
+			dungeon.WithRNG(rng), dungeon.WithInventoryProvider(&mockInventoryRepo{}), dungeon.WithAdmission(approvedRoster{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.StartPartyExpedition(ctx, lead, roster, dungeon.NativeMap2ID, "p-"+lead); err != nil {
+			t.Fatal(err)
+		}
+		exp, err := store.GetActiveExpedition(ctx, lead)
+		if err != nil || exp == nil {
+			t.Fatalf("reload %+v err=%v", exp, err)
+		}
+		exp.MapVariant, exp.RoundLimit, exp.PosX, exp.PosY = 4, 40, 2, 2
+		if err := store.SaveActiveExpedition(ctx, *exp); err != nil {
+			t.Fatal(err)
+		}
+		rng.ints, rng.floats = []int{0}, []float64{0, 0.9999}
+		res, err := svc.Move(ctx, lead, dungeon.DirectionSouth)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.GetActiveExpedition(ctx, lead)
+		if err != nil || got == nil {
+			t.Fatalf("reload %+v err=%v", got, err)
+		}
+		for _, e := range []dungeon.ActiveExpedition{res.Expedition, *got} {
+			if e.Members[0].CurrentHP != 473 || e.CurrentHP != 473 {
+				t.Fatalf("leader member HP %d, run HP %d, want 473", e.Members[0].CurrentHP, e.CurrentHP)
+			}
+			if len(roster) > 1 && e.Members[1].CurrentHP != 465 {
+				t.Fatalf("ally HP %d, want 465", e.Members[1].CurrentHP)
+			}
+		}
+	}
+	for _, roster := range [][]string{{"sync-solo"}, {"sync-lead", "sync-ally"}} {
+		t.Run("memory/"+roster[0], func(t *testing.T) {
+			run(t, dungeon.NewMemoryExpeditionRepository(), roster[0], roster)
+		})
+		t.Run("valkey/"+roster[0], func(t *testing.T) {
+			client := testutil.OpenValkey(t)
+			suffix := time.Now().Format("150405.000000")
+			ids := make([]string, len(roster))
+			for i, id := range roster {
+				ids[i] = id + "-" + suffix
+				defer cleanupDungeonValkey(t, client, ids[i])
+			}
+			store, err := dungeon.NewValkeyExpeditionRepository(client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			run(t, store, ids[0], ids)
+		})
+	}
+}

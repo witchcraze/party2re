@@ -154,6 +154,8 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 			step.RoundLimit = d.limitOf(d.Variants[step.MapVariant-1])
 			if exit.Trap > 0 {
 				step.MemberHPDeltas = trapDamage(exp, exit.Trap, s.rng)
+				// The run-level HP mirrors the leader, as combat keeps it.
+				step.HPDelta = step.MemberHPDeltas[char.ID]
 				if len(exp.Members) == 0 {
 					step.HPDelta = -trapRoll(exit.Trap, s.rng)
 				}
