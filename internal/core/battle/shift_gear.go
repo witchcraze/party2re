@@ -1,10 +1,16 @@
 package battle
 
 import (
-	"slices"
-
 	"github.com/witchcraze/party2re/internal/core/random"
 )
+
+// HasExtendedSkillAmulet is the source's item158 equivalence for player
+// extension and shift-gear listing (_battle.cgi:1747–1758).
+func (a LifetimeActor) HasExtendedSkillAmulet() bool {
+	return a.Extended == ExtendedAwakening || hasItem(a.ItemDefinitionIDs, "item-158") ||
+		hasItem(a.ItemDefinitionIDs, "item-240") || hasItem(a.ItemDefinitionIDs, "item-241") ||
+		hasItem(a.ItemDefinitionIDs, "item-242")
+}
 
 // ShiftGearCallback is the ordinary item158 body, distinct from gem86's
 // handled job73 branch. The consumer charges ordinary MP1 after the callback.
@@ -18,7 +24,7 @@ func ShiftGearCallback(previous bool) CallbackDefinition {
 		if previous {
 			job, sp = a.Jobs.OldJobID, a.Jobs.OldSP
 		}
-		if job != "job-73" || sp == 0 || !slices.Contains(a.ItemDefinitionIDs, "item-158") || a.MP < 1 {
+		if job != "job-73" || sp == 0 || !a.HasExtendedSkillAmulet() || a.MP < 1 {
 			return ErrUnsupportedEffect
 		}
 		return nil

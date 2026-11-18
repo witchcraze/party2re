@@ -133,8 +133,8 @@ The durable recovery below adapts persistence to the approved SQL command bounda
 
 ### Capture and display projection
 
-Use the [normal-run operation/activity matrix](adventure.md#normal-run-operation-discovery)
-to classify the submitted operation separately from combat effects and activity.
+Use the [normal-run operation contract](adventure.md#normal-run-operation-discovery)
+and [room activity rules](adventure.md#room-activity-contract) to classify the submission.
 The dispatcher reconciliation is:
 
 | Original boundary | Native capture/copy target |
