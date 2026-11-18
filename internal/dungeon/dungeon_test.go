@@ -274,12 +274,12 @@ func TestMove_ValidationErrors(t *testing.T) {
 	// 7. Invalid layout index: variant 0 (< 1) and 99 (> variants)
 	for _, variant := range []int{0, 99} {
 		_ = customStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-			ID:             "exp-bad-variant",
-			CharacterID:    "advent",
-			DungeonID:      dungeon.NativeMap0ID,
-			MapVariant:     variant,
-			TurnsRemaining: 10,
-			Status:         dungeon.StatusExploring,
+			ID:          "exp-bad-variant",
+			CharacterID: "advent",
+			DungeonID:   dungeon.NativeMap0ID,
+			MapVariant:  variant,
+			Round:       40, RoundLimit: 50,
+			Status: dungeon.StatusExploring,
 		})
 		_, err = service.Move(ctx, "advent", dungeon.DirectionEast)
 		if err == nil || !strings.Contains(err.Error(), "invalid floor index") {
@@ -289,15 +289,15 @@ func TestMove_ValidationErrors(t *testing.T) {
 
 	// 8. Invalid Direction
 	_ = customStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-		ID:             "exp-valid",
-		CharacterID:    "advent",
-		DungeonID:      dungeon.NativeMap0ID,
-		MapVariant:     1,
-		PosX:           0,
-		PosY:           0,
-		CurrentHP:      100,
-		TurnsRemaining: 20,
-		Status:         dungeon.StatusExploring,
+		ID:          "exp-valid",
+		CharacterID: "advent",
+		DungeonID:   dungeon.NativeMap0ID,
+		MapVariant:  1,
+		PosX:        0,
+		PosY:        0,
+		CurrentHP:   100,
+		Round:       30, RoundLimit: 50,
+		Status: dungeon.StatusExploring,
 	})
 	_, err = service.Move(ctx, "advent", dungeon.Direction("INVALID_DIR"))
 	if !errors.Is(err, dungeon.ErrInvalidDirection) {

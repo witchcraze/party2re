@@ -135,7 +135,7 @@ func TestNativeMap1_KeyOpensDoorWithoutBeingConsumed(t *testing.T) {
 		t.Fatal(err)
 	}
 	exp := f.reload(t, "key")
-	if exp.PosX != 3 || exp.PosY != 0 || !slices.Equal(exp.ConsumedEvents, []string{"K", "D"}) || exp.TurnsRemaining != 47 {
+	if exp.PosX != 3 || exp.PosY != 0 || !slices.Equal(exp.ConsumedEvents, []string{"K", "D"}) || exp.Round != 3 {
 		t.Fatalf("opened %+v", exp)
 	}
 	// Re-entering the open door is a plain move: no event, spawn roll or new state.
@@ -181,7 +181,7 @@ func TestNativeMap1_LockedDoorSpendsTheRoundAndReturns(t *testing.T) {
 				t.Fatalf("locked %+v err=%v", res, err)
 			}
 			exp := f.reload(t, "locked")
-			if exp.PosX != tc.x || exp.PosY != tc.y || exp.TurnsRemaining != 39 || len(exp.ConsumedEvents) != 0 || f.rng.calls() != 0 {
+			if exp.PosX != tc.x || exp.PosY != tc.y || exp.Round != 11 || len(exp.ConsumedEvents) != 0 || f.rng.calls() != 0 {
 				t.Fatalf("locked state %+v rng=%d", exp, f.rng.calls())
 			}
 		})
@@ -193,7 +193,7 @@ func TestNativeMap1_LockedDoorSpendsTheRoundAndReturns(t *testing.T) {
 	if _, err := f.svc.Move(ctx, "wall", dungeon.DirectionNorth); !errors.Is(err, dungeon.ErrImpassableWall) {
 		t.Fatalf("wall err=%v", err)
 	}
-	if after := f.reload(t, "wall"); after.Revision != before.Revision || after.TurnsRemaining != 40 {
+	if after := f.reload(t, "wall"); after.Revision != before.Revision || after.Round != 10 {
 		t.Fatalf("wall changed %+v", after)
 	}
 }
@@ -232,7 +232,7 @@ func TestNativeMap1_LockedDoorAtRoundLimit(t *testing.T) {
 		t.Fatalf("round 49 -> 50: %v", err)
 	}
 	before := f.reload(t, "limit")
-	if before.TurnsRemaining != 0 || before.PosX != 4 || before.Status != dungeon.StatusExploring {
+	if before.Round != 50 || before.PosX != 4 || before.Status != dungeon.StatusExploring {
 		t.Fatalf("at limit %+v", before)
 	}
 	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionSouth); !errors.Is(err, dungeon.ErrMovementExhausted) {
@@ -370,12 +370,12 @@ func TestNativeMap1_ValkeyKeyAndDoorState(t *testing.T) {
 	}
 	rev := stale.Revision
 	if _, err := store.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: got.ID, ExpectedRevision: &rev,
-		NewX: 3, NewY: 0, TurnsDelta: -1, EventKey: "D", Now: time.Now().UTC()}); !errors.Is(err, dungeon.ErrExpeditionStateChanged) {
+		NewX: 3, NewY: 0, RoundDelta: 1, EventKey: "D", Now: time.Now().UTC()}); !errors.Is(err, dungeon.ErrExpeditionStateChanged) {
 		t.Fatalf("stale door err=%v", err)
 	}
 	rev = got.Revision
 	out, err := store.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: got.ID, ExpectedRevision: &rev,
-		NewX: 3, NewY: 0, TurnsDelta: -1, EventKey: "K", Now: time.Now().UTC()})
+		NewX: 3, NewY: 0, RoundDelta: 1, EventKey: "K", Now: time.Now().UTC()})
 	if err != nil || out.EventConsumed || !slices.Equal(out.Expedition.ConsumedEvents, []string{"K", "D"}) {
 		t.Fatalf("key replay %+v err=%v", out, err)
 	}

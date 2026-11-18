@@ -26,10 +26,18 @@ const (
 	cellDoor     = 'D' // map1: opens with the key or an acting job 9
 )
 
-// symbolEvents share one state per symbol, like legacy flags: map1 repeats K
-// and 3. Other events key by cell, since map0/map3 spell their independent
-// repeats with distinct legacy symbols.
-const symbolEvents = "KD23"
+// symbolEvents share one run-wide state per symbol, like legacy flags: map1
+// repeats K and 3, and map2 repeats 7 and keeps its flags across floors. Other
+// events key by cell, since map0/map3 spell their independent repeats with
+// distinct legacy symbols.
+const symbolEvents = "KD23478"
+
+func eventKey(cell byte, x, y int) string {
+	if strings.IndexByte(symbolEvents, cell) >= 0 {
+		return string(cell)
+	}
+	return fmt.Sprintf("%c:%d:%d", cell, x, y)
+}
 
 // jobLockpick (legacy job 9) opens a locked door for the acting character only.
 const jobLockpick = "job-09"
@@ -91,15 +99,12 @@ func (s *Service) activeFloor(exp *ActiveExpedition) (Dungeon, Floor, error) {
 
 // moveNative applies one admitted native step: the round advances and the
 // destination's map event is dispatched (legacy vs_dungeon.cgi _susumu).
-func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *corecharacter.Character, floor Floor, x, y int) (ExpeditionStepResult, error) {
+func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *corecharacter.Character, d Dungeon, floor Floor, x, y int) (ExpeditionStepResult, error) {
 	// Only an encounter without living members reaches here; the step drops it.
 	clearing := exp.Encounter != nil
 	exp.Encounter = nil
 	cell := floor.Grid[y][x]
-	key := fmt.Sprintf("%c:%d:%d", cell, x, y)
-	if strings.IndexByte(symbolEvents, cell) >= 0 {
-		key = string(cell)
-	}
+	key := eventKey(cell, x, y)
 	consumed := slices.Contains(exp.ConsumedEvents, key)
 	step := StepParams{
 		ExpectedExpeditionID: exp.ID,
@@ -107,7 +112,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 		Combat:               clearing,
 		NewX:                 x,
 		NewY:                 y,
-		TurnsDelta:           -1,
+		RoundDelta:           1,
 		Now:                  time.Now().UTC(),
 	}
 	switch {
@@ -125,6 +130,8 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 		if pool := s.encounterPool(floor); pool.Boss != nil {
 			return s.resolveMonsterCombat(ctx, exp, char, *pool.Boss, EventBoss, x, y, key, "")
 		}
+	case floor.Bosses[cell].ID != "" && !consumed:
+		return s.resolveMonsterCombat(ctx, exp, char, floor.Bosses[cell], EventBoss, x, y, key, "")
 	case cell == cellKey && !consumed:
 		step.EventKey = key
 	case cell == cellDoor && !consumed:
@@ -134,23 +141,67 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 			// Locked: the round is spent and the party returns to its only approach.
 			step.NewX, step.NewY = exp.PosX, exp.PosY
 		}
-	case (cell == cellTreasure || cell == '2' || cell == '3') && !consumed:
+	case (cell == cellTreasure || strings.IndexByte("234", cell) >= 0) && !consumed:
 		step.EventKey = key
 		step.Encounter = treasureEncounter(exp, char.JobID, s.rng, x, y)
 	default:
 		if to, ok := floor.Warps[cell]; ok {
 			step.NewX, step.NewY = to[0], to[1]
 		}
+		if exit, ok := floor.Exits[cell]; ok {
+			// The destination is drawn first, then each member's damage (map/2 event_T).
+			step.MapVariant = exit.Variants[s.rng.Intn(len(exit.Variants))]
+			step.RoundLimit = d.limitOf(d.Variants[step.MapVariant-1])
+			if exit.Trap > 0 {
+				step.MemberHPDeltas = trapDamage(exp, exit.Trap, s.rng)
+				if len(exp.Members) == 0 {
+					step.HPDelta = -trapRoll(exit.Trap, s.rng)
+				}
+			}
+		}
 	}
 	out, err := s.activeStore.Step(ctx, char.ID, step)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	res := ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove}
+	if out.Status == StatusWipedOut {
+		res, err := s.handleWipeout(ctx, &out.Expedition, char)
+		res.MemberDamages = negate(step.MemberHPDeltas)
+		return res, err
+	}
+	res := ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove, MemberDamages: negate(step.MemberHPDeltas)}
 	if out.Expedition.Encounter != nil {
 		res.EventType = EventTreasure
 	}
 	return res, nil
+}
+
+// trapRoll is _trap_d's per-member damage: int(base × (0.9 + rand(0.3))).
+func trapRoll(base int, rng RandomSource) int {
+	return int(float64(base) * (0.9 + 0.3*rng.Float64()))
+}
+
+// trapDamage hits every roster member; fallen members stay at 0.
+func trapDamage(exp *ActiveExpedition, base int, rng RandomSource) map[string]int {
+	if len(exp.Members) == 0 {
+		return nil
+	}
+	deltas := make(map[string]int, len(exp.Members))
+	for _, m := range exp.Members {
+		deltas[m.CharacterID] = -trapRoll(base, rng)
+	}
+	return deltas
+}
+
+func negate(deltas map[string]int) map[string]int {
+	if len(deltas) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(deltas))
+	for id, v := range deltas {
+		out[id] = -v
+	}
+	return out
 }
 
 // encounterPool draws the content pool for one event; a floor with no or one

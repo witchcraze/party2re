@@ -145,7 +145,8 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 	posX, _ := strconv.Atoi(sMap["pos_x"])
 	posY, _ := strconv.Atoi(sMap["pos_y"])
 	hp, _ := strconv.Atoi(sMap["current_hp"])
-	turns, _ := strconv.Atoi(sMap["turns_remaining"])
+	round, _ := strconv.Atoi(sMap["round"])
+	limit, _ := strconv.Atoi(sMap["round_limit"])
 	variant, _ := strconv.Atoi(sMap["map_variant"])
 
 	exp, _ := strconv.Atoi(rMap["exp"])
@@ -182,7 +183,8 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 		PosX:             posX,
 		PosY:             posY,
 		CurrentHP:        hp,
-		TurnsRemaining:   turns,
+		Round:            round,
+		RoundLimit:       limit,
 		AccumulatedExp:   exp,
 		AccumulatedGold:  gold,
 		AccumulatedItems: items,
@@ -229,7 +231,8 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 			FieldValue("pos_x", strconv.Itoa(exp.PosX)).
 			FieldValue("pos_y", strconv.Itoa(exp.PosY)).
 			FieldValue("current_hp", strconv.Itoa(exp.CurrentHP)).
-			FieldValue("turns_remaining", strconv.Itoa(exp.TurnsRemaining)).
+			FieldValue("round", strconv.Itoa(exp.Round)).
+			FieldValue("round_limit", strconv.Itoa(exp.RoundLimit)).
 			FieldValue("status", string(exp.Status)).
 			FieldValue("consumed_events", eventsJSON).
 			FieldValue("started_at", exp.StartedAt.Format(time.RFC3339Nano)).
@@ -304,7 +307,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		strconv.Itoa(params.NewX),
 		strconv.Itoa(params.NewY),
 		strconv.Itoa(params.HPDelta),
-		strconv.Itoa(params.TurnsDelta),
+		strconv.Itoa(params.RoundDelta),
 		strconv.Itoa(params.ExpDelta),
 		strconv.Itoa(params.GoldDelta),
 		params.RewardItemID,
@@ -320,6 +323,8 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		strconv.FormatBool(params.Combat),
 		encounterJSON,
 		string(params.FinishStatus),
+		strconv.Itoa(params.MapVariant),
+		strconv.Itoa(params.RoundLimit),
 	})
 
 	if err := res.Error(); err != nil {
@@ -327,7 +332,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 19 {
+	if err != nil || len(vals) < 20 {
 		return StepOutcome{}, fmt.Errorf("unexpected lua step response format: %v", err)
 	}
 
@@ -335,7 +340,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	posX, _ := strconv.Atoi(vals[1])
 	posY, _ := strconv.Atoi(vals[2])
 	hp, _ := strconv.Atoi(vals[3])
-	turns, _ := strconv.Atoi(vals[4])
+	round, _ := strconv.Atoi(vals[4])
 	totExp, _ := strconv.Atoi(vals[5])
 	totGold, _ := strconv.Atoi(vals[6])
 	items := DecodeItems(vals[7])
@@ -356,6 +361,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 	revision, _ := strconv.Atoi(vals[17])
 	variant, _ := strconv.Atoi(vals[18])
+	limit, _ := strconv.Atoi(vals[19])
 	exp := ActiveExpedition{
 		Encounter: encounter,
 		Revision:  revision,
@@ -367,7 +373,8 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		PosX:             posX,
 		PosY:             posY,
 		CurrentHP:        hp,
-		TurnsRemaining:   turns,
+		Round:            round,
+		RoundLimit:       limit,
 		AccumulatedExp:   totExp,
 		AccumulatedGold:  totGold,
 		AccumulatedItems: items,

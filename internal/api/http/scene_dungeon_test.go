@@ -41,7 +41,7 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 			f := newGatewayFixture(t)
 			selection := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "bank"}, loadErr: errors.New("lost selector")}
 			fact := playercontext.Activity{Kind: "dungeon", ID: "run", Revision: 7, PartyID: "party", Role: tc.role, Phase: string(tc.status), Actions: tc.actions}
-			view := dungeon.ExpeditionObservation{ID: "run", LeaderID: "hero", PartyID: "party", DungeonID: "dungeon-01", Revision: 7, Status: tc.status, TurnsRemaining: 12, Directions: []dungeon.Direction{}, Controls: tc.controls}
+			view := dungeon.ExpeditionObservation{ID: "run", LeaderID: "hero", PartyID: "party", DungeonID: "dungeon-01", Revision: 7, Status: tc.status, Round: 3, RoundLimit: 15, Directions: []dungeon.Direction{}, Controls: tc.controls}
 			if tc.role == "member" {
 				view.LeaderID = "leader"
 			}

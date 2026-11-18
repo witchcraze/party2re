@@ -53,7 +53,7 @@ func TestExpeditionCleanup_RunIdentity(t *testing.T) {
 			next.ID = id.New()
 			next.AccumulatedItems = []string{"potion"}
 			next.ConsumedEvents = []string{"T:1:2:0"}
-			next.PosX, next.TurnsRemaining, next.AccumulatedGold = 2, 17, 77
+			next.PosX, next.Round, next.AccumulatedGold = 2, 33, 77
 			if err := store.SaveActiveExpedition(ctx, old); err != nil {
 				t.Fatal(err)
 			}

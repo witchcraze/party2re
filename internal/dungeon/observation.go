@@ -15,7 +15,7 @@ func (exp ActiveExpedition) Controls(actor string) ContinuationControls {
 	}
 	switch exp.Status {
 	case StatusExploring:
-		return ContinuationControls{CanMove: !exp.Encounter.blocking() && exp.TurnsRemaining > 0, CanFight: exp.Encounter.hostile(), CanEscape: true}
+		return ContinuationControls{CanMove: !exp.Encounter.blocking() && exp.Round < exp.RoundLimit, CanFight: exp.Encounter.hostile(), CanEscape: true}
 	case StatusEscaped, StatusWipedOut:
 		// Both operations retry the frozen outcome without fighting or changing it.
 		return ContinuationControls{CanFight: true, CanEscape: true}
@@ -26,18 +26,18 @@ func (exp ActiveExpedition) Controls(actor string) ContinuationControls {
 
 // ExpeditionObservation excludes the private roster inventory and event/reward buffers.
 type ExpeditionObservation struct {
-	ID             string               `json:"id"`
-	LeaderID       string               `json:"leader_id"`
-	PartyID        string               `json:"party_id,omitempty"`
-	DungeonID      string               `json:"dungeon_id"`
-	Revision       int                  `json:"revision"`
-	Status         ExpeditionStatus     `json:"status"`
-	TurnsRemaining int                  `json:"turns_remaining"`
-	Round          int                  `json:"round,omitempty"`
-	RoundLimit     int                  `json:"round_limit,omitempty"`
-	Map            *MapView             `json:"map"`
-	Directions     []Direction          `json:"directions"`
-	Controls       ContinuationControls `json:"controls"`
+	ID         string               `json:"id"`
+	LeaderID   string               `json:"leader_id"`
+	PartyID    string               `json:"party_id,omitempty"`
+	DungeonID  string               `json:"dungeon_id"`
+	Revision   int                  `json:"revision"`
+	Status     ExpeditionStatus     `json:"status"`
+	Round      int                  `json:"round,omitempty"`
+	RoundLimit int                  `json:"round_limit,omitempty"`
+	Floor      int                  `json:"floor,omitempty"`
+	Map        *MapView             `json:"map"`
+	Directions []Direction          `json:"directions"`
+	Controls   ContinuationControls `json:"controls"`
 }
 
 // ObserveExpedition reads one authoritative run, including terminal settlement buffers.
@@ -47,7 +47,7 @@ func (s *Service) ObserveExpedition(ctx context.Context, actor string) (*Expedit
 	if err != nil || exp == nil {
 		return nil, err
 	}
-	view := &ExpeditionObservation{ID: exp.ID, LeaderID: exp.CharacterID, PartyID: exp.PartyID, DungeonID: exp.DungeonID, Revision: exp.Revision, Status: exp.Status, TurnsRemaining: exp.TurnsRemaining, Directions: []Direction{}, Controls: exp.Controls(actor)}
+	view := &ExpeditionObservation{ID: exp.ID, LeaderID: exp.CharacterID, PartyID: exp.PartyID, DungeonID: exp.DungeonID, Revision: exp.Revision, Status: exp.Status, Directions: []Direction{}, Controls: exp.Controls(actor)}
 	if exp.Status != StatusExploring {
 		return view, nil
 	}
@@ -56,11 +56,12 @@ func (s *Service) ObserveExpedition(ctx context.Context, actor string) (*Expedit
 		return nil, err
 	}
 	view.Map = &m
-	d, _, err := s.activeFloor(exp)
+	_, floor, err := s.activeFloor(exp)
 	if err != nil {
 		return nil, err
 	}
-	view.Round, view.RoundLimit = d.RoundLimit-exp.TurnsRemaining, d.RoundLimit
+	// A pitfall to a floor with a lower limit can leave the round above it.
+	view.Round, view.RoundLimit, view.Floor = exp.Round, exp.RoundLimit, floor.FloorNumber
 	// Legacy registers all four directions; walls are rejected on use, so
 	// the list cannot reveal a hidden passage.
 	if view.Controls.CanMove {

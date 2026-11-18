@@ -53,7 +53,7 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 		&exp.PosX,
 		&exp.PosY,
 		&exp.CurrentHP,
-		&exp.TurnsRemaining,
+		&exp.Round, // shortcut: round is stored in the old turns_remaining column; drop with the unused table (#2365)
 		&exp.AccumulatedExp,
 		&exp.AccumulatedGold,
 		&itemsJSON,
@@ -126,7 +126,7 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 		exp.PosX,
 		exp.PosY,
 		exp.CurrentHP,
-		exp.TurnsRemaining,
+		exp.Round,
 		exp.AccumulatedExp,
 		exp.AccumulatedGold,
 		itemsJSON,

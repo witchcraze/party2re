@@ -98,15 +98,15 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 
 	// Save active expedition
 	active := dungeon.ActiveExpedition{
-		ID:             expID,
-		CharacterID:    c1.ID,
-		DungeonID:      "dungeon-01",
-		CurrentHP:      0,
-		TurnsRemaining: 10,
-		Status:         dungeon.StatusExploring,
-		Members:        members,
-		StartedAt:      now.Add(-10 * time.Minute),
-		UpdatedAt:      now,
+		ID:          expID,
+		CharacterID: c1.ID,
+		DungeonID:   "dungeon-01",
+		CurrentHP:   0,
+		Round:       40, RoundLimit: 50,
+		Status:    dungeon.StatusExploring,
+		Members:   members,
+		StartedAt: now.Add(-10 * time.Minute),
+		UpdatedAt: now,
 	}
 	if err := dungeonRepo.SaveActiveExpedition(ctx, active); err != nil {
 		t.Fatalf("SaveActiveExpedition failed: %v", err)

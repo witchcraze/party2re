@@ -157,7 +157,7 @@ func (s *Service) resolveMonsterCombat(
 	eventKey string,
 	allyStatus string,
 ) (ExpeditionStepResult, error) {
-	turns, stayX, stayY := exp.combatProgress(newX, newY)
+	rounds, stayX, stayY := exp.combatProgress(newX, newY)
 	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, monster, allyStatus)
 	if err != nil {
 		return ExpeditionStepResult{}, err
@@ -191,7 +191,7 @@ func (s *Service) resolveMonsterCombat(
 			MemberExpDeltas:      memberExpDeltas,
 			MemberGoldDeltas:     memberGoldDeltas,
 			ConsumedItems:        consumedItems,
-			TurnsDelta:           turns,
+			RoundDelta:           rounds,
 			EventKey:             eventKey,
 			ExpDelta:             leaderExpDelta,
 			GoldDelta:            leaderGoldDelta,
@@ -238,7 +238,7 @@ func (s *Service) resolveMonsterCombat(
 			MemberHPDeltas:       memberHPDeltas,
 			MemberMPDeltas:       memberMPDeltas,
 			ConsumedItems:        consumedItems,
-			TurnsDelta:           turns,
+			RoundDelta:           rounds,
 			EventKey:             eventKey,
 			Now:                  time.Now().UTC(),
 		})
@@ -270,7 +270,7 @@ func (s *Service) resolveMonsterCombat(
 		MemberHPDeltas:       memberHPDeltas,
 		MemberMPDeltas:       memberMPDeltas,
 		ConsumedItems:        consumedItems,
-		TurnsDelta:           turns,
+		RoundDelta:           rounds,
 		EventKey:             eventKey,
 		Now:                  time.Now().UTC(),
 	})
@@ -284,11 +284,11 @@ func (s *Service) resolveMonsterCombat(
 
 // combatProgress: the round advances only on the move itself, and the party
 // already stands on the destination (vs_dungeon.cgi _susumu).
-func (exp *ActiveExpedition) combatProgress(newX, newY int) (turns, stayX, stayY int) {
+func (exp *ActiveExpedition) combatProgress(newX, newY int) (rounds, stayX, stayY int) {
 	if exp.Encounter != nil {
 		return 0, newX, newY
 	}
-	return -1, newX, newY
+	return 1, newX, newY
 }
 
 func buildFallbackParticipantWithHP(char corecharacter.Character, currentHP int) corebattle.Participant {
