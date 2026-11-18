@@ -132,7 +132,7 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 | `すすむ` → `susumu` (`vs_dungeon.cgi:33–36,57–67`) | Superseded by atomic start, which initializes round 1 and keeps leader admission |
 | `にし`/`きた`/`みなみ`/`ひがし` (`39–43,70–73`) | Move in that direction; map-owned dispatch follows admission |
 | `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
-| Treasure `しらべる` → `shiraberu(target)` (`45–48`) | Participant inspection under the [treasure contract](#treasure-inspection-and-delivery); open: #2119 |
+| Treasure `しらべる` → `shiraberu(target)` (`45–48`) | Participant inspection under the [treasure contract](#treasure-inspection-and-delivery). Map0 [#2119](https://github.com/witchcraze/party2re/issues/2119), map3 [#2374](https://github.com/witchcraze/party2re/issues/2374). |
 | `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Open: map16 mining (#1777) |
 | Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Existing Escape, available after exhaustion with stock kept. Open: per-character departure, fatigue and exit equipment effects (#1956); whole-party Escape is not equivalent |
 
@@ -182,35 +182,30 @@ Numeric and letter identifiers here are evidence pointers, not native enums.
 
 ### Map0 implementation
 
-Native map0 has six independently authored 5×5 layouts (legacy has six initial variants, two without a hidden passage: `map/0/1.cgi`–`6.cgi`). Non-obvious rules:
+Native map0 transcribes the six initial layouts. Variant 3 has two hidden
+passages (`map/0/3.cgi:6–8`), and variants 5 and 6 have none
+(`map/0/5.cgi:5–11`, `map/0/6.cgi:5–11`).
 
-- Passage spawn draws `r = 2 × U[0,1)` and spawns iff `r <= 1`; start, hidden passage and consumed one-time cells draw nothing.
-- Treasure chests block all movement until opened and are never auto-opened.
-- Boss victory grants the monster's rewards only and does not complete the expedition.
-- The hidden passage is always shown as a wall; observation lists all four directions while movement is allowed, so it reveals nothing.
-
-Open: chest contents, inspection and the blessing-4 chest (#2119), encounter group size, scaling and the stage 0/1 pool choice (#1954), enemy battle data (#2351), and the per-character exit gaps under [Remaining limits](#remaining-limits).
+The three placeholder regular enemies remain until the stage 0/1 pools, group
+size and scaling are restored [#1954](https://github.com/witchcraze/party2re/issues/1954).
+Chest inspection follows the [treasure contract](#treasure-inspection-and-delivery).
+Enemy battle data is tracked in [#2351](https://github.com/witchcraze/party2re/issues/2351).
 
 ### Map3 implementation
 
-Native map3 has eight independently authored 9×9 layouts with round limit 60
-(legacy: eight initial variants, `map/3/1.cgi`–`8.cgi`). Non-obvious findings:
+Native map3 transcribes the eight initial layouts. Variants 5–8 define
+`event_I` at line 21, but their grids have no hidden passage cell.
 
-- **No hidden passage.** `5.cgi`–`8.cgi` define `event_I`, but no cell uses `I`.
-- **Warp landing dispatches nothing.** A move dispatches only the entered cell
-  (`vs_dungeon.cgi:96–101`); a warp only rewrites the position. Legacy targets
-  include the warp's own cell (`5.cgi` `C`, `E`), a partner warp, start, treasure,
-  boss and `T` cells; each stays untriggered until entered by a later move.
-- **Two bosses.** The base `B` and the map's `b` are independent once events.
-- **`T` repeats.** It has no once flag; it confuses every allied member and always
-  spawns. Every move resets status first (`_battle.cgi:1390–1430`), so confusion
-  reaches only the ensuing battle and its continuation.
-- **Content pools.** Each request loads stage 5–8 at random (`int(rand(4)+5)`), and
-  a move dispatches one event, so native draws one pool per spawning event.
-  Weights follow each stage's `@appears`; stage 7 has none and is uniform.
+Some warp destinations are themselves event cells. Variant 5's `C` and `E`
+target their own cells (`map/3/5.cgi:23–25`). Variant 1's `F` lands on the
+treasure at `(6,6)` without opening it (`map/3/1.cgi:12,25`). The dispatcher
+evaluates the entered cell once before drawing the map (`vs_dungeon.cgi:96–101`).
 
-Open: legacy boss groups (stages 5 and 7 spawn three bosses), group size and
-scaling (#1954), enemy battle data beyond the base stats (#2351), chest contents (#2119).
+Map3 keeps the approved generic names 浮遊眼 and 一つ目の巨人 while the Adventure
+catalog still uses the legacy names [#2373](https://github.com/witchcraze/party2re/issues/2373).
+The open gaps are boss groups, group size and scaling [#1954](https://github.com/witchcraze/party2re/issues/1954),
+enemy battle data [#2351](https://github.com/witchcraze/party2re/issues/2351),
+and chest contents and inspection [#2374](https://github.com/witchcraze/party2re/issues/2374).
 
 ### Map1 implementation
 
