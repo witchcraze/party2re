@@ -8,6 +8,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -56,6 +57,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			return ErrRunRecovery
 		}
 		var ids []string
+		var requester corecharacter.Character
 		ctx = context.WithValue(ctx, normalMutationContext{}, r.ID)
 		if err := economy.LockInOrder(ctx, r.Roster, func(ctx context.Context, id string) error {
 			c, err := s.cfg.Characters.FindByIDForUpdate(ctx, id)
@@ -64,6 +66,9 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			}
 			if c.PlayerID != r.Recipients[id].PlayerID {
 				return ErrRunForbidden
+			}
+			if id == cmd.ActorID {
+				requester = c
 			}
 			ids = append(ids, id)
 			return nil
@@ -107,6 +112,11 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			if err := s.timeout(ctx, r, now); err != nil {
 				return err
 			}
+		case stockLevelAction:
+			if err := s.stockLevel(ctx, r, cmd, requester, now); err != nil {
+				return err
+			}
+			effects.RoomActivity, effects.ActorActivity = true, true
 		default:
 			if s.cfg.Combat == nil {
 				return ErrRunUnavailable
@@ -137,7 +147,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				}
 			}
 		}
-		if cmd.Action != "cleanup" {
+		if cmd.Action != "cleanup" && cmd.Action != stockLevelAction {
 			releaseStock = (releaseStock && effects.ReleaseStock) || cmd.Action == "exit"
 			if err := r.recordEarnings(effects.Earnings); err != nil {
 				return err

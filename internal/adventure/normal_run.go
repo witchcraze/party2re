@@ -7,6 +7,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
@@ -208,6 +209,7 @@ type NormalRunConfig struct {
 	History     Repository
 	Stages      *StageCatalog
 	Monsters    *MonsterCatalog
+	Jobs        job.DefinitionProvider
 	Admission   RunAdmission
 	Combat      RunCombat
 	Blessings   BlessingProvider

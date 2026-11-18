@@ -168,7 +168,7 @@ func (r *NormalRun) normalOperations(actorID string, ctx NormalOperationContext)
 	}
 	if p := ctx.Requester; p != nil && !enemies {
 		if exp, err := progression.ExperienceForNextLevelWithMax(p.Level, progression.MaxLevelForCharacter(p)); err == nil && p.Experience >= exp {
-			ops.addBattle("stock-level", "stock-level", "すとっく", "stock-level")
+			ops.addBattle(stockLevelAction, stockLevelAction, "すとっく", stockLevelAction)
 		}
 	}
 	return ops, nil

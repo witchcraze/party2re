@@ -40,6 +40,10 @@ func (r *NormalRun) ParseNormalOperation(cmd RunCommand, ctx NormalOperationCont
 	if err != nil {
 		return ParsedRunOperation{}, err
 	}
+	return ops.parse(cmd)
+}
+
+func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 	if cmd.Action != "" && cmd.Action != "comment" {
 		var namedCustom *runOperationCandidate
 		for _, key := range ops.order {
@@ -139,6 +143,9 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 	}
 	if o.banned(c) || o.treasure && !takesSelector(c) {
 		return ParsedRunAction{}, ErrRunUnavailable
+	}
+	if action.EntryID == stockLevelAction {
+		return action, nil
 	}
 	frame := o.ctx.Callback
 	frame.Arguments = slices.Clone(action.Arguments)

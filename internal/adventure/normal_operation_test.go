@@ -295,6 +295,25 @@ func TestDiscoverOrdinaryTreasureKeepsUnrepresentedCombatGated(t *testing.T) {
 	}
 }
 
+func TestNormalStockLevelBindsTypedAndLegacySelection(t *testing.T) {
+	r, ctx := operationFixture()
+	r.actor("c").HP = 0
+	ctx.Requester = &corecharacter.Character{Level: 1, Experience: 10}
+	for _, cmd := range []RunCommand{
+		{ActorID: "a", Action: stockLevelAction},
+		{ActorID: "a", Input: "＠すとっく"},
+	} {
+		got, err := r.ParseNormalOperation(cmd, ctx)
+		if err != nil || got.Kind != RunOperationBattle || got.First.EntryID != stockLevelAction || got.First.Cost != 0 || got.Second != nil {
+			t.Fatalf("stock selection: %+v, %v", got, err)
+		}
+	}
+	choices, err := r.DiscoverNormalOperations(RunCommand{ActorID: "a"}, ctx)
+	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == stockLevelAction && !c.Gated }) {
+		t.Fatalf("stock discovery: %+v, %v", choices, err)
+	}
+}
+
 func TestNormalOperationSourceKeysCoverRegisteredTablePositions(t *testing.T) {
 	_, ctx := operationFixture()
 	for job, table := range ctx.Definitions.Invocations.JobTables {
