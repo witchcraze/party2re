@@ -10,7 +10,7 @@ This project is currently rebuilding Party2 toward Version 1.0. These are transi
 ## 1. Clean-room reconstruction
 
 - Do not copy, port, translate, or mechanically rewrite legacy Perl code.
-- Game data in the legacy files (map layouts, numeric parameters, tables) MAY be transcribed into native data formats; the Perl logic around it remains subject to the previous item.
+- Game data in the legacy files (map layouts, numeric parameters, tables, message text) MAY be transcribed into native data formats; the Perl logic around it remains subject to the previous item.
 - Do not preserve the old implementation's architecture merely for compatibility.
 - Use the existing game only as a source of behavioral and functional requirements and of the game data above.
 - Reconstruct the implementation from the desired domain model and requirements.
