@@ -49,7 +49,7 @@ func (r *mapRunReader) GetActiveExpedition(context.Context, string) (*dungeon.Ac
 
 func TestMapObservationSourcesAndContinuations(t *testing.T) {
 	ctx := context.Background()
-	run := &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: dungeon.NativeMap0ID, MapVariant: 1, Revision: 4, Status: dungeon.StatusExploring, Round: 0, RoundLimit: 20}
+	run := &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: dungeon.NativeMap0ID, MapVariant: 1, Revision: 4, Status: dungeon.StatusExploring, CurrentHP: 1, Round: 0, RoundLimit: 20}
 	store := &mapRunReader{run: run}
 	chars := &mapCharacterReader{char: corecharacter.Character{ID: "hero", JobID: "job-09"}}
 	inventory := &mapInventoryReader{inv: coreinventory.Inventory{Items: []coreitem.Instance{{DefinitionID: "item-197", Quantity: 1}}}}
@@ -87,14 +87,14 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 		t.Fatal("observation mutated run")
 	}
 	inventory.inv.Items = nil
-	run.Members = []dungeon.ExpeditionMember{{CharacterID: "hero", JobID: "job-01"}, {CharacterID: "scout", JobID: "job-79", ItemIDs: []string{"item-197"}}}
+	run.Members = []dungeon.ExpeditionMember{{CharacterID: "hero", JobID: "job-01", CurrentHP: 1}, {CharacterID: "scout", JobID: "job-79", CurrentHP: 1, ItemIDs: []string{"item-197"}}}
 	for _, tc := range []struct {
 		actor  string
 		radius int
 		move   bool
-	}{{"hero", 1, true}, {"scout", 3, false}} {
+	}{{"hero", 1, true}, {"scout", 3, true}} {
 		got, err := svc.ObserveExpedition(ctx, tc.actor)
-		if err != nil || got.Map.Radius != tc.radius || got.Controls.CanMove != tc.move || (tc.actor == "scout" && (got.Controls.CanFight || got.Controls.CanEscape || len(got.Directions) != 0)) {
+		if err != nil || got.Map.Radius != tc.radius || got.Controls.CanMove != tc.move || (tc.actor == "scout" && (got.Controls.CanFight || got.Controls.CanEscape || len(got.Directions) != 4)) {
 			t.Fatalf("actor %s: %+v %v", tc.actor, got, err)
 		}
 	}

@@ -252,7 +252,7 @@ func TestMove_ValidationErrors(t *testing.T) {
 		ID:          "exp-unknown-dungeon",
 		CharacterID: "advent",
 		DungeonID:   "non-existent-dungeon",
-		Status:      dungeon.StatusExploring,
+		Status:      dungeon.StatusExploring, CurrentHP: 1,
 	})
 	_, err = service.Move(ctx, "advent", dungeon.DirectionEast)
 	if !errors.Is(err, dungeon.ErrDungeonNotFound) {
@@ -264,7 +264,7 @@ func TestMove_ValidationErrors(t *testing.T) {
 		ID:          "exp-ghost",
 		CharacterID: "ghost-character",
 		DungeonID:   dungeon.NativeMap0ID,
-		Status:      dungeon.StatusExploring,
+		Status:      dungeon.StatusExploring, CurrentHP: 1,
 	})
 	_, err = service.Move(ctx, "ghost-character", dungeon.DirectionEast)
 	if !errors.Is(err, dungeon.ErrCharacterNotFound) {
@@ -279,7 +279,7 @@ func TestMove_ValidationErrors(t *testing.T) {
 			DungeonID:   dungeon.NativeMap0ID,
 			MapVariant:  variant,
 			Round:       40, RoundLimit: 50,
-			Status: dungeon.StatusExploring,
+			Status: dungeon.StatusExploring, CurrentHP: 1,
 		})
 		_, err = service.Move(ctx, "advent", dungeon.DirectionEast)
 		if err == nil || !strings.Contains(err.Error(), "invalid floor index") {

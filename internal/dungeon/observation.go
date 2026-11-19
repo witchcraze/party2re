@@ -9,13 +9,15 @@ type ContinuationControls struct {
 	CanEscape bool `json:"can_escape"`
 }
 
+// Any living member may move; combat and Escape stay with the leader.
 func (exp ActiveExpedition) Controls(actor string) ContinuationControls {
+	canMove := exp.Status == StatusExploring && exp.isAlive(actor) && !exp.Encounter.blocking() && exp.Round < exp.RoundLimit
 	if exp.CharacterID != actor {
-		return ContinuationControls{}
+		return ContinuationControls{CanMove: canMove}
 	}
 	switch exp.Status {
 	case StatusExploring:
-		return ContinuationControls{CanMove: !exp.Encounter.blocking() && exp.Round < exp.RoundLimit, CanFight: exp.Encounter.hostile(), CanEscape: true}
+		return ContinuationControls{CanMove: canMove, CanFight: exp.Encounter.hostile(), CanEscape: true}
 	case StatusEscaped, StatusWipedOut:
 		// Both operations retry the frozen outcome without fighting or changing it.
 		return ContinuationControls{CanFight: true, CanEscape: true}

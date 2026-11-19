@@ -124,7 +124,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	f.party, f.member = party.Party{ID: "party", Status: party.StatusRecruiting, LeaderCharacterID: "hero"}, party.Member{PartyID: "party", CharacterID: "hero", IsLeader: true}
 	pv.room = pvp.RoomDetail{Room: pvp.ColosseumRoom{ID: "pvp", Status: pvp.StatusInProgress, LeaderCharacterID: "hero", Round: 2}, Members: []pvp.RoomMember{{CharacterID: "hero"}}}
 	gv.room = gvg.RoomDetail{Room: gvg.GvGRoom{ID: "gvg", Status: gvg.StatusInProgress, LeaderCharacterID: "hero", Round: 3}, Members: []gvg.GvGMember{{CharacterID: "hero"}}}
-	f.exp = &dungeon.ActiveExpedition{ID: "dungeon", CharacterID: "hero", Status: dungeon.StatusExploring, Round: 30, RoundLimit: 50}
+	f.exp = &dungeon.ActiveExpedition{ID: "dungeon", CharacterID: "hero", Status: dungeon.StatusExploring, CurrentHP: 1, Round: 30, RoundLimit: 50}
 	f.session = &challenge.ChallengeSession{ID: "challenge", Revision: 1, CharacterID: "hero", Status: challenge.StatusActive, CurrentRound: 5}
 	f.casino = &casino.RoomView{Room: casino.RoomObservation{RoomSummary: casino.RoomSummary{ID: "casino", Status: casino.RoomStatusInProgress, GameType: casino.GameTypeIndian}, Round: 6}, Members: []casino.MemberObservation{{CharacterID: "hero", IsSpectator: true}}}
 	facts, err := r.read(ctx, "owner", "hero")
@@ -273,6 +273,12 @@ func TestCombatMemberActivityHasNoLeaderControls(t *testing.T) {
 			t.Fatalf("member received leader controls: %+v", fact)
 		}
 	}
+	// A living member may move, without the leader's fight/escape controls.
+	f.exp.Members[0].CurrentHP, f.exp.RoundLimit = 1, 10
+	facts, err = readers.read(context.Background(), "owner", "hero")
+	if err != nil || facts[0].Kind != "dungeon" || !slices.Equal(facts[0].Actions, []string{"dungeon_move"}) {
+		t.Fatalf("living member dungeon actions: %+v %v", facts, err)
+	}
 }
 
 func TestDungeonActivityEncounterAndTerminalCandidates(t *testing.T) {
@@ -290,7 +296,7 @@ func TestDungeonActivityEncounterAndTerminalCandidates(t *testing.T) {
 		{dungeon.StatusEscaped, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 		{dungeon.StatusWipedOut, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 	} {
-		f.exp = &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", Revision: 8, Status: tc.status, Round: 20 - tc.turns, RoundLimit: 20}
+		f.exp = &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", Revision: 8, Status: tc.status, CurrentHP: 1, Round: 20 - tc.turns, RoundLimit: 20}
 		if tc.encounter {
 			f.exp.Encounter = &dungeon.ActiveEncounter{}
 		}
