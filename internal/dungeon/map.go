@@ -139,9 +139,9 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 				} else {
 					tileChar := floor.Grid[targetY][targetX]
 					switch {
-					case tileChar == cellWall || tileChar == cellHidden:
+					case tileChar == cellWall || floor.event(tileChar).kind == eventHidden:
 						symbol = "■" // wall
-					case floor.Marks[tileChar] != "" && !slices.Contains(exp.ConsumedEvents, eventKey(tileChar, targetX, targetY)):
+					case floor.Marks[tileChar] != "" && !slices.Contains(exp.ConsumedEvents, floor.event(tileChar).stateKey(tileChar, targetX, targetY)):
 						symbol = floor.Marks[tileChar]
 					default:
 						symbol = "□" // path

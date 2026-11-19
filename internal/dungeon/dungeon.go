@@ -88,6 +88,8 @@ type Floor struct {
 	Bosses map[byte]DungeonMonster `json:"-"`
 	// Marks show a cell's symbol in the map view until its once event is consumed.
 	Marks map[byte]string `json:"-"`
+	// events bind this floor's symbols; see map_events.go.
+	events map[byte]cellEvent
 }
 
 // FloorExit is a route or pitfall: the round carries over and the position is

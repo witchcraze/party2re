@@ -1,0 +1,102 @@
+package dungeon
+
+import (
+	"strings"
+
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+)
+
+// NativeMap4ID is the attrition maze (legacy map/4, seven initial variants).
+const NativeMap4ID = "native-map-4"
+
+// nativeMap4Grids transcribe map/4/1.cgi–7.cgi with their legacy symbols.
+var nativeMap4Grids = [7][10]string{
+	{"SM000010bB2", "11011010134", "00010010111", "01110110100", "00010H10001", "11011111101", "00000000100", "01101010001", "01101011111", "0000100000H"},
+	{"SM000010Bb2", "11011010113", "00010010014", "01110111011", "00010001000", "11011101101", "00001000100", "01101010001", "01101011111", "0000100000H"},
+	{"SM000010Bb2", "11011010113", "00010010014", "01110111011", "00010001000", "11011101110", "00001000110", "01101010010", "01101011110", "00H01000000"},
+	{"SM000010bB2", "11011010134", "00010010111", "01110110100", "00010H10001", "11011111100", "00000000101", "0111111H100", "01100011110", "00001000000"},
+	{"SM00001432B", "1101101111b", "00010010H10", "01110110110", "00010H10000", "11011111110", "00000000100", "0110111H101", "01111011101", "00000000000"},
+	{"SM000010Bb2", "11011010113", "00010010014", "01110111011", "00010001000", "11011101101", "00000001000", "01111111011", "0100000101H", "00010100000"},
+	{"SM000010Bb2", "11011010113", "00010010014", "01110111011", "00010001000", "11011101110", "00000001H10", "01111111010", "01000001010", "00010100000"},
+}
+
+// Passages charge the mover instead of spawning, and every H shares one flag.
+var nativeMap4Events = map[byte]cellEvent{
+	'0': {kind: eventAttrition},
+	'M': {kind: eventMessage, perSymbol: true},
+	'H': {kind: eventRecovery, perSymbol: true},
+	'b': {kind: eventBoss},
+	'2': {kind: eventTreasure, perSymbol: true},
+	'3': {kind: eventTreasure, perSymbol: true},
+	'4': {kind: eventTreasure, perSymbol: true},
+}
+
+// nativeMap4 has round limit 70 and the menu threshold for dungeon 4 (job level 9).
+// Each event loads one of stages 4–8 (int(rand(5) + 4)).
+func nativeMap4() Dungeon {
+	pools := append([]EncounterPool{nativeStage4Pool()}, nativeMap3Pools()...)
+	marks := map[byte]string{'B': "◎", 'b': "◎", '2': "宝", '3': "宝", '4': "宝"}
+	variants := make([]Floor, len(nativeMap4Grids))
+	for i, rows := range nativeMap4Grids {
+		f := Floor{FloorNumber: 1, Width: 11, Height: 10, Grid: rows[:], Pools: pools, Marks: marks, events: nativeMap4Events}
+		for y, row := range rows {
+			if x := strings.IndexByte(row, cellStart); x >= 0 {
+				f.StartX, f.StartY = x, y
+			}
+		}
+		variants[i] = f
+	}
+	return Dungeon{
+		ID:             NativeMap4ID,
+		Name:           "命削りの大迷路",
+		Description:    "敵の出ない大迷路。一歩ごとに進む者の命が削られていく。",
+		RoundLimit:     70,
+		LeaderJobLevel: 9,
+		Variants:       variants,
+	}
+}
+
+// attritionLoss is int(MaxHP × 0.02 + 0.5), exact in integers.
+func attritionLoss(exp *ActiveExpedition, actor *corecharacter.Character) int {
+	maxHP := actor.Stats.MaxHP
+	for _, m := range exp.Members {
+		if m.CharacterID == actor.ID {
+			maxHP = m.MaxHP
+		}
+	}
+	return (2*maxHP + 50) / 100
+}
+
+// recoverOne is map4 event_H. Its call forwards the direction name as the
+// target, which _check_party treats as unspecified: a uniform roster member,
+// fallen ones redirected to the actor. Half the time HP, otherwise MP, base 40.
+func recoverOne(exp *ActiveExpedition, actor *corecharacter.Character, rng RandomSource) (hp, mp map[string]int, err error) {
+	healHP := rng.Float64() < .5
+	state := corebattle.LifetimeState{}
+	ids := make([]string, len(exp.Members))
+	for i, m := range exp.Members {
+		ids[i] = m.CharacterID
+		p := corebattle.Participant{ID: m.CharacterID, Name: m.Name, TeamID: "allies", HP: m.CurrentHP, MaxHP: m.MaxHP, MP: m.CurrentMP, MaxMP: m.MaxMP, ItemDefinitionIDs: m.ItemIDs}
+		state.Actors = append(state.Actors, corebattle.LifetimeActor{Participant: p, Tension: 1, Hit: 95})
+	}
+	c := &corebattle.EffectContext{TargetContext: corebattle.TargetContext{ActorID: actor.ID, PartyIDs: ids}}
+	effect := corebattle.TargetEffect{Payload: corebattle.CallbackPayload{Number: 40}}
+	apply := state.ApplyMPHealing
+	if healHP {
+		apply = state.ApplyHealing
+	}
+	if _, err := apply(c, effect, randomSourceAdapter{rng}); err != nil {
+		return nil, nil, err
+	}
+	hp, mp = map[string]int{}, map[string]int{}
+	for i, m := range exp.Members {
+		if d := state.Actors[i].HP - m.CurrentHP; d != 0 {
+			hp[m.CharacterID] = d
+		}
+		if d := state.Actors[i].MP - m.CurrentMP; d != 0 {
+			mp[m.CharacterID] = d
+		}
+	}
+	return hp, mp, nil
+}

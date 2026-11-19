@@ -18,6 +18,15 @@ var nativeMap1Grids = [7][9]string{
 	{"000030000", "011111110", "010000000", "0001S1111", "011111000", "000000010", "01D101000", "01011101H", "K10B21K13"},
 }
 
+// Variants repeat K and 3 under one legacy flag, so they key by symbol.
+var nativeMap1Events = map[byte]cellEvent{
+	'H': {kind: eventHidden},
+	'K': {kind: eventKey, perSymbol: true},
+	'D': {kind: eventDoor, perSymbol: true, key: 'K'},
+	'2': {kind: eventTreasure, perSymbol: true},
+	'3': {kind: eventTreasure, perSymbol: true},
+}
+
 // nativeMap1Pool is legacy stage 2, which map1 always loads, named as in the
 // adventure catalog.
 func nativeMap1Pool() EncounterPool {
@@ -39,7 +48,7 @@ func nativeMap1() Dungeon {
 	pools := []EncounterPool{nativeMap1Pool()}
 	variants := make([]Floor, len(nativeMap1Grids))
 	for i, rows := range nativeMap1Grids {
-		f := Floor{FloorNumber: 1, Width: 9, Height: 9, Grid: rows[:], Pools: pools, Marks: map[byte]string{cellKey: "★", cellDoor: "扉"}}
+		f := Floor{FloorNumber: 1, Width: 9, Height: 9, Grid: rows[:], Pools: pools, Marks: map[byte]string{'K': "★", 'D': "扉"}, events: nativeMap1Events}
 		for y, row := range rows {
 			if x := strings.IndexByte(row, cellStart); x >= 0 {
 				f.StartX, f.StartY = x, y

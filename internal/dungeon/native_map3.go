@@ -31,6 +31,14 @@ var nativeMap3Warps = [8]map[byte][2]int{
 	{'a': {6, 4}, 'c': {4, 6}, 'd': {2, 4}, 'e': {4, 2}, 'f': {8, 8}, 'g': {2, 6}},
 }
 
+// b is a boss independent of B; M (legacy T) repeats on every entry.
+var nativeMap3Events = map[byte]cellEvent{
+	'b': {kind: eventBoss},
+	'M': {kind: eventMist},
+	'2': {kind: eventTreasure, perSymbol: true},
+	'3': {kind: eventTreasure, perSymbol: true},
+}
+
 func mon(id, name string, hp, at, df, ag, exp, gold int) DungeonMonster {
 	return DungeonMonster{ID: id, Name: name, HP: hp, Attack: at, Defense: df, Agility: ag, ExpReward: exp, GoldReward: gold}
 }
@@ -93,7 +101,7 @@ func nativeMap3() Dungeon {
 	pools := nativeMap3Pools()
 	variants := make([]Floor, len(nativeMap3Grids))
 	for i, rows := range nativeMap3Grids {
-		f := Floor{FloorNumber: 1, Width: 9, Height: 9, Grid: rows[:], Warps: nativeMap3Warps[i], Pools: pools}
+		f := Floor{FloorNumber: 1, Width: 9, Height: 9, Grid: rows[:], Warps: nativeMap3Warps[i], Pools: pools, events: nativeMap3Events}
 		for y, row := range rows {
 			if x := strings.IndexByte(row, cellStart); x >= 0 {
 				f.StartX, f.StartY = x, y
