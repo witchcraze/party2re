@@ -31,7 +31,7 @@ var nativeMap5Events = map[byte]cellEvent{
 // nativeMap5 has round limit 60 and the menu threshold for dungeon 5 (job level 11).
 // Each event loads one of stages 5–8 (int(rand(4) + 5)), as map3 does.
 func nativeMap5() Dungeon {
-	pools := nativeMap3Pools()
+	pools := stagePools(5, 8)
 	marks := map[byte]string{'L': "★"}
 	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: marks, events: nativeMap5Events}, nativeMap5Grids)
 	return Dungeon{

@@ -259,7 +259,7 @@ func TestNativeMap2_FloorBossesAreOncePerRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Monster == nil || res.Monster.Name != "キラーシェル" || res.EventType != dungeon.EventBoss {
+	if res.Monster == nil || res.Monster.Name != "デビルシェル" || res.EventType != dungeon.EventBoss {
 		t.Fatalf("7 %+v", res)
 	}
 	exp := f.reload(t, "boss")
