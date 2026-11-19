@@ -15,7 +15,7 @@ const (
 	_              eventKind = iota // zero value: no event
 	eventHidden                     // traversable, displayed as a wall until its key event is spent
 	eventSpawn                      // event_0: rand(2) <= 1 spawns an encounter
-	eventBoss                       // once: Floor.Bosses[symbol], else the event's pool boss
+	eventBoss                       // once: Floor.Bosses[symbol], else the boss of a pool drawn from the event's or floor's pools
 	eventTreasure                   // once: unopened chests
 	eventKey                        // once; never consumed by its door
 	eventDoor                       // opens with its key or an acting job in jobs; locked spends the round in place
@@ -36,10 +36,13 @@ type cellEvent struct {
 	perSymbol bool
 	// keepMark keeps the floor's mark after the event is spent (map5 lever).
 	keepMark bool
-	key      byte                    // eventDoor/eventHidden: the symbol whose flag opens/reveals it
-	jobs     []string                // eventDoor: the acting character's jobs that open it
-	status   corebattle.StatusEffect // eventMist
-	base     int                     // eventTrap: _trap_d base damage
+	key      byte     // eventDoor/eventHidden: the symbol whose flag opens/reveals it
+	jobs     []string // eventDoor: the acting character's jobs that open it
+	// status is the party status for the ensuing encounter (eventMist, and
+	// map9's sealed spawn and boss); the next step resets it.
+	status corebattle.StatusEffect
+	pools  []EncounterPool // eventBoss: replaces the floor's pools (map9 B/C)
+	base   int             // eventTrap: _trap_d base damage
 	// flag, when set, is the once-state shared by every symbol carrying it
 	// (map6 A/B share "AB").
 	flag string

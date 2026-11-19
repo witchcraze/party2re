@@ -110,21 +110,26 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 	case eventSpawn:
 		if 2*s.rng.Float64() <= 1 {
 			if pool := s.encounterPool(floor); len(pool.Monsters) > 0 {
-				return s.resolveMonsterCombat(ctx, exp, char, pool.monster(s.rng), EventBattle, x, y, "", "")
+				return s.resolveMonsterCombat(ctx, exp, char, pool.monster(s.rng), EventBattle, x, y, "", ev.status)
 			}
 		}
 	case eventMist:
-		// The status reaches only the ensuing battle; the next step resets it.
 		return s.resolveMonsterCombat(ctx, exp, char, s.encounterPool(floor).monster(s.rng), EventBattle, x, y, "", ev.status)
 	case eventBoss:
 		if consumed {
 			break
 		}
 		if boss, ok := floor.Bosses[cell]; ok {
-			return s.resolveMonsterCombat(ctx, exp, char, boss, EventBoss, x, y, key, "")
+			return s.resolveMonsterCombat(ctx, exp, char, boss, EventBoss, x, y, key, ev.status)
 		}
-		if pool := s.encounterPool(floor); pool.Boss != nil {
-			return s.resolveMonsterCombat(ctx, exp, char, *pool.Boss, EventBoss, x, y, key, "")
+		var pool EncounterPool
+		if len(ev.pools) > 0 {
+			pool = ev.pools[s.rng.Intn(len(ev.pools))]
+		} else {
+			pool = s.encounterPool(floor)
+		}
+		if pool.Boss != nil {
+			return s.resolveMonsterCombat(ctx, exp, char, *pool.Boss, EventBoss, x, y, key, ev.status)
 		}
 	case eventKey, eventMessage:
 		if !consumed {
