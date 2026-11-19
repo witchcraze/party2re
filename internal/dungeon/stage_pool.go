@@ -24,9 +24,8 @@ var stageCatalog = sync.OnceValues(func() (map[string]stagedata.Stage, map[strin
 	return stages, monsters
 })
 
-// stagePool is legacy stage n (party2/stage/<n>.cgi) from the shared catalog.
-// shortcut: a pool fights one boss, the strongest of the first roster, until
-// #1954 spawns whole rosters.
+// stagePool is legacy stage n (party2/stage/<n>.cgi) from the shared catalog;
+// its boss is the strongest of the first roster.
 func stagePool(n int) EncounterPool {
 	stages, monsters := stageCatalog()
 	st, ok := stages[fmt.Sprintf("stage-%02d", n)]
@@ -44,14 +43,25 @@ func stagePool(n int) EncounterPool {
 	for _, id := range st.MonsterIDs {
 		pool.Monsters = append(pool.Monsters, resolve(id))
 	}
-	boss := resolve(st.BossRosters[0][0])
-	for _, id := range st.BossRosters[0][1:] {
-		if m := resolve(id); m.HP > boss.HP {
-			boss = m
-		}
+	roster := make([]DungeonMonster, len(st.BossRosters[0]))
+	for i, id := range st.BossRosters[0] {
+		roster[i] = resolve(id)
 	}
+	boss := strongest(roster)
 	pool.Boss = &boss
 	return pool
+}
+
+// strongest is the roster member with the most HP, the first on a tie.
+// shortcut: one enemy stands in for a group until #1954 spawns whole groups.
+func strongest(group []DungeonMonster) DungeonMonster {
+	best := group[0]
+	for _, m := range group[1:] {
+		if m.HP > best.HP {
+			best = m
+		}
+	}
+	return best
 }
 
 // stagePools loads stages from..to, one pool per stage, as int(rand(k) + from) draws them.

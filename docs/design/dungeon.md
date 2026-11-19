@@ -273,25 +273,15 @@ Open: group size and scaling (#1954), enemy battle data (#2351), chest contents
 
 ### Map6 choice corridor
 
-Target, not current behavior: events [#2416](https://github.com/witchcraze/party2re/issues/2416),
-gold [#2417](https://github.com/witchcraze/party2re/issues/2417). Findings in `map/6/`:
+Native map6 transcribes the five layouts of `map/6/`. It stays unlisted and
+start-rejected until its gold outcomes land ([#2417](https://github.com/witchcraze/party2re/issues/2417)).
 
-- **The boss is always the three sages.** Each variant requires `_data.cgi` after
-  its own subs are compiled, and `_data.cgi` redefines `event_X` (`_data.cgi:6–68`).
-  The variants' `event_X`, which would draw a stage boss, never runs.
-- **Variants 3 and 4 hide the only route.** Row 9 has one open side, D (3) or C (4),
-  shown as a wall until entered (`3.cgi:30`, `4.cgi:30`); the partner event has no cell.
-- **Map-local monsters ignore stage weights.** A/B replace `@monsters` with one entry
-  but keep the stage's `@appears`; unknown indices fall back to entry 0, so the
-  whole group is that monster (`_npc_action.cgi:641–642`).
-- **Trap and heal bases are fractional.** `_trap_d(rand(200))` and `_heals(rand(100))`
-  truncate only after each member's multiplier.
-- **Gold has no floor.** Pickup and loss change the mover's own wallet at once,
-  outside run stock, and `write_user` caps it at 999999 (`system.cgi:71`). The
-  floor `$m{money}-=0 if $m{money} < 0` is a no-op (`1.cgi:40`, `5.cgi:44`).
+**Finding.** Gold pickup and loss change the mover's own wallet at once, outside
+run stock, and `write_user` caps it at 999999 (`system.cgi:71`). The intended
+floor `$m{money}-=0 if $m{money} < 0` is a no-op (`1.cgi:40`, `5.cgi:44`).
 
-**Decision (#1767).** Reproduce the gold rule: each accepted event changes the
-mover's wallet immediately and exactly once, possibly below zero, as for
+**Decision (#1767).** Reproduce it: each accepted event changes the mover's
+wallet immediately and exactly once, possibly below zero, as for
 [item 237](home.md#4-remote-depot--inventory-item-usage-つかう). Deferring it to
 settlement would drop it whenever a run idles out.
 
@@ -343,7 +333,7 @@ Define L, the legacy `$len`, as the count of non-digit flags at request start (`
 | Event | Normal route (k = 1–3) | EX route |
 |---|---|---|
 | Alternate boss | First single boss iff `rand(10) > L − 1`, so P = (8 − k)/10; else the second (`_1.cgi:89–94,116–168`). | None. Passages use the one-entry EX pool. |
-| Recovery | Party HP and an independent MP base of `(rand(20) + 25) × L`, element "none", through the shared party-heal routines with the actor's modifiers; fallen members excluded (`_1.cgi:96–102`, `_skill.cgi:9056–9188`). | Same, with its L (`_EX.cgi:55–61`). |
+| Recovery | Party HP and an independent MP base of `(rand(20) + 25) × L`, element "none", through the shared party-heal routines with the actor's modifiers; a fallen member's share heals the actor instead (`_1.cgi:96–102`, `_skill.cgi:9056–9188,9638`). | Same, with its L (`_EX.cgi:55–61`). |
 | Boss | Three-member group with party scaling, then the special boss field: allied max-stat caps and status reset, lasting for the run (`_1.cgi:39–45`, `_battle.cgi:1476–1532`). | First the phantom default field (`_battle.cgi:1786–1791`), then the EX group and the special field (`_EX.cgi:39–46`). |
 | Treasure | Gated by the frozen channels (`_1.cgi:47–87`): center W, west R, east B, north Y, west corner k > 1, east corner k > 2, top k > 3 (unreachable). Unavailable cells are plain passages with no flag or display. | Six ungated ordinary cells. The top cell is a fixed treasure: chests per allied player, fallen included, with no job-78/wish bonus (`_EX.cgi:47–53`, `_npc_action.cgi:555–598`). |
 
