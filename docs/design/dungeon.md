@@ -28,8 +28,7 @@ The base wall event leaves coordinates unchanged; map8 overrides it with a warp.
 
 Each map supplies `$max_round` (examples range from 20 to 200); there is no
 universal 25–35-turn floor budget. At the limit, further movement is blocked
-and the legacy message requests escape/disbandment. Do not equate that guard
-with automatic wipeout and zero rewards without checking the exit flow.
+and the legacy message requests escape/disbandment.
 The initial leader advance changes round 0 to 1 without moving or dispatching
 the start tile. Thus map0's limit of 20 permits 19 subsequent successful moves,
 not 20 moves after initialization (`vs_dungeon.cgi:57–103`).
@@ -90,7 +89,7 @@ in their own units.
 | Live expedition (existing Valkey buffer) | Selected map identity, position, current round, existing run/revision/member/encounter facts, and typed event state. Distinguish one-time triggers, keys/doors, reversible switches, selected routes and counters; do not encode them as a legacy flag string. Shared cross-map events explicitly reuse a state identity rather than resetting on every map change. |
 | Accepted event transition | Save position, round, event state and resulting encounter/reward facts together through the existing revision-checked step contract. A rejected limit move changes none of them and consumes no encounter RNG. Reload and stale competing requests must not regenerate an accepted one-time event. |
 | Pending encounter | Distinguish hostile combat from unopened treasure for resolution; both block movement while living enemy-side members remain. Persist any accepted random choice needed to resume without redrawing it. |
-| Movement availability | Derive exhausted movement from current round and the selected map's limit, independently of terminal status. An exhausted expedition remains active, retaining vitality and stock; Escape and required combat/inspection continuations remain available. A genuine defeat remains a distinct outcome. |
+| Movement availability | Derive exhausted movement from current round and the selected map's limit, independently of terminal status. An exhausted expedition remains active, retaining vitality and stock; Escape and required combat/inspection continuations remain available. Only Escape ends a run: legacy never ends a quest because every ally fell (`_trap_d` sets HP to 0 without ending it), so an all-fallen party keeps its stock until it escapes. |
 | Terminal settlement | Reuse frozen outcomes and the SQL run-ID settlement claim. Exit parity beyond the movement-limit guard remains separately scoped below. |
 
 For map0, initialize the round to 1 as part of accepted start, representing the
@@ -165,7 +164,7 @@ Not yet implemented ([#2119](https://github.com/witchcraze/party2re/issues/2119)
 - **Delivery.** Immediate, under the [Depot treasure rule](depot.md#delivery-capacity-by-caller).
   A tool entering the empty hand also registers the actor's equipped items in the
   Collection (`add_collection`). An empty chest (pool entry `0`) still spends the
-  allowance and any item 215. Delivered items survive a later wipeout or Escape;
+  allowance and any item 215. Delivered items survive the later Escape;
   exit never awards unopened chests.
 - **Gap.** Chests are also attackable enemies, and some skills reveal contents.
   A destroyed chest is empty. Native has neither path until [#1865](https://github.com/witchcraze/party2re/issues/1865)
@@ -240,8 +239,7 @@ Native map2 transcribes all eleven floors of `map/2/`. Non-obvious findings:
   only the third floor's pitfall draws `_1`–`_4`.
 - **Dead event.** The second floor defines `event_2` but has no `2` cell.
 
-Open: a pitfall that fells every member wipes the run out, whereas legacy keeps
-the fallen party until it escapes (#2364); chest contents (#2119), group size and
+Open: chest contents (#2119), group size and
 scaling (#1954), enemy battle data (#2351), narration (#948).
 
 ### Map4 attrition maze
@@ -254,8 +252,7 @@ scaling (#1954), enemy battle data (#2351), narration (#948).
   actor alone loses `int(MaxHP × 0.02 + 0.5)` HP per passage entered, so MaxHP
   ≤ 24 loses nothing, and falls at 0 (`1.cgi:24`). Only bosses `B` (base event) and `b`
   fight, as independent once-only bosses. Because the mover pays, the party
-  spreads the cost, and members continue after one falls; an all-fallen party
-  waits for Escape (#2364).
+  spreads the cost, and members continue after one falls.
 - **`H` recovers one random member, not the party.** **Finding:** the call passes
   no target. `&{'event_'…}` without parentheses forwards `_susumu`'s arguments, so
   the "target" is the direction name (`vs_dungeon.cgi:75,101`). `_check_party`

@@ -332,11 +332,25 @@ func TestPartyCombat_AllMembersKilled_WipesOut(t *testing.T) {
 		t.Fatalf("Move failed: %v", err)
 	}
 
-	if !res.IsFinished {
-		t.Error("expected expedition finished on wipeout")
+	// Legacy keeps the fallen party in the quest; only Escape remains.
+	exp := res.Expedition
+	if res.IsFinished || exp.Status != dungeon.StatusExploring || res.CombatOutcome != corebattle.OutcomeDefeat || exp.Encounter == nil {
+		t.Fatalf("all-fallen run ended or lost its enemies: %+v", res)
 	}
-	if res.Expedition.Status != dungeon.StatusWipedOut {
-		t.Errorf("expected StatusWipedOut, got %v", res.Expedition.Status)
+	if c := exp.Controls("lead-weak"); c.CanMove || c.CanFight || !c.CanEscape {
+		t.Fatalf("all-fallen controls %+v", c)
+	}
+	for _, call := range []func() error{
+		func() error { _, err := svc.Fight(ctx, "lead-weak"); return err },
+		func() error { _, err := svc.Move(ctx, "ally-weak", dungeon.DirectionEast); return err },
+	} {
+		if err := call(); !errors.Is(err, dungeon.ErrActorFallen) {
+			t.Fatalf("fallen party acted: %v", err)
+		}
+	}
+	esc, err := svc.Escape(ctx, "lead-weak")
+	if err != nil || !esc.IsFinished || esc.Expedition.Status != dungeon.StatusEscaped || len(repo.histories["lead-weak"]) != 1 {
+		t.Fatalf("escape after all fell: %+v %v", esc, err)
 	}
 }
 

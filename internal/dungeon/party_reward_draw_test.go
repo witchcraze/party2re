@@ -437,11 +437,11 @@ func TestPartyCombat_OutcomeDraw_MutualWipeout_WipesOut(t *testing.T) {
 		t.Fatalf("Move failed: %v", err)
 	}
 
-	// Mutual wipeout: all party members died, must wipe out!
-	if !res.IsFinished {
-		t.Error("expected expedition finished on mutual wipeout")
+	// Mutual death: the fallen party stays in the run with only Escape left.
+	if res.IsFinished || res.Expedition.Status != dungeon.StatusExploring {
+		t.Fatalf("mutual death ended the run: %+v", res)
 	}
-	if res.Expedition.Status != dungeon.StatusWipedOut {
-		t.Errorf("expected StatusWipedOut, got %v", res.Expedition.Status)
+	if c := res.Expedition.Controls("lead-mutual"); c.CanMove || c.CanFight || !c.CanEscape {
+		t.Fatalf("mutual death controls %+v", c)
 	}
 }

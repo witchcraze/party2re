@@ -35,7 +35,6 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 		{"encounter", "actor", dungeon.StatusExploring, dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
 		{"member", "member", dungeon.StatusExploring, dungeon.ContinuationControls{}, []string{}},
 		{"escaped", "actor", dungeon.StatusEscaped, dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
-		{"wiped_out", "actor", dungeon.StatusWipedOut, dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newGatewayFixture(t)

@@ -71,3 +71,13 @@ func (run ActiveExpedition) isAlive(id string) bool {
 	}
 	return len(run.Members) == 0 && run.CharacterID == id && run.CurrentHP > 0
 }
+
+// anyAlive reports whether the party still has a member who can act.
+func (run ActiveExpedition) anyAlive() bool {
+	for _, member := range run.Members {
+		if member.CurrentHP > 0 {
+			return true
+		}
+	}
+	return len(run.Members) == 0 && run.CurrentHP > 0
+}

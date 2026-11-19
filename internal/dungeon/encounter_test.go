@@ -29,7 +29,7 @@ func encounterStore(t *testing.T, kind string) dungeon.ActiveExpeditionStore {
 
 func TestActiveEncounterLifecycle(t *testing.T) {
 	for _, kind := range []string{"memory", "valkey"} {
-		for _, ending := range []string{"win", "wipeout", "escape"} {
+		for _, ending := range []string{"win", "defeat", "escape"} {
 			t.Run(kind+"/"+ending, func(t *testing.T) {
 				ctx := context.Background()
 				store := encounterStore(t, kind)
@@ -59,7 +59,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 						outcome, side = corebattle.OutcomeWin, "allies"
 						hp["enemy"] = 0
 					}
-					if calls == 3 && ending == "wipeout" {
+					if calls == 3 && ending == "defeat" {
 						outcome, side = corebattle.OutcomeDefeat, "enemies"
 						hp[char.ID] = 0
 						hp["enemy"] = 40
@@ -143,8 +143,17 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 					if _, err = svc.Escape(ctx, char.ID); err != nil {
 						t.Fatal(err)
 					}
-				} else if !final.IsFinished {
-					t.Fatalf("terminal fight did not settle: %+v", final)
+				} else {
+					// The fallen party keeps the run and the enemy; only Escape remains.
+					if final.IsFinished || final.Expedition.Status != dungeon.StatusExploring || final.Expedition.Encounter == nil || final.Expedition.Encounter.Enemies[0].HP != 40 {
+						t.Fatalf("defeat ended the run: %+v", final)
+					}
+					if _, err = svc.Fight(ctx, char.ID); !errors.Is(err, dungeon.ErrActorFallen) {
+						t.Fatalf("fallen party fought: %v", err)
+					}
+					if _, err = svc.Escape(ctx, char.ID); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if len(repo.histories[char.ID]) != 1 {
 					t.Fatal("settlement not exactly once")

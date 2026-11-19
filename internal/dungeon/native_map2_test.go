@@ -214,17 +214,39 @@ func TestNativeMap2_PitfallHitsEveryMember(t *testing.T) {
 	}
 }
 
-// A pitfall that fells the whole roster ends the run like a combat wipeout.
-func TestNativeMap2_PitfallWipeout(t *testing.T) {
+// A pitfall that fells the whole roster keeps the run until Escape, which
+// still banks the stock (legacy _trap_d never ends the quest).
+func TestNativeMap2_PitfallFellsThePartyUntilEscape(t *testing.T) {
+	ctx := context.Background()
 	f := newNativeFixture(t, map2Hero("frail", 20))
 	f.placeMap2(t, "frail", 4, 2, 2, 10)
+	exp := f.reload(t, "frail")
+	exp.AccumulatedExp, exp.AccumulatedGold = 7, 9
+	if err := f.store.SaveActiveExpedition(ctx, exp); err != nil {
+		t.Fatal(err)
+	}
 	f.rng.ints = []int{0}
-	res, err := f.svc.Move(context.Background(), "frail", dungeon.DirectionSouth)
+	res, err := f.svc.Move(ctx, "frail", dungeon.DirectionSouth)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.IsFinished || res.Expedition.Status != dungeon.StatusWipedOut || res.MemberDamages["frail"] == 0 {
-		t.Fatalf("wipeout %+v", res)
+	if res.IsFinished || res.Expedition.Status != dungeon.StatusExploring || res.MemberDamages["frail"] == 0 {
+		t.Fatalf("pitfall ended the run %+v", res)
+	}
+	if c := f.reload(t, "frail").Controls("frail"); c.CanMove || c.CanFight || !c.CanEscape {
+		t.Fatalf("fallen controls %+v", c)
+	}
+	esc, err := f.svc.Escape(ctx, "frail")
+	h := f.repo.histories["frail"]
+	if err != nil || esc.Expedition.Status != dungeon.StatusEscaped || len(h) != 1 || h[0].ExpReward != 7 || h[0].GoldReward != 9 {
+		t.Fatalf("escape %+v %v history=%+v", esc, err, h)
+	}
+	// A retried Escape settles nothing twice.
+	if _, err := f.svc.Escape(ctx, "frail"); err != nil && !errors.Is(err, dungeon.ErrNoActiveExpedition) {
+		t.Fatal(err)
+	}
+	if len(f.repo.histories["frail"]) != 1 {
+		t.Fatalf("double settlement %+v", f.repo.histories["frail"])
 	}
 }
 

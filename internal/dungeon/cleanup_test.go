@@ -124,7 +124,7 @@ func (r *replacingFinalizeRepository) FinalizeExpedition(ctx context.Context, h 
 }
 
 func TestSettlementCleanup_PreservesReplacement(t *testing.T) {
-	for _, outcome := range []string{"escape", "wipeout"} {
+	for _, outcome := range []string{"escape"} {
 		for _, duplicate := range []bool{false, true} {
 			name := outcome
 			if duplicate {
@@ -135,9 +135,6 @@ func TestSettlementCleanup_PreservesReplacement(t *testing.T) {
 				store := dungeon.NewMemoryExpeditionRepository()
 				repo := &replacingFinalizeRepository{mockDungeonRepo: newMockDungeonRepo()}
 				hero := createTestChar("hero", 30, 100, 50, 30)
-				if outcome == "wipeout" {
-					hero = createTestChar("hero", 1, 10, 5, 5) // loses to the boss east of the start
-				}
 				chars := &mockCharRepo{chars: map[string]corecharacter.Character{"hero": hero}}
 				svc, err := dungeon.NewService(repo, chars, corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(customSettlementDungeons()))
 				if err != nil {
@@ -162,12 +159,7 @@ func TestSettlementCleanup_PreservesReplacement(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				var result dungeon.ExpeditionStepResult
-				if outcome == "escape" {
-					result, err = svc.Escape(ctx, "hero")
-				} else {
-					result, err = svc.Move(ctx, "hero", dungeon.DirectionEast)
-				}
+				result, err := svc.Escape(ctx, "hero")
 				if err != nil || !result.IsFinished {
 					t.Fatalf("expected terminal settlement: %+v %v", result, err)
 				}

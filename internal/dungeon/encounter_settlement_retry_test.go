@@ -27,7 +27,7 @@ func (s *failedCleanupStore) DeleteActiveExpedition(ctx context.Context, actor, 
 
 func TestEncounterFrozenSettlementRetry(t *testing.T) {
 	for _, kind := range []string{"memory", "valkey"} {
-		for _, ending := range []string{"escape", "wipeout"} {
+		for _, ending := range []string{"escape"} {
 			t.Run(kind+"/"+ending, func(t *testing.T) {
 				ctx := context.Background()
 				store := &failedCleanupStore{ActiveExpeditionStore: encounterStore(t, kind)}
@@ -46,9 +46,6 @@ func TestEncounterFrozenSettlementRetry(t *testing.T) {
 				})
 				engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 					outcome, side, hp := corebattle.OutcomeWin, "allies", 80
-					if ending == "wipeout" {
-						outcome, side, hp = corebattle.OutcomeDefeat, "enemies", 0
-					}
 					return corebattle.PartyBattleResult{Outcome: outcome, WinnerSide: side, RemainingHP: map[string]int{char.ID: hp, "enemy": 0}}, nil
 				}}
 				catalog := []dungeon.Dungeon{{ID: "retry"}}
@@ -70,9 +67,6 @@ func TestEncounterFrozenSettlementRetry(t *testing.T) {
 				}
 				expectedStatus := dungeon.StatusEscaped
 				expectedGold, expectedExp := 0, 0
-				if ending == "wipeout" {
-					expectedStatus = dungeon.StatusWipedOut
-				}
 				if frozen == nil || frozen.Status != expectedStatus {
 					t.Fatalf("unfrozen after SQL failure: %+v", frozen)
 				}
@@ -81,7 +75,7 @@ func TestEncounterFrozenSettlementRetry(t *testing.T) {
 				}
 				repo.errFinalizeExpedition = nil
 				store.fail = true
-				// A retry through Escape must honor an already frozen wipeout outcome.
+				// A retry through Escape must honor the already frozen outcome.
 				res, err := svc.Escape(ctx, char.ID)
 				if err != nil || res.Expedition.Status != expectedStatus {
 					t.Fatalf("retry changed outcome: %+v %v", res, err)

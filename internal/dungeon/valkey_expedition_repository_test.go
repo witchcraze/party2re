@@ -118,21 +118,23 @@ func TestMemoryExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 		t.Errorf("expected ErrExpeditionIDMismatch, got %v", err)
 	}
 
-	// 6. Step to Wipeout (HP drops to 0)
+	// 6. HP dropping to 0 keeps the run exploring until an exit freezes it.
 	fatalParams := stepParams
 	fatalParams.HPDelta = -200
 	outcome, err = repo.Step(ctx, charID, fatalParams)
 	if err != nil {
 		t.Fatalf("Step to fatal failed: %v", err)
 	}
-	if outcome.Status != dungeon.StatusWipedOut {
-		t.Errorf("expected StatusWipedOut, got %v", outcome.Status)
+	if outcome.Status != dungeon.StatusExploring || outcome.Expedition.CurrentHP != 0 {
+		t.Errorf("expected exploring at HP 0, got %v / %d", outcome.Status, outcome.Expedition.CurrentHP)
 	}
-	if outcome.Expedition.CurrentHP != 0 {
-		t.Errorf("expected HP 0, got %d", outcome.Expedition.CurrentHP)
+	freeze := stepParams
+	freeze.FinishStatus = dungeon.StatusEscaped
+	if _, err := repo.Step(ctx, charID, freeze); err != nil {
+		t.Fatalf("freeze step failed: %v", err)
 	}
 
-	// 7. Error: Expedition Not Active (already wiped out)
+	// 7. Error: Expedition Not Active (already frozen)
 	_, err = repo.Step(ctx, charID, stepParams)
 	if !errors.Is(err, dungeon.ErrExpeditionNotActive) {
 		t.Errorf("expected ErrExpeditionNotActive, got %v", err)
@@ -323,7 +325,7 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	if exhausted.Status != dungeon.StatusExploring || exhausted.Expedition.Round != 102 {
 		t.Errorf("expected exploring at round 102, got %v / %d", exhausted.Status, exhausted.Expedition.Round)
 	}
-	if _, err := repo.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: expID, NewX: 2, NewY: 2, FinishStatus: dungeon.StatusWipedOut, Now: time.Now().UTC()}); err != nil {
+	if _, err := repo.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: expID, NewX: 2, NewY: 2, FinishStatus: dungeon.StatusEscaped, Now: time.Now().UTC()}); err != nil {
 		t.Fatalf("freeze step failed: %v", err)
 	}
 
