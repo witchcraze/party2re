@@ -47,6 +47,13 @@ func (s *LifetimeState) validateNPCChoices(c *CallbackContext, plan NPCActionPla
 	}
 	for _, choice := range plan.Choices {
 		frame := choice.frame(c)
+		var continuation func(*LifetimeState, *CallbackContext) error
+		if after != nil {
+			continuation = func(state *LifetimeState, frame *CallbackContext) error {
+				choice.charge(state.actor(frame.ActorID))
+				return after(state, frame)
+			}
+		}
 		if choice.ID == "npc-normal-attack" {
 			if c.Damage == nil || !c.Damage.ActorNPC {
 				return ErrUnsupportedEffect
@@ -56,18 +63,29 @@ func (s *LifetimeState) validateNPCChoices(c *CallbackContext, plan NPCActionPla
 			if err := s.ValidateNormalAttack(&child, "", rng); err != nil {
 				return err
 			}
-			if child.responseDefeat != nil {
-				// The default skill calls kougeki once. Its critical uses
-				// direct power, which can reach defeat when a normal hit can't.
-				power := float64(s.actor(frame.ActorID).Attack)
-				for _, hit := range []TargetEffect{
-					{Category: CategoryPhysical, Payload: CallbackPayload{Number: power}, Arguments: []string{"0", "1"}},
-					{Category: CategoryPhysical, Payload: CallbackPayload{Number: power * .75}, Arguments: []string{"1", "1"}},
-				} {
-					death := *child.responseDefeat
-					death.TargetContext = frame.TargetContext
-					if _, err := s.projectCallbackDamage(&child, &death, hit, hit.Payload.Number, false, rng); err != nil {
-						return err
+			defeat := child.responseDefeat
+			if defeat == nil && continuation == nil {
+				continue
+			}
+			// The default skill calls kougeki once. The critical travels
+			// through the direct-power branch.
+			power := float64(s.actor(frame.ActorID).Attack)
+			for _, hit := range []TargetEffect{
+				{Category: CategoryPhysical, Payload: CallbackPayload{Number: power}, Arguments: []string{"0", "1"}},
+				{Category: CategoryPhysical, Payload: CallbackPayload{Number: power * .75}, Arguments: []string{"1", "1"}},
+			} {
+				states, err := s.projectCallbackDamage(&child, defeat, hit, hit.Payload.Number, continuation != nil, rng)
+				if err != nil {
+					return err
+				}
+				if continuation != nil {
+					for _, branch := range states {
+						state, projected := branch.State.callbackCopy(), frame
+						projected.Damage, projected.TargetContext = &branch.Context, branch.Context.TargetContext
+						projected = cloneCallbackContext(projected)
+						if err := continuation(&state, &projected); err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -77,13 +95,6 @@ func (s *LifetimeState) validateNPCChoices(c *CallbackContext, plan NPCActionPla
 		arguments := make([][]string, len(invocations))
 		for i := range invocations {
 			arguments[i] = frame.Arguments
-		}
-		continuation := after
-		if after != nil {
-			continuation = func(state *LifetimeState, frame *CallbackContext) error {
-				choice.charge(state.actor(frame.ActorID))
-				return after(state, frame)
-			}
 		}
 		if err := s.validateSequenceThen(&frame, plan.Catalog, invocations, arguments, rng, continuation); err != nil {
 			return err

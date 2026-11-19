@@ -87,6 +87,65 @@ func TestNPCOperationPreflightsKnownTailsAndReachableDefeat(t *testing.T) {
 	}
 }
 
+func TestNPCOperationNormalAttackPreflightsEquipmentTail(t *testing.T) {
+	for _, mode := range []string{"one-hit defense", "zero power without defeat port"} {
+		t.Run(mode, func(t *testing.T) {
+			s, op := runNPCFixture(t)
+			a := &s.Actors[0]
+			a.ItemDefinitionIDs = []string{"item-164"}
+			a.Temporary, a.Tension = battle.TemporaryCovering, 5
+			if mode == "one-hit defense" {
+				s.Actors[1].Temporary = battle.TemporaryOneHitDefense
+			} else {
+				a.Attack, op.Defeat = 0, nil
+			}
+			targetTemporary := s.Actors[1].Temporary
+			result, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), registerNPCFixture, &npcJobRNG{t: t})
+			if !errors.Is(err, battle.ErrUnsupportedEffect) || !reflect.DeepEqual(result, battle.NPCOperationResult{}) ||
+				s.Actors[0].Temporary != battle.TemporaryCovering || s.Actors[0].Tension != 5 ||
+				s.Actors[1].HP != 1000 || s.Actors[1].Temporary != targetTemporary {
+				t.Fatalf("result %+v, actors %+v, error %v", result, s.Actors, err)
+			}
+
+			// Unblocked hits spend tension; a zero-power hit can still complete
+			// with no need for defeat ports when the equipment tail is absent.
+			if mode == "one-hit defense" {
+				s.Actors[1].Temporary = ""
+			} else {
+				s.Actors[0].ItemDefinitionIDs = nil
+			}
+			result, err = ApplyNPCOperation(&s, op, NPCDefaultSeed(), registerNPCFixture, &npcSelectionRNG{value: .95})
+			if err != nil || result.Choice.ID != "npc-normal-attack" ||
+				(mode == "one-hit defense" && (s.Actors[1].HP >= 1000 || s.Actors[0].Temporary != "")) ||
+				(mode != "one-hit defense" && s.Actors[1].HP != 1000) {
+				t.Fatalf("result %+v, actors %+v, error %v", result, s.Actors, err)
+			}
+		})
+	}
+}
+
+func TestNPCOperationNormalAttackPreflightsEquipmentReachedAfterField(t *testing.T) {
+	s, op := runNPCFixture(t)
+	s.Fields.Default = "burn"
+	s.Actors[0].Status = battle.StatusMagicSeal
+	s.Actors[0].ItemDefinitionIDs = []string{"item-206"}
+	s.Actors[1].HP = 150
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+
+	// The nonlethal normal attack leaves the target in reach of item206
+	// after the burn field cures the actor. Its defeat needs a weapon reset.
+	_, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), registerNPCFixture, &npcJobRNG{t: t})
+	if !errors.Is(err, battle.ErrUnsupportedEffect) || s.Actors[0].Status != battle.StatusMagicSeal || s.Actors[1].HP != 150 {
+		t.Fatalf("actors %+v, error %v", s.Actors, err)
+	}
+	s.Fields.AntiTurns = 1
+	got, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), registerNPCFixture, &npcSelectionRNG{value: .95})
+	if err != nil || got.Choice.ID != "npc-normal-attack" || s.Actors[0].Status != battle.StatusMagicSeal ||
+		s.Actors[1].HP <= 0 || s.Actors[1].HP >= 150 {
+		t.Fatalf("result %+v, actors %+v, error %v", got, s.Actors, err)
+	}
+}
+
 func TestNPCOperationConfusionChoiceAndExpiryDrawOrder(t *testing.T) {
 	for _, row := range []struct {
 		draw   float64
@@ -212,6 +271,31 @@ func TestNPCOperationDefeatOrderConsumptionAndEndProcessing(t *testing.T) {
 	if err != nil || got.Choice.ID != "job-1-entry-4" || !reflect.DeepEqual(got.Defeats, wantDefeats) ||
 		!reflect.DeepEqual(got.Consumed, wantItems) || s.Actors[3].HP != 500 || s.Actors[0].HP >= 100 || s.Actors[0].MP != 75 {
 		t.Fatalf("result %+v NPC HP %d MP %d amulet HP %d error %v", got, s.Actors[0].HP, s.Actors[0].MP, s.Actors[3].HP, err)
+	}
+}
+
+func TestNPCOperationFinalStrikeRecordsTheRetaliatingActor(t *testing.T) {
+	s, op := runNPCFixture(t)
+	s.Actors = s.Actors[:2]
+	op.Damage.PartyIDs = []string{"self"}
+	s.Actors[0].HP, s.Actors[1].HP = 10, 10
+	s.Actors[1].BaseStats.Attack = 200
+	s.Actors[1].Gear.AccessoryID = "item-212"
+	s.Actors[1].ItemDefinitionIDs = []string{"item-212"}
+	op.Defeat.Rewards = &battle.DefeatRewards{
+		Validate: func(*battle.LifetimeState, battle.TargetContext, string) error {
+			t.Fatal("NPC response reached player reward admission")
+			return nil
+		},
+		Apply: func(*battle.LifetimeState, battle.TargetContext, string) error {
+			t.Fatal("NPC response reached player reward application")
+			return nil
+		},
+	}
+	got, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), registerNPCFixture, &npcSelectionRNG{value: .95})
+	want := []battle.NPCDefeat{{TargetID: "enemy", KillerID: "self"}, {TargetID: "self", KillerID: "enemy"}}
+	if err != nil || !reflect.DeepEqual(got.Defeats, want) || s.Actors[0].HP != 0 || s.Actors[1].HP != 0 {
+		t.Fatalf("defeats %v, want %v, HP %d/%d, error %v", got.Defeats, want, s.Actors[0].HP, s.Actors[1].HP, err)
 	}
 }
 

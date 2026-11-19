@@ -22,6 +22,7 @@ type NPCActionPlan struct {
 	Catalog  CallbackCatalog
 }
 
+// NPCDefeat records the source of the fatal hit. The defeat context owns rewards.
 type NPCDefeat struct {
 	TargetID, KillerID string
 }
