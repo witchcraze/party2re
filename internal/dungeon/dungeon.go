@@ -34,7 +34,6 @@ type ExpeditionStatus string
 const (
 	StatusExploring ExpeditionStatus = "exploring"
 	StatusEscaped   ExpeditionStatus = "escaped"
-	StatusWipedOut  ExpeditionStatus = "wiped_out"
 )
 
 type TileEventType string
@@ -45,7 +44,6 @@ const (
 	EventTreasure TileEventType = "treasure"
 	EventBoss     TileEventType = "boss"
 	EventEscape   TileEventType = "escape"
-	EventWipeout  TileEventType = "wipeout"
 )
 
 type Direction string

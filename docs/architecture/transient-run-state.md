@@ -267,14 +267,12 @@ an encounter remains, without consuming a turn, event or reward. The leader can
 resume through `Service.Fight` (`POST /characters/{id}/dungeons/fight`) or escape.
 Step revisions reject stale combat results and movement updates; the Memory
 adapter follows the same checks. Victory clears the encounter and grants its
-rewards once. Before terminal SQL settlement, a revision-checked step freezes the
-run's clear/escape/wipeout outcome and snapshot, rejecting further battle updates.
-Concurrent identical exits reuse that frozen snapshot rather than their earlier
-reads; a different terminal intent cannot replace it.
-Boss victory freezes clear in the same step as the victory rewards. A stale Escape
-cannot claim SQL settlement or delete a newer battle result. If SQL fails or
-post-commit cleanup is lost, Fight/Escape retries the frozen outcome without
-re-running combat; clear bonuses are derived once from the frozen base ledger.
+rewards once. Escape is the only terminal outcome; an all-fallen party stays in
+the run until it escapes. Before SQL settlement, a revision-checked step freezes
+the escape snapshot, rejecting further battle updates. Concurrent Escapes reuse
+that frozen snapshot rather than their earlier reads. A stale Escape cannot claim
+SQL settlement or delete a newer battle result. If SQL fails or post-commit
+cleanup is lost, Fight/Escape retries the frozen outcome without re-running combat.
 SQL's run-ID claim remains the durable idempotency boundary, and live cleanup
 remains owner/run-qualified and occurs only after SQL succeeds.
 
@@ -354,8 +352,8 @@ If required member or run state cannot be read, settlement aborts before freezin
 deleting the active run. Duplicate run-ID
 claims map to `ErrExpeditionAlreadyFinished`, which `internal/dungeon` treats as idempotent
 completion so post-commit Valkey `DeleteActiveExpedition` can safely retry without
-double-granting rewards or overwriting concurrent wallet updates. Clear, escape
-and wipeout pass both the owner and finalized run ID to each cleanup port;
+double-granting rewards or overwriting concurrent wallet updates. Escape passes
+both the owner and finalized run ID to each cleanup port;
 missing or replaced runs are a successful no-op. Valkey compares that identity
 and deletes state/rewards in one Lua invocation, while memory compares and
 deletes under its store lock. Member references are released only when their

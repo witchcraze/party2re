@@ -96,6 +96,9 @@ func (s *Service) Fight(ctx context.Context, characterID string) (ExpeditionStep
 	if !enc.hostile() {
 		return ExpeditionStepResult{}, ErrNoActiveCombat
 	}
+	if !exp.anyAlive() {
+		return ExpeditionStepResult{}, ErrActorFallen
+	}
 	char, err := s.characterRepo.FindByID(ctx, characterID)
 	if err != nil {
 		return ExpeditionStepResult{}, err

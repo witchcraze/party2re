@@ -300,23 +300,3 @@ func TestEscape_IdempotentOnDeleteFailureRetry(t *testing.T) {
 		t.Fatalf("expected active expedition purged on retry, got %+v", activeAfter)
 	}
 }
-
-func TestWipeout_ErrorPropagation(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("finalize expedition error during wipeout propagates", func(t *testing.T) {
-		repo, _, _, service := setupSettlementTest(t)
-
-		_, err := service.StartExpedition(ctx, "weak", "test-dg-01")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		repo.errFinalizeExpedition = errors.New("simulated db error on wipeout FinalizeExpedition")
-
-		_, err = service.Move(ctx, "weak", dungeon.DirectionEast)
-		if err == nil || !strings.Contains(err.Error(), "simulated db error on wipeout FinalizeExpedition") {
-			t.Fatalf("expected finalize expedition error on wipeout, got: %v", err)
-		}
-	})
-}

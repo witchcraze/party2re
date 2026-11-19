@@ -195,24 +195,8 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		currentHP = 0
 	}
 
+	// An all-fallen party stays exploring until Escape; only exits finish a run.
 	finalStatus := StatusExploring
-	if len(exp.Members) > 0 {
-		allDead := true
-		for _, m := range exp.Members {
-			if m.CurrentHP > 0 {
-				allDead = false
-				break
-			}
-		}
-		if allDead {
-			currentHP = 0
-			finalStatus = StatusWipedOut
-		}
-	} else if currentHP <= 0 {
-		currentHP = 0
-		finalStatus = StatusWipedOut
-	}
-
 	if params.FinishStatus != "" {
 		finalStatus = params.FinishStatus
 	}

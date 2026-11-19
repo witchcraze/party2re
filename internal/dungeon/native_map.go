@@ -167,11 +167,6 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	if out.Status == StatusWipedOut {
-		res, err := s.handleWipeout(ctx, &out.Expedition, char)
-		res.MemberDamages = negate(step.MemberHPDeltas)
-		return res, err
-	}
 	res := ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove, MemberDamages: negate(step.MemberHPDeltas)}
 	if out.Expedition.Encounter != nil {
 		res.EventType = EventTreasure

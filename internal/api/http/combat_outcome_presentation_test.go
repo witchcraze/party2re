@@ -27,12 +27,10 @@ func TestDungeonOutcomePresentation(t *testing.T) {
 		{"treasure", dungeon.EventTreasure, "", nil, ""},
 		{"escape", dungeon.EventEscape, "", nil, "探索を中断し、戦利品を持って無事に脱出した！"},
 		{"resumed escape", dungeon.EventEscape, "", nil, "探索を中断し、戦利品を持って無事に脱出した！"},
-		{"resumed wipeout", dungeon.EventWipeout, "", nil, "探索に失敗した…"},
 		{"victory", dungeon.EventBattle, corebattle.OutcomeWin, monster, "Slime との戦闘に勝利した！ (EXP: +20, G: +30)"},
 		{"boss victory", dungeon.EventBoss, corebattle.OutcomeWin, monster, "Slime との戦闘に勝利した！ (EXP: +20, G: +30)"},
-		{"defeat", dungeon.EventWipeout, corebattle.OutcomeDefeat, monster, "Slime との戦いに敗れ、全滅してしまった…"},
+		{"defeat", dungeon.EventBattle, corebattle.OutcomeDefeat, monster, "Slime との戦いに敗れ、全滅してしまった…"},
 		{"draw", dungeon.EventBattle, corebattle.OutcomeDraw, monster, "Slime との戦いは時間切れで決着がつかなかった… (引き分け)"},
-		{"movement exhausted", dungeon.EventWipeout, corebattle.OutcomeDraw, monster, "Slime との戦いが長引き、行動限界に達してしまった…"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			facts := dungeon.ExpeditionStepResult{EventType: tc.event, CombatOutcome: tc.outcome, Monster: tc.monster}

@@ -214,58 +214,20 @@ func (s *Service) resolveMonsterCombat(
 		}, nil
 	}
 
-	allDead := true
-	if len(exp.Members) > 0 {
-		for _, m := range exp.Members {
-			if remHP, ok := battleRes.RemainingHP[m.CharacterID]; ok && remHP > 0 {
-				allDead = false
-				break
-			}
-		}
-	} else {
-		allDead = (exp.CurrentHP+leaderHPDelta <= 0)
+	// Draw or defeat: surviving enemies stay. An all-fallen party remains in the
+	// run, where only Escape is left (legacy never ends a quest because allies fell).
+	// After a mutual knockout no enemy survives, so no encounter is kept.
+	pending := pendingEncounter(exp, monster, eventType, newX, newY, battleRes, field)
+	if pending.Enemies[0].HP <= 0 {
+		pending = nil
 	}
-
-	if battleRes.Outcome == corebattle.OutcomeDraw && !allDead {
-		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
-			ExpectedExpeditionID: exp.ID,
-			ExpectedRevision:     &exp.Revision,
-			Combat:               true,
-			NewX:                 stayX,
-			NewY:                 stayY,
-			Encounter:            pendingEncounter(exp, monster, eventType, newX, newY, battleRes, field),
-			HPDelta:              leaderHPDelta,
-			MemberHPDeltas:       memberHPDeltas,
-			MemberMPDeltas:       memberMPDeltas,
-			ConsumedItems:        consumedItems,
-			RoundDelta:           rounds,
-			EventKey:             eventKey,
-			Now:                  time.Now().UTC(),
-		})
-		if err != nil {
-			return ExpeditionStepResult{}, err
-		}
-		if stepRes.Status == StatusWipedOut {
-			result, err := s.handleWipeout(ctx, &stepRes.Expedition, char)
-			result.Monster, result.CombatOutcome = &monster, corebattle.OutcomeDraw
-			return result, err
-		}
-		return ExpeditionStepResult{
-			Expedition:    stepRes.Expedition,
-			EventType:     eventType,
-			BattleResult:  &battleRes,
-			Monster:       &monster,
-			CombatOutcome: corebattle.OutcomeDraw,
-		}, nil
-	}
-
-	// Player Defeated
 	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
 		Combat:               true,
-		NewX:                 newX,
-		NewY:                 newY,
+		NewX:                 stayX,
+		NewY:                 stayY,
+		Encounter:            pending,
 		HPDelta:              leaderHPDelta,
 		MemberHPDeltas:       memberHPDeltas,
 		MemberMPDeltas:       memberMPDeltas,
@@ -277,9 +239,13 @@ func (s *Service) resolveMonsterCombat(
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	result, err := s.handleWipeout(ctx, &stepRes.Expedition, char)
-	result.Monster, result.CombatOutcome = &monster, corebattle.OutcomeDefeat
-	return result, err
+	return ExpeditionStepResult{
+		Expedition:    stepRes.Expedition,
+		EventType:     eventType,
+		BattleResult:  &battleRes,
+		Monster:       &monster,
+		CombatOutcome: battleRes.Outcome,
+	}, nil
 }
 
 // combatProgress: the round advances only on the move itself, and the party

@@ -143,26 +143,8 @@ if current_hp < 0 then
     current_hp = 0
 end
 
+-- An all-fallen party stays exploring until Escape; only exits finish a run.
 local final_status = 'exploring'
-if has_members and #members > 0 then
-    local all_dead = true
-    for _, m in ipairs(members) do
-        if (tonumber(m['current_hp']) or 0) > 0 then
-            all_dead = false
-            break
-        end
-    end
-    if all_dead then
-        current_hp = 0
-        final_status = 'wiped_out'
-    end
-else
-    if current_hp <= 0 then
-        current_hp = 0
-        final_status = 'wiped_out'
-    end
-end
-
 if ARGV[20] and ARGV[20] ~= '' then
     final_status = ARGV[20]
 end
