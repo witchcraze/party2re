@@ -181,7 +181,8 @@ Every restored map shares these gaps: group size and scaling
 ([#1954](https://github.com/witchcraze/party2re/issues/1954)), enemy battle data
 ([#2351](https://github.com/witchcraze/party2re/issues/2351)), defeat rewards and
 crystals ([#1957](https://github.com/witchcraze/party2re/issues/1957)), chest
-contents and inspection ([treasure contract](#treasure-inspection-and-delivery))
+contents and inspection ([treasure contract](#treasure-inspection-and-delivery);
+per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428))
 and narration, owned by the Dungeon log ([#948](https://github.com/witchcraze/party2re/issues/948)).
 
 ### Map0 implementation
