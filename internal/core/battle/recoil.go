@@ -24,6 +24,9 @@ func (s *LifetimeState) ApplyRecoil(c *EffectContext, end *EndProcessing, power 
 		return r, nil
 	}
 	end.ImmediateRiskCalls++
+	if s.npcResponse != nil {
+		s.npcResponse.end.ImmediateRiskCalls++
+	}
 	r.Amount = int(power + 1)
 	before := a.HP
 	if hasItem(a.ItemDefinitionIDs, "item-160") {

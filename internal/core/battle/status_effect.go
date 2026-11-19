@@ -298,28 +298,31 @@ func (a *LifetimeActor) ApplyAbilityCure(rng random.Generator) error {
 	if rng == nil {
 		return ErrInvalidRequest
 	}
-	specific := ""
-	switch a.Status {
-	case StatusPoison, StatusDeadlyPoison, StatusVirulentPoison:
-		specific = "poison1"
-	case StatusParalyze:
-		specific = "paralysis1"
-	case StatusSleep:
-		specific = "sleep1"
-	case StatusConfusion:
-		specific = "confusion1"
-	case StatusDofuu:
-		specific = "sealed1"
-	case StatusPhysicalSeal:
-		specific = "attack_sealed1"
-	case StatusMagicSeal:
-		specific = "magic_sealed1"
-	}
-	if specific != "" && hasAbility(a.Abilities, specific) && rng.Float64() < .5 {
+	if specific := a.statusCureAbility(); specific != "" && hasAbility(a.Abilities, specific) && rng.Float64() < .5 {
 		a.Status = ""
 	}
 	if a.Status != "" && hasAbility(a.Abilities, "state1") && rng.Float64() < .2 {
 		a.Status = ""
 	}
 	return nil
+}
+
+func (a LifetimeActor) statusCureAbility() string {
+	switch a.Status {
+	case StatusPoison, StatusDeadlyPoison, StatusVirulentPoison:
+		return "poison1"
+	case StatusParalyze:
+		return "paralysis1"
+	case StatusSleep:
+		return "sleep1"
+	case StatusConfusion:
+		return "confusion1"
+	case StatusDofuu:
+		return "sealed1"
+	case StatusPhysicalSeal:
+		return "attack_sealed1"
+	case StatusMagicSeal:
+		return "magic_sealed1"
+	}
+	return ""
 }

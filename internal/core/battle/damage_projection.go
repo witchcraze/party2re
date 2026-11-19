@@ -280,6 +280,7 @@ func (s *LifetimeState) projectCallbackHit(defeat *DefeatContext, damage DamageC
 }
 
 func (s *LifetimeState) nativeDamageContext(damage DamageContext, defeat *DefeatContext, rng random.Generator) DamageContext {
+	damage.responseDefeat = nil
 	damage.Reset = func(target string) error {
 		if defeat == nil {
 			return ErrUnsupportedEffect
@@ -296,4 +297,24 @@ func (s *LifetimeState) nativeDamageContext(damage DamageContext, defeat *Defeat
 		return err
 	}
 	return damage
+}
+
+func (s *LifetimeState) applyDamageDefeat(c *DamageContext, id string, rng random.Generator) error {
+	if c.responseDefeat == nil {
+		return c.Defeat(id)
+	}
+	death := *c.responseDefeat
+	death.TargetContext = c.TargetContext
+	_, err := s.ApplyDefeat(&death, id, rng)
+	c.responseDefeat.Cursor = death.Cursor
+	return err
+}
+
+func (s *LifetimeState) applyDamageReset(c *DamageContext, id string, rng random.Generator) error {
+	if c.responseDefeat == nil {
+		return c.Reset(id)
+	}
+	reset := &c.responseDefeat.EquipmentResetContext
+	reset.TargetContext = c.TargetContext
+	return s.ApplyEquipmentReset(reset, id, rng)
 }

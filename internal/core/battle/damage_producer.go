@@ -204,7 +204,7 @@ func (s *LifetimeState) ApplyDamageGem(sourceID int, c *DamageContext, targetID 
 		return append(results, tail), err
 	}
 	if sourceID == 72 {
-		if err := c.Defeat(a.ID); err != nil {
+		if err := s.applyDamageDefeat(c, a.ID, rng); err != nil {
 			return results, err
 		}
 	}
@@ -219,7 +219,7 @@ type NormalHit struct {
 // ValidateNormalAttack checks every reachable strike without drawing or changing state.
 func (s *LifetimeState) ValidateNormalAttack(c *DamageContext, targetID string, rng random.Generator) error {
 	strikes := 1
-	if s != nil && c != nil && s.actor(c.ActorID) != nil && hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
+	if s != nil && c != nil && !c.ActorNPC && s.actor(c.ActorID) != nil && hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
 		strikes = 2
 	}
 	return s.validateNormalStrikes(c, targetID, strikes, rng)
@@ -260,7 +260,7 @@ func (s *LifetimeState) ApplyNormalAttack(c *DamageContext, targetID string, rng
 		return nil, err
 	}
 	strikes := 1
-	if hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
+	if !c.ActorNPC && hasAbility(s.actor(c.ActorID).Abilities, "seal_shinsoku") {
 		strikes = 2
 	}
 	if len(c.EnemyIDs) == 0 {

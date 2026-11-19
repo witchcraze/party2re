@@ -18,6 +18,10 @@ func (s *LifetimeState) ValidateInvocations(c *CallbackContext, d CallbackCatalo
 
 // validateSequence is ValidateInvocations with each slot's own arguments.
 func (s *LifetimeState) validateSequence(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, rng random.Generator) error {
+	return s.validateSequenceThen(c, d, ops, arguments, rng, nil)
+}
+
+func (s *LifetimeState) validateSequenceThen(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, rng random.Generator, after func(*LifetimeState, *CallbackContext) error) error {
 	if s == nil || c == nil || len(ops) == 0 || len(arguments) != len(ops) {
 		return ErrInvalidRequest
 	}
@@ -29,10 +33,10 @@ func (s *LifetimeState) validateSequence(c *CallbackContext, d CallbackCatalog, 
 	remaining := maxInvocationContinuations
 	context.admissionBudget = &remaining
 	p := callbackAdmission{s: &state, c: &context, d: d, remaining: &remaining}
-	return p.sequence(ops, arguments, true)
+	return p.sequence(ops, arguments, true, after)
 }
 
-func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments [][]string, known bool) error {
+func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments [][]string, known bool, after func(*LifetimeState, *CallbackContext) error) error {
 	p.c.admissionBudget = p.remaining
 	for i, op := range ops {
 		// Visits depend on the projected state, not just entry identity.
@@ -41,7 +45,7 @@ func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments [][]str
 		if err := p.visit(op, !known); err != nil {
 			return err
 		}
-		if known && i+1 < len(ops) {
+		if known && (i+1 < len(ops) || after != nil) {
 			branches, err := p.project(op)
 			if err != nil {
 				return err
@@ -62,15 +66,23 @@ func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments [][]str
 					return ErrInvalidParticipant
 				}
 				if actor.HP <= 0 {
+					if after != nil {
+						if err := after(&state, &context); err != nil {
+							return err
+						}
+					}
 					continue
 				}
 				child := callbackAdmission{s: &state, c: &context, d: p.d, remaining: p.remaining}
-				if err := child.sequence(ops[i+1:], arguments[i+1:], true); err != nil {
+				if err := child.sequence(ops[i+1:], arguments[i+1:], true, after); err != nil {
 					return err
 				}
 			}
 			return nil
 		}
+	}
+	if known && after != nil {
+		return after(p.s, p.c)
 	}
 	return nil
 }

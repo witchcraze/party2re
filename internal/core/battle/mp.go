@@ -6,6 +6,9 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // sanctuary penalty. HP and the enclosing callback's resource cost are separate.
 func (s *LifetimeState) ApplyMPHealing(c *EffectContext, e TargetEffect, rng random.Generator) (EffectApplication, error) {
 	r := EffectApplication{}
+	if f := s.npcFacts(); f != nil && c != nil {
+		mergeNPCEffects(c, &f.effects)
+	}
 	if err := s.validateRecovery(c, e, rng); err != nil {
 		return r, err
 	}

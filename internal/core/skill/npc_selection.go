@@ -12,11 +12,7 @@ import (
 
 // NPCChoice preserves a weighted name position and its last admitted binding.
 // Callbacks and definition ports are rebuilt per request, never cached on actors.
-type NPCChoice struct {
-	corebattle.CallbackBinding
-	Custom      bool
-	Invocations []corebattle.CallbackInvocation
-}
+type NPCChoice = corebattle.NPCChoice
 
 // NPCActionResult carries the request-local table left by source construction.
 // The next request starts from its mode seed; only a same-request repeat uses it.
@@ -70,18 +66,26 @@ func (d BattleDefinitions) npcBurnStrike(s *corebattle.LifetimeState, a *corebat
 // the random pool. Primitive batch definitions cannot certify NPC callbacks.
 // _npc_action.cgi:159–224,313–322; vs_monster.cgi:11–14.
 func (d BattleDefinitions) NPCChoices(s *corebattle.LifetimeState, c *corebattle.CallbackContext, seed []corebattle.CallbackBinding, rng random.Generator) ([]NPCChoice, error) {
+	plan, err := d.npcChoicePool(s, c, seed)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ValidateNPCChoices(c, plan, rng); err != nil {
+		return nil, err
+	}
+	return plan.Choices, nil
+}
+
+func (d BattleDefinitions) npcChoicePool(s *corebattle.LifetimeState, c *corebattle.CallbackContext, seed []corebattle.CallbackBinding) (corebattle.NPCActionPlan, error) {
 	a, err := npcActor(s, c)
-	if err != nil || rng == nil {
-		if err != nil {
-			return nil, err
-		}
-		return nil, corebattle.ErrInvalidRequest
+	if err != nil {
+		return corebattle.NPCActionPlan{}, err
 	}
 	if a.HP <= 0 {
-		return nil, corebattle.ErrInvalidParticipant
+		return corebattle.NPCActionPlan{}, corebattle.ErrInvalidParticipant
 	}
 	if err := a.ValidateOrdinaryNPC(); err != nil {
-		return nil, err
+		return corebattle.NPCActionPlan{}, err
 	}
 	burn := d.npcBurnStrike(s, a)
 	var positions []string
@@ -105,14 +109,14 @@ func (d BattleDefinitions) NPCChoices(s *corebattle.LifetimeState, c *corebattle
 	}
 	current, err := d.npcTable(s, c, a.Jobs.JobID)
 	if err != nil {
-		return nil, err
+		return corebattle.NPCActionPlan{}, err
 	}
 	for _, e := range append(slices.Clone(seed), current...) {
 		appendEntry(e, a.Jobs.SP, a.Jobs.JobID)
 	}
 	previous, err := d.npcTable(s, c, a.Jobs.OldJobID)
 	if err != nil {
-		return nil, err
+		return corebattle.NPCActionPlan{}, err
 	}
 	for _, e := range previous {
 		appendEntry(e, a.Jobs.OldSP, a.Jobs.OldJobID)
@@ -137,85 +141,25 @@ func (d BattleDefinitions) NPCChoices(s *corebattle.LifetimeState, c *corebattle
 	}
 	choices := make([]NPCChoice, 0, len(positions))
 	for _, key := range positions {
-		choice := bindings[key]
-		frame := *c
-		frame.Arguments = nil // NPC callbacks receive no player selector/extension list.
-		frame.Custom = choice.Custom
-		if choice.Custom {
-			frame.Custom = true
-			frame.Arguments = []string{a.ID}
-		}
-		if choice.ID == "npc-normal-attack" {
-			if c.Damage == nil || !c.Damage.ActorNPC {
-				return nil, corebattle.ErrUnsupportedEffect
-			}
-			child := *c.Damage
-			child.TargetContext = frame.TargetContext
-			err = s.ValidateNormalAttack(&child, "", rng)
-		} else {
-			ops := choice.Invocations
-			if !choice.Custom {
-				ops = []corebattle.CallbackInvocation{choice.Invocation}
-			}
-			err = s.ValidateInvocations(&frame, d.Invocations, ops, rng)
-		}
-		if err != nil {
-			return nil, err
-		}
-		choices = append(choices, choice)
+		choices = append(choices, bindings[key])
 	}
-	if len(choices) == 0 {
-		return nil, corebattle.ErrUnsupportedEffect
-	}
-	return choices, nil
+	return corebattle.NPCActionPlan{Choices: choices, NextSeed: previous, Catalog: d.Invocations}, nil
 }
 
 // ApplyNPCAction derives execution from the same server-owned discovery pool.
 // Costs are late, after a successful callback, including accepted no-effect.
 // Status/temporary checks precede this boundary; outer tails follow it.
 func (d BattleDefinitions) ApplyNPCAction(s *corebattle.LifetimeState, c *corebattle.CallbackContext, seed []corebattle.CallbackBinding, rng random.Generator) (NPCActionResult, error) {
-	choices, err := d.NPCChoices(s, c, seed, rng)
+	plan, err := d.npcChoicePool(s, c, seed)
 	if err != nil {
 		return NPCActionResult{}, err
 	}
-	a, err := npcActor(s, c)
-	if err != nil {
+	if err := s.ValidateNPCChoices(c, plan, rng); err != nil {
 		return NPCActionResult{}, err
 	}
-	nextSeed, err := d.npcTable(s, c, a.Jobs.OldJobID)
-	if err != nil {
+	choice := plan.Choices[int(rng.Float64()*float64(len(plan.Choices)))]
+	if err := s.ApplyNPCChoice(c, plan.Catalog, choice, rng); err != nil {
 		return NPCActionResult{}, err
 	}
-	choice := choices[int(rng.Float64()*float64(len(choices)))]
-	frame := *c
-	frame.Arguments = nil
-	frame.Custom = choice.Custom
-	if choice.Custom {
-		frame.Custom = true
-		frame.Arguments = []string{c.ActorID}
-	}
-	if choice.ID == "npc-normal-attack" {
-		c.Damage.TargetContext = frame.TargetContext
-		_, err = s.ApplyNormalAttack(c.Damage, "", rng)
-		frame.TargetContext = c.Damage.TargetContext
-	} else {
-		ops := choice.Invocations
-		if !choice.Custom {
-			ops = []corebattle.CallbackInvocation{choice.Invocation}
-		}
-		err = s.ApplyInvocations(&frame, d.Invocations, ops, rng)
-	}
-	if err != nil {
-		return NPCActionResult{}, err
-	}
-	*c = frame
-	a, err = npcActor(s, c)
-	if err != nil {
-		return NPCActionResult{}, err
-	}
-	a.MP = max(0, a.MP-choice.MPCost)
-	if load := a.NPCLoadout; load != nil && (choice.Custom || choice.Name == load.CustomName) {
-		a.CMP -= load.CustomCost
-	}
-	return NPCActionResult{NPCChoice: choice, NextSeed: nextSeed}, nil
+	return NPCActionResult{NPCChoice: choice, NextSeed: plan.NextSeed}, nil
 }

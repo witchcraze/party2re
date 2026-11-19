@@ -40,6 +40,10 @@ func (s *LifetimeState) healingBasePower(c *EffectContext, e TargetEffect) float
 // counters, actor tension, one-time splash and post-cap sanctuary overflow.
 func (s *LifetimeState) ApplyHealing(c *EffectContext, e TargetEffect, rng random.Generator) (EffectApplication, error) {
 	r := EffectApplication{}
+	if f := s.npcFacts(); f != nil && c != nil {
+		mergeNPCEffects(c, &f.effects)
+		defer mergeNPCEffects(&f.effects, c)
+	}
 	if err := s.validateRecovery(c, e, rng); err != nil {
 		return r, err
 	}
@@ -97,6 +101,10 @@ func (s *LifetimeState) ApplyHealing(c *EffectContext, e TargetEffect, rng rando
 }
 
 func (s *LifetimeState) ApplyPartyHealing(c *EffectContext, power float64, category CallbackCategory, rng random.Generator) ([]EffectApplication, error) {
+	if f := s.npcFacts(); f != nil && c != nil {
+		mergeNPCEffects(c, &f.effects)
+		defer mergeNPCEffects(&f.effects, c)
+	}
 	e := TargetEffect{Category: category, Payload: CallbackPayload{Number: power}}
 	if err := s.validateRecovery(c, e, rng); err != nil {
 		return nil, err

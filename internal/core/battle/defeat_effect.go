@@ -101,6 +101,9 @@ func (s *LifetimeState) applyDefeat(c *DefeatContext, id string, rng random.Gene
 		a.Temporary = tmp
 	}
 	r.Defeated = true
+	if s.npcResponse != nil {
+		s.npcResponse.defeats = append(s.npcResponse.defeats, NPCDefeat{TargetID: id, KillerID: c.ActorID})
+	}
 	if hasItem(a.ItemDefinitionIDs, "item-212") {
 		e := TargetEffect{Payload: CallbackPayload{Symbol: "last_strike"}}
 		var target TargetResolution
