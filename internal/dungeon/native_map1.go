@@ -25,25 +25,9 @@ var nativeMap1Events = map[byte]cellEvent{
 	'3': {kind: eventTreasure, perSymbol: true},
 }
 
-// nativeMap1Pool is legacy stage 2, which map1 always loads, named as in the
-// adventure catalog.
-func nativeMap1Pool() EncounterPool {
-	return EncounterPool{
-		Monsters: []DungeonMonster{
-			mon("nm1-01", "ゴースト", 20, 36, 20, 30, 7, 4), mon("nm1-02", "メイジゴースト", 26, 32, 26, 36, 12, 6),
-			mon("nm1-03", "シャドー", 21, 20, 35, 44, 11, 5), mon("nm1-04", "ミイラ男", 50, 40, 6, 16, 10, 7),
-			mon("nm1-05", "ガイコツ剣士", 45, 50, 15, 20, 12, 6), mon("nm1-06", "ナイトウィスプ", 25, 30, 25, 35, 9, 5),
-			mon("nm1-07", "プチケルベロス", 41, 31, 8, 61, 8, 4), mon("nm1-08", "パンプキン", 65, 55, 20, 14, 16, 8),
-			mon("nm1-09", "人食い箱", 120, 55, 10, 200, 30, 50),
-		},
-		Appears: []int{0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7, 8},
-		Boss:    &DungeonMonster{ID: "nm1-boss", Name: "亡霊剣士", HP: 1000, Attack: 60, Defense: 20, Agility: 50, ExpReward: 160, GoldReward: 50},
-	}
-}
-
 // nativeMap1 has round limit 50 and the menu threshold for dungeon 1 (job level 3).
 func nativeMap1() Dungeon {
-	pools := []EncounterPool{nativeMap1Pool()}
+	pools := []EncounterPool{stagePool(2)}
 	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: map[byte]string{'K': "★", 'D': "扉"}, events: nativeMap1Events}, nativeMap1Grids)
 	return Dungeon{
 		ID:             NativeMap1ID,

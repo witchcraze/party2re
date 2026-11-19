@@ -23,41 +23,11 @@ var nativeMap2Floors = [11][5]string{
 
 var nativeMap2FloorOf = [11]int{1, 1, 1, 2, 2, 2, 2, 3, 4, 4, 4}
 
-// nativeStage3Pool is legacy stage 3 (uniform appearance) under the adventure
-// catalog's names; its boss is the leading member of the legacy boss group.
-func nativeStage3Pool() EncounterPool {
-	return EncounterPool{
-		Monsters: []DungeonMonster{
-			mon("nm-s3-01", "ヒーラースライム", 50, 30, 15, 50, 14, 5), mon("nm-s3-02", "しびれクラゲ", 60, 36, 18, 35, 13, 6),
-			mon("nm-s3-03", "シェルスライム", 40, 20, 80, 20, 16, 9), mon("nm-s3-04", "メイジバット", 54, 40, 20, 75, 14, 6),
-			mon("nm-s3-05", "亀戦士", 48, 64, 70, 5, 13, 4), mon("nm-s3-06", "チビイエティ", 64, 46, 15, 80, 7, 3),
-			mon("nm-s3-07", "イエティ", 150, 78, 25, 22, 20, 8),
-		},
-		Boss: &DungeonMonster{ID: "nm-s3-boss", Name: "キラーシェル", HP: 450, Attack: 90, Defense: 90, Agility: 30, ExpReward: 100, GoldReward: 150},
-	}
-}
-
-// nativeStage4Pool is legacy stage 4 under the adventure catalog's names.
-func nativeStage4Pool() EncounterPool {
-	return EncounterPool{
-		Monsters: []DungeonMonster{
-			mon("nm-s4-01", "泥の魔手", 70, 85, 36, 50, 10, 8), mon("nm-s4-02", "おおさそり", 34, 76, 130, 45, 11, 9),
-			mon("nm-s4-03", "ボム", 50, 50, 60, 50, 15, 10), mon("nm-s4-04", "まどうし", 55, 35, 30, 70, 16, 6),
-			mon("nm-s4-05", "トゲサボテン", 100, 70, 50, 150, 20, 5), mon("nm-s4-06", "紅トゲサボテン", 100, 70, 50, 150, 20, 5),
-			mon("nm-s4-07", "トゲボウズ", 64, 55, 125, 15, 23, 7), mon("nm-s4-08", "チビベリー", 50, 55, 15, 120, 15, 5),
-			mon("nm-s4-09", "ベロロン", 120, 85, 40, 10, 28, 10), mon("nm-s4-10", "チビドラゴン", 150, 85, 35, 20, 24, 7),
-		},
-		Appears: []int{0, 0, 0, 1, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9},
-		Boss:    &DungeonMonster{ID: "nm-s4-boss", Name: "ゴーレム", HP: 1500, Attack: 100, Defense: 60, Agility: 50, ExpReward: 150, GoldReward: 100},
-	}
-}
-
 // nativeMap2 has the menu threshold for dungeon 2 (job level 5). Each floor
 // loads one of its stage files per request; floor bosses 7/8 always load
 // stages 3/4, while the third floor's B uses that request's stage.
 func nativeMap2() Dungeon {
-	m3 := nativeMap3Pools()
-	s2, s3, s4, s5, s6 := nativeMap1Pool(), nativeStage3Pool(), nativeStage4Pool(), m3[0], m3[1]
+	s2, s3, s4, s5, s6 := stagePool(2), stagePool(3), stagePool(4), stagePool(5), stagePool(6)
 	up := map[byte]string{'F': "凸"}
 	floors := [4]Floor{
 		{FloorNumber: 1, Pools: []EncounterPool{s2, s3, s4}, Marks: up,

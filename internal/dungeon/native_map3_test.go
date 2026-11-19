@@ -252,7 +252,7 @@ func TestNativeMap3_MistConfusesTheEnsuingBattle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Monster == nil || res.Monster.ID != "nm3-a-09" || res.BattleResult == nil || res.BattleResult.Outcome != corebattle.OutcomeDraw {
+	if res.Monster == nil || res.Monster.Name != "ミミック" || res.BattleResult == nil || res.BattleResult.Outcome != corebattle.OutcomeDraw {
 		t.Fatalf("mist encounter %+v", res)
 	}
 	if confusedTurns(res, "mist") == 0 {
@@ -290,7 +290,7 @@ func TestNativeMap3_PassageEncounterUsesPoolWithoutConfusion(t *testing.T) {
 	f.placeMap3(t, "walk", 1, 1, 0, 3)
 	f.rng.floats, f.rng.ints = []float64{0.5}, []int{2, 10} // spawn; pool c is uniform
 	res, err := f.svc.Move(ctx, "walk", dungeon.DirectionEast)
-	if err != nil || res.Monster == nil || res.Monster.ID != "nm3-c-11" || confusedTurns(res, "walk") != 0 {
+	if err != nil || res.Monster == nil || res.Monster.Name != "炎の戦士" || confusedTurns(res, "walk") != 0 {
 		t.Fatalf("passage %+v err=%v", res, err)
 	}
 }
@@ -304,7 +304,7 @@ func TestNativeMap3_TwoBossesEachTriggerOnce(t *testing.T) {
 	f.placeMap3(t, "boss", 1, 1, 8, 4) // east of B at (0,8)
 	f.rng.ints = []int{3}
 	res, err := f.svc.Move(ctx, "boss", dungeon.DirectionWest)
-	if err != nil || res.EventType != dungeon.EventBoss || res.Monster.ID != "nm3-d-boss" {
+	if err != nil || res.EventType != dungeon.EventBoss || res.Monster.Name != "ベヒーモス" {
 		t.Fatalf("first boss %+v err=%v", res, err)
 	}
 	if _, err := f.svc.Move(ctx, "boss", dungeon.DirectionEast); err != nil {
@@ -319,7 +319,7 @@ func TestNativeMap3_TwoBossesEachTriggerOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.rng.ints = []int{0}
-	if res, err = f.svc.Move(ctx, "boss", dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventBoss || res.Monster.ID != "nm3-a-boss" {
+	if res, err = f.svc.Move(ctx, "boss", dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventBoss || res.Monster.Name != "闇の魔術士" {
 		t.Fatalf("second boss %+v err=%v", res, err)
 	}
 	if _, err := f.svc.Move(ctx, "boss", dungeon.DirectionEast); err != nil {
