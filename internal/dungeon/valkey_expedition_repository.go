@@ -3,6 +3,7 @@ package dungeon
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -189,6 +190,7 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 		AccumulatedGold:  gold,
 		AccumulatedItems: items,
 		ConsumedEvents:   consumedEvents,
+		MapState:         rawState(sMap["map_state"]),
 		Status:           ExpeditionStatus(sMap["status"]),
 		StartedAt:        startedAt,
 		UpdatedAt:        updatedAt,
@@ -235,6 +237,7 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 			FieldValue("round_limit", strconv.Itoa(exp.RoundLimit)).
 			FieldValue("status", string(exp.Status)).
 			FieldValue("consumed_events", eventsJSON).
+			FieldValue("map_state", string(exp.MapState)).
 			FieldValue("started_at", exp.StartedAt.Format(time.RFC3339Nano)).
 			FieldValue("updated_at", exp.UpdatedAt.Format(time.RFC3339Nano)).
 			Build(),
@@ -325,6 +328,8 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		string(params.FinishStatus),
 		strconv.Itoa(params.MapVariant),
 		strconv.Itoa(params.RoundLimit),
+		string(params.MapState),
+		strconv.FormatBool(params.MapState != nil),
 	})
 
 	if err := res.Error(); err != nil {
@@ -332,7 +337,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 20 {
+	if err != nil || len(vals) < 21 {
 		return StepOutcome{}, fmt.Errorf("unexpected lua step response format: %v", err)
 	}
 
@@ -379,6 +384,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		AccumulatedGold:  totGold,
 		AccumulatedItems: items,
 		ConsumedEvents:   consumedEvents,
+		MapState:         rawState(vals[20]),
 		Status:           status,
 		StartedAt:        startedAt,
 		UpdatedAt:        updatedAt,
@@ -389,4 +395,12 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		Status:        status,
 		EventConsumed: eventConsumed,
 	}, nil
+}
+
+// rawState maps an absent or empty map_state field to no state.
+func rawState(s string) json.RawMessage {
+	if s == "" {
+		return nil
+	}
+	return json.RawMessage(s)
 }

@@ -27,6 +27,7 @@ const (
 	eventRemedy                     // once, by an acting job 43: the roster to full HP and MP
 	eventChoice                     // once per flag: draws one of two outcomes (map6 pairs)
 	eventScatter                    // every entry or wall hit: a random warp (map8)
+	eventRoute                      // map14 point: an active one transfers to its destination, else a passage
 )
 
 type cellEvent struct {

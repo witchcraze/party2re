@@ -339,29 +339,17 @@ until both destinations are implemented, so players never meet a partial map.
 
 ### Map14 sunken routes
 
-**Decision (#1775)**; target specification, not current behavior. Evidence is static,
-relative to `party2/` at the legacy revision above (`map/14/` files abbreviated).
-Implementation units: main floor, allocation and `_P`/`_K`
-[#2431](https://github.com/witchcraze/party2re/issues/2431); `_T` and start enablement
-[#2432](https://github.com/witchcraze/party2re/issues/2432).
+**Decision (#1775)**; evidence is static, relative to `party2/` at the legacy revision
+above (`map/14/` files abbreviated). The main floor, point allocation, routing, `R`,
+`_P` and `_K` are implemented and stay unlisted until the treasure ship lands
+([#2432](https://github.com/witchcraze/party2re/issues/2432)). Findings:
 
-One main floor (`1.cgi`) and three destinations (`_P`, `_K`, `_T`), all with
-round limit 200. The run-wide flag string carries across floors as in
-[floor changes](#native-schema-and-transition-boundary); no flag in this map
-collides with another's pattern, including the initial `S`.
-
-| Event | Rule |
-|---|---|
-| Allocation (`1.cgi:20,35–43`) | The first request that loads the main floor draws three of points 4–8 (`A`–`E`) without replacement. Native draws them in the accepted Start. Main-floor marks show `★` on active points only. |
-| Point `A`–`E` (`1.cgi:26–30,45–72`) | Inactive: a passage spawn. Active, first entry: a destination drawn uniformly from the types no point holds yet. Three active points and three types make this a random bijection fixed in visit order. Re-entry reuses the point's destination. The coordinate is kept, and every point is a passage on every destination. |
-| Return `R` | To the main floor at the same coordinate. `_P` (5,9) and `_T` (6,9) are main-floor walls: the party stands in the wall and walks out, as on map2. |
-| `9` | Narration only. |
-| `_P`, `_K` | Plain floors: a once-only boss group and treasure, own pools (`_dataP.cgi`, `_dataK.cgi`). |
-| `_T` treasure sites (`_T.cgi:23,38–49,53–62`) | Loading `_T` the first time draws 5 of the listed 11 sites without replacement. Their flags are set, so they are dead sites without a mark. `k` is missing from the list and is always live. A live site, once: `rand(2) < 1` chests, else `rand(2) < 1` a single mimic, else a three-member chest-monster group. `_T` uses the main pool (`_data.cgi`). |
-
-Native state is typed: active points, each visited point's destination and `_T`'s
-dead sites, all drawn in their accepted step and never redrawn on reload or retry.
-Observation never shows an unvisited point's destination. Map14 adds no map-specific
-action; Start, Move, observation and Escape reuse the native use cases. The map stays
-unlisted and start-rejected until `_T` is implemented. Start admission follows the
-[leader job-level table](#start-admission) (≥ 30).
+- **Two returns land in a wall.** `_P` (5,9) and `_T` (6,9) are main-floor walls;
+  the party stands in the wall and walks out, as on map2.
+- **No flag collisions.** Every flag shares one string with regex checks, yet none
+  matches another's pattern, including the initial `S`.
+- **Target, not current: `_T` sites** (`_T.cgi:23,38–49,53–62`). The first `_T` load
+  draws 5 of the listed 11 sites without replacement and sets their flags, so they are
+  dead sites without a mark; `k` is missing from the list and is always live. A live
+  site, once: `rand(2) < 1` chests, else `rand(2) < 1` a single mimic, else a
+  three-member chest-monster group. The dead sites join the map's typed run state.

@@ -1,6 +1,7 @@
 package dungeon
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"time"
@@ -63,6 +64,7 @@ func (m *MemoryExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 	cp.Encounter = cloneEncounter(exp.Encounter)
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
+	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	return &cp, nil
 }
@@ -75,6 +77,7 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	cp.Encounter = cloneEncounter(exp.Encounter)
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
+	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	m.expeditions[exp.CharacterID] = cp
 	for _, member := range cp.Members {
@@ -208,6 +211,9 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		exp.MapVariant, exp.RoundLimit = params.MapVariant, params.RoundLimit
 	}
 	exp.Status = finalStatus
+	if params.MapState != nil {
+		exp.MapState = bytes.Clone(params.MapState)
+	}
 
 	eventConsumed := true
 	if params.EventKey != "" {
@@ -261,6 +267,7 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	cp.Encounter = cloneEncounter(exp.Encounter)
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
+	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	return StepOutcome{
 		Expedition:    cp,

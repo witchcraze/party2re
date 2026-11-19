@@ -117,6 +117,8 @@ type Dungeon struct {
 	Variants []Floor `json:"-"`
 	// Initial counts the leading variants a run may start on; 0 means all.
 	Initial int `json:"-"`
+	// newState draws the map's run state in the accepted start (map14 points).
+	newState func(RandomSource) json.RawMessage
 }
 
 func (d Dungeon) limitOf(f Floor) int {
@@ -145,9 +147,12 @@ type ActiveExpedition struct {
 	AccumulatedGold  int                `json:"accumulated_gold"`
 	AccumulatedItems []string           `json:"accumulated_items"`
 	ConsumedEvents   []string           `json:"consumed_events,omitempty"`
-	Status           ExpeditionStatus   `json:"status"`
-	StartedAt        time.Time          `json:"started_at"`
-	UpdatedAt        time.Time          `json:"updated_at"`
+	// MapState is the map's own typed run state (e.g. map14 routes), JSON
+	// encoded by that map and private to it.
+	MapState  json.RawMessage  `json:"-"`
+	Status    ExpeditionStatus `json:"status"`
+	StartedAt time.Time        `json:"started_at"`
+	UpdatedAt time.Time        `json:"updated_at"`
 }
 
 type DungeonExpeditionHistory struct {
@@ -199,7 +204,9 @@ type StepParams struct {
 	GoldDelta    int
 	RewardItemID string
 	EventKey     string
-	Now          time.Time
+	// MapState, when non-nil, replaces the run's map state.
+	MapState json.RawMessage
+	Now      time.Time
 }
 
 // StepOutcome represents the result of executing an atomic step against the active expedition store.

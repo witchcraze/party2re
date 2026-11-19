@@ -137,7 +137,17 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 				} else {
 					tileChar := floor.Grid[targetY][targetX]
 					ev := floor.event(tileChar)
+					inactive := false
+					if ev.kind == eventRoute {
+						active, err := routeActive(exp, tileChar)
+						if err != nil {
+							return MapView{}, err
+						}
+						inactive = !active
+					}
 					switch {
+					case inactive:
+						symbol = "□" // only active points are marked
 					case tileChar == cellWall || ev.kind == eventHidden && (ev.key == 0 || !slices.Contains(exp.ConsumedEvents, string(ev.key))):
 						symbol = wall
 					case floor.Marks[tileChar] != "" && (ev.keepMark || !slices.Contains(exp.ConsumedEvents, ev.stateKey(tileChar, targetX, targetY))):

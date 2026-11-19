@@ -94,6 +94,15 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 	exp.Encounter = nil
 	cell := floor.Grid[y][x]
 	ev := floor.event(cell)
+	if ev.kind == eventRoute {
+		active, err := routeActive(exp, cell)
+		if err != nil {
+			return ExpeditionStepResult{}, err
+		}
+		if !active {
+			ev = baseEvents['0'] // an inactive point is a passage (_allot_stage)
+		}
+	}
 	key := ev.stateKey(cell, x, y)
 	consumed := slices.Contains(exp.ConsumedEvents, key)
 	step := StepParams{
@@ -220,6 +229,13 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 		step.MemberHPDeltas, step.MemberMPDeltas = fullRestore(exp)
 		step.HPDelta = step.MemberHPDeltas[char.ID]
 		recovery = true
+	case eventRoute:
+		v, state, err := routeDestination(exp, cell, s.rng)
+		if err != nil {
+			return ExpeditionStepResult{}, err
+		}
+		// The coordinate is kept; every point is a passage on every destination.
+		step.MapVariant, step.RoundLimit, step.MapState = v, d.limitOf(d.Variants[v-1]), state
 	case eventScatter:
 		// The landing cell is not dispatched.
 		step.NewX, step.NewY = scatter(s.rng)

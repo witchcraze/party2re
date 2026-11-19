@@ -291,6 +291,9 @@ func (s *Service) startRoster(
 		UpdatedAt:        now,
 	}
 
+	if dungeon.newState != nil {
+		exp.MapState = dungeon.newState(s.rng)
+	}
 	if err := s.activeStore.SaveActiveExpedition(ctx, exp); err != nil {
 		return nil, err
 	}
