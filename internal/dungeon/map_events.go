@@ -28,6 +28,7 @@ const (
 	eventChoice                     // once per flag: draws one of two outcomes (map6 pairs)
 	eventScatter                    // every entry or wall hit: a random warp (map8)
 	eventRoute                      // map14 point: an active one transfers to its destination, else a passage
+	eventShipSite                   // map14 ship: an eligible site gives chests or a boss encounter once
 )
 
 type cellEvent struct {

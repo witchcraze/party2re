@@ -6,9 +6,8 @@ import (
 	"strings"
 )
 
-// nativeMap14ID is the sunken routes (legacy map/14). It stays unlisted until
-// the treasure ship's sites land (#2432).
-const nativeMap14ID = "native-map-14"
+// NativeMap14ID is the sunken routes (legacy map/14).
+const NativeMap14ID = "native-map-14"
 
 // nativeMap14Floors transcribe map/14/1.cgi, _P.cgi, _K.cgi and _T.cgi; the
 // variant number is the legacy destination type + 1.
@@ -22,11 +21,18 @@ var nativeMap14Floors = [4][]string{
 // map14Points are the main floor's points 4–8 in _allot_point's list order.
 const map14Points = "ABCDE"
 
-// routeState is map14's run state: the three active points, and each visited
-// point's destination variant.
+const (
+	map14ShipVariant = 4
+	// _allot_tre omits k, which is always eligible.
+	map14DisablableSites = "cdefghijlno"
+)
+
+// routeState holds the active points, their assigned destinations and the
+// treasure sites disabled when the ship is first entered.
 type routeState struct {
-	Active string         `json:"active"`
-	Dest   map[string]int `json:"dest,omitempty"`
+	Active           string         `json:"active"`
+	Dest             map[string]int `json:"dest,omitempty"`
+	DisabledTreasure string         `json:"disabled_treasure,omitempty"`
 }
 
 func decodeRouteState(raw json.RawMessage) (routeState, error) {
@@ -50,14 +56,18 @@ func (st routeState) encode() json.RawMessage {
 
 // allotPoints is _allot_point: three of the five points without replacement.
 func allotPoints(rng RandomSource) json.RawMessage {
-	left := []byte(map14Points)
-	var active []byte
-	for range 3 {
+	return routeState{Active: drawMap14Sites(map14Points, 3, rng)}.encode()
+}
+
+func drawMap14Sites(candidates string, count int, rng RandomSource) string {
+	left := []byte(candidates)
+	drawn := make([]byte, 0, count)
+	for range count {
 		i := rng.Intn(len(left))
-		active = append(active, left[i])
+		drawn = append(drawn, left[i])
 		left = append(left[:i], left[i+1:]...)
 	}
-	return routeState{Active: string(active)}.encode()
+	return string(drawn)
 }
 
 func routeActive(exp *ActiveExpedition, cell byte) (bool, error) {
@@ -65,32 +75,42 @@ func routeActive(exp *ActiveExpedition, cell byte) (bool, error) {
 	return strings.IndexByte(st.Active, cell) >= 0, err
 }
 
+func shipTreasureActive(exp *ActiveExpedition, cell byte) (bool, error) {
+	st, err := decodeRouteState(exp.MapState)
+	return strings.IndexByte(st.DisabledTreasure, cell) < 0, err
+}
+
 // routeDestination returns the point's destination variant, drawing it on the
 // first visit uniformly from the types no point holds yet (get_sub_stage_num).
-// The returned state is non-nil only when the draw changed it.
+// The first ship transfer also allocates its disabled sites.
 func routeDestination(exp *ActiveExpedition, cell byte, rng RandomSource) (int, json.RawMessage, error) {
 	st, err := decodeRouteState(exp.MapState)
 	if err != nil {
 		return 0, nil, err
 	}
-	if v, ok := st.Dest[string(cell)]; ok {
+	v, assigned := st.Dest[string(cell)]
+	if !assigned {
+		var free []int
+		for candidate := 2; candidate <= map14ShipVariant; candidate++ {
+			held := false
+			for _, d := range st.Dest {
+				held = held || d == candidate
+			}
+			if !held {
+				free = append(free, candidate)
+			}
+		}
+		v = free[rng.Intn(len(free))]
+		if st.Dest == nil {
+			st.Dest = map[string]int{}
+		}
+		st.Dest[string(cell)] = v
+	}
+	if v == map14ShipVariant && st.DisabledTreasure == "" {
+		st.DisabledTreasure = drawMap14Sites(map14DisablableSites, 5, rng)
+	} else if assigned {
 		return v, nil, nil
 	}
-	var free []int
-	for v := 2; v <= 4; v++ {
-		held := false
-		for _, d := range st.Dest {
-			held = held || d == v
-		}
-		if !held {
-			free = append(free, v)
-		}
-	}
-	v := free[rng.Intn(len(free))]
-	if st.Dest == nil {
-		st.Dest = map[string]int{}
-	}
-	st.Dest[string(cell)] = v
 	return v, st.encode(), nil
 }
 
@@ -100,6 +120,9 @@ var (
 	nm14Diver    = DungeonMonster{ID: "nm14-diver-chick", Name: "ダイバーピヨコ", HP: 250, Attack: 150, Defense: 101, Agility: 108, ExpReward: 54, GoldReward: 54}
 	nm14Turtle   = DungeonMonster{ID: "nm14-turtle-warrior", Name: "亀戦士", HP: 118, Attack: 101, Defense: 111, Agility: 42, ExpReward: 37, GoldReward: 22}
 	nm14Marine   = DungeonMonster{ID: "nm14-sea-slime", Name: "海原スライム", HP: 142, Attack: 88, Defense: 138, Agility: 53, ExpReward: 38, GoldReward: 25}
+	nm14Mimic    = DungeonMonster{ID: "nm14-ship-mimic", Name: "ミミック", HP: 300, Attack: 280, Defense: 65, Agility: 600, ExpReward: 40, GoldReward: 100}
+	// shortcut: the strongest chest monster represents the group until #1954 adds groups.
+	nm14ArmoredChest = DungeonMonster{ID: "nm14-armored-chest", Name: "魔装の宝箱", HP: 500, Attack: 300, Defense: 95, Agility: 400, ExpReward: 70, GoldReward: 200}
 )
 
 // nm14Pools are _data.cgi (main floor and _T), _dataP.cgi and _dataK.cgi with
@@ -141,6 +164,12 @@ var nm14Pools = [3]EncounterPool{
 // at the same coordinate; 9 is narration only.
 func nativeMap14() Dungeon {
 	back := map[byte]FloorExit{'R': {Variants: []int{1}}}
+	ship := Floor{Pools: nm14Pools[:1], Exits: back, Marks: map[byte]string{'R': "★"}, events: map[byte]cellEvent{}}
+	sites := map14DisablableSites + "k"
+	for i := range len(sites) {
+		ship.Marks[sites[i]] = "宝"
+		ship.events[sites[i]] = cellEvent{kind: eventShipSite, perSymbol: true}
+	}
 	floors := [4]Floor{
 		{Pools: nm14Pools[:1], Marks: map[byte]string{'A': "★", 'B': "★", 'C': "★", 'D': "★", 'E': "★"},
 			events: map[byte]cellEvent{'A': {kind: eventRoute}, 'B': {kind: eventRoute}, 'C': {kind: eventRoute}, 'D': {kind: eventRoute}, 'E': {kind: eventRoute}}},
@@ -148,8 +177,7 @@ func nativeMap14() Dungeon {
 			events: map[byte]cellEvent{'P': {kind: eventBoss, perSymbol: true}, 'a': {kind: eventTreasure, perSymbol: true}, 'b': {kind: eventTreasure, perSymbol: true}}},
 		{Pools: nm14Pools[2:3], Exits: back, Marks: map[byte]string{'K': "◎", 'R': "★", 't': "宝", 'u': "宝", 'v': "宝"},
 			events: map[byte]cellEvent{'K': {kind: eventBoss, perSymbol: true}, 't': {kind: eventTreasure, perSymbol: true}, 'u': {kind: eventTreasure, perSymbol: true}, 'v': {kind: eventTreasure, perSymbol: true}}},
-		// shortcut: _T's treasure sites are plain passages until #2432; the map is unlisted.
-		{Pools: nm14Pools[:1], Exits: back, Marks: map[byte]string{'R': "★"}},
+		ship,
 	}
 	variants := make([]Floor, len(floors))
 	for i, f := range floors {
@@ -157,7 +185,7 @@ func nativeMap14() Dungeon {
 		variants[i] = gridFloor(f, nativeMap14Floors[i])
 	}
 	return Dungeon{
-		ID:             nativeMap14ID,
+		ID:             NativeMap14ID,
 		Name:           "沈没の海峡",
 		Description:    "海底に沈む船と深い峡谷。光る目印の先は、潜るたびに行き先が定まる。",
 		RoundLimit:     200,

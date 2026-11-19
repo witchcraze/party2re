@@ -159,6 +159,24 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 			step.EventKey = key
 			step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
 		}
+	case eventShipSite:
+		active, err := shipTreasureActive(exp, cell)
+		if err != nil {
+			return ExpeditionStepResult{}, err
+		}
+		if consumed || !active {
+			break
+		}
+		if s.rng.Float64() < 0.5 {
+			step.EventKey = key
+			step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
+			break
+		}
+		monster := nm14Mimic
+		if s.rng.Float64() >= 0.5 {
+			monster = nm14ArmoredChest
+		}
+		return s.resolveMonsterCombat(ctx, exp, char, monster, EventBoss, x, y, key, "")
 	case eventAttrition:
 		if loss := attritionLoss(exp, actor); loss > 0 {
 			step.MemberHPDeltas = map[string]int{actor.ID: -loss}
