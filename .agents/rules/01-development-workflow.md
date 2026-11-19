@@ -23,7 +23,8 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
 **Post-Merge Local Cleanup:**
 1. Return to synced main: `git checkout main && git pull --ff-only origin main`.
 2. Delete local branch: `git branch -D <branch-name> 2>/dev/null || true`.
-3. Prune remote tracking branches: `git fetch origin --prune`.
+3. Delete the merged remote head branch unless retention was explicitly requested (`gh pr merge --delete-branch`, or `git push origin --delete <branch-name>`), and confirm `git ls-remote --heads origin <branch-name>` returns nothing. Pruning alone does not delete it.
+4. Prune remote tracking branches: `git fetch origin --prune`.
 
 ## 2. Issue and PR Workflow
 - **No substantial work without an Issue:** Do not begin substantial implementation from an informal request without an Issue.
@@ -61,7 +62,7 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
   - When creating issues for security, auth, or cross-cutting features, verify whether required underlying infrastructure/models (e.g., Admin role, RBAC, config keys) already exist in the codebase.
   - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
 - **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase with the available file and content search tools for existing features that solve similar problems. Adopt the same architectural patterns, variable naming conventions, and file structures.
-- **Transparent Tool Usage:** When analyzing codebases, prefer the agent's built-in file reading and search tools when available. Do NOT execute complex or opaque bash scripts (like `sed`, `awk`, or `perl` one-liners) to parse code without explicitly explaining your intent to the user first. Ensure transparency in your actions.
+- **Transparent Tool Usage:** When analyzing codebases, prefer dedicated file reading and search tools when the agent provides them. Before running a non-trivial shell command that parses or rewrites code (such as `sed`, `awk` or `perl` one-liners), state its intent in the agent's visible output. MUST NOT hide what a command does.
 - **HTTP Authorization / Legacy Reconciliation**: For affected work, MUST apply the [auth wrapper rules](06-security.md#3-mandatory-auth-helper-and-common-wrapper-anti-bypass-rule) and [legacy dispatch reconciliation](00-migration-constraints.md#4-legacy-cgi-actions-array--subroutine-reconciliation); those files own the requirements.
 - **Pre-Commit Active Issue Re-Check (対応漏れ再確認)**:
   - Before committing changes and opening a PR upon task completion, agents and developers MUST re-inspect the active issue and every other issue the PR closes (`gh issue view <issue-number>`).
@@ -82,7 +83,7 @@ Agents and developers MUST follow a tiered verification strategy scoped to the c
   - **Pure / Unit changes** (domain logic, battle formulas, algorithms, or pure helpers without DB/cache dependencies): do NOT require starting backing services or running the full test suite during iteration. Run focused or affected-package tests directly on host Go.
   - **DB / Valkey changes**: MUST ensure backing services are running (`make up`), migrations are applied (`make db-migrate`), and appropriate connection settings are configured (`PARTY2_DB_DSN`, `PARTY2_TEST_DB_ADMIN_DSN`, `PARTY2_VALKEY_ADDR`) before running integration tests. MUST comply with the [test database ownership and isolation](#test-database-ownership-and-isolation) rules below.
   - **Documentation-only changes**: verify changed requirements, local links/anchors, and examples against their sources. Do NOT start backing services or run runtime test suites solely for prose changes. Configured pre-push hooks and CI will run their verification checks.
-- **TDD Inner Loop:** Identify acceptance criteria and write/update tests before or alongside code. Implement the smallest change satisfying the tests. Run focused tests continuously (`go test -count=1 ./<package> -run '<test>'`), expanding to the affected package(s) when the change is ready. MUST NOT run the full 80+ package test suite on every edit.
+- **TDD Inner Loop:** Identify acceptance criteria and write/update tests before or alongside code. Implement the smallest change satisfying the tests. Run focused tests continuously (`go test -count=1 ./<package> -run '<test>'`), expanding to the affected package(s) when the change is ready. MUST NOT run the full test suite on every edit.
 - **Outer Loop & Ready to Merge:** Before committing and opening a PR for code changes, MUST format code (`make fmt`) and pass unified local checks (`make check`). When full database reset and verification are required, use `make check-clean`. `make check-changed` MAY provide a faster intermediate check of affected packages; it MUST NOT substitute for `make check`.
 - **Long-Running Verification:** `make check`, `make check-clean` and `git push` (through the pre-push hook) run the full suite under a default 30-minute test deadline. MUST run them under a command limit exceeding that deadline, or in background execution when the agent's limit is shorter. MUST NOT treat an agent-side timeout as a verification result.
 
