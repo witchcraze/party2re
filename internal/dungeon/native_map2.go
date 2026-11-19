@@ -1,7 +1,5 @@
 package dungeon
 
-import "strings"
-
 // NativeMap2ID is the four-floor tower (legacy map/2).
 const NativeMap2ID = "native-map-2"
 
@@ -83,13 +81,8 @@ func nativeMap2() Dungeon {
 	variants := make([]Floor, len(nativeMap2Floors))
 	for i, rows := range nativeMap2Floors {
 		f := floors[nativeMap2FloorOf[i]-1]
-		f.Width, f.Height, f.Grid, f.events = 3, 5, rows[:], events
-		for y, row := range rows {
-			if x := strings.IndexByte(row, cellStart); x >= 0 {
-				f.StartX, f.StartY = x, y
-			}
-		}
-		variants[i] = f
+		f.events = events
+		variants[i] = gridFloor(f, rows[:])
 	}
 	return Dungeon{
 		ID:             NativeMap2ID,

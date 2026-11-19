@@ -1,8 +1,6 @@
 package dungeon
 
 import (
-	"strings"
-
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -11,7 +9,7 @@ import (
 const NativeMap4ID = "native-map-4"
 
 // nativeMap4Grids transcribe map/4/1.cgi–7.cgi with their legacy symbols.
-var nativeMap4Grids = [7][10]string{
+var nativeMap4Grids = [][]string{
 	{"SM000010bB2", "11011010134", "00010010111", "01110110100", "00010H10001", "11011111101", "00000000100", "01101010001", "01101011111", "0000100000H"},
 	{"SM000010Bb2", "11011010113", "00010010014", "01110111011", "00010001000", "11011101101", "00001000100", "01101010001", "01101011111", "0000100000H"},
 	{"SM000010Bb2", "11011010113", "00010010014", "01110111011", "00010001000", "11011101110", "00001000110", "01101010010", "01101011110", "00H01000000"},
@@ -37,16 +35,7 @@ var nativeMap4Events = map[byte]cellEvent{
 func nativeMap4() Dungeon {
 	pools := append([]EncounterPool{nativeStage4Pool()}, nativeMap3Pools()...)
 	marks := map[byte]string{'B': "◎", 'b': "◎", '2': "宝", '3': "宝", '4': "宝"}
-	variants := make([]Floor, len(nativeMap4Grids))
-	for i, rows := range nativeMap4Grids {
-		f := Floor{FloorNumber: 1, Width: 11, Height: 10, Grid: rows[:], Pools: pools, Marks: marks, events: nativeMap4Events}
-		for y, row := range rows {
-			if x := strings.IndexByte(row, cellStart); x >= 0 {
-				f.StartX, f.StartY = x, y
-			}
-		}
-		variants[i] = f
-	}
+	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: marks, events: nativeMap4Events}, nativeMap4Grids)
 	return Dungeon{
 		ID:             NativeMap4ID,
 		Name:           "命削りの大迷路",
