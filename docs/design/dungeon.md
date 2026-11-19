@@ -173,11 +173,9 @@ Not yet implemented ([#2119](https://github.com/witchcraze/party2re/issues/2119)
 
 ## Map events and restoration units
 
-The inventory below records event families and bounded follow-up scopes, not
-full map or combat parity. It covers the map-local handlers (in addition to the
-base passage/wall/start/boss events); each follow-up must inspect every reachable
-variant, selected enemy/treasure data and enclosing dispatch before coding.
-Numeric and letter identifiers here are evidence pointers, not native enums.
+Each section records one map's decisions and non-obvious findings; maps without
+a section are tracked by their own Issues. Numeric and letter identifiers here
+are evidence pointers, not native enums.
 
 ### Map0 implementation
 
@@ -273,6 +271,33 @@ Non-obvious findings in `map/5/`:
 Open: group size and scaling (#1954), enemy battle data (#2351), chest contents
 (#2119), and narration (#948), whose repeated-lever lines are the only `L` draws.
 
+### Map6 choice corridor
+
+Target, not current behavior: events [#2416](https://github.com/witchcraze/party2re/issues/2416),
+gold [#2417](https://github.com/witchcraze/party2re/issues/2417). Findings in `map/6/`:
+
+- **The boss is always the three sages.** Each variant requires `_data.cgi` after
+  its own subs are compiled, and `_data.cgi` redefines `event_X` (`_data.cgi:6–68`).
+  The variants' `event_X`, which would draw a stage boss, never runs.
+- **Variants 3 and 4 hide the only route.** Row 9 has one open side, D (3) or C (4),
+  shown as a wall until entered (`3.cgi:30`, `4.cgi:30`); the partner event has no cell.
+- **Map-local monsters ignore stage weights.** A/B replace `@monsters` with one entry
+  but keep the stage's `@appears`; unknown indices fall back to entry 0, so the
+  whole group is that monster (`_npc_action.cgi:641–642`).
+- **Trap and heal bases are fractional.** `_trap_d(rand(200))` and `_heals(rand(100))`
+  truncate only after each member's multiplier.
+- **Gold has no floor.** Pickup and loss change the mover's own wallet at once,
+  outside run stock, and `write_user` caps it at 999999 (`system.cgi:71`). The
+  floor `$m{money}-=0 if $m{money} < 0` is a no-op (`1.cgi:40`, `5.cgi:44`).
+
+**Decision (#1767).** Reproduce the gold rule: each accepted event changes the
+mover's wallet immediately and exactly once, possibly below zero, as for
+[item 237](home.md#4-remote-depot--inventory-item-usage-つかう). Deferring it to
+settlement would drop it whenever a run idles out.
+
+Open: group size and scaling (#1954), defeat rewards and the sages' crystals
+(#1957), chest contents (#2119), and narration (#948).
+
 ### Map13 channel puzzle and routes
 
 **Decision (#1774)**; this is a target specification, not current behavior. Evidence is static, relative to
@@ -330,33 +355,3 @@ Start admission follows the [leader job-level table](#start-admission) (≥ 80).
 map-specific action (no `add_battle_action2` override). Start, Move, observation and
 Escape reuse the native use cases above. The map stays unlisted and start-rejected
 until both destinations are implemented, so players never meet a partial map.
-
-### Map2–17 follow-up scopes
-
-Each row is a separate restoration objective; subdivide complex rows at the
-listed boundary before implementation. Limits are map-owned round limits, not
-promises of that many moves after initialization. Submaps do not all share the
-same limit. Initial catalogs and selected data need their own verified native
-content; this table does not authorize their automatic rollout.
-
-| Map / evidence | Events and round limits | Follow-up verification boundary |
-|---|---|---|
-| [6 / #1767](https://github.com/witchcraze/party2re/issues/1767): `map/6/1.cgi:20–43`, variants `2..5.cgi` | Exclusive `A/B`, `C/D`, `E/F` choices, message markers `5/6/7`, `X` boss, treasure; limit 30 | Test mutually exclusive branch flags, encounter pools and ordered currency/heal/trap alternatives; audit negative-money behavior rather than silently normalizing it. |
-| [7 / #1768](https://github.com/witchcraze/party2re/issues/1768): `map/7/1.cgi:20–45`, variants `2..6.cgi` | `K` switch or jobs 4/25 open rock `D`, `T` paralysis/encounter, `t` damage base 150, `A/b` bosses, treasure; limit 60 | Door-style entry reversal, actor qualification, shared switch/rock state and hazard ordering. |
-| [8 / #1769](https://github.com/witchcraze/party2re/issues/1769): `map/8/1.cgi:20–32`, variants `2..12.cgi` | `W` and wall event `1` random warp, walls appear as passage, `A/C/D` bosses, treasure; limit 50 | Wall collision can move position without spending a round; test visible-versus-traversable distinction and warp bounds/RNG. |
-| [9 / #1770](https://github.com/witchcraze/party2re/issues/1770): `map/9/1.cgi:21–38`, variants `2..4.cgi` | Passage, treasure and `A/B/C` bosses impose party magic seal; limit 60 | Verify seal application even on consumed events, alternate boss data and save/reload of affected battle state. |
-| [10 / #1771](https://github.com/witchcraze/party2re/issues/1771): `map/10/1.cgi:20–28`, `_1.cgi:20–28`, `__1.cgi:20–32` | Party attack seal on passage/boss/treasure/routes, `F` next map, `A/B/C` bosses; limit 30 | First verify route carry rules, then seal/encounter order and independently once-only events across three maps. |
-| [11 / #1772](https://github.com/witchcraze/party2re/issues/1772): `map/11/1.cgi:31–61` | `2/3/4` treasure pool selection, `A..F` distinct bosses, `H` job-43 recovery; limit 30 | Verify pool bounds, distinct boss bindings, once flags and eligible party recovery. |
-| [12 / #1773](https://github.com/witchcraze/party2re/issues/1773): `map/12/1.cgi:31–61` | Same event families as 11 with different treasure/boss sources; limit 30 | Separate content unit: verify its own pool bounds and boss bindings rather than certifying it with map11 tests. |
-| [13 / #1774](https://github.com/witchcraze/party2re/issues/1774): `map/13/1.cgi:40–85`, `_1.cgi:39–103`, `_EX.cgi:39–62` | `B/R/Y/W` toggles, `C` reroll, `A` combination/route selection; submap boss/treasure/recovery events; limit 80 | Decided; see [Map13 channel puzzle and routes](#map13-channel-puzzle-and-routes). |
-| [14 / #1775](https://github.com/witchcraze/party2re/issues/1775): `map/14/1.cgi:20–75`, `_P.cgi:22–33`, `_K.cgi:22–36`, `_T.cgi` | Random active points `A..E` and stable subroute assignment, `R` return, submap bosses/treasures; limit 200 | Split route allocation from submap content; revisit must preserve assignment and explicit cross-map once identities. Audit allocation-helper claims against actual state writes. |
-| [15 / #1776](https://github.com/witchcraze/party2re/issues/1776): `map/15/1.cgi:20–63`, `_1.cgi`, `_2.cgi`, `__1.cgi` | Without-replacement event choices, route markers, encounter/status/treasure events; limits 30/50/60/90 | Split event-choice state from submap restoration; verify exhausted-choice behavior, route carry and every submap's overrides. |
-| [16 / #1777](https://github.com/witchcraze/party2re/issues/1777): `map/16/1.cgi:22–87`, `_1.cgi:34–61`, `__1.cgi:25–64`, `__2.cgi:36–48` | Mining actions with depletion, route switches, periodic recovery, weekday boss progression, special field/fixed treasure; limit 150 | Separate mining/inspection command contract, progression/clock boundaries and final submaps; test actor claims, interval reset, depletion and conditional boss/route facts. |
-| [17 / #1778](https://github.com/witchcraze/party2re/issues/1778): `map/17/1.cgi:62–176`, `_1.cgi:41–105`, `__1.cgi:32–60` | State-dependent encounter rate/walls, switches `3..8`, doors/key, traps/ambushes, multimap routes and conditional treasure; limit 200 | Split switch/wall state, underground key/ambush routes and secret-room rewards. Resolve differing treasure display/eligibility thresholds explicitly; test ordered route/state changes. |
-
-## Remaining limits
-
-This decision does not certify the whole Dungeon cluster.
-Maps without a section above require their row's scoped investigation. Idle expiry,
-Valkey-loss recovery and multi-instance guarantees retain their existing limits
-in the [run-state architecture](../architecture/transient-run-state.md).
