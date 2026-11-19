@@ -1,6 +1,9 @@
 package skill
 
-import corebattle "github.com/witchcraze/party2re/internal/core/battle"
+import (
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/random"
+)
 
 // PlayerCallbackContexts supplies the existing operation owners. Rebuild these
 // ports after reload; missing ports still reject through whole-action admission.
@@ -43,7 +46,7 @@ type PlayerCallbackContexts struct {
 }
 
 // RegisterPlayerCallbacks assembles all 608 source positions, retaining missing
-// asset descendants as gates, plus the two ordinary job73 gear bindings.
+// asset descendants as gates, plus ordinary gear and non-job entries.
 // partySize is a frozen table-construction fact for76.5. This does not wire a
 // service or replace the representative scalar SkillProvider.
 func (d *BattleDefinitions) RegisterPlayerCallbacks(c PlayerCallbackContexts, partySize int) {
@@ -96,5 +99,13 @@ func (d *BattleDefinitions) RegisterPlayerCallbacks(c PlayerCallbackContexts, pa
 			id = "job-73-gear-previous"
 		}
 		d.Invocations.Entries[id] = corebattle.ShiftGearCallback(previous)
+	}
+	d.Invocations.Entries["front"] = corebattle.FormationCallback(true)
+	d.Invocations.Entries["back"] = corebattle.FormationCallback(false)
+	d.Invocations.Entries["between-encounter-survival"] = corebattle.BetweenEncounterSurvivalCallback()
+	d.Invocations.Entries["br"] = corebattle.CallbackDefinition{
+		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
+		Project:  func(*corebattle.LifetimeState, *corebattle.CallbackContext) (bool, error) { return true, nil },
+		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
 }

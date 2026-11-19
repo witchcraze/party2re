@@ -57,6 +57,7 @@ type PlayerOperation struct {
 // items stay on the actors' ConsumedItems.
 type PlayerOperationResult struct {
 	Accepted, NormalAction, Suppressed, ResponseReached bool
+	Target                                              TargetContext // Final operation-local side order.
 	LifetimeResult
 }
 
@@ -96,6 +97,7 @@ func (s *LifetimeState) ApplyPlayerOperation(op *PlayerOperation, rng random.Gen
 		*s = saved
 		return PlayerOperationResult{}, err
 	}
+	result.Target = work.Tail.TargetContext
 	return result, nil
 }
 
@@ -222,6 +224,7 @@ func (s *LifetimeState) applyPlayerNormalAction(op *PlayerOperation, defeat func
 func (s *LifetimeState) recordPlayerFacts(c *PlayerTailContext, f PlayerActionFacts) {
 	if f.Target.ActorID != "" {
 		c.TargetContext = f.Target
+		c.DefeatContext.TargetContext = f.Target
 	}
 	c.Completion.Suppressed = c.Completion.Suppressed || f.Suppressed
 	c.DamageCalls += f.DamageCalls
