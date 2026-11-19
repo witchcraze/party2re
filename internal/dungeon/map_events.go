@@ -18,7 +18,7 @@ const (
 	eventBoss                       // once: Floor.Bosses[symbol], else the event's pool boss
 	eventTreasure                   // once: unopened chests
 	eventKey                        // once; never consumed by its door
-	eventDoor                       // opens with its key or an acting job 9; locked spends the round in place
+	eventDoor                       // opens with its key or an acting job in jobs; locked spends the round in place
 	eventMist                       // every entry: a party status for the ensuing encounter
 	eventAttrition                  // the mover loses int(MaxHP × 0.02 + 0.5) HP
 	eventRecovery                   // once: one random member's HP or MP
@@ -36,6 +36,7 @@ type cellEvent struct {
 	// keepMark keeps the floor's mark after the event is spent (map5 lever).
 	keepMark bool
 	key      byte                    // eventDoor/eventHidden: the symbol whose flag opens/reveals it
+	jobs     []string                // eventDoor: the acting character's jobs that open it
 	status   corebattle.StatusEffect // eventMist
 	base     int                     // eventTrap: _trap_d base damage
 	// flag, when set, is the once-state shared by every symbol carrying it

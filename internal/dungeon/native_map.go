@@ -11,9 +11,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-// jobLockpick (legacy job 9) opens a locked door for the acting character only.
-const jobLockpick = "job-09"
-
 // NativeMap0ID is the first native map (legacy map/0, six initial variants).
 const NativeMap0ID = "native-map-0"
 
@@ -137,7 +134,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 		if consumed {
 			break
 		}
-		if actor.JobID == jobLockpick || slices.Contains(exp.ConsumedEvents, string(ev.key)) {
+		if slices.Contains(ev.jobs, actor.JobID) || slices.Contains(exp.ConsumedEvents, string(ev.key)) {
 			step.EventKey = key
 		} else {
 			// Locked: the round is spent and the party returns to its only approach.

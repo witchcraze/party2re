@@ -55,7 +55,7 @@ func reachable(fl dungeon.Floor, open bool) map[[2]int]bool {
 		queue = queue[1:]
 		for _, d := range [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
 			n := [2]int{p[0] + d[0], p[1] + d[1]}
-			if n[0] < 0 || n[1] < 0 || n[0] > 8 || n[1] > 8 || seen[n] {
+			if n[0] < 0 || n[1] < 0 || n[0] >= fl.Width || n[1] >= fl.Height || seen[n] {
 				continue
 			}
 			if c := fl.Grid[n[1]][n[0]]; c == '1' || (c == 'D' && !open) {
