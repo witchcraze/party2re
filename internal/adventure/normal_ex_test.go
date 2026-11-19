@@ -193,7 +193,9 @@ func TestRoyalBeeCreditedDefeatDraws(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &NormalRun{Stage: Stage{ID: tc.stage}, EXUnlocked: tc.marker}
 			d := &exDraws{values: slices.Clone(tc.draws)}
-			r.recordCreditedDefeats(tc.ids, d)
+			for _, identity := range tc.ids {
+				r.EXUnlocked = rollStage22EX(r.Stage.ID, identity, d) || r.EXUnlocked
+			}
 			if r.EXUnlocked != tc.want || len(d.calls) != len(tc.draws) || slices.ContainsFunc(d.calls, func(n int) bool { return n != 3 }) {
 				t.Fatal(r.EXUnlocked, d.calls)
 			}

@@ -49,6 +49,8 @@ type TargetContext struct {
 	Item195Activated bool
 	PhantomTargetID  string
 	PhantomEnemyIDs  []string
+	// DefeatedStatus preserves the target's status before the defeat reset for reward Apply.
+	DefeatedStatus string
 	// A duel reply swaps the source arrays even when its fallback chose an ally.
 	// This transient provenance is set only by the intrinsic duel body.
 	duelOriginID string

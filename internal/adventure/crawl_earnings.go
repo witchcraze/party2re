@@ -4,7 +4,6 @@ import (
 	"maps"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	"github.com/witchcraze/party2re/internal/economy"
 )
 
 func (r DungeonCrawlResult) RewardForCharacter(id string) corebattle.Reward {
@@ -32,15 +31,10 @@ func (s *CrawlSession) recordDefeatEarnings(result corebattle.PartyBattleResult)
 	}
 	for id, e := range floor {
 		// Keep the existing floor-level cooperative rounding, applied once.
-		exp, err := economy.SafeMultiply(e.EXP, 100+result.BonusPercent)
+		e, err := scaleCooperativeEarnings(e, result.BonusPercent)
 		if err != nil {
 			return err
 		}
-		gold, err := economy.SafeMultiply(e.Gold, 100+result.BonusPercent)
-		if err != nil {
-			return err
-		}
-		e.EXP, e.Gold = exp/100, gold/100
 		earnings[id], err = addRunEarnings(earnings[id], e)
 		if err != nil {
 			return err

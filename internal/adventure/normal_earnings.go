@@ -28,6 +28,22 @@ func scaleTryEarnings(e RunEarnings) (RunEarnings, error) {
 	return addRunEarnings(e, RunEarnings{EXP: e.EXP / 2, Gold: e.Gold / 2, Crystals: e.Crystals / 2})
 }
 
+func scaleCooperativeEarnings(e RunEarnings, bonusPercent int) (RunEarnings, error) {
+	if bonusPercent == 0 {
+		return e, nil
+	}
+	exp, err := economy.SafeMultiply(e.EXP, 100+bonusPercent)
+	if err != nil {
+		return RunEarnings{}, err
+	}
+	gold, err := economy.SafeMultiply(e.Gold, 100+bonusPercent)
+	if err != nil {
+		return RunEarnings{}, err
+	}
+	e.EXP, e.Gold = exp/100, gold/100
+	return e, nil
+}
+
 func (r *NormalRun) recordEarnings(earned map[string]RunEarnings) error {
 	for id, e := range earned {
 		if !slices.Contains(r.Roster, id) {

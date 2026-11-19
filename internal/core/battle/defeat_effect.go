@@ -92,6 +92,7 @@ func (s *LifetimeState) applyDefeat(c *DefeatContext, id, killerID string, rng r
 	}
 	a := s.actor(id)
 	tmp := a.Temporary
+	status := a.Status
 	a.HP = 0
 	if err := s.ApplyEquipmentReset(&c.EquipmentResetContext, id, rng); err != nil {
 		return r, err
@@ -138,7 +139,9 @@ func (s *LifetimeState) applyDefeat(c *DefeatContext, id, killerID string, rng r
 	if s.actor(c.ActorID).NPC || id == c.ActorID {
 		return r, nil
 	}
-	if err := c.Rewards.Apply(s, c.TargetContext, id); err != nil {
+	targets := c.TargetContext
+	targets.DefeatedStatus = status
+	if err := c.Rewards.Apply(s, targets, id); err != nil {
 		return r, err
 	}
 	r.RewardsReached = true

@@ -176,7 +176,8 @@ func (s *Service) queryBlessing(ctx context.Context, charID string) (string, err
 	return strings.ToLower(strings.TrimSpace(blessing)), nil
 }
 
-func isGoldBlessing(blessing string) bool {
+// IsGoldBlessing reports whether a normalized blessing grants the defeat gold bonus.
+func IsGoldBlessing(blessing string) bool {
 	switch blessing {
 	case "gold", "1", "gold_wish", "お金がほしい":
 		return true
@@ -185,7 +186,8 @@ func isGoldBlessing(blessing string) bool {
 	}
 }
 
-func isExpBlessing(blessing string) bool {
+// IsExpBlessing reports whether a normalized blessing grants the defeat EXP bonus.
+func IsExpBlessing(blessing string) bool {
 	switch blessing {
 	case "exp", "2", "exp_wish", "強くなりたい":
 		return true
@@ -194,7 +196,8 @@ func isExpBlessing(blessing string) bool {
 	}
 }
 
-func isMonsterBlessing(blessing string) bool {
+// IsMonsterBlessing reports whether a normalized blessing improves capture odds.
+func IsMonsterBlessing(blessing string) bool {
 	switch blessing {
 	case "monster", "3", "monster_wish", "モンスターと仲良くしたい":
 		return true
@@ -209,7 +212,7 @@ func (s *Service) checkMonsterBlessing(ctx context.Context, charID string) (bool
 	if err != nil {
 		return false, err
 	}
-	return isMonsterBlessing(blessing), nil
+	return IsMonsterBlessing(blessing), nil
 }
 
 // processMonsterTaming handles post-battle monster rising and taming for a recipient character.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/job"
@@ -96,13 +97,14 @@ type RunCommand struct {
 
 // RunReceipt contains only the executing actor's result, including after exit.
 type RunReceipt struct {
-	Command     RunCommand   `json:"command"`
-	Version     int          `json:"version"`
-	Floor       int          `json:"floor"`
-	StageID     string       `json:"stage_id"`
-	Disposition string       `json:"disposition"`
-	Box         *TreasureBox `json:"box,omitempty"`
-	Recipient   RunRecipient `json:"recipient"`
+	Command      RunCommand                 `json:"command"`
+	Version      int                        `json:"version"`
+	Floor        int                        `json:"floor"`
+	StageID      string                     `json:"stage_id"`
+	Disposition  string                     `json:"disposition"`
+	Box          *TreasureBox               `json:"box,omitempty"`
+	Recipient    RunRecipient               `json:"recipient"`
+	MonsterTames []battle.MonsterTameResult `json:"monster_tames,omitempty"`
 }
 
 type ActorRun struct {
@@ -192,6 +194,8 @@ type RunActionEffects struct {
 	// Encounter identities of defeats that reached the player reward path, in
 	// defeat order: no NPC killer, self-defeat or revival (_battle.cgi:28–51,142).
 	CreditedDefeats []string
+	Defeats         []battle.ExplicitDefeat
+	EXUnlocked      bool
 }
 
 // RunPenalty projects a committed absolute deadline. SQL ownership remains held

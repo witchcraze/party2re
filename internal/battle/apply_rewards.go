@@ -103,7 +103,7 @@ func (s *Service) applyRewardsForCharacter(
 	gainedGold := reward.Currency
 	if gainedGold > 0 {
 		// Chapel Blessing 1 ("お金がほしい"): 25% chance of 1.5x Gold (party2/lib/_battle.cgi:186-189, rand(4) < 1)
-		if isGoldBlessing(blessing) && s.rollIntn(4) == 0 {
+		if IsGoldBlessing(blessing) && s.rollIntn(4) == 0 {
 			gainedGold = int(float64(gainedGold) * 1.5)
 		}
 		if err := char.AddMoney(gainedGold); err != nil {
@@ -115,7 +115,7 @@ func (s *Service) applyRewardsForCharacter(
 	var lvlRes progression.LevelUpResult
 	if gainedEXP > 0 {
 		// Chapel Blessing 2 ("強くなりたい"): 25% chance of 1.5x EXP (party2/lib/_battle.cgi:190-193, rand(4) < 1)
-		if isExpBlessing(blessing) && s.rollIntn(4) == 0 {
+		if IsExpBlessing(blessing) && s.rollIntn(4) == 0 {
 			gainedEXP = int(float64(gainedEXP) * 1.5)
 		}
 		opts := progression.ApplyExperienceOptions{

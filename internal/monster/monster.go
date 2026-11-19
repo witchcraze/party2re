@@ -224,7 +224,8 @@ func (s *Service) TameMonster(ctx context.Context, characterID, monsterID, custo
 		return MonsterInstance{}, ErrNameTooLong
 	}
 	for _, r := range customName {
-		if unicode.IsSpace(r) || r == '\u3000' || strings.ContainsRune(",;\"'&<>@", r) {
+		// Server-owned encounter names can contain ordinary spaces.
+		if (r != ' ' && unicode.IsSpace(r)) || strings.ContainsRune(",;\"'&<>@", r) {
 			return MonsterInstance{}, ErrInvalidName
 		}
 	}
