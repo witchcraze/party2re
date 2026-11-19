@@ -61,9 +61,10 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 	if err != nil || view.Map.Radius != 3 || !slices.Equal(view.Directions, []dungeon.Direction{dungeon.DirectionNorth, dungeon.DirectionSouth, dungeon.DirectionEast, dungeon.DirectionWest}) || !view.Controls.CanMove || view.Controls.CanFight || !view.Controls.CanEscape {
 		t.Fatalf("solo map: %+v %v", view, err)
 	}
-	for _, item := range []string{"197", "item-197", "scope_goggles", "スコープ"} {
+	// Only item 197 itself qualifies; look-alike IDs do not.
+	for _, item := range []string{"197", "item-1970", "scope_goggles", "スコープ"} {
 		inventory.inv.Items[0].DefinitionID = item
-		if got, err := svc.ObserveExpedition(ctx, "hero"); err != nil || got.Map.Radius != 3 {
+		if got, err := svc.ObserveExpedition(ctx, "hero"); err != nil || got.Map.Radius != 2 {
 			t.Fatalf("item %s: %+v %v", item, got, err)
 		}
 	}

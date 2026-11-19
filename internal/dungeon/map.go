@@ -17,24 +17,18 @@ type MapView struct {
 	BonusReason         string     `json:"bonus_reason,omitempty"`
 }
 
+// isScoutingJob: the acting job 9, 26, 27 or 79 widens @ちず (vs_dungeon.cgi:44).
 func isScoutingJob(jobID string) bool {
-	j := strings.ToLower(strings.TrimSpace(jobID))
-	switch j {
-	case "job-09", "job-26", "job-27", "job-79", "9", "26", "27", "79", "thief", "ninja", "geomancer", "ranger", "盗賊", "忍者", "風水師", "レンジャー":
+	switch jobID {
+	case "job-09", "job-26", "job-27", "job-79":
 		return true
-	default:
-		return strings.Contains(j, "thief") || strings.Contains(j, "ninja") || strings.Contains(j, "geomancer") || strings.Contains(j, "ranger")
-	}
-}
-
-func hasScopeGoggles(itemIDs []string) bool {
-	for _, it := range itemIDs {
-		lower := strings.ToLower(strings.TrimSpace(it))
-		if lower == "item-197" || lower == "197" || lower == "scope_goggles" || strings.Contains(lower, "scope") || strings.Contains(lower, "スコープ") {
-			return true
-		}
 	}
 	return false
+}
+
+// hasScopeGoggles: item 197 in the tool hand; the inventory is the three hands.
+func hasScopeGoggles(itemIDs []string) bool {
+	return slices.Contains(itemIDs, "item-197")
 }
 
 // viewMap projects one owned snapshot; bonuses belong to the viewing actor.

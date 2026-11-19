@@ -155,9 +155,9 @@ func TestPartyMapScouting(t *testing.T) {
 		t.Errorf("expected 3x3 tiles for radius 2, got %dx%d", len(mapView2.Map.Tiles), len(mapView2.Map.Tiles[0]))
 	}
 
-	// 3. Ninja (26), Geomancer (27), Ranger (79)
-	jobs := []string{"job-09", "job-26", "job-27", "job-79", "9", "26", "27", "79", "thief", "ninja", "geomancer", "ranger", "盗賊", "忍者", "風水師", "レンジャー"}
-	for _, jobID := range jobs {
+	// 3. Only the exact legacy jobs 9, 26, 27 and 79 qualify; aliases do not.
+	jobs := map[string]int{"job-09": 2, "job-26": 2, "job-27": 2, "job-79": 2, "9": 1, "79": 1, "thief": 1, "master-ninja": 1, "盗賊": 1, "job-090": 1}
+	for jobID, wantRadius := range jobs {
 		cTest := createTestChar("scout-"+jobID, 10, 100, 30, 20)
 		cTest.JobID = jobID
 		charRepo.chars[cTest.ID] = cTest
@@ -174,8 +174,8 @@ func TestPartyMapScouting(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ObserveExpedition failed for job %s: %v", jobID, err)
 		}
-		if mv.Map.Radius != 2 {
-			t.Errorf("expected radius 2 for scouting job %s, got %d", jobID, mv.Map.Radius)
+		if mv.Map.Radius != wantRadius {
+			t.Errorf("job %s: radius %d, want %d", jobID, mv.Map.Radius, wantRadius)
 		}
 	}
 
