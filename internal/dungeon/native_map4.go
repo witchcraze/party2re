@@ -83,16 +83,22 @@ func partyHeal(exp *ActiveExpedition, actor *corecharacter.Character, base float
 	return hp, err
 }
 
-// rosterHeal runs one healing effect on the saved roster and returns the
-// per-member HP and MP changes.
-func rosterHeal(exp *ActiveExpedition, actor *corecharacter.Character, heal func(*corebattle.LifetimeState, *corebattle.EffectContext, randomSourceAdapter) error, rng RandomSource) (hp, mp map[string]int, err error) {
-	state := corebattle.LifetimeState{}
+// rosterState builds a LifetimeState and ordered member IDs from the saved roster.
+func rosterState(exp *ActiveExpedition) (corebattle.LifetimeState, []string) {
+	state := corebattle.LifetimeState{Actors: make([]corebattle.LifetimeActor, len(exp.Members))}
 	ids := make([]string, len(exp.Members))
 	for i, m := range exp.Members {
 		ids[i] = m.CharacterID
 		p := corebattle.Participant{ID: m.CharacterID, Name: m.Name, TeamID: "allies", HP: m.CurrentHP, MaxHP: m.MaxHP, MP: m.CurrentMP, MaxMP: m.MaxMP, ItemDefinitionIDs: m.ItemIDs}
-		state.Actors = append(state.Actors, corebattle.LifetimeActor{Participant: p, Tension: 1, Hit: 95})
+		state.Actors[i] = corebattle.LifetimeActor{Participant: p, Tension: 1, Hit: 95}
 	}
+	return state, ids
+}
+
+// rosterHeal runs one healing effect on the saved roster and returns the
+// per-member HP and MP changes.
+func rosterHeal(exp *ActiveExpedition, actor *corecharacter.Character, heal func(*corebattle.LifetimeState, *corebattle.EffectContext, randomSourceAdapter) error, rng RandomSource) (hp, mp map[string]int, err error) {
+	state, ids := rosterState(exp)
 	c := &corebattle.EffectContext{TargetContext: corebattle.TargetContext{ActorID: actor.ID, PartyIDs: ids}}
 	if err := heal(&state, c, randomSourceAdapter{rng}); err != nil {
 		return nil, nil, err
