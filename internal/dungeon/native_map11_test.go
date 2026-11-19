@@ -17,7 +17,7 @@ import (
 // HFH / 101 101 / 1S1. Bosses sit at (1, 3·k) for A..F; H flanks B..F.
 func map11Hero(id, job string) corecharacter.Character {
 	c := createTestChar(id, 40, 1_000_000, 1, 900) // survives and never wins
-	c.JobLevel, c.JobID = 23, job
+	c.JobLevel, c.JobID = 25, job                  // enough for map11 (23) and map12 (25)
 	return c
 }
 
@@ -84,7 +84,7 @@ func TestNativeMap11_BossBindingsFireOnce(t *testing.T) {
 // full HP and MP, and one flag covers every H cell.
 func TestNativeMap11_RemedyTable(t *testing.T) {
 	t.Run("memory", func(t *testing.T) {
-		remedyTable(t, dungeon.NewMemoryExpeditionRepository(), "lead")
+		remedyTable(t, dungeon.NewMemoryExpeditionRepository(), dungeon.NativeMap11ID, "lead")
 	})
 	t.Run("valkey", func(t *testing.T) {
 		client := testutil.OpenValkey(t)
@@ -94,17 +94,18 @@ func TestNativeMap11_RemedyTable(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		remedyTable(t, store, id)
+		remedyTable(t, store, dungeon.NativeMap11ID, id)
 	})
 }
 
-func remedyTable(t *testing.T, store dungeon.ActiveExpeditionStore, lead string) {
+// remedyTable checks the H tables shared by map11 and map12 on mapID.
+func remedyTable(t *testing.T, store dungeon.ActiveExpeditionStore, mapID, lead string) {
 	ctx := context.Background()
 	medic := lead + "-medic"
 	f := newNativeFixtureOn(t, store, map11Hero(lead, "job-01"))
 	f.chars.chars[medic] = map11Hero(medic, "job-43")
 	f.rng.ints = []int{0}
-	if _, err := f.svc.StartPartyExpedition(ctx, lead, []string{lead, medic}, dungeon.NativeMap11ID, "p"); err != nil {
+	if _, err := f.svc.StartPartyExpedition(ctx, lead, []string{lead, medic}, mapID, "p"); err != nil {
 		t.Fatal(err)
 	}
 	f.setVitality(t, lead, medic, 10, 0)
