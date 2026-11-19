@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
@@ -98,8 +97,8 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 			}
 		}
 	case eventMist:
-		// Confusion reaches only the ensuing battle.
-		return s.resolveMonsterCombat(ctx, exp, char, s.encounterPool(floor).monster(s.rng), EventBattle, x, y, "", string(corebattle.StatusConfusion))
+		// The status reaches only the ensuing battle; the next step resets it.
+		return s.resolveMonsterCombat(ctx, exp, char, s.encounterPool(floor).monster(s.rng), EventBattle, x, y, "", ev.status)
 	case eventBoss:
 		if consumed {
 			break
@@ -148,6 +147,16 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 		step.MemberHPDeltas, step.MemberMPDeltas = hp, mp
 		step.HPDelta = hp[char.ID]
 		recovery = true
+	case eventTrap:
+		partyTrap(&step, exp, char.ID, ev.base, s.rng)
+	case eventRemedy:
+		if consumed || actor.JobID != jobRemedy {
+			break
+		}
+		step.EventKey = key
+		step.MemberHPDeltas, step.MemberMPDeltas = fullRestore(exp)
+		step.HPDelta = step.MemberHPDeltas[char.ID]
+		recovery = true
 	default:
 		if to, ok := floor.Warps[cell]; ok {
 			step.NewX, step.NewY = to[0], to[1]
@@ -157,12 +166,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 			step.MapVariant = exit.Variants[s.rng.Intn(len(exit.Variants))]
 			step.RoundLimit = d.limitOf(d.Variants[step.MapVariant-1])
 			if exit.Trap > 0 {
-				step.MemberHPDeltas = trapDamage(exp, exit.Trap, s.rng)
-				// The run-level HP mirrors the leader, as combat keeps it.
-				step.HPDelta = step.MemberHPDeltas[char.ID]
-				if len(exp.Members) == 0 {
-					step.HPDelta = -trapRoll(exit.Trap, s.rng)
-				}
+				partyTrap(&step, exp, char.ID, exit.Trap, s.rng)
 			}
 		}
 	}
@@ -185,16 +189,18 @@ func trapRoll(base int, rng RandomSource) int {
 	return int(float64(base) * (0.9 + 0.3*rng.Float64()))
 }
 
-// trapDamage hits every roster member; fallen members stay at 0.
-func trapDamage(exp *ActiveExpedition, base int, rng RandomSource) map[string]int {
+// partyTrap hits every roster member; fallen members stay at 0. The run-level
+// HP mirrors the leader, as combat keeps it.
+func partyTrap(step *StepParams, exp *ActiveExpedition, leaderID string, base int, rng RandomSource) {
 	if len(exp.Members) == 0 {
-		return nil
+		step.HPDelta = -trapRoll(base, rng)
+		return
 	}
-	deltas := make(map[string]int, len(exp.Members))
+	step.MemberHPDeltas = make(map[string]int, len(exp.Members))
 	for _, m := range exp.Members {
-		deltas[m.CharacterID] = -trapRoll(base, rng)
+		step.MemberHPDeltas[m.CharacterID] = -trapRoll(base, rng)
 	}
-	return deltas
+	step.HPDelta = step.MemberHPDeltas[leaderID]
 }
 
 func negate(deltas map[string]int) map[string]int {

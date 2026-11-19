@@ -56,7 +56,7 @@ func nativeMap0Def(t *testing.T) dungeon.Dungeon {
 
 type nativeFixture struct {
 	svc   *dungeon.Service
-	store *dungeon.MemoryExpeditionRepository
+	store dungeon.ActiveExpeditionStore
 	repo  *mockDungeonRepo
 	chars *mockCharRepo
 	rng   *scriptedRNG
@@ -64,8 +64,13 @@ type nativeFixture struct {
 
 func newNativeFixture(t *testing.T, hero corecharacter.Character) *nativeFixture {
 	t.Helper()
+	return newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), hero)
+}
+
+func newNativeFixtureOn(t *testing.T, store dungeon.ActiveExpeditionStore, hero corecharacter.Character) *nativeFixture {
+	t.Helper()
 	f := &nativeFixture{
-		store: dungeon.NewMemoryExpeditionRepository(),
+		store: store,
 		repo:  newMockDungeonRepo(),
 		chars: &mockCharRepo{chars: map[string]corecharacter.Character{hero.ID: hero}},
 		rng:   &scriptedRNG{},
