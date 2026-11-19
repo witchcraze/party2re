@@ -34,8 +34,23 @@ func nativeMap7Events(trapBase int) map[byte]mapEvent {
 // nm7FixedBoss is _data.cgi's fixed group, which replaces the stage bosses
 // with rand(3) < 1 on every event.
 var nm7FixedBoss = strongest([]DungeonMonster{
-	{ID: "nm7-ifrit", Name: "イフリート", HP: 7000, Attack: 360, Defense: 140, Agility: 300, ExpReward: 1500, GoldReward: 300},
-	{ID: "nm7-red-stone", Name: "レッドストーン", HP: 10, Attack: 200, Defense: 6000, Agility: 1000, ExpReward: 70, GoldReward: 500},
+	{ID: "nm7-ifrit", Name: "イフリート", HP: 7000, Attack: 360, Defense: 140, Agility: 300, ExpReward: 1500, GoldReward: 300,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant:   corebattle.Participant{MP: 4999, MaxMP: 99999},
+			Jobs:          corebattle.BattleJobs{JobID: "job-70", SP: 150, OldJobID: "job-52", OldSP: 999},
+			Hit:           500,
+			CrystalReward: 7,
+			Temporary:     corebattle.TemporaryNullAttack,
+		}),
+	},
+	{ID: "nm7-red-stone", Name: "レッドストーン", HP: 10, Attack: 200, Defense: 6000, Agility: 1000, ExpReward: 70, GoldReward: 500,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant:   corebattle.Participant{MP: 999},
+			Jobs:          corebattle.BattleJobs{JobID: "job-12", SP: 999, OldJobID: "job-90", OldSP: 999},
+			CrystalReward: 5,
+			Temporary:     corebattle.TemporaryNullMagic,
+		}),
+	},
 })
 
 // nativeMap7Pools draws stages 8–11 (int(rand(4) + 8)) and the fixed boss with

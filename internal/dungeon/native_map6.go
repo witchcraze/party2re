@@ -1,5 +1,7 @@
 package dungeon
 
+import corebattle "github.com/witchcraze/party2re/internal/core/battle"
+
 // nativeMap6ID is the choice corridor (legacy map/6, five initial variants).
 // It stays out of DefaultDungeonCatalog until its gold outcomes land (#2417).
 const nativeMap6ID = "native-map-6"
@@ -16,30 +18,119 @@ var nativeMap6Grids = [5][]string{
 // Map-local enemies (map/6/*.cgi get_monster_data*, get_boss_data*, _data.cgi
 // event_X), with franchise names replaced as in internal/stagedata.
 var (
-	nm6SilverDrop = DungeonMonster{ID: "nm6-silver-drop", Name: "銀滴スライム", HP: 8, Attack: 70, Defense: 2500, Agility: 1500, ExpReward: 250, GoldReward: 10}
-	nm6Slime      = DungeonMonster{ID: "nm6-slime", Name: "スライム", HP: 500, Attack: 200, Defense: 100, Agility: 500, ExpReward: 50, GoldReward: 30}
-	nm6SilverKing = DungeonMonster{ID: "nm6-silver-king", Name: "王様流銀スライム", HP: 25, Attack: 200, Defense: 6000, Agility: 2000, ExpReward: 4000, GoldReward: 100}
-	nm6KingSlime  = DungeonMonster{ID: "nm6-king-slime", Name: "キングスライム", HP: 2000, Attack: 250, Defense: 150, Agility: 120, ExpReward: 200, GoldReward: 200}
-	nm6Chests     = strongest([]DungeonMonster{
-		{ID: "nm6-man-eater", Name: "人食い箱", HP: 500, Attack: 250, Defense: 35, Agility: 400, ExpReward: 50, GoldReward: 100},
-		{ID: "nm6-mimic", Name: "ミミック", HP: 700, Attack: 280, Defense: 65, Agility: 600, ExpReward: 60, GoldReward: 150},
-		{ID: "nm6-pandora", Name: "パンドラの魔箱", HP: 900, Attack: 300, Defense: 95, Agility: 800, ExpReward: 100, GoldReward: 500},
+	nm6SilverDrop = DungeonMonster{ID: "nm6-silver-drop", Name: "銀滴スライム", HP: 8, Attack: 70, Defense: 2500, Agility: 1500, ExpReward: 250, GoldReward: 10,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 31},
+			Jobs:        corebattle.BattleJobs{JobID: "job-39", SP: 3, OldJobID: "job-99"},
+			Temporary:   corebattle.TemporaryNullMagic,
+		}),
+	}
+	nm6Slime = DungeonMonster{ID: "nm6-slime", Name: "スライム", HP: 500, Attack: 200, Defense: 100, Agility: 500, ExpReward: 50, GoldReward: 30,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 149},
+			Jobs:        corebattle.BattleJobs{JobID: "job-40", SP: 999, OldSP: 20},
+		}),
+	}
+	nm6SilverKing = DungeonMonster{ID: "nm6-silver-king", Name: "王様流銀スライム", HP: 25, Attack: 200, Defense: 6000, Agility: 2000, ExpReward: 4000, GoldReward: 100,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 299},
+			Jobs:        corebattle.BattleJobs{JobID: "job-40", SP: 999, OldJobID: "job-99"},
+			Temporary:   corebattle.TemporaryNullMagic,
+		}),
+	}
+	nm6KingSlime = DungeonMonster{ID: "nm6-king-slime", Name: "キングスライム", HP: 2000, Attack: 250, Defense: 150, Agility: 120, ExpReward: 200, GoldReward: 200,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 400},
+			Jobs:        corebattle.BattleJobs{JobID: "job-21", SP: 5, OldSP: 20},
+			Hit:         150,
+			Temporary:   corebattle.TemporaryNullAttack,
+		}),
+	}
+	nm6Chests = strongest([]DungeonMonster{
+		{ID: "nm6-man-eater", Name: "人食い箱", HP: 500, Attack: 250, Defense: 35, Agility: 400, ExpReward: 50, GoldReward: 100,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant: corebattle.Participant{MP: 42},
+				Jobs:        corebattle.BattleJobs{JobID: "job-92", SP: 30},
+				Temporary:   corebattle.TemporaryDouble,
+			}),
+		},
+		{ID: "nm6-mimic", Name: "ミミック", HP: 700, Attack: 280, Defense: 65, Agility: 600, ExpReward: 60, GoldReward: 150,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant: corebattle.Participant{MP: 68},
+				Jobs:        corebattle.BattleJobs{JobID: "job-93", SP: 10},
+				Temporary:   corebattle.TemporaryDouble,
+			}),
+		},
+		{ID: "nm6-pandora", Name: "パンドラの魔箱", HP: 900, Attack: 300, Defense: 95, Agility: 800, ExpReward: 100, GoldReward: 500,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant: corebattle.Participant{MP: 69},
+				Jobs:        corebattle.BattleJobs{JobID: "job-93", SP: 20},
+				Temporary:   corebattle.TemporaryDouble,
+			}),
+		},
 	})
 	nm6Hounds = strongest([]DungeonMonster{
-		{ID: "nm6-pup-a", Name: "チビベロスA", HP: 160, Attack: 160, Defense: 90, Agility: 260, ExpReward: 32, GoldReward: 15},
-		{ID: "nm6-cerberus", Name: "ケルベロス", HP: 300, Attack: 300, Defense: 100, Agility: 100, ExpReward: 48, GoldReward: 22},
-		{ID: "nm6-pup-b", Name: "チビベロスB", HP: 160, Attack: 160, Defense: 90, Agility: 260, ExpReward: 32, GoldReward: 15},
+		{ID: "nm6-pup-a", Name: "チビベロスA", HP: 160, Attack: 160, Defense: 90, Agility: 260, ExpReward: 32, GoldReward: 15,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Jobs: corebattle.BattleJobs{OldSP: 20},
+			}),
+		},
+		{ID: "nm6-cerberus", Name: "ケルベロス", HP: 300, Attack: 300, Defense: 100, Agility: 100, ExpReward: 48, GoldReward: 22,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant: corebattle.Participant{MP: 53},
+				Jobs:        corebattle.BattleJobs{JobID: "job-29", SP: 20, OldSP: 20},
+			}),
+		},
+		{ID: "nm6-pup-b", Name: "チビベロスB", HP: 160, Attack: 160, Defense: 90, Agility: 260, ExpReward: 32, GoldReward: 15,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Jobs: corebattle.BattleJobs{OldSP: 20},
+			}),
+		},
 	})
 	nm6Panthers = strongest([]DungeonMonster{
-		{ID: "nm6-cub-a", Name: "ベビーレオA", HP: 150, Attack: 180, Defense: 50, Agility: 300, ExpReward: 30, GoldReward: 18},
-		{ID: "nm6-shadow-panther", Name: "シャドウパンサー", HP: 340, Attack: 300, Defense: 30, Agility: 120, ExpReward: 50, GoldReward: 20},
-		{ID: "nm6-cub-b", Name: "ベビーレオB", HP: 150, Attack: 180, Defense: 50, Agility: 300, ExpReward: 30, GoldReward: 18},
+		{ID: "nm6-cub-a", Name: "ベビーレオA", HP: 150, Attack: 180, Defense: 50, Agility: 300, ExpReward: 30, GoldReward: 18,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Jobs: corebattle.BattleJobs{OldSP: 20},
+			}),
+		},
+		{ID: "nm6-shadow-panther", Name: "シャドウパンサー", HP: 340, Attack: 300, Defense: 30, Agility: 120, ExpReward: 50, GoldReward: 20,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant: corebattle.Participant{MP: 79},
+				Jobs:        corebattle.BattleJobs{JobID: "job-21", SP: 20, OldSP: 20},
+			}),
+		},
+		{ID: "nm6-cub-b", Name: "ベビーレオB", HP: 150, Attack: 180, Defense: 50, Agility: 300, ExpReward: 30, GoldReward: 18,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Jobs: corebattle.BattleJobs{OldSP: 20},
+			}),
+		},
 	})
 	// _data.cgi redefines every variant's event_X after it is compiled.
 	nm6Sages = strongest([]DungeonMonster{
-		{ID: "nm6-sage-1", Name: "一賢者", HP: 2000, Attack: 200, Defense: 60, Agility: 200, ExpReward: 600, GoldReward: 200},
-		{ID: "nm6-sage-2", Name: "二賢者", HP: 2000, Attack: 200, Defense: 60, Agility: 200, ExpReward: 600, GoldReward: 200},
-		{ID: "nm6-sage-3", Name: "三賢者", HP: 2000, Attack: 200, Defense: 60, Agility: 200, ExpReward: 600, GoldReward: 200},
+		{ID: "nm6-sage-1", Name: "一賢者", HP: 2000, Attack: 200, Defense: 60, Agility: 200, ExpReward: 600, GoldReward: 200,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant:   corebattle.Participant{MP: 999},
+				Jobs:          corebattle.BattleJobs{JobID: "job-51", SP: 80, OldJobID: "job-16", OldSP: 999},
+				CrystalReward: 3,
+				Temporary:     corebattle.TemporaryNullMagic,
+			}),
+		},
+		{ID: "nm6-sage-2", Name: "二賢者", HP: 2000, Attack: 200, Defense: 60, Agility: 200, ExpReward: 600, GoldReward: 200,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant:   corebattle.Participant{MP: 999},
+				Jobs:          corebattle.BattleJobs{JobID: "job-15", SP: 80, OldJobID: "job-40", OldSP: 50},
+				CrystalReward: 3,
+				Temporary:     corebattle.TemporaryAbsorbMagic,
+			}),
+		},
+		{ID: "nm6-sage-3", Name: "三賢者", HP: 2000, Attack: 200, Defense: 60, Agility: 200, ExpReward: 600, GoldReward: 200,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant:   corebattle.Participant{MP: 999},
+				Jobs:          corebattle.BattleJobs{JobID: "job-06", SP: 999, OldJobID: "job-19", OldSP: 70},
+				CrystalReward: 3,
+				Temporary:     corebattle.TemporaryReflectMagic,
+			}),
+		},
 	})
 )
 

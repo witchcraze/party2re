@@ -3,6 +3,7 @@ package dungeon
 import (
 	"encoding/json"
 	"fmt"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"strings"
 )
 
@@ -153,46 +154,143 @@ func routeDestination(exp *ActiveExpedition, cell byte, rng RandomSource) (int, 
 
 // Distinctive names are replaced (rule 00 §3), reusing the shared catalog's.
 var (
-	nm14Helmfish = DungeonMonster{ID: "nm14-helmfish", Name: "ヘルムフィッシュ", HP: 138, Attack: 98, Defense: 132, Agility: 95, ExpReward: 41, GoldReward: 8}
-	nm14Diver    = DungeonMonster{ID: "nm14-diver-chick", Name: "ダイバーピヨコ", HP: 250, Attack: 150, Defense: 101, Agility: 108, ExpReward: 54, GoldReward: 54}
-	nm14Turtle   = DungeonMonster{ID: "nm14-turtle-warrior", Name: "亀戦士", HP: 118, Attack: 101, Defense: 111, Agility: 42, ExpReward: 37, GoldReward: 22}
-	nm14Marine   = DungeonMonster{ID: "nm14-sea-slime", Name: "海原スライム", HP: 142, Attack: 88, Defense: 138, Agility: 53, ExpReward: 38, GoldReward: 25}
-	nm14Mimic    = DungeonMonster{ID: "nm14-ship-mimic", Name: "ミミック", HP: 300, Attack: 280, Defense: 65, Agility: 600, ExpReward: 40, GoldReward: 100}
+	nm14Helmfish = DungeonMonster{ID: "nm14-helmfish", Name: "ヘルムフィッシュ", HP: 138, Attack: 98, Defense: 132, Agility: 95, ExpReward: 41, GoldReward: 8,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 84},
+			Jobs:        corebattle.BattleJobs{JobID: "job-07", SP: 2, OldJobID: "job-21", OldSP: 20},
+		}),
+	}
+	nm14Turtle = DungeonMonster{ID: "nm14-turtle-warrior", Name: "亀戦士", HP: 118, Attack: 101, Defense: 111, Agility: 42, ExpReward: 37, GoldReward: 22,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 72},
+			Jobs:        corebattle.BattleJobs{JobID: "job-01", SP: 50, OldJobID: "job-07", OldSP: 2},
+		}),
+	}
+	nm14Marine = DungeonMonster{ID: "nm14-sea-slime", Name: "海原スライム", HP: 142, Attack: 88, Defense: 138, Agility: 53, ExpReward: 38, GoldReward: 25,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 76},
+			Jobs:        corebattle.BattleJobs{JobID: "job-03", SP: 17, OldJobID: "job-41", OldSP: 100},
+		}),
+	}
+	nm14Mimic = DungeonMonster{ID: "nm14-ship-mimic", Name: "ミミック", HP: 300, Attack: 280, Defense: 65, Agility: 600, ExpReward: 40, GoldReward: 100,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 68},
+			Jobs:        corebattle.BattleJobs{JobID: "job-93", SP: 10},
+			Temporary:   corebattle.TemporaryDouble,
+		}),
+	}
 	// shortcut: the strongest chest monster represents the group until #1954 adds groups.
-	nm14ArmoredChest = DungeonMonster{ID: "nm14-armored-chest", Name: "魔装の宝箱", HP: 500, Attack: 300, Defense: 95, Agility: 400, ExpReward: 70, GoldReward: 200}
+	nm14ArmoredChest = DungeonMonster{ID: "nm14-armored-chest", Name: "魔装の宝箱", HP: 500, Attack: 300, Defense: 95, Agility: 400, ExpReward: 70, GoldReward: 200,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 69},
+			Jobs:        corebattle.BattleJobs{JobID: "job-93", SP: 20},
+			Temporary:   corebattle.TemporaryDouble,
+		}),
+	}
 )
+
+// Map14 loads a different custom skill for the diver at each destination.
+func map14Diver(loadout corebattle.NPCLoadout) DungeonMonster {
+	return DungeonMonster{ID: "nm14-diver-chick", Name: "ダイバーピヨコ", HP: 250, Attack: 150, Defense: 101, Agility: 108, ExpReward: 54, GoldReward: 54,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant: corebattle.Participant{MP: 97, CMP: 80},
+			Jobs:        corebattle.BattleJobs{JobID: "job-44", SP: 120, OldJobID: "job-10", OldSP: 1},
+			NPCLoadout:  &loadout,
+		}),
+	}
+}
 
 // nm14Pools are _data.cgi (main floor and _T), _dataP.cgi and _dataK.cgi with
 // their appearance weights; P and K bosses stand in for their groups.
 var nm14Pools = [3]EncounterPool{
 	{
 		Monsters: []DungeonMonster{
-			{ID: "nm14-numb-jelly", Name: "麻痺クラゲ", HP: 106, Attack: 97, Defense: 43, Agility: 67, ExpReward: 32, GoldReward: 23},
+			{ID: "nm14-numb-jelly", Name: "麻痺クラゲ", HP: 106, Attack: 97, Defense: 43, Agility: 67, ExpReward: 32, GoldReward: 23,
+				combat: enemyCombat(corebattle.LifetimeActor{
+					Participant: corebattle.Participant{MP: 43},
+					Jobs:        corebattle.BattleJobs{JobID: "job-91", SP: 20},
+				}),
+			},
 			nm14Marine,
-			{ID: "nm14-shell-slime", Name: "シェルスライム", HP: 85, Attack: 90, Defense: 130, Agility: 40, ExpReward: 34, GoldReward: 29},
-			nm14Helmfish, nm14Diver, nm14Turtle,
+			{ID: "nm14-shell-slime", Name: "シェルスライム", HP: 85, Attack: 90, Defense: 130, Agility: 40, ExpReward: 34, GoldReward: 29,
+				combat: enemyCombat(corebattle.LifetimeActor{
+					Participant: corebattle.Participant{MP: 89},
+					Jobs:        corebattle.BattleJobs{JobID: "job-39", SP: 16},
+				}),
+			},
+			nm14Helmfish,
+			map14Diver(corebattle.NPCLoadout{
+				Source: "ff97fc5:map/14/_data.cgi:74", CustomName: "custom-gem_sky_atk_1",
+				Gems: [3]string{"gem_sky_atk_1"}, GemCosts: [3]int{29},
+			}),
+			nm14Turtle,
 		},
 		Appears: []int{0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 5, 5, 5},
 	},
 	{
 		Monsters: []DungeonMonster{
-			{ID: "nm14-pirate-skeleton", Name: "カイゾクガイコツ", HP: 154, Attack: 108, Defense: 20, Agility: 76, ExpReward: 41, GoldReward: 36},
-			nm14Helmfish, nm14Diver, nm14Turtle,
+			{ID: "nm14-pirate-skeleton", Name: "カイゾクガイコツ", HP: 154, Attack: 108, Defense: 20, Agility: 76, ExpReward: 41, GoldReward: 36,
+				combat: enemyCombat(corebattle.LifetimeActor{
+					Participant: corebattle.Participant{MP: 42},
+					Jobs:        corebattle.BattleJobs{JobID: "job-81", SP: 55},
+				}),
+			},
+			nm14Helmfish,
+			map14Diver(corebattle.NPCLoadout{
+				Source: "ff97fc5:map/14/_dataP.cgi:98", CustomName: "custom-gem_sky_atk_1-gem_regen_1",
+				Gems: [3]string{"gem_sky_atk_1", "gem_regen_1"}, GemCosts: [3]int{29, 16},
+			}),
+			nm14Turtle,
 		},
 		Appears: []int{0, 0, 0, 0, 0, 1, 1, 2, 3},
-		Boss:    &DungeonMonster{ID: "nm14-captain-skeleton", Name: "キャプテンガイコツ", HP: 1500, Attack: 248, Defense: 82, Agility: 140, ExpReward: 500, GoldReward: 320},
+		Boss: &DungeonMonster{ID: "nm14-captain-skeleton", Name: "キャプテンガイコツ", HP: 1500, Attack: 248, Defense: 82, Agility: 140, ExpReward: 500, GoldReward: 320,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant:   corebattle.Participant{MP: 548},
+				Jobs:          corebattle.BattleJobs{JobID: "job-81", SP: 130, OldJobID: "job-02", OldSP: 20},
+				CrystalReward: 3,
+				Temporary:     corebattle.TemporaryNullMagic,
+			}),
+		},
 	},
 	{
 		Monsters: []DungeonMonster{
 			nm14Marine,
-			{ID: "nm14-cleio", Name: "クレイオー", HP: 15, Attack: 35, Defense: 1200, Agility: 600, ExpReward: 200, GoldReward: 500},
+			{ID: "nm14-cleio", Name: "クレイオー", HP: 15, Attack: 35, Defense: 1200, Agility: 600, ExpReward: 200, GoldReward: 500,
+				combat: enemyCombat(corebattle.LifetimeActor{
+					Participant: corebattle.Participant{MP: 89},
+					Jobs:        corebattle.BattleJobs{JobID: "job-13", SP: 100, OldJobID: "job-14", OldSP: 45},
+					Temporary:   corebattle.TemporaryNullMagic,
+				}),
+			},
 			nm14Helmfish,
-			{ID: "nm14-luminous-tentacles", Name: "ルミナステンタクルス", HP: 147, Attack: 118, Defense: 72, Agility: 15, ExpReward: 45, GoldReward: 20},
-			nm14Diver,
-			{ID: "nm14-light-jaws-shell", Name: "ライトジョーズシェル", HP: 320, Attack: 170, Defense: 200, Agility: 10, ExpReward: 62, GoldReward: 90},
+			{ID: "nm14-luminous-tentacles", Name: "ルミナステンタクルス", HP: 147, Attack: 118, Defense: 72, Agility: 15, ExpReward: 45, GoldReward: 20,
+				combat: enemyCombat(corebattle.LifetimeActor{
+					Participant: corebattle.Participant{MP: 93},
+					Jobs:        corebattle.BattleJobs{JobID: "job-34", SP: 30, OldJobID: "job-76", OldSP: 10},
+				}),
+			},
+			map14Diver(corebattle.NPCLoadout{
+				Source: "ff97fc5:map/14/_dataK.cgi:141", CustomName: "custom-gem_sky_atk_1-gem_crisis_strike",
+				Gems: [3]string{"gem_sky_atk_1", "gem_crisis_strike"}, GemCosts: [3]int{29, 22},
+			}),
+			{ID: "nm14-light-jaws-shell", Name: "ライトジョーズシェル", HP: 320, Attack: 170, Defense: 200, Agility: 10, ExpReward: 62, GoldReward: 90,
+				combat: enemyCombat(corebattle.LifetimeActor{
+					Participant: corebattle.Participant{MP: 208},
+					Jobs:        corebattle.BattleJobs{JobID: "job-403", SP: 40, OldJobID: "job-51", OldSP: 110},
+					Temporary:   corebattle.TemporaryNullMagic,
+				}),
+			},
 		},
 		Appears: []int{0, 0, 0, 1, 2, 2, 2, 3, 3, 4, 5},
-		Boss:    &DungeonMonster{ID: "nm14-leviakel", Name: "リヴァイケル", HP: 5800, Attack: 300, Defense: 200, Agility: 160, ExpReward: 800, GoldReward: 1000},
+		Boss: &DungeonMonster{ID: "nm14-leviakel", Name: "リヴァイケル", HP: 5800, Attack: 300, Defense: 200, Agility: 160, ExpReward: 800, GoldReward: 1000,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant:   corebattle.Participant{MP: 1500},
+				Jobs:          corebattle.BattleJobs{JobID: "job-403", SP: 190, OldJobID: "job-83", OldSP: 35},
+				Hit:           444,
+				CrystalReward: 8,
+				Temporary:     corebattle.TemporaryDeflect,
+			}),
+		},
 	},
 }
 

@@ -65,6 +65,7 @@ type DungeonMonster struct {
 	ExpReward  int    `json:"exp_reward"`
 	GoldReward int    `json:"gold_reward"`
 	DropItemID string `json:"drop_item_id,omitempty"`
+	combat     *corebattle.LifetimeActor
 }
 
 type Floor struct {

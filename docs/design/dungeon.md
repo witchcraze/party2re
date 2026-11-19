@@ -178,8 +178,9 @@ tracked by their own Issues. Numeric and letter identifiers here are evidence
 pointers, not native enums.
 
 Every restored map shares these gaps: group size and scaling
-([#1954](https://github.com/witchcraze/party2re/issues/1954)), enemy battle data
-([#2351](https://github.com/witchcraze/party2re/issues/2351)), defeat rewards and
+([#1954](https://github.com/witchcraze/party2re/issues/1954)), applying enemy
+accuracy, job skills and temporary effects in explicit combat
+([#1865](https://github.com/witchcraze/party2re/issues/1865)), defeat rewards and
 crystals ([#1957](https://github.com/witchcraze/party2re/issues/1957)), chest
 contents and inspection ([treasure contract](#treasure-inspection-and-delivery);
 per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428))

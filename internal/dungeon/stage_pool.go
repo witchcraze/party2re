@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sync"
 
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/stagedata"
 )
 
@@ -37,7 +38,12 @@ func stagePool(n int) EncounterPool {
 		if !ok {
 			panic("dungeon: unknown stage monster " + id)
 		}
-		return DungeonMonster{ID: m.ID, Name: m.Name, HP: m.HP, Attack: m.Attack, Defense: m.Defense, Agility: m.Agility, ExpReward: m.ExperienceReward, GoldReward: m.GoldReward}
+		var actor corebattle.LifetimeActor
+		if m.Combat != nil {
+			actor = m.Combat.Clone()
+		}
+		actor.MP, actor.CMP = m.MP, m.CMP
+		return DungeonMonster{ID: m.ID, Name: m.Name, HP: m.HP, Attack: m.Attack, Defense: m.Defense, Agility: m.Agility, ExpReward: m.ExperienceReward, GoldReward: m.GoldReward, combat: enemyCombat(actor)}
 	}
 	pool := EncounterPool{Appears: slices.Clone(st.Appears)}
 	for _, id := range st.MonsterIDs {
