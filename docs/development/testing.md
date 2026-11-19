@@ -41,17 +41,18 @@ Verification is scoped by change type:
 | TDD iteration | `go test -count=1 ./<package> -run '<test>'` |
 | Change ready | `go test -count=1 ./<package>` for affected packages |
 | Optional check of dependents | `make check-changed` |
-| Before commit / ready to merge | `make check`; wait for completion (roughly 6–15 minutes, depending on build cache and machine load) |
-| Push | Let the pre-push hook reuse the successful check or verify changed content |
+| Push | The pre-push hook checks formatting, `go vet` and OpenAPI synchronization, then runs `make check-changed` |
+| Ready to merge | CI passes on the PR head: full suite on shards and the smoke image |
+| Optional full local run | `make check` (roughly 6–15 minutes), for example after migration or shared test-infrastructure changes |
 | Clean database verification needed | `make check-clean` resets the database and forces full verification |
 
 `make test-integration` supplies local connection settings and tests all packages; start services via `make up` and apply migrations via `make db-migrate`. `make test` runs all packages on host without supplying connection settings; DB-backed tests skip automatically when connection variables are absent.
 
-`make check` runs formatting, static analysis, OpenAPI/architecture checks, migrations, the full test suite and a smoke image build. It and the pre-push hook call the same `scripts/verify.sh`, which reuses a successful result for an unchanged working tree. The verified tree hash is captured after code formatting and OpenAPI sync; if working tree files change before verification completes, the run exits non-zero without updating the stamp, ensuring subsequent runs verify the modified contents. Do not start duplicate checks concurrently or repeat a successful check solely for push or session end. If the verification environment changes, use `FORCE_VERIFY=1 make check`.
+`make check` runs formatting, static analysis, OpenAPI/architecture checks, migrations, the full test suite and a smoke image build. It calls `scripts/verify.sh`, which reuses a successful result for an unchanged working tree. The verified tree hash is captured after code formatting and OpenAPI sync; if working tree files change before verification completes, the run exits non-zero without updating the stamp, ensuring subsequent runs verify the modified contents. Do not start duplicate checks concurrently or repeat a successful check solely for session end. If the verification environment changes, use `FORCE_VERIFY=1 make check`.
 
 ### 2.1 Testing Only What a Change Can Affect
 
-`make check-changed` tests the packages a change can affect. It does not satisfy the Definition of Done or replace `make check`, the pre-push hook or CI: it skips formatting, static analysis, OpenAPI synchronization and the smoke image build, and it records no verified tree.
+`make check-changed` tests the packages a change can affect. The pre-push hook runs it after its formatting, `go vet` and OpenAPI checks. It does not replace CI: it skips the smoke image build and the tests it cannot select, and it records no verified tree.
 
 Changes are the difference from the merge base with the local `origin/main` ref, which is not fetched, plus staged, unstaged and untracked files. They select packages as follows:
 
@@ -64,7 +65,7 @@ Changes are the difference from the merge base with the local `origin/main` ref,
 
 The full suite also runs when `origin/main`, the merge base or package data is unavailable. `internal/architecture` and `internal/core` run on every invocation because they read source across packages. A new test with that behavior belongs in `internal/architecture`; one placed elsewhere must be added to [`scripts/check_changed.sh`](../../scripts/check_changed.sh).
 
-The target always starts healthy services and applies migrations through `scripts/migrate.sh`, then uses the same connection settings as `make check`, so selected DB-backed tests run rather than skip. Literal matching cannot see a test that computes a path without naming its directory or file; `make check` remains the guarantee.
+The target always starts healthy services and applies migrations through `scripts/migrate.sh`, then uses the same connection settings as `make check`, so selected DB-backed tests run rather than skip. Literal matching cannot see a test that computes a path without naming its directory or file; CI's full suite remains the guarantee.
 
 ---
 
@@ -338,8 +339,8 @@ insufficient if catalog order or generator logic changes.
 #### Execution and cost
 
 Run the smallest named regression during iteration, then affected packages. The
-normal behavior-change gate remains one completed `make check` on final artifacts
-(section 2); avoid parallel or repeated full checks. Wider seed/sequence sweeps
+normal behavior-change gate is CI's full suite on the PR head (section 2);
+avoid parallel or repeated full checks. Wider seed/sequence sweeps
 are opt-in investigation when a specific invariant or risk warrants them, with a
 recorded seed set, maximum generated actors/operations and run budget. Deterministic
 cases and fuzz seed corpora execute under ordinary `go test`/CI; active fuzzing is

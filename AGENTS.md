@@ -32,19 +32,6 @@ Use the documents according to these roles:
 - GitHub PRs and Git history — detailed change history.
 - `.github/ISSUE_TEMPLATE/` — mandatory ticket/review formats.
 
-The distinction is important:
-
-```text
-AGENTS.md (and .agents/rules/)
-  rules
-    |
-    +--> docs/architecture/   how the software is structured
-    +--> docs/design/         what the game means
-    +--> docs/development/    how work is performed
-    |
-    +--> GitHub Issues        current gaps and planned work
-```
-
 Do not use GitHub Issues as substitutes for permanent architecture/design documentation.
 
 Update the owning documents when a change makes their explanations outdated, as defined in `.agents/rules/02-documentation-sync.md`. Do not append completion records for each Issue/PR or routinely update the frozen inventory. Use [`docs/README.md`](docs/README.md) to locate current contracts, gaps and historical evidence.
@@ -61,7 +48,3 @@ Place the following in `docs/architecture/`, NOT in `.agents/rules/`:
 - Design rationale and explanations of "why" constraints exist
 - Historical migration context and decision records
 - Detailed implementation patterns already enforced mechanically by linters
-
-## Historical Context
-
-The original `AGENTS.md` contained "Reproducible design rationale" explaining the initial Phase 0–2 design work. This information is preserved in Git history but is no longer required for day-to-day feature development.

@@ -1,44 +1,28 @@
 ---
 name: Domain Modeling Principles
-description: Guidelines for modeling game logic, combat, progression, and scheduled actions.
+description: Rules for modeling characters, items, jobs, battle, scheduled actions, events and core invariants.
 ---
 
 # Domain Modeling Principles
 
-## 1. Player vs Character
-Separate the account-level `Player` concept from the in-game `Character`.
-Character owns character state and invariants, but should not become a God object containing every game system (e.g., the Character struct should not directly implement buying items, changing jobs, or managing guilds).
+## 1. Model separation
+- `Player` (account) is separate from `Character`. Character owns its invariants but MUST NOT absorb feature systems (buying, job change, guild management).
+- Items: `ItemDefinition` (what), `ItemInstance` (owned instance), `Inventory` (ownership), `Equipment` (equipped state).
+- `JobDefinition` is separate from `CharacterJob` (mastery/history). Model job requirements and skills as rules/data, not special cases.
+- Battle is an independent component (participants, state, actions, effects, results) with no feature-specific assumptions; features supply context.
+- Time-based actions use a reusable `ScheduledAction` (actor, type, start, execution time, state). The scheduler MUST NOT contain feature rules.
 
-## 2. Items and Inventory
-Separate:
-- `ItemDefinition`: what an item is.
-- `ItemInstance`: a concrete owned instance.
-- `Inventory`: ownership state.
-- `Equipment`: equipped state.
-This supports future systems such as enhancement, randomized properties, and durability.
+## 2. Domain events and hooks
+- Use events or explicit hooks only for meaningful cross-module decoupling; same-context operations sharing transactional invariants use direct calls.
+- Producers emit through `internal/core/event.Dispatcher` (`tc.EmitEvent`) and define hook/event types at their own boundary; registrations are wired in `cmd/party2/wire.go`. Semantics: [`cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md).
+- Sync handlers that mutate records MUST follow the lock order in `05-database-and-caching.md`.
 
-## 3. Jobs and Progression
-Separate `JobDefinition` from `CharacterJob` (a character's relationship with a job, including mastery/history). Job requirements and available skills should be modeled as rules/data rather than as a growing collection of special cases.
+## 3. Core invariants
+Feature modules MUST NOT mutate core fields directly. Use:
+- experience/level: `progression.ApplyExperience*`; MUST NOT add a reincarnation/reset loop absent from the legacy specification;
+- money/medals: `char.AddMoney`, `DeductMoney`, `AddSmallMedals`, `DeductSmallMedals`, or `economy.TransactionRunner`;
+- job state: `CharacterJob.ChangeTo`, `CharacterJob.Master`;
+- inventory: `Inventory.Add`, `Consume`, `Update`;
+- equipment: `Equipment.Equip`, `Unequip`.
 
-## 4. Battle is an Independent Component
-Battle is an independent domain component used by features. At a conceptual level, it contains participants, state, actions, effects, and results. Battle must **not** contain feature-specific assumptions (e.g., "this is a guild battle"). Higher-level features provide the context and invoke the Battle component.
-
-## 5. Scheduled Actions
-Party2 contains asynchronous/time-based actions (an action is started and a result becomes available later). Model this as a reusable concept such as `ScheduledAction` (actor, action type, start time, execution time, state). The scheduling mechanism itself must not contain the rules of individual features.
-
-## 6. Domain Events & Side-Effect Hooks
-Use domain events or explicit observer hooks (e.g., `PostAdventureHook`, `BattleFinished`, `LevelUp`) when they provide meaningful decoupling:
-- **Two-Phase Dispatcher (`internal/core/event.Dispatcher`)**: Producers emit domain events via `tc.EmitEvent`. The dispatcher separates in-tx synchronous execution from post-commit asynchronous execution. See [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) §5 for dispatcher architecture and lifecycle semantics.
-- **Modular Monolith Decoupling**: Action producers define explicit hook signatures or domain event types at their module boundaries rather than importing downstream consumer modules. Wire registrations in `cmd/party2/wire.go` at the composition root.
-- **Lock Hierarchy & Transaction Safety**: Sync event handlers mutating secondary entities must adhere to the lock order in `.agents/rules/05-database-and-caching.md` (`characters` -> `inventory_items` -> secondary records). Secondary records must always be locked *after* characters, never before.
-- **Direct Calls vs Events**: Do not turn internal intra-module operations into events or hooks; use direct method calls when operations belong to the same bounded context and share immediate transactional invariants.
-
-## 7. Core Domain Invariant & Helper Enforcement (Go AST Linting)
-Direct struct field mutations across Core domain entities by feature modules are strictly prohibited to prevent rule bypasses, integer overflows, concurrency races, and duplication bugs:
-- **Progression (`Experience`, `Level`)**: Must route through the appropriate `progression.ApplyExperience*` helper (ensuring OverLevel Lv 150 thresholds, cumulative experience calculations, and stat growths are applied). MUST NOT introduce a reincarnation/reset loop absent from the legacy specification.
-- **Currency & Economy (`Money`, `SmallMedals`)**: Must route through `char.AddMoney`, `char.DeductMoney`, `char.AddSmallMedals`, `char.DeductSmallMedals`, or the universal runtime primitive `economy.TransactionRunner` (`ExecuteTransaction`) (ensuring 0-debt invariants, non-negative amounts, deterministic lock order, and max currency caps).
-- **Job & Skill State (`CurrentJobID`, `MasteredJobs`)**: Must route through `CharacterJob.ChangeTo` and `CharacterJob.Master` (ensuring prerequisite level/gender validation and history logging).
-- **Inventory & Items (`Inventory.Items`)**: Must route through `Inventory.Add`, `Inventory.Consume`, or `Inventory.Update` (ensuring instance uniqueness and quantity consistency).
-- **Equipment & Slots (`Equipment.Slots`)**: Must route through `Equipment.Equip` or `Equipment.Unequip` (ensuring slot compatibility and ownership verification).
-
-These encapsulation boundaries MUST pass the Go AST checks in `internal/core/core_lint_test.go` during `make check`. Passing structural checks MUST NOT be treated as proof of legacy specification parity.
+Enforced by `internal/core/core_lint_test.go`. Passing it is not proof of legacy parity.

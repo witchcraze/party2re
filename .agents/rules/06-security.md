@@ -1,38 +1,26 @@
 ---
 name: Security Rules
-description: Guidelines for ensuring security-sensitive changes are properly reviewed and handled.
+description: Rules for security-sensitive changes, authorization, credentials and dependencies.
 ---
 
-# Security Principles
+# Security Rules
 
 ## 1. Security-Sensitive Changes Require Explicit Review
-Changes that impact the security perimeter of the application must not be merged silently or superficially. Explicit review and attention are required for:
-- Authentication / Authorization
-- Secret handling and storage (passwords, tokens, API keys)
-- Input validation and boundary enforcement
-- SQL Injection, Command Injection, Path Traversal
-- Cross-Site Scripting (XSS) and Cross-Site Request Forgery (CSRF)
-- Server-Side Request Forgery (SSRF)
-- Insecure deserialization
-- Rate limiting and resource exhaustion protections
-- Sensitive data logging (preventing PII or tokens from entering logs)
+MUST NOT merge silently a change affecting: authentication/authorization, secret storage, input validation, injection (SQL, command, path traversal), XSS/CSRF, SSRF, deserialization, rate limiting/resource exhaustion, or logging of sensitive data.
 
 ## 2. API Authorization Boundary
-The presentation/HTTP layer is responsible for extracting session tokens and performing initial authentication. However, **authorization (ensuring the user has permission to access or modify a resource)** must be guaranteed at the Service/API boundary as well. Always ensure that the authenticated user (`Session.PlayerID`) matches the owner of the requested resource before the Service executes critical domain logic.
+HTTP authenticates; the Service/domain boundary MUST also verify that the session's `PlayerID` owns the resource before critical domain logic runs.
 
 ## 3. Mandatory Auth Helper and Common Wrapper Anti-Bypass Rule
-To completely prevent Insecure Direct Object Reference (IDOR) and unauthorized mutation vulnerabilities:
-- **Mandatory Standard Wrappers**: All HTTP handlers accepting `character_id` (in path or JSON body) or mutating character state MUST route through approved higher-order wrappers (`withAuthenticatedCharacter`, `withAuthenticatedCharacterAndJSON`) or explicit session auth (`authenticatePlayer`, `authenticateAdmin`).
-- **No Direct Parameter Extraction**: Handlers MUST NEVER bypass wrappers to decode `req.CharacterID` directly from JSON request bodies without verifying character ownership (`char.PlayerID == player.ID`).
-- **Continuous Mechanical Verification**: The Go AST static analysis suite (`internal/architecture/auth_lint_test.go`) automatically scans all HTTP endpoints during `make check` and CI to enforce that no character endpoint or request struct bypasses these authorization wrappers.
+- HTTP handlers taking `character_id` (path or body) or mutating character state MUST use `withAuthenticatedCharacter`, `withAuthenticatedCharacterAndJSON`, `authenticatePlayer` or `authenticateAdmin`.
+- MUST NEVER decode `req.CharacterID` from a body without verifying `char.PlayerID == player.ID`.
+- Enforced by `internal/architecture/auth_lint_test.go`.
 
-## 4. Dependency Vulnerabilities
-Before introducing a new third-party dependency, verify its security posture and whether it introduces known vulnerabilities. Keep the dependency tree small to minimize attack surface.
+## 4. Dependencies
+Check a new dependency's known vulnerabilities before adding it (see `01-development-workflow.md` §6).
 
-## 5. Password Hashing and Cryptographic Storage
-To ensure credentials resist brute-force attacks through an appropriate password hashing algorithm and work factor:
-- **Approved Hashing Algorithms**: All account authentication credentials MUST use `golang.org/x/crypto/bcrypt` with a work factor / cost parameter ≥ 12 (or `argon2id`).
-- **Strictly Banned Patterns**: Custom iterative SHA-256 loops, PBKDF1, MD5, SHA-1, unsalted hashes, or fast non-memory-hard cryptographic digests are strictly prohibited for user passwords.
-- **Constant-Time Verification**: Verification of security tokens, API keys, and credentials MUST use constant-time comparison (e.g., `subtle.ConstantTimeCompare`) or standard library cryptographic compare functions (e.g., `bcrypt.CompareHashAndPassword`) to prevent timing attacks.
-- **Test Fixture Reuse**: Production credential hashing MUST ALWAYS maintain `cost ≥ 12`, and tests verifying registration, password hashing, authentication, or cost enforcement MUST exercise real production hashing and verification. Tests that only require a valid player fixture without testing hash generation itself MAY reuse a pre-hashed template generated once at production cost (e.g., via `sync.OnceValues`), and MUST NOT reduce `bcrypt` cost or add low-cost hasher hooks to production APIs.
-- **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/crypto_lint_test.go`) during `make check` and CI.
+## 5. Credentials
+- Passwords MUST use `bcrypt` with cost ≥ 12 (or `argon2id`). Custom SHA loops, PBKDF1, MD5, SHA-1, unsalted or fast digests are banned.
+- Tokens, API keys and credentials MUST be compared in constant time (`subtle.ConstantTimeCompare`, `bcrypt.CompareHashAndPassword`).
+- Tests of registration, hashing or authentication MUST use real production hashing. Other tests MAY reuse a pre-hashed template made once at production cost; MUST NOT lower the cost or add low-cost hooks to production APIs.
+- Enforced by `internal/architecture/crypto_lint_test.go`.

@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
-echo "==> [Git pre-push hook] Running unified local verification..."
-./scripts/verify.sh
-echo "==> [Git pre-push hook] All checks passed. Proceeding with push."
+# CI runs the full suite on every PR; the hook only runs checks a push can fail fast on.
+echo "==> [Git pre-push hook] Checking formatting, vet and OpenAPI sync..."
+UNFORMATTED=$(git ls-files -z '*.go' | xargs -0 gofmt -l)
+if [ -n "$UNFORMATTED" ]; then
+    echo "Unformatted Go files (run make fmt):" >&2
+    echo "$UNFORMATTED" >&2
+    exit 1
+fi
+go vet ./...
+go run ./scripts/sync_openapi --check
+
+./scripts/check_changed.sh
+echo "==> [Git pre-push hook] Checks passed. CI runs the full suite."
