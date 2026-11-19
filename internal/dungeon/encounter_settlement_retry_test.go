@@ -162,3 +162,56 @@ func TestEncounterEscapeFencesPausedFight(t *testing.T) {
 		})
 	}
 }
+
+// A mutual knockout leaves no enemy to keep: the stored run stays readable,
+// only Escape remains, and Escape banks the stock exactly once.
+func TestEncounterMutualKnockoutEscapes(t *testing.T) {
+	for _, kind := range []string{"memory", "valkey"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := context.Background()
+			store := encounterStore(t, kind)
+			char := createTestChar(id.New(), 10, 100, 30, 20)
+			repo := newMockDungeonRepo()
+			exp := sampleExpedition(id.New(), char.ID, "mutual")
+			exp.AccumulatedExp, exp.AccumulatedGold, exp.AccumulatedItems = 11, 13, nil
+			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23}
+			exp.Encounter = &dungeon.ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: dungeon.EventBattle, X: 1}
+			if err := store.SaveActiveExpedition(ctx, exp); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := store.DeleteActiveExpedition(ctx, char.ID, exp.ID); err != nil {
+					t.Error(err)
+				}
+			})
+			engine := &customPartyBattleEngine{resolvePartyFn: func(corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+				return corebattle.PartyBattleResult{Outcome: corebattle.OutcomeDraw, RemainingHP: map[string]int{char.ID: 0, "enemy": 0}}, nil
+			}}
+			svc, err := dungeon.NewService(repo, &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine,
+				dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons([]dungeon.Dungeon{{ID: "mutual"}}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.Fight(ctx, char.ID); err != nil {
+				t.Fatal(err)
+			}
+			got, err := store.GetActiveExpedition(ctx, char.ID)
+			if err != nil || got == nil || got.Status != dungeon.StatusExploring || got.Encounter != nil {
+				t.Fatalf("after mutual knockout: %+v %v", got, err)
+			}
+			if c := got.Controls(char.ID); c.CanMove || c.CanFight || !c.CanEscape {
+				t.Fatalf("controls %+v", c)
+			}
+			if _, err := svc.Escape(ctx, char.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.Escape(ctx, char.ID); !errors.Is(err, dungeon.ErrNoActiveExpedition) {
+				t.Fatalf("repeat escape: %v", err)
+			}
+			h := repo.histories[char.ID]
+			if len(h) != 1 || h[0].Outcome != dungeon.StatusEscaped || h[0].ExpReward != 11 || h[0].GoldReward != 13 {
+				t.Fatalf("settlement %+v", h)
+			}
+		})
+	}
+}

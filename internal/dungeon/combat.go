@@ -214,15 +214,20 @@ func (s *Service) resolveMonsterCombat(
 		}, nil
 	}
 
-	// Draw or defeat: the enemies stay. An all-fallen party remains in the run,
-	// where only Escape is left (legacy never ends a quest because allies fell).
+	// Draw or defeat: surviving enemies stay. An all-fallen party remains in the
+	// run, where only Escape is left (legacy never ends a quest because allies fell).
+	// After a mutual knockout no enemy survives, so no encounter is kept.
+	pending := pendingEncounter(exp, monster, eventType, newX, newY, battleRes, field)
+	if pending.Enemies[0].HP <= 0 {
+		pending = nil
+	}
 	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
 		Combat:               true,
 		NewX:                 stayX,
 		NewY:                 stayY,
-		Encounter:            pendingEncounter(exp, monster, eventType, newX, newY, battleRes, field),
+		Encounter:            pending,
 		HPDelta:              leaderHPDelta,
 		MemberHPDeltas:       memberHPDeltas,
 		MemberMPDeltas:       memberMPDeltas,
