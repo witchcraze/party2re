@@ -1,17 +1,13 @@
 package dungeon
 
-import (
-	"strings"
-
-	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-)
+import corebattle "github.com/witchcraze/party2re/internal/core/battle"
 
 // NativeMap3ID is the warp maze (legacy map/3, eight initial variants).
 const NativeMap3ID = "native-map-3"
 
 // nativeMap3Grids transcribes map/3/1.cgi–8.cgi. Warp letters A, C, D, E,
 // F and G use lowercase aliases, and T uses the native mist cell M.
-var nativeMap3Grids = [8][9]string{
+var nativeMap3Grids = [][]string{
 	{"f0000000d", "0101c1010", "003101b00", "011101110", "0a00S0000", "011101110", "0Me101200", "010101M10", "B0000000g"},
 	{"b0000000f", "010101010", "00a1013M0", "011101110", "0000S00d0", "011101110", "0M2101B00", "0101e1010", "c0000000g"},
 	{"a00000003", "01M101010", "00b101f00", "011101110", "0000S00d0", "011101110", "00c101BM0", "0101e1010", "20000000g"},
@@ -105,13 +101,7 @@ func nativeMap3() Dungeon {
 	pools := nativeMap3Pools()
 	variants := make([]Floor, len(nativeMap3Grids))
 	for i, rows := range nativeMap3Grids {
-		f := Floor{FloorNumber: 1, Width: 9, Height: 9, Grid: rows[:], Warps: nativeMap3Warps[i], Pools: pools, events: nativeMap3Events}
-		for y, row := range rows {
-			if x := strings.IndexByte(row, cellStart); x >= 0 {
-				f.StartX, f.StartY = x, y
-			}
-		}
-		variants[i] = f
+		variants[i] = gridFloor(Floor{FloorNumber: 1, Warps: nativeMap3Warps[i], Pools: pools, events: nativeMap3Events}, rows)
 	}
 	return Dungeon{
 		ID:             NativeMap3ID,

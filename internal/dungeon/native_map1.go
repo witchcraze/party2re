@@ -1,14 +1,12 @@
 package dungeon
 
-import "strings"
-
 // NativeMap1ID is the key-and-door maze (legacy map/1, seven initial variants).
 const NativeMap1ID = "native-map-1"
 
 // nativeMap1Grids transcribe legacy map/1/1.cgi–7.cgi; legacy I is H here.
 // A locked door has one open neighbour, entered moving west in variants 1, 2
 // and 5 and moving south in the others.
-var nativeMap1Grids = [7][9]string{
+var nativeMap1Grids = [][]string{
 	{"2B0D0101K", "111100010", "000101010", "010001000", "01H111110", "010000010", "0001S1000", "1H111111H", "100030000"},
 	{"2B0D00000", "111110110", "100010110", "001000000", "011101H10", "00K1013H0", "011101110", "010000010", "0001S1000"},
 	{"1K1000013", "10101101H", "000010000", "011110110", "000S00010", "01101111D", "011000110", "11001001B", "3H0111K12"},
@@ -46,16 +44,7 @@ func nativeMap1Pool() EncounterPool {
 // nativeMap1 has round limit 50 and the menu threshold for dungeon 1 (job level 3).
 func nativeMap1() Dungeon {
 	pools := []EncounterPool{nativeMap1Pool()}
-	variants := make([]Floor, len(nativeMap1Grids))
-	for i, rows := range nativeMap1Grids {
-		f := Floor{FloorNumber: 1, Width: 9, Height: 9, Grid: rows[:], Pools: pools, Marks: map[byte]string{'K': "★", 'D': "扉"}, events: nativeMap1Events}
-		for y, row := range rows {
-			if x := strings.IndexByte(row, cellStart); x >= 0 {
-				f.StartX, f.StartY = x, y
-			}
-		}
-		variants[i] = f
-	}
+	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: map[byte]string{'K': "★", 'D': "扉"}, events: nativeMap1Events}, nativeMap1Grids)
 	return Dungeon{
 		ID:             NativeMap1ID,
 		Name:           "封じの地下墓所",

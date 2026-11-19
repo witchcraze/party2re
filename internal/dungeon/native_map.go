@@ -3,6 +3,7 @@ package dungeon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -33,17 +34,8 @@ func nativeMap0() Dungeon {
 		{"C0000", "11B11", "00000", "11110", "00S00"},
 		{"C0000", "11B11", "00000", "01111", "00S00"},
 	}
-	variants := make([]Floor, len(grids))
-	for i, grid := range grids {
-		f := Floor{FloorNumber: 1, Width: 5, Height: 5, Grid: grid, Monsters: monsters, Boss: boss,
-			events: map[byte]cellEvent{'H': {kind: eventHidden}, 'C': {kind: eventTreasure}}}
-		for y, row := range grid {
-			if x := strings.IndexByte(row, cellStart); x >= 0 {
-				f.StartX, f.StartY = x, y
-			}
-		}
-		variants[i] = f
-	}
+	variants := variantFloors(Floor{FloorNumber: 1, Monsters: monsters, Boss: boss,
+		events: map[byte]cellEvent{'H': {kind: eventHidden}, 'C': {kind: eventTreasure}}}, grids)
 	return Dungeon{
 		ID:          NativeMap0ID,
 		Name:        "地下迷路",
@@ -51,6 +43,34 @@ func nativeMap0() Dungeon {
 		RoundLimit:  20,
 		Variants:    variants,
 	}
+}
+
+// gridFloor completes tmpl with one transcribed grid, deriving its size and
+// start; floors without S keep the arriving position. A ragged grid is a
+// transcription error and fails catalog construction.
+func gridFloor(tmpl Floor, rows []string) Floor {
+	if len(rows) == 0 {
+		panic("dungeon: empty grid")
+	}
+	tmpl.Grid, tmpl.Width, tmpl.Height = rows, len(rows[0]), len(rows)
+	for y, row := range rows {
+		if len(row) != tmpl.Width {
+			panic(fmt.Sprintf("dungeon: ragged grid row %d %q", y, row))
+		}
+		if x := strings.IndexByte(row, cellStart); x >= 0 {
+			tmpl.StartX, tmpl.StartY = x, y
+		}
+	}
+	return tmpl
+}
+
+// variantFloors builds one initial variant per grid from a shared template.
+func variantFloors(tmpl Floor, grids [][]string) []Floor {
+	floors := make([]Floor, len(grids))
+	for i, rows := range grids {
+		floors[i] = gridFloor(tmpl, rows)
+	}
+	return floors
 }
 
 var errInvalidFloor = errors.New("invalid floor index")

@@ -1,10 +1,6 @@
 package dungeon
 
-import (
-	"strings"
-
-	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-)
+import corebattle "github.com/witchcraze/party2re/internal/core/battle"
 
 // NativeMap5ID is the lever temple (legacy map/5, four initial variants).
 const NativeMap5ID = "native-map-5"
@@ -13,7 +9,7 @@ const NativeMap5ID = "native-map-5"
 const jobRemedy = "job-43"
 
 // nativeMap5Grids transcribe map/5/1.cgi–4.cgi with their legacy symbols.
-var nativeMap5Grids = [4][9]string{
+var nativeMap5Grids = [][]string{
 	{"S0000IT140t", "0111t111110", "01000000010", "01011101010", "0I01L101000", "01010001101", "0T01I111100", "0101I12100I", "0001IIB1H13"},
 	{"S0000ItI40T", "011T1111110", "01000000010", "0T011101010", "0101L101000", "00010001010", "010111I1010", "01t121I10II", "0001BII1H13"},
 	{"3000L000000", "01111111110", "01S000010T0", "01011100010", "0101000I000", "t101011T141", "0I0T0H11111", "01010110II1", "000000001B2"},
@@ -37,16 +33,7 @@ var nativeMap5Events = map[byte]cellEvent{
 func nativeMap5() Dungeon {
 	pools := nativeMap3Pools()
 	marks := map[byte]string{'L': "★"}
-	variants := make([]Floor, len(nativeMap5Grids))
-	for i, rows := range nativeMap5Grids {
-		f := Floor{FloorNumber: 1, Width: 11, Height: 9, Grid: rows[:], Pools: pools, Marks: marks, events: nativeMap5Events}
-		for y, row := range rows {
-			if x := strings.IndexByte(row, cellStart); x >= 0 {
-				f.StartX, f.StartY = x, y
-			}
-		}
-		variants[i] = f
-	}
+	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: marks, events: nativeMap5Events}, nativeMap5Grids)
 	return Dungeon{
 		ID:             NativeMap5ID,
 		Name:           "仕掛けの神殿",
