@@ -147,6 +147,7 @@ func (s *Service) resolveMonsterCombat(
 	newX, newY int,
 	eventKey string,
 	allyStatus string,
+	revived map[string]int,
 ) (ExpeditionStepResult, error) {
 	rounds, stayX, stayY := exp.combatProgress(newX, newY)
 	var enemy corebattle.Participant
@@ -159,6 +160,10 @@ func (s *Service) resolveMonsterCombat(
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
+	for id, d := range revived {
+		memberHPDeltas[id] += d
+	}
+	leaderHPDelta += revived[char.ID]
 
 	if won {
 		memberExpDeltas := make(map[string]int, len(exp.Members))

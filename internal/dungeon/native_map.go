@@ -110,12 +110,16 @@ func (n *nativeStep) fight(monster DungeonMonster, kind TileEventType, key, stat
 	n.battle = &nativeBattle{monster: monster, kind: kind, key: key, status: status}
 }
 
-// moveNative applies one admitted native step: the round advances and the
-// destination's map event is dispatched (legacy vs_dungeon.cgi _susumu).
+// moveNative applies one admitted native step: the pre-move revival pass runs
+// before the destination's map event is dispatched (legacy vs_dungeon.cgi _susumu).
 func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader, actor *corecharacter.Character, d Dungeon, floor Floor, x, y int) (ExpeditionStepResult, error) {
 	// Only an encounter without living members reaches here; the step drops it.
 	clearing := exp.Encounter != nil
 	exp.Encounter = nil
+	revived, err := reviveOnMove(exp, s.rng)
+	if err != nil {
+		return ExpeditionStepResult{}, err
+	}
 	cell := floor.Grid[y][x]
 	ev := floor.event(cell)
 	key := ev.stateKey(cell, x, y)
@@ -136,21 +140,61 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader,
 		return ExpeditionStepResult{}, err
 	}
 	if battle := n.battle; battle != nil {
-		return s.resolveMonsterCombat(ctx, exp, leader, battle.monster, battle.kind, x, y, battle.key, battle.status)
+		return s.resolveMonsterCombat(ctx, exp, leader, battle.monster, battle.kind, x, y, battle.key, battle.status, revived)
 	}
+
+	var damages map[string]int
+	if !n.recovery {
+		damages = negate(n.step.MemberHPDeltas)
+	}
+	addHPDeltas(&n.step, leader.ID, revived)
 
 	out, err := s.activeStore.Step(ctx, leader.ID, n.step)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	res := ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove}
-	if !n.recovery {
-		res.MemberDamages = negate(n.step.MemberHPDeltas)
-	}
+	res := ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove, MemberDamages: damages}
 	if out.Expedition.Encounter != nil {
 		res.EventType = EventTreasure
 	}
 	return res, nil
+}
+
+// reviveOnMove runs reset_status_all's item-188 revival pass on the saved
+// roster before the destination event (vs_dungeon.cgi:93, _battle.cgi:1411–1422).
+func reviveOnMove(exp *ActiveExpedition, rng RandomSource) (map[string]int, error) {
+	state, ids := rosterState(exp)
+	if err := state.ReviveOnAdvance(ids, adaptRandomSource(rng)); err != nil {
+		return nil, err
+	}
+	var hp map[string]int
+	for i := range exp.Members {
+		if d := state.Actors[i].HP - exp.Members[i].CurrentHP; d != 0 {
+			if hp == nil {
+				hp = make(map[string]int)
+			}
+			id := exp.Members[i].CharacterID
+			hp[id] = d
+			exp.Members[i].CurrentHP = state.Actors[i].HP
+			if id == exp.CharacterID {
+				exp.CurrentHP = state.Actors[i].HP
+			}
+		}
+	}
+	return hp, nil
+}
+
+func addHPDeltas(step *StepParams, leaderID string, deltas map[string]int) {
+	if len(deltas) == 0 {
+		return
+	}
+	if step.MemberHPDeltas == nil {
+		step.MemberHPDeltas = make(map[string]int, len(deltas))
+	}
+	for id, d := range deltas {
+		step.MemberHPDeltas[id] += d
+	}
+	step.HPDelta += deltas[leaderID]
 }
 
 // trapRoll is _trap_d's per-member damage: int(base × (0.9 + rand(0.3))).
