@@ -17,15 +17,15 @@ var nativeMap5Grids = [][]string{
 }
 
 // The lever is a once-only boss whose flag also reveals every I.
-var nativeMap5Events = map[byte]cellEvent{
-	'I': {kind: eventHidden, key: 'L'},
-	'L': {kind: eventBoss, perSymbol: true, keepMark: true},
-	'T': {kind: eventMist, status: corebattle.StatusDeadlyPoison},
-	't': {kind: eventTrap, base: 80},
-	'H': {kind: eventRemedy, perSymbol: true},
-	'2': {kind: eventTreasure, perSymbol: true},
-	'3': {kind: eventTreasure, perSymbol: true},
-	'4': {kind: eventTreasure, perSymbol: true},
+var nativeMap5Events = map[byte]mapEvent{
+	'I': {action: hiddenEvent{key: 'L'}},
+	'L': {action: bossEvent{}, perSymbol: true, keepMark: true},
+	'T': {action: mistEvent{status: corebattle.StatusDeadlyPoison}},
+	't': {action: trapEvent{base: 80}},
+	'H': {action: remedyEvent{}, perSymbol: true},
+	'2': {action: treasureEvent{}, perSymbol: true},
+	'3': {action: treasureEvent{}, perSymbol: true},
+	'4': {action: treasureEvent{}, perSymbol: true},
 }
 
 // nativeMap5 has round limit 60 and the menu threshold for dungeon 5 (job level 11).

@@ -20,14 +20,14 @@ var nativeMap4Grids = [][]string{
 }
 
 // Passages charge the mover instead of spawning, and every H shares one flag.
-var nativeMap4Events = map[byte]cellEvent{
-	'0': {kind: eventAttrition},
-	'M': {kind: eventMessage, perSymbol: true},
-	'H': {kind: eventRecovery, perSymbol: true},
-	'b': {kind: eventBoss},
-	'2': {kind: eventTreasure, perSymbol: true},
-	'3': {kind: eventTreasure, perSymbol: true},
-	'4': {kind: eventTreasure, perSymbol: true},
+var nativeMap4Events = map[byte]mapEvent{
+	'0': {action: attritionEvent{}},
+	'M': {action: messageEvent{}, perSymbol: true},
+	'H': {action: recoveryEvent{}, perSymbol: true},
+	'b': {action: bossEvent{}},
+	'2': {action: treasureEvent{}, perSymbol: true},
+	'3': {action: treasureEvent{}, perSymbol: true},
+	'4': {action: treasureEvent{}, perSymbol: true},
 }
 
 // nativeMap4 has round limit 70 and the menu threshold for dungeon 4 (job level 9).

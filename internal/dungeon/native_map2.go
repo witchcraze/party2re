@@ -44,9 +44,9 @@ func nativeMap2() Dungeon {
 			Exits: map[byte]FloorExit{'T': {Variants: []int{8}, Trap: 40}}},
 	}
 	// Flags carry across floors, so the repeated 7 and the vault treasures key by symbol.
-	events := map[byte]cellEvent{
-		'7': {kind: eventBoss, perSymbol: true}, '8': {kind: eventBoss, perSymbol: true},
-		'2': {kind: eventTreasure, perSymbol: true}, '3': {kind: eventTreasure, perSymbol: true}, '4': {kind: eventTreasure, perSymbol: true},
+	events := map[byte]mapEvent{
+		'7': {action: bossEvent{}, perSymbol: true}, '8': {action: bossEvent{}, perSymbol: true},
+		'2': {action: treasureEvent{}, perSymbol: true}, '3': {action: treasureEvent{}, perSymbol: true}, '4': {action: treasureEvent{}, perSymbol: true},
 	}
 	variants := make([]Floor, len(nativeMap2Floors))
 	for i, rows := range nativeMap2Floors {

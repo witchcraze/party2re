@@ -113,10 +113,11 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 // hitWall runs the floor's wall event without spending a round or resetting
 // statuses (vs_dungeon.cgi _susumu); the base wall rejects the move.
 func (s *Service) hitWall(ctx context.Context, exp *ActiveExpedition, ownerID string, floor Floor) (ExpeditionStepResult, error) {
-	if floor.event(cellWall).kind != eventScatter {
+	ev, ok := floor.event(cellWall).action.(scatterEvent)
+	if !ok {
 		return ExpeditionStepResult{}, ErrImpassableWall
 	}
-	x, y := scatter(s.rng)
+	x, y := ev.landing(s.rng)
 	out, err := s.activeStore.Step(ctx, ownerID, StepParams{
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,

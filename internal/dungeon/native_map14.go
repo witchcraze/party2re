@@ -70,14 +70,51 @@ func drawMap14Sites(candidates string, count int, rng RandomSource) string {
 	return string(drawn)
 }
 
-func routeActive(exp *ActiveExpedition, cell byte) (bool, error) {
+type routeEvent struct{}
+
+func (routeEvent) visible(exp *ActiveExpedition, cell byte) (bool, error) {
 	st, err := decodeRouteState(exp.MapState)
 	return strings.IndexByte(st.Active, cell) >= 0, err
 }
 
-func shipTreasureActive(exp *ActiveExpedition, cell byte) (bool, error) {
+func (ev routeEvent) apply(n *nativeStep) error {
+	active, err := ev.visible(n.exp, n.cell)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return baseEvents['0'].action.apply(n)
+	}
+	v, state, err := routeDestination(n.exp, n.cell, n.rng)
+	if err != nil {
+		return err
+	}
+	// The coordinate is kept; every point is a passage on every destination.
+	n.step.MapVariant, n.step.RoundLimit, n.step.MapState = v, n.dungeon.limitOf(n.dungeon.Variants[v-1]), state
+	return nil
+}
+
+type shipSiteEvent struct{}
+
+func (shipSiteEvent) visible(exp *ActiveExpedition, cell byte) (bool, error) {
 	st, err := decodeRouteState(exp.MapState)
 	return strings.IndexByte(st.DisabledTreasure, cell) < 0, err
+}
+
+func (ev shipSiteEvent) apply(n *nativeStep) error {
+	active, err := ev.visible(n.exp, n.cell)
+	if err != nil || n.consumed || !active {
+		return err
+	}
+	if n.rng.Float64() < 0.5 {
+		return treasureEvent{}.apply(n)
+	}
+	monster := nm14Mimic
+	if n.rng.Float64() >= 0.5 {
+		monster = nm14ArmoredChest
+	}
+	n.fight(monster, EventBoss, n.key, "")
+	return nil
 }
 
 // routeDestination returns the point's destination variant, drawing it on the
@@ -164,19 +201,19 @@ var nm14Pools = [3]EncounterPool{
 // at the same coordinate; 9 is narration only.
 func nativeMap14() Dungeon {
 	back := map[byte]FloorExit{'R': {Variants: []int{1}}}
-	ship := Floor{Pools: nm14Pools[:1], Exits: back, Marks: map[byte]string{'R': "★"}, events: map[byte]cellEvent{}}
+	ship := Floor{Pools: nm14Pools[:1], Exits: back, Marks: map[byte]string{'R': "★"}, events: map[byte]mapEvent{}}
 	sites := map14DisablableSites + "k"
 	for i := range len(sites) {
 		ship.Marks[sites[i]] = "宝"
-		ship.events[sites[i]] = cellEvent{kind: eventShipSite, perSymbol: true}
+		ship.events[sites[i]] = mapEvent{action: shipSiteEvent{}, perSymbol: true}
 	}
 	floors := [4]Floor{
 		{Pools: nm14Pools[:1], Marks: map[byte]string{'A': "★", 'B': "★", 'C': "★", 'D': "★", 'E': "★"},
-			events: map[byte]cellEvent{'A': {kind: eventRoute}, 'B': {kind: eventRoute}, 'C': {kind: eventRoute}, 'D': {kind: eventRoute}, 'E': {kind: eventRoute}}},
+			events: map[byte]mapEvent{'A': {action: routeEvent{}}, 'B': {action: routeEvent{}}, 'C': {action: routeEvent{}}, 'D': {action: routeEvent{}}, 'E': {action: routeEvent{}}}},
 		{Pools: nm14Pools[1:2], Exits: back, Marks: map[byte]string{'P': "◎", 'R': "★", 'a': "宝", 'b': "宝"},
-			events: map[byte]cellEvent{'P': {kind: eventBoss, perSymbol: true}, 'a': {kind: eventTreasure, perSymbol: true}, 'b': {kind: eventTreasure, perSymbol: true}}},
+			events: map[byte]mapEvent{'P': {action: bossEvent{}, perSymbol: true}, 'a': {action: treasureEvent{}, perSymbol: true}, 'b': {action: treasureEvent{}, perSymbol: true}}},
 		{Pools: nm14Pools[2:3], Exits: back, Marks: map[byte]string{'K': "◎", 'R': "★", 't': "宝", 'u': "宝", 'v': "宝"},
-			events: map[byte]cellEvent{'K': {kind: eventBoss, perSymbol: true}, 't': {kind: eventTreasure, perSymbol: true}, 'u': {kind: eventTreasure, perSymbol: true}, 'v': {kind: eventTreasure, perSymbol: true}}},
+			events: map[byte]mapEvent{'K': {action: bossEvent{}, perSymbol: true}, 't': {action: treasureEvent{}, perSymbol: true}, 'u': {action: treasureEvent{}, perSymbol: true}, 'v': {action: treasureEvent{}, perSymbol: true}}},
 		ship,
 	}
 	variants := make([]Floor, len(floors))

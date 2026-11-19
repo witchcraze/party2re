@@ -32,7 +32,7 @@ func nativeMap0() Dungeon {
 		{"C0000", "11B11", "00000", "01111", "00S00"},
 	}
 	variants := variantFloors(Floor{FloorNumber: 1, Monsters: monsters, Boss: boss,
-		events: map[byte]cellEvent{'H': {kind: eventHidden}, 'C': {kind: eventTreasure}}}, grids)
+		events: map[byte]mapEvent{'H': {action: hiddenEvent{}}, 'C': {action: treasureEvent{}}}}, grids)
 	return Dungeon{
 		ID:          NativeMap0ID,
 		Name:        "地下迷路",
@@ -85,198 +85,67 @@ func (s *Service) activeFloor(exp *ActiveExpedition) (Dungeon, Floor, error) {
 	return d, d.Variants[idx], nil
 }
 
+type nativeStep struct {
+	exp           *ActiveExpedition
+	leader, actor *corecharacter.Character
+	dungeon       Dungeon
+	floor         Floor
+	cell          byte
+	rng           RandomSource
+	key           string
+	consumed      bool
+	step          StepParams
+	battle        *nativeBattle
+	recovery      bool
+}
+
+type nativeBattle struct {
+	monster DungeonMonster
+	kind    TileEventType
+	key     string
+	status  string
+}
+
+func (n *nativeStep) fight(monster DungeonMonster, kind TileEventType, key, status string) {
+	n.battle = &nativeBattle{monster: monster, kind: kind, key: key, status: status}
+}
+
 // moveNative applies one admitted native step: the round advances and the
 // destination's map event is dispatched (legacy vs_dungeon.cgi _susumu).
-// char is the leader owning the run; actor is the mover the event acts through.
-func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, actor *corecharacter.Character, d Dungeon, floor Floor, x, y int) (ExpeditionStepResult, error) {
+func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader, actor *corecharacter.Character, d Dungeon, floor Floor, x, y int) (ExpeditionStepResult, error) {
 	// Only an encounter without living members reaches here; the step drops it.
 	clearing := exp.Encounter != nil
 	exp.Encounter = nil
 	cell := floor.Grid[y][x]
 	ev := floor.event(cell)
-	if ev.kind == eventRoute {
-		active, err := routeActive(exp, cell)
-		if err != nil {
-			return ExpeditionStepResult{}, err
-		}
-		if !active {
-			ev = baseEvents['0'] // an inactive point is a passage (_allot_stage)
-		}
-	}
 	key := ev.stateKey(cell, x, y)
-	consumed := slices.Contains(exp.ConsumedEvents, key)
-	step := StepParams{
-		ExpectedExpeditionID: exp.ID,
-		ExpectedRevision:     &exp.Revision,
-		Combat:               clearing,
-		NewX:                 x,
-		NewY:                 y,
-		RoundDelta:           1,
-		Now:                  time.Now().UTC(),
+	n := nativeStep{
+		exp: exp, leader: leader, actor: actor, dungeon: d, floor: floor, cell: cell, rng: s.rng,
+		key: key, consumed: slices.Contains(exp.ConsumedEvents, key),
+		step: StepParams{
+			ExpectedExpeditionID: exp.ID,
+			ExpectedRevision:     &exp.Revision,
+			Combat:               clearing,
+			NewX:                 x,
+			NewY:                 y,
+			RoundDelta:           1,
+			Now:                  time.Now().UTC(),
+		},
 	}
-	recovery := false
-	switch ev.kind {
-	case eventSpawn:
-		if 2*s.rng.Float64() <= 1 {
-			if pool := s.encounterPool(floor); len(pool.Monsters) > 0 {
-				return s.resolveMonsterCombat(ctx, exp, char, pool.monster(s.rng), EventBattle, x, y, "", ev.status)
-			}
-		}
-	case eventMist:
-		return s.resolveMonsterCombat(ctx, exp, char, s.encounterPool(floor).monster(s.rng), EventBattle, x, y, "", ev.status)
-	case eventBoss:
-		if consumed {
-			break
-		}
-		if boss, ok := floor.Bosses[cell]; ok {
-			return s.resolveMonsterCombat(ctx, exp, char, boss, EventBoss, x, y, key, ev.status)
-		}
-		var pool EncounterPool
-		if len(ev.pools) > 0 {
-			pool = ev.pools[s.rng.Intn(len(ev.pools))]
-		} else {
-			pool = s.encounterPool(floor)
-		}
-		if pool.Boss != nil {
-			return s.resolveMonsterCombat(ctx, exp, char, *pool.Boss, EventBoss, x, y, key, ev.status)
-		}
-	case eventKey, eventMessage:
-		if !consumed {
-			step.EventKey = key
-		}
-	case eventDoor:
-		if consumed {
-			break
-		}
-		if slices.Contains(ev.jobs, actor.JobID) || slices.Contains(exp.ConsumedEvents, string(ev.key)) {
-			step.EventKey = key
-		} else {
-			// Locked: the round is spent and the party returns to its only approach.
-			step.NewX, step.NewY = exp.PosX, exp.PosY
-		}
-	case eventTreasure:
-		if !consumed {
-			step.EventKey = key
-			step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
-		}
-	case eventShipSite:
-		active, err := shipTreasureActive(exp, cell)
-		if err != nil {
-			return ExpeditionStepResult{}, err
-		}
-		if consumed || !active {
-			break
-		}
-		if s.rng.Float64() < 0.5 {
-			step.EventKey = key
-			step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
-			break
-		}
-		monster := nm14Mimic
-		if s.rng.Float64() >= 0.5 {
-			monster = nm14ArmoredChest
-		}
-		return s.resolveMonsterCombat(ctx, exp, char, monster, EventBoss, x, y, key, "")
-	case eventAttrition:
-		if loss := attritionLoss(exp, actor); loss > 0 {
-			step.MemberHPDeltas = map[string]int{actor.ID: -loss}
-			if actor.ID == char.ID {
-				step.HPDelta = -loss // the run-level HP mirrors the leader
-			}
-		}
-	case eventRecovery:
-		if consumed {
-			break
-		}
-		step.EventKey = key
-		hp, mp, err := recoverOne(exp, actor, s.rng)
-		if err != nil {
-			return ExpeditionStepResult{}, err
-		}
-		step.MemberHPDeltas, step.MemberMPDeltas = hp, mp
-		step.HPDelta = hp[char.ID]
-		recovery = true
-	case eventTrap:
-		partyTrap(&step, exp, char.ID, float64(ev.base), s.rng)
-	case eventChoice:
-		if consumed {
-			break
-		}
-		o := ev.outcomes[0]
-		if ev.odds > 0 && float64(ev.odds)*s.rng.Float64() >= 1 {
-			o = ev.outcomes[1]
-		}
-		base := float64(o.base)
-		if o.random {
-			base *= s.rng.Float64()
-		}
-		step.EventKey = key
-		switch o.kind {
-		case outcomeMonster:
-			m := o.monster
-			if m == nil {
-				pm := s.encounterPool(floor).monster(s.rng)
-				m = &pm
-			}
-			return s.resolveMonsterCombat(ctx, exp, char, *m, EventBattle, x, y, key, "")
-		case outcomeBoss:
-			m := o.monster
-			if m == nil {
-				m = s.encounterPool(floor).Boss
-			}
-			return s.resolveMonsterCombat(ctx, exp, char, *m, EventBoss, x, y, key, "")
-		case outcomeTreasure:
-			step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
-		case outcomeTrap:
-			partyTrap(&step, exp, char.ID, base, s.rng)
-		case outcomeHeal:
-			hp, err := partyHeal(exp, actor, base, s.rng)
-			if err != nil {
-				return ExpeditionStepResult{}, err
-			}
-			step.MemberHPDeltas, step.HPDelta = hp, hp[char.ID]
-			recovery = true
-		case outcomeGold:
-			// shortcut: the wallet change lands with #2417; map6 stays unlisted until then.
-		}
-	case eventRemedy:
-		if consumed || actor.JobID != jobRemedy {
-			break
-		}
-		step.EventKey = key
-		step.MemberHPDeltas, step.MemberMPDeltas = fullRestore(exp)
-		step.HPDelta = step.MemberHPDeltas[char.ID]
-		recovery = true
-	case eventRoute:
-		v, state, err := routeDestination(exp, cell, s.rng)
-		if err != nil {
-			return ExpeditionStepResult{}, err
-		}
-		// The coordinate is kept; every point is a passage on every destination.
-		step.MapVariant, step.RoundLimit, step.MapState = v, d.limitOf(d.Variants[v-1]), state
-	case eventScatter:
-		// The landing cell is not dispatched.
-		step.NewX, step.NewY = scatter(s.rng)
-	default:
-		if to, ok := floor.Warps[cell]; ok {
-			step.NewX, step.NewY = to[0], to[1]
-		}
-		if exit, ok := floor.Exits[cell]; ok {
-			// The destination is drawn first, then each member's damage (map/2 event_T).
-			step.MapVariant = exit.Variants[s.rng.Intn(len(exit.Variants))]
-			step.RoundLimit = d.limitOf(d.Variants[step.MapVariant-1])
-			if exit.Trap > 0 {
-				partyTrap(&step, exp, char.ID, float64(exit.Trap), s.rng)
-			}
-		}
+	if err := ev.action.apply(&n); err != nil {
+		return ExpeditionStepResult{}, err
 	}
-	out, err := s.activeStore.Step(ctx, char.ID, step)
+	if battle := n.battle; battle != nil {
+		return s.resolveMonsterCombat(ctx, exp, leader, battle.monster, battle.kind, x, y, battle.key, battle.status)
+	}
+
+	out, err := s.activeStore.Step(ctx, leader.ID, n.step)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
 	res := ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove}
-	if !recovery {
-		res.MemberDamages = negate(step.MemberHPDeltas)
+	if !n.recovery {
+		res.MemberDamages = negate(n.step.MemberHPDeltas)
 	}
 	if out.Expedition.Encounter != nil {
 		res.EventType = EventTreasure
@@ -317,14 +186,15 @@ func negate(deltas map[string]int) map[string]int {
 
 // encounterPool draws the content pool for one event; a floor with no or one
 // pool draws nothing.
-func (s *Service) encounterPool(f Floor) EncounterPool {
+func (n *nativeStep) encounterPool() EncounterPool {
+	f := n.floor
 	switch len(f.Pools) {
 	case 0:
 		return EncounterPool{Monsters: f.Monsters, Boss: f.Boss}
 	case 1:
 		return f.Pools[0]
 	}
-	return f.Pools[s.rng.Intn(len(f.Pools))]
+	return f.Pools[n.rng.Intn(len(f.Pools))]
 }
 
 // monster draws one enemy through the weighted index list (add_monster).

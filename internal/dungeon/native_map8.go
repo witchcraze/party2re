@@ -22,20 +22,28 @@ var nativeMap8Grids = [][]string{
 
 // A wall hit and W both scatter the party; the map edge displays as passage
 // ($map_imgs{1}) and no symbol has a mark, so the view shows only passage.
-var nativeMap8Events = map[byte]cellEvent{
-	cellWall: {kind: eventScatter},
-	'W':      {kind: eventScatter},
-	'A':      {kind: eventBoss, perSymbol: true},
-	'B':      {kind: eventBoss, perSymbol: true},
-	'C':      {kind: eventBoss, perSymbol: true},
-	'D':      {kind: eventBoss, perSymbol: true},
-	'2':      {kind: eventTreasure, perSymbol: true},
-	'3':      {kind: eventTreasure, perSymbol: true},
-	'4':      {kind: eventTreasure, perSymbol: true},
+var nativeMap8Events = map[byte]mapEvent{
+	cellWall: {action: scatterEvent{}},
+	'W':      {action: scatterEvent{}},
+	'A':      {action: bossEvent{}, perSymbol: true},
+	'B':      {action: bossEvent{}, perSymbol: true},
+	'C':      {action: bossEvent{}, perSymbol: true},
+	'D':      {action: bossEvent{}, perSymbol: true},
+	'2':      {action: treasureEvent{}, perSymbol: true},
+	'3':      {action: treasureEvent{}, perSymbol: true},
+	'4':      {action: treasureEvent{}, perSymbol: true},
 }
 
-// scatter is event_W/event_1: y, then x, each int(rand(5) + 3), inside every map8 grid.
-func scatter(rng RandomSource) (x, y int) {
+type scatterEvent struct{}
+
+func (ev scatterEvent) apply(n *nativeStep) error {
+	// The landing cell is not dispatched.
+	n.step.NewX, n.step.NewY = ev.landing(n.rng)
+	return nil
+}
+
+// event_W/event_1 draw y, then x, each int(rand(5) + 3), inside every map8 grid.
+func (scatterEvent) landing(rng RandomSource) (x, y int) {
 	y = 3 + rng.Intn(5)
 	return 3 + rng.Intn(5), y
 }

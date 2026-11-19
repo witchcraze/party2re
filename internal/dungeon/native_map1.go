@@ -20,12 +20,12 @@ var nativeMap1Grids = [][]string{
 const jobLockpick = "job-09"
 
 // Variants repeat K and 3 under one legacy flag, so they key by symbol.
-var nativeMap1Events = map[byte]cellEvent{
-	'H': {kind: eventHidden},
-	'K': {kind: eventKey, perSymbol: true},
-	'D': {kind: eventDoor, perSymbol: true, key: 'K', jobs: []string{jobLockpick}},
-	'2': {kind: eventTreasure, perSymbol: true},
-	'3': {kind: eventTreasure, perSymbol: true},
+var nativeMap1Events = map[byte]mapEvent{
+	'H': {action: hiddenEvent{}},
+	'K': {action: keyEvent{}, perSymbol: true},
+	'D': {action: doorEvent{key: 'K', jobs: []string{jobLockpick}}, perSymbol: true},
+	'2': {action: treasureEvent{}, perSymbol: true},
+	'3': {action: treasureEvent{}, perSymbol: true},
 }
 
 // nativeMap1 has round limit 50 and the menu threshold for dungeon 1 (job level 3).

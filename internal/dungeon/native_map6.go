@@ -43,60 +43,60 @@ var (
 	})
 )
 
-func fixedMonster(m DungeonMonster) choiceOutcome {
-	return choiceOutcome{kind: outcomeMonster, monster: &m}
-}
+func fixedMonster(m DungeonMonster) monsterOutcome { return monsterOutcome{monster: &m} }
 
-func fixedBoss(m DungeonMonster) choiceOutcome { return choiceOutcome{kind: outcomeBoss, monster: &m} }
+func fixedBoss(m DungeonMonster) bossOutcome { return bossOutcome{monster: &m} }
 
 var (
-	stageBoss    = choiceOutcome{kind: outcomeBoss}
-	stageMonster = choiceOutcome{kind: outcomeMonster}
-	treasure     = choiceOutcome{kind: outcomeTreasure}
-	rock         = choiceOutcome{kind: outcomeTrap, base: 120}
-	trap200      = choiceOutcome{kind: outcomeTrap, base: 200, random: true}
-	heal100      = choiceOutcome{kind: outcomeHeal, base: 100, random: true}
-	goldGain     = choiceOutcome{kind: outcomeGold, base: 1}
-	goldLoss     = choiceOutcome{kind: outcomeGold, base: -1}
-	nothing      = choiceOutcome{}
+	stageBoss    = bossOutcome{}
+	stageMonster = monsterOutcome{}
+	treasure     = treasureEvent{}
+	rock         = trapEvent{base: 120}
+	trap200      = trapEvent{base: 200, random: true}
+	heal100      = healOutcome{base: 100}
+)
+
+const (
+	goldGain = goldOutcome(1)
+	goldLoss = goldOutcome(-1)
 )
 
 // pair binds one side of an exclusive pair; odds 0 always takes first.
-func pair(flag string, odds int, first, second choiceOutcome) cellEvent {
-	return cellEvent{kind: eventChoice, flag: flag, odds: odds, outcomes: [2]choiceOutcome{first, second}}
+func pair(flag string, odds int, first, second nativeEvent) mapEvent {
+	return mapEvent{flag: flag, action: choiceEvent{odds: odds, outcomes: [2]nativeEvent{first, second}}}
 }
 
 // nativeMap6Choices are each variant's A–F events (map/6/<n>.cgi:35–45).
-var nativeMap6Choices = [5]map[byte]cellEvent{
+var nativeMap6Choices = [5]map[byte]mapEvent{
 	{
 		'A': pair("AB", 3, fixedMonster(nm6SilverDrop), fixedMonster(nm6Slime)),
 		'B': pair("AB", 7, fixedMonster(nm6SilverKing), fixedMonster(nm6KingSlime)),
 		'C': pair("CD", 2, trap200, goldGain),
 		'D': pair("CD", 2, heal100, goldLoss),
 		'E': pair("EF", 3, stageBoss, stageMonster),
-		'F': pair("EF", 3, rock, nothing),
+		'F': pair("EF", 3, rock, nil),
 	},
 	{
 		'A': pair("AB", 5, treasure, fixedBoss(nm6Chests)),
 		'B': pair("AB", 3, stageBoss, stageMonster),
-		'C': pair("CD", 0, stageBoss, nothing),
+		'C': pair("CD", 0, stageBoss, nil),
 		'D': pair("CD", 3, stageMonster, rock),
-		'E': pair("EF", 0, fixedBoss(nm6Hounds), nothing),
-		'F': pair("EF", 0, fixedBoss(nm6Panthers), nothing),
+		'E': pair("EF", 0, fixedBoss(nm6Hounds), nil),
+		'F': pair("EF", 0, fixedBoss(nm6Panthers), nil),
 	},
 	{
-		'A': pair("AB", 0, stageBoss, nothing),
+		'A': pair("AB", 0, stageBoss, nil),
 		'B': pair("AB", 6, treasure, fixedBoss(nm6Chests)),
-		'D': pair("CD", 0, nothing, nothing),
+		'D': pair("CD", 0, nil, nil),
 		'E': pair("EF", 2, stageBoss, stageMonster),
-		'F': pair("EF", 2, rock, nothing),
+		'F': pair("EF", 2, rock, nil),
 	},
 	{
-		'A': pair("AB", 0, stageBoss, nothing),
+		'A': pair("AB", 0, stageBoss, nil),
 		'B': pair("AB", 6, treasure, fixedBoss(nm6Chests)),
-		'C': pair("CD", 0, nothing, nothing),
+		'C': pair("CD", 0, nil, nil),
 		'E': pair("EF", 2, stageBoss, stageMonster),
-		'F': pair("EF", 2, rock, nothing),
+		'F': pair("EF", 2, rock, nil),
 	},
 	{
 		'A': pair("AB", 3, fixedMonster(nm6SilverDrop), fixedMonster(nm6Slime)),
@@ -114,13 +114,13 @@ func nativeMap6() Dungeon {
 	pools := stagePools(7, 11)
 	variants := make([]Floor, len(nativeMap6Grids))
 	for i, rows := range nativeMap6Grids {
-		events := map[byte]cellEvent{
-			'X': {kind: eventBoss, perSymbol: true},
-			'2': {kind: eventTreasure, perSymbol: true},
-			'3': {kind: eventTreasure, perSymbol: true},
-			'5': {kind: eventMessage, perSymbol: true},
-			'6': {kind: eventMessage, perSymbol: true},
-			'7': {kind: eventMessage, perSymbol: true},
+		events := map[byte]mapEvent{
+			'X': {action: bossEvent{}, perSymbol: true},
+			'2': {action: treasureEvent{}, perSymbol: true},
+			'3': {action: treasureEvent{}, perSymbol: true},
+			'5': {action: messageEvent{}, perSymbol: true},
+			'6': {action: messageEvent{}, perSymbol: true},
+			'7': {action: messageEvent{}, perSymbol: true},
 		}
 		for sym, ev := range nativeMap6Choices[i] {
 			events[sym] = ev
