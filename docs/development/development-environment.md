@@ -35,7 +35,7 @@ call.
 ```sh
 git clone https://github.com/witchcraze/party2re.git
 cd party2re
-make setup-hooks   # run make check's verification before every push
+make setup-hooks   # check formatting, vet, OpenAPI and affected tests before every push
 make up            # start the development MariaDB and Valkey
 make db-migrate    # apply the schema to the development database
 make check         # format, analyze and run the full test suite

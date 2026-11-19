@@ -30,8 +30,10 @@ The versioned client context/action Gateway is registered; its contract is defin
 The mandatory [guidance rules](../../.agents/rules/07-guidance-layer.md) select
 modules by transaction depth, deterministic locks, shared/P2P state, and
 scheduling. A dedicated module index requires at least two qualifying criteria;
-Tier 2 means on-demand navigation and does not waive that selection rule. These tiers are documentation priorities,
-not SQL lock ranks.
+Tier 1 modules (`tavern`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`,
+`store`) are investigated first for transactions; other qualifying modules
+(Tier 2) get an index on demand when modified. Neither tier waives that
+selection rule. These tiers are documentation priorities, not SQL lock ranks.
 
 | Existing module index | Navigation purpose |
 |---|---|
@@ -75,6 +77,5 @@ SQL table existence, complete call-graph coverage, lock order across every
 callback, legacy behavior, or runtime performance.
 
 After changing a transaction, inspect its implementation and update its index
-in the same PR. Run `go test ./internal/architecture` and the required
-`make check`; independently verify table names and lock acquisitions. New
+in the same PR. Run `go test ./internal/architecture`; CI runs the full suite. Independently verify table names and lock acquisitions. New
 artifact types or validation rules follow the architecture issue workflow.

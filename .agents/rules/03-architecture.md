@@ -1,103 +1,61 @@
 ---
 name: Architecture and Component Rules
-description: Guidelines for system architecture, modular monolith design, layer boundaries, API connections, and environment variable configuration.
+description: Rules for modular monolith boundaries, layers, shared components, configuration, file sizing, runtime primitives and recovery.
 ---
 
-# Architecture Principles
+# Architecture Rules
 
-## 1. Feature Expansion is a Primary Goal
-New features should be possible without modifying core or unrelated features. Extensibility comes from clear boundaries, not premature abstraction.
-- Prefer: isolated feature modules, explicit responsibilities, stable contracts, data-driven content.
-- Avoid: growing a central God object, feature-specific branches in core code, accessing another feature's internal state.
+Section numbers are cited by `internal/architecture` lint messages; keep them stable.
 
-## 2. Start as a Modular Monolith
-Single repository and single application process. Logical component boundaries are required, but physical service separation (microservices) is banned unless justified by concrete requirements.
+## 1. Feature Expansion
+New features MUST NOT require modifying core or unrelated features. Prefer isolated modules, stable contracts and data-driven content; avoid God objects, feature branches in core and access to another feature's internal state.
 
-## 3. Core Must Remain Small
-Core contains only genuinely shared concepts (Player, Character, Stats, Progression, Items, Time). Feature-specific concepts belong strictly in their respective feature module.
+## 2. Modular Monolith
+One repository, one process. Microservices are banned without a concrete requirement.
 
-## 4. Features are First-Class Components
-Features (Adventure, Guild, Casino, Alchemy, etc.) own their feature-specific rules and state. A feature may depend on public contracts of Core or Domain components (like Battle), but **must not access another Feature Module's private implementation or persistence layer.**
-- **Prohibition of Cross-Feature Direct Imports**: Feature packages MUST NOT import peer feature packages directly. Inter-feature communication must route through public API contracts, `core/event.Dispatcher`, or composition roots (`cmd/party2/`).
-- **Prohibition of Direct Database Imports**: Feature packages MUST NOT import `internal/database` directly. Persistence must be accessed strictly through domain repository interfaces.
-- **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/package_boundary_lint_test.go`) during `make check` and CI.
+## 3. Small Core
+Core holds only shared concepts (Player, Character, Stats, Progression, Items, Time). Core MUST NOT import feature packages.
 
+## 4. Feature Boundaries
+Features own their rules and state and MAY use public contracts of core and domain components (e.g. Battle). Feature packages MUST NOT import peer features or `internal/database`; communicate through public contracts, `core/event.Dispatcher` or the composition root (`cmd/party2/`), and persist through repository interfaces. Enforced by `package_boundary_lint_test.go`.
 
 ## 5. UI and API Layer Boundary
-- **No Domain Logic in HTTP Handlers:** Do not put game logic, math, or complex validations directly in HTTP handlers or GUI components.
-- **Service Layer Abstraction:** Major game operations should pass through the UI-independent application API / Service layer boundary so they can be tested and alternative clients can be added later.
-- **Authorization Depth:** While the HTTP layer parses JSON and extracts session tokens, **authorization logic** (ensuring `PlayerID` owns the character) should be enforced deeply at the Service/Domain boundary to prevent bypasses when called from other contexts.
-- **No Detached Root Contexts in Handlers:** HTTP handlers and middleware functions MUST NOT instantiate detached root contexts (`context.Background()` or `context.TODO()`). Discarding `r.Context()` drops client disconnect signals, timeouts, session identities, and ambient transaction scopes. Handlers MUST always propagate `r.Context()` or the incoming `ctx`.
-  - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/context_lint_test.go`) during `make check` and CI.
-- **Presentation Decoupling & UI-Agnostic Domain Services:** Backend domain services (`internal/*` excluding `internal/api/http`) MUST NEVER return HTML markup (`<b>`, `<br>`, etc.), human-facing NPC dialogue, or layout-specific formatting strings. All rendering, dialogue formatting, and presentation styling belong strictly to the presentation/client layer. Domain service results MUST return pure, structured data (models, counts, facts, or boolean flags like `SentToDepot`). HTTP handlers format presentation messages using standardized envelopes (`writeSuccess` and `writeAppError`) or transport response DTOs.
-  - **Continuous Mechanical Verification**: Enforced automatically across all domain packages via Go AST static analysis (`internal/architecture/presentation_lint_test.go`) with ratcheting whitelist (`whitelistedLegacyPresentationFields`) during `make check` and CI.
-- **Client/Agent Gateway & CQRS Interaction Model:** New interactive clients MUST target the two-pillar Gateway (`get_character_context`, `execute_character_action`) described in [`docs/architecture/client-agent-api.md`](../../docs/architecture/client-agent-api.md).
-  - Clients MUST consult the [current OpenAPI specification](../../docs/api/openapi.json) for registered routes and documented responses; MUST NOT infer command connection from `available_actions` entry eligibility.
-  - Existing REST routes MUST be retired only through the tracked migration, after their replacement command coverage is implemented and verified.
-  - MUST keep current gaps and planned work in GitHub Issues and enduring API contracts in the architecture document linked above. MUST NOT duplicate issue completion or rollout status in this rule.
+- Handlers and UI MUST NOT contain game logic, math or complex validation; operations go through the UI-independent service layer. Authorization is also enforced at the service boundary (`06-security.md` §2).
+- Handlers and middleware MUST propagate `r.Context()`/`ctx`, never `context.Background()`/`TODO()` (`context_lint_test.go`).
+- Domain services (`internal/*` except `internal/api/http`) MUST return structured data, never HTML, NPC dialogue or display formatting; HTTP formats with `writeSuccess`/`writeAppError` or transport DTOs (`presentation_lint_test.go`, ratcheted).
+- New interactive clients MUST use the Gateway (`get_character_context`, `execute_character_action`) in [`client-agent-api.md`](../../docs/architecture/client-agent-api.md), consult the [OpenAPI spec](../../docs/api/openapi.json) for registered routes, and MUST NOT infer command support from `available_actions` eligibility. REST routes retire only through the tracked migration after verified replacement.
 
 ## 6. Architecture Review Triggers
-Do not silently make substantial architectural decisions. Create an Issue if the work would change: Core responsibilities, component boundaries, dependency direction, public contracts, persistence architecture, or external API architecture.
+Create an Issue before changing core responsibilities, component boundaries, dependency direction, public contracts, persistence architecture or external API architecture.
 
-## 7. Common Components and DRY Guidelines
-- **No Monolithic `util`/`common` Packages**: Generic "junk-drawer" packages are BANNED. Shared logic belongs in single-responsibility packages (`internal/id`, `internal/pagination`, `internal/validation`).
-- **No Generic "Helper" Packages & Domain Identity of `internal/helperquest`**: Generic "helper" packages are strictly forbidden. The package `internal/helperquest` represents the legacy Party2 Helper Quests (`lib/helper.cgi`) and is a gameplay feature domain package, not a utility module.
-- **Rule of Three for General Utilities**: Prefer local implementation until duplication occurs across 3+ modules before extracting shared utilities.
-- **Immediate Centralization for Security & Concurrency**: Security enforcement (`withAuthenticatedCharacter`) and thread-safe RNG (`internal/core/random`) MUST be centralized immediately. Direct imports of `math/rand` in production packages are prohibited (verified by `rand_lint_test.go`).
-- **Shared Entity Persistence**: Repositories mutating shared Core entities must use centralized persistence helpers in `internal/database` rather than scattered raw SQL updates.
-- **Encapsulation of Core Domain Attributes**: Core domain evaluations (e.g. `item.Slot.Kind()`) MUST be encapsulated directly on domain types (`internal/core/*`), never reconstructed via ad-hoc switches in feature services.
-- **Centralized Safe Arithmetic**: Currency/quantity arithmetic subject to integer overflow MUST use `internal/economy` (`economy.SafeMultiply`, `economy.SafeAdd`). Local duplicate overflow checks are prohibited.
+## 7. Shared Components
+- `util`/`common`/generic `helper` packages are banned; use single-responsibility packages (`internal/id`, `internal/pagination`, `internal/validation`). `internal/helperquest` is the Helper Quest gameplay feature, not a utility.
+- Extract general utilities at three duplicating modules; centralize security (`withAuthenticatedCharacter`) and RNG (`internal/core/random`; no `math/rand` in production, `rand_lint_test.go`) immediately.
+- Shared core entity writes use `internal/database` persistence helpers; core evaluations (e.g. `item.Slot.Kind()`) live on core types; overflow-prone currency/quantity math uses `economy.SafeMultiply`/`SafeAdd`.
 
-## 8. Configuration & Environment Variable Boundaries
-To preserve testability, decouple packages from global runtime state, and prevent hidden configuration dependencies:
-- **Config Struct First**: Packages requiring configuration parameters MUST define a pure configuration struct (e.g., `pkg.Config`) containing typed fields with zero dependencies on `os.Getenv` or environment variables.
-- **Constructors Accept Config**: Service/repository constructors MUST accept config structs or explicit arguments (e.g., `NewService(cfg Config, ...)`), and MUST NOT call `os.Getenv` or load secrets/paths directly within constructors.
-- **Isolated Environment Loaders**: Environment variable parsing MUST be isolated to dedicated loader functions (e.g., `pkg.ConfigFromEnvironment()` or `pkg.DefaultConfig()`), or handled entirely at the composition root (`cmd/party2/config.go`).
-- **Test-Friendly Defaults**: Provide sane default values for local development and testing without requiring mandatory environment variables unless strictly necessary for secrets or external connection addresses.
-- **Deployment Documentation**: This applies to every environment variable read by production code.
-  - **Same-PR Update**: A PR that adds, renames or removes a variable, or changes its default, fallback alias or invalid-value behavior, MUST update its entry in the same PR. Required variables belong in the required table of [`docs/development/environment-variables.md`](../../docs/development/environment-variables.md) and the [README Docker Compose example](../../README.md#docker-compose-での起動例). Optional variables belong only in that document's optional table.
-  - **Required Content**: Each entry MUST state its default, its aliases and its invalid-value behavior.
-  - **Secrets**: Passwords and API keys MUST use placeholders such as `<admin-api-key>`. NEVER write a real secret.
-  - **Exclusions**: Variables read only by tests or development tooling (`_test.go`, `internal/testutil`, `PARTY2_TEST_*`, `GOFLAGS`) MUST NOT be listed.
-  - **Continuous Mechanical Verification**: Variable names and placement are enforced by Go AST static analysis (`internal/architecture/env_docs_lint_test.go`) during `make check` and CI. Reads with a dynamic name MUST use a string literal or be annotated with `//lint:ignore env-docs <reason>`.
+## 8. Configuration
+- Packages take a typed `Config` struct or explicit arguments; constructors MUST NOT read environment variables. Parsing lives in a dedicated loader (`ConfigFromEnvironment`, `DefaultConfig`) or `cmd/party2/config.go`. Defaults work for local development without required variables except secrets and connection addresses.
+- A PR that adds, renames or removes a production environment variable, or changes its default, alias or invalid-value behavior, MUST update [`environment-variables.md`](../../docs/development/environment-variables.md) (required ones also in the [README Compose example](../../README.md#docker-compose-での起動例)) with default, aliases and invalid-value behavior. Use placeholders for secrets; never real values. Test/tooling-only variables are not listed. Dynamic names need a literal or `//lint:ignore env-docs <reason>` (`env_docs_lint_test.go`).
 
-## 9. File Sizing, Package Cohesion, and Mechanical Linting
-To keep files readable, maintainable, and within effective token limits for AI pair programming:
-- **Mechanical Line Limits**: Enforced automatically via `internal/architecture/file_size_lint_test.go` on `make check` and `make arch-lint`:
-  - Production Go files (`internal/**/*.go`): **≤ 500 lines** (excluding tests).
-  - Application entry points (`cmd/*/main.go`): **≤ 150 lines**.
-- **Interface Sizing & Segregation (ISP)**: Enforced automatically via `internal/architecture/interface_size_lint_test.go` on `make check` and `make arch-lint`:
-  - Domain interfaces must declare **≤ 10 direct methods** (`maxDirectInterfaceMethods`).
-  - Monolithic interfaces violating ISP must be decomposed into cohesive sub-interfaces (focused on specific sub-aggregates / operations) and assembled via interface embedding (composition).
-  - Embedded interfaces are excluded from direct method counts, actively incentivizing composition.
-  - Pre-existing oversized interfaces are ratcheted down in `whitelistedLegacyInterfaceLimits` as they are refactored.
-- **Ratcheting Whitelist**: Pre-existing oversized files are locked at their historical line count. Any growth beyond the baseline fails CI. When a file is decomposed below 500 lines, it must be removed from the whitelist to lock in the improvement.
-- **Decomposition by Responsibility**: When a domain file approaches 500 lines, decompose it into focused peer files within the same package (e.g., `service.go`, `session.go`, `step.go`, `repository.go`).
-- **Maintain Package Cohesion**: Keep related sub-responsibilities within the same Go package unless clear layer boundaries justify a new package. Splitting across peer files retains package-private visibility while improving navigability.
+## 9. File Size and Cohesion
+- Production `internal/**/*.go` ≤ 500 lines, `cmd/*/main.go` ≤ 150 (`file_size_lint_test.go`); interfaces ≤ 10 direct methods, composed by embedding (`interface_size_lint_test.go`). Oversized legacy entries are ratcheted: never grow them; remove an entry once it is under the limit.
+- Split large files into peer files by responsibility within the same package; add packages only for real layer boundaries.
 
-## 10. Cross-Domain Application Runtime Primitives
-- **Transactional Mutation Boundaries**:
-  - **Single-Character Currency & Inventory Operations**: Operations modifying a single character's wallet, medals, or inventory items MUST route through `economy.TransactionRunner` (`ExecuteTransaction` or `economy.Run[T]`). Feature services MUST NOT roll their own ad-hoc transaction orchestration or row locking for single-character currency/inventory mutations.
-  - **Peer-to-Peer (P2P) and Multi-Aggregate Operations**: Operations orchestrating transfers between multiple characters (e.g. sender & receiver, buyer & seller) or mutating multiple domain aggregates across storage/table boundaries (e.g. `character_depots`, `gem_boxes`, `flea_market_items`, `player_stores`, `auction_listings`) MUST inject a transaction boundary provider interface (`TransactionProvider` / `RunInTx(ctx, fn) error`, matching `economy.TransactionProvider`).
-  - **Deterministic Lock Hierarchy Enforcement**: Any P2P or multi-aggregate transaction MUST strictly adhere to the global pessimistic lock hierarchy (Rank 0 → Rank 8) defined in [`.agents/rules/05-database-and-caching.md`](05-database-and-caching.md) and [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md).
-  - **Prohibition of Direct Infrastructure Coupling**: Feature packages MUST NOT import `internal/database` directly to invoke raw `database.RunInTx(ctx, db, ...)` or hold raw `*sql.DB` / `db` identifiers. All database transaction boundaries must be injected via interfaces.
-  - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/tx_runner_lint_test.go` and `internal/architecture/lock_hierarchy_lint_test.go`) during `make check` and CI.
-- **Event Dispatcher**: Domain events MUST use `internal/core/event.Dispatcher` two-phase dispatch. See [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) for architecture, lock order enforcement, and migration examples.
+## 10. Runtime Primitives
+- Single-character money/medal/inventory mutations MUST use `economy.TransactionRunner` (`ExecuteTransaction`, `economy.Run[T]`).
+- P2P and multi-aggregate operations MUST take an injected `TransactionProvider` (`RunInTx(ctx, fn)`) and follow the lock order in `05-database-and-caching.md`.
+- Feature packages MUST NOT call raw `database.RunInTx` or hold `*sql.DB` (`tx_runner_lint_test.go`, `lock_hierarchy_lint_test.go`).
+- Domain events use `internal/core/event.Dispatcher` two-phase dispatch ([`cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md)).
 
-## 11. Combat Cluster Boundaries & Battle Adapter Enforcement
-- **Prohibition of Direct `corebattle.NewParticipantFromCharacter`**: Feature modules (`adventure`, `boss`, `pvp`, `gvg`, `dungeon`, `challenge`, `party`, etc.) MUST NOT construct combat participants directly from Core character models via `corebattle.NewParticipantFromCharacter`, `corebattle.NewParticipantFromCharacterWithHP`, or `FromCharacter`. Direct generation bypasses equipment stat calculation (weapons, armors, accessories), combat-time consumable items, passive triggers (e.g. `ItemToukiShield`, `ItemDokuroAmulet`, `ItemCursedTalisman`), and status orbs, producing "naked combatants".
-- **Mandatory Battle Adapter Routing**: All combat features MUST inject `battle.ParticipantBuilder` (implemented by `internal/battle.Service`) or use `battle.BuildParticipantFromData` to ensure complete, authentic character combatant construction.
-- **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/battle_adapter_lint_test.go`) during `make check`, `make arch-lint`, and CI.
+## 11. Battle Adapter
+Combat features MUST build participants through `battle.ParticipantBuilder` (`internal/battle.Service`) or `battle.BuildParticipantFromData`, never `corebattle.NewParticipantFromCharacter*`/`FromCharacter`, which skip equipment, combat items, passives and orbs (`battle_adapter_lint_test.go`).
 
-## 12. Concurrency and Cooperative Cancellation
-- **Context-Aware Delays and Prohibiting Raw `time.Sleep`**: Backend services and workers must always support cooperative cancellation via `context.Context`. Raw `time.Sleep` calls block goroutines unconditionally, ignoring server graceful shutdown signals, container termination deadlines, and request timeout/cancellation events.
-- **Mandatory Pattern**: Any delay, retry backoff, or polling interval in production services MUST listen to `ctx.Done()` (e.g. via `select { case <-ctx.Done(): return ctx.Err(); case <-time.After(delay): }` or `time.NewTicker` / `time.NewTimer`). Direct calls to `time.Sleep` in production code are strictly prohibited.
-- **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/sleep_lint_test.go`) during `make check` and CI.
+## 12. Cancellation
+Production delays, retries and polling MUST honor `ctx.Done()` (`select` with `time.After`, timers, tickers); `time.Sleep` is banned (`sleep_lint_test.go`).
 
-## 13. Recoverability Before Exhaustive Edge-Case Handling
-- **Design Priority:** MUST prefer a simple normal path with safe automatic recovery over accumulating special-case branches for speculative edge cases. MUST preserve required domain behavior, trust-boundary validation, authorization, transaction guarantees, and asset conservation.
-- **Recovery from Residual State:** When failures can leave stale, partial, or inconsistent state, MUST define how it converges to a valid state through safe re-execution, reconciliation from the authoritative store, or lifecycle cleanup. Prefer the next access or existing workers; MUST NOT introduce a new recovery subsystem without a concrete need.
-- **Minimum Recovery Redundancy:** MUST retain the minimum durable evidence needed to resume or reconcile interrupted work when the authoritative state alone is insufficient. Recovery MUST be idempotent, preserve valid concurrent updates, and avoid duplicate rewards, charges, or other side effects; MUST NOT create competing sources of truth.
-- **Safe Repair Boundary:** MUST automatically repair only when the correct result follows from authoritative data and domain rules. MUST NOT guess, silently reset assets, discard unfinished work, or hide persistent failures; ambiguous state MUST be preserved and surfaced for diagnosis. Retries MUST be bounded per attempt and respect context cancellation.
-- **Focused Verification:** Changes to recovery behavior MUST test a representative interrupted or inconsistent state and repeated recovery, verifying convergence and preservation of valid data. MUST NOT expand into an exhaustive hypothetical combination matrix without evidence of a distinct failure mode.
-
+## 13. Recoverability
+- Prefer a simple normal path with safe automatic recovery over speculative edge-case branches, without weakening domain behavior, validation, authorization, transactions or asset conservation.
+- When failure can leave partial state, define how it converges: safe re-execution, reconciliation from the authoritative store or lifecycle cleanup, preferably on next access or in existing workers. No new recovery subsystem without concrete need.
+- Keep the minimum durable evidence needed to resume; recovery MUST be idempotent, preserve concurrent updates and never duplicate rewards or charges, and MUST NOT create a competing source of truth.
+- Repair automatically only what authoritative data determines; never guess, silently reset assets, drop unfinished work or hide persistent failure. Retries are bounded and cancellable.
+- Test a representative interrupted state and repeated recovery, not a hypothetical combination matrix.

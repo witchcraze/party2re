@@ -1,51 +1,37 @@
 ---
 name: Documentation Sync Rules
-description: Rules for maintaining the Single Source of Truth (SSOT) and synchronizing documents within Pull Requests.
+description: Rules for document ownership, content criteria, same-PR updates, consolidation and OpenAPI sources.
 ---
 
-# Documentation Maintenance Principles
+# Documentation Rules
 
-## 1. Single Source of Truth (SSOT)
-- MUST use the document ownership defined in [`AGENTS.md`](../../AGENTS.md#document-hierarchy) and indexed in [`docs/README.md`](../../docs/README.md). Keep one owning explanation per contract; other documents and skills MUST link to it rather than copy it.
-- During reconstruction, MUST check game specifications against the original project under [`00-migration-constraints.md`](00-migration-constraints.md). MUST distinguish legacy requirements, current implementation and planned changes; NEVER rewrite a correct legacy rule to match an incorrect implementation.
+## 1. Single Source of Truth
+- Use the ownership in [`AGENTS.md`](../../AGENTS.md#document-hierarchy), indexed in [`docs/README.md`](../../docs/README.md). One owning explanation per contract; other documents and skills MUST link to it, not copy it.
+- Check game specifications against the original under `00-migration-constraints.md`. Distinguish legacy requirement, current implementation and planned change; NEVER rewrite a correct legacy rule to match the implementation.
 
 ## 2. Documentation Role and Timing
-- **Minimum Prose for Implemented Behavior:** For details already expressed in source, tests or generated specifications, MUST retain only the minimum explanation needed to understand responsibilities, public contracts, domain rules and non-obvious rationale. Link to the owning source when needed; do not reproduce private helpers, internal data structures, SQL or execution traces in prose.
-- **Design Document Content:** `docs/design/` MUST keep only content that neither the implementing code/tests nor a direct reading of the legacy routine provides:
-  - approved decisions and their rationale, including intentional departures from legacy behavior;
+- For behavior expressed in source, tests or generated specs, keep only the minimum needed to understand responsibilities, public contracts, domain rules and non-obvious rationale. Do not reproduce private helpers, data structures, SQL or execution traces.
+- `docs/design/` MUST keep only what neither the code/tests nor a direct reading of the legacy routine provides:
+  - approved decisions and rationale, including intentional departures from legacy;
   - unresolved specifications and known gaps, linked to open Issues;
   - verified rules not yet implemented, with legacy evidence, until code and tests own them;
-  - non-obvious findings with legacy line references: source defects, unreachable or broken branches, misleading names or values, and values captured or applied at unexpected times.
-- MUST NOT restate per-entry formulas, parameters or execution order that implemented code or tests express, and MUST NOT keep legacy line references whose only purpose is to locate a routine findable by its name. Merge new findings into the owning section rather than appending investigation reports.
-- **Avoid Pre-emptive Detailed Tech Specs:** While domain rules should be documented early, do not pre-draft overly rigid technical specification files (e.g., defining exact structs and function signatures in markdown) before writing code. Let the detailed technical boundaries settle through TDD and code, then finalize the documentation.
+  - non-obvious findings with legacy line references: source defects, unreachable or broken branches, misleading names or values, values captured or applied at unexpected times.
+- MUST NOT restate per-entry formulas, parameters or execution order that code or tests express, or keep legacy line references that only locate a routine findable by name. Merge findings into the owning section.
+- Do not pre-draft structs or signatures in markdown before the code settles.
 
-## 3. Update Affected Explanations within PR
+## 3. Same-PR Updates
+- Update owning documents in the same PR when a change makes them outdated or adds an enduring contract: design for game rules, architecture for responsibilities and contracts, development for procedures. An unaffected document needs no edit; say so briefly in the PR.
+- GitHub Issues and milestones own current gaps, progress and plans. MUST NOT create status/roadmap files, coverage or completion histories, or Issue/PR links that only mark where something was implemented.
+- `docs/migration/feature-inventory.md` is a frozen snapshot: do not update it routinely; a correction MUST describe the snapshot's error. Freezing it MUST NOT imply its unfinished work is complete.
 
-- Assess whether the change makes an existing explanation outdated or introduces a contract that needs permanent documentation. Update the owning documents in the same PR.
-- Update design documents when game rules/formulas/state transitions change; architecture documents when responsibilities/contracts/dependencies change; development documents when procedures change.
-- GitHub Issues, labels and milestones own current gaps, limitations and planned work. MUST NOT recreate repository files that summarize current status, progress or roadmap; record a new gap or plan in its Issue or milestone.
-- Do not require a fixed list of documents to be reviewed or edited for every feature. A change that leaves their explanations accurate requires no document edit; state that briefly in the PR when applicable.
-- Do not duplicate live command coverage, task progress or completion histories in architecture/design documents. Use current OpenAPI/source for registered contracts and GitHub Issues for current coverage and gaps. Maintained documents MUST NOT retain Issue/PR links merely identifying where behavior was implemented or completed; retain references only when needed for specification decisions, legacy evidence or unresolved work.
-- Do not routinely append or update feature-inventory.md. Preserve its dated snapshot and existing records. Any correction MUST describe an error in the historical snapshot rather than silently updating it to today's state.
-- Keep unresolved specifications, missing coverage, unverified behavior and known differences discoverable through their owning documents or linked open Issues. Freezing a historical inventory MUST NOT mark its unfinished work complete or imply full parity.
-
-## 4. Consolidation and Addition Criteria
-- When editing documents, MUST rewrite the owning section as one current explanation, replacing or consolidating superseded/duplicate text rather than appending implementation reports. Keep cleanup within the active objective and its directly affected references.
-- When further documentation cleanup opportunities are found outside the active objective, MUST search for an existing open Issue and create a dedicated documentation-cleanup Issue or refine an existing one under `01-development-workflow.md`. Identify concrete target sections, the redundancy or implementation detail to remove, and the contracts/evidence to preserve; do not require a repository-wide sweep to find candidates.
-- Add a section or document only for a distinct enduring contract, decision or procedure that existing owners cannot explain clearly. Issue-specific investigation, completion records and temporary cautions belong in Issues/PRs; private implementation details and reproducible inventories belong in source, tests or generated artifacts.
-- Add an agent rule only for a cross-cutting constraint or decision criterion needed in future work. A local bug normally needs a regression test, not a repository rule. For mechanically enforced constraints, keep the actionable requirement and link to the check; do not copy its implementation or exception lists into prose.
-- Before deleting or consolidating, MUST inspect contents and inbound references. Preserve unique requirements, approved decisions, the non-obvious findings defined in §2 and unresolved gaps in their owner or a linked Issue; update affected indexes, links and guidance references. Age or line count alone MUST NOT justify deletion.
-- Do not move completion history into the frozen inventory.
-- In the PR's existing documentation assessment, briefly explain meaningful consolidation or necessary growth and its owner. Do not require deletion quotas, a fixed document sweep or a separate maintenance log.
+## 4. Consolidation and Additions
+- Rewrite the owning section as one current explanation; replace superseded or duplicate text instead of appending reports. Keep cleanup within the active objective.
+- Cleanup found outside the objective goes to a new or existing documentation Issue naming the target sections, what to remove and what to preserve.
+- Add a section or document only for a distinct enduring contract, decision or procedure. Add an agent rule only for a cross-cutting constraint or decision criterion; a local bug needs a regression test. For mechanically enforced rules, state the requirement and link the check.
+- Before deleting or consolidating, inspect content and inbound references; preserve unique requirements, decisions, §2 findings and open gaps, and fix links. Age or length alone never justifies deletion.
+- Explain meaningful consolidation or growth in the PR's documentation section; no quotas or maintenance logs.
 
 ## 5. OpenAPI Specification Synchronization (SSOT & Modular Paths)
-- **Source of Truth:**
-  - Base metadata, reusable schemas, and security schemes reside in `docs/api/base.json`.
-  - Endpoint path operations reside in modular files: `docs/api/paths/{module}.json` (e.g., `character.json`, `home.json`).
-- **NEVER edit compiled artifacts directly:**
-  - Do NOT edit `docs/api/openapi.json` or `internal/api/http/openapi.json` directly. These are compiled build artifacts generated deterministically by `scripts/sync_openapi/`.
-- **Synchronization Workflow:**
-  - Whenever an HTTP route is added or changed in `internal/api/http/handler.go`, update its modular specification; use `make openapi-scaffold` only when missing-route scaffolding is needed.
-  - Modify the modular path specification in `docs/api/paths/{module}.json`.
-  - Run `make openapi-sync` to recompile both artifacts.
-  - CI enforces 100% route coverage and synchronization via `make openapi-check`.
+- Sources: `docs/api/base.json` (metadata, schemas, security) and `docs/api/paths/{module}.json` (operations).
+- NEVER edit the generated `docs/api/openapi.json` or `internal/api/http/openapi.json`.
+- When a route in `internal/api/http/handler.go` changes, edit its module file (`make openapi-scaffold` for missing routes) and run `make openapi-sync`. `make openapi-check` enforces coverage and sync.

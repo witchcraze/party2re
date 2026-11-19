@@ -142,6 +142,18 @@ exit "${DOCKER_EXIT:-0}"
 	}
 }
 
+// fixtureEnviron drops GIT_* variables, such as the absolute GIT_DIR a hook sets
+// in a linked worktree, so fixture git commands resolve their own repository.
+func fixtureEnviron() []string {
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GIT_") {
+			env = append(env, e)
+		}
+	}
+	return env
+}
+
 func runCmd(t *testing.T, dir string, env []string, name string, args ...string) (string, int) {
 	t.Helper()
 	lookupPath := os.Getenv("PATH")
@@ -160,7 +172,7 @@ func runCmd(t *testing.T, dir string, env []string, name string, args ...string)
 	}
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = append(fixtureEnviron(), env...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -996,4 +1008,41 @@ func TestVerify_PartialGoListFailureAbortsStep6(t *testing.T) {
 			t.Fatalf("docker fallback Step 6 must not run go test after go list fails:\n%s", goLogFail)
 		}
 	})
+}
+
+func TestRunCmd_IgnoresCallerGitDir(t *testing.T) {
+	parent := t.TempDir()
+	runCmd(t, parent, nil, "git", "init", "-q")
+	parentGitDir := filepath.Join(parent, ".git")
+	configBefore, err := os.ReadFile(filepath.Join(parentGitDir, "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_DIR", parentGitDir)
+	t.Setenv("GIT_WORK_TREE", parent)
+
+	fixture := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.name", "test"},
+		{"commit", "-q", "--allow-empty", "-m", "fixture"},
+	} {
+		if out, code := runCmd(t, fixture, nil, "git", args...); code != 0 {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+
+	configAfter, err := os.ReadFile(filepath.Join(parentGitDir, "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(configBefore, configAfter) {
+		t.Errorf("caller config changed:\n%s", configAfter)
+	}
+	if _, code := runCmd(t, parent, nil, "git", "rev-parse", "--verify", "-q", "HEAD"); code == 0 {
+		t.Error("fixture commit landed in the caller repository")
+	}
+	if _, err := os.Stat(filepath.Join(fixture, ".git")); err != nil {
+		t.Errorf("fixture repository not created: %v", err)
+	}
 }

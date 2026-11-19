@@ -30,4 +30,4 @@ PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:${TEST_DB_PORT})/?parseTime=tr
 PARTY2_VALKEY_ADDR="127.0.0.1:${TEST_VALKEY_PORT}" \
 go test ${timeout:+-timeout="$timeout"} -count=1 ./internal/architecture ./internal/core $packages
 
-echo "==> [check-changed] Selected tests passed. This does not replace make check."
+echo "==> [check-changed] Selected tests passed. CI runs the full suite."

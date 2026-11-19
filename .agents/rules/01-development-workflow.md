@@ -1,144 +1,105 @@
 ---
 name: Development Workflow and Operating Rules
-description: Rules for Agent operations, branch strategy, testing, and Definition of Done.
+description: Rules for branches, Issues and PRs, related tickets, scope, verification, tests and Definition of Done.
 ---
 
 # Development Workflow
 
-## 1. Branch Strategy (Trunk-Based Development)
-Keep `main` as the sole integration branch. Feature branches must be short-lived.
-
-**Branch Naming Convention:**
-- Use Conventional Commits prefixes: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`.
-- Include the issue number: `<type>/<issue-number>-<short-desc>` (e.g., `feat/160-small-medals`).
-
-**Safe Branching & Working Tree Hygiene:**
-1. Check working tree cleanliness: `git status --porcelain`. Stash or commit uncommitted changes before switching branches. Never use `reset --hard` blindly.
-2. Checkout and sync main: `git checkout main && git pull --ff-only origin main`.
-3. Create feature branch: `git checkout -b <type>/<issue-number>-<short-description>`.
-
-**Merge Strategy & PR Titles:**
-- Always **Squash and Merge**. PR Titles MUST follow Conventional Commits (e.g., `feat: implement small medals`).
-
-**Post-Merge Local Cleanup:**
-1. Return to synced main: `git checkout main && git pull --ff-only origin main`.
-2. Delete local branch: `git branch -D <branch-name> 2>/dev/null || true`.
-3. Prune remote tracking branches: `git fetch origin --prune`.
+## 1. Branches
+- `main` is the only integration branch. Feature branches are short-lived and named `<type>/<issue-number>-<short-desc>` (`feat/`, `fix/`, `chore/`, `docs/`, `refactor/`).
+- Before branching: keep the working tree clean (stash or commit; never a blind `reset --hard`), then `git checkout main && git pull --ff-only origin main`.
+- Always squash-merge; PR titles follow Conventional Commits.
+- After merge:
+  1. `git checkout main && git pull --ff-only origin main`;
+  2. delete the local branch;
+  3. delete the merged remote head branch unless retention was requested (`gh pr merge --delete-branch` or `git push origin --delete <branch>`), and confirm `git ls-remote --heads origin <branch>` returns nothing; pruning alone does not delete it;
+  4. `git fetch origin --prune`.
 
 ## 2. Issue and PR Workflow
-- **No substantial work without an Issue:** Do not begin substantial implementation from an informal request without an Issue.
-- **Templates:** Check `.github/ISSUE_TEMPLATE` and `.github/PULL_REQUEST_TEMPLATE.md`. Every Issue **must** use the provided repository Issue template. Every PR **must** use the repository PR template and all checkboxes must be honestly verified. Do not bypass templates.
-- **Searchable Issue Naming and Complexity Labeling Rules (SSOT):**
-  - **Issue Titles:** MUST strictly follow `[<Type>] <Domain>: <Specific Action / Target>` (e.g., `[Bug] Home: Return 404 in GET /homes/{id}/companion/phrases`, `[Feature] HTTP: Guard action endpoints against active sleep penalty`). Prohibit vague titles like `Fix bug` or `Update system`.
-  - **Size Estimates (Creation, Refinement & Triage):**
-    Issue bodies MUST describe work independently of implementation tools or providers; do not add execution-strategy or executor-recommendation sections. Size labels MUST describe work complexity only.
-    Every issue MUST have exactly one size label upon creation. Use the following as initial estimates of the expected work:
-    1. **`size/small`**: Localized work that can be completed using established contracts and patterns.
-    2. **`size/medium`**: Work requiring investigation, implementation and verification across multiple cases, with a clear responsibility and completion target.
-    3. **`size/large`**: Work with substantial design uncertainty, broad impact, or complex migration/transaction coordination.
-    Choose the estimate that best fits the work as a whole; these descriptions are judgment aids, not automatic triggers. Reviewers and implementers MAY revise the label as investigation clarifies complexity; maintain exactly one size label and briefly explain material changes in the Issue or PR.
-    Use line counts, package/layer count, DDL, transactions and capped-file edits as signals of review effort and risk; none alone imposes an issue-diff ceiling, a size label or decomposition. Account for the nature of tests, documentation, generated artifacts and code moves when assessing review effort.
-  - **Issue Status & Dependency Management Rules (明確な使い分けルール):**
-    - **`status/needs-spec` (Label)**: Use when legacy specifications, formulas, or architectural designs are incomplete, undecided, or pending discussion/RFC. Implementation cannot proceed until specs are clarified.
-    - **Native Issue Dependencies (`blocked by` / `blocking`)**: Use GitHub native dependencies instead of manual labels when the specification is clear, but another ticket/PR must be executed first (e.g., foundational infrastructure/models, security/auth guards on overlapping handlers, sequential PRs, or prerequisite domain logic).
-      - **Native Registration**: When an issue depends on another issue, link it natively via `gh issue edit <issue-number> --add-blocked-by <predecessor-number>`. Do NOT apply a manual `status/blocked` label (`status/blocked` is deprecated).
-      - **Sub-issues / Parent Hierarchy**: When decomposing features or epics under the bounded-task guidance below, link child issues to the tracking issue via `gh issue edit <parent-number> --add-sub-issue <child-number>` (or `--parent <parent-number>`).
-      - **Native Relationships and Issue Bodies**: MUST use GitHub native relationships as the sole source of dependency/parent-child relationships and their resolution state. Issue bodies MUST explain why a prerequisite is needed and specify the requirements/contracts to adopt and validation conditions, referencing the prerequisite Issue or owning document. MUST NOT duplicate relationship-only lists, progress/resolution state, or full shared specifications in the body.
-      - **Zero-Token Triage Exclusion**: When querying candidate issues, filter out blocked tickets directly using GitHub native search syntax (`gh issue list --search "is:open -is:blocked" --json number,title,labels`) and exclude `status/needs-spec` and `priority: low`.
-      - **Automatic Unblocking on Merge**: When a preceding ticket is merged and closed, GitHub automatically resolves the blocker (0 open blockers). Subsequent triage workflows immediately observe the unblocked ticket without manual label-stripping overhead.
-  - The Issue body MUST explicitly state the primary affected component/package and database tables (e.g., `Affected Component: internal/home`, `Database Tables: character_letters`).
-- **Pre-Registration De-duplication Check:**
-  - Before creating any new Issue, agents MUST search existing open issues using targeted domain/entity keywords (`gh issue list --state open --search "<domain-or-keyword>" --json number,title,labels`).
-  - If an open issue already tracks the problem, update or refine the existing issue rather than registering a duplicate.
-- **Related Tickets Synchronization (Body-First Update Rule):**
-  - Agents MUST assess related-ticket impact starting with direct dependent issues and known issue references to the changed contract. Expand targeted discovery when a concrete shared-model, storage, behavior or prerequisite change may affect additional open issues; do not routinely scan all open issues or recursively follow every related link.
-  - Agents MUST update affected open issue bodies when unchanged instructions would mislead implementation or verification: changed requirements/contracts, obsolete code targets or prerequisite claims, duplicated completed work, or changed remaining scope. Apply corrections directly in the owning sections with relevant Issue/PR references (`gh issue edit <number> --body-file ...`); never rely solely on comments for required corrections (not shown by `gh issue view` by default).
-  - Adding or resolving a dependency, completion, newly reusable implementations or clarification in a linked specification alone MUST NOT require a body edit unless they make the issue's instructions inaccurate or insufficient. Update the owning body sections when dependency reasons, adoption requirements/contracts or validation conditions change.
-  - Keep edits scoped to materially affected sections, but MUST reconcile contradictory claims elsewhere in the same body. Preserve evidence links and still-valid, independently usable requirements, specifications and decisions. Do not use synchronization to add unrelated requirements or reopen issue scope without concrete impact.
-  - Add or update a `> [!NOTE]` callout only when an implementation caution needs emphasis. NEVER add completion-only notes or cumulative implementation-status lists. Replace or consolidate existing callouts only for the changed premises; unrelated valid notes are outside mandatory cleanup.
-  - When dependency relationships change or an issue is described as unblocked, MUST verify remaining open blockers through GitHub native dependencies. Update explicit prerequisite claims in the body when they become misleading; do not maintain a parallel list of satisfied blockers. State that the issue is unblocked only when all native blockers are resolved. Resolving an implementation blocker MUST NOT clear independent `status/needs-spec` labels or unresolved specification decisions.
-- **Prerequisite & Feasibility Verification:**
-  - When creating issues for security, auth, or cross-cutting features, verify whether required underlying infrastructure/models (e.g., Admin role, RBAC, config keys) already exist in the codebase.
-  - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
-- **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase with the available file and content search tools for existing features that solve similar problems. Adopt the same architectural patterns, variable naming conventions, and file structures.
-- **Transparent Tool Usage:** When analyzing codebases, prefer the agent's built-in file reading and search tools when available. Do NOT execute complex or opaque bash scripts (like `sed`, `awk`, or `perl` one-liners) to parse code without explicitly explaining your intent to the user first. Ensure transparency in your actions.
-- **HTTP Authorization / Legacy Reconciliation**: For affected work, MUST apply the [auth wrapper rules](06-security.md#3-mandatory-auth-helper-and-common-wrapper-anti-bypass-rule) and [legacy dispatch reconciliation](00-migration-constraints.md#4-legacy-cgi-actions-array--subroutine-reconciliation); those files own the requirements.
-- **Pre-Commit Active Issue Re-Check (対応漏れ再確認)**:
-  - Before committing changes and opening a PR upon task completion, agents and developers MUST re-inspect the active issue (`gh issue view <issue-number>`).
-  - Cross-check every item in Acceptance Criteria, Scope, and specific requirements against the implemented code, tests, and documentation to verify zero omissions.
-  - Do not proceed to commit changes or open a PR until all acceptance criteria and issue requirements are verified as completely satisfied.
-- **Bounded Tasks (1 Issue = 1 PR = 1 Mergeable Unit):**
-  - **Cohesive Objective:** An issue MUST represent one cohesive, reviewable and independently verifiable objective that maps to a single PR. Unrelated objectives MUST NOT be bundled merely for convenience.
-  - **Decomposition Judgment:** When creating, refining or implementing an issue, assess whether splitting would make the work easier to understand, verify and merge. Independent objectives, broad impact, independently useful sub-features and separable prerequisites are reasons to consider decomposition. Reassess the scope when investigation reveals additional work.
-  - **Coupled Changes:** Changes across packages/layers, schema changes and refactoring MAY remain together when they support the same acceptance criteria and keeping them together improves understanding, verification or consistency. When retaining work that raises decomposition concerns, briefly record the reason in the Issue or PR. This rationale does not introduce a separate approval gate; apply existing requirements for unresolved specifications and significant architectural decisions.
-  - **Capped Files:** Touching a file near a production line ceiling or ratchet MUST NOT by itself force a split. Assess whether the required restructuring is cohesive with the objective or would be easier to review as a prerequisite. Existing architecture boundaries, production-file ceilings and ratchets MUST still be satisfied.
 
-## 3. TDD and Local Verification (Tiered Strategy)
+### Issues
+- Substantial work MUST have an Issue. Issues and PRs MUST use the repository templates in `.github/`, with every checkbox honestly verified.
+- Titles: `[<Type>] <Domain>: <Specific Action / Target>`; vague titles are banned.
+- Bodies describe the work independently of tools or executors, and MUST name the primary affected component and database tables.
+- Exactly one size label, revisable as investigation clarifies (explain material changes):
+  - `size/small`: localized work on established contracts and patterns;
+  - `size/medium`: investigation, implementation and verification across multiple cases with a clear target;
+  - `size/large`: substantial design uncertainty, broad impact or complex migration/transaction coordination.
+  Line counts, layers, DDL and transactions are signals, not ceilings.
+- `status/needs-spec` marks unresolved specifications or designs; implementation waits for them. Ordering dependencies use native links (`gh issue edit <n> --add-blocked-by <m>`; parents via `--add-sub-issue`/`--parent`), never a `status/blocked` label. Native links are the only record of relationships and their state; bodies explain why a prerequisite is needed and what to adopt and verify, without relationship lists or progress.
+- Triage candidates: `gh issue list --search "is:open -is:blocked"`, excluding `status/needs-spec` and `priority: low`.
+- Before creating an Issue, search open Issues by domain/entity keywords; refine an existing one instead of duplicating.
+- For security or cross-cutting work, verify that prerequisite infrastructure exists; if not, document it with concrete options and mark that specification alignment is required.
 
-Agents and developers MUST follow a tiered verification strategy scoped to the change type. Detailed commands, execution budgets, and operating examples reside in [`docs/development/testing.md`](../../docs/development/testing.md).
+### Related tickets
+- After a change, assess open Issues that depend on it or reference the changed contract; widen discovery only for a concrete shared-model, storage, behavior or prerequisite change. Do not scan all Issues.
+- MUST correct an affected open Issue body (`gh issue edit --body-file`) when it would otherwise mislead: changed contracts, obsolete targets or prerequisites, duplicated completed work or changed remaining scope. Comments alone are not corrections. Completion, new dependencies or reusable code alone need no edit.
+- Edit only affected sections but reconcile contradictions elsewhere in the body; preserve evidence and still-valid requirements. Use `> [!NOTE]` only for an implementation caution; never completion notes or status lists.
+- Call an Issue unblocked only after checking its native blockers. Resolving a blocker MUST NOT clear `status/needs-spec`.
 
-- **Scope Verification and Environment by Change Type:**
-  - **Pure / Unit changes** (domain logic, battle formulas, algorithms, or pure helpers without DB/cache dependencies): do NOT require starting backing services or running the full test suite during iteration. Run focused or affected-package tests directly on host Go.
-  - **DB / Valkey changes**: MUST ensure backing services are running (`make up`), migrations are applied (`make db-migrate`), and appropriate connection settings are configured (`PARTY2_DB_DSN`, `PARTY2_TEST_DB_ADMIN_DSN`, `PARTY2_VALKEY_ADDR`) before running integration tests. MUST comply with the [test database ownership and isolation](#test-database-ownership-and-isolation) rules below.
-  - **Documentation-only changes**: verify changed requirements, local links/anchors, and examples against their sources. Do NOT start backing services or run runtime test suites solely for prose changes. Configured pre-push hooks and CI will run their verification checks.
-- **TDD Inner Loop:** Identify acceptance criteria and write/update tests before or alongside code. Implement the smallest change satisfying the tests. Run focused tests continuously (`go test -count=1 ./<package> -run '<test>'`), expanding to the affected package(s) when the change is ready. MUST NOT run the full 80+ package test suite on every edit.
-- **Outer Loop & Ready to Merge:** Before committing and opening a PR for code changes, MUST format code (`make fmt`) and pass unified local checks (`make check`). When full database reset and verification are required, use `make check-clean`. `make check-changed` MAY provide a faster intermediate check of affected packages; it MUST NOT substitute for `make check`.
-- **Long-Running Verification:** `make check`, `make check-clean` and `git push` (through the pre-push hook) run the full suite under a default 30-minute test deadline. MUST run them under a command limit exceeding that deadline, or in background execution when the agent's limit is shorter. MUST NOT treat an agent-side timeout as a verification result.
+### Working practice
+- Reuse existing implementations and patterns before writing new logic.
+- Prefer dedicated file reading and search tools when the agent provides them. Before running a non-trivial shell command that parses or rewrites code (such as `sed`, `awk` or `perl` one-liners), state its intent in visible output; MUST NOT hide what a command does.
+- Apply the [auth wrapper rules](06-security.md#3-mandatory-auth-helper-and-common-wrapper-anti-bypass-rule) and [legacy dispatch reconciliation](00-migration-constraints.md#4-legacy-cgi-actions-array--subroutine-reconciliation) to affected work.
+- Before committing and opening a PR, re-read the active Issue and every other Issue the PR closes, and verify every acceptance criterion and requirement against code, tests and documents.
+
+### Scope (1 Issue = 1 PR = 1 Mergeable Unit)
+- **Cohesive Objective:** an Issue is one reviewable, independently verifiable objective. Unrelated objectives MUST NOT be bundled merely for convenience.
+- **Decomposition:** consider splitting for independent objectives, broad impact, independently useful sub-features or separable prerequisites; reassess when investigation finds more work.
+- **Coupled Changes:** cross-layer, schema and refactoring changes MAY stay together when they serve the same acceptance criteria; record the reason in the Issue or PR when decomposition is a concern.
+- **Related and Discovered Issues:** a PR MAY also resolve open Issues on the same code targets, legacy routines or contracts, and defects or missing implementation found during the work, when their specification is resolved and combining them avoids rework, conflicting edits or duplicate verification. Register each discovered defect as an Issue first (de-duplication applies). The PR MUST close each with its own `Closes #<number>` and state why it was combined. MUST NOT combine `status/needs-spec` or `priority: low` Issues, or work that would make the change `size/large`.
+- **Capped Files:** a file near a size ceiling or ratchet does not by itself force a split, but ceilings and boundaries MUST still hold.
+
+## 3. TDD and Verification
+
+Commands, budgets and examples: [`docs/development/testing.md`](../../docs/development/testing.md).
+
+- **By change type:**
+  - pure/unit logic: focused and affected-package tests on host Go; no services needed;
+  - DB/Valkey: services up (`make up`), migrations applied (`make db-migrate`), connection variables set (`PARTY2_DB_DSN`, `PARTY2_TEST_DB_ADMIN_DSN`, `PARTY2_VALKEY_ADDR`), and the isolation rules below;
+  - documentation only: check changed claims, links and examples against sources; no services or runtime suites.
+- **Inner loop:** write or update tests with the code, implement the smallest passing change, run `go test -count=1 ./<package> -run '<test>'`, then the affected packages. MUST NOT run the full suite on every edit.
+- **Before PR:** `make fmt`. The pre-push hook checks formatting, `go vet` and OpenAPI sync and runs the affected-package tests (`make check-changed`). CI's full suite on the PR head is the merge gate; MUST NOT present local checks as CI results. `make check` (full local run) is optional, for example after migration or shared test-infrastructure changes; run it with a command limit above its 30-minute test deadline or in the background, and never treat an agent timeout as a result.
 
 ### Test Database Ownership and Isolation
-
-- DB-backed tests MUST use the environment's shared test DB by default, choosing a dedicated DB when the isolation criteria below require it.
-- Environment-wide initialization/disposal MAY reset or destroy test data before tests start or after all users of that environment stop. Explicit local resets and temporary development data MAY be used; MUST NOT reset an environment while tests or application processes are using it.
-- Individual tests using the shared DB MUST normally limit deletion/reset to data they created, including dependent rows. MUST NOT commit destructive changes to unrelated data, including table-wide deletes, broad fixture predicates or restoring an old shared-data snapshot. Serialization alone MUST NOT be treated as data ownership.
-- Connection-local temporary tables and guaranteed rollback within a single transaction MAY isolate assertions when they leave unrelated data unchanged and do not compromise other tests. MUST NOT treat rollback as isolation for independent commits, implicit-commit DDL or multiple connections outside that transaction.
-- When shared data or concurrent tests prevent accurate verification, tests MUST use a dedicated DB. Inside that DB they MAY freely manipulate data; creation/cleanup MUST target only their own database. MUST NOT silently fall back to the shared DB when required isolation is unavailable.
-- CI's disposable environment MUST NOT waive ownership/isolation rules for individual tests within a run. Operating procedures and current examples: [`docs/development/testing.md`](../../docs/development/testing.md#51-database-ownership-and-isolation).
+- DB tests use the environment's shared test DB unless the criteria below require a dedicated one.
+- Environment-wide reset is allowed only before tests start or after all users stop; never while tests or the application use it.
+- Tests on the shared DB MUST delete or reset only data they created, including dependent rows; no table-wide deletes, broad fixture predicates or snapshot restores. Serialization is not ownership.
+- Temporary tables and single-transaction rollback MAY isolate assertions; rollback is not isolation for independent commits, implicit-commit DDL or other connections.
+- When shared data or concurrency prevents accurate verification, use a dedicated DB, touching only that DB; MUST NOT silently fall back to the shared DB.
+- CI's disposable environment does not waive these rules. Procedure: [`testing.md` §5.1](../../docs/development/testing.md#51-database-ownership-and-isolation).
 
 ### Whole-Action Admission Regression Coverage
+Changes to whole-action admission MUST cover the affected representative cases:
+- **Rejection and permission:** unregistered reachable descendants and paths unsupported in the known state reject before execution; a callback unsupported in the actual state after an unknown predecessor rejects at execution with battle state and callback context restored. Supported nonlethal and permitted no-effect paths are protected from rejection for context used only by unreachable side effects. Rejected, accepted-no-effect and applied outcomes are distinguished.
+- **Pure validation:** admission leaves caller state, context, counters, RNG and nested shared references unchanged on accept and reject, observed independently of shallow snapshots. It MUST NOT call external `Apply` hooks or persistence; external transitions use the owner's validation/projection on isolated state.
+- **Ordered composition:** when earlier effects change later resources, stats, consumption, life state, targets or eligibility, test the sequence at the enclosing operation boundary. Mutually exclusive alternatives are not accumulated. Execution-time rejection or external failure commits no partial effects; assert the restored state.
 
-Changes to whole-action admission MUST cover representative cases relevant to the affected behavior:
-
-- **Rejection and Permission:** Unregistered reachable descendants and paths unsupported in the known state MUST reject before execution; a callback unsupported in the actual state after an unknown predecessor MUST reject at execution with the caller's battle state and callback context restored. Tests MUST also protect supported nonlethal and permitted no-effect paths from rejection for context used only by unreachable side effects. Rejected, accepted-no-effect and applied outcomes MUST be distinguished.
-- **Pure Validation:** Admission MUST leave caller state, context, counters, RNG and nested shared references unchanged, on acceptance and rejection. Tests MUST observe affected referents independently of shallow snapshots. Validation MUST NOT invoke external `Apply` hooks or persistence; required external transitions MUST use the owner's validation/projection contract on isolated state.
-- **Ordered Composition:** When earlier effects change later resources, stats, consumption, living/dead state, target resolution or eligibility, tests MUST include the sequence at the enclosing operation boundary, carrying those changes into later steps. Mutually exclusive target/RNG alternatives MUST NOT be accumulated as simultaneous effects. An execution-time rejection or external failure MUST NOT commit partial effects; tests MUST assert the restored state for such sequences.
-
-These criteria MUST NOT be interpreted as requiring an exhaustive combination matrix or tests for unrelated behavior.
+No exhaustive combination matrix or tests of unrelated behavior.
 
 ### Battle Test Selection
-
-For battle behavior changes, MUST apply the [selection procedure and decision table](../../docs/development/testing.md#53-battle-test-selection) to the affected behavior:
-
-- MUST identify relevant equivalence classes, boundaries and shared-state interactions, and select checks at the responsible layers. Pairwise/t-wise sampling MUST NOT replace ordered cases for reachable death/revival, reflection/cover, one-use defenses, equipment reset or external state changes that affect continuation. MUST NOT require the full job × skill × status product by default.
-- Shared helpers or synthetic representative catalogs MUST NOT certify untested concrete entries. Changed entries MUST have their binding, parameters/cost metadata, discovery and execution checked through affected invocation paths; unsupported descendants MUST remain whole-action gates.
-- Positive fixtures/generated cases MUST satisfy the relevant state and context contracts. Intentionally missing/unsupported facts MUST be explicit negative cases. MUST NOT narrow production target candidates or random pools to make tests pass.
-- Expected behavior MUST use independently verified specification vectors/invariants. Comparing projection with execution MAY supplement them, but MUST NOT be the sole oracle. Changed persistence/continuation facts MUST be checked across save/reload with required runtime context rebuilt.
-- Generated failures MUST retain replayable seed/input facts and a minimized input/operation sequence. Test/benchmark selection MUST account for generated-case count and admission exploration cost at supported roster/catalog sizes; MUST NOT cap production behavior to fit a test budget. MUST NOT add a generic runner, dependency or CI tier without a demonstrated gap that existing tools cannot cover.
+Apply the [selection procedure](../../docs/development/testing.md#53-battle-test-selection):
+- Identify equivalence classes, boundaries and shared-state interactions; test at the responsible layers. Pairwise sampling MUST NOT replace ordered cases for death/revival, reflection/cover, one-use defenses, equipment reset or external state changes affecting continuation. The full job × skill × status product is not required.
+- Shared helpers or synthetic catalogs MUST NOT certify untested entries; changed entries are checked for binding, parameters/cost, discovery and execution through their invocation paths. Unsupported descendants stay whole-action gates.
+- Positive fixtures satisfy state and context contracts; missing facts are explicit negative cases. MUST NOT narrow production targets or random pools to pass tests.
+- Expected values come from independently verified vectors or invariants; projection-vs-execution comparison is supplementary only. Changed persisted facts are checked across save/reload.
+- Generated failures keep replayable seeds and a minimized sequence. Budget generated cases without capping production behavior. No new generic runner, dependency or CI tier without a demonstrated gap.
 
 ### Unit & Integration Test Time Budget Policy vs. Benchmarking
-- **No Sub-Second Performance Assertions in Unit/Integration Tests:** Functional tests (`go test`) MUST NOT enforce sub-second wall-clock latency thresholds (fragile in CI/virtualized environments). Use liberal dead-man bounds (2.0s–5.0s) strictly for isolated deadlock/hanging-goroutine detection, not as whole DB-test budgets. Avoid sequential stalls on intentional multi-second lock/TTL boundary checks by using safe `t.Parallel()` isolation (unique IDs/keys) or explicit test-fixture timeout injection on intentional timeout-failure checks (without weakening deadlock headroom, physical Valkey `EX` expiry checks, or CI flake resistance). DB integration tests MUST allow fixture preparation and operations sufficient time under package concurrency and `-race` (normally 60s); cancellation MUST release barriers and join workers. Emit informational timing via `t.Logf`. Operating guidance: [test execution budgets](../../docs/development/testing.md#54-execution-budgets-and-stop-detection).
-- **Dedicated Benchmarks for Performance:** Verify throughput and latency regressions via Go benchmarks (`testing.B`) using `scripts/benchmark.sh` / `make bench`. SSOT: [`docs/development/testing.md#7-continuous-performance-verification--benchmarking`](../../docs/development/testing.md#7-continuous-performance-verification--benchmarking).
+- Functional tests MUST NOT assert sub-second latency. Use 2–5s dead-man bounds only for deadlock/hang detection; DB integration tests allow about 60s under package concurrency and `-race`, and cancellation releases barriers and joins workers. Avoid serial multi-second waits with safe `t.Parallel()` or injected timeouts without weakening deadlock headroom or real TTL checks. Report timing with `t.Logf` ([budgets](../../docs/development/testing.md#54-execution-budgets-and-stop-detection)).
+- Performance is verified with `testing.B` benchmarks via `make bench` ([benchmarking](../../docs/development/testing.md#7-continuous-performance-verification--benchmarking)).
 
 ## 4. Definition of Done
-A ticket is complete only when applicable:
-- Acceptance criteria are satisfied.
-- Active issue re-check above is complete.
-- Behavior is covered by tests.
-- For features touching P2P or shared-resource state mutations (Bank, Auction, Flea Market, Delivery, Guild, Boss), a paired concurrency stress test using the standardized test harness (`testutil.RunConcurrentStressTest` or `testutil.RunRace`) is implemented and passes with zero deadlocks and conserved assets.
-- Unified local checks (`make check`) pass completely.
-- Architecture remains valid and no unrelated changes were introduced.
-- Dead Code and Orphaned Definitions Elimination: When replacing, refactoring, or superseding domain methods, repository interfaces, constants, or DTOs, all unused precursors MUST be eliminated. Leaving obsolete or zero-caller methods, unused top-level constants, or dead DTO fields behind is prohibited. Mechanically enforced by Go AST linters (`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`). Intentional schema/OpenAPI compatibility fields and enum sets must be annotated with `//lint:ignore <reason>`.
-- Silent Error Suppression Prohibition: Database repository, persistent store, container mutation, and currency mutation calls must never discard errors via blank identifiers (`_ =`, `_, _ =`, `val, _ :=`) or unassigned expression statements. All errors must be propagated to the caller or handled within transactional rollback boundaries. If a call is strictly best-effort or compensatory (e.g., defer rollback, post-commit cache eviction), it must be annotated with `//lint:ignore error-swallow <reason>`. Mechanically enforced by Go AST linter (`internal/architecture/error_swallow_lint_test.go`; see [`docs/development/testing.md#6-mechanical-ast-static-analysis-linters`](../../docs/development/testing.md#6-mechanical-ast-static-analysis-linters)).
-- Owning documentation is current and affected explanations are consolidated under [`02-documentation-sync.md`](02-documentation-sync.md).
-- PR template requirements are satisfied.
+- Acceptance criteria of every closed Issue are met and re-checked (§2).
+- Behavior is covered by tests; shared-resource or P2P mutations have a paired stress test (`05-database-and-caching.md` §6).
+- CI passes on the PR head.
+- Architecture remains valid; no unrelated changes beyond Issues the PR closes.
+- Superseded methods, interfaces, constants and DTO fields are removed (`deadcode_lint_test.go`, `unused_definitions_lint_test.go`; intentional compatibility fields use `//lint:ignore <reason>`).
+- Repository, store, container and currency errors are never discarded with `_`; best-effort calls are annotated `//lint:ignore error-swallow <reason>` (`error_swallow_lint_test.go`).
+- Owning documents are current under `02-documentation-sync.md`; PR template requirements are met.
 
-## 5. Token-Budget Strategy
-Optimize for **tested, reviewable, mergeable functionality**, not maximum generated code.
-Prefer: `one small Issue` + `tests` + `minimum implementation` + `one focused PR`.
-If implementation reveals a significant architectural question, stop the local implementation and create an appropriate decision Issue rather than consuming the token budget on speculative redesign.
+## 5. Token Budget
+Optimize for tested, reviewable, mergeable work, not generated volume. When implementation reveals a significant architectural question, stop and open a decision Issue instead of redesigning speculatively.
 
 ## 6. Dependency and License Gate
-Before adding a dependency:
-1. Determine why it is needed.
-2. Check whether the standard library or existing dependencies are sufficient.
-3. Inspect its license (and transitive licenses).
-4. Verify compatibility with the project's licensing strategy.
+Before adding a dependency, state why it is needed, confirm the standard library and existing dependencies are insufficient, and check its license (including transitive) against the project's licensing strategy.
