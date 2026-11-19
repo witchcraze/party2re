@@ -173,9 +173,17 @@ Not yet implemented ([#2119](https://github.com/witchcraze/party2re/issues/2119)
 
 ## Map events and restoration units
 
-Each section records one map's decisions and non-obvious findings; maps without
-a section are tracked by their own Issues. Numeric and letter identifiers here
-are evidence pointers, not native enums.
+Each section records one map's decisions and non-obvious findings. A restored
+map without a section has none beyond its code and tests; unrestored maps are
+tracked by their own Issues. Numeric and letter identifiers here are evidence
+pointers, not native enums.
+
+Every restored map shares these gaps: group size and scaling
+([#1954](https://github.com/witchcraze/party2re/issues/1954)), enemy battle data
+([#2351](https://github.com/witchcraze/party2re/issues/2351)), defeat rewards and
+crystals ([#1957](https://github.com/witchcraze/party2re/issues/1957)), chest
+contents and inspection ([treasure contract](#treasure-inspection-and-delivery))
+and narration, owned by the Dungeon log ([#948](https://github.com/witchcraze/party2re/issues/948)).
 
 ### Map0 implementation
 
@@ -183,10 +191,8 @@ Native map0 transcribes the six initial layouts. Variant 3 has two hidden
 passages (`map/0/3.cgi:6–8`), and variants 5 and 6 have none
 (`map/0/5.cgi:5–11`, `map/0/6.cgi:5–11`).
 
-The three placeholder regular enemies remain until the stage 0/1 pools, group
-size and scaling are restored [#1954](https://github.com/witchcraze/party2re/issues/1954).
-Chest inspection follows the [treasure contract](#treasure-inspection-and-delivery).
-Enemy battle data is tracked in [#2351](https://github.com/witchcraze/party2re/issues/2351).
+The three placeholder regular enemies remain until the stage 0/1 pools are
+restored with groups ([#1954](https://github.com/witchcraze/party2re/issues/1954)).
 
 ### Map3 implementation
 
@@ -198,9 +204,7 @@ target their own cells (`map/3/5.cgi:23–25`). Variant 1's `F` lands on the
 treasure at `(6,6)` without opening it (`map/3/1.cgi:12,25`). The dispatcher
 evaluates the entered cell once before drawing the map (`vs_dungeon.cgi:96–101`).
 
-The open gaps are boss groups, group size and scaling [#1954](https://github.com/witchcraze/party2re/issues/1954),
-enemy battle data [#2351](https://github.com/witchcraze/party2re/issues/2351),
-and chest contents and inspection [#2374](https://github.com/witchcraze/party2re/issues/2374).
+Chest contents come from stages 5–8 ([#2374](https://github.com/witchcraze/party2re/issues/2374)).
 
 ### Map1 implementation
 
@@ -217,9 +221,6 @@ with round limit 50. Non-obvious findings:
   (`$m{job}`) or the picked-up key; another member's job does not count. The key
   is never consumed.
 
-Open: chest contents (#2119), group size and scaling (#1954), enemy battle data
-(#2351), and event narration, which belongs to the Dungeon log owner (#948).
-
 ### Map2 implementation
 
 Native map2 transcribes all eleven floors of `map/2/`. Non-obvious findings:
@@ -235,9 +236,6 @@ Native map2 transcribes all eleven floors of `map/2/`. Non-obvious findings:
   only the third floor's pitfall draws `_1`–`_4`.
 - **Dead event.** The second floor defines `event_2` but has no `2` cell.
 
-Open: chest contents (#2119), group size and
-scaling (#1954), enemy battle data (#2351), narration (#948).
-
 ### Map4 attrition maze
 
 Native map4 transcribes the seven layouts of `map/4/` with their legacy symbols.
@@ -252,9 +250,6 @@ Non-obvious findings:
   healing the actor instead (`_skill.cgi:9635–9638`). The pre-move reset has
   already cleared statuses and tension, and one flag covers every `H` cell.
 
-Open: group size and scaling (#1954), enemy battle data (#2351), chest contents
-(#2119), and the `M`/`H` narration (#948).
-
 ### Map5 lever temple
 
 Non-obvious findings in `map/5/`:
@@ -268,8 +263,7 @@ Non-obvious findings in `map/5/`:
 - **The `T` poison lasts one battle.** It precedes the encounter, and the next
   step's `reset_status_all` clears it (`vs_dungeon.cgi:93`), as with map3's mist.
 
-Open: group size and scaling (#1954), enemy battle data (#2351), chest contents
-(#2119), and narration (#948), whose repeated-lever lines are the only `L` draws.
+Narration also owns the repeated-lever lines, the only `L` draws.
 
 ### Map6 choice corridor
 
@@ -284,9 +278,6 @@ floor `$m{money}-=0 if $m{money} < 0` is a no-op (`1.cgi:40`, `5.cgi:44`).
 wallet immediately and exactly once, possibly below zero, as for
 [item 237](home.md#4-remote-depot--inventory-item-usage-つかう). Deferring it to
 settlement would drop it whenever a run idles out.
-
-Open: group size and scaling (#1954), defeat rewards and the sages' crystals
-(#1957), chest contents (#2119), and narration (#948).
 
 ### Map13 channel puzzle and routes
 

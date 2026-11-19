@@ -16,11 +16,14 @@ var nativeMap1Grids = [][]string{
 	{"000030000", "011111110", "010000000", "0001S1111", "011111000", "000000010", "01D101000", "01011101H", "K10B21K13"},
 }
 
+// jobLockpick (legacy job 9) opens a locked door for the acting character only.
+const jobLockpick = "job-09"
+
 // Variants repeat K and 3 under one legacy flag, so they key by symbol.
 var nativeMap1Events = map[byte]cellEvent{
 	'H': {kind: eventHidden},
 	'K': {kind: eventKey, perSymbol: true},
-	'D': {kind: eventDoor, perSymbol: true, key: 'K'},
+	'D': {kind: eventDoor, perSymbol: true, key: 'K', jobs: []string{jobLockpick}},
 	'2': {kind: eventTreasure, perSymbol: true},
 	'3': {kind: eventTreasure, perSymbol: true},
 }
