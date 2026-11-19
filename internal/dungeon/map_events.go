@@ -26,6 +26,7 @@ const (
 	eventTrap                       // every entry: _trap_d on the whole roster
 	eventRemedy                     // once, by an acting job 43: the roster to full HP and MP
 	eventChoice                     // once per flag: draws one of two outcomes (map6 pairs)
+	eventScatter                    // every entry or wall hit: a random warp (map8)
 )
 
 type cellEvent struct {
@@ -69,7 +70,8 @@ type choiceOutcome struct {
 	random bool
 }
 
-// The base wall and start; every other symbol is passable.
+// The base wall and start; every other symbol is passable. A floor binding
+// cellWall gives wall hits and the map edge that event (legacy event_1).
 const (
 	cellWall  = '1'
 	cellStart = 'S'

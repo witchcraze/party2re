@@ -14,7 +14,6 @@ enforce this restriction (`lib/vs_dungeon.cgi:37–48,74–80`). Combat actions
 remain available, and `lib/_battle.cgi:1184–1220` permits escape with current
 vitality and earned stock.
 A wall hit invokes the selected map's wall event without consuming a round.
-The base wall event leaves coordinates unchanged; map8 overrides it with a warp.
 
 | Symbol | Legacy behavior |
 |---|---|

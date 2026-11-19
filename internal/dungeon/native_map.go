@@ -215,6 +215,9 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 		step.MemberHPDeltas, step.MemberMPDeltas = fullRestore(exp)
 		step.HPDelta = step.MemberHPDeltas[char.ID]
 		recovery = true
+	case eventScatter:
+		// The landing cell is not dispatched.
+		step.NewX, step.NewY = scatter(s.rng)
 	default:
 		if to, ok := floor.Warps[cell]; ok {
 			step.NewX, step.NewY = to[0], to[1]
