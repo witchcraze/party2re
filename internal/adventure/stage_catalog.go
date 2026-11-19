@@ -11,6 +11,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/stagedata"
 )
 
 var (
@@ -364,9 +365,9 @@ func (c *StageCatalog) AvailableStagesAt(char corecharacter.Character, t time.Ti
 var stagesCatalogData []byte
 
 func InitialStageCatalog() (*StageCatalog, error) {
-	var encounters map[string]OrdinaryStage
-	if err := json.Unmarshal(ordinaryStageData, &encounters); err != nil {
-		return nil, fmt.Errorf("decode ordinary stages: %w", err)
+	encounters, err := stagedata.Stages()
+	if err != nil {
+		return nil, err
 	}
 	var rawList []stageJSON
 	if err := json.Unmarshal(stagesCatalogData, &rawList); err != nil {

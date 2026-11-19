@@ -96,7 +96,7 @@ func TestCombatTravel150BossClearMarkerAndRetainedResponseEffects(t *testing.T) 
 	s, r, _, reset = travelFixture(t)
 	old := r.actor("a").Clone()
 	old.ID, old.NPC, old.TeamID, old.EncounterIdentity = "old", true, "enemies", "other"
-	old.Name = "Stage 00 monster 29"
+	old.Name = "ドットスライム" // ordinary-00-monster-29
 	r.Battle.Actors = append(r.Battle.Actors, old)
 	r.Enemies = []string{old.ID}
 	reset.EnemyIDs = r.Enemies

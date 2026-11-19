@@ -92,6 +92,7 @@ Battle engine operates independently of callers (adventures, arena, GvG, bosses,
 - **Turn Resolver (`internal/core/battle`)**: Deterministic 1v1 and party combat (capacity supplied by the feature, including six-member king encounters) as well as multi-team combat (3+ factions up to 8 participants) with agility-ordered actions, MP/CMP skill costs, elemental field states, anti-field cancellation, and pre-death survival triggers.
 - **Battle Adapter (`internal/battle`)**: Standardized integration service bridging Character/Party entities to combat `Participant` models. Calculates authentic equipment stats across 71 weapons, 55 armors, and accessories, binds passive triggers, and provides atomic `ApplyPostBattleResult` enforcing deterministic row-lock hierarchy (Rank 2: Characters ascending -> Rank 3: Inventories/Equipment ascending -> Rank 5: Depots ascending), item consumption persistence, recipient-targeted drop distribution, milestone counter increments (`char.MonsterKills` on strong enemies, `char.MaoCount` on stage 19 floor 11 treasure-created unseal event), progression error propagation, and depot overflow fallback.
 - **AST Guard**: Prohibits direct construction of un-adapted participants in feature modules (`battle_adapter_lint_test.go`).
+- **Stage data (`internal/stagedata`)**: The legacy stage transcription (enemy templates with battle payloads, `@appears`, boss rosters) shared by Adventure and Dungeon, so no feature owns another's content (#2402).
 
 ### Adventure / Quest
 

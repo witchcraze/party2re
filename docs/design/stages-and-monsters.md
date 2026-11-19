@@ -78,13 +78,16 @@ The historical batch definitions specify:
 - **Rewards**: `exp_reward`, `gold_reward`.
 - **Drop Items (`drop_item_ids`)**: Item IDs awarded upon defeat.
 
-The same Monster/Stage catalogs also load `ordinary_monsters.json` and
-`ordinary_stages.json` for explicit ordinary encounters. These retain complete
-native combat payloads and source-position identities; the batch last-monster
-boss convention is not their encounter contract. See the [shared battle owner](battle.md#normal-adventure-action-and-target-matrix).
+Explicit ordinary encounters load the legacy stage transcription from the
+shared `internal/stagedata` package, which Dungeon also draws from (#2402). It
+retains complete native combat payloads and source-position identities; the
+batch last-monster boss convention is not its encounter contract. See the
+[shared battle owner](battle.md#normal-adventure-action-and-target-matrix).
 
 ### Clean-Room Name Replacements
-To maintain strict clean-room isolation from third-party franchises:
-- Dragon Quest-specific names (e.g. `ドラキー`, `スライムベス`, `キラーマシン`, `ホイミスライム`, `メガザルロック`, `マドハンド`, `ナスビーラ`, `プチヒーロー`, `メタルスライム`, `はぐれメタル`, `メタルキング`) are replaced with generic terms (`ナイトバット`, `レッドスライム`, `自動戦闘機械`, `ヒーラースライム`, `守護の岩石`, `泥の魔手`, `魔界ナス`, `ちび勇者`, `銀滴スライム`, `流銀スライム`, `王様流銀スライム`).
-- Final Fantasy-specific names (e.g. `サボテンダー`, `片翼の天使`) are replaced with generic terms (`トゲサボテン`, `隻翼の堕天使`).
-- Chrono Trigger-specific names (e.g. `ラボス`) are replaced with generic terms (`深淵の巨魁`).
+**Decision (#2402).** Stage enemies keep the name of their legacy stage-file entry.
+Names strongly associated with another work (Dragon Quest, Final Fantasy, Chrono
+Trigger) are replaced with one generic name per legacy name, applied in every
+shipped catalog, with `A`/`B` suffixes kept (e.g. `ドラキー` → `ナイトバット`,
+`サボテンダー` → `トゲサボテン`, `ラボス` → `深淵の巨魁`). The replaced names are
+mapped and enforced by `internal/stagedata/names_test.go`.

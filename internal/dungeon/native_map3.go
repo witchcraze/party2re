@@ -44,8 +44,7 @@ func mon(id, name string, hp, at, df, ag, exp, gold int) DungeonMonster {
 }
 
 // nativeMap3Pools mirror the stat magnitudes and appearance weights of legacy
-// stages 5–8, which map3 and map5 load. Names follow the Adventure catalog
-// apart from the two approved generic names (#2373).
+// stages 5–8, which map3 and map5 load, with the shared stage catalog's names.
 func nativeMap3Pools() []EncounterPool {
 	return []EncounterPool{
 		{
