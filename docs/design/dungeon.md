@@ -339,17 +339,13 @@ until both destinations are implemented, so players never meet a partial map.
 
 ### Map14 sunken routes
 
-**Decision (#1775)**; evidence is static, relative to `party2/` at the legacy revision
-above (`map/14/` files abbreviated). The main floor, point allocation, routing, `R`,
-`_P` and `_K` are implemented and stay unlisted until the treasure ship lands
-([#2432](https://github.com/witchcraze/party2re/issues/2432)). Findings:
+Decision [#1775](https://github.com/witchcraze/party2re/issues/1775). File references
+are relative to `party2/map/14/` at the legacy revision above.
 
-- **Two returns land in a wall.** `_P` (5,9) and `_T` (6,9) are main-floor walls;
-  the party stands in the wall and walks out, as on map2.
-- **No flag collisions.** Every flag shares one string with regex checks, yet none
-  matches another's pattern, including the initial `S`.
-- **Target, not current: `_T` sites** (`_T.cgi:23,38–49,53–62`). The first `_T` load
-  draws 5 of the listed 11 sites without replacement and sets their flags, so they are
-  dead sites without a mark; `k` is missing from the list and is always live. A live
-  site, once: `rand(2) < 1` chests, else `rand(2) < 1` a single mimic, else a
-  three-member chest-monster group. The dead sites join the map's typed run state.
+- Two returns put the party inside a main-floor wall. The party can walk out
+  from `_P` at (5,9) or `_T` at (6,9) (`1.cgi:16`, `_P.cgi:18`, `_T.cgi:18`).
+- The legacy flags share a single string and use regex checks. Checks on
+  different floors avoid collisions with each other and the initial `S`
+  (`1.cgi:55–75`, `_P.cgi:22–30`, `_K.cgi:22–36`, `_T.cgi:23–62`).
+- Site `k` is always eligible because the allocation list omits it even though
+  it has a treasure event (`_T.cgi:33,46,54`).
