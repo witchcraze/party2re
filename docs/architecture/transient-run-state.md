@@ -636,7 +636,9 @@ The injected combat port supplies bounded explicit effects and activity/stock
 release facts; no batch resolver is its fallback. It must finish action/effect
 validation and any ordered external transitions within this contract. Finalized
 recipient earnings bypass reward multipliers when released through the common
-settler. Applied assets and outstanding normal/Try entitlements remain distinct;
+settler. The same settler consumes the defeat owner's capture decisions, so box
+delivery and the result in the command receipt share one commit. Applied assets
+and outstanding normal/Try entitlements remain distinct;
 Try conversion occurs once at explicit ordinary treasure creation. Exit cannot
 consume already debited items or award unopened chests.
 

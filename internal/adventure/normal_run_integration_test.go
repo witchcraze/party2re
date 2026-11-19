@@ -109,9 +109,6 @@ func (e *normalCombat) ExecuteRunAction(_ context.Context, r *adventure.NormalRu
 			}
 		}
 		r.Battle.Actors[actor].HP, r.Battle.Actors[actor].MP = 1, 0
-	case "bee":
-		r.Stage.ID = cmd.TargetID
-		fx.CreditedDefeats = []string{"ordinary-22-boss-16", "ordinary-22-monster-175B"}
 	case "comment", "unknown_text", "ignored_skill":
 		fx.ActorActivity = false
 		fx.ReleaseStock = false

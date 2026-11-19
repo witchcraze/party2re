@@ -43,6 +43,7 @@ type LifetimeActor struct {
 	ConsumedItems     []ConsumedItem  `json:"consumed_items"`
 	HeldToolID        *string         `json:"held_tool_id,omitempty"` // nil is unknown; pointer to empty is an evidenced empty hand.
 	CrystalDropped    bool            `json:"crystal_dropped"`
+	CrystalDropRolled bool            `json:"crystal_drop_rolled,omitempty"`
 }
 
 type ExtendedEffect string

@@ -58,7 +58,7 @@ func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 	}
 	f.restart(t)
 	drawn := f.rng.calls.Load()
-	if again, err := f.svc.Command(context.Background(), cmd); err != nil || again != result {
+	if again, err := f.svc.Command(context.Background(), cmd); err != nil || !reflect.DeepEqual(again, result) {
 		t.Fatal("receipt replay changed result", again, err)
 	}
 	if replayed, err := f.store.FindRun(context.Background(), runID); err != nil || !reflect.DeepEqual(r, replayed) || f.rng.calls.Load() != drawn || drawn == draws {
@@ -89,6 +89,8 @@ func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 
 func TestNormalRunRoyalBeeDrawCommitsOnce(t *testing.T) {
 	f := newNormalFixture(t, 1)
+	f.cfg.Combat = normalDefeatCombat{f.combat, f.actors[0], f.rng}
+	f.restart(t)
 	runID := f.enter(t, "normal").Command.RunID
 	cmd := exCommand(t, f, runID, "bee", "bee")
 	cmd.TargetID = "stage-22"
@@ -97,10 +99,10 @@ func TestNormalRunRoyalBeeDrawCommitsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := f.store.FindRun(context.Background(), runID)
-	if err != nil || !r.EXUnlocked || f.rng.calls.Load() != draws+1 {
+	if err != nil || !r.EXUnlocked || f.rng.calls.Load() != draws+2 {
 		t.Fatal("royal bee draw missing or repeated", r, err)
 	}
-	if _, err := f.svc.Command(context.Background(), cmd); err != nil || f.rng.calls.Load() != draws+1 {
+	if _, err := f.svc.Command(context.Background(), cmd); err != nil || f.rng.calls.Load() != draws+2 {
 		t.Fatal("replay redrew", err)
 	}
 }

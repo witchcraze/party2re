@@ -3,6 +3,7 @@ package battle
 import (
 	"context"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -25,9 +26,10 @@ type ApplyPostBattleRequest struct {
 	RecipientDrops        map[string][]string          // Optional recipient-targeted drop item definition IDs (characterID -> []itemDefID)
 	RecipientCharacterID  string                       // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
 	DefeatedEnemies       []corebattle.Participant
-	Habitat               string // Habitat/stage name for monster book recording
-	ExitFatigue           int    // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
-	UnsealDemonKing       bool   // Explicit stage19 treasure-creation event, independent of battle victory.
+	ExplicitDefeats       []ExplicitDefeat // Already evaluated for RecipientCharacterID at each reached defeat.
+	Habitat               string           // Habitat/stage name for monster book recording
+	ExitFatigue           int              // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
+	UnsealDemonKing       bool             // Explicit stage19 treasure-creation event, independent of battle victory.
 }
 
 // ApplyPostBattleResponse contains the committed state for each participating character.
@@ -54,6 +56,11 @@ func (s *Service) ApplyPostBattleResult(ctx context.Context, req ApplyPostBattle
 
 	// Deduplicate and sort character IDs in ascending lexicographical order for Rank 2 locking
 	sortedIDs := deduplicateAndSortIDs(req.CharacterIDs)
+	if len(req.ExplicitDefeats) > 0 {
+		if _, found := slices.BinarySearch(sortedIDs, req.RecipientCharacterID); !found {
+			return ApplyPostBattleResponse{}, ErrInvalidRequest
+		}
+	}
 
 	// Single character and TransactionRunner configured -> route through economy.TransactionRunner
 	if len(sortedIDs) == 1 && s.txRunner != nil {
@@ -142,6 +149,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			}
 		}
 		s.applyMaoCount(&tc.Character, req)
+		applyExplicitKillCounts(&tc.Character, req)
 		if err := s.recordUnsealClock(tc.Context, req); err != nil {
 			return err
 		}
@@ -156,6 +164,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			}
 		}
 
+		if err := s.deliverExplicitCaptures(tc.Context, tc.Character, req, &resp); err != nil {
+			return err
+		}
 		resp.UpdatedCharacters[charID] = tc.Character
 		return nil
 	})
@@ -258,6 +269,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 				s.applyMonsterKills(&char, inv, equip, req.BattleResult, req.DefeatedEnemies)
 			}
 			s.applyMaoCount(&char, req)
+			applyExplicitKillCounts(&char, req)
 
 			chars[id] = char
 			invs[id] = inv
@@ -320,7 +332,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			}
 		}
 
-		return nil
+		return s.deliverExplicitCaptures(txCtx, chars[req.RecipientCharacterID], req, &resp)
 	})
 	if err != nil {
 		return ApplyPostBattleResponse{}, err

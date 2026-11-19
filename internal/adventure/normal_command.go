@@ -80,6 +80,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 		effects := RunActionEffects{}
 		request := battle.ApplyPostBattleRequest{CharacterIDs: ids, PreserveEarnedRewards: true, RecipientRewards: map[string]corebattle.Reward{}}
 		var box *TreasureBox
+		var tames []battle.MonsterTameResult
 		switch cmd.Action {
 		case "advance", "chest", "exit":
 			if now.Before(r.LastActions[cmd.ActorID].Add(time.Duration(r.Admission.Speed) * time.Second)) {
@@ -127,7 +128,8 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				return err
 			}
 			request.UnsealDemonKing = effects.UnsealDemonKing
-			r.recordCreditedDefeats(effects.CreditedDefeats, s.cfg.RNG)
+			r.EXUnlocked = r.EXUnlocked || effects.EXUnlocked
+			request.RecipientCharacterID, request.ExplicitDefeats = cmd.ActorID, effects.Defeats
 			for _, id := range effects.MemberOnlyIDs {
 				a, actor := r.actor(id), r.actor(cmd.ActorID)
 				if a == nil || actor == nil || a.TeamID == actor.TeamID || slices.Contains(r.Enemies, id) {
@@ -179,6 +181,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			if err != nil {
 				return err
 			}
+			tames = response.MonsterTames[cmd.ActorID]
 			if box != nil {
 				boxes := []TreasureBox{*box}
 				updateTreasureDeliveries(boxes, response)
@@ -236,7 +239,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 		if err := s.cfg.Store.SaveRun(ctx, *r, cmd.Version); err != nil {
 			return err
 		}
-		result = RunReceipt{Command: cmd, Version: r.Version, Floor: r.Floor, StageID: r.Stage.ID, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition}
+		result = RunReceipt{Command: cmd, Version: r.Version, Floor: r.Floor, StageID: r.Stage.ID, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition, MonsterTames: tames}
 		return s.cfg.Store.SaveRunReceipt(ctx, result)
 	})
 	result, err = s.resolveReceipt(ctx, cmd, result, err)

@@ -39,18 +39,8 @@ func (r *NormalRun) markEncounterCreated() {
 // royalBeeIdentity is the server-owned stage22 source entry (ff97fc5:stage/22.cgi:175).
 const royalBeeIdentity = "ordinary-22-monster-175"
 
-// recordCreditedDefeats applies _battle.cgi:277–280 once per player-credited
-// defeat, in defeat order. The draw happens even when the marker already exists.
-func (r *NormalRun) recordCreditedDefeats(identities []string, rng random.Generator) {
-	if r.Stage.ID != "stage-22" {
-		return
-	}
-	for _, identity := range identities {
-		// Encounter suffixes A–H keep the catalog identity (add_monster @alfas).
-		if strings.TrimRight(identity, "ABCDEFGH") == royalBeeIdentity && rng.Intn(3) == 0 {
-			r.EXUnlocked = true
-		}
-	}
+func rollStage22EX(stageID, identity string, rng random.Generator) bool {
+	return stageID == "stage-22" && strings.TrimRight(identity, "ABCDEFGH") == royalBeeIdentity && rng.Intn(3) == 0
 }
 
 // prepareEXAllies follows add_ex_boss: after the roster exists, every ally,
