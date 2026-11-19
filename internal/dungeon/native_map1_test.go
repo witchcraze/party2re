@@ -14,62 +14,14 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func nativeMap1Def(t *testing.T) dungeon.Dungeon {
-	t.Helper()
-	for _, d := range dungeon.DefaultDungeonCatalog() {
-		if d.ID == dungeon.NativeMap1ID {
-			return d
-		}
-	}
-	t.Fatal("native map1 missing from default catalog")
-	return dungeon.Dungeon{}
-}
-
 func map1Hero(id, job string) corecharacter.Character {
 	c := createTestChar(id, 30, 5000, 900, 900)
 	c.JobLevel, c.JobID = 3, job
 	return c
 }
 
-func (f *nativeFixture) placeMap1(t *testing.T, id string, variant, x, y, round int) {
-	t.Helper()
-	f.placeNative(t, dungeon.NativeMap1ID, 50, id, variant, x, y, round)
-}
-
-func (f *nativeFixture) moveTo(t *testing.T, id string, x, y int) {
-	t.Helper()
-	exp := f.reload(t, id)
-	exp.PosX, exp.PosY = x, y
-	if err := f.store.SaveActiveExpedition(context.Background(), exp); err != nil {
-		t.Fatal(err)
-	}
-	f.rng.intCalls, f.rng.floatCalls = 0, 0
-}
-
-// reachable floods from start; the door is passable only when open.
-func reachable(fl dungeon.Floor, open bool) map[[2]int]bool {
-	seen := map[[2]int]bool{{fl.StartX, fl.StartY}: true}
-	queue := [][2]int{{fl.StartX, fl.StartY}}
-	for len(queue) > 0 {
-		p := queue[0]
-		queue = queue[1:]
-		for _, d := range [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
-			n := [2]int{p[0] + d[0], p[1] + d[1]}
-			if n[0] < 0 || n[1] < 0 || n[0] >= fl.Width || n[1] >= fl.Height || seen[n] {
-				continue
-			}
-			if c := fl.Grid[n[1]][n[0]]; c == '1' || (c == 'D' && !open) {
-				continue
-			}
-			seen[n] = true
-			queue = append(queue, n)
-		}
-	}
-	return seen
-}
-
 func TestNativeMap1_LayoutsSealTheBossBehindOneDoorApproach(t *testing.T) {
-	d := nativeMap1Def(t)
+	d := mapDef(t, dungeon.NativeMap1ID)
 	if d.RoundLimit != 50 || d.LeaderJobLevel != 3 || len(d.Variants) != 7 {
 		t.Fatalf("limit=%d job=%d variants=%d", d.RoundLimit, d.LeaderJobLevel, len(d.Variants))
 	}
@@ -123,7 +75,7 @@ func TestNativeMap1_LayoutsSealTheBossBehindOneDoorApproach(t *testing.T) {
 func TestNativeMap1_KeyOpensDoorWithoutBeingConsumed(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("key", "job-01"))
-	f.placeMap1(t, "key", 1, 8, 1, 1)
+	f.placeNative(t, dungeon.NativeMap1ID, "key", 1, 8, 1, 1)
 	if res, err := f.svc.Move(ctx, "key", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove {
 		t.Fatalf("key %+v err=%v", res, err)
 	}
@@ -154,7 +106,7 @@ func TestNativeMap1_KeyOpensDoorWithoutBeingConsumed(t *testing.T) {
 func TestNativeMap1_EveryKeyCellSharesOneKey(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("keys", "job-01"))
-	f.placeMap1(t, "keys", 3, 1, 1, 1) // variant 3 keys at (1,0) and (6,8)
+	f.placeNative(t, dungeon.NativeMap1ID, "keys", 3, 1, 1, 1) // variant 3 keys at (1,0) and (6,8)
 	if _, err := f.svc.Move(ctx, "keys", dungeon.DirectionNorth); err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +127,7 @@ func TestNativeMap1_LockedDoorSpendsTheRoundAndReturns(t *testing.T) {
 	}{{1, 4, 0, dungeon.DirectionWest}, {3, 8, 4, dungeon.DirectionSouth}} {
 		t.Run(fmt.Sprint(tc.variant), func(t *testing.T) {
 			f := newNativeFixture(t, map1Hero("locked", "job-01"))
-			f.placeMap1(t, "locked", tc.variant, tc.x, tc.y, 10)
+			f.placeNative(t, dungeon.NativeMap1ID, "locked", tc.variant, tc.x, tc.y, 10)
 			res, err := f.svc.Move(ctx, "locked", tc.dir)
 			if err != nil || res.EventType != dungeon.EventMove {
 				t.Fatalf("locked %+v err=%v", res, err)
@@ -188,7 +140,7 @@ func TestNativeMap1_LockedDoorSpendsTheRoundAndReturns(t *testing.T) {
 	}
 	// An ordinary wall spends nothing.
 	f := newNativeFixture(t, map1Hero("wall", "job-01"))
-	f.placeMap1(t, "wall", 1, 4, 0, 10)
+	f.placeNative(t, dungeon.NativeMap1ID, "wall", 1, 4, 0, 10)
 	before := f.reload(t, "wall")
 	if _, err := f.svc.Move(ctx, "wall", dungeon.DirectionNorth); !errors.Is(err, dungeon.ErrImpassableWall) {
 		t.Fatalf("wall err=%v", err)
@@ -201,7 +153,7 @@ func TestNativeMap1_LockedDoorSpendsTheRoundAndReturns(t *testing.T) {
 func TestNativeMap1_OnlyTheActingJob9OpensWithoutKey(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("thief", "job-09"))
-	f.placeMap1(t, "thief", 1, 4, 0, 1)
+	f.placeNative(t, dungeon.NativeMap1ID, "thief", 1, 4, 0, 1)
 	if _, err := f.svc.Move(ctx, "thief", dungeon.DirectionWest); err != nil {
 		t.Fatal(err)
 	}
@@ -211,11 +163,7 @@ func TestNativeMap1_OnlyTheActingJob9OpensWithoutKey(t *testing.T) {
 
 	g := newNativeFixture(t, map1Hero("lead", "job-01"))
 	g.chars.chars["ally"] = map1Hero("ally", "job-09")
-	g.rng.ints = []int{0}
-	if _, err := g.svc.StartPartyExpedition(ctx, "lead", []string{"lead", "ally"}, dungeon.NativeMap1ID, "p"); err != nil {
-		t.Fatal(err)
-	}
-	g.moveTo(t, "lead", 4, 0)
+	g.startNativeParty(t, dungeon.NativeMap1ID, 1, 4, 0)
 	if _, err := g.svc.Move(ctx, "lead", dungeon.DirectionWest); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +175,7 @@ func TestNativeMap1_OnlyTheActingJob9OpensWithoutKey(t *testing.T) {
 func TestNativeMap1_LockedDoorAtRoundLimit(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("limit", "job-01"))
-	f.placeMap1(t, "limit", 1, 4, 0, 49)
+	f.placeNative(t, dungeon.NativeMap1ID, "limit", 1, 4, 0, 49)
 	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionWest); err != nil {
 		t.Fatalf("round 49 -> 50: %v", err)
 	}
@@ -247,7 +195,7 @@ func TestNativeMap1_LockedDoorAtRoundLimit(t *testing.T) {
 func TestNativeMap1_TreasureSymbolsAreIndependentOnceTriggers(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("chest", "job-01"))
-	f.placeMap1(t, "chest", 3, 8, 1, 1)
+	f.placeNative(t, dungeon.NativeMap1ID, "chest", 3, 8, 1, 1)
 	if res, err := f.svc.Move(ctx, "chest", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventTreasure {
 		t.Fatalf("first 3 %+v err=%v", res, err)
 	}
@@ -275,7 +223,7 @@ func TestNativeMap1_TreasureSymbolsAreIndependentOnceTriggers(t *testing.T) {
 func TestNativeMap1_ObservationFollowsKeyAndDoorState(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map1Hero("look", "job-01"))
-	f.placeMap1(t, "look", 1, 8, 1, 1)
+	f.placeNative(t, dungeon.NativeMap1ID, "look", 1, 8, 1, 1)
 	tile := func(row, col int) string {
 		t.Helper()
 		before := f.reload(t, "look")

@@ -13,78 +13,6 @@ import (
 	"github.com/witchcraze/party2re/internal/dungeon"
 )
 
-// scriptedRNG replays fixed draws and counts every draw.
-type scriptedRNG struct {
-	ints       []int
-	floats     []float64
-	intCalls   int
-	floatCalls int
-}
-
-func (r *scriptedRNG) Intn(n int) int {
-	r.intCalls++
-	if len(r.ints) == 0 || n <= 0 {
-		return 0
-	}
-	v := r.ints[0]
-	r.ints = r.ints[1:]
-	return v % n
-}
-
-func (r *scriptedRNG) Float64() float64 {
-	r.floatCalls++
-	if len(r.floats) == 0 {
-		return 0.99 // passage roll 1.98: no spawn
-	}
-	v := r.floats[0]
-	r.floats = r.floats[1:]
-	return v
-}
-
-func (r *scriptedRNG) calls() int { return r.intCalls + r.floatCalls }
-
-func nativeMap0Def(t *testing.T) dungeon.Dungeon {
-	t.Helper()
-	for _, d := range dungeon.DefaultDungeonCatalog() {
-		if d.ID == dungeon.NativeMap0ID {
-			return d
-		}
-	}
-	t.Fatal("native map0 missing from default catalog")
-	return dungeon.Dungeon{}
-}
-
-type nativeFixture struct {
-	svc   *dungeon.Service
-	store dungeon.ActiveExpeditionStore
-	repo  *mockDungeonRepo
-	chars *mockCharRepo
-	rng   *scriptedRNG
-}
-
-func newNativeFixture(t *testing.T, hero corecharacter.Character) *nativeFixture {
-	t.Helper()
-	return newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), hero)
-}
-
-func newNativeFixtureOn(t *testing.T, store dungeon.ActiveExpeditionStore, hero corecharacter.Character, opts ...dungeon.Option) *nativeFixture {
-	t.Helper()
-	f := &nativeFixture{
-		store: store,
-		repo:  newMockDungeonRepo(),
-		chars: &mockCharRepo{chars: map[string]corecharacter.Character{hero.ID: hero}},
-		rng:   &scriptedRNG{},
-	}
-	opts = append([]dungeon.Option{dungeon.WithActiveExpeditionStore(f.store), dungeon.WithRNG(f.rng),
-		dungeon.WithInventoryProvider(&mockInventoryRepo{}), dungeon.WithAdmission(approvedRoster{})}, opts...)
-	svc, err := dungeon.NewService(f.repo, f.chars, corebattle.Engine{}, opts...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.svc = svc
-	return f
-}
-
 // place starts on variant 1 and then rewrites position and round; variant 1:
 //
 //	00002
@@ -107,15 +35,6 @@ func (f *nativeFixture) place(t *testing.T, id string, x, y, round int) dungeon.
 	return exp
 }
 
-func (f *nativeFixture) reload(t *testing.T, id string) dungeon.ActiveExpedition {
-	t.Helper()
-	exp, err := f.svc.GetActiveExpedition(context.Background(), id)
-	if err != nil || exp == nil {
-		t.Fatalf("reload: %v %v", exp, err)
-	}
-	return *exp
-}
-
 func strongHero(id string) corecharacter.Character {
 	return createTestChar(id, 30, 5000, 900, 900)
 }
@@ -131,7 +50,7 @@ func TestNativeMap0_LayoutsMatchLegacy(t *testing.T) {
 		"20000 11B11 00000 01111 00S00",
 	}
 	nativeCells := strings.NewReplacer("I", "H", "2", "C")
-	d := nativeMap0Def(t)
+	d := mapDef(t, dungeon.NativeMap0ID)
 	if d.RoundLimit != 20 || len(d.Variants) != len(legacy) {
 		t.Fatalf("limit=%d variants=%d", d.RoundLimit, len(d.Variants))
 	}
@@ -165,7 +84,7 @@ func TestNativeMap0_StartSelectsSavedVariantAtRoundOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v4 := nativeMap0Def(t).Variants[3]
+	v4 := mapDef(t, dungeon.NativeMap0ID).Variants[3]
 	got := f.reload(t, "start")
 	if exp.MapVariant != 4 || got.MapVariant != 4 || got.PosX != v4.StartX || got.PosY != v4.StartY || len(got.ConsumedEvents) != 0 || got.Encounter != nil {
 		t.Fatalf("start state %+v", got)
@@ -400,7 +319,7 @@ func TestNativeMap0_BossTriggersOnceWithoutClearing(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, strongHero("boss"))
 	f.place(t, "boss", 2, 2, 4)
-	boss := nativeMap0Def(t).Variants[0].Boss
+	boss := mapDef(t, dungeon.NativeMap0ID).Variants[0].Boss
 
 	res, err := f.svc.Move(ctx, "boss", dungeon.DirectionNorth)
 	if err != nil {

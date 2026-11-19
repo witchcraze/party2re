@@ -30,11 +30,6 @@ func newMap6Fixture(t *testing.T, store dungeon.ActiveExpeditionStore, hero core
 	return newNativeFixtureOn(t, store, hero, dungeon.WithCustomDungeons(catalog))
 }
 
-func (f *nativeFixture) placeMap6(t *testing.T, id string, variant, x, y int) {
-	t.Helper()
-	f.placeNative(t, dungeon.NativeMap6ID, 30, id, variant, x, y, 2)
-}
-
 // Map6 stays unlisted and start-rejected until its gold outcomes land (#2417).
 func TestNativeMap6_UnlistedUntilGold(t *testing.T) {
 	for _, d := range dungeon.DefaultDungeonCatalog() {
@@ -152,7 +147,7 @@ func map6Outcome(t *testing.T, variant int, cell byte, draw float64) string {
 	ctx := context.Background()
 	f := newMap6Fixture(t, dungeon.NewMemoryExpeditionRepository(), map6Hero("out", 500))
 	at := map6Approach[cell]
-	f.placeMap6(t, "out", variant, at[0], at[1])
+	f.placeNative(t, dungeon.NativeMap6ID, "out", variant, at[0], at[1], 2)
 	f.setVitality(t, "out", "out", 300, 0)
 	f.rng.floats = []float64{draw, 0.5}
 	res, err := f.svc.Move(ctx, "out", dungeon.DirectionSouth)
@@ -210,7 +205,7 @@ func TestNativeMap6_PairOnceAcrossReload(t *testing.T) {
 func pairOnce(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	ctx := context.Background()
 	f := newMap6Fixture(t, store, map6Hero(id, 500))
-	f.placeMap6(t, id, 1, 2, 13)
+	f.placeNative(t, dungeon.NativeMap6ID, id, 1, 2, 13, 2)
 	f.rng.floats = []float64{0} // F: falling rock
 	if _, err := f.svc.Move(ctx, id, dungeon.DirectionSouth); err != nil {
 		t.Fatal(err)
@@ -252,12 +247,8 @@ func TestNativeMap6_TrapAndHealTargetsWithFractionalBase(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newMap6Fixture(t, dungeon.NewMemoryExpeditionRepository(), map6Hero("lead", 500))
 			f.chars.chars["ally"] = map6Hero("ally", 500)
-			f.rng.ints = []int{0}
-			if _, err := f.svc.StartPartyExpedition(ctx, "lead", []string{"lead", "ally"}, dungeon.NativeMap6ID, "p"); err != nil {
-				t.Fatal(err)
-			}
 			at := map6Approach[tc.cell]
-			f.moveTo(t, "lead", at[0], at[1])
+			f.startNativeParty(t, dungeon.NativeMap6ID, 1, at[0], at[1])
 			f.setVitality(t, "lead", "lead", 300, 0)
 			f.setVitality(t, "lead", "ally", 0, 0)
 			f.rng.floats = tc.floats
@@ -277,7 +268,7 @@ func TestNativeMap6_SagesInEveryVariant(t *testing.T) {
 	ctx := context.Background()
 	for v := 1; v <= 5; v++ {
 		f := newMap6Fixture(t, dungeon.NewMemoryExpeditionRepository(), map6Hero("sage", 500_000))
-		f.placeMap6(t, "sage", v, 1, 2)
+		f.placeNative(t, dungeon.NativeMap6ID, "sage", v, 1, 2, 2)
 		res, err := f.svc.Move(ctx, "sage", dungeon.DirectionNorth)
 		if err != nil || res.EventType != dungeon.EventBoss || res.Monster == nil || res.Monster.ID != "nm6-sage-1" {
 			t.Fatalf("variant %d X %+v err=%v", v, res, err)
@@ -293,7 +284,7 @@ func TestNativeMap6_HiddenRouteRevealedOnEntry(t *testing.T) {
 		x       int
 	}{{3, 2}, {4, 0}} {
 		f := newMap6Fixture(t, dungeon.NewMemoryExpeditionRepository(), map6Hero("hide", 500))
-		f.placeMap6(t, "hide", tc.variant, 1, 8)
+		f.placeNative(t, dungeon.NativeMap6ID, "hide", tc.variant, 1, 8, 2)
 		view := func() []string {
 			v, err := f.svc.ObserveExpedition(ctx, "hide")
 			if err != nil || v.Map == nil {
