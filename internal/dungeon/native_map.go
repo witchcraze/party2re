@@ -3,7 +3,6 @@ package dungeon
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -12,34 +11,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-// Native map cells. Appearance, passability and event dispatch are separate:
-// a hidden passage looks like a wall but is traversable.
-const (
-	cellPassage  = '0'
-	cellWall     = '1'
-	cellStart    = 'S'
-	cellHidden   = 'H'
-	cellTreasure = 'C'
-	cellBoss     = 'B'
-	cellMap3Boss = 'b' // independent of B
-	cellMist     = 'M' // map3 event_T: party confusion, then an encounter
-	cellKey      = 'K' // map1: picked up once; never consumed by the door
-	cellDoor     = 'D' // map1: opens with the key or an acting job 9
-)
-
-// symbolEvents share one run-wide state per symbol, like legacy flags: map1
-// repeats K and 3, and map2 repeats 7 and keeps its flags across floors. Other
-// events key by cell, since map0/map3 spell their independent repeats with
-// distinct legacy symbols.
-const symbolEvents = "KD23478"
-
-func eventKey(cell byte, x, y int) string {
-	if strings.IndexByte(symbolEvents, cell) >= 0 {
-		return string(cell)
-	}
-	return fmt.Sprintf("%c:%d:%d", cell, x, y)
-}
-
 // jobLockpick (legacy job 9) opens a locked door for the acting character only.
 const jobLockpick = "job-09"
 
@@ -47,7 +18,7 @@ const jobLockpick = "job-09"
 const NativeMap0ID = "native-map-0"
 
 // nativeMap0 uses the layouts and round limit from map/0/1.cgi–6.cgi.
-// Legacy I and 2 map to the native hidden passage H and treasure C.
+// Legacy I and 2 are written H and C.
 func nativeMap0() Dungeon {
 	monsters := []DungeonMonster{
 		{ID: "nm0-rat", Name: "洞窟ネズミ", HP: 8, Attack: 7, Defense: 2, Agility: 8, ExpReward: 2, GoldReward: 3},
@@ -65,7 +36,8 @@ func nativeMap0() Dungeon {
 	}
 	variants := make([]Floor, len(grids))
 	for i, grid := range grids {
-		f := Floor{FloorNumber: 1, Width: 5, Height: 5, Grid: grid, Monsters: monsters, Boss: boss}
+		f := Floor{FloorNumber: 1, Width: 5, Height: 5, Grid: grid, Monsters: monsters, Boss: boss,
+			events: map[byte]cellEvent{'H': {kind: eventHidden}, 'C': {kind: eventTreasure}}}
 		for y, row := range grid {
 			if x := strings.IndexByte(row, cellStart); x >= 0 {
 				f.StartX, f.StartY = x, y
@@ -105,7 +77,8 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 	clearing := exp.Encounter != nil
 	exp.Encounter = nil
 	cell := floor.Grid[y][x]
-	key := eventKey(cell, x, y)
+	ev := floor.event(cell)
+	key := ev.stateKey(cell, x, y)
 	consumed := slices.Contains(exp.ConsumedEvents, key)
 	step := StepParams{
 		ExpectedExpeditionID: exp.ID,
@@ -116,35 +89,65 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 		RoundDelta:           1,
 		Now:                  time.Now().UTC(),
 	}
-	switch {
-	case cell == cellPassage:
-		// event_0: rand(2) <= 1 spawns.
+	recovery := false
+	switch ev.kind {
+	case eventSpawn:
 		if 2*s.rng.Float64() <= 1 {
 			if pool := s.encounterPool(floor); len(pool.Monsters) > 0 {
 				return s.resolveMonsterCombat(ctx, exp, char, pool.monster(s.rng), EventBattle, x, y, "", "")
 			}
 		}
-	case cell == cellMist:
-		// Repeats on every entry; confusion reaches only the ensuing battle.
+	case eventMist:
+		// Confusion reaches only the ensuing battle.
 		return s.resolveMonsterCombat(ctx, exp, char, s.encounterPool(floor).monster(s.rng), EventBattle, x, y, "", string(corebattle.StatusConfusion))
-	case (cell == cellBoss || cell == cellMap3Boss) && !consumed:
+	case eventBoss:
+		if consumed {
+			break
+		}
+		if boss, ok := floor.Bosses[cell]; ok {
+			return s.resolveMonsterCombat(ctx, exp, char, boss, EventBoss, x, y, key, "")
+		}
 		if pool := s.encounterPool(floor); pool.Boss != nil {
 			return s.resolveMonsterCombat(ctx, exp, char, *pool.Boss, EventBoss, x, y, key, "")
 		}
-	case floor.Bosses[cell].ID != "" && !consumed:
-		return s.resolveMonsterCombat(ctx, exp, char, floor.Bosses[cell], EventBoss, x, y, key, "")
-	case cell == cellKey && !consumed:
-		step.EventKey = key
-	case cell == cellDoor && !consumed:
-		if actor.JobID == jobLockpick || slices.Contains(exp.ConsumedEvents, string(cellKey)) {
+	case eventKey, eventMessage:
+		if !consumed {
+			step.EventKey = key
+		}
+	case eventDoor:
+		if consumed {
+			break
+		}
+		if actor.JobID == jobLockpick || slices.Contains(exp.ConsumedEvents, string(ev.key)) {
 			step.EventKey = key
 		} else {
 			// Locked: the round is spent and the party returns to its only approach.
 			step.NewX, step.NewY = exp.PosX, exp.PosY
 		}
-	case (cell == cellTreasure || strings.IndexByte("234", cell) >= 0) && !consumed:
+	case eventTreasure:
+		if !consumed {
+			step.EventKey = key
+			step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
+		}
+	case eventAttrition:
+		if loss := attritionLoss(exp, actor); loss > 0 {
+			step.MemberHPDeltas = map[string]int{actor.ID: -loss}
+			if actor.ID == char.ID {
+				step.HPDelta = -loss // the run-level HP mirrors the leader
+			}
+		}
+	case eventRecovery:
+		if consumed {
+			break
+		}
 		step.EventKey = key
-		step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
+		hp, mp, err := recoverOne(exp, actor, s.rng)
+		if err != nil {
+			return ExpeditionStepResult{}, err
+		}
+		step.MemberHPDeltas, step.MemberMPDeltas = hp, mp
+		step.HPDelta = hp[char.ID]
+		recovery = true
 	default:
 		if to, ok := floor.Warps[cell]; ok {
 			step.NewX, step.NewY = to[0], to[1]
@@ -167,7 +170,10 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	res := ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove, MemberDamages: negate(step.MemberHPDeltas)}
+	res := ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove}
+	if !recovery {
+		res.MemberDamages = negate(step.MemberHPDeltas)
+	}
 	if out.Expedition.Encounter != nil {
 		res.EventType = EventTreasure
 	}

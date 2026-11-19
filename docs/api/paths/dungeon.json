@@ -274,7 +274,7 @@
   },
   "/characters/{id}/dungeons/move": {
     "post": {
-      "description": "Any living member of the run may move; the mover is the acting character for the destination's map event. Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming rounds or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at the current floor's round limit with 409 while the run stays active for escape; walls and bounds spend no round, while a locked door spends the round and leaves the party in place. Stairs and pitfalls switch the floor at the same position and round; a pitfall reports member_damages and can leave the round above the new floor's limit.",
+      "description": "Any living member of the run may move; the mover is the acting character for the destination's map event. Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming rounds or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at the current floor's round limit with 409 while the run stays active for escape; walls and bounds spend no round, while a locked door spends the round and leaves the party in place. Stairs and pitfalls switch the floor at the same position and round; a pitfall reports member_damages and can leave the round above the new floor's limit. On map4 a passage charges only the mover, also reported in member_damages.",
       "operationId": "moveDungeonExpedition",
       "parameters": [
         {

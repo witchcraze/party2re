@@ -69,16 +69,21 @@ func nativeMap2() Dungeon {
 			Exits:  map[byte]FloorExit{'F': {Variants: []int{8}}, 'T': {Variants: []int{1, 2, 3}, Trap: 30}},
 			Bosses: map[byte]DungeonMonster{'8': *s4.Boss}},
 		{FloorNumber: 3, RoundLimit: 50, Pools: []EncounterPool{s4, s5, s6},
-			Marks: map[byte]string{'F': "凸", cellBoss: "◎", 'Q': "　", 'T': "　"},
+			Marks: map[byte]string{'F': "凸", 'B': "◎", 'Q': "　", 'T': "　"},
 			Exits: map[byte]FloorExit{'F': {Variants: []int{9, 10, 11}}, 'T': {Variants: []int{4, 5, 6, 7}, Trap: 70}}},
 		{FloorNumber: 4, RoundLimit: 50, Pools: []EncounterPool{s3, s4, s5, s6},
 			Marks: map[byte]string{'2': "宝", '3': "宝", '4': "宝"},
 			Exits: map[byte]FloorExit{'T': {Variants: []int{8}, Trap: 40}}},
 	}
+	// Flags carry across floors, so the repeated 7 and the vault treasures key by symbol.
+	events := map[byte]cellEvent{
+		'7': {kind: eventBoss, perSymbol: true}, '8': {kind: eventBoss, perSymbol: true},
+		'2': {kind: eventTreasure, perSymbol: true}, '3': {kind: eventTreasure, perSymbol: true}, '4': {kind: eventTreasure, perSymbol: true},
+	}
 	variants := make([]Floor, len(nativeMap2Floors))
 	for i, rows := range nativeMap2Floors {
 		f := floors[nativeMap2FloorOf[i]-1]
-		f.Width, f.Height, f.Grid = 3, 5, rows[:]
+		f.Width, f.Height, f.Grid, f.events = 3, 5, rows[:], events
 		for y, row := range rows {
 			if x := strings.IndexByte(row, cellStart); x >= 0 {
 				f.StartX, f.StartY = x, y
