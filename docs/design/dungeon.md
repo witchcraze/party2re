@@ -6,7 +6,9 @@ do not describe every event. Current Go is in `internal/dungeon`.
 
 ## Legacy movement and map events
 
-The leader performs the initial advance. Afterwards cardinal movement is
+The leader performs the initial advance. Afterwards any living member may move;
+a fallen character can only Escape (`_battle.cgi:654–663`). Native movement is
+leader-only and does not yet reject a fallen leader (#2394). Cardinal movement is
 available only when no living enemy-side members remain, including ordinary
 unopened Dungeon chests. Movement advances the shared round and dispatches the
 selected map's `event_<symbol>`. Both action registration and the movement guard
@@ -116,7 +118,7 @@ position displays the party marker. There is no source-backed permanent reveal
 flag (`map/0/1.cgi:14–16`, `vs_dungeon.cgi:114–129`). Map5's lever-controlled
 visibility is a different map rule.
 
-Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Existing leader-only commands stay; participant commands and individual exit need a separately approved contract (#1956), not an incidental change in a map implementation.
+Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Participant movement is its own unit (#2394). Other participant commands, combat (#1865) and individual exit (#1956), need their own approved contracts, not an incidental change in a map implementation.
 
 ### Legacy action reconciliation
 
@@ -244,6 +246,31 @@ Open: a pitfall that fells every member wipes the run out, whereas legacy keeps
 the fallen party until it escapes (#2364); chest contents (#2119), group size and
 scaling (#1954), enemy battle data (#2351), narration (#948).
 
+### Map4 attrition maze
+
+**Decision (#1765)**; a target specification, not yet implemented
+([#2396](https://github.com/witchcraze/party2re/issues/2396)). The seven variants
+`map/4/1.cgi`–`7.cgi` differ only in layout.
+
+- **Attrition replaces encounters.** `event_0` overrides the base spawn: the
+  actor alone loses `int(MaxHP × 0.02 + 0.5)` HP per passage entered, so MaxHP
+  ≤ 24 loses nothing, and falls at 0 (`1.cgi:24`). Only bosses `B` (base event) and `b`
+  fight, as independent once-only bosses. Because the mover pays, the party
+  spreads the cost, and members continue after one falls. Map4 therefore stays
+  unlisted until participant movement exists; an all-fallen party waits for
+  Escape (#2364).
+- **`H` recovers one random member, not the party.** **Finding:** the call passes
+  no target. `&{'event_'…}` without parentheses forwards `_susumu`'s arguments, so
+  the "target" is the direction name (`vs_dungeon.cgi:75,101`). `_check_party`
+  treats it as unspecified: a uniform roster member, fallen included, and a
+  fallen pick heals the actor instead (`_skill.cgi:9635–9638`). With probability
+  1/2 the base-40 HP heal applies, otherwise the base-40 MP heal, element 無, with
+  the shared routines' modifiers (`1.cgi:30`). The pre-move reset has already cleared
+  statuses and tension. One flag covers every `H` cell, so variants with two or
+  three give one recovery per run.
+
+Map4 adds no map-specific action.
+
 ### Map13 channel puzzle and routes
 
 **Decision (#1774)**; this is a target specification, not current behavior. Evidence is static, relative to
@@ -312,7 +339,7 @@ content; this table does not authorize their automatic rollout.
 
 | Map / evidence | Events and round limits | Follow-up verification boundary |
 |---|---|---|
-| [4 / #1765](https://github.com/witchcraze/party2re/issues/1765): `map/4/1.cgi:20–34`, variants `2..7.cgi` | Passage damages actor by rounded 2% MaxHP, `M` message, `H` once healing choice, `b` boss, `2/3/4` treasure; limit 70 | Verify actor-only attrition and death, no inherited passage encounter, and the actual healing target/helper behavior before implementation. |
+| [4 / #1765](https://github.com/witchcraze/party2re/issues/1765): `map/4/1.cgi:20–34`, variants `2..7.cgi` | Passage attrition, `H` random recovery, `B/b` bosses, treasure; limit 70 | Decided; see [Map4 attrition maze](#map4-attrition-maze). |
 | [5 / #1766](https://github.com/witchcraze/party2re/issues/1766): `map/5/1.cgi:18–54`, variants `2..4.cgi` | `L` lever/boss, `I` display depends on lever, `T` poison/encounter, `t` damage base 80, `H` job-43 party recovery, treasure; limit 60 | Separate lever/visibility from hazard/recovery if useful; test lever replay, status ordering, actor qualification and all members' vitality. |
 | [6 / #1767](https://github.com/witchcraze/party2re/issues/1767): `map/6/1.cgi:20–43`, variants `2..5.cgi` | Exclusive `A/B`, `C/D`, `E/F` choices, message markers `5/6/7`, `X` boss, treasure; limit 30 | Test mutually exclusive branch flags, encounter pools and ordered currency/heal/trap alternatives; audit negative-money behavior rather than silently normalizing it. |
 | [7 / #1768](https://github.com/witchcraze/party2re/issues/1768): `map/7/1.cgi:20–45`, variants `2..6.cgi` | `K` switch or jobs 4/25 open rock `D`, `T` paralysis/encounter, `t` damage base 150, `A/b` bosses, treasure; limit 60 | Door-style entry reversal, actor qualification, shared switch/rock state and hazard ordering. |
@@ -330,10 +357,6 @@ content; this table does not authorize their automatic rollout.
 ## Remaining limits
 
 This decision does not certify the whole Dungeon cluster.
-Per-character combat action dispatch is scoped in
-[#1865](https://github.com/witchcraze/party2re/issues/1865). Independent participant
-departure and fatigue/equipment exit effects remain unscheduled gaps; whole-party
-Escape and a shared movement counter do not supply them. Maps without a section
-above require their row's scoped investigation. Idle expiry,
+Maps without a section above require their row's scoped investigation. Idle expiry,
 Valkey-loss recovery and multi-instance guarantees retain their existing limits
 in the [run-state architecture](../architecture/transient-run-state.md).
