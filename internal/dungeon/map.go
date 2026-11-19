@@ -138,10 +138,11 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 					symbol = "■" // out of bounds / wall
 				} else {
 					tileChar := floor.Grid[targetY][targetX]
+					ev := floor.event(tileChar)
 					switch {
-					case tileChar == cellWall || floor.event(tileChar).kind == eventHidden:
+					case tileChar == cellWall || ev.kind == eventHidden && (ev.key == 0 || !slices.Contains(exp.ConsumedEvents, string(ev.key))):
 						symbol = "■" // wall
-					case floor.Marks[tileChar] != "" && !slices.Contains(exp.ConsumedEvents, floor.event(tileChar).stateKey(tileChar, targetX, targetY)):
+					case floor.Marks[tileChar] != "" && (ev.keepMark || !slices.Contains(exp.ConsumedEvents, ev.stateKey(tileChar, targetX, targetY))):
 						symbol = floor.Marks[tileChar]
 					default:
 						symbol = "□" // path

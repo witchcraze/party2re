@@ -86,7 +86,7 @@ type Floor struct {
 	Exits map[byte]FloorExit `json:"-"`
 	// Bosses are map-owned once bosses with fixed content, keyed by cell.
 	Bosses map[byte]DungeonMonster `json:"-"`
-	// Marks show a cell's symbol in the map view until its once event is consumed.
+	// Marks show a cell's symbol in the map view until its once event is consumed, unless the event keeps it.
 	Marks map[byte]string `json:"-"`
 	// events bind this floor's symbols; see map_events.go.
 	events map[byte]cellEvent

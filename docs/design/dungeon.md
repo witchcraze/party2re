@@ -112,8 +112,8 @@ future routes or the full private event-state map. GET/refresh performs no event
 dispatch, RNG draw, reward delivery or exploration mutation. For map0, `I` is
 displayed as a wall when in view, including after traversal; being the current
 position displays the party marker. There is no source-backed permanent reveal
-flag (`map/0/1.cgi:14–16`, `vs_dungeon.cgi:114–129`). Map5's lever-controlled
-visibility is a different map rule.
+flag (`map/0/1.cgi:14–16`, `vs_dungeon.cgi:114–129`); map5's `I` is
+[revealed by its lever](#map5-lever-temple).
 
 Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Participant combat (#1865) and individual exit (#1956) need their own approved contracts, not an incidental change in a map implementation.
 
@@ -259,6 +259,22 @@ Non-obvious findings:
 Open: group size and scaling (#1954), enemy battle data (#2351), chest contents
 (#2119), and the `M`/`H` narration (#948).
 
+### Map5 lever temple
+
+Non-obvious findings in `map/5/`:
+
+- **The lever changes only the view.** `I` is never impassable; the `L` flag
+  only switches its display from wall to passage (`1.cgi:18–20`). `★` stays
+  after the pull, and `B` and treasure have no marker, unlike map4.
+- **`H` revives.** It sets every `@partys` member, fallen included, to full HP
+  and MP (`1.cgi:26–37`). Only the acting character's job 43 qualifies; another
+  entry sets no flag, so a later job-43 entry still succeeds.
+- **The `T` poison lasts one battle.** It precedes the encounter, and the next
+  step's `reset_status_all` clears it (`vs_dungeon.cgi:93`), as with map3's mist.
+
+Open: group size and scaling (#1954), enemy battle data (#2351), chest contents
+(#2119), and narration (#948), whose repeated-lever lines are the only `L` draws.
+
 ### Map13 channel puzzle and routes
 
 **Decision (#1774)**; this is a target specification, not current behavior. Evidence is static, relative to
@@ -327,7 +343,6 @@ content; this table does not authorize their automatic rollout.
 
 | Map / evidence | Events and round limits | Follow-up verification boundary |
 |---|---|---|
-| [5 / #1766](https://github.com/witchcraze/party2re/issues/1766): `map/5/1.cgi:18–54`, variants `2..4.cgi` | `L` lever/boss, `I` display depends on lever, `T` poison/encounter, `t` damage base 80, `H` job-43 party recovery, treasure; limit 60 | Separate lever/visibility from hazard/recovery if useful; test lever replay, status ordering, actor qualification and all members' vitality. |
 | [6 / #1767](https://github.com/witchcraze/party2re/issues/1767): `map/6/1.cgi:20–43`, variants `2..5.cgi` | Exclusive `A/B`, `C/D`, `E/F` choices, message markers `5/6/7`, `X` boss, treasure; limit 30 | Test mutually exclusive branch flags, encounter pools and ordered currency/heal/trap alternatives; audit negative-money behavior rather than silently normalizing it. |
 | [7 / #1768](https://github.com/witchcraze/party2re/issues/1768): `map/7/1.cgi:20–45`, variants `2..6.cgi` | `K` switch or jobs 4/25 open rock `D`, `T` paralysis/encounter, `t` damage base 150, `A/b` bosses, treasure; limit 60 | Door-style entry reversal, actor qualification, shared switch/rock state and hazard ordering. |
 | [8 / #1769](https://github.com/witchcraze/party2re/issues/1769): `map/8/1.cgi:20–32`, variants `2..12.cgi` | `W` and wall event `1` random warp, walls appear as passage, `A/C/D` bosses, treasure; limit 50 | Wall collision can move position without spending a round; test visible-versus-traversable distinction and warp bounds/RNG. |

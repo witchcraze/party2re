@@ -1,6 +1,10 @@
 package dungeon
 
-import "strings"
+import (
+	"strings"
+
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+)
 
 // NativeMap3ID is the warp maze (legacy map/3, eight initial variants).
 const NativeMap3ID = "native-map-3"
@@ -31,10 +35,10 @@ var nativeMap3Warps = [8]map[byte][2]int{
 	{'a': {6, 4}, 'c': {4, 6}, 'd': {2, 4}, 'e': {4, 2}, 'f': {8, 8}, 'g': {2, 6}},
 }
 
-// b is a boss independent of B; M (legacy T) repeats on every entry.
+// b is a boss independent of B; M (legacy T) confuses on every entry.
 var nativeMap3Events = map[byte]cellEvent{
 	'b': {kind: eventBoss},
-	'M': {kind: eventMist},
+	'M': {kind: eventMist, status: corebattle.StatusConfusion},
 	'2': {kind: eventTreasure, perSymbol: true},
 	'3': {kind: eventTreasure, perSymbol: true},
 }
@@ -43,8 +47,8 @@ func mon(id, name string, hp, at, df, ag, exp, gold int) DungeonMonster {
 	return DungeonMonster{ID: id, Name: name, HP: hp, Attack: at, Defense: df, Agility: ag, ExpReward: exp, GoldReward: gold}
 }
 
-// nativeMap3Pools mirror the stat magnitudes and appearance weights of the four
-// legacy stage files from map/3/*.cgi. Names follow the Adventure catalog
+// nativeMap3Pools mirror the stat magnitudes and appearance weights of legacy
+// stages 5–8, which map3 and map5 load. Names follow the Adventure catalog
 // apart from the two approved generic names (#2373).
 func nativeMap3Pools() []EncounterPool {
 	return []EncounterPool{
