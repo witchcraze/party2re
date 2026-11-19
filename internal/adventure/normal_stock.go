@@ -87,7 +87,7 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 			return grow(b, rng, true)
 		},
 	}
-	result, err := r.Battle.ApplyPlayerOperation(&op, s.cfg.RNG)
+	result, err := r.applyPlayerOperation(&op, s.cfg.RNG)
 	if err != nil {
 		return err
 	}

@@ -57,6 +57,8 @@ type normalOperations struct {
 	treasure bool
 }
 
+var separatorKey = skill.OperationNameKey("br")
+
 // DiscoverNormalOperations uses saved encounter membership and the same
 // argument-dependent admission as parsing. Authorization belongs to the caller.
 func (r *NormalRun) DiscoverNormalOperations(cmd RunCommand, ctx NormalOperationContext) ([]RunOperationChoice, error) {
@@ -67,6 +69,9 @@ func (r *NormalRun) DiscoverNormalOperations(cmd RunCommand, ctx NormalOperation
 	choices := make([]RunOperationChoice, 0, len(ops.order))
 	checked := make(map[string]RunOperationChoice, len(ops.byKey))
 	for _, key := range ops.order {
+		if key == separatorKey {
+			continue
+		}
 		choice, exists := checked[key]
 		if !exists {
 			candidate := ops.byKey[key]
@@ -125,6 +130,9 @@ func (r *NormalRun) normalOperations(actorID string, ctx NormalOperationContext)
 		if !cursed {
 			ops.addJob(jobs.JobID, jobs.SP, false)
 			ops.addJob(jobs.OldJobID, jobs.OldSP, true)
+			if jobs.SP != 0 || jobs.OldSP != 0 {
+				ops.addBattle("br", "br", "br", "br")
+			}
 		}
 		ops.addBattle("attack", "attack", "こうげき", "")
 		ops.addBattle("defend", "defend", "ぼうぎょ", "job-0-entry-4")
@@ -357,7 +365,7 @@ func (o *normalOperations) addCustom() {
 	}
 	name := a.Custom.Name
 	key := skill.OperationNameKey(name)
-	if _, exists := o.byKey[key]; exists || key == skill.OperationNameKey("br") && (a.Jobs.SP != 0 || a.Jobs.OldSP != 0) {
+	if _, exists := o.byKey[key]; exists {
 		return
 	}
 	o.add(runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: "custom", Name: name, Kind: RunOperationBattle}, key: key, custom: true})

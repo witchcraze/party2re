@@ -10,7 +10,7 @@ import (
 )
 
 // ParsedRunOperation carries dispatch and the frozen player entries. The
-// consumer binds their Validate and Execute functions when building the step.
+// consumer binds any remaining Validate and Execute functions when building the step.
 type ParsedRunOperation struct {
 	Kind   RunOperationKind
 	First  ParsedRunAction
@@ -48,7 +48,7 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 		var namedCustom *runOperationCandidate
 		for _, key := range ops.order {
 			c := ops.byKey[key]
-			if c.Action == cmd.Action {
+			if c.Action == cmd.Action && c.Action != "br" {
 				return ops.parseFirst(c, cmd.TargetID, cmd.Input)
 			}
 			if c.custom && c.Name == cmd.Action {
@@ -175,6 +175,10 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 	}
 	if err != nil {
 		return ParsedRunAction{}, err
+	}
+	switch action.EntryID {
+	case "front", "back", "between-encounter-survival", "br":
+		bindOrdinaryPlayerAction(&action, frame, o.ctx.Definitions.Invocations)
 	}
 	return action, nil
 }
