@@ -350,6 +350,7 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 		"party-live", "Live Party", "[]",
 		"[]", "1", "", "1", // consumed events, event consumed, encounter, revision
 		"", "", // map variant and round limit (catalog run)
+		"", // map state (none)
 	}
 
 	params := dungeon.StepParams{

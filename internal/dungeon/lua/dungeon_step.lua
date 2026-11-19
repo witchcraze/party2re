@@ -240,6 +240,11 @@ if map_variant > 0 then
     redis.call('HSET', state_key, 'map_variant', tostring(map_variant), 'round_limit', ARGV[22])
 end
 
+-- The map's own run state is replaced whole; the revision check above guards it.
+if ARGV[24] == 'true' then
+    redis.call('HSET', state_key, 'map_state', ARGV[23])
+end
+
 -- 7. Update rewards hash
 if event_consumed == 0 then
     exp_delta = 0
@@ -296,5 +301,6 @@ return {
     encounter,
     tostring(revision),
     redis.call('HGET', state_key, 'map_variant') or '',
-    redis.call('HGET', state_key, 'round_limit') or ''
+    redis.call('HGET', state_key, 'round_limit') or '',
+    redis.call('HGET', state_key, 'map_state') or ''
 }
