@@ -62,6 +62,30 @@ func attritionLoss(exp *ActiveExpedition, actor *corecharacter.Character) int {
 // fallen ones redirected to the actor. Half the time HP, otherwise MP, base 40.
 func recoverOne(exp *ActiveExpedition, actor *corecharacter.Character, rng RandomSource) (hp, mp map[string]int, err error) {
 	healHP := rng.Float64() < .5
+	return rosterHeal(exp, actor, func(state *corebattle.LifetimeState, c *corebattle.EffectContext, g randomSourceAdapter) error {
+		effect := corebattle.TargetEffect{Payload: corebattle.CallbackPayload{Number: 40}}
+		apply := state.ApplyMPHealing
+		if healHP {
+			apply = state.ApplyHealing
+		}
+		_, err := apply(c, effect, g)
+		return err
+	}, rng)
+}
+
+// partyHeal is _heals(base, '無'): every living member through the shared
+// party-heal routine with the actor's modifiers (map6).
+func partyHeal(exp *ActiveExpedition, actor *corecharacter.Character, base float64, rng RandomSource) (map[string]int, error) {
+	hp, _, err := rosterHeal(exp, actor, func(state *corebattle.LifetimeState, c *corebattle.EffectContext, g randomSourceAdapter) error {
+		_, err := state.ApplyPartyHealing(c, base, corebattle.CategoryUntyped, g)
+		return err
+	}, rng)
+	return hp, err
+}
+
+// rosterHeal runs one healing effect on the saved roster and returns the
+// per-member HP and MP changes.
+func rosterHeal(exp *ActiveExpedition, actor *corecharacter.Character, heal func(*corebattle.LifetimeState, *corebattle.EffectContext, randomSourceAdapter) error, rng RandomSource) (hp, mp map[string]int, err error) {
 	state := corebattle.LifetimeState{}
 	ids := make([]string, len(exp.Members))
 	for i, m := range exp.Members {
@@ -70,12 +94,7 @@ func recoverOne(exp *ActiveExpedition, actor *corecharacter.Character, rng Rando
 		state.Actors = append(state.Actors, corebattle.LifetimeActor{Participant: p, Tension: 1, Hit: 95})
 	}
 	c := &corebattle.EffectContext{TargetContext: corebattle.TargetContext{ActorID: actor.ID, PartyIDs: ids}}
-	effect := corebattle.TargetEffect{Payload: corebattle.CallbackPayload{Number: 40}}
-	apply := state.ApplyMPHealing
-	if healHP {
-		apply = state.ApplyHealing
-	}
-	if _, err := apply(c, effect, randomSourceAdapter{rng}); err != nil {
+	if err := heal(&state, c, randomSourceAdapter{rng}); err != nil {
 		return nil, nil, err
 	}
 	hp, mp = map[string]int{}, map[string]int{}

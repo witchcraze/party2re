@@ -25,6 +25,7 @@ const (
 	eventMessage                    // once: narration only
 	eventTrap                       // every entry: _trap_d on the whole roster
 	eventRemedy                     // once, by an acting job 43: the roster to full HP and MP
+	eventChoice                     // once per flag: draws one of two outcomes (map6 pairs)
 )
 
 type cellEvent struct {
@@ -37,6 +38,34 @@ type cellEvent struct {
 	key      byte                    // eventDoor/eventHidden: the symbol whose flag opens/reveals it
 	status   corebattle.StatusEffect // eventMist
 	base     int                     // eventTrap: _trap_d base damage
+	// flag, when set, is the once-state shared by every symbol carrying it
+	// (map6 A/B share "AB").
+	flag string
+	// eventChoice: outcomes[0] when rand(odds) < 1, else outcomes[1]; odds 0
+	// always takes outcomes[0].
+	odds     int
+	outcomes [2]choiceOutcome
+}
+
+type outcomeKind uint8
+
+const (
+	_               outcomeKind = iota // zero value: flag only
+	outcomeMonster                     // add_monster: the fixed monster, else the event's stage pool
+	outcomeBoss                        // add_boss: the fixed group's representative, else the pool boss
+	outcomeTreasure                    // _add_treasure
+	outcomeTrap                        // _trap_d on the whole roster
+	outcomeHeal                        // _heals(base, '無') on the living roster
+	outcomeGold                        // the mover's wallet; see #2417
+)
+
+type choiceOutcome struct {
+	kind    outcomeKind
+	monster *DungeonMonster
+	// base is the trap/heal base, with random the bound of rand(base); for
+	// gold, +1 is a pickup and -1 a loss.
+	base   int
+	random bool
 }
 
 // The base wall and start; every other symbol is passable.
@@ -55,6 +84,9 @@ func (f Floor) event(cell byte) cellEvent {
 }
 
 func (ev cellEvent) stateKey(cell byte, x, y int) string {
+	if ev.flag != "" {
+		return ev.flag
+	}
 	if ev.perSymbol {
 		return string(cell)
 	}

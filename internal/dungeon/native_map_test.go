@@ -67,7 +67,7 @@ func newNativeFixture(t *testing.T, hero corecharacter.Character) *nativeFixture
 	return newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), hero)
 }
 
-func newNativeFixtureOn(t *testing.T, store dungeon.ActiveExpeditionStore, hero corecharacter.Character) *nativeFixture {
+func newNativeFixtureOn(t *testing.T, store dungeon.ActiveExpeditionStore, hero corecharacter.Character, opts ...dungeon.Option) *nativeFixture {
 	t.Helper()
 	f := &nativeFixture{
 		store: store,
@@ -75,9 +75,9 @@ func newNativeFixtureOn(t *testing.T, store dungeon.ActiveExpeditionStore, hero 
 		chars: &mockCharRepo{chars: map[string]corecharacter.Character{hero.ID: hero}},
 		rng:   &scriptedRNG{},
 	}
-	svc, err := dungeon.NewService(f.repo, f.chars, corebattle.Engine{},
-		dungeon.WithActiveExpeditionStore(f.store), dungeon.WithRNG(f.rng),
-		dungeon.WithInventoryProvider(&mockInventoryRepo{}), dungeon.WithAdmission(approvedRoster{}))
+	opts = append([]dungeon.Option{dungeon.WithActiveExpeditionStore(f.store), dungeon.WithRNG(f.rng),
+		dungeon.WithInventoryProvider(&mockInventoryRepo{}), dungeon.WithAdmission(approvedRoster{})}, opts...)
+	svc, err := dungeon.NewService(f.repo, f.chars, corebattle.Engine{}, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}

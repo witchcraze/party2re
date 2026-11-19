@@ -168,7 +168,48 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 		step.HPDelta = hp[char.ID]
 		recovery = true
 	case eventTrap:
-		partyTrap(&step, exp, char.ID, ev.base, s.rng)
+		partyTrap(&step, exp, char.ID, float64(ev.base), s.rng)
+	case eventChoice:
+		if consumed {
+			break
+		}
+		o := ev.outcomes[0]
+		if ev.odds > 0 && float64(ev.odds)*s.rng.Float64() >= 1 {
+			o = ev.outcomes[1]
+		}
+		base := float64(o.base)
+		if o.random {
+			base *= s.rng.Float64()
+		}
+		step.EventKey = key
+		switch o.kind {
+		case outcomeMonster:
+			m := o.monster
+			if m == nil {
+				pm := s.encounterPool(floor).monster(s.rng)
+				m = &pm
+			}
+			return s.resolveMonsterCombat(ctx, exp, char, *m, EventBattle, x, y, key, "")
+		case outcomeBoss:
+			m := o.monster
+			if m == nil {
+				m = s.encounterPool(floor).Boss
+			}
+			return s.resolveMonsterCombat(ctx, exp, char, *m, EventBoss, x, y, key, "")
+		case outcomeTreasure:
+			step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
+		case outcomeTrap:
+			partyTrap(&step, exp, char.ID, base, s.rng)
+		case outcomeHeal:
+			hp, err := partyHeal(exp, actor, base, s.rng)
+			if err != nil {
+				return ExpeditionStepResult{}, err
+			}
+			step.MemberHPDeltas, step.HPDelta = hp, hp[char.ID]
+			recovery = true
+		case outcomeGold:
+			// shortcut: the wallet change lands with #2417; map6 stays unlisted until then.
+		}
 	case eventRemedy:
 		if consumed || actor.JobID != jobRemedy {
 			break
@@ -186,7 +227,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 			step.MapVariant = exit.Variants[s.rng.Intn(len(exit.Variants))]
 			step.RoundLimit = d.limitOf(d.Variants[step.MapVariant-1])
 			if exit.Trap > 0 {
-				partyTrap(&step, exp, char.ID, exit.Trap, s.rng)
+				partyTrap(&step, exp, char.ID, float64(exit.Trap), s.rng)
 			}
 		}
 	}
@@ -205,13 +246,14 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, a
 }
 
 // trapRoll is _trap_d's per-member damage: int(base × (0.9 + rand(0.3))).
-func trapRoll(base int, rng RandomSource) int {
-	return int(float64(base) * (0.9 + 0.3*rng.Float64()))
+// The base may be fractional (map6 rand(200)).
+func trapRoll(base float64, rng RandomSource) int {
+	return int(base * (0.9 + 0.3*rng.Float64()))
 }
 
 // partyTrap hits every roster member; fallen members stay at 0. The run-level
 // HP mirrors the leader, as combat keeps it.
-func partyTrap(step *StepParams, exp *ActiveExpedition, leaderID string, base int, rng RandomSource) {
+func partyTrap(step *StepParams, exp *ActiveExpedition, leaderID string, base float64, rng RandomSource) {
 	if len(exp.Members) == 0 {
 		step.HPDelta = -trapRoll(base, rng)
 		return
