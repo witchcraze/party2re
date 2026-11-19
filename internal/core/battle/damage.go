@@ -12,6 +12,7 @@ type DamageContext struct {
 	Reset, Defeat          func(string) error
 	Cursor                 TargetCursor
 	ToolCategory           ToolCategoryContext
+	responseDefeat         *DefeatContext
 	// Native enclosing callbacks can own resource writes at target resolution;
 	// primitive callers otherwise consume the returned TargetResolution facts.
 	targetResources func(TargetResolution)
@@ -124,6 +125,10 @@ func (s *LifetimeState) validateDamageRecipients(c *DamageContext, candidates []
 // Target/resource facts remain visible even when the helper returns no tuple.
 func (s *LifetimeState) ApplyDamage(c *DamageContext, e TargetEffect, rng random.Generator) (EffectApplication, error) {
 	r := EffectApplication{}
+	if f := s.npcFacts(); f != nil && c != nil {
+		mergeNPCEffects(&c.EffectContext, &f.effects)
+		defer mergeNPCEffects(&f.effects, &c.EffectContext)
+	}
 	if err := s.ValidateDamage(c, e, rng); err != nil {
 		return r, err
 	}
@@ -163,7 +168,7 @@ func (s *LifetimeState) ApplyDamage(c *DamageContext, e TargetEffect, rng random
 	fieldPower := v
 	if a.Extended == ExtendedPurification {
 		status, tension := t.Status, t.Tension
-		if err := c.Reset(t.ID); err != nil {
+		if err := s.applyDamageReset(c, t.ID, rng); err != nil {
 			return r, err
 		}
 		a, t = s.actor(c.ActorID), s.actor(r.TargetID)
@@ -205,7 +210,7 @@ func (s *LifetimeState) ApplyDamage(c *DamageContext, e TargetEffect, rng random
 	}
 	if t.HP <= 0 {
 		t.HP = 0
-		if err := c.Defeat(t.ID); err != nil {
+		if err := s.applyDamageDefeat(c, t.ID, rng); err != nil {
 			return r, err
 		}
 	} else if hasItem(t.ItemDefinitionIDs, "item-162") && target.Category == CategoryPhysical {
@@ -227,10 +232,13 @@ func (s *LifetimeState) ApplyDamage(c *DamageContext, e TargetEffect, rng random
 	a, t = s.actor(c.ActorID), s.actor(r.TargetID)
 	if s.Fields.Current() == "darkness" && a.HP > 0 {
 		c.End.RecordDarkness(r.Amount)
+		if s.npcResponse != nil {
+			s.npcResponse.end.RecordDarkness(r.Amount)
+		}
 	}
 	if t.HP > 0 && hasAbility(a.Abilities, "seal_kuu") && rng.Float64() < .125 {
 		tension := t.Tension
-		if err := c.Reset(t.ID); err != nil {
+		if err := s.applyDamageReset(c, t.ID, rng); err != nil {
 			return r, err
 		}
 		t = s.actor(r.TargetID)
@@ -271,6 +279,10 @@ func (s *LifetimeState) exceedAg(c *DamageContext, m, y *LifetimeActor, rng rand
 // ApplyAreaDamage pre-evaluates modifiers before recording the area count.
 // It retains every invocation, including zero/miss, and source roster order.
 func (s *LifetimeState) ApplyAreaDamage(c *DamageContext, power float64, category CallbackCategory, direct bool, rng random.Generator) ([]EffectApplication, error) {
+	if f := s.npcFacts(); f != nil && c != nil {
+		mergeNPCEffects(&c.EffectContext, &f.effects)
+		defer mergeNPCEffects(&f.effects, &c.EffectContext)
+	}
 	e := TargetEffect{Category: category, Payload: CallbackPayload{Number: power}}
 	if direct {
 		e.Arguments = []string{"1"}

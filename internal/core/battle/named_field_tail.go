@@ -64,13 +64,7 @@ func (s *LifetimeState) ApplyNamedFieldTail(c *NamedFieldContext, tail NamedFiel
 	if err := s.ValidateNamedFieldTail(c, tail, rng); err != nil {
 		return err
 	}
-	if s.Fields.Exercises("burn", tail.Before, tail.ResponseEnabled, tail.Suppressed) {
-		a := s.actor(c.ActorID)
-		if a.HP > 0 {
-			a.HP = max(1, a.HP-min(200, a.MaxHP/10))
-			a.Status, a.Temporary, a.Extended, a.ExtendedTurns = "", "", "", 0
-		}
-	}
+	s.applyBurnField(c.ActorID, tail)
 	if g := tail.Grave; g != nil && s.Fields.Exercises("grave", tail.Before, tail.ResponseEnabled, tail.Suppressed) {
 		a := s.rosterIdentity(callingIdentity(64))
 		if a == nil {
@@ -96,6 +90,17 @@ func (s *LifetimeState) ApplyNamedFieldTail(c *NamedFieldContext, tail NamedFiel
 		}
 	}
 	return nil
+}
+
+func (s *LifetimeState) applyBurnField(actorID string, tail NamedFieldTail) {
+	if tail.NPC {
+		tail.ResponseEnabled, tail.Suppressed = true, false
+	}
+	a := s.actor(actorID)
+	if a.HP > 0 && s.Fields.Exercises("burn", tail.Before, tail.ResponseEnabled, tail.Suppressed) {
+		a.HP = max(1, a.HP-min(200, a.MaxHP/10))
+		a.Status, a.Temporary, a.Extended, a.ExtendedTurns = "", "", "", 0
+	}
 }
 
 // ApplyIncenseHealing runs before TickIncense/CompleteOperation. The holder's

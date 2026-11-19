@@ -4,6 +4,11 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
+var (
+	npcTailsBeforeField = [...]string{"item-164-operation-tail", "item-209-operation-tail"}
+	npcTailsAfterField  = [...]string{"item-206-operation-tail", "item-202-npc-tail", "item-208-combat-tail", "guardian-mp-tail", "item-246-combat-tail"}
+)
+
 func (s *LifetimeState) validateNPCPoison(c *EquipmentTailContext, rng random.Generator) error {
 	a := s.actor(c.ActorID)
 	damage := a.MaxHP / 10
@@ -25,6 +30,14 @@ func (s *LifetimeState) validateNPCPoison(c *EquipmentTailContext, rng random.Ge
 // Capture equipment/field facts before calling. The enclosing consumer admits
 // the action and its continuations before this first state mutation.
 func (s *LifetimeState) BeginNPCAction(c *EquipmentTailContext, rng random.Generator) (StatusDecision, error) {
+	decision, err := s.beginNPCAction(c, rng)
+	if err == nil && decision.NormalAction {
+		err = s.actor(c.ActorID).BeginNormalAction(true, false, false, rng)
+	}
+	return decision, err
+}
+
+func (s *LifetimeState) beginNPCAction(c *EquipmentTailContext, rng random.Generator) (StatusDecision, error) {
 	if c == nil || rng == nil {
 		return StatusDecision{}, ErrInvalidRequest
 	}
@@ -35,7 +48,8 @@ func (s *LifetimeState) BeginNPCAction(c *EquipmentTailContext, rng random.Gener
 	if err := a.ValidateOrdinaryNPC(); err != nil {
 		return StatusDecision{}, err
 	}
-	if a.Status == StatusKinju {
+	bypass := hasItem(a.ItemDefinitionIDs, "item-204")
+	if a.Status == StatusKinju && !bypass && a.Extended != ExtendedPurification {
 		if err := s.validateNPCPoison(c, rng); err != nil {
 			return StatusDecision{}, err
 		}
@@ -43,7 +57,7 @@ func (s *LifetimeState) BeginNPCAction(c *EquipmentTailContext, rng random.Gener
 	if a.Status != "" && ((hasItem(a.ItemDefinitionIDs, "item-246") && rng.Float64() < .5) || a.Extended == ExtendedPurification) {
 		a.Status = ""
 	}
-	decision, err := a.CheckIncapacitation(IncapacitationContext{NPC: true, Bypass: hasItem(a.ItemDefinitionIDs, "item-204"), SpecialBossField: s.SpecialBossField, PhantomField: s.Fields.Current() == "phantom"}, rng)
+	decision, err := a.CheckIncapacitation(IncapacitationContext{NPC: true, Bypass: bypass, SpecialBossField: s.SpecialBossField, PhantomField: s.Fields.Current() == "phantom"}, rng)
 	if err != nil {
 		return StatusDecision{}, err
 	}
@@ -52,11 +66,6 @@ func (s *LifetimeState) BeginNPCAction(c *EquipmentTailContext, rng random.Gener
 			return StatusDecision{}, ErrUnsupportedEffect
 		}
 		if _, err := s.ApplyDefeat(c.Defeat, a.ID, rng); err != nil {
-			return StatusDecision{}, err
-		}
-	}
-	if decision.NormalAction {
-		if err := s.actor(c.ActorID).BeginNormalAction(true, false, false, rng); err != nil {
 			return StatusDecision{}, err
 		}
 	}
@@ -77,12 +86,10 @@ func (s *LifetimeState) FinishNPCNormalAction(c *EquipmentTailContext, rng rando
 	if err := a.ValidateOrdinaryNPC(); err != nil {
 		return err
 	}
-	if a.Status == StatusPoison || a.Status == StatusDeadlyPoison || a.Status == StatusVirulentPoison {
+	poison := func() error {
 		if err := s.validateNPCPoison(c, rng); err != nil {
 			return err
 		}
-	}
-	poison := func() error {
 		dead, err := s.actor(c.ActorID).ApplyPoison(rng)
 		if err != nil || !dead {
 			return err
@@ -131,7 +138,7 @@ func (s *LifetimeState) FinishNPCTails(c *EquipmentTailContext, field *NamedFiel
 			return err
 		}
 	}
-	for _, id := range []string{"item-164-operation-tail", "item-209-operation-tail"} {
+	for _, id := range npcTailsBeforeField {
 		if err := s.ApplyEquipmentTail(c, id, rng); err != nil {
 			return err
 		}
@@ -142,12 +149,15 @@ func (s *LifetimeState) FinishNPCTails(c *EquipmentTailContext, field *NamedFiel
 		return err
 	}
 	c.TargetContext = field.TargetContext
-	for _, id := range []string{"item-206-operation-tail", "item-202-npc-tail", "item-208-combat-tail", "guardian-mp-tail", "item-246-combat-tail"} {
+	for _, id := range npcTailsAfterField {
 		if err := s.ApplyEquipmentTail(c, id, rng); err != nil {
 			return err
 		}
 	}
 	c.Completion.End = c.End
+	if s.npcResponse != nil {
+		c.Completion.End = s.npcResponse.end
+	}
 	_, err := s.CompleteOperation(c.Completion, c.PartyIDs)
 	return err
 }

@@ -6,6 +6,7 @@ import (
 )
 
 func cloneCallbackContext(c CallbackContext) CallbackContext {
+	originalDefeat := c.Defeat
 	c.PartyIDs = slices.Clone(c.PartyIDs)
 	c.EnemyIDs = slices.Clone(c.EnemyIDs)
 	c.MemberOnlyIDs = slices.Clone(c.MemberOnlyIDs)
@@ -39,10 +40,25 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 			seals := *defeat.Seals
 			defeat.Seals = &seals
 		}
+		if defeat.Rewards != nil {
+			rewards := *defeat.Rewards
+			defeat.Rewards = &rewards
+		}
+		if defeat.Fortress != nil {
+			fortress := *defeat.Fortress
+			defeat.Fortress = &fortress
+		}
 		c.Defeat = &defeat
 	}
 	if c.Damage != nil {
 		damage := *c.Damage
+		if damage.responseDefeat != nil {
+			if damage.responseDefeat == originalDefeat {
+				damage.responseDefeat = c.Defeat
+			} else {
+				damage.responseDefeat = cloneCallbackContext(CallbackContext{Defeat: damage.responseDefeat}).Defeat
+			}
+		}
 		damage.PartyIDs = slices.Clone(damage.PartyIDs)
 		damage.EnemyIDs = slices.Clone(damage.EnemyIDs)
 		damage.MemberOnlyIDs = slices.Clone(damage.MemberOnlyIDs)
@@ -61,6 +77,7 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 }
 
 func (s LifetimeState) callbackCopy() LifetimeState {
+	s.npcResponse = nil
 	s.Actors = slices.Clone(s.Actors)
 	s.SkillBans = maps.Clone(s.SkillBans)
 	s.SkillHistory = maps.Clone(s.SkillHistory)

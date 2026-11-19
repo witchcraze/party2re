@@ -38,7 +38,7 @@ func (s *LifetimeState) ApplyToolDamage(c *DamageContext, targetID string, power
 			t.HP = 1
 		} else {
 			t.HP = 0
-			if err := c.Defeat(t.ID); err != nil {
+			if err := s.applyDamageDefeat(c, t.ID, rng); err != nil {
 				return r, err
 			}
 			t = s.actor(targetID)

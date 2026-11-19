@@ -102,7 +102,7 @@ func (s *LifetimeState) ApplyTimeMixedMagic(c *TimeMixedMagicContext, id string,
 			t = a
 		}
 		if t.HP <= 999 && t.Defense <= 999 {
-			return c.Defeat(t.ID)
+			return s.applyDamageDefeat(&c.DamageContext, t.ID, rng)
 		}
 		return nil
 	case "job-30-entry-8":
@@ -155,7 +155,7 @@ func (s *LifetimeState) ApplyTimeMixedMagic(c *TimeMixedMagicContext, id string,
 		}
 	}
 	if id == "job-31-entry-0" {
-		return c.Defeat(c.ActorID)
+		return s.applyDamageDefeat(&c.DamageContext, c.ActorID, rng)
 	}
 	return nil
 }

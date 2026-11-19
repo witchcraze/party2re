@@ -79,10 +79,10 @@ func (s *LifetimeState) ApplyDefeat(c *DefeatContext, targetID string, rng rando
 	if err := s.ValidateDefeat(c, targetID, rng); err != nil {
 		return DefeatResult{}, err
 	}
-	return s.applyDefeat(c, targetID, rng)
+	return s.applyDefeat(c, targetID, c.ActorID, rng)
 }
 
-func (s *LifetimeState) applyDefeat(c *DefeatContext, id string, rng random.Generator) (DefeatResult, error) {
+func (s *LifetimeState) applyDefeat(c *DefeatContext, id, killerID string, rng random.Generator) (DefeatResult, error) {
 	r := DefeatResult{}
 	auto := AutomaticRevivalContext{TargetContext: c.TargetContext, Reset: func(id string) error { return s.ApplyEquipmentReset(&c.EquipmentResetContext, id, rng) }}
 	revival, err := s.ApplyAutomaticRevival(&auto, id, rng)
@@ -101,6 +101,9 @@ func (s *LifetimeState) applyDefeat(c *DefeatContext, id string, rng random.Gene
 		a.Temporary = tmp
 	}
 	r.Defeated = true
+	if s.npcResponse != nil {
+		s.npcResponse.defeats = append(s.npcResponse.defeats, NPCDefeat{TargetID: id, KillerID: killerID})
+	}
 	if hasItem(a.ItemDefinitionIDs, "item-212") {
 		e := TargetEffect{Payload: CallbackPayload{Symbol: "last_strike"}}
 		var target TargetResolution
@@ -116,14 +119,20 @@ func (s *LifetimeState) applyDefeat(c *DefeatContext, id string, rng random.Gene
 			return r, ErrUnsupportedEffect
 		}
 		applyStatusResources(s, target)
-		if target.Resolved {
-			damage := DamageContext{EffectContext: EffectContext{TargetContext: c.TargetContext}, ToolCategory: c.ToolCategory, Defeat: func(id string) error { _, err := s.applyDefeat(c, id, rng); return err }}
-			strike, err := s.ApplyToolDamage(&damage, target.TargetID, float64(s.actor(id).Attack)*1.5, false, false, rng)
-			if err != nil {
-				return r, err
-			}
-			r.FinalStrike = &strike
+		damage := DamageContext{
+			EffectContext: EffectContext{TargetContext: c.TargetContext},
+			ToolCategory:  c.ToolCategory,
+			Defeat: func(targetID string) error {
+				// The hit comes from the holder; targeting and rewards still use the operation actor.
+				_, err := s.applyDefeat(c, targetID, id, rng)
+				return err
+			},
 		}
+		strike, err := s.ApplyToolDamage(&damage, target.TargetID, float64(s.actor(id).Attack)*1.5, false, false, rng)
+		if err != nil {
+			return r, err
+		}
+		r.FinalStrike = &strike
 	}
 	s.applyDefeatInheritance(c, id)
 	if s.actor(c.ActorID).NPC || id == c.ActorID {
