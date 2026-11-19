@@ -1,24 +1,16 @@
 package adventure
 
 import (
-	_ "embed"
 	"fmt"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/stagedata"
 )
 
 // OrdinaryStage is the complete source-position table, separate from the batch
 // catalog's historical last-monster boss convention. Persist it with the room.
-type OrdinaryStage struct {
-	BossRosters [][]string `json:"boss_rosters"`
-	MonsterIDs  []string   `json:"monster_ids"`
-	Appears     []int      `json:"appears"`
-	PartyCopy   bool       `json:"party_copy,omitempty"`
-	// EXRoster is the floor-12 table; summons keep using MonsterIDs/Appears.
-	EXRoster []string `json:"ex_roster,omitempty"`
-	EXField  string   `json:"ex_field,omitempty"`
-}
+type OrdinaryStage = stagedata.Stage
 
 // OrdinaryEncounter retains the complete unrolled summon table as well as the
 // selected opponents. Summons use their own nonrandom scaling, not boss rolls.
@@ -27,12 +19,6 @@ type OrdinaryEncounter struct {
 	Pool    []corebattle.LifetimeActor
 	Appears []int
 }
-
-//go:embed data/ordinary_monsters.json
-var ordinaryMonsterData []byte
-
-//go:embed data/ordinary_stages.json
-var ordinaryStageData []byte
 
 // OrdinarySeason follows room-marker priority. An unmarked room is spring;
 // calendar time and the batch resolver's random season are not inputs.

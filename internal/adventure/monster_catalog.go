@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/stagedata"
 )
 
 var (
@@ -113,10 +114,12 @@ func InitialMonsterCatalog() (*MonsterCatalog, error) {
 	if err := json.Unmarshal(monstersCatalogData, &list); err != nil {
 		return nil, fmt.Errorf("decode monster catalog: %w", err)
 	}
-	var ordinary []Monster
-	if err := json.Unmarshal(ordinaryMonsterData, &ordinary); err != nil {
-		return nil, fmt.Errorf("decode ordinary monsters: %w", err)
+	ordinary, err := stagedata.Monsters()
+	if err != nil {
+		return nil, err
 	}
-	list = append(list, ordinary...)
+	for _, m := range ordinary {
+		list = append(list, Monster(m))
+	}
 	return NewMonsterCatalog(list)
 }

@@ -106,7 +106,7 @@
         "base_gold": 50
       },
       {
-        "name": "ブラッドハンド",
+        "name": "血塗られた手",
         "base_hp": 280,
         "base_attack": 200,
         "base_defense": 110,
@@ -133,7 +133,7 @@
     "treasure_item_pool": ["item-003", "item-004", "item-005"],
     "monster_pool": [
       {
-        "name": "オバケキノコ",
+        "name": "ゴーストマッシュ",
         "base_hp": 300,
         "base_attack": 160,
         "base_defense": 100,
@@ -141,7 +141,7 @@
         "base_gold": 30
       },
       {
-        "name": "ドクキノコ",
+        "name": "ポイズンマッシュ",
         "base_hp": 330,
         "base_attack": 180,
         "base_defense": 110,
@@ -149,7 +149,7 @@
         "base_gold": 40
       },
       {
-        "name": "マージマタンゴ",
+        "name": "メイジマッシュ",
         "base_hp": 380,
         "base_attack": 200,
         "base_defense": 130,
@@ -208,7 +208,7 @@
         "base_gold": 200
       },
       {
-        "name": "パンドラボックス",
+        "name": "パンドラの魔箱",
         "base_hp": 600,
         "base_attack": 350,
         "base_defense": 250,
@@ -302,7 +302,7 @@
         "base_gold": 250
       },
       {
-        "name": "メタルスライム",
+        "name": "銀滴スライム",
         "base_hp": 20,
         "base_attack": 100,
         "base_defense": 999,
@@ -310,7 +310,7 @@
         "base_gold": 500
       },
       {
-        "name": "ハグレメタル",
+        "name": "流銀スライム",
         "base_hp": 30,
         "base_attack": 150,
         "base_defense": 999,
@@ -329,7 +329,7 @@
     "treasure_item_pool": ["item-008", "item-009", "item-010"],
     "monster_pool": [
       {
-        "name": "人面樹",
+        "name": "トレント人面樹",
         "base_hp": 1000,
         "base_attack": 400,
         "base_defense": 300,
@@ -369,7 +369,7 @@
         "base_gold": 600
       },
       {
-        "name": "ギガンテス",
+        "name": "一つ目の巨人",
         "base_hp": 2200,
         "base_attack": 600,
         "base_defense": 350,
@@ -377,7 +377,7 @@
         "base_gold": 700
       },
       {
-        "name": "ひくいどり",
+        "name": "火炎鳥",
         "base_hp": 1400,
         "base_attack": 520,
         "base_defense": 300,
@@ -417,7 +417,7 @@
         "base_gold": 1200
       },
       {
-        "name": "片翼の天使",
+        "name": "隻翼の堕天使",
         "base_hp": 3200,
         "base_attack": 800,
         "base_defense": 480,
@@ -453,7 +453,7 @@
     "treasure_item_pool": ["item-010", "item-011", "item-012"],
     "monster_pool": [
       {
-        "name": "人面樹",
+        "name": "トレント人面樹",
         "base_hp": 1200,
         "base_attack": 450,
         "base_defense": 350,
@@ -493,7 +493,7 @@
         "base_gold": 700
       },
       {
-        "name": "ギガンテス",
+        "name": "一つ目の巨人",
         "base_hp": 2600,
         "base_attack": 680,
         "base_defense": 400,
@@ -501,7 +501,7 @@
         "base_gold": 800
       },
       {
-        "name": "ひくいどり",
+        "name": "火炎鳥",
         "base_hp": 1700,
         "base_attack": 600,
         "base_defense": 350,
@@ -541,7 +541,7 @@
         "base_gold": 1400
       },
       {
-        "name": "片翼の天使",
+        "name": "隻翼の堕天使",
         "base_hp": 3800,
         "base_attack": 900,
         "base_defense": 520,

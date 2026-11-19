@@ -200,8 +200,6 @@ target their own cells (`map/3/5.cgi:23–25`). Variant 1's `F` lands on the
 treasure at `(6,6)` without opening it (`map/3/1.cgi:12,25`). The dispatcher
 evaluates the entered cell once before drawing the map (`vs_dungeon.cgi:96–101`).
 
-Map3 keeps the approved generic names 浮遊眼 and 一つ目の巨人 while the Adventure
-catalog still uses the legacy names [#2373](https://github.com/witchcraze/party2re/issues/2373).
 The open gaps are boss groups, group size and scaling [#1954](https://github.com/witchcraze/party2re/issues/1954),
 enemy battle data [#2351](https://github.com/witchcraze/party2re/issues/2351),
 and chest contents and inspection [#2374](https://github.com/witchcraze/party2re/issues/2374).
