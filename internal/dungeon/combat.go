@@ -13,7 +13,7 @@ func (s *Service) resolveEncounter(
 	ctx context.Context,
 	exp *ActiveExpedition,
 	char *corecharacter.Character,
-	monster DungeonMonster,
+	monsterPart corebattle.Participant,
 	allyStatus string,
 ) (corebattle.Result, *corebattle.FieldState, bool, map[string]int, map[string]int, map[string][]corebattle.ConsumedItem, int, error) {
 	allies, err := s.buildCombatAllies(ctx, exp, char, allyStatus)
@@ -26,15 +26,6 @@ func (s *Service) resolveEncounter(
 	initialMP := make(map[string]int, len(allies))
 	for _, a := range allies {
 		initialMP[a.ID] = a.MP
-	}
-
-	monsterPart := corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense)
-	monsterPart.Name = monster.Name
-	monsterPart.Agility = monster.Agility
-	monsterPart.TeamID = "enemies"
-
-	if exp.Encounter != nil {
-		monsterPart = exp.Encounter.Enemies[0]
 	}
 
 	var initialField *corebattle.FieldState
@@ -54,11 +45,11 @@ func (s *Service) resolveEncounter(
 		if err != nil {
 			return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
 		}
-		winnerID := monster.ID
+		winnerID := monsterPart.ID
 		loserID := char.ID
 		if partyRes.Outcome == corebattle.OutcomeWin && partyRes.WinnerSide == "allies" {
 			winnerID = char.ID
-			loserID = monster.ID
+			loserID = monsterPart.ID
 		}
 		battleRes = corebattle.Result{
 			Outcome:         partyRes.Outcome,
@@ -158,7 +149,13 @@ func (s *Service) resolveMonsterCombat(
 	allyStatus string,
 ) (ExpeditionStepResult, error) {
 	rounds, stayX, stayY := exp.combatProgress(newX, newY)
-	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, monster, allyStatus)
+	var enemy corebattle.Participant
+	if exp.Encounter != nil {
+		enemy = exp.Encounter.Enemies[0]
+	} else {
+		enemy = monster.participant()
+	}
+	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, enemy, allyStatus)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
@@ -217,7 +214,7 @@ func (s *Service) resolveMonsterCombat(
 	// Draw or defeat: surviving enemies stay. An all-fallen party remains in the
 	// run, where only Escape is left (legacy never ends a quest because allies fell).
 	// After a mutual knockout no enemy survives, so no encounter is kept.
-	pending := pendingEncounter(exp, monster, eventType, newX, newY, battleRes, field)
+	pending := pendingEncounter(exp, monster, enemy, eventType, newX, newY, battleRes, field)
 	if pending.Enemies[0].HP <= 0 {
 		pending = nil
 	}

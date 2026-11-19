@@ -42,12 +42,7 @@ func (enc *ActiveEncounter) blocking() bool {
 // hostile reports an encounter that Fight resolves; treasure is not combat.
 func (enc *ActiveEncounter) hostile() bool { return enc != nil && enc.EventType != EventTreasure }
 
-func pendingEncounter(exp *ActiveExpedition, monster DungeonMonster, event TileEventType, x, y int, result corebattle.Result, field *corebattle.FieldState) *ActiveEncounter {
-	enemy := corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense)
-	enemy.Name, enemy.Agility, enemy.TeamID = monster.Name, monster.Agility, "enemies"
-	if exp.Encounter != nil {
-		enemy = exp.Encounter.Enemies[0]
-	}
+func pendingEncounter(exp *ActiveExpedition, monster DungeonMonster, enemy corebattle.Participant, event TileEventType, x, y int, result corebattle.Result, field *corebattle.FieldState) *ActiveEncounter {
 	if hp, ok := result.RemainingHP[enemy.ID]; ok {
 		enemy.HP = hp
 	}
@@ -106,11 +101,17 @@ func (s *Service) Fight(ctx context.Context, characterID string) (ExpeditionStep
 	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monster, enc.EventType, enc.X, enc.Y, "", "")
 }
 
+// encounterRecord adds private enemy data only to the stored buffer.
+type encounterRecord struct {
+	*ActiveEncounter
+	EnemyCombat *corebattle.LifetimeActor `json:"enemy_combat,omitempty"`
+}
+
 func encodeEncounter(enc *ActiveEncounter) (string, error) {
 	if enc == nil {
 		return "", nil
 	}
-	b, err := json.Marshal(enc)
+	b, err := json.Marshal(encounterRecord{ActiveEncounter: enc, EnemyCombat: enc.Monster.combat})
 	return string(b), err
 }
 
@@ -119,9 +120,11 @@ func decodeEncounter(data string) (*ActiveEncounter, error) {
 		return nil, nil
 	}
 	var enc ActiveEncounter
-	if err := json.Unmarshal([]byte(data), &enc); err != nil {
+	record := encounterRecord{ActiveEncounter: &enc}
+	if err := json.Unmarshal([]byte(data), &record); err != nil {
 		return nil, err
 	}
+	enc.Monster.combat = record.EnemyCombat
 	if enc.EventType == EventTreasure {
 		if len(enc.Chests) == 0 || len(enc.Enemies) != 0 {
 			return nil, corebattle.ErrInvalidParticipant
@@ -139,6 +142,10 @@ func cloneEncounter(enc *ActiveEncounter) *ActiveEncounter {
 		return nil
 	}
 	cp := *enc
+	if enc.Monster.combat != nil {
+		combat := enc.Monster.combat.Clone()
+		cp.Monster.combat = &combat
+	}
 	cp.Enemies = slices.Clone(enc.Enemies)
 	cp.Chests = slices.Clone(enc.Chests)
 	cp.Statuses = maps.Clone(enc.Statuses)
