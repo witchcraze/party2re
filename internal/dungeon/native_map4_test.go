@@ -17,46 +17,8 @@ func map4Hero(id string, maxHP int) corecharacter.Character {
 	return c
 }
 
-func (f *nativeFixture) placeMap4(t *testing.T, id string, variant, x, y int) {
-	t.Helper()
-	f.placeNative(t, dungeon.NativeMap4ID, 70, id, variant, x, y, 2)
-}
-
-// setVitality overwrites one member's saved HP/MP.
-func (f *nativeFixture) setVitality(t *testing.T, lead, member string, hp, mp int) {
-	t.Helper()
-	exp := f.reload(t, lead)
-	for i := range exp.Members {
-		if exp.Members[i].CharacterID == member {
-			exp.Members[i].CurrentHP, exp.Members[i].CurrentMP = hp, mp
-			if member == lead {
-				exp.CurrentHP = hp
-			}
-		}
-	}
-	if err := f.store.SaveActiveExpedition(context.Background(), exp); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func memberOf(t *testing.T, exp dungeon.ActiveExpedition, id string) dungeon.ExpeditionMember {
-	t.Helper()
-	for _, m := range exp.Members {
-		if m.CharacterID == id {
-			return m
-		}
-	}
-	t.Fatalf("member %s missing", id)
-	return dungeon.ExpeditionMember{}
-}
-
 func TestNativeMap4_CatalogTranscribesLayouts(t *testing.T) {
-	var d dungeon.Dungeon
-	for _, c := range dungeon.DefaultDungeonCatalog() {
-		if c.ID == dungeon.NativeMap4ID {
-			d = c
-		}
-	}
+	d := mapDef(t, dungeon.NativeMap4ID)
 	if d.RoundLimit != 70 || d.LeaderJobLevel != 9 || len(d.Variants) != 7 {
 		t.Fatalf("map4 catalog %+v", d)
 	}
@@ -74,7 +36,7 @@ func TestNativeMap4_AttritionBoundaries(t *testing.T) {
 	for _, tc := range []struct{ maxHP, loss int }{{24, 0}, {25, 1}, {74, 1}, {75, 2}} {
 		t.Run(fmt.Sprint(tc.maxHP), func(t *testing.T) {
 			f := newNativeFixture(t, map4Hero("walker", tc.maxHP))
-			f.placeMap4(t, "walker", 1, 2, 0)
+			f.placeNative(t, dungeon.NativeMap4ID, "walker", 1, 2, 0, 2)
 			res, err := f.svc.Move(context.Background(), "walker", dungeon.DirectionEast)
 			if err != nil || res.EventType != dungeon.EventMove || res.Expedition.Encounter != nil || f.rng.calls() != 0 {
 				t.Fatalf("passage %+v err=%v rng=%d", res, err, f.rng.calls())
@@ -91,7 +53,7 @@ func TestNativeMap4_AttritionBoundaries(t *testing.T) {
 func TestNativeMap4_MessageCostsNothing(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map4Hero("reader", 500))
-	f.placeMap4(t, "reader", 1, 2, 0)
+	f.placeNative(t, dungeon.NativeMap4ID, "reader", 1, 2, 0, 2)
 	for range 2 {
 		if _, err := f.svc.Move(ctx, "reader", dungeon.DirectionWest); err != nil {
 			t.Fatal(err)
@@ -110,11 +72,7 @@ func TestNativeMap4_ActorOnlyDeathAndContinuation(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map4Hero("lead", 100))
 	f.chars.chars["ally"] = map4Hero("ally", 100)
-	f.rng.ints = []int{0}
-	if _, err := f.svc.StartPartyExpedition(ctx, "lead", []string{"lead", "ally"}, dungeon.NativeMap4ID, "p"); err != nil {
-		t.Fatal(err)
-	}
-	f.moveTo(t, "lead", 2, 0)
+	f.startNativeParty(t, dungeon.NativeMap4ID, 1, 2, 0)
 	f.setVitality(t, "lead", "lead", 1, 0)
 	if _, err := f.svc.Move(ctx, "lead", dungeon.DirectionEast); err != nil {
 		t.Fatal(err)
@@ -154,7 +112,7 @@ func TestNativeMap4_RecoveryBranchesAndOnce(t *testing.T) {
 	}{{"hp", 0.4, 136, 10}, {"mp", 0.5, 100, 47}} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newNativeFixture(t, map4Hero("healer", 500))
-			f.placeMap4(t, "healer", 4, 4, 4)
+			f.placeNative(t, dungeon.NativeMap4ID, "healer", 4, 4, 4, 2)
 			f.setVitality(t, "healer", "healer", 100, 10)
 			exp := f.reload(t, "healer")
 			exp.Members[0].MaxMP = 200
@@ -187,11 +145,7 @@ func TestNativeMap4_RecoveryRedirectsFallenPickToActor(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map4Hero("lead", 500))
 	f.chars.chars["ally"] = map4Hero("ally", 500)
-	f.rng.ints = []int{3} // variant 4
-	if _, err := f.svc.StartPartyExpedition(ctx, "lead", []string{"lead", "ally"}, dungeon.NativeMap4ID, "p"); err != nil {
-		t.Fatal(err)
-	}
-	f.moveTo(t, "lead", 4, 4)
+	f.startNativeParty(t, dungeon.NativeMap4ID, 4, 4, 4)
 	f.setVitality(t, "lead", "lead", 100, 0)
 	f.setVitality(t, "lead", "ally", 0, 0)
 	f.rng.floats = []float64{0, 0.75, 0} // HP branch, pick the fallen ally
@@ -208,7 +162,7 @@ func TestNativeMap4_RecoveryRedirectsFallenPickToActor(t *testing.T) {
 func TestNativeMap4_BossesAreIndependentAndOnce(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map4Hero("hunter", 50000))
-	f.placeMap4(t, "hunter", 1, 7, 0)
+	f.placeNative(t, dungeon.NativeMap4ID, "hunter", 1, 7, 0, 2)
 	for _, dir := range []dungeon.Direction{dungeon.DirectionEast, dungeon.DirectionEast} {
 		res, err := f.svc.Move(ctx, "hunter", dir)
 		if err != nil || res.EventType != dungeon.EventBoss {

@@ -20,11 +20,7 @@ func startMap1Party(t *testing.T, allyJob string) *nativeFixture {
 	t.Helper()
 	f := newNativeFixture(t, map1Hero("lead", "job-01"))
 	f.chars.chars["ally"] = map1Hero("ally", allyJob)
-	f.rng.ints = []int{0}
-	if _, err := f.svc.StartPartyExpedition(context.Background(), "lead", []string{"lead", "ally"}, dungeon.NativeMap1ID, "p"); err != nil {
-		t.Fatal(err)
-	}
-	f.moveTo(t, "lead", 4, 0)
+	f.startNativeParty(t, dungeon.NativeMap1ID, 1, 4, 0)
 	return f
 }
 

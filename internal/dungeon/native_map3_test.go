@@ -17,70 +17,10 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func nativeMap3Def(t *testing.T) dungeon.Dungeon {
-	t.Helper()
-	for _, d := range dungeon.DefaultDungeonCatalog() {
-		if d.ID == dungeon.NativeMap3ID {
-			return d
-		}
-	}
-	t.Fatal("native map3 missing from default catalog")
-	return dungeon.Dungeon{}
-}
-
 func map3Hero(id string, hp, attack, defense int) corecharacter.Character {
 	c := createTestChar(id, 30, hp, attack, defense)
 	c.JobLevel = 7
 	return c
-}
-
-// placeMap3 starts on the given variant, then rewrites position and round.
-func (f *nativeFixture) placeMap3(t *testing.T, id string, variant, x, y, round int) {
-	t.Helper()
-	f.placeNative(t, dungeon.NativeMap3ID, 60, id, variant, x, y, round)
-}
-
-func (f *nativeFixture) placeNative(t *testing.T, mapID string, limit int, id string, variant, x, y, round int) {
-	t.Helper()
-	f.rng.ints = []int{variant - 1}
-	if _, err := f.svc.StartExpedition(context.Background(), id, mapID); err != nil {
-		t.Fatal(err)
-	}
-	exp := f.reload(t, id)
-	if exp.MapVariant != variant {
-		t.Fatalf("variant %d, want %d", exp.MapVariant, variant)
-	}
-	exp.PosX, exp.PosY, exp.Round = x, y, round
-	if err := f.store.SaveActiveExpedition(context.Background(), exp); err != nil {
-		t.Fatal(err)
-	}
-	f.rng.ints, f.rng.intCalls, f.rng.floatCalls = nil, 0, 0
-}
-
-func cellOf(fl dungeon.Floor, sym byte) [][2]int {
-	var out [][2]int
-	for y, row := range fl.Grid {
-		for x := range len(row) {
-			if row[x] == sym {
-				out = append(out, [2]int{x, y})
-			}
-		}
-	}
-	return out
-}
-
-// approach returns an open neighbour of p and the direction that enters p.
-func approach(fl dungeon.Floor, p [2]int) ([2]int, dungeon.Direction) {
-	for _, c := range []struct {
-		dx, dy int
-		dir    dungeon.Direction
-	}{{-1, 0, dungeon.DirectionEast}, {1, 0, dungeon.DirectionWest}, {0, -1, dungeon.DirectionSouth}, {0, 1, dungeon.DirectionNorth}} {
-		x, y := p[0]+c.dx, p[1]+c.dy
-		if x >= 0 && y >= 0 && x < fl.Width && y < fl.Height && fl.Grid[y][x] != '1' {
-			return [2]int{x, y}, c.dir
-		}
-	}
-	return [2]int{-1, -1}, ""
 }
 
 func TestNativeMap3_LayoutsAndContent(t *testing.T) {
@@ -96,7 +36,7 @@ func TestNativeMap3_LayoutsAndContent(t *testing.T) {
 		"b0000000G 01T101010 00F1C1200 011101110 00A0S0D00 011101110 0031E1B00 010101010 00000000T",
 	}
 	nativeCells := strings.NewReplacer("A", "a", "C", "c", "D", "d", "E", "e", "F", "f", "G", "g", "T", "M")
-	d := nativeMap3Def(t)
+	d := mapDef(t, dungeon.NativeMap3ID)
 	if d.RoundLimit != 60 || d.LeaderJobLevel != 7 || len(d.Variants) != len(legacy) {
 		t.Fatalf("limit=%d job=%d variants=%d", d.RoundLimit, d.LeaderJobLevel, len(d.Variants))
 	}
@@ -140,7 +80,7 @@ func TestNativeMapNamesMatchAdventureCatalog(t *testing.T) {
 			t.Errorf("%s name %q, want %q (%s)", m.ID, m.Name, want, entry.ID)
 		}
 	}
-	assertName(*nativeMap0Def(t).Variants[0].Boss, 7, "")
+	assertName(*mapDef(t, dungeon.NativeMap0ID).Variants[0].Boss, 7, "")
 	// Stage order, including the shared Bomb Rock in stage 8 and the
 	// existing main boss of stage 7 (Firebird, between its two escorts).
 	stages := []struct {
@@ -153,7 +93,7 @@ func TestNativeMapNamesMatchAdventureCatalog(t *testing.T) {
 		{[]int{88, 89, 90, 91, 76, 92, 93, 94, 95, 96}, 97},
 	}
 	approvedNames := map[int]string{54: "浮遊眼", 73: "一つ目の巨人"}
-	pools := nativeMap3Def(t).Variants[0].Pools
+	pools := mapDef(t, dungeon.NativeMap3ID).Variants[0].Pools
 	if len(pools) != len(stages) {
 		t.Fatalf("pools %d, want %d", len(pools), len(stages))
 	}
@@ -184,7 +124,7 @@ func TestNativeMap3_EveryWarpBinding(t *testing.T) {
 		{{6, 4}, {4, 6}, {2, 4}, {4, 2}, {6, 6}, {0, 8}},
 		{{6, 4}, {4, 6}, {2, 4}, {4, 2}, {8, 8}, {2, 6}},
 	}
-	for vi, fl := range nativeMap3Def(t).Variants {
+	for vi, fl := range mapDef(t, dungeon.NativeMap3ID).Variants {
 		if len(fl.Warps) != len(want[vi]) {
 			t.Fatalf("variant %d warps: %v", vi+1, fl.Warps)
 		}
@@ -196,7 +136,7 @@ func TestNativeMap3_EveryWarpBinding(t *testing.T) {
 			}
 			from, dir := approach(fl, cells[0])
 			f := newNativeFixture(t, map3Hero("warp", 5000, 900, 900))
-			f.placeMap3(t, "warp", vi+1, from[0], from[1], 10)
+			f.placeNative(t, dungeon.NativeMap3ID, "warp", vi+1, from[0], from[1], 10)
 			res, err := f.svc.Move(ctx, "warp", dir)
 			if err != nil {
 				t.Fatalf("variant %d warp %c: %v", vi+1, sym, err)
@@ -215,7 +155,7 @@ func TestNativeMap3_EveryWarpBinding(t *testing.T) {
 func TestNativeMap3_WarpLandingLeavesEventUntriggered(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map3Hero("land", 5000, 900, 900))
-	f.placeMap3(t, "land", 1, 1, 0, 5)
+	f.placeNative(t, dungeon.NativeMap3ID, "land", 1, 1, 0, 5)
 	if _, err := f.svc.Move(ctx, "land", dungeon.DirectionWest); err != nil {
 		t.Fatal(err)
 	}
@@ -246,8 +186,9 @@ func confusedTurns(res dungeon.ExpeditionStepResult, id string) int {
 func TestNativeMap3_MistConfusesTheEnsuingBattle(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map3Hero("mist", 1_000_000, 1, 1_000_000))
-	f.placeMap3(t, "mist", 1, 0, 6, 8) // west of T at (1,6)
-	f.rng.ints = []int{0, 26}          // pool a, Appears[26] = monster index 8
+	f.placeNative(t, dungeon.NativeMap3ID, "mist", 1, 0, 6, 8) // west of T at (1,6)
+	// pool a, Appears[26] = monster index 8
+	f.rng.ints = []int{0, 26}
 	res, err := f.svc.Move(ctx, "mist", dungeon.DirectionEast)
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +210,7 @@ func TestNativeMap3_MistConfusesTheEnsuingBattle(t *testing.T) {
 
 	// A fresh party clears the mist and re-enters: it fires again.
 	g := newNativeFixture(t, map3Hero("again", 5000, 900, 900))
-	g.placeMap3(t, "again", 1, 0, 6, 8)
+	g.placeNative(t, dungeon.NativeMap3ID, "again", 1, 0, 6, 8)
 	for range 2 {
 		if res, err := g.svc.Move(ctx, "again", dungeon.DirectionEast); err != nil || res.EventType != dungeon.EventBattle || confusedTurns(res, "again") == 0 {
 			t.Fatalf("mist entry %+v err=%v", res, err)
@@ -287,7 +228,7 @@ func TestNativeMap3_MistConfusesTheEnsuingBattle(t *testing.T) {
 func TestNativeMap3_PassageEncounterUsesPoolWithoutConfusion(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map3Hero("walk", 5000, 900, 900))
-	f.placeMap3(t, "walk", 1, 1, 0, 3)
+	f.placeNative(t, dungeon.NativeMap3ID, "walk", 1, 1, 0, 3)
 	f.rng.floats, f.rng.ints = []float64{0.5}, []int{2, 10} // spawn; pool c is uniform
 	res, err := f.svc.Move(ctx, "walk", dungeon.DirectionEast)
 	if err != nil || res.Monster == nil || res.Monster.Name != "炎の戦士" || confusedTurns(res, "walk") != 0 {
@@ -301,7 +242,7 @@ func TestNativeMap3_TwoBossesEachTriggerOnce(t *testing.T) {
 	hero := map3Hero("boss", 1_000_000, 100_000, 100_000)
 	hero.Stats.Agility = 10_000 // scripted 0.99 rolls must still land on agile bosses
 	f := newNativeFixture(t, hero)
-	f.placeMap3(t, "boss", 1, 1, 8, 4) // east of B at (0,8)
+	f.placeNative(t, dungeon.NativeMap3ID, "boss", 1, 1, 8, 4) // east of B at (0,8)
 	f.rng.ints = []int{3}
 	res, err := f.svc.Move(ctx, "boss", dungeon.DirectionWest)
 	if err != nil || res.EventType != dungeon.EventBoss || res.Monster.Name != "ベヒーモス" {
@@ -336,7 +277,7 @@ func TestNativeMap3_TwoBossesEachTriggerOnce(t *testing.T) {
 func TestNativeMap3_TreasuresAreIndependentOnceTriggers(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map3Hero("chest", 5000, 900, 900))
-	f.placeMap3(t, "chest", 1, 7, 6, 4) // east of 2 at (6,6)
+	f.placeNative(t, dungeon.NativeMap3ID, "chest", 1, 7, 6, 4) // east of 2 at (6,6)
 	res, err := f.svc.Move(ctx, "chest", dungeon.DirectionWest)
 	if err != nil || res.EventType != dungeon.EventTreasure {
 		t.Fatalf("chest %+v err=%v", res, err)
@@ -369,7 +310,7 @@ func TestNativeMap3_TreasuresAreIndependentOnceTriggers(t *testing.T) {
 func TestNativeMap3_RoundLimitRejectsWarpWithoutChange(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map3Hero("limit", 5000, 900, 900))
-	f.placeMap3(t, "limit", 1, 1, 0, 59)
+	f.placeNative(t, dungeon.NativeMap3ID, "limit", 1, 1, 0, 59)
 	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionWest); err != nil {
 		t.Fatalf("round 59 -> 60 warp: %v", err)
 	}
@@ -490,7 +431,7 @@ func TestNativeMap3_ObservationMasksEvents(t *testing.T) {
 	hero := map3Hero("look", 5000, 900, 900)
 	hero.JobID = "job-09"
 	f := newNativeFixture(t, hero)
-	f.placeMap3(t, "look", 1, 7, 6, 3) // within scouting range of treasure 2, mist T and warp G
+	f.placeNative(t, dungeon.NativeMap3ID, "look", 1, 7, 6, 3) // within scouting range of treasure 2, mist T and warp G
 	before := f.reload(t, "look")
 	view, err := f.svc.ObserveExpedition(ctx, "look")
 	if err != nil {

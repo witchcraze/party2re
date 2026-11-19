@@ -22,7 +22,7 @@ func map2Hero(id string, hp int) corecharacter.Character {
 // placeMap2 starts on variant 1, then rewrites floor, position, round and flags.
 func (f *nativeFixture) placeMap2(t *testing.T, id string, variant, x, y, round int, consumed ...string) {
 	t.Helper()
-	f.placeNative(t, dungeon.NativeMap2ID, 30, id, 1, x, y, round)
+	f.placeNative(t, dungeon.NativeMap2ID, id, 1, x, y, round)
 	exp := f.reload(t, id)
 	exp.MapVariant, exp.RoundLimit, exp.ConsumedEvents = variant, []int{30, 30, 30, 40, 40, 40, 40, 50, 50, 50, 50}[variant-1], consumed
 	if err := f.store.SaveActiveExpedition(context.Background(), exp); err != nil {
@@ -31,12 +31,7 @@ func (f *nativeFixture) placeMap2(t *testing.T, id string, variant, x, y, round 
 }
 
 func TestNativeMap2_CatalogAndInitialFloors(t *testing.T) {
-	var d dungeon.Dungeon
-	for _, c := range dungeon.DefaultDungeonCatalog() {
-		if c.ID == dungeon.NativeMap2ID {
-			d = c
-		}
-	}
+	d := mapDef(t, dungeon.NativeMap2ID)
 	if d.RoundLimit != 30 || d.LeaderJobLevel != 5 || len(d.Variants) != 11 {
 		t.Fatalf("limit=%d job=%d variants=%d", d.RoundLimit, d.LeaderJobLevel, len(d.Variants))
 	}

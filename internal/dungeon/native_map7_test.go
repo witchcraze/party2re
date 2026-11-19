@@ -33,28 +33,8 @@ func map7Hero(id, job string, hp, attack int) corecharacter.Character {
 	return c
 }
 
-func (f *nativeFixture) placeMap7(t *testing.T, id string, variant, x, y, round int) {
-	t.Helper()
-	f.placeNative(t, dungeon.NativeMap7ID, 60, id, variant, x, y, round)
-}
-
-func (f *nativeFixture) startMap7Party(t *testing.T, variant, x, y int) {
-	t.Helper()
-	f.rng.ints = []int{variant - 1}
-	if _, err := f.svc.StartPartyExpedition(context.Background(), "lead", []string{"lead", "ally"}, dungeon.NativeMap7ID, "p"); err != nil {
-		t.Fatal(err)
-	}
-	f.moveTo(t, "lead", x, y)
-	f.rng.ints, f.rng.intCalls, f.rng.floatCalls = nil, 0, 0
-}
-
 func TestNativeMap7_LayoutsHideTheLastTreasureBehindTheRock(t *testing.T) {
-	var d dungeon.Dungeon
-	for _, c := range dungeon.DefaultDungeonCatalog() {
-		if c.ID == dungeon.NativeMap7ID {
-			d = c
-		}
-	}
+	d := mapDef(t, dungeon.NativeMap7ID)
 	if d.RoundLimit != 60 || d.LeaderJobLevel != 15 || len(d.Variants) != 6 {
 		t.Fatalf("map7 catalog %+v", d)
 	}
@@ -103,7 +83,7 @@ func switchOpensRock(t *testing.T, store dungeon.ActiveExpeditionStore, id strin
 		}
 		return v.Map.Tiles[2][1]
 	}
-	f.placeMap7(t, id, 1, 4, 9, 1)
+	f.placeNative(t, dungeon.NativeMap7ID, id, 1, 4, 9, 1)
 	if k, d := south(4, 9), south(0, 7); k != "★" || d != "岩" {
 		t.Fatalf("marks before the switch %q %q", k, d)
 	}
@@ -137,7 +117,7 @@ func switchOpensRock(t *testing.T, store dungeon.ActiveExpeditionStore, id strin
 // Variant 6 defines no K mark, so the switch looks like a passage.
 func TestNativeMap7_Variant6SwitchIsUnmarked(t *testing.T) {
 	f := newNativeFixture(t, map7Hero("v6", "job-01", 5000, 900))
-	f.placeMap7(t, "v6", 6, 1, 1, 1)
+	f.placeNative(t, dungeon.NativeMap7ID, "v6", 6, 1, 1, 1)
 	v, err := f.svc.ObserveExpedition(context.Background(), "v6")
 	if err != nil || v.Map == nil || v.Map.Tiles[0][0] != "□" {
 		t.Fatalf("variant 6 view %+v err=%v", v.Map, err)
@@ -154,7 +134,7 @@ func TestNativeMap7_DeniedRockSpendsTheRoundAndReturns(t *testing.T) {
 	}{{1, 0, 7, dungeon.DirectionSouth}, {2, 4, 3, dungeon.DirectionNorth}} {
 		t.Run(fmt.Sprint(tc.variant), func(t *testing.T) {
 			f := newNativeFixture(t, map7Hero("denied", "job-01", 5000, 900))
-			f.placeMap7(t, "denied", tc.variant, tc.x, tc.y, 10)
+			f.placeNative(t, dungeon.NativeMap7ID, "denied", tc.variant, tc.x, tc.y, 10)
 			if res, err := f.svc.Move(ctx, "denied", tc.dir); err != nil || res.EventType != dungeon.EventMove {
 				t.Fatalf("denied %+v err=%v", res, err)
 			}
@@ -181,7 +161,7 @@ func TestNativeMap7_OnlyTheActingJob4Or25BreaksTheRock(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map7Hero("lead", "job-01", 5000, 900))
 	f.chars.chars["ally"] = map7Hero("ally", "job-04", 5000, 900)
-	f.startMap7Party(t, 1, 0, 7)
+	f.startNativeParty(t, dungeon.NativeMap7ID, 1, 0, 7)
 	if _, err := f.svc.Move(ctx, "lead", dungeon.DirectionSouth); err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +183,7 @@ func TestNativeMap7_OnlyTheActingJob4Or25BreaksTheRock(t *testing.T) {
 	}
 
 	g := newNativeFixture(t, map7Hero("j25", "job-25", 5000, 900))
-	g.placeMap7(t, "j25", 2, 4, 3, 1)
+	g.placeNative(t, dungeon.NativeMap7ID, "j25", 2, 4, 3, 1)
 	if _, err := g.svc.Move(ctx, "j25", dungeon.DirectionNorth); err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +196,7 @@ func TestNativeMap7_OnlyTheActingJob4Or25BreaksTheRock(t *testing.T) {
 func TestNativeMap7_DeniedRockAtRoundLimit(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map7Hero("limit", "job-01", 5000, 900))
-	f.placeMap7(t, "limit", 1, 0, 7, 59)
+	f.placeNative(t, dungeon.NativeMap7ID, "limit", 1, 0, 7, 59)
 	if _, err := f.svc.Move(ctx, "limit", dungeon.DirectionSouth); err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +213,7 @@ func TestNativeMap7_DeniedRockAtRoundLimit(t *testing.T) {
 func TestNativeMap7_ParalysisPrecedesEncounter(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map7Hero("gas", "job-01", 1_000_000, 1))
-	f.placeMap7(t, "gas", 1, 1, 1, 1) // east of T at (0,1)
+	f.placeNative(t, dungeon.NativeMap7ID, "gas", 1, 1, 1, 1) // east of T at (0,1)
 	res, err := f.svc.Move(ctx, "gas", dungeon.DirectionWest)
 	if err != nil || res.EventType != dungeon.EventBattle || res.Monster == nil {
 		t.Fatalf("gas %+v err=%v", res, err)
@@ -253,7 +233,7 @@ func TestNativeMap7_HeatTrapHitsEveryMember(t *testing.T) {
 		t.Run(fmt.Sprint(tc.variant), func(t *testing.T) {
 			f := newNativeFixture(t, map7Hero("lead", "job-01", 500, 900))
 			f.chars.chars["ally"] = map7Hero("ally", "job-01", 500, 900)
-			f.startMap7Party(t, tc.variant, tc.x, tc.y)
+			f.startNativeParty(t, dungeon.NativeMap7ID, tc.variant, tc.x, tc.y)
 			f.rng.floats = []float64{0, 0}
 			if _, err := f.svc.Move(ctx, "lead", dungeon.DirectionWest); err != nil {
 				t.Fatal(err)
@@ -276,7 +256,7 @@ func TestNativeMap7_BossDrawsTheFixedGroupOneInThree(t *testing.T) {
 	}{{0, false}, {1, false}, {2, true}, {11, true}} {
 		t.Run(fmt.Sprint(tc.pool), func(t *testing.T) {
 			f := newNativeFixture(t, map7Hero("boss", "job-01", 1_000_000, 1))
-			f.placeMap7(t, "boss", 1, 4, 2, 1) // south of A at (4,1)
+			f.placeNative(t, dungeon.NativeMap7ID, "boss", 1, 4, 2, 1) // south of A at (4,1)
 			f.rng.ints = []int{tc.pool}
 			res, err := f.svc.Move(ctx, "boss", dungeon.DirectionNorth)
 			if err != nil || res.EventType != dungeon.EventBoss || res.Monster == nil || (res.Monster.ID == "nm7-ifrit") != tc.fixed {
@@ -305,7 +285,7 @@ func TestNativeMap7_BossesAndTreasureFireOnce(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newNativeFixture(t, map7Hero("once", "job-01", 1_000_000, 1))
-			f.placeMap7(t, "once", tc.variant, tc.x, tc.y, 1)
+			f.placeNative(t, dungeon.NativeMap7ID, "once", tc.variant, tc.x, tc.y, 1)
 			if res, err := f.svc.Move(ctx, "once", tc.dir); err != nil || res.EventType != tc.want {
 				t.Fatalf("first %+v err=%v", res, err)
 			}

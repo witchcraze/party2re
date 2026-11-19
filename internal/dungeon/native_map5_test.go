@@ -30,28 +30,8 @@ func map5Hero(id, job string, hp int) corecharacter.Character {
 	return c
 }
 
-func (f *nativeFixture) placeMap5(t *testing.T, id string, x, y int) {
-	t.Helper()
-	f.placeNative(t, dungeon.NativeMap5ID, 60, id, 1, x, y, 2)
-}
-
-func (f *nativeFixture) startMap5Party(t *testing.T, x, y int) {
-	t.Helper()
-	f.rng.ints = []int{0}
-	if _, err := f.svc.StartPartyExpedition(context.Background(), "lead", []string{"lead", "ally"}, dungeon.NativeMap5ID, "p"); err != nil {
-		t.Fatal(err)
-	}
-	f.moveTo(t, "lead", x, y)
-	f.rng.ints, f.rng.intCalls, f.rng.floatCalls = nil, 0, 0
-}
-
 func TestNativeMap5_CatalogTranscribesLayouts(t *testing.T) {
-	var d dungeon.Dungeon
-	for _, c := range dungeon.DefaultDungeonCatalog() {
-		if c.ID == dungeon.NativeMap5ID {
-			d = c
-		}
-	}
+	d := mapDef(t, dungeon.NativeMap5ID)
 	if d.RoundLimit != 60 || d.LeaderJobLevel != 11 || len(d.Variants) != 4 {
 		t.Fatalf("map5 catalog %+v", d)
 	}
@@ -90,7 +70,7 @@ func TestNativeMap5_LeverBossOnceAndReveal(t *testing.T) {
 func leverAndReveal(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	ctx := context.Background()
 	f := newNativeFixtureOn(t, store, map5Hero(id, "job-01", 50000))
-	f.placeMap5(t, id, 4, 5) // south of L, north of I (4,6)
+	f.placeNative(t, dungeon.NativeMap5ID, id, 1, 4, 5, 2) // south of L, north of I (4,6)
 	view := func() [][]string {
 		v, err := f.svc.ObserveExpedition(ctx, id)
 		if err != nil || v.Map == nil {
@@ -130,7 +110,7 @@ func leverAndReveal(t *testing.T, store dungeon.ActiveExpeditionStore, id string
 func TestNativeMap5_PoisonGasPrecedesEncounter(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map5Hero("gas", "job-01", 100_000))
-	f.placeMap5(t, "gas", 0, 6) // west of T at (1,6)
+	f.placeNative(t, dungeon.NativeMap5ID, "gas", 1, 0, 6, 2) // west of T at (1,6)
 	for range 2 {
 		res, err := f.svc.Move(ctx, "gas", dungeon.DirectionEast)
 		if err != nil || res.EventType != dungeon.EventBattle || res.BattleResult == nil {
@@ -157,7 +137,7 @@ func TestNativeMap5_ArrowTrapHitsEveryMember(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map5Hero("lead", "job-01", 500))
 	f.chars.chars["ally"] = map5Hero("ally", "job-01", 500)
-	f.startMap5Party(t, 4, 0) // north of t at (4,1)
+	f.startNativeParty(t, dungeon.NativeMap5ID, 1, 4, 0) // north of t at (4,1)
 	for _, tc := range []struct {
 		floats             []float64
 		wantLead, wantAlly int
@@ -195,7 +175,7 @@ func TestNativeMap5_RemedyNeedsActingJob43AndRevives(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map5Hero("lead", "job-01", 500))
 	f.chars.chars["ally"] = map5Hero("ally", "job-43", 300)
-	f.startMap5Party(t, 8, 7) // north of H at (8,8)
+	f.startNativeParty(t, dungeon.NativeMap5ID, 1, 8, 7) // north of H at (8,8)
 	f.setVitality(t, "lead", "lead", 10, 0)
 	f.setVitality(t, "lead", "ally", 20, 5)
 
