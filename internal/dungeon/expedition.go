@@ -3,6 +3,7 @@ package dungeon
 import (
 	"context"
 	"errors"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -103,15 +104,31 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		return ExpeditionStepResult{}, ErrInvalidDirection
 	}
 
-	if newX < 0 || newX >= floor.Width || newY < 0 || newY >= floor.Height {
-		return ExpeditionStepResult{}, ErrImpassableWall
-	}
-
-	tileChar := floor.Grid[newY][newX]
-	if tileChar == cellWall {
-		return ExpeditionStepResult{}, ErrImpassableWall
+	if newX < 0 || newX >= floor.Width || newY < 0 || newY >= floor.Height || floor.Grid[newY][newX] == cellWall {
+		return s.hitWall(ctx, exp, owner.ID, floor)
 	}
 	return s.moveNative(ctx, exp, &owner, &actor, d, floor, newX, newY)
+}
+
+// hitWall runs the floor's wall event without spending a round or resetting
+// statuses (vs_dungeon.cgi _susumu); the base wall rejects the move.
+func (s *Service) hitWall(ctx context.Context, exp *ActiveExpedition, ownerID string, floor Floor) (ExpeditionStepResult, error) {
+	if floor.event(cellWall).kind != eventScatter {
+		return ExpeditionStepResult{}, ErrImpassableWall
+	}
+	x, y := scatter(s.rng)
+	out, err := s.activeStore.Step(ctx, ownerID, StepParams{
+		ExpectedExpeditionID: exp.ID,
+		ExpectedRevision:     &exp.Revision,
+		Combat:               exp.Encounter != nil, // only opened chests remain; the step drops them
+		NewX:                 x,
+		NewY:                 y,
+		Now:                  time.Now().UTC(),
+	})
+	if err != nil {
+		return ExpeditionStepResult{}, err
+	}
+	return ExpeditionStepResult{Expedition: out.Expedition, EventType: EventMove}, nil
 }
 
 func (s *Service) findCharacter(ctx context.Context, id string) (corecharacter.Character, error) {

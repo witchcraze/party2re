@@ -128,14 +128,18 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 			} else {
 				targetY := exp.PosY + dy
 				targetX := exp.PosX + dx
+				wall := "■"
+				if m := floor.Marks[cellWall]; m != "" {
+					wall = m // the map's own wall display (map8 $map_imgs{1})
+				}
 				if targetY < 0 || targetY >= floor.Height || targetX < 0 || targetX >= floor.Width {
-					symbol = "■" // out of bounds / wall
+					symbol = wall // out of bounds
 				} else {
 					tileChar := floor.Grid[targetY][targetX]
 					ev := floor.event(tileChar)
 					switch {
 					case tileChar == cellWall || ev.kind == eventHidden && (ev.key == 0 || !slices.Contains(exp.ConsumedEvents, string(ev.key))):
-						symbol = "■" // wall
+						symbol = wall
 					case floor.Marks[tileChar] != "" && (ev.keepMark || !slices.Contains(exp.ConsumedEvents, ev.stateKey(tileChar, targetX, targetY))):
 						symbol = floor.Marks[tileChar]
 					default:
