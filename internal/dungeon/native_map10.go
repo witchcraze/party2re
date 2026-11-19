@@ -57,16 +57,16 @@ var nm10Bosses = [3]DungeonMonster{
 // Every event seals the party's attacks before its once guard, so a sealed
 // party meets every encounter here. F also seals; native has no encounter to
 // carry that to.
-func nativeMap10Events() map[byte]cellEvent {
+func nativeMap10Events() map[byte]mapEvent {
 	seal := corebattle.StatusPhysicalSeal
-	return map[byte]cellEvent{
-		'0': {kind: eventSpawn, status: seal},
-		'A': {kind: eventBoss, perSymbol: true, status: seal},
-		'B': {kind: eventBoss, perSymbol: true, status: seal},
-		'C': {kind: eventBoss, perSymbol: true, status: seal},
-		'2': {kind: eventTreasure, perSymbol: true},
-		'3': {kind: eventTreasure, perSymbol: true},
-		'4': {kind: eventTreasure, perSymbol: true},
+	return map[byte]mapEvent{
+		'0': {action: spawnEvent{status: seal}},
+		'A': {action: bossEvent{status: seal}, perSymbol: true},
+		'B': {action: bossEvent{status: seal}, perSymbol: true},
+		'C': {action: bossEvent{status: seal}, perSymbol: true},
+		'2': {action: treasureEvent{}, perSymbol: true},
+		'3': {action: treasureEvent{}, perSymbol: true},
+		'4': {action: treasureEvent{}, perSymbol: true},
 	}
 }
 

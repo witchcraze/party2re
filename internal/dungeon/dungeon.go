@@ -89,7 +89,7 @@ type Floor struct {
 	// Marks show a cell's symbol in the map view until its once event is consumed, unless the event keeps it.
 	Marks map[byte]string `json:"-"`
 	// events bind this floor's symbols; see map_events.go.
-	events map[byte]cellEvent
+	events map[byte]mapEvent
 }
 
 // FloorExit is a route or pitfall: the round carries over and the position is

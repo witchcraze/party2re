@@ -17,17 +17,17 @@ var nativeMap7Grids = [][]string{
 }
 
 // The switch K and the rock D share one flag: either one opens the rock.
-func nativeMap7Events(trapBase int) map[byte]cellEvent {
-	return map[byte]cellEvent{
-		'K': {kind: eventKey, flag: "DK"},
-		'D': {kind: eventDoor, flag: "DK", jobs: []string{"job-04", "job-25"}},
-		'T': {kind: eventMist, status: corebattle.StatusParalyze},
-		't': {kind: eventTrap, base: trapBase},
-		'A': {kind: eventBoss, perSymbol: true},
-		'b': {kind: eventBoss, perSymbol: true},
-		'2': {kind: eventTreasure, perSymbol: true},
-		'3': {kind: eventTreasure, perSymbol: true},
-		'4': {kind: eventTreasure, perSymbol: true},
+func nativeMap7Events(trapBase int) map[byte]mapEvent {
+	return map[byte]mapEvent{
+		'K': {action: keyEvent{}, flag: "DK"},
+		'D': {action: doorEvent{jobs: []string{"job-04", "job-25"}}, flag: "DK"},
+		'T': {action: mistEvent{status: corebattle.StatusParalyze}},
+		't': {action: trapEvent{base: trapBase}},
+		'A': {action: bossEvent{}, perSymbol: true},
+		'b': {action: bossEvent{}, perSymbol: true},
+		'2': {action: treasureEvent{}, perSymbol: true},
+		'3': {action: treasureEvent{}, perSymbol: true},
+		'4': {action: treasureEvent{}, perSymbol: true},
 	}
 }
 

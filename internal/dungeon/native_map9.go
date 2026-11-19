@@ -36,17 +36,17 @@ var nm9Boss = strongest([]DungeonMonster{
 // Every event seals the party's magic before its once guard, so a sealed
 // party meets every encounter here. B and C load one of stages 8–12
 // (int(rand(5) + 8)) for their boss; A uses _data.cgi's.
-func nativeMap9Events() map[byte]cellEvent {
+func nativeMap9Events() map[byte]mapEvent {
 	seal := corebattle.StatusMagicSeal
 	stageBosses := stagePools(8, 12)
-	return map[byte]cellEvent{
-		'0': {kind: eventSpawn, status: seal},
-		'A': {kind: eventBoss, perSymbol: true, status: seal},
-		'B': {kind: eventBoss, perSymbol: true, status: seal, pools: stageBosses},
-		'C': {kind: eventBoss, perSymbol: true, status: seal, pools: stageBosses},
-		'2': {kind: eventTreasure, perSymbol: true},
-		'3': {kind: eventTreasure, perSymbol: true},
-		'4': {kind: eventTreasure, perSymbol: true},
+	return map[byte]mapEvent{
+		'0': {action: spawnEvent{status: seal}},
+		'A': {action: bossEvent{status: seal}, perSymbol: true},
+		'B': {action: bossEvent{status: seal, pools: stageBosses}, perSymbol: true},
+		'C': {action: bossEvent{status: seal, pools: stageBosses}, perSymbol: true},
+		'2': {action: treasureEvent{}, perSymbol: true},
+		'3': {action: treasureEvent{}, perSymbol: true},
+		'4': {action: treasureEvent{}, perSymbol: true},
 	}
 }
 

@@ -28,17 +28,17 @@ var nm11BossA = strongest([]DungeonMonster{
 })
 
 // H is map5's remedy table: only an acting job 43 spends the flag.
-var nativeMap11Events = map[byte]cellEvent{
-	'A': {kind: eventBoss, perSymbol: true},
-	'B': {kind: eventBoss, perSymbol: true},
-	'C': {kind: eventBoss, perSymbol: true},
-	'D': {kind: eventBoss, perSymbol: true},
-	'E': {kind: eventBoss, perSymbol: true},
-	'F': {kind: eventBoss, perSymbol: true},
-	'H': {kind: eventRemedy, perSymbol: true},
-	'2': {kind: eventTreasure, perSymbol: true},
-	'3': {kind: eventTreasure, perSymbol: true},
-	'4': {kind: eventTreasure, perSymbol: true},
+var nativeMap11Events = map[byte]mapEvent{
+	'A': {action: bossEvent{}, perSymbol: true},
+	'B': {action: bossEvent{}, perSymbol: true},
+	'C': {action: bossEvent{}, perSymbol: true},
+	'D': {action: bossEvent{}, perSymbol: true},
+	'E': {action: bossEvent{}, perSymbol: true},
+	'F': {action: bossEvent{}, perSymbol: true},
+	'H': {action: remedyEvent{}, perSymbol: true},
+	'2': {action: treasureEvent{}, perSymbol: true},
+	'3': {action: treasureEvent{}, perSymbol: true},
+	'4': {action: treasureEvent{}, perSymbol: true},
 }
 
 // nativeMap11 has round limit 30 and the menu threshold for dungeon 11 (job

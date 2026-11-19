@@ -32,11 +32,11 @@ var nativeMap3Warps = [8]map[byte][2]int{
 }
 
 // b is a boss independent of B; M (legacy T) confuses on every entry.
-var nativeMap3Events = map[byte]cellEvent{
-	'b': {kind: eventBoss},
-	'M': {kind: eventMist, status: corebattle.StatusConfusion},
-	'2': {kind: eventTreasure, perSymbol: true},
-	'3': {kind: eventTreasure, perSymbol: true},
+var nativeMap3Events = map[byte]mapEvent{
+	'b': {action: bossEvent{}},
+	'M': {action: mistEvent{status: corebattle.StatusConfusion}},
+	'2': {action: treasureEvent{}, perSymbol: true},
+	'3': {action: treasureEvent{}, perSymbol: true},
 }
 
 // nativeMap3 has round limit 60 and the menu threshold for dungeon 3 (job level 7).

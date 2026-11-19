@@ -136,26 +136,9 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 					symbol = wall // out of bounds
 				} else {
 					tileChar := floor.Grid[targetY][targetX]
-					ev := floor.event(tileChar)
-					active := true
-					switch ev.kind {
-					case eventRoute:
-						active, err = routeActive(exp, tileChar)
-					case eventShipSite:
-						active, err = shipTreasureActive(exp, tileChar)
-					}
+					symbol, err = floor.event(tileChar).tileSymbol(exp, tileChar, targetX, targetY, floor.Marks[tileChar], wall)
 					if err != nil {
 						return MapView{}, err
-					}
-					switch {
-					case !active:
-						symbol = "□"
-					case tileChar == cellWall || ev.kind == eventHidden && (ev.key == 0 || !slices.Contains(exp.ConsumedEvents, string(ev.key))):
-						symbol = wall
-					case floor.Marks[tileChar] != "" && (ev.keepMark || !slices.Contains(exp.ConsumedEvents, ev.stateKey(tileChar, targetX, targetY))):
-						symbol = floor.Marks[tileChar]
-					default:
-						symbol = "□" // path
 					}
 				}
 			}
