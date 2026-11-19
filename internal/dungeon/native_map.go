@@ -99,7 +99,8 @@ func (s *Service) activeFloor(exp *ActiveExpedition) (Dungeon, Floor, error) {
 
 // moveNative applies one admitted native step: the round advances and the
 // destination's map event is dispatched (legacy vs_dungeon.cgi _susumu).
-func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *corecharacter.Character, d Dungeon, floor Floor, x, y int) (ExpeditionStepResult, error) {
+// char is the leader owning the run; actor is the mover the event acts through.
+func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char, actor *corecharacter.Character, d Dungeon, floor Floor, x, y int) (ExpeditionStepResult, error) {
 	// Only an encounter without living members reaches here; the step drops it.
 	clearing := exp.Encounter != nil
 	exp.Encounter = nil
@@ -135,7 +136,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 	case cell == cellKey && !consumed:
 		step.EventKey = key
 	case cell == cellDoor && !consumed:
-		if char.JobID == jobLockpick || slices.Contains(exp.ConsumedEvents, string(cellKey)) {
+		if actor.JobID == jobLockpick || slices.Contains(exp.ConsumedEvents, string(cellKey)) {
 			step.EventKey = key
 		} else {
 			// Locked: the round is spent and the party returns to its only approach.
@@ -143,7 +144,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, char *c
 		}
 	case (cell == cellTreasure || strings.IndexByte("234", cell) >= 0) && !consumed:
 		step.EventKey = key
-		step.Encounter = treasureEncounter(exp, char.JobID, s.rng, x, y)
+		step.Encounter = treasureEncounter(exp, actor.JobID, s.rng, x, y)
 	default:
 		if to, ok := floor.Warps[cell]; ok {
 			step.NewX, step.NewY = to[0], to[1]
@@ -227,9 +228,9 @@ func (p EncounterPool) monster(rng RandomSource) DungeonMonster {
 }
 
 // treasureEncounter creates unopened chests like add_treasure: one per living
-// member, plus 1–2 when the acting leader is job 78. Contents and inspection
+// member, plus 1–2 when the mover is job 78. Contents and inspection
 // belong to #1762; the chests only block movement until opened.
-func treasureEncounter(exp *ActiveExpedition, leaderJob string, rng RandomSource, x, y int) *ActiveEncounter {
+func treasureEncounter(exp *ActiveExpedition, actorJob string, rng RandomSource, x, y int) *ActiveEncounter {
 	count := 0
 	for _, m := range exp.Members {
 		if m.CurrentHP > 0 {
@@ -239,7 +240,7 @@ func treasureEncounter(exp *ActiveExpedition, leaderJob string, rng RandomSource
 	if len(exp.Members) == 0 && exp.CurrentHP > 0 {
 		count = 1
 	}
-	if j := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(leaderJob)), "job-"); j == "78" {
+	if j := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(actorJob)), "job-"); j == "78" {
 		count += 1 + rng.Intn(2)
 	}
 	if count <= 0 {

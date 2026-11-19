@@ -147,8 +147,9 @@ func TestCombatAdmissionProduction(t *testing.T) {
 				if err != nil || run == nil || run.CharacterID != leader.ID || len(run.Members) != 2 {
 					t.Fatalf("member discovery: %+v %v", run, err)
 				}
-				if _, err := combat.dungeon.Move(ctx, member.ID, dungeon.DirectionEast); !errors.Is(err, dungeon.ErrForbidden) {
-					t.Fatalf("member moved leader: %v", err)
+				// Any living member moves the shared run; Escape stays with the leader.
+				if _, err := combat.dungeon.Move(ctx, member.ID, dungeon.DirectionEast); err != nil {
+					t.Fatalf("member move rejected: %v", err)
 				}
 				if _, err := combat.dungeon.Escape(ctx, member.ID); !errors.Is(err, dungeon.ErrForbidden) {
 					t.Fatalf("member escaped leader: %v", err)

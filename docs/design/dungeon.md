@@ -6,10 +6,8 @@ do not describe every event. Current Go is in `internal/dungeon`.
 
 ## Legacy movement and map events
 
-The leader performs the initial advance. Afterwards any living member may move;
-a fallen character can only Escape (`_battle.cgi:654–663`). Native movement is
-leader-only and does not yet reject a fallen leader (#2394). Cardinal movement is
-available only when no living enemy-side members remain, including ordinary
+The leader performs the initial advance. Afterwards any living member may move.
+Cardinal movement is available only when no living enemy-side members remain, including ordinary
 unopened Dungeon chests. Movement advances the shared round and dispatches the
 selected map's `event_<symbol>`. Both action registration and the movement guard
 enforce this restriction (`lib/vs_dungeon.cgi:37–48,74–80`). Combat actions
@@ -118,7 +116,7 @@ position displays the party marker. There is no source-backed permanent reveal
 flag (`map/0/1.cgi:14–16`, `vs_dungeon.cgi:114–129`). Map5's lever-controlled
 visibility is a different map rule.
 
-Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Participant movement is its own unit (#2394). Other participant commands, combat (#1865) and individual exit (#1956), need their own approved contracts, not an incidental change in a map implementation.
+Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Participant combat (#1865) and individual exit (#1956) need their own approved contracts, not an incidental change in a map implementation.
 
 ### Legacy action reconciliation
 
@@ -132,7 +130,7 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 |---|---|
 | `ダンジョン` → `quest.dungeon` / `get_dungeon_data` (`quest.cgi:198,623–703`); join selects `vs_dungeon` (`1051–1053`) | Existing solo/party start; preserve consented roster admission |
 | `すすむ` → `susumu` (`vs_dungeon.cgi:33–36,57–67`) | Superseded by atomic start, which initializes round 1 and keeps leader admission |
-| `にし`/`きた`/`みなみ`/`ひがし` (`39–43,70–73`) | Move in that direction; map-owned dispatch follows admission |
+| `にし`/`きた`/`みなみ`/`ひがし` (`39–43,70–73`) | Any living member moves in that direction; map-owned dispatch follows admission |
 | `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
 | Treasure `しらべる` → `shiraberu(target)` (`45–48`) | Participant inspection under the [treasure contract](#treasure-inspection-and-delivery). Map0 [#2119](https://github.com/witchcraze/party2re/issues/2119), map3 [#2374](https://github.com/witchcraze/party2re/issues/2374). |
 | `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Open: map16 mining (#1777) |
@@ -256,9 +254,8 @@ scaling (#1954), enemy battle data (#2351), narration (#948).
   actor alone loses `int(MaxHP × 0.02 + 0.5)` HP per passage entered, so MaxHP
   ≤ 24 loses nothing, and falls at 0 (`1.cgi:24`). Only bosses `B` (base event) and `b`
   fight, as independent once-only bosses. Because the mover pays, the party
-  spreads the cost, and members continue after one falls. Map4 therefore stays
-  unlisted until participant movement exists; an all-fallen party waits for
-  Escape (#2364).
+  spreads the cost, and members continue after one falls; an all-fallen party
+  waits for Escape (#2364).
 - **`H` recovers one random member, not the party.** **Finding:** the call passes
   no target. `&{'event_'…}` without parentheses forwards `_susumu`'s arguments, so
   the "target" is the direction name (`vs_dungeon.cgi:75,101`). `_check_party`

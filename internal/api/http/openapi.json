@@ -21907,7 +21907,7 @@
     },
     "/characters/{id}/dungeons/move": {
       "post": {
-        "description": "Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming rounds or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at the current floor's round limit with 409 while the run stays active for escape; walls and bounds spend no round, while a locked door spends the round and leaves the party in place. Stairs and pitfalls switch the floor at the same position and round; a pitfall reports member_damages and can leave the round above the new floor's limit.",
+        "description": "Any living member of the run may move; the mover is the acting character for the destination's map event. Rejects movement in all directions while an active enemy or an unopened treasure chest remains, without consuming rounds or tile events. Continue combat with fightDungeonEncounter or escape; native treasure inspection is not connected yet. Native maps reject movement at the current floor's round limit with 409 while the run stays active for escape; walls and bounds spend no round, while a locked door spends the round and leaves the party in place. Stairs and pitfalls switch the floor at the same position and round; a pitfall reports member_damages and can leave the round above the new floor's limit.",
         "operationId": "moveDungeonExpedition",
         "parameters": [
           {
@@ -21993,7 +21993,7 @@
           },
           "422": {
             "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
+            "description": "The acting character has fallen; only escape remains"
           },
           "500": {
             "content": {
@@ -22023,7 +22023,7 @@
     },
     "/characters/{id}/dungeons/party-start": {
       "post": {
-        "description": "Starts from the authenticated leader’s saved, ready Party roster. member_ids is optional; when supplied it must contain every saved member exactly once. Cross-account participants are allowed through their own lobby consent. Every member must be idle; nonleaders may observe their enrolled run but only the leader advances or ends it.",
+        "description": "Starts from the authenticated leader’s saved, ready Party roster. member_ids is optional; when supplied it must contain every saved member exactly once. Cross-account participants are allowed through their own lobby consent. Every member must be idle; living nonleaders may observe and move their enrolled run, but only the leader fights or ends it.",
         "operationId": "startPartyDungeonExpedition",
         "parameters": [
           {

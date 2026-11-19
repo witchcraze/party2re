@@ -10,6 +10,9 @@ var ErrForbidden = errors.New("character is not authorized for this expedition")
 
 var ErrPartyUnavailable = errors.New("party admission is unavailable")
 
+// ErrActorFallen rejects commands from a fallen character; only Escape remains.
+var ErrActorFallen = errors.New("a fallen character cannot act")
+
 // Admission coordinates live party consent and character activity locks.
 // Implemented at the composition root through the Party public service.
 type Admission interface {
@@ -56,4 +59,15 @@ func (run ActiveExpedition) ContainsCharacter(id string) bool {
 		}
 	}
 	return false
+}
+
+// isAlive reports whether an enrolled character has HP left; a run without a
+// roster snapshot carries only the leader's HP.
+func (run ActiveExpedition) isAlive(id string) bool {
+	for _, member := range run.Members {
+		if member.CharacterID == id {
+			return member.CurrentHP > 0
+		}
+	}
+	return len(run.Members) == 0 && run.CharacterID == id && run.CurrentHP > 0
 }

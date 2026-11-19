@@ -21,7 +21,7 @@ func writeCombatAdmissionError(w http.ResponseWriter, err error) bool {
 	case errors.Is(err, party.ErrPartyNotRecruiting), errors.Is(err, party.ErrPartyNotReady),
 		errors.Is(err, party.ErrMemberBusy), errors.Is(err, party.ErrCharacterUnconscious),
 		errors.Is(err, party.ErrCharacterExhausted), errors.Is(err, party.ErrDailyOnceAlreadyUsed),
-		errors.Is(err, dungeon.ErrActiveExpeditionExists),
+		errors.Is(err, dungeon.ErrActiveExpeditionExists), errors.Is(err, dungeon.ErrActorFallen),
 		errors.Is(err, challenge.ErrActiveSessionExists):
 		writeError(w, http.StatusUnprocessableEntity, err)
 	case errors.Is(err, dungeon.ErrCombatActive):

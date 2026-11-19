@@ -297,7 +297,7 @@ PvP/GvG admission, unconsciousness and exhaustion before starting.
 The ordinary Party adventure start reuses that activity check so it cannot
 bypass an existing Dungeon/Challenge enrollment.
 
-Dungeon retains its canonical leader buffer and leader-only advance/escape.
+Dungeon retains its canonical leader buffer; members move through the member index, and escape stays leader-only.
 Challenge leadership is ordered live roster data and may transfer without moving
 keys. All admitted actors discover the same immutable run, independently of the
 Party lobby's shorter lifetime. Challenge's unfinished SQL claims also remain

@@ -2,6 +2,7 @@ package dungeon_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -231,8 +232,11 @@ func TestPartyCombat_LeaderKilledAllySurvivesAndWins_ExplorationContinues(t *tes
 			t.Errorf("expected StatusExploring, got %v", res.Expedition.Status)
 		}
 
-		// Party can make a subsequent move without error
-		res2, err := svc.Move(ctx, "lead-fragile", dungeon.DirectionEast)
+		// The fallen leader can only Escape; the surviving ally moves on.
+		if _, err := svc.Move(ctx, "lead-fragile", dungeon.DirectionEast); !errors.Is(err, dungeon.ErrActorFallen) {
+			t.Fatalf("fallen leader move err=%v", err)
+		}
+		res2, err := svc.Move(ctx, "ally-strong", dungeon.DirectionEast)
 		if err != nil {
 			t.Fatalf("subsequent move failed: %v", err)
 		}
