@@ -88,13 +88,13 @@ func (nm17Raisable) closed(exp *ActiveExpedition) (bool, error) {
 
 func (ev nm17Raisable) wallShown(exp *ActiveExpedition) (bool, error) { return ev.closed(exp) }
 
-// nm17Gate is B: its boss once, then after b a door that returns the party
-// north with the round spent (1.cgi:117–131).
+// nm17Gate is B: its boss once, then after b a wall that puts the party one
+// row north (--$py) with the round spent (1.cgi:117–131).
 type nm17Gate struct{ boss DungeonMonster }
 
 func (ev nm17Gate) apply(n *nativeStep) error {
 	if slices.Contains(n.exp.ConsumedEvents, "b") {
-		n.step.NewX, n.step.NewY = n.exp.PosX, n.exp.PosY
+		n.step.NewY--
 		return nil
 	}
 	if n.consumed {
