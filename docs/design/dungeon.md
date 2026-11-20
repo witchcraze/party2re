@@ -282,61 +282,26 @@ settlement would drop it whenever a run idles out.
 
 ### Map13 channel puzzle and routes
 
-**Decision (#1774)**; this is a target specification, not current behavior. Evidence is static, relative to
-`party2/` at the legacy revision above (`map/13/` files abbreviated). Implementation
-units: puzzle/route [#1959](https://github.com/witchcraze/party2re/issues/1959),
-normal destination [#1960](https://github.com/witchcraze/party2re/issues/1960),
-EX destination and start enablement [#1961](https://github.com/witchcraze/party2re/issues/1961).
+Decision [#1774](https://github.com/witchcraze/party2re/issues/1774). File references
+are relative to `party2/map/13/` at the legacy revision above.
 
-**Main floor** (`1.cgi`). Only one initial variant exists: entry skips `_` files (`quest.cgi:673–703`).
-The floor is 9×9 with round limit 80. The start's only exit is the altar `A`, so the first
-move always reaches it. Native layouts transcribe the legacy floors. Passages use the base spawn with the floor pool. The map overrides base `event_B`
-(`1.cgi:59`), so this floor has no boss or treasure.
-
-| Event | Rule |
-|---|---|
-| Channels `B/R/Y/W` (`1.cgi:59–62`) | Entering toggles that channel; re-entry toggles it back. No RNG and no once flag. |
-| Reroll `C` (`1.cgi:63`) | Always replaces the target with a uniform `int(rand(15))` draw over the 15 nonempty channel combinations (`1.cgi:21–38`). Before activation the draw is superseded by the altar's first draw, because the last digit run is the target (`1.cgi:48–49`). |
-| Altar `A` (`1.cgi:47–58`) | The first visit draws the target and activates the puzzle. In the same step, a match selects the route and transfers; a mismatch discloses the target color. The branches that remove `A` or return on it are unreachable, because a match leaves the floor and no path returns. |
-
-Disclosure persists for every member, matching the shared party log: the run
-keeps the last disclosed target and whether a reroll happened since. Observation
-shows channel states and the altar marker for cells in view (`1.cgi:41–46`). It never
-shows an undisclosed target or route odds.
-
-**Route** (`_is_EX`, `1.cgi:68–83`). Let k be the number of active channels at the match
-(the target's size, 1–4) and n the allied roster (`@partys`, including fallen and allied
-NPC members, `_battle.cgi:482–490`). The route is EX if n ≥ 5 or k = 4. Otherwise, for
-n ≥ 2 it is EX iff `k >= rand(5)`, so P = k/5; a solo party takes the normal route. Players
-are capped at 4 (`quest.cgi:21`), so n ≥ 5 needs allied NPCs, which native rosters lack.
-
-**Carry** follows the [floor-change rule](#native-schema-and-transition-boundary). The
-altar's coordinate is a passage on both destinations, and both keep limit 80.
-Channels and target freeze after the transfer. Native state is typed: channels, target,
-activation, disclosure, selected destination and per-event once facts. Accepted draws
-are stored with their revision-checked step and never redrawn on reload or retry.
-
-**Destinations** (`_1.cgi`, `_EX.cgi`). From arrival, a corridor runs north: alternate
-boss `Z` (normal) or a passage (EX), then recovery `Q`, then boss `V`. Above it lie a treasure
-row of three, another row of three and a top cell. Every event is once per run.
-Define L, the legacy `$len`, as the count of non-digit flags at request start (`_1.cgi:21–25`):
-3 + k + destination events already consumed. So L = 3 + k at `Z`, and at `Q` it is 4 + k (normal) or 3 + k (EX).
-
-| Event | Normal route (k = 1–3) | EX route |
-|---|---|---|
-| Alternate boss | First single boss iff `rand(10) > L − 1`, so P = (8 − k)/10; else the second (`_1.cgi:89–94,116–168`). | None. Passages use the one-entry EX pool. |
-| Recovery | Party HP and an independent MP base of `(rand(20) + 25) × L`, element "none", through the shared party-heal routines with the actor's modifiers; a fallen member's share heals the actor instead (`_1.cgi:96–102`, `_skill.cgi:9056–9188,9638`). | Same, with its L (`_EX.cgi:55–61`). |
-| Boss | Three-member group with party scaling, then the special boss field: allied max-stat caps and status reset, lasting for the run (`_1.cgi:39–45`, `_battle.cgi:1476–1532`). | First the phantom default field (`_battle.cgi:1786–1791`), then the EX group and the special field (`_EX.cgi:39–46`). |
-| Treasure | Gated by the frozen channels (`_1.cgi:47–87`): center W, west R, east B, north Y, west corner k > 1, east corner k > 2, top k > 3 (unreachable). Unavailable cells are plain passages with no flag or display. | Six ungated ordinary cells. The top cell is a fixed treasure: chests per allied player, fallen included, with no job-78/wish bonus (`_EX.cgi:47–53`, `_npc_action.cgi:555–598`). |
-
-Contents and inspection: [treasure contract](#treasure-inspection-and-delivery).
-Groups/scaling: [#1954](https://github.com/witchcraze/party2re/issues/1954).
-Rewards: [#1957](https://github.com/witchcraze/party2re/issues/1957).
-Per-character combat: [#1865](https://github.com/witchcraze/party2re/issues/1865).
-Start admission follows the [leader job-level table](#start-admission) (≥ 80). Map13 adds no
-map-specific action (no `add_battle_action2` override). Start, Move, observation and
-Escape reuse the native use cases above. The map stays unlisted and start-rejected
-until both destinations are implemented, so players never meet a partial map.
+- **Disclosure persists for every member,** matching the shared party log. The run
+  keeps the last disclosed target and whether a reroll happened since. Observation
+  never shows an undisclosed target or route odds.
+- **A reroll before activation is wasted.** The altar's first draw supersedes it,
+  because the last digit run is the target (`1.cgi:48–49`).
+- **The altar's removal and return branches are unreachable,** because a match
+  leaves the floor and no path returns (`1.cgi:47–58`).
+- **The n ≥ 5 EX rule needs allied NPCs,** which native rosters lack. Players are
+  capped at 4 (`quest.cgi:21`), but the roster counts allied NPC members
+  (`_battle.cgi:482–490`).
+- **L counts non-digit flags at request start** (`$len`, `_1.cgi:21–25`): 3 + k plus
+  the destination events already consumed. It is 3 + k at the alternate boss, and
+  4 + k (normal) or 3 + k (EX) at recovery.
+- **The normal route's top treasure is unreachable.** Its gate k > 3 needs k = 4,
+  which always routes to EX (`_1.cgi:47–87`).
+- **The EX boss installs the phantom default field before its group** and the
+  special boss field after it. Both last for the run (`_EX.cgi:39–46`).
 
 ### Map14 sunken routes
 
