@@ -322,24 +322,15 @@ Decision [#1776](https://github.com/witchcraze/party2re/issues/1776): reproduce 
 original without departures. File references are relative to `party2/map/15/` at
 the legacy revision above.
 
-- **Exclusive pools never run dry.** `A`–`C` on the main floor and `D`–`F` on `_1`
-  each draw uniformly from the outcomes not yet drawn on that floor, three triggers
-  for three outcomes, so the empty-pool branch is unreachable (`1.cgi:33–39`,
-  `_1.cgi:43–49`).
 - **The branches never meet.** `2` leads to `_1` and then `__1`, `4` leads to `_2`,
   and no floor returns. The shared flag string therefore never collides,
   although `_2` and `__1` both use `z`.
-- **Closed walls refund the round.** A closed `d` puts the party back and undoes
-  the round, unlike map1's locked door. The pre-move reset has already run, including
-  item-188 revival (`vs_dungeon.cgi:93–96`, `_1.cgi:30–37`, `_2.cgi:31–38`).
-- **`_1`'s walls open on the boss outcome,** which every route to the stairs
-  needs, so a party must draw it from `D`–`F` (`_1.cgi:22,30,51–54`).
 - **`_2`'s first boss kills a treasure.** The first of `J`/`K` pre-sets the once
   flag of `j` or `k` (1/2 each), as on map14's ship, so exactly one stays live.
   The walls open with 1/2 at the first, and always at the second, because the
   event's own flag is appended before the check (`_2.cgi:28–29,43–57`).
-- **`__1` has no random encounters.** Its `event_0` replaces the base spawn
-  (`__1.cgi:23`), so the monster pool in `_data.cgi` is never used.
 - **The final bosses install `fortress` as the run's default field** before the
   group spawns. It applies to every later battle without a temporary field
-  (`__1.cgi:28`, `_2.cgi:30`, `_battle.cgi:1568–1610,1786–1791`).
+  (`__1.cgi:28`, `_2.cgi:30`, `_battle.cgi:1568–1610,1786–1791`). Native records
+  it in the run state; the batch resolver has no named fields, so battles apply it
+  only with explicit combat ([#1865](https://github.com/witchcraze/party2re/issues/1865)).
