@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -123,6 +124,13 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 		current, err := h.playerContext.Query(r.Context(), char.ID, player.ID)
+		if errors.Is(err, casino.ErrDepartureRecovery) && h.casino != nil {
+			// A concurrent kick can claim this character's departure after the
+			// recovery above; commands recover it, observations never do.
+			if err = h.casino.RecoverCharacterDeparture(r.Context(), char.ID); err == nil {
+				current, err = h.playerContext.Query(r.Context(), char.ID, player.ID)
+			}
+		}
 		if err != nil {
 			if errors.Is(err, playercontext.ErrNavigationForbidden) {
 				writeError(w, http.StatusForbidden, err)

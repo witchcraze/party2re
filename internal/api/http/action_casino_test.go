@@ -492,6 +492,24 @@ func TestCasinoKickWaitFailureAndRecovery(t *testing.T) {
 		}
 	})
 
+	t.Run("kick claimed after peer preflight recovers instead of failing preflight", func(t *testing.T) {
+		f, waits, departures, router := newMultiActorKickFixture(t)
+		waits.failExtend.Store(true)
+		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"room","target_character_id":"peer"}}`, nil); status != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", status)
+		}
+		waits.failExtend.Store(false)
+		f.reads.missedRecoveries = 1
+
+		status, raw := gatewayRequest(t, router, "peer", "peer-session", "application/json", `{"action":"casino_room_leave","params":{"room_id":"room"}}`, nil)
+		if status != http.StatusConflict || actionErrorCode(t, raw) != "ACTION_WAIT" {
+			t.Fatalf("expected ACTION_WAIT after recovering the late kick, got %d %s", status, raw)
+		}
+		if claim, err := departures.FindPendingDeparture(ctx, "peer"); err != nil || claim != "" {
+			t.Fatalf("pending claim remained: %q %v", claim, err)
+		}
+	})
+
 	t.Run("peer mutation recovers pending kick wait and rejects with ACTION_WAIT", func(t *testing.T) {
 		_, waits, departures, router := newMultiActorKickFixture(t)
 		waits.failExtend.Store(true)
