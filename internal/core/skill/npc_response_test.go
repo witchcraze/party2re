@@ -344,6 +344,192 @@ func TestNPCOperationLateRejectionRestoresStateAndPorts(t *testing.T) {
 	}
 }
 
+func TestNPCOperationKinjuPreflightsTailsAndRetainsNonlethalContrast(t *testing.T) {
+	seed := []battle.CallbackBinding{responseBinding("job-0-entry-4")}
+
+	s, op := runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 100, 100
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-206"}
+	s.Actors[1].HP = 1
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+	before, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rng := &npcJobRNG{t: t, draws: []float64{.1}}
+	got, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng)
+	after, marshalErr := json.Marshal(s)
+	if !errors.Is(err, battle.ErrUnsupportedEffect) || marshalErr != nil || string(after) != string(before) ||
+		!reflect.DeepEqual(got, battle.NPCOperationResult{}) || len(rng.draws) != 1 ||
+		s.Actors[0].HP != 100 || s.Actors[0].Status != battle.StatusKinju || s.Actors[1].HP != 1 {
+		t.Fatalf("result %+v state changed %t draws %v actors %+v error %v marshal %v", got, string(after) != string(before), rng.draws, s.Actors, err, marshalErr)
+	}
+
+	// Removing item-206 leaves the curse-only idle continuation supported.
+	s.Actors[0].ItemDefinitionIDs = nil
+	rng = &npcJobRNG{t: t, draws: []float64{.1}}
+	got, err = ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng)
+	if err != nil || got.NormalAction || got.Choice.ID != "" || len(got.Defeats) != 0 ||
+		s.Actors[0].HP != 90 || s.Actors[0].Status != "" || len(rng.draws) != 0 {
+		t.Fatalf("supported curse result %+v actor %+v draws %v error %v", got, s.Actors[0], rng.draws, err)
+	}
+
+	// Supported nonlethal curse with item-206 retains the debited HP and runs reached tails.
+	s, op = runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 50, 100
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-206"}
+	s.Actors[1].HP = 1000
+	rng = &npcJobRNG{t: t, draws: []float64{.1, 0, .9}}
+	got, err = ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng)
+	if err != nil || got.NormalAction || got.Choice.ID != "" || len(got.Defeats) != 0 ||
+		s.Actors[0].HP != 67 || s.Actors[0].Status != "" || len(rng.draws) != 0 {
+		t.Fatalf("supported item-206 curse result %+v actor %+v draws %v error %v", got, s.Actors[0], rng.draws, err)
+	}
+
+	// Non-triggering curse proceeds to normal choice selection with StatusKinju intact.
+	s, op = runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 100, 100
+	s.Actors[0].Status = battle.StatusKinju
+	rng = &npcJobRNG{t: t, draws: []float64{.5, 0, .9}}
+	got, err = ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng)
+	if err != nil || !got.NormalAction || got.Choice.ID != "job-0-entry-4" ||
+		s.Actors[0].HP != 100 || s.Actors[0].Status != battle.StatusKinju ||
+		s.Actors[0].Temporary != battle.TemporaryDefense || len(rng.draws) != 0 {
+		t.Fatalf("non-triggering curse result %+v actor %+v draws %v error %v", got, s.Actors[0], rng.draws, err)
+	}
+
+	// item-204 bypasses the curse roll (even when drawn < 0.25) without reaching item-206 under defend.
+	s, op = runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 100, 100
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-204", "item-206"}
+	s.Actors[1].HP = 1
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+	rng = &npcJobRNG{t: t, draws: []float64{.1, 0, .9}}
+	got, err = ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng)
+	if err != nil || !got.NormalAction || got.Choice.ID != "job-0-entry-4" ||
+		s.Actors[0].HP != 100 || s.Actors[0].Status != battle.StatusKinju ||
+		s.Actors[0].Temporary != battle.TemporaryDefense || len(rng.draws) != 0 {
+		t.Fatalf("item-204 bypass result %+v actor %+v draws %v error %v", got, s.Actors[0], rng.draws, err)
+	}
+}
+
+func TestNPCOperationKinjuPreflightsFatalAndDeathPreventionContinuations(t *testing.T) {
+	seed := []battle.CallbackBinding{responseBinding("job-0-entry-4")}
+
+	// Fatal curse still reaches item-206 and rejects missing opponent reset before RNG.
+	s, op := runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 10, 100
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-206"}
+	s.Actors[1].HP = 1
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+	before, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rng := &npcJobRNG{t: t, draws: []float64{.1}}
+	got, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng)
+	after, marshalErr := json.Marshal(s)
+	if !errors.Is(err, battle.ErrUnsupportedEffect) || marshalErr != nil || string(after) != string(before) ||
+		!reflect.DeepEqual(got, battle.NPCOperationResult{}) || len(rng.draws) != 1 {
+		t.Fatalf("fatal item-206 result %+v state changed %t draws %v error %v", got, string(after) != string(before), rng.draws, err)
+	}
+
+	// Fatal curse without a defeat context rejects before RNG even without item-206.
+	s, op = runNPCFixture(t)
+	op.Defeat = nil
+	s.Actors[0].HP, s.Actors[0].MaxHP = 10, 100
+	s.Actors[0].Status = battle.StatusKinju
+	rng = &npcJobRNG{t: t, draws: []float64{.1}}
+	if _, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng); !errors.Is(err, battle.ErrUnsupportedEffect) || len(rng.draws) != 1 {
+		t.Fatalf("fatal missing defeat context draws %v error %v", rng.draws, err)
+	}
+
+	// Supported fatal curse completes defeat and post-defeat tails.
+	s, op = runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 10, 100
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-206"}
+	s.Actors[1].HP = 1000
+	rng = &npcJobRNG{t: t, draws: []float64{.1, .9}}
+	got, err = ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng)
+	wantDefeats := []battle.NPCDefeat{{TargetID: "self", KillerID: "self"}}
+	if err != nil || got.NormalAction || !reflect.DeepEqual(got.Defeats, wantDefeats) ||
+		s.Actors[0].HP != 0 || s.Actors[0].Status != "" || len(rng.draws) != 0 {
+		t.Fatalf("supported fatal result %+v actor %+v draws %v error %v", got, s.Actors[0], rng.draws, err)
+	}
+
+	// Death prevention via TemporaryRevival keeps Status cleared and rejects item-206 before RNG.
+	s, op = runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 10, 100
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].Temporary = battle.TemporaryRevival
+	s.Actors[0].ItemDefinitionIDs = []string{"item-206"}
+	s.Actors[1].HP = 1
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+	rng = &npcJobRNG{t: t, draws: []float64{.1}}
+	if _, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng); !errors.Is(err, battle.ErrUnsupportedEffect) || len(rng.draws) != 1 {
+		t.Fatalf("temporary revival item-206 draws %v error %v", rng.draws, err)
+	}
+
+	// Death prevention via item-260 raises Attack by +300 so item-206 can fell a 250 HP enemy.
+	s, op = runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 10, 100
+	s.Actors[0].Attack = 10
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-206", "item-260"}
+	s.Actors[1].HP = 250
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+	rng = &npcJobRNG{t: t, draws: []float64{.1}}
+	if _, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng); !errors.Is(err, battle.ErrUnsupportedEffect) || len(rng.draws) != 1 {
+		t.Fatalf("item-260 revival item-206 draws %v error %v", rng.draws, err)
+	}
+
+	// Death prevention via item-193 sets StatusDofuu so item-206 is skipped unless burn cures it.
+	s, op = runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 10, 100
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-193", "item-206"}
+	s.Actors[0].Gear.AccessoryID = "item-193"
+	s.Actors[1].HP = 1
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+	rng = &npcJobRNG{t: t, draws: []float64{.1}}
+	got, err = ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng)
+	wantConsumed := map[string][]battle.ConsumedItem{"self": {{ID: "item-193", Quantity: 1}}}
+	if err != nil || got.NormalAction || !reflect.DeepEqual(got.Consumed, wantConsumed) ||
+		len(got.Defeats) != 0 || s.Actors[0].HP != 50 || s.Actors[0].Status != battle.StatusDofuu || len(rng.draws) != 0 {
+		t.Fatalf("item-193 revival result %+v actor %+v draws %v error %v", got, s.Actors[0], rng.draws, err)
+	}
+
+	s, op = runNPCFixture(t)
+	s.Fields.Default = "burn"
+	s.Actors[0].HP, s.Actors[0].MaxHP = 10, 100
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-193", "item-206"}
+	s.Actors[0].Gear.AccessoryID = "item-193"
+	s.Actors[1].HP = 1
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+	rng = &npcJobRNG{t: t, draws: []float64{.1}}
+	if _, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng); !errors.Is(err, battle.ErrUnsupportedEffect) || len(rng.draws) != 1 {
+		t.Fatalf("item-193 under burn field draws %v error %v", rng.draws, err)
+	}
+
+	// High-MaxHP curse straddling [950, 1049] preflights both survivable and fatal continuations.
+	s, op = runNPCFixture(t)
+	s.Actors[0].HP, s.Actors[0].MaxHP = 1000, 20000
+	s.Actors[0].Status = battle.StatusKinju
+	s.Actors[0].ItemDefinitionIDs = []string{"item-206"}
+	s.Actors[1].HP = 1
+	s.Actors[1].Gear.WeaponID = "weapon-1"
+	rng = &npcJobRNG{t: t, draws: []float64{.1}}
+	if _, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, rng); !errors.Is(err, battle.ErrUnsupportedEffect) || len(rng.draws) != 1 {
+		t.Fatalf("high-MaxHP item-206 draws %v error %v", rng.draws, err)
+	}
+}
+
 func responseBinding(id string) battle.CallbackBinding {
 	return battle.CallbackBinding{CallbackEntry: battle.CallbackEntry{ID: id, Name: id}, Invocation: battle.CallbackInvocation{Kind: "entry", EntryID: id}}
 }

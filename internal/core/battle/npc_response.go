@@ -202,7 +202,7 @@ func (s *LifetimeState) validateNPCResponse(c *EquipmentTailContext, field *Name
 			}
 			return s.validateNPCIdleTails(c, field, tail, "", rng)
 		case StatusKinju:
-			if err := s.validateNPCPoison(c, rng); err != nil {
+			if err := s.validateNPCKinju(c, field, tail, rng); err != nil {
 				return err
 			}
 		case StatusSabaku:
@@ -251,6 +251,39 @@ func (s *LifetimeState) validateNPCNormalContinuation(c *EquipmentTailContext, f
 		}
 	}
 	return s.validateNPCIdleTails(c, field, tail, a.Status, rng)
+}
+
+func (s *LifetimeState) validateNPCKinju(c *EquipmentTailContext, field *NamedFieldContext, tail NamedFieldTail, rng random.Generator) error {
+	a := s.actor(c.ActorID)
+	minDamage, maxDamage := npcPoisonBounds(a)
+	for _, hp := range damageSurvivorHPs(a.HP, minDamage, maxDamage) {
+		p := s.callbackCopy()
+		p.actor(c.ActorID).HP = hp
+		p.actor(c.ActorID).Status = ""
+		if err := p.validateNPCIdleTails(c, field, tail, "", rng); err != nil {
+			return err
+		}
+	}
+	if a.HP <= maxDamage {
+		if c.Defeat == nil {
+			return ErrUnsupportedEffect
+		}
+		p := s.callbackCopy()
+		p.actor(c.ActorID).HP = 0
+		p.actor(c.ActorID).Status = ""
+		defeat := *c.Defeat
+		defeat.TargetContext = c.TargetContext
+		continuations, err := p.projectDefeatContinuation(&defeat, c.ActorID, rng, map[string]bool{}, true)
+		if err != nil {
+			return err
+		}
+		for _, next := range continuations {
+			if err := next.validateNPCIdleTails(c, field, tail, next.actor(c.ActorID).Status, rng); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Check tails on a known continuation. Each runtime owner rechecks the
