@@ -15,36 +15,19 @@ remain available, and `lib/_battle.cgi:1184–1220` permits escape with current
 vitality and earned stock.
 A wall hit invokes the selected map's wall event without consuming a round.
 
-| Symbol | Legacy behavior |
-|---|---|
-| `0` | Passage; the base event may spawn a monster with `rand(2) <= 1` |
-| `1` | Wall; additional impassable symbols come from the selected map's `@wall` |
-| `S` | Start tile |
-| `B` | Base boss event, guarded by its event flag |
-| `I` | Example hidden passage displayed as a wall (`map/0/1.cgi`, `map/1/1.cgi`) |
-| `2`, `3`, etc. | Map-owned events, such as one-time treasure triggers |
-| Other letters/numbers | Map-specific keys, doors, stairs, bosses, hazards, or routes |
-
-Each map supplies `$max_round` (examples range from 20 to 200); there is no
-universal 25–35-turn floor budget. At the limit, further movement is blocked
-and the legacy message requests escape/disbandment.
 The initial leader advance changes round 0 to 1 without moving or dispatching
 the start tile. Thus map0's limit of 20 permits 19 subsequent successful moves,
 not 20 moves after initialization (`vs_dungeon.cgi:57–103`).
 
-## Scouting, party traps, and treasure
+## Scouting and blocking chests
 
 Legacy `@ちず` defaults to radius 1. The acting character's job 9, 26, 27, or
 79 supplies radius 2; held item 197 adds one. The original checks the actor,
 not the presence of any qualifying party member. Visible tiles use the map's
 display definitions and out-of-bounds walls.
 
-`_trap_d` damages each party member by `int(base × (0.9 + rand(0.3)))`; each
-map supplies the base damage. It does not establish a universal 15%-MaxHP trap.
-
-Chests are living enemy-side members, so they block movement until every one is
-opened ([treasure contract](#treasure-inspection-and-delivery)). **Pitfall:** the
-`$event ne '宝'` exception in `_susumu` never frees them. Map0 `event_2` appends
+**Pitfall:** the `$event ne '宝'` exception in `_susumu` never frees unopened
+chests ([treasure contract](#treasure-inspection-and-delivery)). Map0 `event_2` appends
 `2` to the flags and never sets `$event` to `宝` (`map/0/1.cgi:16`). With chests
 present, `add_battle_action` registers only `しらべる`, so the dispatcher also
 rejects movement (`vs_dungeon.cgi:37–48,77–80`; `_battle.cgi:640`). Escape stays
@@ -78,18 +61,22 @@ script engine, legacy runtime or a second run store.
 
 ### Native schema and transition boundary
 
-The following are semantic requirements, not fixed Go types or SQL DDL. Add only
-the facts needed by the map being implemented; later maps extend this contract
-in their own units.
+Semantic requirements, not fixed Go types; each map adds only the facts it
+needs. Step atomicity, revision checks, pending encounters, Escape and
+settlement are owned by the [run buffer contract](../architecture/transient-run-state.md#candidate-d-in-progress-run-buffers).
 
-| Owner | Required facts and invariants |
-|---|---|
-| Map definition (`internal/dungeon`) | Stable native catalog/map identity, dimensions, start, round limit, cells and their map-owned event identities. Keep movement eligibility, visible appearance and event behavior separate: a displayed wall may be traversable, and `D` does not globally mean stairs. |
-| Live expedition (existing Valkey buffer) | Selected map identity, position, current round, existing run/revision/member/encounter facts, and typed event state. Distinguish one-time triggers, keys/doors, reversible switches, selected routes and counters; do not encode them as a legacy flag string. Shared cross-map events explicitly reuse a state identity rather than resetting on every map change. |
-| Accepted event transition | Save position, round, event state and resulting encounter/reward facts together through the existing revision-checked step contract. A rejected limit move changes none of them and consumes no encounter RNG. Reload and stale competing requests must not regenerate an accepted one-time event. |
-| Pending encounter | Distinguish hostile combat from unopened treasure for resolution; both block movement while living enemy-side members remain. Persist any accepted random choice needed to resume without redrawing it. |
-| Movement availability | Derive exhausted movement from current round and the selected map's limit, independently of terminal status. An exhausted expedition remains active, retaining vitality and stock; Escape and required combat/inspection continuations remain available. Only Escape ends a run: legacy never ends a quest because every ally fell (`_trap_d` sets HP to 0 without ending it), so an all-fallen party keeps its stock until it escapes. |
-| Terminal settlement | Reuse frozen outcomes and the SQL run-ID settlement claim. Exit parity beyond the movement-limit guard remains separately scoped below. |
+- **Map definition.** Keep movement eligibility, visible appearance and event
+  behavior separate: a displayed wall may be traversable, and `D` does not
+  globally mean stairs.
+- **Event state.** Typed per-map run state distinguishes one-time triggers,
+  keys/doors, reversible switches, selected routes and counters, never a legacy
+  flag string. Shared cross-floor events reuse one state identity. Accepted
+  random choices are saved with the step, so reload and stale requests never
+  redraw them.
+- **Exhaustion.** Derived from the round and the selected map's limit. A
+  rejected limit move changes nothing and draws no RNG; the run stays active
+  with Escape and required combat/inspection continuations. Legacy never ends a
+  quest because every ally fell (`_trap_d` sets HP to 0 without ending it).
 
 For map0, initialize the round to 1 as part of accepted start, representing the
 leader's initial advance through the existing Start use case. Do not add a new
@@ -190,17 +177,13 @@ and narration, owned by the Dungeon log ([#948](https://github.com/witchcraze/pa
 
 ### Map0 implementation
 
-Native map0 transcribes the six initial layouts. Variant 3 has two hidden
-passages (`map/0/3.cgi:6–8`), and variants 5 and 6 have none
-(`map/0/5.cgi:5–11`, `map/0/6.cgi:5–11`).
-
 The three placeholder regular enemies remain until the stage 0/1 pools are
 restored with groups ([#1954](https://github.com/witchcraze/party2re/issues/1954)).
 
 ### Map3 implementation
 
-Native map3 transcribes the eight initial layouts. Variants 5–8 define
-`event_I` at line 21, but their grids have no hidden passage cell.
+Variants 5–8 define `event_I` at line 21, but their grids have no hidden
+passage cell.
 
 Some warp destinations are themselves event cells. Variant 5's `C` and `E`
 target their own cells (`map/3/5.cgi:23–25`). Variant 1's `F` lands on the
@@ -211,8 +194,7 @@ Chest contents come from stages 5–8 ([#2374](https://github.com/witchcraze/par
 
 ### Map1 implementation
 
-Native map1 transcribes the seven 9×9 initial variants (`map/1/1.cgi`–`7.cgi`)
-with round limit 50. Non-obvious findings:
+Non-obvious findings:
 
 - **Locked-door reversal is not always horizontal.** Legacy `event_D` undoes the
   entry with `++$px` in variants 1, 2 and 5 but `--$py` in 3, 4, 6 and 7. Every
@@ -226,7 +208,7 @@ with round limit 50. Non-obvious findings:
 
 ### Map2 implementation
 
-Native map2 transcribes all eleven floors of `map/2/`. Non-obvious findings:
+Non-obvious findings:
 
 - **Pitfalls can exceed the limit.** A floor-2 or floor-3 pitfall drops to a floor
   with a lower limit. A run past round 30 or 40 lands with its round above the new
@@ -241,7 +223,6 @@ Native map2 transcribes all eleven floors of `map/2/`. Non-obvious findings:
 
 ### Map4 attrition maze
 
-Native map4 transcribes the seven layouts of `map/4/` with their legacy symbols.
 Non-obvious findings:
 
 - **Only the mover pays.** `event_0` replaces the base spawn with an HP charge on
@@ -270,8 +251,7 @@ Narration also owns the repeated-lever lines, the only `L` draws.
 
 ### Map6 choice corridor
 
-Native map6 transcribes the five layouts of `map/6/`. It stays unlisted and
-start-rejected until its gold outcomes land ([#2417](https://github.com/witchcraze/party2re/issues/2417)).
+Map6 stays unlisted and start-rejected until its gold outcomes land ([#2417](https://github.com/witchcraze/party2re/issues/2417)).
 
 **Finding.** Gold pickup and loss change the mover's own wallet at once, outside
 run stock, and `write_user` caps it at 999999 (`system.cgi:71`). The intended
@@ -352,8 +332,10 @@ the legacy revision above.
 - **Secret-room treasures show before they open.** Their gate counts `j`/`k`
   visits, including a box fight, so it is at most 2. `M` shows at 1 but opens at 2,
   and `Q`/`O` show at 2 but need 3 and 4 (`__1.cgi:32–55`).
-- **The `w` boss starts at half HP.** It presets max HP 12000 over HP 6000, so
-  party scaling changes only HP (`1.cgi:179–200`, `lib/_npc_action.cgi:600–611`).
+- **The `w` boss starts below full HP.** Its preset max HP 12000 stays
+  unscaled, because `add_boss` fills a maximum only when it is missing; HP is
+  scaled from 6000 like the other stats (`1.cgi:179–200`,
+  `lib/_npc_action.cgi:600–614`).
 - **Rest MP uses `_item_mp_heals`,** not map15's `_mp_hs`: living members only,
   without field or status processing (`_1.cgi:49`, `__1.cgi:56`,
   `lib/_skill.cgi:10570–10586`).
