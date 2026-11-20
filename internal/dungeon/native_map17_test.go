@@ -23,8 +23,7 @@ func map17Hero(id string) corecharacter.Character {
 
 func newMap17Fixture(t *testing.T, store dungeon.ActiveExpeditionStore, id string) *nativeFixture {
 	t.Helper()
-	catalog := append(dungeon.DefaultDungeonCatalog(), dungeon.NativeMap17())
-	f := newNativeFixtureOn(t, store, map17Hero(id), dungeon.WithCustomDungeons(catalog))
+	f := newNativeFixtureOn(t, store, map17Hero(id))
 	if _, err := f.svc.StartExpedition(context.Background(), id, dungeon.NativeMap17ID); err != nil {
 		t.Fatal(err)
 	}
@@ -58,15 +57,21 @@ func map17StateOf(t *testing.T, exp dungeon.ActiveExpedition) (st struct {
 	return st
 }
 
-func TestNativeMap17_UnlistedWithFloorLimits(t *testing.T) {
-	f := newNativeFixture(t, map17Hero("lead"))
-	if slices.ContainsFunc(f.svc.ListDungeons(99), func(d dungeon.Dungeon) bool { return d.ID == dungeon.NativeMap17ID }) {
-		t.Fatal("map17 listed before the secret room lands")
+// Map17 is listed for leader job level 40.
+func TestNativeMap17_CatalogAndFloorLimits(t *testing.T) {
+	hero := map17Hero("lead")
+	hero.JobLevel = 39
+	f := newNativeFixture(t, hero)
+	for _, level := range []int{39, 40} {
+		listed := slices.ContainsFunc(f.svc.ListDungeons(level), func(d dungeon.Dungeon) bool { return d.ID == dungeon.NativeMap17ID })
+		if listed != (level == 40) {
+			t.Fatalf("job level %d: listed=%t", level, listed)
+		}
 	}
-	if _, err := f.svc.StartExpedition(context.Background(), "lead", dungeon.NativeMap17ID); !errors.Is(err, dungeon.ErrDungeonNotFound) {
-		t.Fatalf("start: %v", err)
+	if _, err := f.svc.StartExpedition(context.Background(), "lead", dungeon.NativeMap17ID); !errors.Is(err, dungeon.ErrJobLevelRequired) {
+		t.Fatalf("start at job level 39: %v", err)
 	}
-	d := dungeon.NativeMap17()
+	d := mapDef(t, dungeon.NativeMap17ID)
 	if d.RoundLimit != 200 || d.LeaderJobLevel != 40 || d.Initial != 1 || len(d.Variants) != 5 {
 		t.Fatalf("map17 %+v", d)
 	}
@@ -338,8 +343,7 @@ func TestNativeMap17_Observation(t *testing.T) {
 // n (9,11) above (9,12), key Y (9,10).
 func newMap17Party(t *testing.T) *nativeFixture {
 	t.Helper()
-	catalog := append(dungeon.DefaultDungeonCatalog(), dungeon.NativeMap17())
-	f := newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), map17Hero("lead"), dungeon.WithCustomDungeons(catalog))
+	f := newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), map17Hero("lead"))
 	f.chars.chars["ally"] = map17Hero("ally")
 	f.startNativeParty(t, dungeon.NativeMap17ID, 1, 11, 16)
 	return f
@@ -546,5 +550,113 @@ func TestNativeMap17_UndergroundMarks(t *testing.T) {
 	f.setFloor(t, "marks", 2, 9, 12)
 	if view, err = f.svc.ObserveExpedition(context.Background(), "marks"); err != nil || view.Map.Tiles[0][1] != "☆" {
 		t.Fatalf("n %v err=%v", view.Map.Tiles, err)
+	}
+}
+
+// Hidden stairs 2 lead to the closet on every entry; its U returns to (9,14)
+// and its rest N heals once.
+func TestNativeMap17_HiddenStairs(t *testing.T) {
+	ctx := context.Background()
+	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "two")
+	for range 2 {
+		f.moveTo(t, "two", 9, 13)
+		if _, err := f.svc.Move(ctx, "two", dungeon.DirectionSouth); err != nil {
+			t.Fatal(err)
+		}
+		if exp := f.reload(t, "two"); exp.MapVariant != 5 || exp.PosX != 9 || exp.PosY != 14 || exp.RoundLimit != 200 {
+			t.Fatalf("2: variant %d at (%d,%d)", exp.MapVariant, exp.PosX, exp.PosY)
+		}
+		for _, dir := range []dungeon.Direction{dungeon.DirectionSouth, dungeon.DirectionSouth, dungeon.DirectionNorth, dungeon.DirectionNorth} {
+			if _, err := f.svc.Move(ctx, "two", dir); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if exp := f.reload(t, "two"); exp.MapVariant != 1 || exp.PosX != 9 || exp.PosY != 14 || !slices.Contains(exp.ConsumedEvents, "N") {
+			t.Fatalf("closet U: variant %d at (%d,%d) consumed %v", exp.MapVariant, exp.PosX, exp.PosY, exp.ConsumedEvents)
+		}
+	}
+}
+
+func TestNativeMap17_Ascent(t *testing.T) {
+	testMap14Stores(t, ascent)
+}
+
+// Z fights once; w does nothing before it, then saves its boss and the move
+// to the secret room in one step. The boss keeps max HP 12000 over HP 6000.
+func ascent(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
+	ctx := context.Background()
+	f := newMap17Fixture(t, store, id)
+	f.moveTo(t, id, 10, 9)
+	if _, err := f.svc.Move(ctx, id, dungeon.DirectionWest); err != nil {
+		t.Fatal(err)
+	}
+	if exp := f.reload(t, id); exp.MapVariant != 1 || exp.Encounter != nil {
+		t.Fatalf("w before Z: variant %d encounter %+v", exp.MapVariant, exp.Encounter)
+	}
+	f.moveTo(t, id, 9, 11)
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventBoss {
+		t.Fatalf("Z: event %s err=%v", res.EventType, err)
+	}
+	if exp := f.reload(t, id); exp.Encounter.Monster.ID != "nm17-pharaoh" || !slices.Contains(exp.ConsumedEvents, "Z") {
+		t.Fatalf("Z encounter %+v consumed %v", exp.Encounter, exp.ConsumedEvents)
+	}
+	f.consume(t, id)
+	f.moveTo(t, id, 10, 9)
+	if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Map.Tiles[1][0] != "凸" {
+		t.Fatalf("w after Z shows %v err=%v", view.Map.Tiles, err)
+	}
+	before := f.reload(t, id)
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventBoss {
+		t.Fatalf("w: event %s err=%v", res.EventType, err)
+	}
+	after := f.reload(t, id)
+	enc := after.Encounter
+	if after.MapVariant != 5 || after.PosX != 9 || after.PosY != 9 || after.RoundLimit != 200 || enc == nil || enc.Monster.ID != "nm17-necro-pharaoh" ||
+		enc.Enemies[0].MaxHP != 12000 || enc.Enemies[0].HP > 6000 {
+		t.Fatalf("w: variant %d at (%d,%d) encounter %+v", after.MapVariant, after.PosX, after.PosY, enc)
+	}
+	f.rejectStaleMap14Step(t, id, before, after)
+}
+
+// Secret-room treasures by visited j/k: L opens at 1; M shows at 1 but opens
+// at 2; Q and O show at 2 and never open. D holds fixed chests.
+func TestNativeMap17_VaultThresholds(t *testing.T) {
+	ctx := context.Background()
+	cells := []struct {
+		name     byte
+		from     [2]int
+		dir      dungeon.Direction
+		open     int
+		viewFrom [2]int
+		row, col int
+	}{
+		{'L', [2]int{9, 9}, dungeon.DirectionWest, 1, [2]int{9, 9}, 1, 0},
+		{'M', [2]int{10, 10}, dungeon.DirectionEast, 2, [2]int{10, 10}, 1, 2},
+		{'Q', [2]int{9, 10}, dungeon.DirectionSouth, 3, [2]int{10, 10}, 2, 0},
+		{'O', [2]int{10, 9}, dungeon.DirectionNorth, 4, [2]int{9, 9}, 0, 2},
+	}
+	shows := map[byte]int{'L': 1, 'M': 1, 'Q': 2, 'O': 2}
+	for visits, keys := range [][]string{nil, {"j"}, {"j", "k"}} {
+		for _, c := range cells {
+			f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "vault")
+			f.consume(t, "vault", keys...)
+			f.setFloor(t, "vault", 5, c.viewFrom[0], c.viewFrom[1])
+			view, err := f.svc.ObserveExpedition(ctx, "vault")
+			if err != nil || (view.Map.Tiles[c.row][c.col] == "宝") != (visits >= shows[c.name]) {
+				t.Fatalf("%c at %d visits shows %q err=%v", c.name, visits, view.Map.Tiles[c.row][c.col], err)
+			}
+			f.moveTo(t, "vault", c.from[0], c.from[1])
+			res, err := f.svc.Move(ctx, "vault", c.dir)
+			opened := err == nil && res.EventType == dungeon.EventTreasure
+			spent := slices.Contains(f.reload(t, "vault").ConsumedEvents, string(c.name))
+			if err != nil || opened != (visits >= c.open) || spent != opened {
+				t.Fatalf("%c at %d visits: event %s spent %t err=%v", c.name, visits, res.EventType, spent, err)
+			}
+		}
+	}
+	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "vault")
+	f.setFloor(t, "vault", 5, 9, 8)
+	if res, err := f.svc.Move(ctx, "vault", dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventTreasure || len(f.reload(t, "vault").Encounter.Chests) != 1 {
+		t.Fatalf("D: event %s err=%v", res.EventType, err)
 	}
 }

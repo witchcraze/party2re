@@ -327,10 +327,3 @@ the legacy revision above.
   `v` corridor and the outer `9` cells are never entered. `R` never cuts the
   band: each band `9` has a parallel lane. Switches `3`–`5`, `A`/`a`/`C` and
   `P` have no cell.
-- **Secret-room treasures show before they open.** Their gate counts `j`/`k`
-  visits, including a box fight, so it is at most 2. `M` shows at 1 but opens at 2,
-  and `Q`/`O` show at 2 but need 3 and 4 (`__1.cgi:32–55`).
-- **The `w` boss starts below full HP.** Its preset max HP 12000 stays
-  unscaled, because `add_boss` fills a maximum only when it is missing; HP is
-  scaled from 6000 like the other stats (`1.cgi:179–200`,
-  `lib/_npc_action.cgi:600–614`).

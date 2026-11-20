@@ -36,7 +36,7 @@ func (m DungeonMonster) participant() corebattle.Participant {
 	p := corebattle.MustNewParticipant(m.ID, m.HP, m.Attack, m.Defense)
 	p.Name, p.Agility, p.TeamID = m.Name, m.Agility, "enemies"
 	if a := m.combat; a != nil {
-		p.MaxHP = m.HP
+		p.MaxHP = max(m.HP, a.MaxHP) // a preset maximum survives scaling (map17 w boss)
 		p.MP, p.MaxMP = a.MP, a.MaxMP
 		p.CMP, p.MaxCMP = a.CMP, a.MaxCMP
 		p.Status = a.Status

@@ -141,7 +141,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader,
 	}
 	if battle := n.battle; battle != nil {
 		revived = preCombatDamage(exp, n.step, revived)
-		return s.resolveMonsterCombat(ctx, exp, leader, battle.monster, battle.kind, x, y, battle.key, battle.status, revived, n.step.MapState)
+		return s.resolveMonsterCombat(ctx, exp, leader, battle.monster, battle.kind, x, y, battle.key, battle.status, revived, n.step)
 	}
 
 	var damages map[string]int
