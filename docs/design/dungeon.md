@@ -183,7 +183,8 @@ accuracy, job skills and temporary effects in explicit combat
 ([#1865](https://github.com/witchcraze/party2re/issues/1865)), defeat rewards and
 crystals ([#1957](https://github.com/witchcraze/party2re/issues/1957)), chest
 contents and inspection ([treasure contract](#treasure-inspection-and-delivery);
-per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428))
+per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428),
+map15 [#2451](https://github.com/witchcraze/party2re/issues/2451))
 and narration, owned by the Dungeon log ([#948](https://github.com/witchcraze/party2re/issues/948)).
 
 ### Map0 implementation

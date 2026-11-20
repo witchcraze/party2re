@@ -138,7 +138,7 @@ func (ev fortressBoss) apply(n *nativeStep) error {
 
 // fixedTreasureEvent is add_fixed_treasure: one chest per allied player,
 // fallen included, with no job-78 bonus (_npc_action.cgi:555–598).
-// shortcut: chests hold no contents until #2119; this one's is @fixed_treasures (item 265).
+// shortcut: chests hold no contents until #2451 binds map15's sources (here item 265).
 type fixedTreasureEvent struct{}
 
 func (fixedTreasureEvent) apply(n *nativeStep) error {
@@ -356,7 +356,7 @@ func nativeMap15() Dungeon {
 			Marks: map[byte]string{'D': "◎", 'E': "◎", 'F': "◎", 'a': "宝", 'd': "■", '3': "凸"},
 			events: map[byte]mapEvent{'D': {action: nm15NorthPool, perSymbol: true}, 'E': {action: nm15NorthPool, perSymbol: true}, 'F': {action: nm15NorthPool, perSymbol: true},
 				'a': {action: treasure, perSymbol: true}, 'd': {action: gateEvent{open: '5'}}}},
-		// shortcut: chests hold no contents until #2119; _2's own pool (_2.cgi:59–65) binds then.
+		// shortcut: chests hold no contents until #2451 binds map15's sources, _2's own pool included.
 		// _2 and __1 share the z flag safely: the branches never meet.
 		{Pools: pool, RoundLimit: 50,
 			Marks: map[byte]string{'J': "◎", 'K': "◎", 'Y': "◎", 'z': "宝", 'j': "宝", 'k': "宝", 'd': "■"},
