@@ -16965,7 +16965,8 @@
             "type": "string",
             "enum": [
               "exploring",
-              "escaped"
+              "escaped",
+              "wiped_out"
             ]
           },
           "map": {

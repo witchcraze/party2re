@@ -27,6 +27,7 @@ func TestDungeonOutcomePresentation(t *testing.T) {
 		{"treasure", dungeon.EventTreasure, "", nil, ""},
 		{"escape", dungeon.EventEscape, "", nil, "探索を中断し、戦利品を持って無事に脱出した！"},
 		{"resumed escape", dungeon.EventEscape, "", nil, "探索を中断し、戦利品を持って無事に脱出した！"},
+		{"wipeout", dungeon.EventWipeout, "", nil, "探索に失敗した…"},
 		{"victory", dungeon.EventBattle, corebattle.OutcomeWin, monster, "Slime との戦闘に勝利した！ (EXP: +20, G: +30)"},
 		{"boss victory", dungeon.EventBoss, corebattle.OutcomeWin, monster, "Slime との戦闘に勝利した！ (EXP: +20, G: +30)"},
 		{"defeat", dungeon.EventBattle, corebattle.OutcomeDefeat, monster, "Slime との戦いに敗れ、全滅してしまった…"},

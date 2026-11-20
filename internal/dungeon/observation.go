@@ -19,7 +19,7 @@ func (exp ActiveExpedition) Controls(actor string) ContinuationControls {
 	switch exp.Status {
 	case StatusExploring:
 		return ContinuationControls{CanMove: canMove, CanFight: exp.Encounter.hostile() && exp.anyAlive(), CanEscape: true}
-	case StatusEscaped:
+	case StatusEscaped, StatusWipedOut:
 		// Both operations retry the frozen outcome without fighting or changing it.
 		return ContinuationControls{CanFight: true, CanEscape: true}
 	default:

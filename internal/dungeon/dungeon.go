@@ -34,6 +34,8 @@ type ExpeditionStatus string
 const (
 	StatusExploring ExpeditionStatus = "exploring"
 	StatusEscaped   ExpeditionStatus = "escaped"
+	// StatusWipedOut is retained only to settle carried-over pre-update frozen buffers.
+	StatusWipedOut ExpeditionStatus = "wiped_out"
 )
 
 type TileEventType string
@@ -44,6 +46,8 @@ const (
 	EventTreasure TileEventType = "treasure"
 	EventBoss     TileEventType = "boss"
 	EventEscape   TileEventType = "escape"
+	// EventWipeout reports resumed settlement of a carried-over wiped_out buffer.
+	EventWipeout TileEventType = "wipeout"
 )
 
 type Direction string

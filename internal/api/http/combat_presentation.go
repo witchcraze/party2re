@@ -38,6 +38,8 @@ func toDungeonStepResult(result dungeon.ExpeditionStepResult) dungeonStepResultR
 		case corebattle.OutcomeDraw:
 			response.Message = fmt.Sprintf("%s との戦いは時間切れで決着がつかなかった… (引き分け)", m.Name)
 		}
+	case result.EventType == dungeon.EventWipeout:
+		response.Message = "探索に失敗した…"
 	}
 	return response
 }
