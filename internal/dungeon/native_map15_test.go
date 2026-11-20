@@ -32,8 +32,7 @@ func map15Hero(id string) corecharacter.Character {
 
 func newMap15Fixture(t *testing.T, store dungeon.ActiveExpeditionStore, id string) *nativeFixture {
 	t.Helper()
-	catalog := append(dungeon.DefaultDungeonCatalog(), dungeon.NativeMap15())
-	f := newNativeFixtureOn(t, store, map15Hero(id), dungeon.WithCustomDungeons(catalog))
+	f := newNativeFixtureOn(t, store, map15Hero(id))
 	if _, err := f.svc.StartExpedition(context.Background(), id, dungeon.NativeMap15ID); err != nil {
 		t.Fatal(err)
 	}
@@ -41,18 +40,30 @@ func newMap15Fixture(t *testing.T, store dungeon.ActiveExpeditionStore, id strin
 	return f
 }
 
-// Map15 stays unlisted and start-rejected until its south branch lands (#2443).
-func TestNativeMap15_UnlistedWithFloorLimits(t *testing.T) {
-	for _, d := range dungeon.DefaultDungeonCatalog() {
-		if d.ID == dungeon.NativeMap15ID {
-			t.Fatal("map15 listed before its branches")
+// Map15 is listed for leader job level 50; joiners are not gated.
+func TestNativeMap15_CatalogAndFloorLimits(t *testing.T) {
+	ctx := context.Background()
+	hero := map15Hero("lead")
+	hero.JobLevel = 49
+	f := newNativeFixture(t, hero)
+	for _, level := range []int{49, 50} {
+		listed := slices.ContainsFunc(f.svc.ListDungeons(level), func(d dungeon.Dungeon) bool { return d.ID == dungeon.NativeMap15ID })
+		if listed != (level == 50) {
+			t.Fatalf("job level %d: listed=%t", level, listed)
 		}
 	}
-	f := newNativeFixture(t, map15Hero("unlisted"))
-	if _, err := f.svc.StartExpedition(context.Background(), "unlisted", dungeon.NativeMap15ID); !errors.Is(err, dungeon.ErrDungeonNotFound) {
-		t.Fatalf("start err=%v", err)
+	if _, err := f.svc.StartExpedition(ctx, hero.ID, dungeon.NativeMap15ID); !errors.Is(err, dungeon.ErrJobLevelRequired) {
+		t.Fatalf("start at job level 49: %v", err)
 	}
-	d := dungeon.NativeMap15()
+	ally := map15Hero("ally")
+	ally.JobLevel = 1
+	f.chars.chars[ally.ID] = ally
+	hero.JobLevel = 50
+	f.chars.chars[hero.ID] = hero
+	if _, err := f.svc.StartPartyExpedition(ctx, hero.ID, []string{hero.ID, ally.ID}, dungeon.NativeMap15ID, "p"); err != nil {
+		t.Fatalf("party start with a level-1 joiner: %v", err)
+	}
+	d := mapDef(t, dungeon.NativeMap15ID)
 	if d.RoundLimit != 30 || d.LeaderJobLevel != 50 || d.Initial != 1 || len(d.Variants) != 4 {
 		t.Fatalf("map15 %+v", d)
 	}
@@ -117,9 +128,9 @@ func exclusivePool(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 		after := f.reload(t, id)
 		drawn += tc.outcome
 		var st struct {
-			Drawn string `json:"drawn"`
+			Flags string `json:"flags"`
 		}
-		if err := json.Unmarshal(after.MapState, &st); err != nil || st.Drawn != drawn {
+		if err := json.Unmarshal(after.MapState, &st); err != nil || st.Flags != drawn {
 			t.Fatalf("%c: map state %s err=%v", tc.trigger, after.MapState, err)
 		}
 		if enc := after.Encounter; enc == nil || enc.Monster.ID != tc.monster || !slices.Contains(after.ConsumedEvents, string(tc.trigger)) {
@@ -143,7 +154,7 @@ func exclusivePool(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 		t.Fatalf("A after use %q", got[1])
 	}
 	raw, err := json.Marshal(f.reload(t, id))
-	if err != nil || strings.Contains(string(raw), "drawn") {
+	if err != nil || strings.Contains(string(raw), "flags") {
 		t.Fatalf("projection leaks map state %s err=%v", raw, err)
 	}
 }
@@ -185,7 +196,7 @@ func TestNativeMap15_Stairs(t *testing.T) {
 
 // Map15 enemies carry their legacy battle fields (__data.cgi:91–109).
 func TestNativeMap15_EnemyFields(t *testing.T) {
-	m := dungeon.NativeMap15().Variants[0].Pools[0].Monsters[1]
+	m := mapDef(t, dungeon.NativeMap15ID).Variants[0].Pools[0].Monsters[1]
 	a := m.EnemyCombatForTest()
 	if m.ID != "nm15-roughneck" || a.Temporary != "null_magic" || !slices.Equal(a.ItemDefinitionIDs, []string{"item-147"}) || a.Jobs.OldJobID != "job-50" {
 		t.Fatalf("roughneck %+v %+v", m, a)
@@ -266,9 +277,9 @@ func northPool(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 		after := f.reload(t, id)
 		drawn += tc.outcome
 		var st struct {
-			Drawn string `json:"drawn"`
+			Flags string `json:"flags"`
 		}
-		if err := json.Unmarshal(after.MapState, &st); err != nil || st.Drawn != drawn || !slices.Contains(after.ConsumedEvents, string(tc.trigger)) {
+		if err := json.Unmarshal(after.MapState, &st); err != nil || st.Flags != drawn || !slices.Contains(after.ConsumedEvents, string(tc.trigger)) {
 			t.Fatalf("%c: state %s flags %v err=%v", tc.trigger, after.MapState, after.ConsumedEvents, err)
 		}
 		if tc.monster == "" {
@@ -354,8 +365,7 @@ func TestNativeMap15_FixedTreasureCountsFallen(t *testing.T) {
 	ctx := context.Background()
 	lead := map15Hero("lead")
 	lead.JobID = "job-78"
-	catalog := append(dungeon.DefaultDungeonCatalog(), dungeon.NativeMap15())
-	f := newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), lead, dungeon.WithCustomDungeons(catalog))
+	f := newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), lead)
 	f.chars.chars["ally"] = map15Hero("ally")
 	f.startNativeParty(t, dungeon.NativeMap15ID, 1, 2, 6)
 	f.setFloor(t, "lead", 4, 2, 2)
@@ -373,8 +383,7 @@ func TestNativeMap15_FixedTreasureCountsFallen(t *testing.T) {
 func TestNativeMap15_ClosedWallStillRunsPreMoveReset(t *testing.T) {
 	ctx := context.Background()
 	chars := map[string]corecharacter.Character{"lead": map15Hero("lead"), "mover": map15Hero("mover")}
-	catalog := append(dungeon.DefaultDungeonCatalog(), dungeon.NativeMap15())
-	f := newItem188PartyFixture(t, dungeon.NewMemoryExpeditionRepository(), chars, []string{"mover"}, dungeon.WithCustomDungeons(catalog))
+	f := newItem188PartyFixture(t, dungeon.NewMemoryExpeditionRepository(), chars, []string{"mover"})
 	startItem188PartyAt(t, f, dungeon.NativeMap15ID, 1, 2, 6, 5, []string{"lead", "mover"}, []string{"lead"})
 	f.setFloor(t, "lead", 2, 0, 4)
 	before := f.reload(t, "lead")
@@ -385,5 +394,124 @@ func TestNativeMap15_ClosedWallStillRunsPreMoveReset(t *testing.T) {
 	after := f.reload(t, "lead")
 	if after.PosX != 0 || after.PosY != 4 || after.Round != before.Round || memberOf(t, after, "lead").CurrentHP <= 0 {
 		t.Fatalf("closed wall: (%d,%d) round %d/%d, lead HP %d", after.PosX, after.PosY, after.Round, before.Round, memberOf(t, after, "lead").CurrentHP)
+	}
+}
+
+// _2 (map/15/_2.cgi): z (2,1), Y (2,3), walls d (1,4), (3,4), treasures j (1,5),
+// k (3,5), bosses J (1,7), K (3,7), landing (2,8):
+//
+//	11111
+//	11z11
+//	11011
+//	10Y01
+//	1d1d1
+//	1j1k1
+//	10101
+//	1J1K1
+//	10001
+func TestNativeMap15_SouthBranch(t *testing.T) {
+	testMap14Stores(t, southBranch)
+}
+
+func southBranch(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
+	ctx := context.Background()
+	f := newMap15Fixture(t, store, id)
+	flags := func(exp dungeon.ActiveExpedition) string {
+		t.Helper()
+		var st struct {
+			Flags string `json:"flags"`
+			Field string `json:"field"`
+		}
+		if err := json.Unmarshal(exp.MapState, &st); err != nil {
+			t.Fatal(err)
+		}
+		return st.Flags + "/" + st.Field
+	}
+	clear := func(exp dungeon.ActiveExpedition) {
+		t.Helper()
+		exp.Encounter = nil
+		if err := store.SaveActiveExpedition(ctx, exp); err != nil {
+			t.Fatal(err)
+		}
+		f.setVitality(t, id, id, 1_000_000, 900)
+	}
+	step := func(dir dungeon.Direction, floats []float64, want dungeon.TileEventType) dungeon.ActiveExpedition {
+		t.Helper()
+		f.rng.floats, f.rng.intCalls, f.rng.floatCalls = floats, 0, 0
+		if res, err := f.svc.Move(ctx, id, dir); err != nil || res.EventType != want {
+			t.Fatalf("event %s want %s err=%v", res.EventType, want, err)
+		}
+		return f.reload(t, id)
+	}
+	f.walkMap14(t, id, "SSW") // Start → stairs 4 → _2 (1,8)
+	before := f.reload(t, id)
+	if before.MapVariant != 3 || before.RoundLimit != 50 {
+		t.Fatalf("not on _2: %+v", before)
+	}
+	// J first: kill k (0.5), walls stay shut (0.5), group 2 (0.49, 0.5).
+	j := step(dungeon.DirectionNorth, []float64{0.5, 0.5, 0.49, 0.5}, dungeon.EventBoss)
+	if flags(j) != "k/" || j.Encounter.Monster.ID != "nm15-blaze-2" {
+		t.Fatalf("J: flags %s encounter %+v", flags(j), j.Encounter)
+	}
+	f.rejectStaleMap14Step(t, id, before, j)
+	clear(j)
+	step(dungeon.DirectionNorth, nil, dungeon.EventMove)
+	clear(step(dungeon.DirectionNorth, nil, dungeon.EventTreasure)) // live j
+	if wall := step(dungeon.DirectionNorth, nil, dungeon.EventMove); wall.PosY != 5 || wall.Round != j.Round+2 {
+		t.Fatalf("closed wall let the party through: %+v", wall)
+	}
+	f.setFloor(t, id, 3, 3, 6)
+	view, err := f.svc.ObserveExpedition(ctx, id)
+	if err != nil || view.Map.Tiles[0][1] != "□" || view.Map.Tiles[2][1] != "◎" {
+		t.Fatalf("killed k / unused K view %+v err=%v", view.Map, err)
+	}
+	// K second: no kill draw, walls open without a draw, group 4 (0.5, 0.5).
+	f.setFloor(t, id, 3, 3, 8)
+	k := step(dungeon.DirectionNorth, []float64{0.5, 0.5}, dungeon.EventBoss)
+	if flags(k) != "k9/" || k.Encounter.Monster.ID != "nm15-sky-slaughter-2" {
+		t.Fatalf("K: flags %s encounter %+v", flags(k), k.Encounter)
+	}
+	clear(k)
+	step(dungeon.DirectionNorth, nil, dungeon.EventMove)
+	if dead := step(dungeon.DirectionNorth, nil, dungeon.EventMove); dead.Encounter != nil || dead.PosY != 5 {
+		t.Fatalf("killed k fired: %+v", dead)
+	}
+	if open := step(dungeon.DirectionNorth, nil, dungeon.EventMove); open.PosY != 4 {
+		t.Fatalf("open wall blocked: %+v", open)
+	}
+	step(dungeon.DirectionNorth, nil, dungeon.EventMove)
+	y := step(dungeon.DirectionWest, nil, dungeon.EventBoss)
+	if flags(y) != "k9/fortress" || y.Encounter.Monster.ID != "nm15-devil-panzer" {
+		t.Fatalf("Y: flags %s encounter %+v", flags(y), y.Encounter)
+	}
+	clear(y)
+	step(dungeon.DirectionNorth, nil, dungeon.EventMove)
+	step(dungeon.DirectionNorth, nil, dungeon.EventTreasure) // z
+}
+
+// The first boss event's draws: which treasure dies, whether the walls open,
+// and the group, in legacy order.
+func TestNativeMap15_FirstCrossBossDraws(t *testing.T) {
+	for _, tc := range []struct {
+		floats  []float64
+		flags   string
+		monster string
+	}{
+		{[]float64{0.49, 0.49, 0.49, 0.49}, "j9", "nm15-grand-hazard-2"},
+		{[]float64{0.5, 0.5, 0.5, 0.49}, "k", "nm15-cyber-armor"},
+	} {
+		f := newMap15Fixture(t, dungeon.NewMemoryExpeditionRepository(), "cross")
+		f.setFloor(t, "cross", 3, 3, 8)
+		f.rng.floats = tc.floats
+		if res, err := f.svc.Move(context.Background(), "cross", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventBoss {
+			t.Fatalf("event %s err=%v", res.EventType, err)
+		}
+		exp := f.reload(t, "cross")
+		var st struct {
+			Flags string `json:"flags"`
+		}
+		if err := json.Unmarshal(exp.MapState, &st); err != nil || st.Flags != tc.flags || exp.Encounter.Monster.ID != tc.monster {
+			t.Fatalf("draws %v: flags %q encounter %+v err=%v", tc.floats, st.Flags, exp.Encounter, err)
+		}
 	}
 }

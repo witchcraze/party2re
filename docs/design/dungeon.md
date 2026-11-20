@@ -183,7 +183,8 @@ accuracy, job skills and temporary effects in explicit combat
 ([#1865](https://github.com/witchcraze/party2re/issues/1865)), defeat rewards and
 crystals ([#1957](https://github.com/witchcraze/party2re/issues/1957)), chest
 contents and inspection ([treasure contract](#treasure-inspection-and-delivery);
-per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428))
+per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428),
+map15 [#2451](https://github.com/witchcraze/party2re/issues/2451))
 and narration, owned by the Dungeon log ([#948](https://github.com/witchcraze/party2re/issues/948)).
 
 ### Map0 implementation
@@ -322,13 +323,6 @@ Decision [#1776](https://github.com/witchcraze/party2re/issues/1776): reproduce 
 original without departures. File references are relative to `party2/map/15/` at
 the legacy revision above.
 
-- **The branches never meet.** `2` leads to `_1` and then `__1`, `4` leads to `_2`,
-  and no floor returns. The shared flag string therefore never collides,
-  although `_2` and `__1` both use `z`.
-- **`_2`'s first boss kills a treasure.** The first of `J`/`K` pre-sets the once
-  flag of `j` or `k` (1/2 each), as on map14's ship, so exactly one stays live.
-  The walls open with 1/2 at the first, and always at the second, because the
-  event's own flag is appended before the check (`_2.cgi:28–29,43–57`).
 - **The final bosses install `fortress` as the run's default field** before the
   group spawns. It applies to every later battle without a temporary field
   (`__1.cgi:28`, `_2.cgi:30`, `_battle.cgi:1568–1610,1786–1791`). Native records

@@ -3,6 +3,7 @@ package dungeon
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -19,13 +20,15 @@ var nativeMap15Floors = [4][]string{
 	{"11111", "1wzv1", "11X11", "10001", "10G01", "10001", "11011", "11111", "11111"},
 }
 
-// map15State records the pool outcomes already drawn on any floor and the
-// run's default field.
+// map15State keeps the legacy digit flags (pool outcomes 2–7, open walls 9),
+// the treasure _2 killed, and the run's default field.
 type map15State struct {
-	Drawn string `json:"drawn,omitempty"`
+	Flags string `json:"flags,omitempty"`
 	// shortcut: the batch resolver has no named fields; explicit combat (#1865) applies it.
 	Field string `json:"field,omitempty"`
 }
+
+func (st map15State) has(flag byte) bool { return strings.IndexByte(st.Flags, flag) >= 0 }
 
 func decodeMap15(raw json.RawMessage) (map15State, error) {
 	var st map15State
@@ -63,7 +66,7 @@ func (ev exclusiveEvent) apply(n *nativeStep) error {
 	}
 	var left []byte
 	for i := range len(ev.order) {
-		if strings.IndexByte(st.Drawn, ev.order[i]) < 0 {
+		if !st.has(ev.order[i]) {
 			left = append(left, ev.order[i])
 		}
 	}
@@ -72,19 +75,19 @@ func (ev exclusiveEvent) apply(n *nativeStep) error {
 		return nil // unreachable: each floor has as many triggers as outcomes
 	}
 	pick := left[n.rng.Intn(len(left))]
-	st.Drawn += string(pick)
+	st.Flags += string(pick)
 	n.step.MapState = st.encode()
 	return ev.outcomes[pick].apply(n)
 }
 
-// gateEvent is a wall that opens once the pool has drawn outcome `open`. A
-// closed one returns the party and refunds the round; the pre-move reset has
-// already run (_1.cgi:30–37).
+// gateEvent is a wall that opens with flag `open`. A closed one returns the
+// party and refunds the round; the pre-move reset has already run
+// (_1.cgi:30–37, _2.cgi:31–38).
 type gateEvent struct{ open byte }
 
 func (ev gateEvent) visible(exp *ActiveExpedition, _ byte) (bool, error) {
 	st, err := decodeMap15(exp.MapState)
-	return strings.IndexByte(st.Drawn, ev.open) < 0, err
+	return !st.has(ev.open), err
 }
 
 func (ev gateEvent) apply(n *nativeStep) error {
@@ -117,7 +120,7 @@ func (o recoveryOutcome) apply(n *nativeStep) error {
 }
 
 // fortressBoss installs fortress as the run's default field, then spawns the
-// boss (__1.cgi:28).
+// boss (__1.cgi:28, _2.cgi:30).
 type fortressBoss struct{ boss DungeonMonster }
 
 func (ev fortressBoss) apply(n *nativeStep) error {
@@ -135,7 +138,7 @@ func (ev fortressBoss) apply(n *nativeStep) error {
 
 // fixedTreasureEvent is add_fixed_treasure: one chest per allied player,
 // fallen included, with no job-78 bonus (_npc_action.cgi:555–598).
-// shortcut: chests hold no contents until #2119; this one's is @fixed_treasures (item 265).
+// shortcut: chests hold no contents until #2451 binds map15's sources (here item 265).
 type fixedTreasureEvent struct{}
 
 func (fixedTreasureEvent) apply(n *nativeStep) error {
@@ -215,6 +218,61 @@ var (
 	})
 )
 
+// crossBossEvent is _2's J and K (_2.cgi:28–29,43–57): the first of the two
+// kills j or k, the walls open by draw or once both fired, then one of four
+// groups spawns.
+type crossBossEvent struct{ groups [4]DungeonMonster }
+
+func (ev crossBossEvent) apply(n *nativeStep) error {
+	if n.consumed {
+		return nil
+	}
+	st, err := decodeMap15(n.exp.MapState)
+	if err != nil {
+		return err
+	}
+	other := "K"
+	if n.cell == 'K' {
+		other = "J"
+	}
+	bothFired := slices.Contains(n.exp.ConsumedEvents, other)
+	if !st.has('j') && !st.has('k') && !bothFired {
+		kill := byte('j')
+		if 2*n.rng.Float64() >= 1 {
+			kill = 'k'
+		}
+		st.Flags += string(kill)
+	}
+	if !st.has('9') && (bothFired || 2*n.rng.Float64() < 1) {
+		st.Flags += "9"
+	}
+	pick := 2
+	if 2*n.rng.Float64() < 1 {
+		pick = 0
+	}
+	if 2*n.rng.Float64() >= 1 {
+		pick++
+	}
+	n.step.MapState = st.encode()
+	return fixedBoss(ev.groups[pick]).apply(n)
+}
+
+// liveTreasure is a _2 treasure that the first boss may have killed.
+type liveTreasure struct{}
+
+func (liveTreasure) visible(exp *ActiveExpedition, cell byte) (bool, error) {
+	st, err := decodeMap15(exp.MapState)
+	return !st.has(cell), err
+}
+
+func (ev liveTreasure) apply(n *nativeStep) error {
+	live, err := ev.visible(n.exp, n.cell)
+	if err != nil || !live {
+		return err
+	}
+	return treasure.apply(n)
+}
+
 // The _1 outcome 5 group is __data.cgi's @bosses; __1's X group is _data.cgi's.
 var (
 	nm15Hazard = nm15Enemy("nm15-grand-hazard", "GN-2000", 8000, 430, 450, 260, 1800, 1800, corebattle.LifetimeActor{
@@ -236,6 +294,40 @@ var (
 	})
 )
 
+// _2's J/K groups 1–4 and Y's group 5 (_2.cgi:66–363); group 4 has one member.
+var (
+	nm15SouthGroups = [4]DungeonMonster{
+		nm15Enemy("nm15-grand-hazard-2", "GN-2000", 10000, 500, 520, 260, 1800, 1800, corebattle.LifetimeActor{
+			Participant:   corebattle.Participant{MP: 2000, ItemDefinitionIDs: []string{"item-159"}},
+			Jobs:          nm15Jobs("job-501", 999, "", 0),
+			CrystalReward: 10,
+			Temporary:     corebattle.TemporaryReflectAttack,
+		}),
+		nm15Enemy("nm15-blaze-2", "BZ-13", 4000, 300, 280, 250, 300, 100, corebattle.LifetimeActor{
+			Participant:   corebattle.Participant{MP: 400, ItemDefinitionIDs: []string{"item-158"}},
+			Jobs:          nm15Jobs("job-54", 999, "job-47", 999),
+			Hit:           1000,
+			CrystalReward: 4,
+		}),
+		nm15Enemy("nm15-cyber-armor", "CB-40B", 4000, 380, 400, 130, 500, 222, corebattle.LifetimeActor{
+			Participant:   corebattle.Participant{MP: 811, ItemDefinitionIDs: []string{"item-192"}},
+			Jobs:          nm15Jobs("job-501", 50, "job-04", 999),
+			CrystalReward: 3,
+			Temporary:     corebattle.TemporaryReflectAttack,
+		}),
+		nm15Enemy("nm15-sky-slaughter-2", "SK-51", 2000, 400, 80, 400, 200, 56, corebattle.LifetimeActor{
+			Participant:   corebattle.Participant{MP: 1200, ItemDefinitionIDs: []string{"item-183"}},
+			Jobs:          nm15Jobs("job-502", 999, "job-52", 999),
+			CrystalReward: 2,
+		}),
+	}
+	nm15Panzer = nm15Enemy("nm15-devil-panzer", "EV-9", 15000, 540, 460, 200, 1800, 500, corebattle.LifetimeActor{
+		Participant:   corebattle.Participant{MP: 8000, MaxMP: 10000, ItemDefinitionIDs: []string{"item-204"}},
+		Jobs:          nm15Jobs("job-503", 10, "job-501", 200),
+		CrystalReward: 13,
+	})
+)
+
 // nm15MainPool is the main floor's A–C outcomes (1.cgi:33–56).
 var nm15MainPool = exclusiveEvent{order: "234", outcomes: map[byte]nativeEvent{
 	'2': choiceEvent{odds: 2, outcomes: [2]nativeEvent{fixedBoss(nm15Inferno), fixedBoss(nm15Blaze)}},
@@ -251,7 +343,7 @@ var nm15NorthPool = exclusiveEvent{order: "567", outcomes: map[byte]nativeEvent{
 }}
 
 // nativeMap15 has the leader job level 50 of @ex_dungeon. The main floor's
-// stairs 2 and 4 lead to _1 and _2, keeping the coordinate.
+// stairs 2 and 4 lead to _1 and _2, and _1's 3 to __1, keeping the coordinate.
 func nativeMap15() Dungeon {
 	pool := []EncounterPool{nm15Pool}
 	floors := [4]Floor{
@@ -264,8 +356,13 @@ func nativeMap15() Dungeon {
 			Marks: map[byte]string{'D': "◎", 'E': "◎", 'F': "◎", 'a': "宝", 'd': "■", '3': "凸"},
 			events: map[byte]mapEvent{'D': {action: nm15NorthPool, perSymbol: true}, 'E': {action: nm15NorthPool, perSymbol: true}, 'F': {action: nm15NorthPool, perSymbol: true},
 				'a': {action: treasure, perSymbol: true}, 'd': {action: gateEvent{open: '5'}}}},
-		// shortcut: _2 events are plain passages until #2443 binds them.
-		{Pools: pool, RoundLimit: 50},
+		// shortcut: chests hold no contents until #2451 binds map15's sources, _2's own pool included.
+		// _2 and __1 share the z flag safely: the branches never meet.
+		{Pools: pool, RoundLimit: 50,
+			Marks: map[byte]string{'J': "◎", 'K': "◎", 'Y': "◎", 'z': "宝", 'j': "宝", 'k': "宝", 'd': "■"},
+			events: map[byte]mapEvent{'J': {action: crossBossEvent{groups: nm15SouthGroups}, perSymbol: true}, 'K': {action: crossBossEvent{groups: nm15SouthGroups}, perSymbol: true},
+				'Y': {action: fortressBoss{boss: nm15Panzer}, perSymbol: true}, 'd': {action: gateEvent{open: '9'}},
+				'z': {action: treasure, perSymbol: true}, 'j': {action: liveTreasure{}, perSymbol: true}, 'k': {action: liveTreasure{}, perSymbol: true}}},
 		// __1's passages spawn nothing (event_0 is empty).
 		{RoundLimit: 90,
 			Marks: map[byte]string{'w': "宝", 'z': "宝", 'v': "宝", 'G': "○", 'X': "◎"},
