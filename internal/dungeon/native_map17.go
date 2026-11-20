@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-
-	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
 // NativeMap17ID is the pharaoh's tomb (legacy map/17).
@@ -55,12 +53,7 @@ func (st map17State) encode() json.RawMessage {
 type nm17Spawn struct{}
 
 func (nm17Spawn) apply(n *nativeStep) error {
-	t := 1
-	for _, k := range n.exp.ConsumedEvents {
-		if k == "j" || k == "k" {
-			t++
-		}
-	}
+	t := 1 + nm17Visits(n.exp)
 	if slices.Contains(n.exp.ConsumedEvents, "Y") {
 		t = 0
 	}
@@ -73,6 +66,17 @@ func (nm17Spawn) apply(n *nativeStep) error {
 	}
 	n.fight(pool.monster(n.rng), EventBattle, "", "")
 	return nil
+}
+
+// nm17Visits counts the j/k treasures visited, whatever they held.
+func nm17Visits(exp *ActiveExpedition) int {
+	t := 0
+	for _, k := range exp.ConsumedEvents {
+		if k == "j" || k == "k" {
+			t++
+		}
+	}
+	return t
 }
 
 // nm17Raisable is a 9 cell: a passage without encounters, or a wall while
@@ -250,153 +254,65 @@ func itemMPHeal(exp *ActiveExpedition, base float64, rng RandomSource) map[strin
 	return out
 }
 
-func nm17Enemy(id, name string, hp, at, df, ag, exp, gold int, a corebattle.LifetimeActor) DungeonMonster {
-	return DungeonMonster{ID: id, Name: name, HP: hp, Attack: at, Defense: df, Agility: ag, ExpReward: exp, GoldReward: gold, combat: enemyCombat(a)}
+// nm17Ascent is w: after Z, its boss and the move to the secret room at the
+// same coordinate, saved together (1.cgi:153–160).
+type nm17Ascent struct{}
+
+func (nm17Ascent) visible(exp *ActiveExpedition, _ byte) (bool, error) {
+	return slices.Contains(exp.ConsumedEvents, "Z"), nil
 }
 
-func nm17Jobs(job string, sp int, old string, oldSP int) corebattle.BattleJobs {
-	return corebattle.BattleJobs{JobID: job, SP: sp, OldJobID: old, OldSP: oldSP}
-}
-
-// nm17Outer is __data.cgi's @monsters with @appears; distinctive names are
-// replaced (rule 00 §3).
-var nm17Outer = EncounterPool{
-	Monsters: []DungeonMonster{
-		nm17Enemy("nm17-blood-hand", "血塗れの手", 160, 130, 50, 60, 41, 10, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 41},
-			Jobs:        nm17Jobs("job-09", 10, "job-61", 10),
-		}),
-		nm17Enemy("nm17-mummy", "マミー", 170, 150, 60, 60, 43, 16, corebattle.LifetimeActor{
-			Jobs: nm17Jobs("", 0, "", 20),
-		}),
-		// The source lists old_sp twice; Perl keeps the later 40 (__data.cgi:129–130).
-		nm17Enemy("nm17-stinger", "スティンガー", 180, 180, 150, 120, 54, 28, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 500},
-			Jobs:        nm17Jobs("job-90", 20, "", 40),
-		}),
-		nm17Enemy("nm17-wraith", "死霊", 199, 119, 199, 66, 45, 13, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 42},
-			Jobs:        nm17Jobs("job-31", 60, "", 0),
-		}),
-		nm17Enemy("nm17-mimic", "ミミック", 300, 100, 30, 300, 50, 100, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 68},
-			Jobs:        nm17Jobs("job-93", 10, "", 0),
-			Temporary:   corebattle.TemporaryDouble,
-		}),
-		nm17Enemy("nm17-ooze-pharaoh", "粘体の王", 444, 144, 144, 144, 144, 144, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 144},
-			Jobs:        nm17Jobs("job-19", 60, "", 0),
-		}),
-	},
-	Appears: []int{0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 5},
-}
-
-// nm17Inner is ___data.cgi's @monsters with @appears.
-var nm17Inner = EncounterPool{
-	Monsters: []DungeonMonster{
-		nm17Enemy("nm17-sphinx-a", "スフィンクス", 500, 400, 480, 100, 250, 100, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 500},
-			Jobs:        nm17Jobs("job-37", 999, "job-30", 999),
-			Hit:         150,
-		}),
-		nm17Enemy("nm17-sphinx-b", "スフィンクス", 500, 400, 480, 100, 250, 100, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 500},
-			Jobs:        nm17Jobs("job-19", 999, "job-27", 999),
-			Hit:         150,
-		}),
-		nm17Enemy("nm17-sand-golem", "サンドゴーレム", 350, 320, 450, 200, 200, 200, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 200},
-			Jobs:        nm17Jobs("job-16", 999, "", 30),
-			Temporary:   corebattle.TemporaryRevival,
-		}),
-		nm17Enemy("nm17-calamity-box", "災いの箱", 900, 300, 95, 800, 100, 500, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 69},
-			Jobs:        nm17Jobs("job-93", 20, "", 0),
-			Temporary:   corebattle.TemporaryDouble,
-		}),
-		nm17Enemy("nm17-envoy", "ファラオのつかい", 450, 300, 800, 900, 130, 800, corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 500, ItemDefinitionIDs: []string{"item-158"}},
-			Jobs:        nm17Jobs("job-15", 200, "job-91", 200),
-		}),
-	},
-	Appears: []int{0, 0, 1, 1, 2, 2, 3, 4},
-}
-
-// The underground groups (_1.cgi:108–254); the mimic and box are the pool entries.
-var (
-	nm17Robber = nm17Enemy("nm17-robber", "墓荒らし", 500, 40, 3, 89, 20, 7, corebattle.LifetimeActor{
-		Participant: corebattle.Participant{MP: 200},
-		Jobs:        nm17Jobs("job-09", 70, "job-52", 20),
-	})
-	nm17RobberChief = nm17Enemy("nm17-robber-chief", "墓荒らし", 1500, 200, 90, 400, 151, 56, corebattle.LifetimeActor{
-		Participant: corebattle.Participant{MP: 999, ItemDefinitionIDs: []string{"item-158"}},
-		Jobs:        nm17Jobs("job-09", 999, "job-52", 130),
-	})
-	nm17Mask = nm17Enemy("nm17-mask", "ファラオの呪面", 800, 200, 300, 200, 111, 111, corebattle.LifetimeActor{
-		Participant: corebattle.Participant{MP: 999},
-		Jobs:        nm17Jobs("job-31", 999, "job-15", 999),
-	})
-	nm17GreatMask = nm17Enemy("nm17-great-mask", "ファラオの呪面", 1300, 400, 600, 400, 222, 222, corebattle.LifetimeActor{
-		Participant: corebattle.Participant{MP: 999},
-		Jobs:        nm17Jobs("job-31", 999, "job-15", 999),
-	})
-	nm17Underground = map[byte]mapEvent{
-		'0': {action: passageEvent{}},
-		'H': {action: onceEvent{fixedMonster(nm17Robber)}, perSymbol: true},
-		'I': {action: onceEvent{fixedMonster(nm17Robber)}, perSymbol: true},
-		'J': {action: onceEvent{fixedMonster(nm17RobberChief)}, perSymbol: true},
-		'K': {action: onceEvent{fixedMonster(nm17RobberChief)}, perSymbol: true},
-		'h': {action: nm17Pair{partner: "i", boss: nm17Outer.Monsters[4]}, perSymbol: true},
-		'i': {action: nm17Pair{partner: "h", boss: nm17Outer.Monsters[4]}, perSymbol: true},
-		'j': {action: nm17Pair{partner: "k", boss: nm17Inner.Monsters[3]}, perSymbol: true},
-		'k': {action: nm17Pair{partner: "j", boss: nm17Inner.Monsters[3]}, perSymbol: true},
-		'V': {action: keyEvent{}, perSymbol: true},
-		'v': {action: nm17Ambush{odds: 2, boss: nm17Mask}},
-		'x': {action: nm17Ambush{odds: 4, needKey: true, boss: nm17GreatMask}},
-		'Y': {action: keyEvent{}, perSymbol: true},
-		'n': {action: nm17Rest{base: 200}, perSymbol: true},
+func (nm17Ascent) apply(n *nativeStep) error {
+	if !slices.Contains(n.exp.ConsumedEvents, "Z") {
+		return nil
 	}
-)
+	n.step.MapVariant = 5
+	n.step.RoundLimit = n.dungeon.limitOf(n.dungeon.Variants[4])
+	n.fight(nm17Necro, EventBoss, "", "")
+	return nil
+}
 
-// nm17Guardians is __data.cgi's @bosses, fought at B.
-// shortcut: the strongest member stands in for the group until #1954 adds groups.
-var nm17Guardians = strongest([]DungeonMonster{
-	nm17Enemy("nm17-golem-a", "サンドゴーレムA", 1300, 220, 400, 110, 250, 100, corebattle.LifetimeActor{
-		Participant: corebattle.Participant{MP: 700},
-		Jobs:        nm17Jobs("job-16", 999, "", 0),
-		Hit:         150,
-		Temporary:   corebattle.TemporaryRevival,
-	}),
-	nm17Enemy("nm17-sphinx-guard-a", "スフィンクスA", 3200, 260, 320, 150, 500, 200, corebattle.LifetimeActor{
-		Participant:   corebattle.Participant{MP: 999},
-		Jobs:          nm17Jobs("job-37", 999, "job-30", 999),
-		Hit:           150,
-		CrystalReward: 4,
-		Temporary:     corebattle.TemporaryReflectAttack,
-	}),
-	nm17Enemy("nm17-sphinx-guard-b", "スフィンクスB", 3200, 260, 320, 150, 500, 200, corebattle.LifetimeActor{
-		Participant:   corebattle.Participant{MP: 999},
-		Jobs:          nm17Jobs("job-19", 999, "job-27", 999),
-		Hit:           150,
-		CrystalReward: 4,
-		Temporary:     corebattle.TemporaryReflectMagic,
-	}),
-	nm17Enemy("nm17-golem-b", "サンドゴーレムB", 1300, 220, 400, 110, 250, 100, corebattle.LifetimeActor{
-		Participant: corebattle.Participant{MP: 700},
-		Jobs:        nm17Jobs("job-16", 999, "", 0),
-		Hit:         150,
-		Temporary:   corebattle.TemporaryRevival,
-	}),
-})
+// nm17Vault is a secret-room treasure shown from `show` visited j/k and
+// opened only from `open`; a closed one stays shown and unspent (__1.cgi:32–55).
+type nm17Vault struct{ open, show int }
+
+func (ev nm17Vault) visible(exp *ActiveExpedition, _ byte) (bool, error) {
+	return nm17Visits(exp) >= ev.show, nil
+}
+
+func (ev nm17Vault) apply(n *nativeStep) error {
+	if n.consumed || nm17Visits(n.exp) < ev.open {
+		return nil
+	}
+	return treasure.apply(n)
+}
+
+// nm17Underground binds the three underground floors' shared events.
+var nm17Underground = map[byte]mapEvent{
+	'0': {action: passageEvent{}},
+	'H': {action: onceEvent{fixedMonster(nm17Robber)}, perSymbol: true},
+	'I': {action: onceEvent{fixedMonster(nm17Robber)}, perSymbol: true},
+	'J': {action: onceEvent{fixedMonster(nm17RobberChief)}, perSymbol: true},
+	'K': {action: onceEvent{fixedMonster(nm17RobberChief)}, perSymbol: true},
+	'h': {action: nm17Pair{partner: "i", boss: nm17Outer.Monsters[4]}, perSymbol: true},
+	'i': {action: nm17Pair{partner: "h", boss: nm17Outer.Monsters[4]}, perSymbol: true},
+	'j': {action: nm17Pair{partner: "k", boss: nm17Inner.Monsters[3]}, perSymbol: true},
+	'k': {action: nm17Pair{partner: "j", boss: nm17Inner.Monsters[3]}, perSymbol: true},
+	'V': {action: keyEvent{}, perSymbol: true},
+	'v': {action: nm17Ambush{odds: 2, boss: nm17Mask}},
+	'x': {action: nm17Ambush{odds: 4, needKey: true, boss: nm17GreatMask}},
+	'Y': {action: keyEvent{}, perSymbol: true},
+	'n': {action: nm17Rest{base: 200}, perSymbol: true},
+}
 
 // nativeMap17 has the leader job level 40 of @ex_dungeon and limit 200 on
 // every floor. Variants 2–4 are the underground floors, 5 the secret room.
-// shortcut: secret-room events, 2, Z and w stay plain passages until #2454;
-// chests hold no contents until #2455.
+// shortcut: chests hold no contents until #2455.
 func nativeMap17() Dungeon {
 	passage := mapEvent{action: passageEvent{}}
 	main := Floor{
-		Marks: map[byte]string{'6': "◇", '7': "◇", '8': "◇", 'B': "◎", 'U': "凹", 'z': "扉", '2': "■", 'Z': "◎"},
+		Exits: map[byte]FloorExit{'2': {Variants: []int{5}}},
+		Marks: map[byte]string{'6': "◇", '7': "◇", '8': "◇", 'B': "◎", 'U': "凹", 'z': "扉", '2': "■", 'Z': "◎", 'w': "凸"},
 		events: map[byte]mapEvent{
 			'0': {action: nm17Spawn{}}, '9': {action: nm17Raisable{}},
 			'B': {action: nm17Gate{boss: nm17Guardians}, perSymbol: true}, 'b': {action: nm17Seal{}, perSymbol: true},
@@ -404,6 +320,7 @@ func nativeMap17() Dungeon {
 			'6': {action: nm17Switch{x: 6, y: 3}, perSymbol: true},
 			'7': {action: nm17Switch{x: 4, y: 10}, perSymbol: true},
 			'8': {action: nm17Switch{x: 8, y: 16}, perSymbol: true},
+			'Z': {action: onceEvent{fixedBoss(nm17Pharaohs)}, perSymbol: true}, 'w': {action: nm17Ascent{}},
 		},
 	}
 	// The three underground floors share their events, and their passages
@@ -413,7 +330,17 @@ func nativeMap17() Dungeon {
 		Marks:  map[byte]string{'u': "凸", 'V': "◇", 'Y': "○", 'h': "宝", 'i': "宝", 'j': "宝", 'k': "宝", 'n': "☆"},
 		events: nm17Underground,
 	}
-	room := Floor{events: map[byte]mapEvent{'0': passage}}
+	room := Floor{
+		Exits: map[byte]FloorExit{'U': {Variants: []int{1}}},
+		Marks: map[byte]string{'D': "宝", 'E': "宝", 'F': "宝", 'G': "宝", 'L': "宝", 'M': "宝", 'Q': "宝", 'O': "宝", 'N': "☆", 'U': "凹"},
+		events: map[byte]mapEvent{
+			'0': passage, 'D': {action: fixedTreasureEvent{}, perSymbol: true},
+			'E': {action: treasure, perSymbol: true}, 'F': {action: treasure, perSymbol: true}, 'G': {action: treasure, perSymbol: true},
+			'L': {action: nm17Vault{open: 1, show: 1}, perSymbol: true}, 'M': {action: nm17Vault{open: 2, show: 1}, perSymbol: true},
+			'Q': {action: nm17Vault{open: 3, show: 2}, perSymbol: true}, 'O': {action: nm17Vault{open: 4, show: 2}, perSymbol: true},
+			'N': {action: nm17Rest{base: 300}, perSymbol: true},
+		},
+	}
 	tmpls := [5]Floor{main, under, under, under, room}
 	variants := make([]Floor, len(tmpls))
 	for i, f := range tmpls {
