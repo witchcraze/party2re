@@ -107,6 +107,13 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	if newX < 0 || newX >= floor.Width || newY < 0 || newY >= floor.Height || floor.Grid[newY][newX] == cellWall {
 		return s.hitWall(ctx, exp, owner.ID, floor)
 	}
+	if w, ok := floor.event(floor.Grid[newY][newX]).action.(conditionalWall); ok {
+		if closed, err := w.closed(exp); err != nil {
+			return ExpeditionStepResult{}, err
+		} else if closed {
+			return s.hitWall(ctx, exp, owner.ID, floor)
+		}
+	}
 	return s.moveNative(ctx, exp, &owner, &actor, d, floor, newX, newY)
 }
 

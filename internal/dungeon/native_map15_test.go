@@ -104,7 +104,7 @@ func exclusivePool(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 	if got := tiles(); got[1] != "◎" || f.rng.calls() != 0 {
 		t.Fatalf("A before use %q, draws %d", got[1], f.rng.calls())
 	}
-	drawn := ""
+	var drawn []int
 	for _, tc := range []struct {
 		trigger byte
 		x       int
@@ -112,11 +112,11 @@ func exclusivePool(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 		floats  []float64
 		event   dungeon.TileEventType
 		monster string
-		outcome string
+		outcome int
 	}{
-		{'A', 2, []int{2}, nil, dungeon.EventBattle, "nm15-private", "4"},        // last of 234; always spawns
-		{'B', 0, []int{0}, []float64{0.5}, dungeon.EventBoss, "nm15-blaze", "2"}, // first of 23; second group
-		{'C', 4, nil, nil, dungeon.EventBoss, "nm15-bomb", "3"},                  // the only one left
+		{'A', 2, []int{2}, nil, dungeon.EventBattle, "nm15-private", 4},        // last of 234; always spawns
+		{'B', 0, []int{0}, []float64{0.5}, dungeon.EventBoss, "nm15-blaze", 2}, // first of 23; second group
+		{'C', 4, nil, nil, dungeon.EventBoss, "nm15-bomb", 3},                  // the only one left
 	} {
 		f.moveTo(t, id, tc.x, 4)
 		before := f.reload(t, id)
@@ -126,12 +126,9 @@ func exclusivePool(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 			t.Fatalf("%c: event %s err=%v", tc.trigger, res.EventType, err)
 		}
 		after := f.reload(t, id)
-		drawn += tc.outcome
-		var st struct {
-			Flags string `json:"flags"`
-		}
-		if err := json.Unmarshal(after.MapState, &st); err != nil || st.Flags != drawn {
-			t.Fatalf("%c: map state %s err=%v", tc.trigger, after.MapState, err)
+		drawn = append(drawn, tc.outcome)
+		if st := map15OutcomesOf(t, after); !slices.Equal(st, drawn) {
+			t.Fatalf("%c: map state %s", tc.trigger, after.MapState)
 		}
 		if enc := after.Encounter; enc == nil || enc.Monster.ID != tc.monster || !slices.Contains(after.ConsumedEvents, string(tc.trigger)) {
 			t.Fatalf("%c: encounter %+v flags %v", tc.trigger, enc, after.ConsumedEvents)
@@ -154,7 +151,7 @@ func exclusivePool(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 		t.Fatalf("A after use %q", got[1])
 	}
 	raw, err := json.Marshal(f.reload(t, id))
-	if err != nil || strings.Contains(string(raw), "flags") {
+	if err != nil || strings.Contains(string(raw), "outcomes") {
 		t.Fatalf("projection leaks map state %s err=%v", raw, err)
 	}
 }
@@ -251,20 +248,20 @@ func northPool(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 		}
 	}
 	bump(false)
-	drawn := ""
+	var drawn []int
 	for _, tc := range []struct {
 		trigger byte
 		x       int
 		ints    []int
 		event   dungeon.TileEventType
 		monster string
-		outcome string
+		outcome int
 	}{
-		{'D', 2, []int{2}, dungeon.EventMove, "", "7"},                  // last of 567: recovery
-		{'E', 0, []int{0}, dungeon.EventBoss, "nm15-grand-hazard", "5"}, // first of 56: the boss opens the walls
-		{'F', 4, nil, dungeon.EventBoss, "nm15-shielded-bomb", "6"},     // the only one left
+		{'D', 2, []int{2}, dungeon.EventMove, "", 7},                  // last of 567: recovery
+		{'E', 0, []int{0}, dungeon.EventBoss, "nm15-grand-hazard", 5}, // first of 56: the boss opens the walls
+		{'F', 4, nil, dungeon.EventBoss, "nm15-shielded-bomb", 6},     // the only one left
 	} {
-		if !strings.Contains(drawn, "5") {
+		if !slices.Contains(drawn, 5) {
 			bump(false)
 		}
 		f.setFloor(t, id, 2, tc.x, 2)
@@ -275,12 +272,9 @@ func northPool(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 			t.Fatalf("%c: event %s err=%v", tc.trigger, res.EventType, err)
 		}
 		after := f.reload(t, id)
-		drawn += tc.outcome
-		var st struct {
-			Flags string `json:"flags"`
-		}
-		if err := json.Unmarshal(after.MapState, &st); err != nil || st.Flags != drawn || !slices.Contains(after.ConsumedEvents, string(tc.trigger)) {
-			t.Fatalf("%c: state %s flags %v err=%v", tc.trigger, after.MapState, after.ConsumedEvents, err)
+		drawn = append(drawn, tc.outcome)
+		if st := map15OutcomesOf(t, after); !slices.Equal(st, drawn) || !slices.Contains(after.ConsumedEvents, string(tc.trigger)) {
+			t.Fatalf("%c: state %s flags %v", tc.trigger, after.MapState, after.ConsumedEvents)
 		}
 		if tc.monster == "" {
 			hero := memberOf(t, after, id)
@@ -416,16 +410,9 @@ func TestNativeMap15_SouthBranch(t *testing.T) {
 func southBranch(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	ctx := context.Background()
 	f := newMap15Fixture(t, store, id)
-	flags := func(exp dungeon.ActiveExpedition) string {
+	flags := func(exp dungeon.ActiveExpedition) map15TestState {
 		t.Helper()
-		var st struct {
-			Flags string `json:"flags"`
-			Field string `json:"field"`
-		}
-		if err := json.Unmarshal(exp.MapState, &st); err != nil {
-			t.Fatal(err)
-		}
-		return st.Flags + "/" + st.Field
+		return map15StateOf(t, exp)
 	}
 	clear := func(exp dungeon.ActiveExpedition) {
 		t.Helper()
@@ -450,8 +437,8 @@ func southBranch(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	}
 	// J first: kill k (0.5), walls stay shut (0.5), group 2 (0.49, 0.5).
 	j := step(dungeon.DirectionNorth, []float64{0.5, 0.5, 0.49, 0.5}, dungeon.EventBoss)
-	if flags(j) != "k/" || j.Encounter.Monster.ID != "nm15-blaze-2" {
-		t.Fatalf("J: flags %s encounter %+v", flags(j), j.Encounter)
+	if flags(j) != (map15TestState{Killed: "k"}) || j.Encounter.Monster.ID != "nm15-blaze-2" {
+		t.Fatalf("J: flags %+v encounter %+v", flags(j), j.Encounter)
 	}
 	f.rejectStaleMap14Step(t, id, before, j)
 	clear(j)
@@ -468,8 +455,8 @@ func southBranch(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	// K second: no kill draw, walls open without a draw, group 4 (0.5, 0.5).
 	f.setFloor(t, id, 3, 3, 8)
 	k := step(dungeon.DirectionNorth, []float64{0.5, 0.5}, dungeon.EventBoss)
-	if flags(k) != "k9/" || k.Encounter.Monster.ID != "nm15-sky-slaughter-2" {
-		t.Fatalf("K: flags %s encounter %+v", flags(k), k.Encounter)
+	if flags(k) != (map15TestState{Killed: "k", SouthOpen: true}) || k.Encounter.Monster.ID != "nm15-sky-slaughter-2" {
+		t.Fatalf("K: flags %+v encounter %+v", flags(k), k.Encounter)
 	}
 	clear(k)
 	step(dungeon.DirectionNorth, nil, dungeon.EventMove)
@@ -481,8 +468,8 @@ func southBranch(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	}
 	step(dungeon.DirectionNorth, nil, dungeon.EventMove)
 	y := step(dungeon.DirectionWest, nil, dungeon.EventBoss)
-	if flags(y) != "k9/fortress" || y.Encounter.Monster.ID != "nm15-devil-panzer" {
-		t.Fatalf("Y: flags %s encounter %+v", flags(y), y.Encounter)
+	if flags(y) != (map15TestState{Killed: "k", SouthOpen: true, Field: "fortress"}) || y.Encounter.Monster.ID != "nm15-devil-panzer" {
+		t.Fatalf("Y: flags %+v encounter %+v", flags(y), y.Encounter)
 	}
 	clear(y)
 	step(dungeon.DirectionNorth, nil, dungeon.EventMove)
@@ -494,11 +481,11 @@ func southBranch(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 func TestNativeMap15_FirstCrossBossDraws(t *testing.T) {
 	for _, tc := range []struct {
 		floats  []float64
-		flags   string
+		state   map15TestState
 		monster string
 	}{
-		{[]float64{0.49, 0.49, 0.49, 0.49}, "j9", "nm15-grand-hazard-2"},
-		{[]float64{0.5, 0.5, 0.5, 0.49}, "k", "nm15-cyber-armor"},
+		{[]float64{0.49, 0.49, 0.49, 0.49}, map15TestState{Killed: "j", SouthOpen: true}, "nm15-grand-hazard-2"},
+		{[]float64{0.5, 0.5, 0.5, 0.49}, map15TestState{Killed: "k"}, "nm15-cyber-armor"},
 	} {
 		f := newMap15Fixture(t, dungeon.NewMemoryExpeditionRepository(), "cross")
 		f.setFloor(t, "cross", 3, 3, 8)
@@ -507,11 +494,37 @@ func TestNativeMap15_FirstCrossBossDraws(t *testing.T) {
 			t.Fatalf("event %s err=%v", res.EventType, err)
 		}
 		exp := f.reload(t, "cross")
-		var st struct {
-			Flags string `json:"flags"`
-		}
-		if err := json.Unmarshal(exp.MapState, &st); err != nil || st.Flags != tc.flags || exp.Encounter.Monster.ID != tc.monster {
-			t.Fatalf("draws %v: flags %q encounter %+v err=%v", tc.floats, st.Flags, exp.Encounter, err)
+		if st := map15StateOf(t, exp); st != tc.state || exp.Encounter.Monster.ID != tc.monster {
+			t.Fatalf("draws %v: state %+v encounter %+v", tc.floats, st, exp.Encounter)
 		}
 	}
+}
+
+// map15TestState mirrors the saved map15 run state apart from its outcomes.
+type map15TestState struct {
+	Killed    string `json:"killed"`
+	SouthOpen bool   `json:"south_open"`
+	Field     string `json:"field"`
+}
+
+func map15StateOf(t *testing.T, exp dungeon.ActiveExpedition) map15TestState {
+	t.Helper()
+	var st map15TestState
+	if len(exp.MapState) > 0 {
+		if err := json.Unmarshal(exp.MapState, &st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return st
+}
+
+func map15OutcomesOf(t *testing.T, exp dungeon.ActiveExpedition) []int {
+	t.Helper()
+	var st struct {
+		Outcomes []int `json:"outcomes"`
+	}
+	if err := json.Unmarshal(exp.MapState, &st); err != nil {
+		t.Fatal(err)
+	}
+	return st.Outcomes
 }

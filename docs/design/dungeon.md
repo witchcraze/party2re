@@ -327,8 +327,6 @@ the legacy revision above.
   `v` corridor and the outer `9` cells are never entered. `R` never cuts the
   band: each band `9` has a parallel lane. Switches `3`–`5`, `A`/`a`/`C` and
   `P` have no cell.
-- **The underground floor is drawn once per run.** The first `U` appends 1–3 and
-  later stairs reuse it (`1.cgi:162–170`), unlike map2's draw on every use.
 - **Secret-room treasures show before they open.** Their gate counts `j`/`k`
   visits, including a box fight, so it is at most 2. `M` shows at 1 but opens at 2,
   and `Q`/`O` show at 2 but need 3 and 4 (`__1.cgi:32–55`).

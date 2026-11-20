@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
@@ -20,15 +19,19 @@ var nativeMap15Floors = [4][]string{
 	{"11111", "1wzv1", "11X11", "10001", "10G01", "10001", "11011", "11111", "11111"},
 }
 
-// map15State keeps the legacy digit flags (pool outcomes 2–7, open walls 9),
-// the treasure _2 killed, and the run's default field.
+// map15State is the run's map15 progress.
 type map15State struct {
-	Flags string `json:"flags,omitempty"`
+	// Outcomes are the exclusive-pool outcomes drawn so far (2–4 main, 5–7 _1).
+	Outcomes []int `json:"outcomes,omitempty"`
+	// Killed is the _2 treasure symbol ('j' or 'k') the first boss destroyed.
+	Killed string `json:"killed,omitempty"`
+	// SouthOpen records that _2's walls opened.
+	SouthOpen bool `json:"south_open,omitempty"`
 	// shortcut: the batch resolver has no named fields; explicit combat (#1865) applies it.
 	Field string `json:"field,omitempty"`
 }
 
-func (st map15State) has(flag byte) bool { return strings.IndexByte(st.Flags, flag) >= 0 }
+func (st map15State) drew(outcome int) bool { return slices.Contains(st.Outcomes, outcome) }
 
 func decodeMap15(raw json.RawMessage) (map15State, error) {
 	var st map15State
@@ -52,8 +55,8 @@ func (st map15State) encode() json.RawMessage {
 // exclusiveEvent is get_event: a uniform draw from the outcomes in order that
 // no trigger has drawn yet.
 type exclusiveEvent struct {
-	order    string
-	outcomes map[byte]nativeEvent
+	order    []int
+	outcomes map[int]nativeEvent
 }
 
 func (ev exclusiveEvent) apply(n *nativeStep) error {
@@ -64,10 +67,10 @@ func (ev exclusiveEvent) apply(n *nativeStep) error {
 	if err != nil {
 		return err
 	}
-	var left []byte
-	for i := range len(ev.order) {
-		if !st.has(ev.order[i]) {
-			left = append(left, ev.order[i])
+	var left []int
+	for _, o := range ev.order {
+		if !st.drew(o) {
+			left = append(left, o)
 		}
 	}
 	n.step.EventKey = n.key
@@ -75,19 +78,19 @@ func (ev exclusiveEvent) apply(n *nativeStep) error {
 		return nil // unreachable: each floor has as many triggers as outcomes
 	}
 	pick := left[n.rng.Intn(len(left))]
-	st.Flags += string(pick)
+	st.Outcomes = append(st.Outcomes, pick)
 	n.step.MapState = st.encode()
 	return ev.outcomes[pick].apply(n)
 }
 
-// gateEvent is a wall that opens with flag `open`. A closed one returns the
-// party and refunds the round; the pre-move reset has already run
+// gateEvent is a wall that stays while `open` is false. A closed one returns
+// the party and refunds the round; the pre-move reset has already run
 // (_1.cgi:30–37, _2.cgi:31–38).
-type gateEvent struct{ open byte }
+type gateEvent struct{ open func(map15State) bool }
 
 func (ev gateEvent) visible(exp *ActiveExpedition, _ byte) (bool, error) {
 	st, err := decodeMap15(exp.MapState)
-	return !st.has(ev.open), err
+	return !ev.open(st), err
 }
 
 func (ev gateEvent) apply(n *nativeStep) error {
@@ -236,15 +239,14 @@ func (ev crossBossEvent) apply(n *nativeStep) error {
 		other = "J"
 	}
 	bothFired := slices.Contains(n.exp.ConsumedEvents, other)
-	if !st.has('j') && !st.has('k') && !bothFired {
-		kill := byte('j')
+	if st.Killed == "" && !bothFired {
+		st.Killed = "j"
 		if 2*n.rng.Float64() >= 1 {
-			kill = 'k'
+			st.Killed = "k"
 		}
-		st.Flags += string(kill)
 	}
-	if !st.has('9') && (bothFired || 2*n.rng.Float64() < 1) {
-		st.Flags += "9"
+	if !st.SouthOpen && (bothFired || 2*n.rng.Float64() < 1) {
+		st.SouthOpen = true
 	}
 	pick := 2
 	if 2*n.rng.Float64() < 1 {
@@ -262,7 +264,7 @@ type liveTreasure struct{}
 
 func (liveTreasure) visible(exp *ActiveExpedition, cell byte) (bool, error) {
 	st, err := decodeMap15(exp.MapState)
-	return !st.has(cell), err
+	return st.Killed != string(cell), err
 }
 
 func (ev liveTreasure) apply(n *nativeStep) error {
@@ -329,17 +331,17 @@ var (
 )
 
 // nm15MainPool is the main floor's A–C outcomes (1.cgi:33–56).
-var nm15MainPool = exclusiveEvent{order: "234", outcomes: map[byte]nativeEvent{
-	'2': choiceEvent{odds: 2, outcomes: [2]nativeEvent{fixedBoss(nm15Inferno), fixedBoss(nm15Blaze)}},
-	'3': fixedBoss(nm15Bomb),
-	'4': stageMonster,
+var nm15MainPool = exclusiveEvent{order: []int{2, 3, 4}, outcomes: map[int]nativeEvent{
+	2: choiceEvent{odds: 2, outcomes: [2]nativeEvent{fixedBoss(nm15Inferno), fixedBoss(nm15Blaze)}},
+	3: fixedBoss(nm15Bomb),
+	4: stageMonster,
 }}
 
 // nm15NorthPool is _1's D–F outcomes (_1.cgi:43–67).
-var nm15NorthPool = exclusiveEvent{order: "567", outcomes: map[byte]nativeEvent{
-	'5': fixedBoss(nm15Hazard),
-	'6': fixedBoss(nm15ShieldedBomb),
-	'7': recoveryOutcome{base: 100},
+var nm15NorthPool = exclusiveEvent{order: []int{5, 6, 7}, outcomes: map[int]nativeEvent{
+	5: fixedBoss(nm15Hazard),
+	6: fixedBoss(nm15ShieldedBomb),
+	7: recoveryOutcome{base: 100},
 }}
 
 // nativeMap15 has the leader job level 50 of @ex_dungeon. The main floor's
@@ -355,13 +357,13 @@ func nativeMap15() Dungeon {
 			Exits: map[byte]FloorExit{'3': {Variants: []int{4}}},
 			Marks: map[byte]string{'D': "◎", 'E': "◎", 'F': "◎", 'a': "宝", 'd': "■", '3': "凸"},
 			events: map[byte]mapEvent{'D': {action: nm15NorthPool, perSymbol: true}, 'E': {action: nm15NorthPool, perSymbol: true}, 'F': {action: nm15NorthPool, perSymbol: true},
-				'a': {action: treasure, perSymbol: true}, 'd': {action: gateEvent{open: '5'}}}},
+				'a': {action: treasure, perSymbol: true}, 'd': {action: gateEvent{open: func(st map15State) bool { return st.drew(5) }}}}},
 		// shortcut: chests hold no contents until #2451 binds map15's sources, _2's own pool included.
 		// _2 and __1 share the z flag safely: the branches never meet.
 		{Pools: pool, RoundLimit: 50,
 			Marks: map[byte]string{'J': "◎", 'K': "◎", 'Y': "◎", 'z': "宝", 'j': "宝", 'k': "宝", 'd': "■"},
 			events: map[byte]mapEvent{'J': {action: crossBossEvent{groups: nm15SouthGroups}, perSymbol: true}, 'K': {action: crossBossEvent{groups: nm15SouthGroups}, perSymbol: true},
-				'Y': {action: fortressBoss{boss: nm15Panzer}, perSymbol: true}, 'd': {action: gateEvent{open: '9'}},
+				'Y': {action: fortressBoss{boss: nm15Panzer}, perSymbol: true}, 'd': {action: gateEvent{open: func(st map15State) bool { return st.SouthOpen }}},
 				'z': {action: treasure, perSymbol: true}, 'j': {action: liveTreasure{}, perSymbol: true}, 'k': {action: liveTreasure{}, perSymbol: true}}},
 		// __1's passages spawn nothing (event_0 is empty).
 		{RoundLimit: 90,
