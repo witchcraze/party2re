@@ -50,7 +50,19 @@ func (ev mapEvent) stateKey(cell byte, x, y int) string {
 	return fmt.Sprintf("%c:%d:%d", cell, x, y)
 }
 
+// conditionalWall blocks movement like a wall while closed (map17 9).
+type conditionalWall interface {
+	closed(*ActiveExpedition) (bool, error)
+}
+
 func (ev mapEvent) tileSymbol(exp *ActiveExpedition, cell byte, x, y int, mark, wall string) (string, error) {
+	if shown, ok := ev.action.(interface {
+		wallShown(*ActiveExpedition) (bool, error)
+	}); ok {
+		if isWall, err := shown.wallShown(exp); err != nil || isWall {
+			return wall, err
+		}
+	}
 	if gated, ok := ev.action.(interface {
 		visible(*ActiveExpedition, byte) (bool, error)
 	}); ok {
