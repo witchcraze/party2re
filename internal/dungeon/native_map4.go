@@ -83,6 +83,20 @@ func partyHeal(exp *ActiveExpedition, actor *corecharacter.Character, base float
 	return hp, err
 }
 
+// partyMPHeal is _mp_hs(base, '無'): _mp_h on every roster member in order.
+func partyMPHeal(exp *ActiveExpedition, actor *corecharacter.Character, base float64, rng RandomSource) (map[string]int, error) {
+	_, mp, err := rosterHeal(exp, actor, func(state *corebattle.LifetimeState, c *corebattle.EffectContext, g randomSourceAdapter) error {
+		for _, id := range c.PartyIDs {
+			effect := corebattle.TargetEffect{TargetID: id, Category: corebattle.CategoryUntyped, Payload: corebattle.CallbackPayload{Number: base}}
+			if _, err := state.ApplyMPHealing(c, effect, g); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, rng)
+	return mp, err
+}
+
 // rosterState builds a LifetimeState and ordered member IDs from the saved roster.
 func rosterState(exp *ActiveExpedition) (corebattle.LifetimeState, []string) {
 	state := corebattle.LifetimeState{Actors: make([]corebattle.LifetimeActor, len(exp.Members))}

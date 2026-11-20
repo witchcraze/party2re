@@ -150,6 +150,7 @@ func newItem188PartyFixture(
 	store dungeon.ActiveExpeditionStore,
 	chars map[string]corecharacter.Character,
 	holders []string,
+	opts ...dungeon.Option,
 ) *nativeFixture {
 	t.Helper()
 	invRepo := &mockInventoryRepo{invs: make(map[string]coreinventory.Inventory, len(holders))}
@@ -164,15 +165,13 @@ func newItem188PartyFixture(
 		invRepo.invs[id] = inv
 	}
 	rng := &scriptedRNG{}
-	svc, err := dungeon.NewService(
-		newMockDungeonRepo(),
-		&mockCharRepo{chars: chars},
-		corebattle.Engine{},
+	opts = append([]dungeon.Option{
 		dungeon.WithActiveExpeditionStore(store),
 		dungeon.WithRNG(rng),
 		dungeon.WithInventoryProvider(invRepo),
 		dungeon.WithAdmission(approvedRoster{}),
-	)
+	}, opts...)
+	svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{chars: chars}, corebattle.Engine{}, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
