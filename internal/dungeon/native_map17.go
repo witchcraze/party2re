@@ -170,6 +170,86 @@ func (ev nm17Switch) apply(n *nativeStep) error {
 	return nil
 }
 
+// onceEvent fires its event only while the cell's once-key is unspent.
+type onceEvent struct{ nativeEvent }
+
+func (o onceEvent) apply(n *nativeStep) error {
+	if n.consumed {
+		return nil
+	}
+	return o.nativeEvent.apply(n)
+}
+
+// nm17Pair is h/i or j/k: the visit is recorded either way, then a treasure
+// if rand(2) < 1 or the partner was visited, else the boss (_1.cgi:57–99).
+type nm17Pair struct {
+	partner string
+	boss    DungeonMonster
+}
+
+func (ev nm17Pair) apply(n *nativeStep) error {
+	if n.consumed {
+		return nil
+	}
+	if 2*n.rng.Float64() < 1 || slices.Contains(n.exp.ConsumedEvents, ev.partner) {
+		return treasure.apply(n)
+	}
+	return fixedBoss(ev.boss).apply(n)
+}
+
+// nm17Ambush is v (every entry) or, once the key is held, x: _trap_d(100)
+// when rand(odds) < 1, then the boss (_1.cgi:52,54).
+type nm17Ambush struct {
+	odds    float64
+	needKey bool
+	boss    DungeonMonster
+}
+
+func (ev nm17Ambush) apply(n *nativeStep) error {
+	if ev.needKey && !slices.Contains(n.exp.ConsumedEvents, "Y") {
+		return nil
+	}
+	if ev.odds*n.rng.Float64() < 1 {
+		partyTrap(&n.step, n.exp, n.leader.ID, 100, n.rng)
+	}
+	n.fight(ev.boss, EventBoss, "", "")
+	return nil
+}
+
+// nm17Rest is n and N: once, _heals(base, '無') then _item_mp_heals(base).
+type nm17Rest struct{ base float64 }
+
+func (ev nm17Rest) apply(n *nativeStep) error {
+	if n.consumed {
+		return nil
+	}
+	hp, err := partyHeal(n.exp, n.actor, ev.base, n.rng)
+	if err != nil {
+		return err
+	}
+	n.step.EventKey = n.key
+	n.step.MemberHPDeltas, n.step.MemberMPDeltas, n.step.HPDelta = hp, itemMPHeal(n.exp, ev.base, n.rng), hp[n.leader.ID]
+	n.recovery = true
+	return nil
+}
+
+// itemMPHeal is _item_mp_heals(base) without an element: each living member
+// regains int(base × (0.9 + rand(0.3))) MP up to max, with no field or status
+// processing, unlike _mp_hs (lib/_skill.cgi:10570–10586).
+func itemMPHeal(exp *ActiveExpedition, base float64, rng RandomSource) map[string]int {
+	out := make(map[string]int, len(exp.Members))
+	for _, m := range exp.Members {
+		if m.CurrentHP <= 0 {
+			continue
+		}
+		v := int(base * (0.9 + 0.3*rng.Float64()))
+		if d := min(m.CurrentMP+v, m.MaxMP) - m.CurrentMP; d > 0 {
+			out[m.CharacterID] = d
+		}
+	}
+	return out
+}
+
 func nm17Enemy(id, name string, hp, at, df, ag, exp, gold int, a corebattle.LifetimeActor) DungeonMonster {
 	return DungeonMonster{ID: id, Name: name, HP: hp, Attack: at, Defense: df, Agility: ag, ExpReward: exp, GoldReward: gold, combat: enemyCombat(a)}
 }
@@ -242,6 +322,42 @@ var nm17Inner = EncounterPool{
 	Appears: []int{0, 0, 1, 1, 2, 2, 3, 4},
 }
 
+// The underground groups (_1.cgi:108–254); the mimic and box are the pool entries.
+var (
+	nm17Robber = nm17Enemy("nm17-robber", "墓荒らし", 500, 40, 3, 89, 20, 7, corebattle.LifetimeActor{
+		Participant: corebattle.Participant{MP: 200},
+		Jobs:        nm17Jobs("job-09", 70, "job-52", 20),
+	})
+	nm17RobberChief = nm17Enemy("nm17-robber-chief", "墓荒らし", 1500, 200, 90, 400, 151, 56, corebattle.LifetimeActor{
+		Participant: corebattle.Participant{MP: 999, ItemDefinitionIDs: []string{"item-158"}},
+		Jobs:        nm17Jobs("job-09", 999, "job-52", 130),
+	})
+	nm17Mask = nm17Enemy("nm17-mask", "ファラオの呪面", 800, 200, 300, 200, 111, 111, corebattle.LifetimeActor{
+		Participant: corebattle.Participant{MP: 999},
+		Jobs:        nm17Jobs("job-31", 999, "job-15", 999),
+	})
+	nm17GreatMask = nm17Enemy("nm17-great-mask", "ファラオの呪面", 1300, 400, 600, 400, 222, 222, corebattle.LifetimeActor{
+		Participant: corebattle.Participant{MP: 999},
+		Jobs:        nm17Jobs("job-31", 999, "job-15", 999),
+	})
+	nm17Underground = map[byte]mapEvent{
+		'0': {action: passageEvent{}},
+		'H': {action: onceEvent{fixedMonster(nm17Robber)}, perSymbol: true},
+		'I': {action: onceEvent{fixedMonster(nm17Robber)}, perSymbol: true},
+		'J': {action: onceEvent{fixedMonster(nm17RobberChief)}, perSymbol: true},
+		'K': {action: onceEvent{fixedMonster(nm17RobberChief)}, perSymbol: true},
+		'h': {action: nm17Pair{partner: "i", boss: nm17Outer.Monsters[4]}, perSymbol: true},
+		'i': {action: nm17Pair{partner: "h", boss: nm17Outer.Monsters[4]}, perSymbol: true},
+		'j': {action: nm17Pair{partner: "k", boss: nm17Inner.Monsters[3]}, perSymbol: true},
+		'k': {action: nm17Pair{partner: "j", boss: nm17Inner.Monsters[3]}, perSymbol: true},
+		'V': {action: keyEvent{}, perSymbol: true},
+		'v': {action: nm17Ambush{odds: 2, boss: nm17Mask}},
+		'x': {action: nm17Ambush{odds: 4, needKey: true, boss: nm17GreatMask}},
+		'Y': {action: keyEvent{}, perSymbol: true},
+		'n': {action: nm17Rest{base: 200}, perSymbol: true},
+	}
+)
+
 // nm17Guardians is __data.cgi's @bosses, fought at B.
 // shortcut: the strongest member stands in for the group until #1954 adds groups.
 var nm17Guardians = strongest([]DungeonMonster{
@@ -275,8 +391,8 @@ var nm17Guardians = strongest([]DungeonMonster{
 
 // nativeMap17 has the leader job level 40 of @ex_dungeon and limit 200 on
 // every floor. Variants 2–4 are the underground floors, 5 the secret room.
-// shortcut: underground and secret-room events, 2, Z and w stay plain
-// passages until their units land; chests hold no contents until #2455.
+// shortcut: secret-room events, 2, Z and w stay plain passages until #2454;
+// chests hold no contents until #2455.
 func nativeMap17() Dungeon {
 	passage := mapEvent{action: passageEvent{}}
 	main := Floor{
@@ -290,11 +406,12 @@ func nativeMap17() Dungeon {
 			'8': {action: nm17Switch{x: 8, y: 16}, perSymbol: true},
 		},
 	}
-	// Underground passages and the secret room spawn nothing (event_0 is empty).
+	// The three underground floors share their events, and their passages
+	// spawn nothing (event_0 is empty), as in the secret room.
 	under := Floor{
 		Exits:  map[byte]FloorExit{'u': {Variants: []int{1}}},
-		Marks:  map[byte]string{'u': "凸"},
-		events: map[byte]mapEvent{'0': passage},
+		Marks:  map[byte]string{'u': "凸", 'V': "◇", 'Y': "○", 'h': "宝", 'i': "宝", 'j': "宝", 'k': "宝", 'n': "☆"},
+		events: nm17Underground,
 	}
 	room := Floor{events: map[byte]mapEvent{'0': passage}}
 	tmpls := [5]Floor{main, under, under, under, room}

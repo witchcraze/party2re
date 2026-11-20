@@ -332,3 +332,219 @@ func TestNativeMap17_Observation(t *testing.T) {
 		t.Fatalf("projection leaks map state %s err=%v", raw, err)
 	}
 }
+
+// Underground floor _1 (variant 2), x across, y down: J (3,14) below j (3,13);
+// K (5,4) west of k (6,4); V (16,6) above v (16,7); centre x (10–12,13), rest
+// n (9,11) above (9,12), key Y (9,10).
+func newMap17Party(t *testing.T) *nativeFixture {
+	t.Helper()
+	catalog := append(dungeon.DefaultDungeonCatalog(), dungeon.NativeMap17())
+	f := newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), map17Hero("lead"), dungeon.WithCustomDungeons(catalog))
+	f.chars.chars["ally"] = map17Hero("ally")
+	f.startNativeParty(t, dungeon.NativeMap17ID, 1, 11, 16)
+	return f
+}
+
+func TestNativeMap17_TreasurePairs(t *testing.T) {
+	testMap14Stores(t, treasurePairs)
+}
+
+// The first of a pair is a treasure when rand(2) < 1, else the box; either way
+// the visit counts, and the partner is then always a treasure.
+func treasurePairs(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		r    float64
+		want dungeon.TileEventType
+	}{{0.49, dungeon.EventTreasure}, {0.5, dungeon.EventBoss}} {
+		f := newMap17Fixture(t, store, id)
+		f.setFloor(t, id, 2, 3, 14)
+		f.consume(t, id, "J")
+		before := f.reload(t, id)
+		f.rng.floats = []float64{tc.r}
+		res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth)
+		if err != nil || res.EventType != tc.want {
+			t.Fatalf("j at r=%v: event %s err=%v", tc.r, res.EventType, err)
+		}
+		after := f.reload(t, id)
+		if !slices.Contains(after.ConsumedEvents, "j") || tc.want == dungeon.EventBoss && after.Encounter.Monster.ID != "nm17-calamity-box" {
+			t.Fatalf("j: consumed %v encounter %+v", after.ConsumedEvents, after.Encounter)
+		}
+		f.rejectStaleMap14Step(t, id, before, after)
+		f.setFloor(t, id, 2, 5, 4)
+		f.consume(t, id, "K")
+		f.rng.floats = []float64{0.99}
+		if res, err := f.svc.Move(ctx, id, dungeon.DirectionEast); err != nil || res.EventType != dungeon.EventTreasure {
+			t.Fatalf("partner k: event %s err=%v", res.EventType, err)
+		}
+		if _, err := f.svc.Escape(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// J fights once; a spent ambush is a plain passage.
+func TestNativeMap17_RobberAmbushOnce(t *testing.T) {
+	ctx := context.Background()
+	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "rob")
+	f.setFloor(t, "rob", 2, 3, 15)
+	if res, err := f.svc.Move(ctx, "rob", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventBattle {
+		t.Fatalf("J: event %s err=%v", res.EventType, err)
+	}
+	if exp := f.reload(t, "rob"); exp.Encounter == nil || exp.Encounter.Monster.ID != "nm17-robber-chief" || !slices.Contains(exp.ConsumedEvents, "J") {
+		t.Fatalf("J encounter %+v consumed %v", exp.Encounter, exp.ConsumedEvents)
+	}
+	f.consume(t, "rob")
+	f.setFloor(t, "rob", 2, 3, 15)
+	if res, err := f.svc.Move(ctx, "rob", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove || f.reload(t, "rob").Encounter != nil {
+		t.Fatalf("spent J: event %s err=%v", res.EventType, err)
+	}
+}
+
+// v fights on every entry after its 1/2 trap draw; the trap lands before the
+// fight, so a member it fells starts it fallen. V marks once. Both cases get
+// the same combat draws, so the leader's losses differ by the trap alone.
+func TestNativeMap17_CorridorAmbush(t *testing.T) {
+	ctx := context.Background()
+	var losses [2]int
+	for i, floats := range [][]float64{{0.49, 0, 0}, {0.5}} {
+		f := newMap17Party(t)
+		f.setFloor(t, "lead", 2, 16, 5)
+		if _, err := f.svc.Move(ctx, "lead", dungeon.DirectionSouth); err != nil {
+			t.Fatal(err)
+		}
+		if exp := f.reload(t, "lead"); !slices.Contains(exp.ConsumedEvents, "V") {
+			t.Fatalf("V not spent: %v", exp.ConsumedEvents)
+		}
+		before := memberOf(t, f.reload(t, "lead"), "lead").CurrentHP
+		f.rng.floats = floats
+		if res, err := f.svc.Move(ctx, "lead", dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventBoss {
+			t.Fatalf("v: event %s err=%v", res.EventType, err)
+		}
+		after := f.reload(t, "lead")
+		if after.Encounter == nil || after.Encounter.Monster.ID != "nm17-mask" || slices.Contains(after.ConsumedEvents, "v") {
+			t.Fatalf("v encounter %+v consumed %v", after.Encounter, after.ConsumedEvents)
+		}
+		losses[i] = before - memberOf(t, after, "lead").CurrentHP
+		// v has no once-key: the next entry fights again, and its trap can
+		// fell a weak member before the fight.
+		f.consume(t, "lead")
+		f.moveTo(t, "lead", 16, 6)
+		f.setVitality(t, "lead", "ally", 50, 0)
+		f.rng.floats = []float64{0.49, 0, 0}
+		if res, err := f.svc.Move(ctx, "lead", dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventBoss {
+			t.Fatalf("v again: event %s err=%v", res.EventType, err)
+		}
+		if memberOf(t, f.reload(t, "lead"), "ally").CurrentHP != 0 {
+			t.Fatal("trap did not fell the ally")
+		}
+	}
+	if losses[0]-losses[1] != 90 {
+		t.Fatalf("leader losses %v: trap should add int(100 × 0.9)", losses)
+	}
+}
+
+// x and X stay inert without the key; with it every x fights after its 1/4
+// trap draw.
+func TestNativeMap17_KeyArmsCentre(t *testing.T) {
+	ctx := context.Background()
+	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "x")
+	f.setFloor(t, "x", 2, 11, 13)
+	if res, err := f.svc.Move(ctx, "x", dungeon.DirectionEast); err != nil || res.EventType != dungeon.EventMove || f.rng.calls() != 0 {
+		t.Fatalf("x without key: event %s draws %d err=%v", res.EventType, f.rng.calls(), err)
+	}
+	var losses [2]int
+	for i, floats := range [][]float64{{0.24, 0}, {0.25}} {
+		f.consume(t, "x", "Y")
+		f.moveTo(t, "x", 11, 13)
+		before := f.reload(t, "x").CurrentHP
+		f.rng.floats = floats
+		if res, err := f.svc.Move(ctx, "x", dungeon.DirectionEast); err != nil || res.EventType != dungeon.EventBoss {
+			t.Fatalf("x with key: event %s err=%v", res.EventType, err)
+		}
+		after := f.reload(t, "x")
+		if after.Encounter == nil || after.Encounter.Monster.ID != "nm17-great-mask" {
+			t.Fatalf("x encounter %+v", after.Encounter)
+		}
+		losses[i] = before - after.CurrentHP
+	}
+	if losses[0]-losses[1] != 90 {
+		t.Fatalf("losses %v: trap should add int(100 × 0.9)", losses)
+	}
+}
+
+// The key opens main-floor z on every entry; without it z returns the party
+// and spends the round.
+func TestNativeMap17_KeyDoor(t *testing.T) {
+	ctx := context.Background()
+	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "z")
+	f.moveTo(t, "z", 9, 13)
+	before := f.reload(t, "z")
+	if _, err := f.svc.Move(ctx, "z", dungeon.DirectionNorth); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.reload(t, "z"); got.PosY != 13 || got.Round != before.Round+1 {
+		t.Fatalf("locked z: y %d round %d/%d", got.PosY, got.Round, before.Round)
+	}
+	// Y is picked up underground, then the door passes every time.
+	f.setFloor(t, "z", 2, 9, 9)
+	if _, err := f.svc.Move(ctx, "z", dungeon.DirectionSouth); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.reload(t, "z"); !slices.Contains(got.ConsumedEvents, "Y") {
+		t.Fatalf("Y not taken: %v", got.ConsumedEvents)
+	}
+	f.setFloor(t, "z", 1, 9, 13)
+	for range 2 {
+		if _, err := f.svc.Move(ctx, "z", dungeon.DirectionNorth); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.reload(t, "z"); got.PosY != 12 {
+			t.Fatalf("keyed z: y %d", got.PosY)
+		}
+		f.moveTo(t, "z", 9, 13)
+	}
+}
+
+// n heals once: MP goes to living members only, by the 0.9–1.2 roll, capped.
+func TestNativeMap17_Rest(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		leadMP, want int
+	}{{100, 339}, {800, 900}} {
+		f := newMap17Party(t)
+		f.setFloor(t, "lead", 2, 9, 12)
+		f.setVitality(t, "lead", "lead", 1_000_000, tc.leadMP)
+		f.setVitality(t, "lead", "ally", 0, 10)
+		if _, err := f.svc.Move(ctx, "lead", dungeon.DirectionNorth); err != nil {
+			t.Fatal(err)
+		}
+		exp := f.reload(t, "lead")
+		if lead, ally := memberOf(t, exp, "lead"), memberOf(t, exp, "ally"); lead.CurrentMP != tc.want || ally.CurrentMP != 10 || !slices.Contains(exp.ConsumedEvents, "n") {
+			t.Fatalf("rest: lead MP %d (want %d) ally MP %d consumed %v", lead.CurrentMP, tc.want, ally.CurrentMP, exp.ConsumedEvents)
+		}
+		f.moveTo(t, "lead", 9, 12)
+		f.setVitality(t, "lead", "lead", 1_000_000, 0)
+		if _, err := f.svc.Move(ctx, "lead", dungeon.DirectionNorth); err != nil || memberOf(t, f.reload(t, "lead"), "lead").CurrentMP != 0 {
+			t.Fatalf("spent rest healed again: %v", err)
+		}
+	}
+}
+
+// Underground marks; ambush cells look like passages.
+func TestNativeMap17_UndergroundMarks(t *testing.T) {
+	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "marks")
+	f.setFloor(t, "marks", 2, 16, 5)
+	view, err := f.svc.ObserveExpedition(context.Background(), "marks")
+	if err != nil || view.Map.Tiles[2][1] != "◇" {
+		t.Fatalf("V %v err=%v", view.Map.Tiles, err)
+	}
+	f.setFloor(t, "marks", 2, 11, 13)
+	if view, err = f.svc.ObserveExpedition(context.Background(), "marks"); err != nil || view.Map.Tiles[1][0] != "□" || view.Map.Tiles[1][2] != "□" {
+		t.Fatalf("x cells %v err=%v", view.Map.Tiles, err)
+	}
+	f.setFloor(t, "marks", 2, 9, 12)
+	if view, err = f.svc.ObserveExpedition(context.Background(), "marks"); err != nil || view.Map.Tiles[0][1] != "☆" {
+		t.Fatalf("n %v err=%v", view.Map.Tiles, err)
+	}
+}

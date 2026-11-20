@@ -334,6 +334,3 @@ the legacy revision above.
   unscaled, because `add_boss` fills a maximum only when it is missing; HP is
   scaled from 6000 like the other stats (`1.cgi:179–200`,
   `lib/_npc_action.cgi:600–614`).
-- **Rest MP uses `_item_mp_heals`,** not map15's `_mp_hs`: living members only,
-  without field or status processing (`_1.cgi:49`, `__1.cgi:56`,
-  `lib/_skill.cgi:10570–10586`).
