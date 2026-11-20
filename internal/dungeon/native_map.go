@@ -140,6 +140,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader,
 		return ExpeditionStepResult{}, err
 	}
 	if battle := n.battle; battle != nil {
+		revived = preCombatDamage(exp, n.step, revived)
 		return s.resolveMonsterCombat(ctx, exp, leader, battle.monster, battle.kind, x, y, battle.key, battle.status, revived, n.step.MapState)
 	}
 
@@ -182,6 +183,35 @@ func reviveOnMove(exp *ActiveExpedition, rng RandomSource) (map[string]int, erro
 		}
 	}
 	return hp, nil
+}
+
+// preCombatDamage applies an event's damage before its fight (map17 v/x
+// traps) to the roster the battle starts from, as reviveOnMove does, and
+// adds the effective change to deltas for the saved step.
+func preCombatDamage(exp *ActiveExpedition, step StepParams, deltas map[string]int) map[string]int {
+	apply := func(id string, cur *int, d int) {
+		hp := max(*cur+d, 0)
+		if hp == *cur {
+			return
+		}
+		if deltas == nil {
+			deltas = make(map[string]int)
+		}
+		deltas[id] += hp - *cur
+		*cur = hp
+	}
+	if len(exp.Members) == 0 {
+		apply(exp.CharacterID, &exp.CurrentHP, step.HPDelta)
+		return deltas
+	}
+	for i := range exp.Members {
+		m := &exp.Members[i]
+		apply(m.CharacterID, &m.CurrentHP, step.MemberHPDeltas[m.CharacterID])
+		if m.CharacterID == exp.CharacterID {
+			exp.CurrentHP = m.CurrentHP
+		}
+	}
+	return deltas
 }
 
 func addHPDeltas(step *StepParams, leaderID string, deltas map[string]int) {
