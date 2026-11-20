@@ -198,6 +198,147 @@ func TestGuildRepository_DecayRecordsGuildListing(t *testing.T) {
 	}
 }
 
+func TestGuildRepository_DecayEmptyDatabaseRecordsEmptySnapshot(t *testing.T) {
+	f := newGuildDecayFixture(t)
+	ctx := context.Background()
+	listing, err := f.guilds.GetListing(ctx)
+	if err != nil || listing.GeneratedAt != nil || listing.Guilds == nil || len(listing.Guilds) != 0 {
+		t.Fatalf("before first decay: %+v err=%v", listing, err)
+	}
+	if err := f.guilds.DecayGuildPoints(ctx, .8); err != nil {
+		t.Fatal(err)
+	}
+	listing, err = f.guilds.GetListing(ctx)
+	if err != nil || listing.GeneratedAt == nil || listing.Guilds == nil || len(listing.Guilds) != 0 {
+		t.Fatalf("after empty decay: %+v err=%v", listing, err)
+	}
+}
+
+func TestGuildRepository_DecaySnapshotWriteFailureRollsBack(t *testing.T) {
+	f := newGuildDecayFixture(t, 200, 100)
+	ctx := context.Background()
+	if err := f.guilds.DecayGuildPoints(ctx, .8); err != nil {
+		t.Fatal(err)
+	}
+	prevListing, err := f.guilds.GetListing(ctx)
+	if err != nil || prevListing.GeneratedAt == nil || len(prevListing.Guilds) != 2 {
+		t.Fatalf("initial listing=%+v err=%v", prevListing, err)
+	}
+	if _, err := f.db.ExecContext(ctx, `CREATE TRIGGER fail_guild_snapshot_write BEFORE INSERT ON guild_list_snapshot
+		FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected snapshot write failure'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.guilds.DecayGuildPoints(ctx, .8); err == nil {
+		t.Fatal("expected snapshot write failure")
+	}
+	if got := f.points(t); !slices.Equal(got, []int64{160, 80}) {
+		t.Fatalf("decay survived snapshot write failure: got=%v want=[160 80]", got)
+	}
+	listing, err := f.guilds.GetListing(ctx)
+	if err != nil || !reflect.DeepEqual(listing, prevListing) {
+		t.Fatalf("listing changed after rollback: got=%+v want=%+v err=%v", listing, prevListing, err)
+	}
+}
+
+func TestGuildDecayConcurrentCreationExcludesNewGuildFromSnapshot(t *testing.T) {
+	f := newGuildDecayFixture(t, 200)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var oldName string
+	if err := f.db.QueryRowContext(ctx, "SELECT name FROM guilds WHERE id = ?", f.guildIDs[0]).Scan(&oldName); err != nil {
+		t.Fatal(err)
+	}
+
+	started := make(chan int64, 1)
+	done := make(chan error, 1)
+	decayStarted := false
+	var newGuildID, newGuildName string
+
+	err := database.RunInTx(ctx, f.db, func(txCtx context.Context) error {
+		tx := database.TxFromContext(txCtx)
+		var locked string
+		if err := tx.QueryRowContext(txCtx, "SELECT id FROM guilds WHERE id = ? FOR UPDATE", f.guildIDs[0]).Scan(&locked); err != nil {
+			return err
+		}
+		var blocking int64
+		if err := tx.QueryRowContext(txCtx, "SELECT CONNECTION_ID()").Scan(&blocking); err != nil {
+			return err
+		}
+		decayStarted = true
+		go func() {
+			done <- database.RunInTx(ctx, f.db, func(decayCtx context.Context) error {
+				var waiting int64
+				err := database.TxFromContext(decayCtx).QueryRowContext(decayCtx, "SELECT CONNECTION_ID()").Scan(&waiting)
+				started <- waiting
+				if err != nil {
+					return err
+				}
+				return f.guilds.DecayGuildPoints(decayCtx, .8)
+			})
+		}()
+		select {
+		case waiting := <-started:
+			if err := waitForGuildDecayLock(txCtx, f.db, waiting, blocking); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		// Create and fund a new guild on an independent connection while decay is blocked.
+		created, _, err := database.CreateTestGuildWithLeader(ctx, f.db, "New_"+id.New()[:8], 10000)
+		if err != nil {
+			return err
+		}
+		if err := f.guilds.AddPoints(ctx, created.ID, 100); err != nil {
+			return err
+		}
+		newGuildID, newGuildName = created.ID, created.Name
+		return nil
+	})
+	if decayStarted {
+		if decayErr := <-done; decayErr != nil {
+			t.Fatalf("decay failed: %v", decayErr)
+		}
+	}
+	if err != nil {
+		t.Fatalf("blocking tx failed: %v", err)
+	}
+
+	if got := f.points(t); !slices.Equal(got, []int64{160}) {
+		t.Fatalf("old guild points=%v want=[160]", got)
+	}
+	var newPoints int64
+	if err := f.db.QueryRowContext(ctx, "SELECT points FROM guilds WHERE id = ?", newGuildID).Scan(&newPoints); err != nil {
+		t.Fatal(err)
+	}
+	if newPoints != 100 {
+		t.Fatalf("new guild points=%d want=100", newPoints)
+	}
+
+	listing, err := f.guilds.GetListing(ctx)
+	if err != nil || listing.GeneratedAt == nil {
+		t.Fatalf("listing=%+v err=%v", listing, err)
+	}
+	if len(listing.Guilds) != 1 || listing.Guilds[0].Name != oldName || listing.Guilds[0].Points != 160 {
+		t.Fatalf("first snapshot=%+v want single guild %q at 160", listing.Guilds, oldName)
+	}
+
+	// The new guild joins the cohort on the next decay.
+	if err := f.guilds.DecayGuildPoints(ctx, .8); err != nil {
+		t.Fatal(err)
+	}
+	listing, err = f.guilds.GetListing(ctx)
+	if err != nil || len(listing.Guilds) != 2 {
+		t.Fatalf("second snapshot=%+v err=%v", listing, err)
+	}
+	if listing.Guilds[0].Name != oldName || listing.Guilds[0].Points != 128 ||
+		listing.Guilds[1].Name != newGuildName || listing.Guilds[1].Points != 80 {
+		t.Fatalf("second snapshot=%+v want [%s:128 %s:80]", listing.Guilds, oldName, newGuildName)
+	}
+}
+
 // Observe a real InnoDB wait instead of guessing when the contender reached its lock.
 func waitForGuildDecayLock(ctx context.Context, db *sql.DB, waiting, blocking int64) error {
 	ticker := time.NewTicker(100 * time.Millisecond)

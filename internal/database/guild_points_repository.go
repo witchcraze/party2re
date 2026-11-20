@@ -1,10 +1,13 @@
 package database
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/guild"
@@ -46,60 +49,90 @@ func (r *GuildRepository) DecayGuildPoints(ctx context.Context, factor float64) 
 				return err
 			}
 		}
-		return saveGuildListing(txCtx, executor, now)
+		return saveGuildListing(txCtx, executor, guildIDs, now)
 	})
 }
 
-// saveGuildListing ranks guilds by points, then active member count; pending applicants are not listed.
-func saveGuildListing(ctx context.Context, executor sqlContextExecutor, now time.Time) error {
-	rows, err := executor.QueryContext(ctx, `
-		SELECT g.id, g.name, g.mark, g.color, g.notice, g.points
-		FROM guilds g
-		ORDER BY g.points DESC,
-			(SELECT COUNT(*) FROM guild_members m WHERE m.guild_id = g.id AND m.is_pending = FALSE) DESC,
-			g.created_at, g.id
-	`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
+type guildListingRow struct {
+	id        string
+	createdAt time.Time
+	entry     guild.ListingEntry
+}
+
+// saveGuildListing ranks the processed guild cohort by points, then active member count from one roster read; pending applicants are not listed.
+func saveGuildListing(ctx context.Context, executor sqlContextExecutor, guildIDs []string, now time.Time) error {
 	guilds := []guild.ListingEntry{}
-	index := map[string]int{}
-	for rows.Next() {
-		var guildID string
-		e := guild.ListingEntry{Members: []guild.ListingMember{}}
-		if err := rows.Scan(&guildID, &e.Name, &e.Mark, &e.Color, &e.Message, &e.Points); err != nil {
+	if len(guildIDs) > 0 {
+		placeholders := "?" + strings.Repeat(",?", len(guildIDs)-1)
+		args := make([]any, len(guildIDs))
+		for i, guildID := range guildIDs {
+			args[i] = guildID
+		}
+		rows, err := executor.QueryContext(ctx, `
+			SELECT id, name, mark, color, notice, points, created_at
+			FROM guilds
+			WHERE id IN (`+placeholders+`)
+		`, args...)
+		if err != nil {
 			return err
 		}
-		index[guildID] = len(guilds)
-		guilds = append(guilds, e)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	members, err := executor.QueryContext(ctx, `
-		SELECT m.guild_id, c.name, m.title
-		FROM guild_members m
-		JOIN characters c ON c.id = m.character_id
-		WHERE m.is_pending = FALSE
-		ORDER BY m.joined_at, m.character_id
-	`)
-	if err != nil {
-		return err
-	}
-	defer members.Close()
-	for members.Next() {
-		var guildID string
-		var m guild.ListingMember
-		if err := members.Scan(&guildID, &m.Name, &m.Title); err != nil {
+		defer rows.Close()
+		listingRows := []guildListingRow{}
+		index := map[string]int{}
+		for rows.Next() {
+			var r guildListingRow
+			r.entry.Members = []guild.ListingMember{}
+			if err := rows.Scan(&r.id, &r.entry.Name, &r.entry.Mark, &r.entry.Color, &r.entry.Message, &r.entry.Points, &r.createdAt); err != nil {
+				return err
+			}
+			index[r.id] = len(listingRows)
+			listingRows = append(listingRows, r)
+		}
+		if err := rows.Err(); err != nil {
 			return err
 		}
-		if i, ok := index[guildID]; ok {
-			guilds[i].Members = append(guilds[i].Members, m)
+		if len(listingRows) > 0 {
+			members, err := executor.QueryContext(ctx, `
+				SELECT m.guild_id, c.name, m.title
+				FROM guild_members m
+				JOIN characters c ON c.id = m.character_id
+				WHERE m.is_pending = FALSE AND m.guild_id IN (`+placeholders+`)
+				ORDER BY m.joined_at, m.character_id
+			`, args...)
+			if err != nil {
+				return err
+			}
+			defer members.Close()
+			for members.Next() {
+				var guildID string
+				var m guild.ListingMember
+				if err := members.Scan(&guildID, &m.Name, &m.Title); err != nil {
+					return err
+				}
+				if i, ok := index[guildID]; ok {
+					listingRows[i].entry.Members = append(listingRows[i].entry.Members, m)
+				}
+			}
+			if err := members.Err(); err != nil {
+				return err
+			}
+			slices.SortFunc(listingRows, func(a, b guildListingRow) int {
+				if c := cmp.Compare(b.entry.Points, a.entry.Points); c != 0 {
+					return c
+				}
+				if c := cmp.Compare(len(b.entry.Members), len(a.entry.Members)); c != 0 {
+					return c
+				}
+				if c := a.createdAt.Compare(b.createdAt); c != 0 {
+					return c
+				}
+				return cmp.Compare(a.id, b.id)
+			})
+			guilds = make([]guild.ListingEntry, len(listingRows))
+			for i, r := range listingRows {
+				guilds[i] = r.entry
+			}
 		}
-	}
-	if err := members.Err(); err != nil {
-		return err
 	}
 	data, err := json.Marshal(guilds)
 	if err != nil {
