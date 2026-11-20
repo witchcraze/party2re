@@ -201,16 +201,13 @@ func (s *Service) Enterable(ctx context.Context, r Result, destination string) e
 	if !ok {
 		return ErrInvalidSelection
 	}
-	if err := qualify(ctx, d, r.Snapshot.Character); err != nil {
-		return err
-	}
 	if (d.ParentOnly || d.OwnedParentOnly) && (r.Navigation == nil || r.Navigation.Unavailable || r.Navigation.Selection.Destination != d.Parent) {
 		return ErrSceneAccessDenied
 	}
 	if d.OwnedParentOnly && r.Navigation.Selection.Subject != (Subject{}) && !r.Navigation.SubjectOwned {
 		return ErrSceneAccessDenied
 	}
-	return nil
+	return qualify(ctx, d, r.Snapshot.Character)
 }
 
 // ByCharacter adapts a pure character predicate to SceneDefinition.CanEnter.

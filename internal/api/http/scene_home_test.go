@@ -41,6 +41,7 @@ type homeSceneFixture struct {
 	imageUnlocks      character.ImageUnlocks
 	imageWrites       []string
 	imageUnlockErr    error
+	imageUnlockReads  int
 }
 
 func (f *homeSceneFixture) OpenOwnRecord(ctx context.Context, playerID, actor string) (adventure.RecordEntryResult, error) {
@@ -190,6 +191,7 @@ func homeSceneRouter(t *testing.T, options ...Option) (*homeSceneFixture, *gatew
 		playercontext.SceneDefinition{ID: "home_adventure_record", Parent: "home", InheritsSubject: true},
 		playercontext.SceneDefinition{ID: "home_custom_skill", Parent: "home", OwnedParentOnly: true},
 		playercontext.SceneDefinition{ID: "home_image", Parent: "home", OwnedParentOnly: true, CanEnter: func(context.Context, corecharacter.Character) (bool, error) {
+			f.imageUnlockReads++
 			return f.imageUnlocks.Image, f.imageUnlockErr
 		}},
 	))
