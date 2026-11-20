@@ -2,6 +2,7 @@ package dungeon
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -148,6 +149,7 @@ func (s *Service) resolveMonsterCombat(
 	eventKey string,
 	allyStatus string,
 	revived map[string]int,
+	mapState json.RawMessage,
 ) (ExpeditionStepResult, error) {
 	rounds, stayX, stayY := exp.combatProgress(newX, newY)
 	var enemy corebattle.Participant
@@ -195,6 +197,7 @@ func (s *Service) resolveMonsterCombat(
 			ConsumedItems:        consumedItems,
 			RoundDelta:           rounds,
 			EventKey:             eventKey,
+			MapState:             mapState,
 			ExpDelta:             leaderExpDelta,
 			GoldDelta:            leaderGoldDelta,
 			RewardItemID:         monster.DropItemID,
@@ -236,6 +239,7 @@ func (s *Service) resolveMonsterCombat(
 		ConsumedItems:        consumedItems,
 		RoundDelta:           rounds,
 		EventKey:             eventKey,
+		MapState:             mapState,
 		Now:                  time.Now().UTC(),
 	})
 	if err != nil {

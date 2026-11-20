@@ -257,7 +257,7 @@ var nm14Pools = [3]EncounterPool{
 			nm14Marine,
 			{ID: "nm14-cleio", Name: "クレイオー", HP: 15, Attack: 35, Defense: 1200, Agility: 600, ExpReward: 200, GoldReward: 500,
 				combat: enemyCombat(corebattle.LifetimeActor{
-					Participant: corebattle.Participant{MP: 89},
+					Participant: corebattle.Participant{MP: 89, ItemDefinitionIDs: []string{"item-148"}},
 					Jobs:        corebattle.BattleJobs{JobID: "job-13", SP: 100, OldJobID: "job-14", OldSP: 45},
 					Temporary:   corebattle.TemporaryNullMagic,
 				}),
