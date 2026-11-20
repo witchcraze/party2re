@@ -268,7 +268,10 @@ resume through `Service.Fight` (`POST /characters/{id}/dungeons/fight`) or escap
 Step revisions reject stale combat results and movement updates; the Memory
 adapter follows the same checks. Victory clears the encounter and grants its
 rewards once. Escape is the only terminal outcome; an all-fallen party stays in
-the run until it escapes. Before SQL settlement, a revision-checked step freezes
+the run until it escapes. Carried-over pre-update frozen `wiped_out` buffers
+remain observable with leader Fight/Escape continuations and settle their
+recorded outcome once via the same SQL run-ID claim and owner/run-qualified
+cleanup, forfeiting unbanked run stock. Before SQL settlement, a revision-checked step freezes
 the escape snapshot, rejecting further battle updates. Concurrent Escapes reuse
 that frozen snapshot rather than their earlier reads. A stale Escape cannot claim
 SQL settlement or delete a newer battle result. If SQL fails or post-commit

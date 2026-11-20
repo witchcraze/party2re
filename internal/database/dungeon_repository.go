@@ -245,6 +245,9 @@ func (r *DungeonRepository) FinalizeExpedition(
 			RemainingMP:   make(map[string]int, len(sortedMembers)),
 			ConsumedItems: make(map[string][]corebattle.ConsumedItem, len(sortedMembers)),
 		}
+		if history.Outcome == dungeon.StatusWipedOut {
+			state.Outcome = corebattle.OutcomeDefeat
+		}
 		for i, m := range sortedMembers {
 			ids[i] = m.CharacterID
 			state.RemainingHP[m.CharacterID] = m.CurrentHP

@@ -113,7 +113,7 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 	if err != nil || got.Controls.CanMove || len(got.Directions) != 0 || !got.Controls.CanEscape {
 		t.Fatalf("exhausted: %+v %v", got, err)
 	}
-	for _, status := range []dungeon.ExpeditionStatus{dungeon.StatusEscaped} {
+	for _, status := range []dungeon.ExpeditionStatus{dungeon.StatusEscaped, dungeon.StatusWipedOut} {
 		run.Status = status
 		chars.err, inventory.err = errors.New("terminal map must not read character"), errors.New("terminal map must not read inventory")
 		got, err := svc.ObserveExpedition(ctx, "hero")

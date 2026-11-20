@@ -48,10 +48,6 @@ func (s *Service) handleEscape(
 	if err := s.freezeExpedition(ctx, exp, StatusEscaped); err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	now := time.Now().UTC()
-	exp.Encounter = nil
-	exp.Status = StatusEscaped
-	exp.UpdatedAt = now
 
 	// Transfer accumulated EXP & Gold to character
 	if exp.AccumulatedExp > 0 {
@@ -62,6 +58,46 @@ func (s *Service) handleEscape(
 	if err := char.AddMoney(exp.AccumulatedGold); err != nil {
 		return ExpeditionStepResult{}, fmt.Errorf("adding gold: %w", err)
 	}
+
+	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
+	for _, defID := range exp.AccumulatedItems {
+		rewardItems = append(rewardItems, coreitem.Instance{
+			ID:               id.New(),
+			DefinitionID:     defID,
+			Quantity:         1,
+			EnhancementLevel: 0,
+		})
+	}
+
+	return s.finalizeFrozenSettlement(ctx, exp, char, StatusEscaped, EventEscape, rewardItems, exp.AccumulatedExp, exp.AccumulatedGold)
+}
+
+// handleWipeout settles a carried-over pre-update frozen wiped_out buffer without creating new wiped_out runs.
+func (s *Service) handleWipeout(
+	ctx context.Context,
+	exp *ActiveExpedition,
+	char *corecharacter.Character,
+) (ExpeditionStepResult, error) {
+	if exp.Status != StatusWipedOut {
+		return ExpeditionStepResult{}, ErrExpeditionStateChanged
+	}
+	return s.finalizeFrozenSettlement(ctx, exp, char, StatusWipedOut, EventWipeout, nil, 0, 0)
+}
+
+func (s *Service) finalizeFrozenSettlement(
+	ctx context.Context,
+	exp *ActiveExpedition,
+	char *corecharacter.Character,
+	status ExpeditionStatus,
+	eventType TileEventType,
+	rewardItems []coreitem.Instance,
+	expEarned int,
+	goldFound int,
+) (ExpeditionStepResult, error) {
+	now := time.Now().UTC()
+	exp.Encounter = nil
+	exp.Status = status
+	exp.UpdatedAt = now
 
 	char.Stats.HP = exp.CurrentHP
 	for _, m := range exp.Members {
@@ -75,17 +111,6 @@ func (s *Service) handleEscape(
 	}
 	char.Stats.ClampVitality()
 
-	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
-	for _, defID := range exp.AccumulatedItems {
-		itemID := id.New()
-		rewardItems = append(rewardItems, coreitem.Instance{
-			ID:               itemID,
-			DefinitionID:     defID,
-			Quantity:         1,
-			EnhancementLevel: 0,
-		})
-	}
-
 	histID := exp.ID
 	if histID == "" {
 		histID = id.New()
@@ -94,9 +119,9 @@ func (s *Service) handleEscape(
 		ID:               histID,
 		CharacterID:      char.ID,
 		DungeonID:        exp.DungeonID,
-		Outcome:          StatusEscaped,
-		ExpReward:        exp.AccumulatedExp,
-		GoldReward:       exp.AccumulatedGold,
+		Outcome:          status,
+		ExpReward:        expEarned,
+		GoldReward:       goldFound,
 		ItemsRewardCount: len(rewardItems),
 		CreatedAt:        now,
 	}
@@ -114,9 +139,9 @@ func (s *Service) handleEscape(
 
 	return ExpeditionStepResult{
 		Expedition: *exp,
-		EventType:  EventEscape,
-		ExpEarned:  exp.AccumulatedExp,
-		GoldFound:  exp.AccumulatedGold,
+		EventType:  eventType,
+		ExpEarned:  expEarned,
+		GoldFound:  goldFound,
 		IsFinished: true,
 	}, nil
 }

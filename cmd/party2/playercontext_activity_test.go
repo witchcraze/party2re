@@ -294,6 +294,7 @@ func TestDungeonActivityEncounterAndTerminalCandidates(t *testing.T) {
 		{dungeon.StatusExploring, true, 10, []string{"dungeon_fight", "dungeon_escape"}},
 		{dungeon.StatusExploring, false, 0, []string{"dungeon_escape"}},
 		{dungeon.StatusEscaped, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
+		{dungeon.StatusWipedOut, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
 	} {
 		f.exp = &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", Revision: 8, Status: tc.status, CurrentHP: 1, Round: 20 - tc.turns, RoundLimit: 20}
 		if tc.encounter {
