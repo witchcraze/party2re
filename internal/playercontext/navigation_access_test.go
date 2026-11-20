@@ -110,6 +110,49 @@ func TestOwnedParentOnlySceneIsEnteredOnlyFromTheActorsOwnParent(t *testing.T) {
 	}
 }
 
+func TestParentAndOwnedBoundaryCheckedBeforeQualificationRead(t *testing.T) {
+	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner"}, ctx: context.Background()}
+	store := &navigationStore{}
+	var reads int
+	var qualErr error
+	s := NewService(r, r, r, WithNavigation(store, SceneDefinition{ID: "town"},
+		SceneDefinition{ID: "home", Parent: "town", SubjectKind: "home",
+			SubjectAvailable: func(context.Context, string, string) (bool, error) { return true, nil },
+			SubjectOwned:     func(_ context.Context, actor, target string) (bool, error) { return actor == target, nil }},
+		SceneDefinition{ID: "mine", Parent: "home", OwnedParentOnly: true, CanEnter: func(context.Context, character.Character) (bool, error) {
+			reads++
+			return true, qualErr
+		}}))
+	qualErr = errors.New("unlock read failed")
+	for _, from := range []Selection{
+		{Destination: "town"},
+		{Destination: "home", Subject: Subject{Kind: "home", ID: "other"}},
+		{Destination: "unknown"},
+	} {
+		store.selection = from
+		res, err := s.Query(r.ctx, "hero", "owner")
+		if err != nil {
+			t.Fatalf("%+v query: %v", from, err)
+		}
+		if err := s.Enterable(r.ctx, res, "mine"); !errors.Is(err, ErrSceneAccessDenied) || reads != 0 {
+			t.Fatalf("%+v enterable: err=%v reads=%d", from, err, reads)
+		}
+		if _, err := s.Enter(r.ctx, "owner", "hero", "mine"); !errors.Is(err, ErrSceneAccessDenied) || reads != 0 {
+			t.Fatalf("%+v enter: err=%v reads=%d", from, err, reads)
+		}
+	}
+	for _, from := range []Selection{
+		{Destination: "home"},
+		{Destination: "home", Subject: Subject{Kind: "home", ID: "hero"}},
+	} {
+		store.selection = from
+		before := reads
+		if _, err := s.Enter(r.ctx, "owner", "hero", "mine"); !errors.Is(err, qualErr) || reads != before+1 {
+			t.Fatalf("%+v own-home enter: err=%v reads=%d->%d", from, err, before, reads)
+		}
+	}
+}
+
 func TestOwnedSubjectAdmitsOwnerActionsAndPropagatesReadFailure(t *testing.T) {
 	r := &queryReaders{character: character.Character{ID: "hero", PlayerID: "owner", Money: 1}, ctx: context.Background()}
 	store := &navigationStore{selection: Selection{Destination: "district", Subject: Subject{Kind: "store", ID: "mine"}}}
