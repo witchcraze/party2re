@@ -9,12 +9,17 @@ var (
 	npcTailsAfterField  = [...]string{"item-206-operation-tail", "item-202-npc-tail", "item-208-combat-tail", "guardian-mp-tail", "item-246-combat-tail"}
 )
 
-func (s *LifetimeState) validateNPCPoison(c *EquipmentTailContext, rng random.Generator) error {
-	a := s.actor(c.ActorID)
+func npcPoisonBounds(a *LifetimeActor) (int, int) {
 	damage := a.MaxHP / 10
 	if damage > 999 {
-		damage = 1049
+		return 950, 1049
 	}
+	return damage, damage
+}
+
+func (s *LifetimeState) validateNPCPoison(c *EquipmentTailContext, rng random.Generator) error {
+	a := s.actor(c.ActorID)
+	_, damage := npcPoisonBounds(a)
 	if a.HP <= 0 || a.HP > damage {
 		return nil
 	}
