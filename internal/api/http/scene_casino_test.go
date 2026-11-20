@@ -102,6 +102,17 @@ type casinoSceneReads struct {
 	viewErr  error
 	mutated  func()
 	mutation int
+	// missedRecoveries makes that many preflight recoveries see no claim, as when a
+	// concurrent kick commits its departure just after the preflight.
+	missedRecoveries int
+}
+
+func (r *casinoSceneReads) RecoverCharacterDeparture(ctx context.Context, characterID string) error {
+	if r.missedRecoveries > 0 {
+		r.missedRecoveries--
+		return nil
+	}
+	return r.CasinoService.RecoverCharacterDeparture(ctx, characterID)
 }
 
 // Room mutations count executions and may fail the observations that follow.
