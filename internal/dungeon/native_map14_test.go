@@ -407,3 +407,16 @@ func TestNativeMap14_DestinationEventsOnce(t *testing.T) {
 		})
 	}
 }
+
+// Map-owned enemies keep their legacy held item (ite) like stage enemies do.
+func TestNativeMap14_CleioHoldsItem148(t *testing.T) {
+	for _, m := range mapDef(t, dungeon.NativeMap14ID).Variants[2].Pools[0].Monsters {
+		if m.ID == "nm14-cleio" {
+			if items := m.EnemyCombatForTest().ItemDefinitionIDs; !slices.Equal(items, []string{"item-148"}) {
+				t.Fatalf("cleio items %v", items)
+			}
+			return
+		}
+	}
+	t.Fatal("cleio missing from the _K pool")
+}
