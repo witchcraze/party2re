@@ -98,8 +98,8 @@ public advance command solely to reproduce two legacy requests.
 **Floor changes.** The selected map, round, position and flags are one saved
 header (`_battle.cgi:464,521`); the next request loads the new map file with its
 own `$max_round` (`vs_dungeon.cgi:23–28`). A map change resets none of them, so
-the party keeps its coordinate unless the event also sets one (map17), the round
-continues under the destination's limit, and flags stay run-wide across floors. As with a warp, the landing cell
+the party keeps its coordinate, the round continues under the destination's
+limit, and flags stay run-wide across floors. As with a warp, the landing cell
 dispatches nothing until a later move enters it.
 
 ### Observation and API ownership
@@ -184,7 +184,8 @@ accuracy, job skills and temporary effects in explicit combat
 crystals ([#1957](https://github.com/witchcraze/party2re/issues/1957)), chest
 contents and inspection ([treasure contract](#treasure-inspection-and-delivery);
 per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428),
-map15 [#2451](https://github.com/witchcraze/party2re/issues/2451))
+map15 [#2451](https://github.com/witchcraze/party2re/issues/2451),
+map17 [#2455](https://github.com/witchcraze/party2re/issues/2455))
 and narration, owned by the Dungeon log ([#948](https://github.com/witchcraze/party2re/issues/948)).
 
 ### Map0 implementation
@@ -328,3 +329,31 @@ the legacy revision above.
   (`__1.cgi:28`, `_2.cgi:30`, `_battle.cgi:1568–1610,1786–1791`). Native records
   it in the run state; the batch resolver has no named fields, so battles apply it
   only with explicit combat ([#1865](https://github.com/witchcraze/party2re/issues/1865)).
+
+### Map17 tomb switches and secret room
+
+Decision [#1778](https://github.com/witchcraze/party2re/issues/1778): reproduce the
+original without departures. File references are relative to `party2/map/17/` at
+the legacy revision above.
+
+- **Passing `b` splits the run.** It is the only way into the inner area, and
+  `B` then turns the party back. No route leads back to the band or its stairs,
+  so `j`/`k` count for the secret room only if visited first. `b` also switches
+  every later pool, boss group and chest from `__data.cgi` to `___data.cgi`
+  (`1.cgi:117–133,172–177`). `_data.cgi` is never loaded; the summon skill
+  returns early for stage 17 (`lib/_skill.cgi:9835–9842`).
+- **Much of the map is unreachable.** The outer ring's stairs lead only to
+  underground pockets without a band stair, so `h`, `i`, `H`, `I`, the bottom
+  `v` corridor and the outer `9` cells are never entered. `R` never cuts the
+  band: each band `9` has a parallel lane. Switches `3`–`5`, `A`/`a`/`C` and
+  `P` have no cell.
+- **The underground floor is drawn once per run.** The first `U` appends 1–3 and
+  later stairs reuse it (`1.cgi:162–170`), unlike map2's draw on every use.
+- **Secret-room treasures show before they open.** Their gate counts `j`/`k`
+  visits, including a box fight, so it is at most 2. `M` shows at 1 but opens at 2,
+  and `Q`/`O` show at 2 but need 3 and 4 (`__1.cgi:32–55`).
+- **The `w` boss starts at half HP.** It presets max HP 12000 over HP 6000, so
+  party scaling changes only HP (`1.cgi:179–200`, `lib/_npc_action.cgi:600–611`).
+- **Rest MP uses `_item_mp_heals`,** not map15's `_mp_hs`: living members only,
+  without field or status processing (`_1.cgi:49`, `__1.cgi:56`,
+  `lib/_skill.cgi:10570–10586`).
