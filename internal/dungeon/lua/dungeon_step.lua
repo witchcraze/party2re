@@ -1,3 +1,26 @@
+local function parse_int_field(hash_key, field)
+    local raw = redis.call('HGET', hash_key, field)
+    if not raw or raw == '' then
+        return 0
+    end
+    if not string.match(raw, '^%-?%d+$') then
+        return nil, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    return tonumber(raw)
+end
+
+local function decode_array_field(hash_key, field)
+    local raw = redis.call('HGET', hash_key, field)
+    if not raw or raw == '' or raw == '[]' or raw == 'null' then
+        return {}, false
+    end
+    local ok, decoded = pcall(cjson.decode, raw)
+    if not ok or type(decoded) ~= 'table' then
+        return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field .. ' json'
+    end
+    return decoded, true
+end
+
 local state_key = KEYS[1]
 local rewards_key = KEYS[2]
 
@@ -39,7 +62,10 @@ local encounter = redis.call('HGET', state_key, 'encounter') or ''
 if encounter ~= '' and ARGV[18] ~= 'true' then
     return redis.error_reply('ERR_COMBAT_ACTIVE')
 end
-local revision = tonumber(redis.call('HGET', state_key, 'revision') or '0')
+local revision, rev_err = parse_int_field(state_key, 'revision')
+if rev_err then
+    return redis.error_reply(rev_err)
+end
 if ARGV[17] ~= '' and tonumber(ARGV[17]) ~= revision then
     return redis.error_reply('ERR_EXPEDITION_STATE_CHANGED')
 end
@@ -47,21 +73,23 @@ revision = revision + 1
 encounter = ARGV[19] or ''
 
 -- 4. Calculate new HP and round
-local current_hp = tonumber(redis.call('HGET', state_key, 'current_hp') or '0')
-local round = tonumber(redis.call('HGET', state_key, 'round') or '0') + round_delta
+local current_hp, hp_err = parse_int_field(state_key, 'current_hp')
+if hp_err then
+    return redis.error_reply(hp_err)
+end
+local round, round_err = parse_int_field(state_key, 'round')
+if round_err then
+    return redis.error_reply(round_err)
+end
+round = round + round_delta
 
 current_hp = current_hp + hp_delta
 
-local members_str = redis.call('HGET', state_key, 'members') or '[]'
-local members = {}
-local has_members = false
-if members_str ~= '' and members_str ~= '[]' then
-    local ok, decoded = pcall(cjson.decode, members_str)
-    if ok and type(decoded) == 'table' then
-        members = decoded
-        has_members = true
-    end
+local members, has_members, members_err = decode_array_field(state_key, 'members')
+if members_err then
+    return redis.error_reply(members_err)
 end
+local members_str = '[]'
 
 if has_members then
     local deltas = {}
@@ -150,13 +178,23 @@ if ARGV[20] and ARGV[20] ~= '' then
 end
 
 -- 5. Check and record event consumption
-local events_str = redis.call('HGET', state_key, 'consumed_events')
-local consumed_events = {}
-if events_str and events_str ~= '' and events_str ~= '[]' then
-    local ok, decoded = pcall(cjson.decode, events_str)
-    if ok and type(decoded) == 'table' then
-        consumed_events = decoded
-    end
+local consumed_events, _, events_err = decode_array_field(state_key, 'consumed_events')
+if events_err then
+    return redis.error_reply(events_err)
+end
+
+-- Validate existing rewards fields before mutating state or rewards.
+local _, exp_err = parse_int_field(rewards_key, 'exp')
+if exp_err then
+    return redis.error_reply(exp_err)
+end
+local _, gold_err = parse_int_field(rewards_key, 'gold')
+if gold_err then
+    return redis.error_reply(gold_err)
+end
+local items, _, items_err = decode_array_field(rewards_key, 'items')
+if items_err then
+    return redis.error_reply(items_err)
 end
 
 local event_consumed = 1
@@ -253,15 +291,6 @@ if event_consumed == 0 then
 end
 local total_exp = redis.call('HINCRBY', rewards_key, 'exp', exp_delta)
 local total_gold = redis.call('HINCRBY', rewards_key, 'gold', gold_delta)
-
-local items_str = redis.call('HGET', rewards_key, 'items')
-local items = {}
-if items_str and items_str ~= '' and items_str ~= '[]' then
-    local ok, decoded = pcall(cjson.decode, items_str)
-    if ok and type(decoded) == 'table' then
-        items = decoded
-    end
-end
 
 if reward_item and reward_item ~= '' then
     table.insert(items, reward_item)

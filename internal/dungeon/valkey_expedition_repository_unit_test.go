@@ -300,6 +300,47 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 	if _, err := repoErr.GetActiveExpedition(ctx, "char-200"); !errors.Is(err, errGet) {
 		t.Fatalf("expected errGet, got %v", err)
 	}
+
+	// 5. Fail closed on non-empty malformed integers, timestamps, or JSON fields.
+	for _, tc := range []struct {
+		name  string
+		state map[string]string
+		rew   map[string]string
+	}{
+		{"bad round", map[string]string{"round": "nan"}, nil},
+		{"bad revision", map[string]string{"revision": "abc"}, nil},
+		{"bad started_at", map[string]string{"started_at": "not-a-time"}, nil},
+		{"bad consumed_events", map[string]string{"consumed_events": "{bad"}, nil},
+		{"bad items", nil, map[string]string{"items": "{bad"}},
+		{"bad exp", nil, map[string]string{"exp": "nan"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := make(map[string]string, len(stateMap))
+			for k, v := range stateMap {
+				s[k] = v
+			}
+			for k, v := range tc.state {
+				s[k] = v
+			}
+			r := make(map[string]string, len(rewardsMap))
+			for k, v := range rewardsMap {
+				r[k] = v
+			}
+			for k, v := range tc.rew {
+				r[k] = v
+			}
+			c := valkeytest.NewMockClient(valkeytest.WithDoMultiHandler(func(ctx context.Context, multi ...valkeygo.Completed) []valkeygo.ValkeyResult {
+				return []valkeygo.ValkeyResult{
+					valkeytest.MakeStringMapResult(s),
+					valkeytest.MakeStringMapResult(r),
+				}
+			}))
+			rep, _ := dungeon.NewValkeyExpeditionRepository(c)
+			if _, err := rep.GetActiveExpedition(ctx, "char-200"); !errors.Is(err, dungeon.ErrExpeditionCorrupted) {
+				t.Fatalf("%s: expected ErrExpeditionCorrupted, got %v", tc.name, err)
+			}
+		})
+	}
 }
 
 func TestValkeyExpeditionRepository_DeleteActiveExpedition(t *testing.T) {
@@ -436,5 +477,30 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 	repoMalformed, _ := dungeon.NewValkeyExpeditionRepository(clientMalformed)
 	if _, err := repoMalformed.Step(ctx, "char-step-1", params); err == nil || !strings.Contains(err.Error(), "unexpected lua step response format") {
 		t.Fatalf("expected malformed format error, got %v", err)
+	}
+
+	// 7. Fail closed on malformed Lua return fields
+	for _, tc := range []struct {
+		name string
+		idx  int
+		val  string
+	}{
+		{"bad pos_x", 1, "nan"},
+		{"bad items", 7, "{bad"},
+		{"bad updated_at", 8, "not-a-time"},
+		{"bad consumed_events", 14, "{bad"},
+		{"bad revision", 17, "xyz"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			badVals := append([]string(nil), validStepVals...)
+			badVals[tc.idx] = tc.val
+			c := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkeygo.Completed) valkeygo.ValkeyResult {
+				return valkeytest.MakeStringSliceResult(badVals)
+			}))
+			rep, _ := dungeon.NewValkeyExpeditionRepository(c)
+			if _, err := rep.Step(ctx, "char-step-1", params); !errors.Is(err, dungeon.ErrExpeditionCorrupted) {
+				t.Fatalf("%s: expected ErrExpeditionCorrupted, got %v", tc.name, err)
+			}
+		})
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -419,17 +420,31 @@ func (s *Service) GetHistory(ctx context.Context, characterID string, limit int)
 }
 
 func EncodeItems(items []string) string {
+	if len(items) == 0 {
+		return "[]"
+	}
 	b, _ := json.Marshal(items)
 	return string(b)
 }
 
 func DecodeItems(data string) []string {
+	items, _ := decodeItems(data)
+	return items
+}
+
+func decodeItems(data string) ([]string, error) {
+	trimmed := strings.TrimSpace(data)
+	if trimmed == "" || trimmed == "null" {
+		return []string{}, nil
+	}
 	var items []string
-	_ = json.Unmarshal([]byte(data), &items)
+	if err := json.Unmarshal([]byte(trimmed), &items); err != nil {
+		return nil, err
+	}
 	if items == nil {
 		items = []string{}
 	}
-	return items
+	return items, nil
 }
 
 func EncodeMemberHPDeltas(deltas map[string]int) string {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -945,5 +946,103 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 	if reloaded2.CurrentHP != hpAfter2 || reloaded2.Members[0].CurrentHP != hpAfter2 {
 		t.Fatalf("Valkey persisted state mismatch after battle 2: CurrentHP=%d, Members[0].CurrentHP=%d (expected %d)",
 			reloaded2.CurrentHP, reloaded2.Members[0].CurrentHP, hpAfter2)
+	}
+}
+
+func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
+	client := testutil.OpenValkey(t)
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name         string
+		target       string // "state" or "rewards"
+		field        string
+		corruptValue string
+		luaValidated bool
+	}{
+		{"corrupted consumed_events", "state", "consumed_events", "{bad-json", true},
+		{"corrupted members", "state", "members", "{bad-json", true},
+		{"corrupted round", "state", "round", "nan", true},
+		{"corrupted started_at", "state", "started_at", "not-a-timestamp", false},
+		{"corrupted rewards items", "rewards", "items", "{bad-json", true},
+		{"corrupted rewards exp", "rewards", "exp", "nan", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			charID := "char-corrupt-" + strings.ReplaceAll(tc.name, " ", "-")
+			cleanupDungeonValkey(t, client, charID)
+			defer cleanupDungeonValkey(t, client, charID)
+
+			repo, err := dungeon.NewValkeyExpeditionRepository(client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			exp := sampleExpedition("exp-corrupt", charID, dungeon.NativeMap0ID)
+			exp.Round = 2
+			exp.ConsumedEvents = []string{"C:1:1"}
+			exp.AccumulatedItems = []string{"item-01"}
+			exp.Members = []dungeon.ExpeditionMember{{CharacterID: charID, Name: "Hero", CurrentHP: 100, MaxHP: 100}}
+			if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+				t.Fatal(err)
+			}
+
+			sKey := fmt.Sprintf("party2:dungeon:{char:%s}:state", charID)
+			rKey := fmt.Sprintf("party2:dungeon:{char:%s}:rewards", charID)
+			key := sKey
+			if tc.target == "rewards" {
+				key = rKey
+			}
+			if err := client.Do(ctx, client.B().Hset().Key(key).FieldValue().FieldValue(tc.field, tc.corruptValue).Build()).Error(); err != nil {
+				t.Fatal(err)
+			}
+
+			beforeState, err := client.Do(ctx, client.B().Hgetall().Key(sKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			beforeRewards, err := client.Do(ctx, client.B().Hgetall().Key(rKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := repo.GetActiveExpedition(ctx, charID); !errors.Is(err, dungeon.ErrExpeditionCorrupted) {
+				t.Fatalf("GetActiveExpedition expected ErrExpeditionCorrupted, got %v", err)
+			}
+
+			_, stepErr := repo.Step(ctx, charID, dungeon.StepParams{
+				ExpectedExpeditionID: exp.ID,
+				NewX:                 1,
+				NewY:                 0,
+				RoundDelta:           1,
+				ExpDelta:             10,
+				GoldDelta:            20,
+				EventKey:             "C:1:1",
+				Now:                  time.Now().UTC(),
+			})
+			if !errors.Is(stepErr, dungeon.ErrExpeditionCorrupted) {
+				t.Fatalf("Step expected ErrExpeditionCorrupted, got %v", stepErr)
+			}
+			if !tc.luaValidated {
+				return
+			}
+
+			afterState, err := client.Do(ctx, client.B().Hgetall().Key(sKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			afterRewards, err := client.Do(ctx, client.B().Hgetall().Key(rKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for k, v := range beforeState {
+				if afterState[k] != v {
+					t.Fatalf("state field %q mutated after corrupted Step: got %q, want %q", k, afterState[k], v)
+				}
+			}
+			for k, v := range beforeRewards {
+				if afterRewards[k] != v {
+					t.Fatalf("rewards field %q mutated after corrupted Step: got %q, want %q", k, afterRewards[k], v)
+				}
+			}
+		})
 	}
 }
