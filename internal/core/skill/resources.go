@@ -44,6 +44,7 @@ func resourceInvocation(c *corebattle.DamageContext, e corebattle.ResourceEntry)
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(f, c)
 			c.TargetContext = f.TargetContext
 			_, err := s.ApplyResource(c, e.ID, target(f), rng)
 			if err == nil && len(f.Arguments) > 0 && (e.TargetScope == corebattle.TargetScopeSingleAlly || e.TargetScope == corebattle.TargetScopeSingleEnemy) {

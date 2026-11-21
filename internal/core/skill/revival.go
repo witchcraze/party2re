@@ -95,6 +95,7 @@ func (d BattleDefinitions) RevivalInvocation(c *corebattle.RevivalContext, id st
 			if c == nil || !d.RevivalSkills[id] {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(frame, c)
 			*c = context(frame)
 			target := ""
 			if len(frame.Arguments) > 0 {

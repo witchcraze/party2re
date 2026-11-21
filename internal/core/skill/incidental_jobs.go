@@ -48,6 +48,7 @@ func incidentalJobInvocation(c *corebattle.IncidentalJobContext, id string) core
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(f, c)
 			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			err := s.ApplyIncidentalJob(c, id, rng)
 			f.TargetContext, f.Arguments = c.TargetContext, c.Arguments

@@ -60,6 +60,7 @@ func recoilDarkStateInvocation(c *corebattle.RecoilDarkStateContext, id string) 
 			if err != nil {
 				return err
 			}
+			rollbackContext(f, c)
 			*c = child
 			err = s.ApplyRecoilDarkState(c, id, rng)
 			if f.Damage != nil {

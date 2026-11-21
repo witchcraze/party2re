@@ -51,6 +51,7 @@ func highPowerInvocation(c *corebattle.HighPowerContext, id string) corebattle.C
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(f, c)
 			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			err := s.ApplyHighPower(c, id, rng)
 			f.TargetContext, f.Arguments = c.TargetContext, c.Arguments

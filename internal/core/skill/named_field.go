@@ -31,6 +31,8 @@ func (d *BattleDefinitions) RegisterNamedFields(c *corebattle.NamedFieldContext)
 				if c == nil {
 					return corebattle.ErrUnsupportedEffect
 				}
+				rollbackContext(f, c)
+				rollbackContext(f, c.Death)
 				child := context(f)
 				err := s.ApplyNamedField(&child, id, rng)
 				*c = child

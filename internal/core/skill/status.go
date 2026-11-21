@@ -112,6 +112,7 @@ func (d BattleDefinitions) StatusInvocation(c *corebattle.StatusContext, reset *
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(frame, c)
 			*c = context(frame)
 			target := ""
 			if len(frame.Arguments) > 0 {

@@ -102,13 +102,32 @@ func (s *LifetimeState) ApplyPlayerOperation(op *PlayerOperation, rng random.Gen
 	// Tails write operation facts and the defeat cursor; the caller's op and
 	// state stay unchanged on failure, and reuse never inherits earlier facts.
 	work := *op
-	defeat := *op.Tail.DefeatContext
-	work.Tail.DefeatContext = &defeat
-	saved := s.callbackCopy()
+	cloned := cloneCallbackContext(CallbackContext{
+		Damage: &work.Tail.DamageContext,
+		Defeat: work.Tail.DefeatContext,
+	})
+	work.Tail.DamageContext = *cloned.Damage
+	work.Tail.DefeatContext = cloned.Defeat
+	work.Tail.Item210Fallen = slices.Clone(op.Tail.Item210Fallen)
+	work.Field.DamageContext = *cloneCallbackContext(CallbackContext{Damage: &work.Field.DamageContext}).Damage
+	work.Field.Arguments = slices.Clone(op.Field.Arguments)
+	work.Field.Discovered = slices.Clone(op.Field.Discovered)
+	if op.Field.Death != nil {
+		work.Field.Death = cloneCallbackContext(CallbackContext{Defeat: op.Field.Death}).Defeat
+	}
+	stateSnap := snapshotState(s)
+	outerRollbacks := s.rollbacks
+	var opRollbacks []func()
+	s.rollbacks = &opRollbacks
 	result, err := s.applyPlayerOperation(&work, rng)
+	s.rollbacks = outerRollbacks
 	if err != nil || !result.Accepted {
-		*s = saved
+		runRollbacks(opRollbacks)
+		stateSnap.restore(s)
 		return PlayerOperationResult{}, err
+	}
+	if outerRollbacks != nil {
+		*outerRollbacks = append(*outerRollbacks, opRollbacks...)
 	}
 	result.Target = work.Tail.TargetContext
 	return result, nil

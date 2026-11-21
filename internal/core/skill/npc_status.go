@@ -37,6 +37,8 @@ func npcStatusInvocation(c *corebattle.NPCStatusContext, id string) corebattle.C
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(f, c)
+			rollbackContext(f, c.Death)
 			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			err := s.ApplyNPCStatus(c, id, rng)
 			f.TargetContext, f.Arguments = c.TargetContext, c.Arguments

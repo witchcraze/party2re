@@ -65,6 +65,7 @@ func dualAgilityInvocation(c *corebattle.DualAgilityContext, id string) corebatt
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(frame, c)
 			c.TargetContext = frame.TargetContext
 			c.Arguments = append([]string(nil), frame.Arguments...)
 			err := s.ApplyDualAgility(c, id, rng)

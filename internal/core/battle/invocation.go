@@ -29,7 +29,16 @@ type CallbackContext struct {
 	ArithmeticDivisor int
 	// Invoke executes a declared child in the current argument/actor frame. It
 	// is supplied only during Execute, after the enclosing closure was admitted.
-	Invoke func(CallbackInvocation) error
+	Invoke    func(CallbackInvocation) error
+	rollbacks *[]func()
+}
+
+// OnRollback registers fn to restore a caller-bound context if the enclosing
+// execution rejects after this callback mutates it.
+func (c *CallbackContext) OnRollback(fn func()) {
+	if c != nil && c.rollbacks != nil && fn != nil {
+		*c.rollbacks = append(*c.rollbacks, fn)
+	}
 }
 
 // CallbackInvocation describes an invocation boundary, not a scalar attack kind.
@@ -102,12 +111,28 @@ func (s *LifetimeState) ApplyInvocations(c *CallbackContext, d CallbackCatalog, 
 	if err := s.ValidateInvocations(c, d, ops, rng); err != nil {
 		return err
 	}
-	// A callback rejected against the actual state restores the caller's state
-	// and context; the consumer commits nothing.
-	saved, context := s.callbackCopy(), cloneCallbackContext(*c)
-	if err := s.applySequence(c, d, ops, rng); err != nil {
-		*s, *c = saved, context
+	// Snapshot original state, context referents and bound producer contexts so
+	// execution-time rejection restores every caller-visible reference.
+	stateSnap := snapshotState(s)
+	ctxSnap := snapshotContext(c)
+	outerRollbacks := c.rollbacks
+	var localRollbacks []func()
+	c.rollbacks = &localRollbacks
+	err := s.applySequence(c, d, ops, rng)
+	c.rollbacks = outerRollbacks
+	if err != nil {
+		runRollbacks(localRollbacks)
+		ctxSnap.restore(c)
+		stateSnap.restore(s)
 		return err
+	}
+	target := outerRollbacks
+	if target == nil {
+		target = s.rollbacks
+	}
+	if target != nil {
+		*target = append(*target, func() { ctxSnap.restore(c) })
+		*target = append(*target, localRollbacks...)
 	}
 	return nil
 }

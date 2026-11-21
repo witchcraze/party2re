@@ -14,20 +14,17 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 	c.Arguments = slices.Clone(c.Arguments)
 	c.Inspection = maps.Clone(c.Inspection)
 	c.Invoke = nil
+	c.rollbacks = nil
 	if c.Assets != nil {
 		assets := *c.Assets
 		assets.HelperToolIDs = slices.Clone(assets.HelperToolIDs)
+		assets.StoredTools = slices.Clone(assets.StoredTools)
+		assets.StoredOutcomes = slices.Clone(assets.StoredOutcomes)
 		if assets.HeldToolID != nil {
 			held := *assets.HeldToolID
 			assets.HeldToolID = &held
 		}
 		c.Assets = &assets
-	}
-	if c.Status != nil {
-		status := *c.Status
-		f := cloneCallbackContext(CallbackContext{Damage: &DamageContext{EffectContext: status.EffectContext}, Defeat: status.Defeat})
-		status.EffectContext, status.Defeat = f.Damage.EffectContext, f.Defeat
-		c.Status = &status
 	}
 	if c.Defeat != nil {
 		defeat := *c.Defeat
@@ -50,6 +47,19 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 			defeat.Fortress = &fortress
 		}
 		c.Defeat = &defeat
+	}
+	if c.Status != nil {
+		status := *c.Status
+		f := cloneCallbackContext(CallbackContext{Damage: &DamageContext{EffectContext: status.EffectContext}})
+		status.EffectContext = f.Damage.EffectContext
+		if status.Defeat != nil {
+			if status.Defeat == originalDefeat {
+				status.Defeat = c.Defeat
+			} else {
+				status.Defeat = cloneCallbackContext(CallbackContext{Defeat: status.Defeat}).Defeat
+			}
+		}
+		c.Status = &status
 	}
 	if c.Damage != nil {
 		damage := *c.Damage
@@ -92,7 +102,18 @@ func (s LifetimeState) callbackCopy() LifetimeState {
 	for i := range s.Actors {
 		s.Actors[i] = s.Actors[i].Clone()
 	}
+	s.rollbacks = nil
 	return s
+}
+
+func (s LifetimeState) executionCopy() LifetimeState {
+	copy := s.callbackCopy()
+	if s.npcResponse != nil {
+		facts := *s.npcResponse
+		facts.defeats = slices.Clone(facts.defeats)
+		copy.npcResponse = &facts
+	}
+	return copy
 }
 
 // Clone isolates mutable encounter/template facts and admission projections.

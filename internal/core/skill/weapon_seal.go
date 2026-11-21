@@ -24,6 +24,10 @@ func (d *BattleDefinitions) RegisterWeaponSeals(c *corebattle.DamageContext) {
 				return err
 			},
 			Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
+				if c == nil {
+					return corebattle.ErrUnsupportedEffect
+				}
+				rollbackContext(frame, c)
 				c.TargetContext = frame.TargetContext
 				_, err := s.ApplyWeaponSeal(c, entry.ID, rng)
 				frame.TargetContext = c.TargetContext

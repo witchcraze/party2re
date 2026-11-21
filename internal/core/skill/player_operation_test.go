@@ -132,3 +132,97 @@ func TestPlayerOperationCertifiedConcreteSecondPair(t *testing.T) {
 		t.Fatal(err, s)
 	}
 }
+
+func TestPlayerOperationRollbackRestoresRetainedAssetsAndHands(t *testing.T) {
+	setup := func() (corebattle.LifetimeState, *corebattle.JobAssetContext, corebattle.CallbackContext, BattleDefinitions, *corebattle.PlayerOperation) {
+		s, c, f, d := jobAssetFixture()
+		*s.Actors[0].HeldToolID, *f.Assets.HeldToolID = "item-169", "item-169"
+		f.Assets.StoredTools = []corebattle.StoredTool{stored("book", "item-170")}
+		f.Arguments = []string{"item-170"}
+		level := 50
+		firstOps, err := d.InvocationAction(&s, &f, []string{"job-86-entry-3"}, noArithmeticDraws{t})
+		if err != nil {
+			t.Fatal(err)
+		}
+		first := corebattle.PlayerAction{
+			EntryID: "job-86-entry-3", Whitelisted: true,
+			Certify: func(state *corebattle.LifetimeState) error {
+				return state.CertifyInvocations(&f, d.Invocations, firstOps, zeroDraws{})
+			},
+			Validate: func(state *corebattle.LifetimeState) error {
+				return state.ValidateInvocations(&f, d.Invocations, firstOps, zeroDraws{})
+			},
+			Execute: func(state *corebattle.LifetimeState, rng random.Generator) (corebattle.PlayerActionFacts, error) {
+				work := f
+				if err := state.ApplyInvocations(&work, d.Invocations, firstOps, rng); err != nil {
+					return corebattle.PlayerActionFacts{}, err
+				}
+				return corebattle.PlayerActionFacts{Suppressed: c.ResponseSuppressed}, nil
+			},
+		}
+		s.Actors[0].Extended, s.Actors[0].ExtendedTurns = corebattle.ExtendedAdditional, 2
+		s.Actors[0].MP = 50
+		op := &corebattle.PlayerOperation{
+			First: first,
+			Tail: corebattle.PlayerTailContext{
+				DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: f.TargetContext, RequesterLevel: &level}},
+				DefeatContext: &corebattle.DefeatContext{
+					EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: f.TargetContext, RequesterLevel: &level},
+					Rewards:               &corebattle.DefeatRewards{},
+				},
+			},
+		}
+		return s, c, f, d, op
+	}
+
+	t.Run("second_slot_rejection_restores_first_native_assets_and_hand", func(t *testing.T) {
+		s, c, f, _, op := setup()
+		origActorHeld, origAssets, origAssetsHeld := s.Actors[0].HeldToolID, f.Assets, f.Assets.HeldToolID
+		op.Second = &corebattle.PlayerAction{
+			EntryID: "second", Whitelisted: true,
+			Validate: func(state *corebattle.LifetimeState) error {
+				if *state.Actors[0].HeldToolID == "item-170" {
+					return corebattle.ErrUnsupportedEffect
+				}
+				return nil
+			},
+			Execute: func(*corebattle.LifetimeState, random.Generator) (corebattle.PlayerActionFacts, error) {
+				return corebattle.PlayerActionFacts{}, nil
+			},
+		}
+		if _, err := s.ApplyPlayerOperation(op, zeroDraws{}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+			t.Fatalf("err = %v, want ErrUnsupportedEffect", err)
+		}
+		if *origActorHeld != "item-169" || *s.Actors[0].HeldToolID != "item-169" || *origAssetsHeld != "item-169" || *origAssets.HeldToolID != "item-169" {
+			t.Fatalf("hands leaked: actor=%q assets=%q", *origActorHeld, *origAssetsHeld)
+		}
+		if len(origAssets.StoredOutcomes) != 0 || len(origAssets.StoredTools) != 1 || len(s.SkillBans) != 0 || s.Actors[0].HP != 500 || c.ResponseSuppressed {
+			t.Fatalf("state/assets/context leaked: outcomes=%+v tools=%+v bans=%v hp=%d suppressed=%v", origAssets.StoredOutcomes, origAssets.StoredTools, s.SkillBans, s.Actors[0].HP, c.ResponseSuppressed)
+		}
+	})
+
+	t.Run("external_levelup_failure_restores_assets_and_hand", func(t *testing.T) {
+		s, c, f, _, op := setup()
+		origActorHeld, origAssets, origAssetsHeld := s.Actors[0].HeldToolID, f.Assets, f.Assets.HeldToolID
+		sentinel := errors.New("external persistence failure")
+		op.LevelUp = func(*corebattle.LifetimeState, random.Generator) (bool, error) { return false, sentinel }
+		if _, err := s.ApplyPlayerOperation(op, zeroDraws{}); !errors.Is(err, sentinel) {
+			t.Fatalf("err = %v, want sentinel", err)
+		}
+		if *origActorHeld != "item-169" || *origAssetsHeld != "item-169" || len(origAssets.StoredOutcomes) != 0 || len(origAssets.StoredTools) != 1 || len(s.SkillBans) != 0 || c.ResponseSuppressed {
+			t.Fatalf("external failure leaked: actor=%q assets=%q outcomes=%+v bans=%v suppressed=%v", *origActorHeld, *origAssetsHeld, origAssets.StoredOutcomes, s.SkillBans, c.ResponseSuppressed)
+		}
+	})
+
+	t.Run("healthy_contrast_publishes_updates", func(t *testing.T) {
+		s, c, f, _, op := setup()
+		origActorHeld, origAssets, origAssetsHeld := s.Actors[0].HeldToolID, f.Assets, f.Assets.HeldToolID
+		res, err := s.ApplyPlayerOperation(op, zeroDraws{})
+		if err != nil || !res.Accepted || !res.Suppressed {
+			t.Fatalf("res=%+v err=%v", res, err)
+		}
+		if *origActorHeld != "item-170" || *origAssetsHeld != "item-170" || len(origAssets.StoredTools) != 0 || !reflect.DeepEqual(origAssets.StoredOutcomes, []corebattle.StoredToolOutcome{{InstanceID: "book", Result: corebattle.StoredToolExchanged}}) || s.SkillBans["job-86-entry-3"] != 2 || !c.ResponseSuppressed {
+			t.Fatalf("missing healthy updates: actor=%q assets=%q outcomes=%+v bans=%v", *origActorHeld, *origAssetsHeld, origAssets.StoredOutcomes, s.SkillBans)
+		}
+	})
+}

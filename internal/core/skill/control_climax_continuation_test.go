@@ -158,7 +158,7 @@ func TestControlPossessionRestoresActorOnErrorAndAlias(t *testing.T) {
 	s.Actors[1].NPC = true
 	sentinel := errors.New("defeat failed")
 	c.Defeat = func(id string) error {
-		if c.ActorID != "enemy" || !c.ActorNPC || id != "enemy" {
+		if c.ActorID != "enemy" || !c.ActorNPC || id != "enemy" || len(c.Arguments) != 1 || c.Arguments[0] != "tail" {
 			t.Fatal(c, id)
 		}
 		return sentinel
@@ -171,7 +171,7 @@ func TestControlPossessionRestoresActorOnErrorAndAlias(t *testing.T) {
 	if err := s.ApplyInvocations(&f, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{0, .5, 0, 0}}); !errors.Is(err, sentinel) {
 		t.Fatal(err)
 	}
-	if c.ActorID != "self" || c.ActorNPC || f.ActorID != "self" || c.Arguments[0] != "tail" {
+	if c.ActorID != "self" || c.ActorNPC || f.ActorID != "self" || len(c.Arguments) != 0 || !reflect.DeepEqual(f.Arguments, []string{"enemy", "tail"}) {
 		t.Fatal(c, f)
 	}
 	// A breath reflection possesses the requester itself; no context change leaks.

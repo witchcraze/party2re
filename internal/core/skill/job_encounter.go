@@ -53,6 +53,8 @@ func (d *BattleDefinitions) RegisterJobEncounters(c *corebattle.JobEncounterCont
 				if err != nil {
 					return err
 				}
+				rollbackContext(f, c)
+				rollbackContext(f, c.DefeatContext)
 				delegated := len(delegates(s, f)) > 0
 				if err := s.ApplyJobEncounter(&child, id, rng); err != nil {
 					return err
