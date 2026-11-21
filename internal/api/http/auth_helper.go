@@ -37,8 +37,8 @@ func (h *Handler) authenticateAdmin(w http.ResponseWriter, r *http.Request) bool
 }
 
 func adminAPIKeyFromRequest(r *http.Request) string {
-	if key := strings.TrimSpace(r.Header.Get("X-Admin-Key")); key != "" {
-		return key
+	if key := r.Header.Get("X-Admin-Key"); key != "" {
+		return strings.TrimSpace(key)
 	}
 	return sessionIDFromRequest(r)
 }

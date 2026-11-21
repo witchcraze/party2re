@@ -206,6 +206,17 @@ func TestAdminAuth(t *testing.T) {
 			t.Errorf("expected 401 Unauthorized for whitespace-only Bearer token, got %d: %s", rec.Code, rec.Body.String())
 		}
 
+		// Whitespace-only X-Admin-Key does not fall back to Bearer -> 401
+		req = httptest.NewRequest(http.MethodPost, "/news", bytes.NewReader([]byte(`{"title":"T","content":"C","category":"system","author":"A"}`)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Key", "   ")
+		req.Header.Set("Authorization", "Bearer "+adminKey)
+		rec = httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 Unauthorized when X-Admin-Key is whitespace-only, got %d: %s", rec.Code, rec.Body.String())
+		}
+
 		// Invalid X-Admin-Key -> 403
 		req = httptest.NewRequest(http.MethodPost, "/news", bytes.NewReader([]byte(`{"title":"T","content":"C","category":"system","author":"A"}`)))
 		req.Header.Set("Content-Type", "application/json")

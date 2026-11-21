@@ -146,6 +146,18 @@ func TestMaintenanceEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("maintenanceMiddleware blocks whitespace-only X-Admin-Key without Bearer fallback", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/char-1", nil)
+		req.Header.Set("X-Admin-Key", "   ")
+		req.Header.Set("Authorization", "Bearer secret-admin-key")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected 503 Service Unavailable, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("maintenanceMiddleware permits /health during maintenance", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
