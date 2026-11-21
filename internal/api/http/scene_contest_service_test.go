@@ -162,7 +162,7 @@ func TestContestNormalizedRepliesRealService(t *testing.T) {
 					}
 					r.readErr = nil
 					status, observation := navigationGET(t, router)
-					data := decodeShopScene[ContestSceneData](t, observation)
+					data := decodeSceneData[ContestSceneData](t, observation)
 					if status != 200 || r.writes != 1 || len(data.Photos) != len(r.photos) || data.ActiveEntries[0].Votes != r.entries[0].Votes {
 						t.Fatalf("GET recovery: %d %+v, writes=%d", status, data, r.writes)
 					}

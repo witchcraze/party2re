@@ -70,7 +70,7 @@ func TestMedalAndHelperScenesObserveTheirLists(t *testing.T) {
 	f := newMedalHelperFixture(t)
 	store, router := f.router(t, "medal")
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[MedalSceneData](t, observation)
+	data := decodeSceneData[MedalSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "メダル伯爵の城" || data.SmallMedals != 5 || len(data.Rewards) != 2 ||
 		data.Rewards[0] != (MedalReward{Cost: 3, ItemID: "armor-32", ItemName: "戦士のパジャマ"}) {
 		t.Fatalf("medal: %d %+v", status, data)
@@ -82,7 +82,7 @@ func TestMedalAndHelperScenesObserveTheirLists(t *testing.T) {
 	}
 	_, router = f.router(t, "helper")
 	status, observation = navigationGET(t, router)
-	helper := decodeShopScene[HelperSceneData](t, observation)
+	helper := decodeSceneData[HelperSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "手助けクエスト" || len(helper.Quests) != 1 || helper.Quests[0].RewardName != "応用錬金レシピ" {
 		t.Fatalf("helper: %d %+v", status, helper)
 	}

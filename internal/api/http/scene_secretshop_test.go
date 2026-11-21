@@ -81,7 +81,7 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 	f.helperErr = errors.New("town must not read catalog")
 	f.char.JobLevel = 6
 	status, observation := navigationGET(t, router)
-	if status != 200 || len(decodeShopScene[TownSceneData](t, observation).Destinations) != 0 || reads.reads != 0 {
+	if status != 200 || len(decodeSceneData[TownSceneData](t, observation).Destinations) != 0 || reads.reads != 0 {
 		t.Fatalf("unqualified town: %d %+v", status, observation)
 	}
 	enter := observation.AvailableActions[slices.IndexFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == "scene_enter" })]
@@ -101,7 +101,7 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 	assertGatewayError(t, raw, "SCENE_ACCESS_DENIED")
 	f.char.JobLevel, f.helperErr = 7, nil
 	status, observation = navigationGET(t, router)
-	data := decodeShopScene[TownSceneData](t, observation)
+	data := decodeSceneData[TownSceneData](t, observation)
 	if status != 200 || len(data.Destinations) != 1 || data.Destinations[0].ID != "secretshop" || !data.Destinations[0].Supported || data.Destinations[0].EnterParams.Destination != "secretshop" || reads.reads != 0 {
 		t.Fatalf("qualified town: %+v", data)
 	}
@@ -117,7 +117,7 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 		t.Fatalf("entry: %d %s", status, raw)
 	}
 	status, observation = navigationGET(t, router)
-	catalog := decodeShopScene[SecretShopCatalogSceneData](t, observation)
+	catalog := decodeSceneData[SecretShopCatalogSceneData](t, observation)
 	want, err := f.service.GetShopStatus(context.Background(), "hero")
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +142,7 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 	if err := json.Unmarshal(raw["context"], &refreshed); err != nil {
 		t.Fatal(err)
 	}
-	product := decodeShopScene[SecretShopProductSceneData](t, refreshed).Product
+	product := decodeSceneData[SecretShopProductSceneData](t, refreshed).Product
 	index := slices.IndexFunc(refreshed.AvailableActions, func(a ContextAction) bool { return a.Action == "secretshop_purchase" })
 	if product.ID != "secret_item_herbal_root" || index < 0 || refreshed.AvailableActions[index].ParamsTemplate["item_id"] != product.ID || refreshed.AvailableActions[index].ParamsSchema == nil {
 		t.Fatalf("selected command: %+v", refreshed)
@@ -183,7 +183,7 @@ func TestSecretShopScenePagesFiltersAndUnavailableSelection(t *testing.T) {
 		t.Fatalf("page: %d %s", status, raw)
 	}
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[SecretShopCatalogSceneData](t, observation)
+	data := decodeSceneData[SecretShopCatalogSceneData](t, observation)
 	if status != 200 || len(data.Items) != 1 || data.Page.Next == nil || data.Page.Next.Offset != 1 || data.Page.Next.Limit != 1 {
 		t.Fatalf("page: %+v", data)
 	}
@@ -195,7 +195,7 @@ func TestSecretShopScenePagesFiltersAndUnavailableSelection(t *testing.T) {
 	for _, offset := range []int{1, 7, 1000000} {
 		store.selection.Offset = offset
 		status, observation = navigationGET(t, router)
-		data = decodeShopScene[SecretShopCatalogSceneData](t, observation)
+		data = decodeSceneData[SecretShopCatalogSceneData](t, observation)
 		if status != 200 || data.Items == nil || len(data.Items) != min(1, max(0, 8-offset)) || (offset == 1 && data.Items[0].ID <= first) || (offset >= 7 && data.Page.Next != nil) {
 			t.Fatalf("end page: %+v", data)
 		}
@@ -209,7 +209,7 @@ func TestSecretShopScenePagesFiltersAndUnavailableSelection(t *testing.T) {
 		f.active = append(f.active, p.ItemDefinitionID)
 	}
 	status, observation = navigationGET(t, router)
-	if data = decodeShopScene[SecretShopCatalogSceneData](t, observation); status != 200 || data.Items == nil || len(data.Items) != 0 || data.Page.Next != nil {
+	if data = decodeSceneData[SecretShopCatalogSceneData](t, observation); status != 200 || data.Items == nil || len(data.Items) != 0 || data.Page.Next != nil {
 		t.Fatalf("empty filtered page: %+v", data)
 	}
 	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_select","params":{"target_kind":"item","target_id":"secret_item_herbal_root"}}`, nil)

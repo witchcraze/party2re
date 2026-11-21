@@ -109,13 +109,13 @@ func TestVerifiedContinuationAndConflictRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	status, obs = navigationGET(t, router)
-	if status != 200 || obs.Scene.Kind != "activity_conflict" || len(decodeShopScene[ActivitySceneData](t, obs).Activities) != 3 || len(obs.OngoingActions) != 2 || !obs.OngoingActions[0].IsReady || slices.ContainsFunc(obs.AvailableActions, func(a ContextAction) bool { return a.Action == "gvg_advance" }) {
+	if status != 200 || obs.Scene.Kind != "activity_conflict" || len(decodeSceneData[ActivitySceneData](t, obs).Activities) != 3 || len(obs.OngoingActions) != 2 || !obs.OngoingActions[0].IsReady || slices.ContainsFunc(obs.AvailableActions, func(a ContextAction) bool { return a.Action == "gvg_advance" }) {
 		t.Fatalf("conflict preserves unfinished work: %d %+v", status, obs)
 	}
 	if len(f.actions) != 3 || len(facts[0].Actions) != 2 {
 		t.Fatal("observation mutated feature/scheduling input")
 	}
-	data := decodeShopScene[ActivitySceneData](t, obs)
+	data := decodeSceneData[ActivitySceneData](t, obs)
 	if len(data.Activities[0].Actions) != 1 || data.Activities[0].Actions[0] != "gvg_leave" {
 		t.Fatalf("conflict exposed continuation: %+v", data)
 	}

@@ -25,19 +25,6 @@ func homeProfileRouter(t *testing.T) (*homeSceneFixture, *gatewayNavigationStore
 	return f, store, act, func() (int, PlayerContextResponse) { return navigationGET(t, router) }
 }
 
-func decodeSceneData[T any](t *testing.T, response PlayerContextResponse) T {
-	t.Helper()
-	raw, err := json.Marshal(response.Scene.Data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var data T
-	if err := json.Unmarshal(raw, &data); err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
 func TestHomeProfileObservesTheOwnerAndOnlyTheOwnerEdits(t *testing.T) {
 	for _, tc := range []struct {
 		name, owner string

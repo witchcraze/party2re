@@ -187,7 +187,7 @@ func TestFaithScenesObserveWithoutWrites(t *testing.T) {
 		AvailableItems: []altar.WishItemInfo{{ID: "item-066", Name: "真実の鏡"}}}
 	store, router := f.router(t, "altar", WithPlaceLog(&fakePlaceLog{}))
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[AltarSceneData](t, observation)
+	data := decodeSceneData[AltarSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "復活の祭壇" || observation.Scene.Support.Observation != "details" ||
 		data.Parent != "town" || !data.RamiaAwakened || data.AwakenedBy != "Friend" || len(data.AvailableItems) != 1 {
 		t.Fatalf("altar projection: %d %+v", status, observation)
@@ -204,7 +204,7 @@ func TestFaithScenesObserveWithoutWrites(t *testing.T) {
 	store.selection.Destination = "wishingwell"
 	f.char.OverLevel = true
 	status, observation = navigationGET(t, router)
-	well := decodeShopScene[WishingWellSceneData](t, observation)
+	well := decodeSceneData[WishingWellSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "願いの泉" || well.Parent != "town" || !well.OverLevel || well.CanExchange ||
 		!slices.ContainsFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == "wishingwell_exchange" }) {
 		t.Fatalf("wishing well projection: %d %+v", status, observation)

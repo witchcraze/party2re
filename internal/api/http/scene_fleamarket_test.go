@@ -95,7 +95,7 @@ func TestFleaMarketSceneObservesWithoutMutation(t *testing.T) {
 	if status != 200 || observation.Scene.LocationID != "fleamarket" || observation.Scene.Kind != "facility" || observation.Scene.Title != "フリーマーケット" || observation.Scene.Support.Observation != "details" {
 		t.Fatalf("projection: %d %+v", status, observation)
 	}
-	data := decodeShopScene[FleaMarketSceneData](t, observation)
+	data := decodeSceneData[FleaMarketSceneData](t, observation)
 	if data.Parent != "town" || len(data.Listings) != 2 || data.Listings[0].EnhancementLevel != 2 || data.ListingCount != 2 || len(data.OwnedListings) != 1 || data.OwnedListings[0].ID != "mine" || data.Page.Next != nil || service.limit != 20 {
 		t.Fatalf("lost facts: %+v", data)
 	}
@@ -129,7 +129,7 @@ func TestFleaMarketScenePages(t *testing.T) {
 	service := &fleaMarketSceneService{listings: fleaMarketListings(5)}
 	_, router := fleaMarketSceneRouter(t, service, playercontext.Selection{Destination: "fleamarket", Offset: 2, Limit: 2})
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[FleaMarketSceneData](t, observation)
+	data := decodeSceneData[FleaMarketSceneData](t, observation)
 	if status != 200 || len(data.Listings) != 2 || data.Listings[0].ID != "l2" || data.ListingCount != 5 || data.Page.Next == nil || data.Page.Next.Offset != 4 || data.Page.Next.Limit != 2 {
 		t.Fatalf("page: %d %+v", status, data)
 	}
@@ -138,7 +138,7 @@ func TestFleaMarketScenePages(t *testing.T) {
 	}
 	_, router = fleaMarketSceneRouter(t, service, playercontext.Selection{Destination: "fleamarket", Offset: 4, Limit: 2})
 	_, observation = navigationGET(t, router)
-	if data := decodeShopScene[FleaMarketSceneData](t, observation); data.Page.Next != nil || len(data.Listings) != 1 {
+	if data := decodeSceneData[FleaMarketSceneData](t, observation); data.Page.Next != nil || len(data.Listings) != 1 {
 		t.Fatalf("last page: %+v", data)
 	}
 }

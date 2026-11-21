@@ -51,7 +51,7 @@ func TestCasinoConfirmedCommandsSurviveFailedObservation(t *testing.T) {
 					t.Fatalf("leave replayed or remained active: %+v", observed)
 				}
 			} else {
-				if observed.Scene.Kind != "activity" || decodeShopScene[ActivitySceneData](t, observed).Casino == nil {
+				if observed.Scene.Kind != "activity" || decodeSceneData[ActivitySceneData](t, observed).Casino == nil {
 					t.Fatalf("admission hidden: %+v", observed)
 				}
 			}
@@ -95,7 +95,7 @@ func TestCasinoAdmissionAndLifetimeRemainServiceOwned(t *testing.T) {
 		t.Fatalf("spectator gate: %v", err)
 	}
 	_, observed := navigationGET(t, router)
-	if decodeShopScene[CasinoSelectedSceneData](t, observed).SpectateParams != nil {
+	if decodeSceneData[CasinoSelectedSceneData](t, observed).SpectateParams != nil {
 		t.Fatal("disabled spectator candidate")
 	}
 	// Expiry is feature-owned lifecycle cleanup, separate from gameplay mutation.
@@ -136,7 +136,7 @@ func TestCasinoLobbyWindowAndEmptyArrays(t *testing.T) {
 	f := newCasinoSceneFixture(t)
 	router := f.router()
 	_, observed := navigationGET(t, router)
-	if data := decodeShopScene[CasinoLobbySceneData](t, observed); data.Rooms == nil || len(data.Rooms) != 0 {
+	if data := decodeSceneData[CasinoLobbySceneData](t, observed); data.Rooms == nil || len(data.Rooms) != 0 {
 		t.Fatal("empty rooms must be []")
 	}
 	for i := range 105 {
@@ -156,7 +156,7 @@ func TestCasinoLobbyWindowAndEmptyArrays(t *testing.T) {
 	}
 	f.store.selection = playercontext.Selection{Destination: "casino", Offset: 90, Limit: 20}
 	_, observed = navigationGET(t, router)
-	data := decodeShopScene[CasinoLobbySceneData](t, observed)
+	data := decodeSceneData[CasinoLobbySceneData](t, observed)
 	if len(data.Rooms) != 10 || data.Page.Next != nil || data.WindowLimit != 100 {
 		t.Fatalf("bounded final page: %+v", data)
 	}

@@ -219,7 +219,7 @@ func TestCasinoGatewayRoomGame(t *testing.T) {
 		if response.Scene.Kind != "activity" {
 			return ids, nil
 		}
-		return ids, decodeShopScene[ActivitySceneData](t, response).Casino
+		return ids, decodeSceneData[ActivitySceneData](t, response).Casino
 	}
 	if ids, _ := offered(); !slices.Contains(ids, "casino_room_create") || !slices.Contains(ids, "npc_talk") {
 		t.Fatalf("lobby offers %v", ids)

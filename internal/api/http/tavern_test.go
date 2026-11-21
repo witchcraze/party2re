@@ -84,7 +84,7 @@ func TestTavernSceneObservesMenuFullnessAndDelivery(t *testing.T) {
 	f.bio = map[string]string{"like_food": "ラーメン"}
 	store, router := f.router(t, "tavern", WithPlaceLog(&fakePlaceLog{}))
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[TavernSceneData](t, observation)
+	data := decodeSceneData[TavernSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "冒険者の酒場" || observation.Scene.Support.Observation != "details" ||
 		data.Parent != "town" || data.IsFull || data.Delivery != nil || len(data.Menu) != 2 ||
 		data.Menu[0].OrderName != "癒しの湧き水" || data.Menu[1].OrderName != "ラーメン" || data.Menu[1].Name != "フルコース料理" {
@@ -105,7 +105,7 @@ func TestTavernSceneObservesMenuFullnessAndDelivery(t *testing.T) {
 	f.bio = nil
 	f.status = tavern.TavernStatus{CharacterID: "hero", IsFull: true, DeliveryReservation: &tavern.DeliveryReservation{ItemID: "tavern_course", ItemName: "フルコース料理"}}
 	status, observation = navigationGET(t, router)
-	data = decodeShopScene[TavernSceneData](t, observation)
+	data = decodeSceneData[TavernSceneData](t, observation)
 	if status != 200 || !data.IsFull || data.Delivery == nil || data.Menu[1].OrderName != "フルコース料理" || !offered(observation, "tavern_delivery_cancel") {
 		t.Fatalf("reserved projection: %d %+v", status, data)
 	}

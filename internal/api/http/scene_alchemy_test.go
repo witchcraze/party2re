@@ -88,7 +88,7 @@ func TestAlchemySceneObservesOwnedFactsWithoutClaiming(t *testing.T) {
 	if status != 200 || observation.Scene.Kind != "facility" || observation.Scene.Title != "錬金場" || observation.Scene.Support.Observation != "details" {
 		t.Fatalf("projection: %d %+v", status, observation)
 	}
-	data := decodeShopScene[AlchemySceneData](t, observation)
+	data := decodeSceneData[AlchemySceneData](t, observation)
 	if data.Parent != "town" || !reflect.DeepEqual(data.Status, service.status) || data.Compendium.TotalRecipes != 114 || data.Page.Next != nil {
 		t.Fatalf("lost facts: %+v", data)
 	}
@@ -101,7 +101,7 @@ func TestAlchemySceneObservesOwnedFactsWithoutClaiming(t *testing.T) {
 		t.Fatalf("GET wrote or claimed: %d %d", store.writes, service.claims)
 	}
 	store.selection.Destination = "town"
-	if status, town := navigationGET(t, router); status != 200 || !slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
+	if status, town := navigationGET(t, router); status != 200 || !slices.ContainsFunc(decodeSceneData[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
 		return d.ID == "alchemy" && d.Supported && d.EnterParams.Destination == "alchemy"
 	}) {
 		t.Fatalf("missing town entry: %d %+v", status, town)
@@ -116,7 +116,7 @@ func TestAlchemySceneHidesUncraftedProduct(t *testing.T) {
 	}
 	_, _, router := alchemySceneRouter(t, service, "alchemy")
 	_, observation := navigationGET(t, router)
-	data := decodeShopScene[struct {
+	data := decodeSceneData[struct {
 		Compendium struct {
 			Entries []map[string]any `json:"entries"`
 		} `json:"compendium"`
@@ -137,7 +137,7 @@ func TestAlchemySceneHidesUncraftedProduct(t *testing.T) {
 func TestAlchemyScenePagesEntries(t *testing.T) {
 	_, store, router := alchemySceneRouter(t, alchemyTestService(21), "alchemy")
 	status, first := navigationGET(t, router)
-	data := decodeShopScene[AlchemySceneData](t, first)
+	data := decodeSceneData[AlchemySceneData](t, first)
 	if status != 200 || len(data.Compendium.Entries) != 20 || data.Compendium.LearnedCount != 21 || data.Page.Next == nil || data.Page.Next.Offset != 20 {
 		t.Fatalf("first page: %d %+v", status, data)
 	}
@@ -146,7 +146,7 @@ func TestAlchemyScenePagesEntries(t *testing.T) {
 	}
 	store.selection.Offset, store.selection.Limit = 20, 20
 	status, second := navigationGET(t, router)
-	data = decodeShopScene[AlchemySceneData](t, second)
+	data = decodeSceneData[AlchemySceneData](t, second)
 	if status != 200 || len(data.Compendium.Entries) != 1 || data.Compendium.Entries[0].RecipeID != "r20" || data.Page.Next != nil {
 		t.Fatalf("second page: %d %+v", status, data)
 	}

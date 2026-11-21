@@ -140,19 +140,6 @@ func TestShopSceneInspectFailureAndProductDisappearingDuringProjection(t *testin
 	}
 }
 
-func decodeShopScene[T any](t *testing.T, response PlayerContextResponse) T {
-	t.Helper()
-	raw, err := json.Marshal(response.Scene.Data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var data T
-	if err := json.Unmarshal(raw, &data); err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
 func TestShopScenesUseRealCatalogAndExplicitSelection(t *testing.T) {
 	for _, kind := range []shop.ShopType{shop.ShopTypeWeapon, shop.ShopTypeArmor, shop.ShopTypeItem, shop.ShopTypeAccessory} {
 		for _, level := range []int{0, 1, 3, 5, 7, 11, 12, 49, 50, 99, 100} {
@@ -164,7 +151,7 @@ func TestShopScenesUseRealCatalogAndExplicitSelection(t *testing.T) {
 				if status != 200 || response.Scene.Support.Observation != "details" {
 					t.Fatalf("catalog: %d %+v", status, response)
 				}
-				data := decodeShopScene[ShopCatalogSceneData](t, response)
+				data := decodeSceneData[ShopCatalogSceneData](t, response)
 				ids, err := shop.GetSalesItemIDs(kind, level)
 				if err != nil {
 					t.Fatal(err)
@@ -257,7 +244,7 @@ func TestShopScenesUseRealCatalogAndExplicitSelection(t *testing.T) {
 				if status != 200 || !reflect.DeepEqual(refreshed.Scene, observed.Scene) {
 					t.Fatalf("GET differs: %d %+v / %+v", status, refreshed.Scene, observed.Scene)
 				}
-				detail := decodeShopScene[ShopProductSceneData](t, observed)
+				detail := decodeSceneData[ShopProductSceneData](t, observed)
 				if observed.Scene.Kind != "subject" || detail.Product.ID != data.Items[0].ID || slices.ContainsFunc(observed.AvailableActions, func(a ContextAction) bool { return a.Action == "scene_page" || a.Action == "scene_select" }) || store.writes != 1 || f.writes != 0 {
 					t.Fatalf("detail mutated or did not narrow: %+v", observed)
 				}
@@ -275,7 +262,7 @@ func TestShopScenePagesFiltersAndMissingProducts(t *testing.T) {
 		t.Fatalf("page: %d %s", status, raw)
 	}
 	status, response := navigationGET(t, router)
-	data := decodeShopScene[ShopCatalogSceneData](t, response)
+	data := decodeSceneData[ShopCatalogSceneData](t, response)
 	if status != 200 || len(data.Items) != 1 || data.Items[0].ID != "item-143" || data.Page.Next == nil || data.Page.Next.Offset != 1 || data.Page.Next.Limit != 1 {
 		t.Fatalf("page: %+v", data)
 	}
@@ -291,7 +278,7 @@ func TestShopScenePagesFiltersAndMissingProducts(t *testing.T) {
 		t.Fatalf("next: %d %s", status, raw)
 	}
 	_, response = navigationGET(t, router)
-	if data := decodeShopScene[ShopCatalogSceneData](t, response); data.Items[0].ID != "item-144" {
+	if data := decodeSceneData[ShopCatalogSceneData](t, response); data.Items[0].ID != "item-144" {
 		t.Fatalf("next: %+v", data)
 	}
 	for _, p := range []string{`{"destination":"shop_accessory","cursor":""}`, `{"destination":"shop_weapon","offset":0}`} {
@@ -306,7 +293,7 @@ func TestShopScenePagesFiltersAndMissingProducts(t *testing.T) {
 	for _, offset := range []int{len(ids) - 1, 1000000} {
 		store.selection.Offset, store.selection.Limit = offset, 100
 		status, response := navigationGET(t, router)
-		data := decodeShopScene[ShopCatalogSceneData](t, response)
+		data := decodeSceneData[ShopCatalogSceneData](t, response)
 		if status != 200 || data.Items == nil || len(data.Items) != max(0, len(ids)-offset) || data.Page.Next != nil {
 			t.Fatalf("end page: %+v", data)
 		}
@@ -317,7 +304,7 @@ func TestShopScenePagesFiltersAndMissingProducts(t *testing.T) {
 		t.Fatal(err)
 	}
 	status, response = navigationGET(t, router)
-	if data := decodeShopScene[ShopCatalogSceneData](t, response); status != 200 || data.Items == nil || len(data.Items) != 0 || data.Page.Next != nil {
+	if data := decodeSceneData[ShopCatalogSceneData](t, response); status != 200 || data.Items == nil || len(data.Items) != 0 || data.Page.Next != nil {
 		t.Fatalf("empty filtered list: %+v", response)
 	}
 	if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_select","params":{"target_kind":"item","target_id":"item-143"}}`, nil); status != 404 {
@@ -395,7 +382,7 @@ func TestShopSceneActorOwnershipAndExplicitPurchase(t *testing.T) {
 		}
 	}
 	_, response := navigationGET(t, router)
-	product := decodeShopScene[ShopProductSceneData](t, response).Product
+	product := decodeSceneData[ShopProductSceneData](t, response).Product
 	i := slices.IndexFunc(response.AvailableActions, func(a ContextAction) bool { return a.Action == "shop_purchase" })
 	if i < 0 || response.AvailableActions[i].ParamsTemplate["item_definition_id"] != "weapon-01" {
 		t.Fatalf("purchase template: %+v", response.AvailableActions)

@@ -66,7 +66,7 @@ func TestBlacksmithSceneObservesOwnedFactsWithoutMutation(t *testing.T) {
 	if status != 200 || observation.Scene.Kind != "facility" || observation.Scene.LocationID != "blacksmith" || observation.Scene.Support.Observation != "details" {
 		t.Fatalf("projection: %d %+v", status, observation)
 	}
-	data := decodeShopScene[BlacksmithSceneData](t, observation)
+	data := decodeSceneData[BlacksmithSceneData](t, observation)
 	if data.Parent != "town" || !reflect.DeepEqual(data.Observation, service.observation) || !reflect.DeepEqual(data.Seals, blacksmith.Seals) || data.StorageCapacity != 3 {
 		t.Fatalf("lost facts: %+v", data)
 	}
@@ -81,7 +81,7 @@ func TestBlacksmithSceneObservesOwnedFactsWithoutMutation(t *testing.T) {
 
 	store.selection.Destination = "town"
 	status, town := navigationGET(t, router)
-	if status != 200 || !slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
+	if status != 200 || !slices.ContainsFunc(decodeSceneData[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
 		return d.ID == "blacksmith" && d.Supported && d.EnterParams.Destination == "blacksmith"
 	}) {
 		t.Fatalf("missing town entry: %d %+v", status, town)

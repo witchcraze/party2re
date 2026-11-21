@@ -73,7 +73,7 @@ func TestGemStoreSceneObservesOwnedFactsWithoutWrites(t *testing.T) {
 	if status != 200 || observation.Scene.Kind != "facility" || observation.Scene.Title != "宝石店" || observation.Scene.Support.Observation != "details" {
 		t.Fatalf("projection: %d %+v", status, observation)
 	}
-	data := decodeShopScene[GemStoreSceneData](t, observation)
+	data := decodeSceneData[GemStoreSceneData](t, observation)
 	if data.Parent != "town" || data.GemBox.Capacity != 15 || len(data.GemBox.Items) != 1 || data.GemBox.Items[0].ID != "owned-gem" ||
 		len(data.Catalog) != 1 || len(data.Recipes) != 56 || service.catalogLevel != 30 {
 		t.Fatalf("lost facts: %+v (catalog level %d)", data, service.catalogLevel)
@@ -106,7 +106,7 @@ func TestGemStoreSceneObservesOwnedFactsWithoutWrites(t *testing.T) {
 		t.Fatalf("GET wrote: %d %d %d", store.writes, service.mutations, f.executions)
 	}
 	store.selection.Destination = "town"
-	if status, town := navigationGET(t, router); status != 200 || !slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
+	if status, town := navigationGET(t, router); status != 200 || !slices.ContainsFunc(decodeSceneData[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
 		return d.ID == "gemstore" && d.Supported && d.EnterParams.Destination == "gemstore"
 	}) {
 		t.Fatalf("missing town entry: %d %+v", status, town)

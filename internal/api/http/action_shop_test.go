@@ -28,7 +28,7 @@ func TestShopSellUsesObservedHandOffer(t *testing.T) {
 	}
 	store.selection.Destination = "shop_weapon"
 	_, response := navigationGET(t, router)
-	data := decodeShopScene[ShopCatalogSceneData](t, response)
+	data := decodeSceneData[ShopCatalogSceneData](t, response)
 	i := slices.IndexFunc(response.AvailableActions, func(a ContextAction) bool { return a.Action == "shop_sell" })
 	if data.SaleOffer == nil || *data.SaleOffer != (shop.SaleOffer{ItemInstanceID: weapon.ID, ItemDefinitionID: "weapon-01", Name: "ヒノキの棒", Payout: 5}) ||
 		i < 0 || response.AvailableActions[i].ParamsTemplate["item_instance_id"] != weapon.ID || response.AvailableActions[i].ParamsTemplate["shop_type"] != "weapon" {

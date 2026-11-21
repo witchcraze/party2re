@@ -54,7 +54,7 @@ func TestBankSceneOwnedStateAndSharedNavigation(t *testing.T) {
 			f, store, reads, router := bankSceneRouter(t)
 			f.char.Deposit = deposit
 			status, observation := navigationGET(t, router)
-			data := decodeShopScene[struct {
+			data := decodeSceneData[struct {
 				Parent string `json:"parent"`
 				bank.State
 			}](t, observation)
@@ -121,14 +121,14 @@ func TestBankSceneCommandRefreshAndGETOnlyRecovery(t *testing.T) {
 					if err := json.Unmarshal(raw["context"], &refreshed); err != nil {
 						t.Fatal(err)
 					}
-					data := decodeShopScene[bank.State](t, refreshed)
+					data := decodeSceneData[bank.State](t, refreshed)
 					if data.Money != tc.money || data.Deposit != tc.deposit {
 						t.Fatalf("stale command refresh: %+v", refreshed)
 					}
 				}
 				reads.err = nil
 				status, observation := navigationGET(t, router)
-				data := decodeShopScene[bank.State](t, observation)
+				data := decodeSceneData[bank.State](t, observation)
 				if status != 200 || data.Money != tc.money || data.Deposit != tc.deposit || f.executions != 1 || store.writes != 0 {
 					t.Fatalf("GET recovery replayed or stale: %d %+v", status, observation)
 				}

@@ -122,7 +122,7 @@ func TestDepotExpansionGatewayOutcomeAndGETRecovery(t *testing.T) {
 					if status != 200 || f.executions != 1 || store.writes != 0 {
 						t.Fatalf("GET replayed: %d %+v", status, observation)
 					}
-					data := decodeShopScene[DepotSceneData](t, observation)
+					data := decodeSceneData[DepotSceneData](t, observation)
 					if data.ExDepot != 1 || data.Capacity != 10 || data.Items[0].EnhancementLevel != 6 {
 						t.Fatalf("lost scene: %+v", data)
 					}

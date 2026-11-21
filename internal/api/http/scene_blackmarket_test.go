@@ -82,7 +82,7 @@ func TestBlackMarketSceneObservesOwnedFactsWithoutMutation(t *testing.T) {
 	if status != 200 || observation.Scene.Kind != "facility" || observation.Scene.LocationID != "blackmarket" || observation.Scene.Title != "闇市場" || observation.Scene.Support.Observation != "details" {
 		t.Fatalf("projection: %d %+v", status, observation)
 	}
-	data := decodeShopScene[BlackMarketSceneData](t, observation)
+	data := decodeSceneData[BlackMarketSceneData](t, observation)
 	if data.Parent != "oracle" || !reflect.DeepEqual(data.Status, service.status) || data.CandidateCount != 2 || data.Page.Next != nil {
 		t.Fatalf("lost facts: %+v", data)
 	}
@@ -98,7 +98,7 @@ func TestBlackMarketSceneObservesOwnedFactsWithoutMutation(t *testing.T) {
 	store.selection.Destination = "town"
 	status, town := navigationGET(t, router)
 	// Legacy reaches the black market only through the Oracle shop (goods.cgi ＠やみいちば).
-	if status != 200 || slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool { return d.ID == "blackmarket" }) {
+	if status != 200 || slices.ContainsFunc(decodeSceneData[TownSceneData](t, town).Destinations, func(d SceneDestination) bool { return d.ID == "blackmarket" }) {
 		t.Fatalf("black market listed in town: %d %+v", status, town)
 	}
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"blackmarket"}}`, nil)
@@ -115,7 +115,7 @@ func TestBlackMarketScenePagesCandidates(t *testing.T) {
 	service := &blackMarketSceneService{status: blackMarketTestStatus(21)}
 	store, router := blackMarketSceneRouter(t, service, blackmarket.MinAccessJobLevel)
 	status, first := navigationGET(t, router)
-	data := decodeShopScene[BlackMarketSceneData](t, first)
+	data := decodeSceneData[BlackMarketSceneData](t, first)
 	if status != 200 || len(data.SacrificeCandidates) != 20 || data.CandidateCount != 21 || data.Page.Next == nil || data.Page.Next.Offset != 20 {
 		t.Fatalf("first page: %d %+v", status, data)
 	}
@@ -124,7 +124,7 @@ func TestBlackMarketScenePagesCandidates(t *testing.T) {
 	}
 	store.selection.Offset, store.selection.Limit = 20, 20
 	status, second := navigationGET(t, router)
-	data = decodeShopScene[BlackMarketSceneData](t, second)
+	data = decodeSceneData[BlackMarketSceneData](t, second)
 	if status != 200 || len(data.SacrificeCandidates) != 1 || data.SacrificeCandidates[0].ItemInstanceID != "i20" || data.Page.Next != nil {
 		t.Fatalf("second page: %d %+v", status, data)
 	}
@@ -147,7 +147,7 @@ func TestBlackMarketSceneQualificationAndSafeBack(t *testing.T) {
 	assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
 
 	store.selection.Destination = "town"
-	if status, town := navigationGET(t, router); status != 200 || slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool { return d.ID == "blackmarket" }) {
+	if status, town := navigationGET(t, router); status != 200 || slices.ContainsFunc(decodeSceneData[TownSceneData](t, town).Destinations, func(d SceneDestination) bool { return d.ID == "blackmarket" }) {
 		t.Fatalf("unqualified discovery: %d %+v", status, town)
 	}
 	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"blackmarket"}}`, nil)
@@ -200,7 +200,7 @@ func TestBlackMarketSceneEquippedCandidateAndSacrificeRefresh(t *testing.T) {
 	_, router := blackMarketSceneRouter(t, service, blackmarket.MinAccessJobLevel)
 
 	httpStatus, observation := navigationGET(t, router)
-	data := decodeShopScene[BlackMarketSceneData](t, observation)
+	data := decodeSceneData[BlackMarketSceneData](t, observation)
 	if httpStatus != 200 || len(data.SacrificeCandidates) != 2 || !data.SacrificeCandidates[0].Equipped || data.SacrificeCandidates[0].ItemInstanceID != "eq-1" {
 		t.Fatalf("unexpected initial candidates: %d %+v", httpStatus, data.SacrificeCandidates)
 	}
