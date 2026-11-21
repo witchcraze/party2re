@@ -21,8 +21,8 @@ func (r *ValkeyExpeditionRepository) getMemberRun(ctx context.Context, actor str
 	if err != nil {
 		return nil, err
 	}
-	ids := DecodeItems(value)
-	if len(ids) != 2 || ids[0] == actor {
+	ids, err := decodeItems(value)
+	if err != nil || len(ids) != 2 || ids[0] == actor {
 		return nil, fmt.Errorf("invalid dungeon member reference")
 	}
 	run, err := r.getActiveExpedition(ctx, ids[0], false)

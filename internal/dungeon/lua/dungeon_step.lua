@@ -1,3 +1,135 @@
+local function parse_int_field(hash_key, field)
+    local raw = redis.call('HGET', hash_key, field)
+    if not raw or raw == '' then
+        return 0
+    end
+    if not string.match(raw, '^%-?%d+$') then
+        return nil, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    return tonumber(raw)
+end
+
+local function decode_array_field(hash_key, field, elem_type)
+    local raw = redis.call('HGET', hash_key, field)
+    if not raw then
+        return {}, false
+    end
+    local trimmed = string.match(raw, '^%s*(.-)%s*$')
+    if trimmed == '' or trimmed == '[]' or trimmed == 'null' then
+        return {}, false
+    end
+    if string.sub(trimmed, 1, 1) ~= '[' then
+        return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field .. ' json'
+    end
+    local ok, decoded = pcall(cjson.decode, trimmed)
+    if not ok or type(decoded) ~= 'table' then
+        return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field .. ' json'
+    end
+    if elem_type then
+        for _, v in ipairs(decoded) do
+            if type(v) ~= elem_type then
+                return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field .. ' json'
+            end
+        end
+    end
+    return decoded, true
+end
+
+local member_str_fields = {'character_id', 'name', 'job_id'}
+local member_int_fields = {'level', 'current_hp', 'max_hp', 'current_mp', 'max_mp', 'accumulated_exp', 'accumulated_gold'}
+
+local function is_int_number(v)
+    return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge and math.floor(v) == v
+end
+
+local function validate_member(m)
+    if type(m) ~= 'table' then
+        return false
+    end
+    for _, f in ipairs(member_str_fields) do
+        local v = m[f]
+        if v ~= nil and v ~= cjson.null and type(v) ~= 'string' then
+            return false
+        end
+    end
+    for _, f in ipairs(member_int_fields) do
+        local v = m[f]
+        if v ~= nil and v ~= cjson.null and not is_int_number(v) then
+            return false
+        end
+    end
+    local item_ids = m['item_ids']
+    if item_ids ~= nil and item_ids ~= cjson.null then
+        if type(item_ids) ~= 'table' or (#item_ids == 0 and next(item_ids) ~= nil) then
+            return false
+        end
+        for _, id in ipairs(item_ids) do
+            if type(id) ~= 'string' then
+                return false
+            end
+        end
+    end
+    local consumed = m['consumed_items']
+    if consumed ~= nil and consumed ~= cjson.null then
+        if type(consumed) ~= 'table' or (#consumed == 0 and next(consumed) ~= nil) then
+            return false
+        end
+        for _, c in ipairs(consumed) do
+            if type(c) ~= 'table' then
+                return false
+            end
+            if c['id'] ~= nil and c['id'] ~= cjson.null and type(c['id']) ~= 'string' then
+                return false
+            end
+            if c['instance_id'] ~= nil and c['instance_id'] ~= cjson.null and type(c['instance_id']) ~= 'string' then
+                return false
+            end
+            if c['quantity'] ~= nil and c['quantity'] ~= cjson.null and not is_int_number(c['quantity']) then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+local function validate_optional_timestamp(hash_key, field)
+    local raw = redis.call('HGET', hash_key, field)
+    if not raw or raw == '' then
+        return nil
+    end
+    local yr_s, mon_s, day_s, hr_s, min_s, sec_s, rest = string.match(raw, '^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)(.*)$')
+    if not yr_s then
+        return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    local yr, mon, day = tonumber(yr_s), tonumber(mon_s), tonumber(day_s)
+    local hr, min, sec = tonumber(hr_s), tonumber(min_s), tonumber(sec_s)
+    if mon < 1 or mon > 12 or hr > 23 or min > 59 or sec > 59 then
+        return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    local days_in_month = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+    if mon == 2 and yr % 4 == 0 and (yr % 100 ~= 0 or yr % 400 == 0) then
+        days_in_month[2] = 29
+    end
+    if day < 1 or day > days_in_month[mon] then
+        return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    if string.sub(rest, 1, 1) == '.' then
+        local frac
+        frac, rest = string.match(rest, '^(%.%d%d?%d?%d?%d?%d?%d?%d?%d?)(.*)$')
+        if not frac then
+            return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+        end
+    end
+    if rest == 'Z' then
+        return nil
+    end
+    local tz_h, tz_m = string.match(rest, '^[+-](%d%d):(%d%d)$')
+    if not tz_h or tonumber(tz_h) > 23 or tonumber(tz_m) > 59 then
+        return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    return nil
+end
+
 local state_key = KEYS[1]
 local rewards_key = KEYS[2]
 
@@ -39,7 +171,10 @@ local encounter = redis.call('HGET', state_key, 'encounter') or ''
 if encounter ~= '' and ARGV[18] ~= 'true' then
     return redis.error_reply('ERR_COMBAT_ACTIVE')
 end
-local revision = tonumber(redis.call('HGET', state_key, 'revision') or '0')
+local revision, rev_err = parse_int_field(state_key, 'revision')
+if rev_err then
+    return redis.error_reply(rev_err)
+end
 if ARGV[17] ~= '' and tonumber(ARGV[17]) ~= revision then
     return redis.error_reply('ERR_EXPEDITION_STATE_CHANGED')
 end
@@ -47,21 +182,43 @@ revision = revision + 1
 encounter = ARGV[19] or ''
 
 -- 4. Calculate new HP and round
-local current_hp = tonumber(redis.call('HGET', state_key, 'current_hp') or '0')
-local round = tonumber(redis.call('HGET', state_key, 'round') or '0') + round_delta
+local current_hp, hp_err = parse_int_field(state_key, 'current_hp')
+if hp_err then
+    return redis.error_reply(hp_err)
+end
+local round, round_err = parse_int_field(state_key, 'round')
+if round_err then
+    return redis.error_reply(round_err)
+end
+round = round + round_delta
 
 current_hp = current_hp + hp_delta
 
-local members_str = redis.call('HGET', state_key, 'members') or '[]'
-local members = {}
-local has_members = false
-if members_str ~= '' and members_str ~= '[]' then
-    local ok, decoded = pcall(cjson.decode, members_str)
-    if ok and type(decoded) == 'table' then
-        members = decoded
-        has_members = true
+local _, variant_err = parse_int_field(state_key, 'map_variant')
+if variant_err then
+    return redis.error_reply(variant_err)
+end
+local _, limit_err = parse_int_field(state_key, 'round_limit')
+if limit_err then
+    return redis.error_reply(limit_err)
+end
+local started_err = validate_optional_timestamp(state_key, 'started_at')
+if started_err then
+    return redis.error_reply(started_err)
+end
+
+local members, has_members, members_err = decode_array_field(state_key, 'members', 'table')
+if members_err then
+    return redis.error_reply(members_err)
+end
+if has_members then
+    for _, m in ipairs(members) do
+        if not validate_member(m) then
+            return redis.error_reply('ERR_EXPEDITION_CORRUPTED: invalid members json')
+        end
     end
 end
+local members_str = '[]'
 
 if has_members then
     local deltas = {}
@@ -150,13 +307,23 @@ if ARGV[20] and ARGV[20] ~= '' then
 end
 
 -- 5. Check and record event consumption
-local events_str = redis.call('HGET', state_key, 'consumed_events')
-local consumed_events = {}
-if events_str and events_str ~= '' and events_str ~= '[]' then
-    local ok, decoded = pcall(cjson.decode, events_str)
-    if ok and type(decoded) == 'table' then
-        consumed_events = decoded
-    end
+local consumed_events, _, events_err = decode_array_field(state_key, 'consumed_events', 'string')
+if events_err then
+    return redis.error_reply(events_err)
+end
+
+-- Validate existing rewards fields before mutating state or rewards.
+local _, exp_err = parse_int_field(rewards_key, 'exp')
+if exp_err then
+    return redis.error_reply(exp_err)
+end
+local _, gold_err = parse_int_field(rewards_key, 'gold')
+if gold_err then
+    return redis.error_reply(gold_err)
+end
+local items, _, items_err = decode_array_field(rewards_key, 'items', 'string')
+if items_err then
+    return redis.error_reply(items_err)
 end
 
 local event_consumed = 1
@@ -253,15 +420,6 @@ if event_consumed == 0 then
 end
 local total_exp = redis.call('HINCRBY', rewards_key, 'exp', exp_delta)
 local total_gold = redis.call('HINCRBY', rewards_key, 'gold', gold_delta)
-
-local items_str = redis.call('HGET', rewards_key, 'items')
-local items = {}
-if items_str and items_str ~= '' and items_str ~= '[]' then
-    local ok, decoded = pcall(cjson.decode, items_str)
-    if ok and type(decoded) == 'table' then
-        items = decoded
-    end
-end
 
 if reward_item and reward_item ~= '' then
     table.insert(items, reward_item)

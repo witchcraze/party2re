@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -946,4 +947,156 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 		t.Fatalf("Valkey persisted state mismatch after battle 2: CurrentHP=%d, Members[0].CurrentHP=%d (expected %d)",
 			reloaded2.CurrentHP, reloaded2.Members[0].CurrentHP, hpAfter2)
 	}
+}
+
+func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
+	client := testutil.OpenValkey(t)
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name         string
+		target       string // "state" or "rewards"
+		field        string
+		corruptValue string
+	}{
+		{"corrupted consumed_events", "state", "consumed_events", "{bad-json"},
+		{"object consumed_events", "state", "consumed_events", `{"bad":1}`},
+		{"empty object consumed_events", "state", "consumed_events", `{}`},
+		{"non-string element consumed_events", "state", "consumed_events", `[123]`},
+		{"corrupted members", "state", "members", "{bad-json"},
+		{"object members", "state", "members", `{"bad":1}`},
+		{"empty object members", "state", "members", `{}`},
+		{"non-object element members", "state", "members", `["bad"]`},
+		{"non-int member current_hp", "state", "members", `[{"current_hp":"oops"}]`},
+		{"non-string member character_id", "state", "members", `[{"character_id":123}]`},
+		{"non-array member item_ids", "state", "members", `[{"item_ids":{"bad":1}}]`},
+		{"non-array member consumed_items", "state", "members", `[{"consumed_items":"oops"}]`},
+		{"corrupted round", "state", "round", "nan"},
+		{"corrupted map_variant", "state", "map_variant", "nan"},
+		{"corrupted round_limit", "state", "round_limit", "nan"},
+		{"corrupted started_at", "state", "started_at", "not-a-timestamp"},
+		{"lowercase t started_at", "state", "started_at", "2026-11-21t16:00:00Z"},
+		{"lowercase z started_at", "state", "started_at", "2026-11-21T16:00:00z"},
+		{"impossible calendar started_at", "state", "started_at", "2026-02-30T12:00:00Z"},
+		{"corrupted rewards items", "rewards", "items", "{bad-json"},
+		{"object rewards items", "rewards", "items", `{"bad":1}`},
+		{"non-string element rewards items", "rewards", "items", `[123]`},
+		{"corrupted rewards exp", "rewards", "exp", "nan"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			charID := "char-corrupt-" + strings.ReplaceAll(tc.name, " ", "-")
+			cleanupDungeonValkey(t, client, charID)
+			defer cleanupDungeonValkey(t, client, charID)
+
+			repo, err := dungeon.NewValkeyExpeditionRepository(client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			exp := sampleExpedition("exp-corrupt", charID, dungeon.NativeMap0ID)
+			exp.Round = 2
+			exp.ConsumedEvents = []string{"C:1:1"}
+			exp.AccumulatedItems = []string{"item-01"}
+			exp.Members = []dungeon.ExpeditionMember{{CharacterID: charID, Name: "Hero", CurrentHP: 100, MaxHP: 100}}
+			if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+				t.Fatal(err)
+			}
+
+			sKey := fmt.Sprintf("party2:dungeon:{char:%s}:state", charID)
+			rKey := fmt.Sprintf("party2:dungeon:{char:%s}:rewards", charID)
+			key := sKey
+			if tc.target == "rewards" {
+				key = rKey
+			}
+			if err := client.Do(ctx, client.B().Hset().Key(key).FieldValue().FieldValue(tc.field, tc.corruptValue).Build()).Error(); err != nil {
+				t.Fatal(err)
+			}
+
+			beforeState, err := client.Do(ctx, client.B().Hgetall().Key(sKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			beforeRewards, err := client.Do(ctx, client.B().Hgetall().Key(rKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := repo.GetActiveExpedition(ctx, charID); !errors.Is(err, dungeon.ErrExpeditionCorrupted) {
+				t.Fatalf("GetActiveExpedition expected ErrExpeditionCorrupted, got %v", err)
+			}
+
+			_, stepErr := repo.Step(ctx, charID, dungeon.StepParams{
+				ExpectedExpeditionID: exp.ID,
+				NewX:                 1,
+				NewY:                 0,
+				RoundDelta:           1,
+				ExpDelta:             10,
+				GoldDelta:            20,
+				EventKey:             "C:1:1",
+				Now:                  time.Now().UTC(),
+			})
+			if !errors.Is(stepErr, dungeon.ErrExpeditionCorrupted) {
+				t.Fatalf("Step expected ErrExpeditionCorrupted, got %v", stepErr)
+			}
+
+			afterState, err := client.Do(ctx, client.B().Hgetall().Key(sKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			afterRewards, err := client.Do(ctx, client.B().Hgetall().Key(rKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for k, v := range beforeState {
+				if afterState[k] != v {
+					t.Fatalf("state field %q mutated after corrupted Step: got %q, want %q", k, afterState[k], v)
+				}
+			}
+			for k, v := range beforeRewards {
+				if afterRewards[k] != v {
+					t.Fatalf("rewards field %q mutated after corrupted Step: got %q, want %q", k, afterRewards[k], v)
+				}
+			}
+		})
+	}
+
+	t.Run("compatible empty and legacy null fields succeed", func(t *testing.T) {
+		charID := "char-corrupt-compat"
+		cleanupDungeonValkey(t, client, charID)
+		defer cleanupDungeonValkey(t, client, charID)
+
+		repo, err := dungeon.NewValkeyExpeditionRepository(client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exp := sampleExpedition("exp-compat", charID, dungeon.NativeMap0ID)
+		if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+			t.Fatal(err)
+		}
+		sKey := fmt.Sprintf("party2:dungeon:{char:%s}:state", charID)
+		rKey := fmt.Sprintf("party2:dungeon:{char:%s}:rewards", charID)
+		if err := client.Do(ctx, client.B().Hset().Key(sKey).FieldValue().
+			FieldValue("consumed_events", "null").
+			FieldValue("map_variant", "").
+			FieldValue("round_limit", "").
+			FieldValue("started_at", "2026-11-21T16:00:00.123456+09:00").
+			Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Do(ctx, client.B().Hset().Key(rKey).FieldValue().FieldValue("items", "null").Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := repo.GetActiveExpedition(ctx, charID); err != nil || got == nil || len(got.ConsumedEvents) != 0 || len(got.AccumulatedItems) != 0 {
+			t.Fatalf("GetActiveExpedition compat failed: %+v err=%v", got, err)
+		}
+		out, err := repo.Step(ctx, charID, dungeon.StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewX:                 1,
+			NewY:                 0,
+			RoundDelta:           1,
+			Now:                  time.Now().UTC(),
+		})
+		if err != nil || out.Expedition.Round != 1 || len(out.Expedition.ConsumedEvents) != 0 {
+			t.Fatalf("Step compat failed: %+v err=%v", out, err)
+		}
+	})
 }
