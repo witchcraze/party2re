@@ -259,12 +259,38 @@ func TestDiscoverFallenAndSpectatorOperations(t *testing.T) {
 	r.actor("b").RosterIdentity = "calling-66"
 	cmd := RunCommand{ActorID: "a", Action: "job-66-revive", TargetID: "c"}
 	got, err := r.ParseNormalOperation(cmd, ctx)
-	if err != nil || !got.First.FallenSelf || got.First.TargetID != cmd.TargetID {
+	if err != nil || !got.First.FallenSelf || got.First.TargetID != cmd.TargetID || got.First.Validate == nil || got.First.Execute == nil {
 		t.Fatalf("fallen revival: %+v %v", got, err)
 	}
 	r.actor("b").HP = 0
 	if got, err := r.ParseNormalOperation(cmd, ctx); err != nil || !got.First.FallenSelf {
 		t.Fatalf("fallen designated helper means the listed callback has no effect: %+v %v", got, err)
+	}
+	r.actor("b").RosterIdentity = ""
+	if got, err := r.ParseNormalOperation(cmd, ctx); err != nil || !got.First.FallenSelf {
+		t.Fatalf("missing designated helper means the listed callback has no effect: %+v %v", got, err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*NormalRun, *corebattle.LifetimeActor)
+	}{
+		{"missing amulet", func(_ *NormalRun, a *corebattle.LifetimeActor) { a.ItemDefinitionIDs = nil }},
+		{"insufficient sp", func(_ *NormalRun, a *corebattle.LifetimeActor) { a.Jobs.SP = 149 }},
+		{"cursed", func(_ *NormalRun, a *corebattle.LifetimeActor) { a.Abilities = []string{"cursed"} }},
+		{"banned", func(r *NormalRun, _ *corebattle.LifetimeActor) {
+			r.Battle.SkillBans = map[string]int{"job-66-revive": 1}
+		}},
+		{"no living enemy", func(r *NormalRun, _ *corebattle.LifetimeActor) { r.actor("c").HP = 0 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, ctx := operationFixture()
+			a := r.actor("a")
+			a.HP, a.Jobs.JobID, a.Jobs.SP, a.ItemDefinitionIDs = 0, "job-66", 150, []string{"item-158"}
+			tc.change(r, a)
+			if _, err := r.ParseNormalOperation(cmd, ctx); !errors.Is(err, ErrRunUnavailable) {
+				t.Fatalf("expected ErrRunUnavailable, got %v", err)
+			}
+		})
 	}
 	cmd.Action = "attack"
 	if _, err := r.ParseNormalOperation(cmd, ctx); !errors.Is(err, ErrUnconsciousCharacter) {

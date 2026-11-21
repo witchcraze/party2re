@@ -109,11 +109,8 @@ func (s *LifetimeState) ValidateRevivalAction(c *RevivalContext, id, targetID st
 	if s.SkillBans[id] > 0 {
 		return ErrUnsupportedEffect
 	}
-	if s.actor(c.ActorID).HP <= 0 {
-		h := s.actor(s.FindCallingHelper(c.TargetContext, 66))
-		if id != "job-66-revive" || h == nil || h.HP <= 0 {
-			return ErrUnsupportedEffect
-		}
+	if s.actor(c.ActorID).HP <= 0 && id != "job-66-revive" {
+		return ErrUnsupportedEffect
 	}
 	return nil
 }
