@@ -758,15 +758,14 @@ func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 // Helpers
 // -------------------------------------------------------------------
 
-// sessionIDFromRequest extracts the session ID from the Authorization header.
-// Expected format: "Bearer <session-id>"
+// sessionIDFromRequest extracts a trimmed Bearer token from the Authorization header.
+// Expected format: "Bearer <token>"
 func sessionIDFromRequest(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
-	const prefix = "Bearer "
-	if len(auth) > len(prefix) && auth[:len(prefix)] == prefix {
-		return auth[len(prefix):]
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok {
+		return ""
 	}
-	return ""
+	return strings.TrimSpace(token)
 }
 
 type errorResponse struct {

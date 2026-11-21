@@ -64,6 +64,28 @@ func TestAuthHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("GET /characters/{id} - whitespace-only Bearer token returns 401 missing session", func(t *testing.T) {
+		called := false
+		p := &stubPlayerService{
+			authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+				called = true
+				return coreplayer.Player{}, errors.New("unexpected authenticate call")
+			},
+		}
+		h, err := apihttp.NewHandler(p, chars, &stubAdventureService{}, &stubShopService{})
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/characters/char-1", nil)
+		req.Header.Set("Authorization", "Bearer   ")
+		rec := httptest.NewRecorder()
+		h.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized || called {
+			t.Errorf("expected 401 without Authenticate call, got %d called=%v body=%s", rec.Code, called, rec.Body.String())
+		}
+	})
+
 	t.Run("GET /characters/{id} - invalid session returns 401", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/characters/char-1", nil)
 		req.Header.Set("Authorization", "Bearer bad-session")
@@ -119,6 +141,17 @@ func TestAuthHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("GET /characters/{id} - padded Bearer token is trimmed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/char-1", nil)
+		req.Header.Set("Authorization", "Bearer  valid-session ")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", rec.Code)
+		}
+	})
+
 }
 
 func TestAdminAuth(t *testing.T) {
@@ -161,6 +194,27 @@ func TestAdminAuth(t *testing.T) {
 		router.ServeHTTP(rec, req)
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected 401 Unauthorized for missing admin credentials, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		// Whitespace-only Bearer -> 401
+		req = httptest.NewRequest(http.MethodPost, "/news", bytes.NewReader([]byte(`{"title":"T","content":"C","category":"system","author":"A"}`)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer   ")
+		rec = httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 Unauthorized for whitespace-only Bearer token, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		// Whitespace-only X-Admin-Key does not fall back to Bearer -> 401
+		req = httptest.NewRequest(http.MethodPost, "/news", bytes.NewReader([]byte(`{"title":"T","content":"C","category":"system","author":"A"}`)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Key", "   ")
+		req.Header.Set("Authorization", "Bearer "+adminKey)
+		rec = httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 Unauthorized when X-Admin-Key is whitespace-only, got %d: %s", rec.Code, rec.Body.String())
 		}
 
 		// Invalid X-Admin-Key -> 403

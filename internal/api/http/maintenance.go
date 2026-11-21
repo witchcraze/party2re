@@ -80,13 +80,7 @@ func (h *Handler) isAdminRequest(r *http.Request) bool {
 		return false
 	}
 
-	providedKey := r.Header.Get("X-Admin-Key")
-	if providedKey == "" {
-		if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
-			providedKey = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-	}
-	providedKey = strings.TrimSpace(providedKey)
+	providedKey := adminAPIKeyFromRequest(r)
 	if providedKey == "" {
 		return false
 	}
