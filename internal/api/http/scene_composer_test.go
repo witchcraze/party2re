@@ -233,3 +233,16 @@ func actionIDs(actions []ContextAction) []string {
 	}
 	return ids
 }
+
+func decodeSceneData[T any](t *testing.T, response PlayerContextResponse) T {
+	t.Helper()
+	raw, err := json.Marshal(response.Scene.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data T
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatal(err)
+	}
+	return data
+}

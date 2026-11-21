@@ -60,7 +60,7 @@ func TestDepotSortGatewayOutcomeAndRecovery(t *testing.T) {
 					}
 					f.queryErr, f.profileErr, f.readErr, f.expectedContext = nil, nil, nil, nil
 					status, observation := navigationGET(t, router)
-					if status != 200 || f.executions != 1 || f.sorts != 1 || store.writes != 0 || decodeShopScene[DepotSceneData](t, observation).Items[0].EnhancementLevel != 6 {
+					if status != 200 || f.executions != 1 || f.sorts != 1 || store.writes != 0 || decodeSceneData[DepotSceneData](t, observation).Items[0].EnhancementLevel != 6 {
 						t.Fatalf("GET recovery: %d %+v", status, observation)
 					}
 				})

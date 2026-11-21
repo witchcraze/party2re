@@ -73,7 +73,7 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 			if status != 200 {
 				t.Fatalf("GET: %d %+v", status, obs)
 			}
-			data := decodeShopScene[ActivitySceneData](t, obs)
+			data := decodeSceneData[ActivitySceneData](t, obs)
 			if data.Dungeon == nil || !reflect.DeepEqual(*data.Dungeon, view) || !slices.Equal(data.Activities[0].Actions, tc.actions) || obs.Scene.LocationID != "dungeon" || obs.Scene.Title != tc.wantTitle || selection.writes != 0 || f.executions != 0 {
 				t.Fatalf("observation: %+v", obs)
 			}
@@ -220,7 +220,7 @@ func TestDungeonActivityConflictKeepsConflictTitle(t *testing.T) {
 	}}
 	router := f.router("rescue_request", timer.NewService(nil), WithPlayerContext(pc), WithDungeon(svc))
 	status, obs := navigationGET(t, router)
-	data := decodeShopScene[ActivitySceneData](t, obs)
+	data := decodeSceneData[ActivitySceneData](t, obs)
 	if status != 200 || obs.Scene.Kind != "activity_conflict" || obs.Scene.LocationID != "activity_conflict" || obs.Scene.Title != "活動の状態を確認してください" || data.Dungeon == nil || data.Dungeon.FloorName != "落穴の塔１階" {
 		t.Fatalf("conflict observation: %d %+v", status, obs)
 	}

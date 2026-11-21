@@ -79,7 +79,7 @@ func TestGodSceneFollowsTheRecordedVisit(t *testing.T) {
 			f.wishes = []god.Wish{{ID: god.WishMoney, Name: "お金がほしい", Available: true}}
 			store, router := f.router(t)
 			status, observation := navigationGET(t, router)
-			data := decodeShopScene[GodSceneData](t, observation)
+			data := decodeSceneData[GodSceneData](t, observation)
 			if status != 200 || observation.Scene.LocationID != tc.scene || observation.Scene.Title != tc.title || observation.Scene.Support.Observation != "details" ||
 				data.Realm != god.Realm(tc.visit) || f.realm != god.Realm(tc.visit) || len(data.Wishes) != 1 || data.Parent != "town" {
 				t.Fatalf("projection: %d %+v", status, observation)
@@ -99,7 +99,7 @@ func TestGodSceneFollowsTheRecordedVisit(t *testing.T) {
 	_, router := f.router(t)
 	if status, observation := navigationGET(t, router); status != 200 || observation.Scene.LocationID != "town" ||
 		slices.ContainsFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == "god_wish" }) ||
-		slices.ContainsFunc(decodeShopScene[TownSceneData](t, observation).Destinations, func(d SceneDestination) bool { return strings.Contains(d.ID, "god") }) {
+		slices.ContainsFunc(decodeSceneData[TownSceneData](t, observation).Destinations, func(d SceneDestination) bool { return strings.Contains(d.ID, "god") }) {
 		t.Fatalf("no visit: %d %+v", status, observation)
 	}
 }

@@ -172,7 +172,7 @@ func TestGuildAssociationOffersCommandsByAffiliation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f, store, _, router := newGuildFixture(t, "join_guild", tc.member, tc.role)
 			status, observation := navigationGET(t, router)
-			data := decodeShopScene[GuildAssociationSceneData](t, observation)
+			data := decodeSceneData[GuildAssociationSceneData](t, observation)
 			if status != 200 || observation.Scene.Title != "ギルド" || len(data.Guilds) != 1 || len(data.Marks) != 66 || data.Wallpapers[0].Price != 0 ||
 				(data.Affiliation != nil) != tc.member {
 				t.Fatalf("scene: %d %+v", status, data)
@@ -189,7 +189,7 @@ func TestGuildAssociationSelectedGuildBindsApply(t *testing.T) {
 	_, store, _, router := newGuildFixture(t, "join_guild", false, "")
 	store.selection.Subject = playercontext.Subject{Kind: "guild", ID: "g1"}
 	_, observation := navigationGET(t, router)
-	data := decodeShopScene[GuildAssociationSceneData](t, observation)
+	data := decodeSceneData[GuildAssociationSceneData](t, observation)
 	if data.Selected == nil || len(data.Selected.Members) != 2 || !data.Selected.Members[1].Pending || len(data.Selected.Decorations) != 1 {
 		t.Fatalf("selected: %+v", data.Selected)
 	}
@@ -206,7 +206,7 @@ func TestGuildAssociationSelectedGuildBindsApply(t *testing.T) {
 func TestGuildRoomObservesRosterForMembersOnly(t *testing.T) {
 	f, store, _, router := newGuildFixture(t, "guild", true, guild.RoleMember)
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[GuildRoomSceneData](t, observation)
+	data := decodeSceneData[GuildRoomSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "銀の盾" || len(data.View.Members) != 3 || data.IsLeader || len(data.ColorSamples) != 0 {
 		t.Fatalf("room: %d %+v", status, data)
 	}
@@ -220,7 +220,7 @@ func TestGuildRoomObservesRosterForMembersOnly(t *testing.T) {
 
 	f.role, f.g.LeaderCharacterID = guild.RoleLeader, "hero"
 	_, observation = navigationGET(t, router)
-	if data := decodeShopScene[GuildRoomSceneData](t, observation); !data.IsLeader || len(data.ColorSamples) != 10 {
+	if data := decodeSceneData[GuildRoomSceneData](t, observation); !data.IsLeader || len(data.ColorSamples) != 10 {
 		t.Fatalf("leader room: %+v", data)
 	}
 	assertOffers(t, observation, map[string]bool{"guild_color": true, "guild_message": true, "guild_assign": true})
@@ -239,7 +239,7 @@ func TestGuildRoomObservesRosterForMembersOnly(t *testing.T) {
 func TestGuildRoomRejectsNonMembers(t *testing.T) {
 	_, _, _, router := newGuildFixture(t, "town", false, "")
 	_, observation := navigationGET(t, router)
-	if data := decodeShopScene[TownSceneData](t, observation); slices.ContainsFunc(data.Destinations, func(d SceneDestination) bool { return d.ID == "guild" }) {
+	if data := decodeSceneData[TownSceneData](t, observation); slices.ContainsFunc(data.Destinations, func(d SceneDestination) bool { return d.ID == "guild" }) {
 		t.Fatal("non-member offered the guild room")
 	}
 	if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("scene_enter", `{"destination":"guild"}`), nil); status/100 != 4 {

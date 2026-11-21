@@ -54,7 +54,7 @@ func exileGatewayRouter(t *testing.T, destination string) (*exileGatewayFixture,
 func TestExileGatewayObservationAndCommands(t *testing.T) {
 	f, router := exileGatewayRouter(t, "exile")
 	status, observed := navigationGET(t, router)
-	data := decodeShopScene[ExileSceneData](t, observed)
+	data := decodeSceneData[ExileSceneData](t, observed)
 	if status != 200 || data.Parent != "town" || !data.Board.Eligible || len(data.Board.Petitions) != 1 || observed.Scene.Support.Observation != "details" || f.executions != 0 {
 		t.Fatalf("missing exile board: %d %+v", status, observed)
 	}

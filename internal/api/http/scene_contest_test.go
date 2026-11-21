@@ -93,7 +93,7 @@ func TestContestSceneObservesRoundAndPhotos(t *testing.T) {
 	f := newContestFixture(t)
 	store, router := f.router(t, "contest", WithPlaceLog(&fakePlaceLog{}))
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[ContestSceneData](t, observation)
+	data := decodeSceneData[ContestSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "フォトコン会場" || observation.Scene.Support.Observation != "details" ||
 		data.Parent != "town" || data.ActiveRound == nil || data.ActiveRound.Round != 3 || len(data.Photos) != 2 {
 		t.Fatalf("contest: %d %+v", status, data)

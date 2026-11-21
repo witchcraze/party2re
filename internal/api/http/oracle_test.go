@@ -67,7 +67,7 @@ func TestOracleSceneObservesCatalogAndGatesTheBlackMarket(t *testing.T) {
 	f := newOracleFixture(t)
 	store, router := f.router(t, "oracle", WithPlaceLog(&fakePlaceLog{}))
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[OracleSceneData](t, observation)
+	data := decodeSceneData[OracleSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "オラクル屋" || observation.Scene.Support.Observation != "details" ||
 		data.Parent != "town" || len(data.AvailableCostumes) != 5 || data.ActiveCostume != nil {
 		t.Fatalf("oracle: %d %+v", status, data)
@@ -98,7 +98,7 @@ func TestOracleTownListOmitsTheBlackMarket(t *testing.T) {
 	f.char.JobLevel = 30
 	_, router := f.router(t, "town")
 	_, observation := navigationGET(t, router)
-	data := decodeShopScene[TownSceneData](t, observation)
+	data := decodeSceneData[TownSceneData](t, observation)
 	for _, d := range data.Destinations {
 		if d.ID == "blackmarket" {
 			t.Fatal("the black market is listed in town; legacy reaches it only through ＠やみいちば")

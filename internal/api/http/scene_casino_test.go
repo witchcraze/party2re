@@ -241,7 +241,7 @@ func TestCasinoLobbySelectionPagingAndMenus(t *testing.T) {
 	}
 	router := f.router()
 	status, response := navigationGET(t, router)
-	data := decodeShopScene[CasinoLobbySceneData](t, response)
+	data := decodeSceneData[CasinoLobbySceneData](t, response)
 	if status != 200 || response.Scene.Support.Observation != "details" || len(data.Rooms) != 20 || data.Page.Next == nil || data.WindowLimit != 100 || data.Menu.Coins != 1000 || data.Menu.GoldPerCoin != 20 || len(data.Menu.Prizes) != 18 || !reflect.DeepEqual(data.Menu.SlotBetRates, []int64{1, 10, 50, 100}) {
 		t.Fatalf("lobby: %d %+v", status, data)
 	}
@@ -255,7 +255,7 @@ func TestCasinoLobbySelectionPagingAndMenus(t *testing.T) {
 		t.Fatalf("page: %d %s", status, raw)
 	}
 	_, response = navigationGET(t, router)
-	data = decodeShopScene[CasinoLobbySceneData](t, response)
+	data = decodeSceneData[CasinoLobbySceneData](t, response)
 	if len(data.Rooms) != 3 || data.Page.Next != nil {
 		t.Fatalf("last page: %+v", data)
 	}
@@ -268,7 +268,7 @@ func TestCasinoLobbySelectionPagingAndMenus(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, response = navigationGET(t, router)
-	selected := decodeShopScene[CasinoSelectedSceneData](t, response)
+	selected := decodeSceneData[CasinoSelectedSceneData](t, response)
 	if !reflect.DeepEqual(refreshed.Scene, response.Scene) || response.Scene.Kind != "subject" || selected.Room.ID != "room-00" || selected.JoinParams.RoomID != "room-00" || selected.SpectateParams == nil || f.store.writes != 2 {
 		t.Fatalf("selection: %+v", response)
 	}
@@ -298,7 +298,7 @@ func TestCasinoLobbySelectionPagingAndMenus(t *testing.T) {
 	f.char.JobID = "job-46"
 	f.store.selection = playercontext.Selection{Destination: "casino", Offset: 1000000, Limit: 100}
 	_, response = navigationGET(t, router)
-	data = decodeShopScene[CasinoLobbySceneData](t, response)
+	data = decodeSceneData[CasinoLobbySceneData](t, response)
 	if data.Rooms == nil || len(data.Rooms) != 0 || len(data.Menu.SlotBetRates) != 5 {
 		t.Fatalf("empty/menu: %+v", data)
 	}
@@ -340,7 +340,7 @@ func TestCasinoActualRoomMaskingRolesAndConflicts(t *testing.T) {
 				f.store.loadErr = errors.New("selection must not be read")
 				router := f.router()
 				status, response := navigationGET(t, router)
-				data := decodeShopScene[ActivitySceneData](t, response)
+				data := decodeSceneData[ActivitySceneData](t, response)
 				view, err := f.service.GetRoomView(ctx, "active", "owner", "hero")
 				if err != nil {
 					t.Fatal(err)
@@ -373,7 +373,7 @@ func TestCasinoActualRoomMaskingRolesAndConflicts(t *testing.T) {
 				}
 				f.facts = append(f.facts, playercontext.Activity{Kind: "pvp", ID: "conflict", Role: "member", Phase: "recruiting", Actions: []string{}})
 				status, response = navigationGET(t, router)
-				data = decodeShopScene[ActivitySceneData](t, response)
+				data = decodeSceneData[ActivitySceneData](t, response)
 				if status != 200 || response.Scene.Kind != "activity_conflict" || len(data.Activities) != 2 || data.Casino == nil || len(data.Casino.Controls.Actions) != 0 {
 					t.Fatalf("conflict: %+v", response)
 				}
@@ -489,7 +489,7 @@ func TestCasinoGatewayPreservesAdmissionAndEntryGatesAcrossRenewal(t *testing.T)
 	}
 
 	status, response := navigationGET(t, router)
-	data := decodeShopScene[ActivitySceneData](t, response)
+	data := decodeSceneData[ActivitySceneData](t, response)
 	if status != 200 || response.Scene.LocationID != "casino" || response.Scene.Kind != "activity" || data.Casino == nil || data.Casino.View.Room.ID != roomID || len(data.Activities) != 1 {
 		t.Fatalf("expected active casino scene across original admission deadline, got status=%d scene=%+v data=%+v", status, response.Scene, data)
 	}

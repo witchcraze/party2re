@@ -88,7 +88,7 @@ func TestChapelGatewayObservationAndPrayer(t *testing.T) {
 		t.Run(input, func(t *testing.T) {
 			f, store, _, router := chapelGatewayRouter(t, true)
 			status, observed := navigationGET(t, router)
-			data := decodeShopScene[ChapelSceneData](t, observed)
+			data := decodeSceneData[ChapelSceneData](t, observed)
 			if status != 200 || data.Parent != "town" || data.Blessing.CharacterID != "hero" || len(data.Status.AvailableBlessings) != 5 || observed.Scene.Support.Observation != "details" {
 				t.Fatalf("missing owned Chapel: %d %+v", status, observed)
 			}
@@ -127,7 +127,7 @@ func TestChapelGatewayNavigationDoesNotPray(t *testing.T) {
 	f, store, _, router := chapelGatewayRouter(t, true)
 	store.selection.Destination = "town"
 	status, observed := navigationGET(t, router)
-	town := decodeShopScene[TownSceneData](t, observed)
+	town := decodeSceneData[TownSceneData](t, observed)
 	if status != 200 || !slices.ContainsFunc(town.Destinations, func(d SceneDestination) bool { return d.ID == "chapel" && d.Supported }) {
 		t.Fatalf("Chapel is not discoverable from town: %d %+v", status, observed)
 	}
@@ -246,7 +246,7 @@ func TestChapelGatewayOutcomeAndReadRecovery(t *testing.T) {
 				}
 				f.queryErr, f.blessingErr, f.statusErr = nil, nil, nil
 				status, observed := navigationGET(t, router)
-				data := decodeShopScene[ChapelSceneData](t, observed)
+				data := decodeSceneData[ChapelSceneData](t, observed)
 				if status != 200 || f.executions != 1 || store.writes != 0 || data.Blessing.ActiveBlessing != f.blessing.ActiveBlessing {
 					t.Fatalf("GET recovery: %d %+v", status, observed)
 				}

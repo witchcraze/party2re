@@ -114,7 +114,7 @@ func TestChapelContextPreservesStatusFieldsWithoutMutation(t *testing.T) {
 					if err := json.Unmarshal(w.Body.Bytes(), &observed); err != nil {
 						t.Fatal(err)
 					}
-					data := decodeShopScene[ChapelSceneData](t, observed)
+					data := decodeSceneData[ChapelSceneData](t, observed)
 					if data.Parent != "town" || !reflect.DeepEqual(data.Blessing, before) || !reflect.DeepEqual(data.Status, want) {
 						t.Fatalf("lost Chapel fields: %+v; blessing=%+v status=%+v", data, before, want)
 					}

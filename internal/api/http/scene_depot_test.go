@@ -113,7 +113,7 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 			if status != 200 || observation.Scene.Kind != "facility" || observation.Scene.LocationID != "depot" || observation.Scene.Support.Observation != "details" {
 				t.Fatalf("Depot projection: %d %+v", status, observation)
 			}
-			data := decodeShopScene[DepotSceneData](t, observation)
+			data := decodeSceneData[DepotSceneData](t, observation)
 			if data.Parent != "town" || data.CharacterID != "hero" || data.Capacity != tc.capacity || data.ExDepot != tc.expanded || data.ItemCount != 2 || len(data.Items) != 2 || data.Items[0].ID != "z" || data.Items[0].DefinitionID != "weapon-01" || data.Items[0].Quantity != 1 || data.Items[0].EnhancementLevel != 6 || data.Items[1].ID != "a" || data.Items[1].Quantity != 8 || data.Items[1].EnhancementLevel != 0 {
 				t.Fatalf("lost facts or changed reader order: %+v", data)
 			}
@@ -133,7 +133,7 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 			}
 			store.selection.Destination = "town"
 			status, town := navigationGET(t, router)
-			if status != 200 || !slices.ContainsFunc(decodeShopScene[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
+			if status != 200 || !slices.ContainsFunc(decodeSceneData[TownSceneData](t, town).Destinations, func(d SceneDestination) bool {
 				return d.ID == "depot" && d.Supported && d.EnterParams.Destination == "depot"
 			}) {
 				t.Fatalf("missing Depot entry: %d %+v", status, town)
@@ -166,7 +166,7 @@ func TestDepotSceneBoundedPagesAndEmptyDepot(t *testing.T) {
 		if status != 200 {
 			t.Fatalf("page: %d", status)
 		}
-		data := decodeShopScene[DepotSceneData](t, observation)
+		data := decodeSceneData[DepotSceneData](t, observation)
 		wantLimit := tc.limit
 		if wantLimit == 0 {
 			wantLimit = 20
@@ -188,7 +188,7 @@ func TestDepotSceneBoundedPagesAndEmptyDepot(t *testing.T) {
 	}
 	store.selection.Offset, store.selection.Limit = 0, 0
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[DepotSceneData](t, observation)
+	data := decodeSceneData[DepotSceneData](t, observation)
 	index := slices.IndexFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == "scene_page" })
 	if index < 0 || observation.AvailableActions[index].ParamsTemplate["offset"] != float64(20) {
 		t.Fatalf("next page choice: %+v", observation.AvailableActions)
@@ -201,7 +201,7 @@ func TestDepotSceneBoundedPagesAndEmptyDepot(t *testing.T) {
 		t.Fatalf("next navigation: %d %s", status, raw)
 	}
 	f.dep.Items = nil
-	if status, observation = navigationGET(t, router); status != 200 || decodeShopScene[DepotSceneData](t, observation).Items == nil || decodeShopScene[DepotSceneData](t, observation).ItemCount != 0 || store.writes != 1 || f.writes != 0 {
+	if status, observation = navigationGET(t, router); status != 200 || decodeSceneData[DepotSceneData](t, observation).Items == nil || decodeSceneData[DepotSceneData](t, observation).ItemCount != 0 || store.writes != 1 || f.writes != 0 {
 		t.Fatalf("empty/nonmutating page: %d %+v", status, observation)
 	}
 }
@@ -303,7 +303,7 @@ func TestDepotSceneRequiredReadOwnershipAndContext(t *testing.T) {
 	}
 	f.repoErr, f.depotCharErr, f.char.JobLevel = depot.ErrNotFound, nil, 7
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[DepotSceneData](t, observation)
+	data := decodeSceneData[DepotSceneData](t, observation)
 	if status != 200 || data.Capacity != 40 || data.ItemCount != 0 || data.Items == nil || len(data.Items) != 0 || f.writes != 0 {
 		t.Fatalf("missing depot must remain in memory: %d %+v", status, data)
 	}

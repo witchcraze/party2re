@@ -76,7 +76,7 @@ func newJobTempleFixture(t *testing.T) (*jobTempleFixture, *gatewayNavigationSto
 func TestJobTempleSceneObservesChoices(t *testing.T) {
 	f, store, router := newJobTempleFixture(t)
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[JobTempleSceneData](t, observation)
+	data := decodeSceneData[JobTempleSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "転職の神殿" || len(data.Jobs) != 1 || data.Jobs[0] != (JobOption{JobID: "job-01", Name: "戦士"}) ||
 		len(data.RecallJobs) != 2 || data.JobMemory != "" || len(data.FutureMemories) != 1 ||
 		data.FutureMemories[0] != (JobFutureMemory{ID: "fm1", JobName: "僧侶", OldJobName: "戦士", Level: 40, MaxHP: 300}) {

@@ -66,7 +66,7 @@ func TestPlantationSceneObservesThePlot(t *testing.T) {
 	f := newPlantationFixture(t)
 	store, router := f.router(t, "plantation", WithPlaceLog(&fakePlaceLog{}))
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[PlantationSceneData](t, observation)
+	data := decodeSceneData[PlantationSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "種菜園" || observation.Scene.Support.Observation != "details" ||
 		data.Parent != "town" || data.Status != plantation.StatusNone || len(data.Seeds) != 6 {
 		t.Fatalf("plantation: %d %+v", status, data)

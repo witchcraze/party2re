@@ -115,7 +115,7 @@ func newStoreSceneService() *storeSceneService {
 func TestTownHubListsLegacyTowns(t *testing.T) {
 	_, router := storeSceneRouter(t, newStoreSceneService(), playercontext.Selection{Destination: "town"})
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[TownSceneData](t, observation)
+	data := decodeSceneData[TownSceneData](t, observation)
 	var titles []string
 	for _, d := range data.Destinations {
 		titles = append(titles, d.Title)
@@ -129,7 +129,7 @@ func TestTownDistrictObservesHousesStoresAndBuildTerms(t *testing.T) {
 	service := newStoreSceneService()
 	nav, router := storeSceneRouter(t, service, playercontext.Selection{Destination: "town1"})
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[TownDistrictSceneData](t, observation)
+	data := decodeSceneData[TownDistrictSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "メケメケ村" || observation.Scene.Support.Observation != "details" ||
 		len(data.Stores) != 2 || len(data.Houses) != 1 || data.Houses[0].CharacterID != "peer" || data.Houses[0].OwnerName != "Peer" || data.Town.ID != "town1" || data.StoreTerms.Price != store.StorePrice || len(data.StoreTerms.HouseStyles) != 4 {
 		t.Fatalf("district: %d %+v %+v", status, observation.Scene, data)
@@ -166,7 +166,7 @@ func TestStoreSceneOwnerAndVisitorCommands(t *testing.T) {
 			service := newStoreSceneService()
 			_, router := storeSceneRouter(t, service, playercontext.Selection{Destination: "town1", Subject: playercontext.Subject{Kind: "store", ID: tc.store}})
 			status, observation := navigationGET(t, router)
-			data := decodeShopScene[StoreSceneData](t, observation)
+			data := decodeSceneData[StoreSceneData](t, observation)
 			if status != 200 || observation.Scene.Kind != "subject" || observation.Scene.Title != service.stores[tc.store].StoreName ||
 				data.Parent != "town1" || data.IsOwner != (tc.store == "mine") || data.Details.Sales == nil {
 				t.Fatalf("store: %d %+v %+v", status, observation.Scene, data)

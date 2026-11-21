@@ -79,7 +79,7 @@ func TestRaffleHallObservesCouponsAndPrizeTable(t *testing.T) {
 	f := newLotteryFixture(t)
 	store, router := f.router(t, "lottery", WithPlaceLog(&fakePlaceLog{}))
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[LotterySceneData](t, observation)
+	data := decodeSceneData[LotterySceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "福引所" || observation.Scene.Support.Observation != "details" ||
 		data.Tickets != 7 || data.Special || data.Cost != 3 || len(data.Prizes) != 7 || data.Prizes[4].Name != "種系" || data.Prizes[6].Name != "福袋" {
 		t.Fatalf("raffle hall: %d %+v", status, data)
@@ -91,7 +91,7 @@ func TestRaffleHallObservesCouponsAndPrizeTable(t *testing.T) {
 	}
 	f.tickets = 300
 	_, observation = navigationGET(t, router)
-	if data := decodeShopScene[LotterySceneData](t, observation); !data.Special || data.Cost != 300 || len(data.Prizes) != 1 {
+	if data := decodeSceneData[LotterySceneData](t, observation); !data.Special || data.Cost != 300 || len(data.Prizes) != 1 {
 		t.Fatalf("special raffle: %+v", data)
 	}
 	f.ticketErr = errors.New("private coupon read")
@@ -108,7 +108,7 @@ func TestTakarakujiShopObservesTheRound(t *testing.T) {
 	f.purchased = true
 	_, router := f.router(t, "takarakuji")
 	status, observation := navigationGET(t, router)
-	data := decodeShopScene[TakarakujiSceneData](t, observation)
+	data := decodeSceneData[TakarakujiSceneData](t, observation)
 	if status != 200 || observation.Scene.Title != "宝くじ屋" || data.RoundID != 3 || data.RemainingTickets != 12 ||
 		data.DrawDateLabel != "2026/11/21" || !data.Purchased || !offered(observation, "takarakuji_buy") {
 		t.Fatalf("takarakuji shop: %d %+v", status, data)
