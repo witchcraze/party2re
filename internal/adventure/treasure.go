@@ -3,7 +3,6 @@ package adventure
 import (
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -36,7 +35,7 @@ var defaultBoxNames = []string{
 
 // TreasureCalculationInput specifies the party state when arriving at Floor 11 (Treasure Room).
 type TreasureCalculationInput struct {
-	StageID             string
+	TripleTreasure      bool // StageTraits.TripleTreasure
 	AliveMembers        int
 	DeadMembers         int // Number of dead party members (legacy add_treasure: --$count if hp <= 0)
 	TotalMembers        int // Total party members; if 0, defaults to AliveMembers + DeadMembers
@@ -46,23 +45,6 @@ type TreasureCalculationInput struct {
 	HasLuckyPendant     bool
 	HasTreasureBlessing bool
 	Rng                 func(n int) int
-}
-
-func isThreeTimesTreasureStage(stageID string) bool {
-	id := strings.ToLower(strings.TrimSpace(stageID))
-	return id == "stage-17" || id == "17" ||
-		id == "stage-20" || id == "20" ||
-		id == "stage-21" || id == "21"
-}
-
-func isStage19(stageIDs ...string) bool {
-	for _, id := range stageIDs {
-		trimmed := strings.ToLower(strings.TrimSpace(id))
-		if trimmed == "stage-19" || trimmed == "19" {
-			return true
-		}
-	}
-	return false
 }
 
 // CalculateTreasureCount calculates the number of treasure boxes spawned on Floor 11
@@ -95,7 +77,7 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 	//   my $count = $stage eq '17' || $stage eq '20' || $stage eq '21' ? ($#partys+1) * 3 : $#partys;
 	// where ($#partys + 1) is total party members, and $#partys is (total - 1).
 	var count int
-	if isThreeTimesTreasureStage(input.StageID) {
+	if input.TripleTreasure {
 		count = total * 3
 	} else {
 		count = total - 1
@@ -202,7 +184,7 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 	}
 
 	boxCount := CalculateTreasureCount(TreasureCalculationInput{
-		StageID:             s.StageID,
+		TripleTreasure:      s.Stage.TripleTreasure,
 		AliveMembers:        aliveCount,
 		DeadMembers:         deadCount,
 		TotalMembers:        len(s.Characters),
@@ -216,7 +198,7 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 
 	pools := StageTreasurePools{Weapons: s.Stage.TreasureWeapons, Armors: s.Stage.TreasureArmors, Items: s.Stage.TreasureItems}
 	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, s.now(), s.Rng)
-	if isStage19(s.StageID, s.Stage.ID) {
+	if s.Stage.UnsealsOnTreasure {
 		s.UnsealDemonKing = true
 	}
 }

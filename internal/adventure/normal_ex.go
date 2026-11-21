@@ -9,9 +9,25 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
+// EX room-marker producers (StageTraits.EX.Marker).
+const (
+	markerRoyalBeeDefeat   = "royal_bee_defeat"
+	markerAdvanceTwoAllies = "advance_two_allies"
+	markerBossEncounter    = "boss_encounter"
+	markerAdvance          = "advance"
+	markerRoomCreation     = "room_creation"
+)
+
+func (s Stage) exMarker() string {
+	if s.EX == nil {
+		return ""
+	}
+	return s.EX.Marker
+}
+
 // HasEX reads the room marker against the current destination, never clear credit.
 func (r *NormalRun) HasEX() bool {
-	return r.EXUnlocked && (r.Stage.ID == "stage-22" || r.Stage.ID == "stage-23" || r.Stage.ID == "stage-24" || r.Stage.ID == "stage-25" || r.Stage.ID == "stage-26")
+	return r.EXUnlocked && r.Stage.EX != nil
 }
 
 func (r *NormalRun) markEXOnAdvance(actor string) {
@@ -24,7 +40,7 @@ func (r *NormalRun) markEXOnAdvance(actor string) {
 			count++
 		}
 	}
-	if r.Stage.ID == "stage-25" || r.Stage.ID == "stage-23" && count > 1 {
+	if m := r.Stage.exMarker(); m == markerAdvance || m == markerAdvanceTwoAllies && count > 1 {
 		r.EXUnlocked = true
 	}
 }
@@ -33,7 +49,7 @@ func (r *NormalRun) markEncounterCreated() {
 	r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID
 	if r.Floor == BossFloor {
 		r.ClearPending = true
-		if r.Stage.ID == "stage-24" {
+		if r.Stage.exMarker() == markerBossEncounter {
 			r.EXUnlocked = true
 		}
 	}
@@ -42,8 +58,8 @@ func (r *NormalRun) markEncounterCreated() {
 // royalBeeIdentity is the server-owned stage22 source entry (ff97fc5:stage/22.cgi:175).
 const royalBeeIdentity = "ordinary-22-monster-175"
 
-func rollStage22EX(stageID, identity string, rng random.Generator) bool {
-	return stageID == "stage-22" && strings.TrimRight(identity, "ABCDEFGH") == royalBeeIdentity && rng.Intn(3) == 0
+func rollRoyalBeeEX(stage Stage, identity string, rng random.Generator) bool {
+	return stage.exMarker() == markerRoyalBeeDefeat && strings.TrimRight(identity, "ABCDEFGH") == royalBeeIdentity && rng.Intn(3) == 0
 }
 
 // prepareEXAllies follows add_ex_boss: after the roster exists, every ally,
@@ -63,13 +79,11 @@ func (r *NormalRun) prepareEXAllies(actor string) {
 
 func isTreasureFloor(floor int) bool { return floor == TreasureRoomFloor || floor == EXTreasureFloor }
 
-// exTreasureItems is the item row of @ex_treasures; stage26 aliases it to the
-// season's @treasures (stage/26.cgi:38), without the weekday orb.
 func (s Stage) exTreasureItems() []string {
-	if s.ID == "stage-26" {
-		return s.TreasureItems
+	if s.EX == nil {
+		return nil
 	}
-	return s.EXTreasureItems
+	return s.EX.TreasureItems
 }
 
 // treasureCount mirrors @partys at creation: same-side roster members, fallen
@@ -91,7 +105,7 @@ func (r *NormalRun) treasureCount(actorID, blessing string, rng func(int) int) (
 			real++
 		}
 	}
-	return CalculateTreasureCount(TreasureCalculationInput{StageID: r.Stage.ID, AliveMembers: alive, DeadMembers: total - alive, TotalMembers: total, HasMerchant: a.Jobs.JobID == merchantJob, HasGambler: a.Jobs.JobID == gamblerJob, HasTreasureHunter: a.Jobs.JobID == treasureHunterJob, HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: IsTreasureBlessing(blessing), Rng: rng}), real
+	return CalculateTreasureCount(TreasureCalculationInput{TripleTreasure: r.Stage.TripleTreasure, AliveMembers: alive, DeadMembers: total - alive, TotalMembers: total, HasMerchant: a.Jobs.JobID == merchantJob, HasGambler: a.Jobs.JobID == gamblerJob, HasTreasureHunter: a.Jobs.JobID == treasureHunterJob, HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: IsTreasureBlessing(blessing), Rng: rng}), real
 }
 
 var fixedBoxNames = []string{"煤けた宝箱", "金の宝箱"}
@@ -117,10 +131,10 @@ func (s *NormalRunService) createEXTreasure(r *NormalRun, actorID, blessing stri
 		name := boxName(defaultBoxNames[s.cfg.RNG.Intn(len(defaultBoxNames))], i)
 		r.Boxes = append(r.Boxes, TreasureBox{ID: fmt.Sprintf("box-%d", i+1), Name: name, ItemID: items[s.cfg.RNG.Intn(len(items))]})
 	}
-	if r.Stage.FixedTreasure != "" {
+	if fixed := r.Stage.EX.FixedTreasure; fixed != "" {
 		for i := range real {
 			name := boxName(fixedBoxNames[s.cfg.RNG.Intn(len(fixedBoxNames))], i)
-			r.Boxes = append(r.Boxes, TreasureBox{ID: fmt.Sprintf("box-%d", len(r.Boxes)+1), Name: name, ItemID: r.Stage.FixedTreasure, Fixed: true})
+			r.Boxes = append(r.Boxes, TreasureBox{ID: fmt.Sprintf("box-%d", len(r.Boxes)+1), Name: name, ItemID: fixed, Fixed: true})
 		}
 	}
 	r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID

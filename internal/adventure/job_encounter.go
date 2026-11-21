@@ -84,7 +84,7 @@ func (s *NormalRunService) PrepareJobEncounters(ctx context.Context, r *NormalRu
 		if err != nil {
 			return frame, err
 		}
-		t.UnsealDemonKing = r.Stage.ID == "stage-19" && floor == TreasureRoomFloor
+		t.UnsealDemonKing = r.Stage.UnsealsOnTreasure && floor == TreasureRoomFloor
 		*transition = t
 		room.Floor = r.Floor
 		frame.EnemyIDs, frame.MemberOnlyIDs = slices.Clone(r.Enemies), nil

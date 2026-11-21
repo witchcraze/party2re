@@ -286,7 +286,7 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		}
 	}()
 
-	if stage.ID == "stage-26" && s.timer != nil && len(characters) > 0 {
+	if stage.DailyOnce && s.timer != nil && len(characters) > 0 {
 		lockToken = id.New()
 		ok, err := s.timer.TryLockWithToken(ctx, timer.CategoryDungeonOnce, characters[0].ID, lockToken, 0)
 		if err != nil {

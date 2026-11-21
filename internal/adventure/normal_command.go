@@ -92,7 +92,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				if err := s.advance(ctx, r, cmd.ActorID); err != nil {
 					return err
 				}
-				request.UnsealDemonKing = r.Stage.ID == "stage-19" && r.Floor == TreasureRoomFloor
+				request.UnsealDemonKing = r.Stage.UnsealsOnTreasure && r.Floor == TreasureRoomFloor
 			case "chest":
 				var err error
 				box, effects.Consumed, err = s.claimChest(ctx, r, cmd.ActorID, cmd.TargetID)

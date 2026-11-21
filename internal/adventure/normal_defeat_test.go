@@ -29,7 +29,7 @@ func runRewardFixture() (NormalRun, corebattle.TargetContext, corecharacter.Char
 		{Participant: corebattle.Participant{ID: "fallen", TeamID: "party", Gear: &corebattle.BattleGearStats{}}},
 		{Participant: corebattle.Participant{ID: "enemy", TeamID: "enemy", Name: "Bee", HP: 30, MaxHP: 30, Gear: &corebattle.BattleGearStats{}, ExperienceReward: 25, GoldReward: 21}, NPC: true, EncounterIdentity: royalBeeIdentity + "A"},
 	}
-	r := NormalRun{Stage: Stage{ID: "stage-22"}, Roster: []string{"actor", "ally", "fallen"}, Battle: corebattle.LifetimeState{Actors: actors}}
+	r := NormalRun{Stage: Stage{ID: "stage-22", StageTraits: StageTraits{EX: &EXStage{Marker: markerRoyalBeeDefeat}}}, Roster: []string{"actor", "ally", "fallen"}, Battle: corebattle.LifetimeState{Actors: actors}}
 	return r, corebattle.TargetContext{ActorID: "actor", PartyIDs: r.Roster, EnemyIDs: []string{"enemy"}}, corecharacter.Character{ID: "actor", Level: 2, Stats: corecharacter.Stats{MaxHP: 50}}
 }
 
@@ -86,7 +86,7 @@ func TestRunDefeatRewardModifiers(t *testing.T) {
 func TestRunDefeatCaptureAndCrystalIdentity(t *testing.T) {
 	for _, pvp := range []bool{false, true} {
 		r, role, requester := runRewardFixture()
-		r.Stage.ID = "stage-01"
+		r.Stage = Stage{ID: "stage-01"}
 		target := r.actor("enemy")
 		target.Status = "capture"
 		rng := &rewardDraws{exDraws: exDraws{values: []int{1}}, floats: []float64{.02, .02}}
@@ -157,7 +157,7 @@ func TestRunDefeatLevelUpBranch(t *testing.T) {
 func TestRunDefeatEarnedEXPReachesPlayerBranch(t *testing.T) {
 	for _, mode := range []string{"normal", CrawlModeTry} {
 		r, targets, requester := runRewardFixture()
-		r.Mode, r.Stage.ID = mode, "stage-01"
+		r.Mode, r.Stage = mode, Stage{ID: "stage-01"}
 		requester.Experience = 10
 		rng := &ordinaryRNG{value: .9}
 		var fx RunActionEffects
