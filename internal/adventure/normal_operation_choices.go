@@ -168,7 +168,7 @@ func (r *NormalRun) normalOperations(actorID string, ctx NormalOperationContext)
 	if !r.livingEnemies() && (r.Floor != 0 || r.LeaderID == actorID) && (r.Floor < TreasureRoomFloor || r.HasEX() && r.Floor <= EXBossFloor) {
 		ops.addSpecial("advance", "すすむ", RunOperationRoom)
 	}
-	if r.Floor == TreasureRoomFloor || r.Floor == EXBossFloor+1 {
+	if isTreasureFloor(r.Floor) {
 		ops.addSpecial("chest", "しらべる", RunOperationRoom)
 	}
 	if enemies && !cursed {

@@ -91,6 +91,10 @@ func (e *normalCombat) ExecuteRunAction(_ context.Context, r *adventure.NormalRu
 		r.Battle.Actors[actor].ExtendedTurns = 4
 		r.Battle.Actors[actor].MP = 7
 		r.Battle.Fields.AntiTurns = 2
+	case "spent": // the ordinary allowance used earlier in the room
+		p := r.Recipients[cmd.ActorID]
+		p.Inspected = 1
+		r.Recipients[cmd.ActorID] = p
 	case "merchant":
 		r.Battle.Actors[actor].Jobs.JobID = "job-07"
 	case "ex11": // a cleared EX treasure room with every chest opened

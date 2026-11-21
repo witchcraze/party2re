@@ -311,6 +311,7 @@ type TreasureBox struct {
 	ItemID      string `json:"item_id,omitempty"`
 	ItemName    string `json:"item_name,omitempty"`
 	DeliveredTo string `json:"delivered_to,omitempty"` // "inventory" or "depot"
+	Fixed       bool   `json:"fixed,omitempty"`        // EX fixed-item chest (over_lv); never uses the ordinary allowance
 }
 
 // GenerateTreasureBoxes creates the list of treasure chests for Floor 11 (legacy convenience wrapper).
@@ -333,11 +334,7 @@ func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now tim
 	items := slices.Clone(pools.Items)
 	boxes := make([]TreasureBox, count)
 	for i := 0; i < count; i++ {
-		baseName := defaultBoxNames[rng(len(defaultBoxNames))]
-		suffix := rune('A' + (i % 26))
-		if i >= 26 {
-			suffix = rune('a' + ((i - 26) % 26))
-		}
+		name := boxName(defaultBoxNames[rng(len(defaultBoxNames))], i)
 		items = append(items, GetDayOfWeekOrb(now, rng))
 
 		pool := items
@@ -350,9 +347,17 @@ func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now tim
 
 		boxes[i] = TreasureBox{
 			ID:     fmt.Sprintf("box-%d", i+1),
-			Name:   fmt.Sprintf("%s%c", baseName, suffix),
+			Name:   name,
 			ItemID: pool[rng(len(pool))],
 		}
 	}
 	return boxes
+}
+
+func boxName(base string, i int) string {
+	suffix := rune('A' + (i % 26))
+	if i >= 26 {
+		suffix = rune('a' + ((i - 26) % 26))
+	}
+	return fmt.Sprintf("%s%c", base, suffix)
 }

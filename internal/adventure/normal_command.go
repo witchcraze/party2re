@@ -140,7 +140,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				}
 			}
 			if effects.EncounterDefeated {
-				if r.livingEnemies() || r.EncounterFloor < 1 || r.EncounterFloor > EXBossFloor || r.EncounterFloor == TreasureRoomFloor {
+				if r.livingEnemies() || r.EncounterFloor < 1 || r.EncounterFloor > EXBossFloor || isTreasureFloor(r.EncounterFloor) {
 					return ErrRunConflict
 				}
 				r.FloorsCleared = max(r.FloorsCleared, r.EncounterFloor)

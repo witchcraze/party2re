@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +13,8 @@ import (
 )
 
 func TestJobEncounterRoomReplacementRetainsRoomFacts(t *testing.T) {
-	for _, id := range []string{"job-78-entry-2", "job-78-entry-6"} {
+	for _, variant := range []string{"job-78-entry-2", "job-78-entry-6", "job-78-entry-6@13"} {
+		id, ex := strings.CutSuffix(variant, "@13")
 		s, r, rng, reset := travelFixture(t)
 		r.Floor, r.Mode, r.EncounterFloor, r.EncounterStageID = 8, "normal", 8, r.Stage.ID
 		r.Battle.Fields = corebattle.LifetimeFields{Default: "snow", Temporary: "burn", Turns: 5, AntiTurns: 2}
@@ -23,6 +25,12 @@ func TestJobEncounterRoomReplacementRetainsRoomFacts(t *testing.T) {
 			r.Floor, r.EncounterFloor = 11, 11
 			r.Boxes = []TreasureBox{{ID: "old", ItemID: "item-001"}}
 			s.cfg.Clock = &testClock{now: time.Unix(100, 0)}
+		}
+		if ex {
+			// set_monster at 13 recreates EX and fixed chests (_skill.cgi:6201–6208).
+			r.Stage, _ = s.cfg.Stages.FindByID("stage-24")
+			r.Floor, r.EncounterFloor, r.EXUnlocked = EXTreasureFloor, EXTreasureFloor, true
+			r.Boxes = []TreasureBox{{ID: "old", ItemID: "item-267", Fixed: true}}
 		}
 		before := r.Recipients["a"]
 		fields := r.Battle.Fields
@@ -48,8 +56,11 @@ func TestJobEncounterRoomReplacementRetainsRoomFacts(t *testing.T) {
 				t.Fatal(r)
 			}
 		} else {
-			if r.Floor != 11 || len(r.Boxes) == 0 || r.Boxes[0].ID == "old" || !transition.UnsealDemonKing || r.actor("a").Jobs.SP != 100 || r.actor("a").Status != corebattle.StatusPoison || !transition.ResponseSuppressed {
+			if r.Floor != r.EncounterFloor || len(r.Boxes) == 0 || r.Boxes[0].ID == "old" || transition.UnsealDemonKing == ex || r.actor("a").Jobs.SP != 100 || r.actor("a").Status != corebattle.StatusPoison || !transition.ResponseSuppressed {
 				t.Fatal(r, transition)
+			}
+			if ex && (r.Floor != EXTreasureFloor || r.Boxes[0].Fixed || !r.Boxes[len(r.Boxes)-1].Fixed) {
+				t.Fatal("EX recreation", r.Boxes)
 			}
 		}
 		data, err := json.Marshal(r)

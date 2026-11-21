@@ -17,6 +17,7 @@ const (
 	BossFloor         = 10
 	TreasureRoomFloor = 11
 	EXBossFloor       = 12
+	EXTreasureFloor   = 13
 	//lint:ignore unused legacy floor limit constant
 	MaxDungeonFloors = 11
 )

@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
@@ -123,7 +126,7 @@ func TestEXEntryGatesPreserveStateAndDraws(t *testing.T) {
 		{"marker on non-EX destination", func(r *NormalRun) { r.Stage.ID = "stage-15" }, ErrInvalidFloorAction},
 		{"unopened chest", func(r *NormalRun) { r.Boxes = []TreasureBox{{ID: "box"}} }, ErrInvalidFloorAction},
 		{"missing roster", func(r *NormalRun) { cp := *r.Stage.Ordinary; cp.EXRoster = nil; r.Stage.Ordinary = &cp }, corebattle.ErrUnsupportedEffect},
-		{"EX treasure owned by #1808", func(r *NormalRun) { r.Floor = EXBossFloor }, corebattle.ErrUnsupportedEffect},
+		{"missing EX pool", func(r *NormalRun) { r.Floor, r.Stage.EXTreasureItems = EXBossFloor, nil }, corebattle.ErrUnsupportedEffect},
 		{"living EX enemy", func(r *NormalRun) {
 			r.Floor = EXBossFloor
 			e := r.Battle.Actors[0].Clone()
@@ -200,5 +203,135 @@ func TestRoyalBeeCreditedDefeatDraws(t *testing.T) {
 				t.Fatal(r.EXUnlocked, d.calls)
 			}
 		})
+	}
+}
+
+func items(ids ...int) []string {
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = fmt.Sprintf("item-%03d", id)
+	}
+	return out
+}
+
+func span(from, to int) []int {
+	var out []int
+	for i := from; i <= to; i++ {
+		out = append(out, i)
+	}
+	return out
+}
+
+// exPools are read independently from ff97fc5 stage/22–26.cgi: the item row of
+// @ex_treasures (stage26 aliases each season's @treasures) and @fixed_treasures.
+var exPools = map[string]struct {
+	pool  []string
+	fixed string
+}{
+	"stage-22": {items(150, 161, 164, 180, 180, 180, 180, 182, 264, 264), ""},
+	"stage-23": {items(slices.Concat([]int{13}, span(16, 27), span(30, 40), []int{75, 85, 128, 170, 171, 244, 245, 264})...), ""},
+	"stage-24": {items(slices.Concat([]int{104, 107, 126, 185, 206, 210}, span(231, 236))...), "item-267"},
+	"stage-25": {items(slices.Concat([]int{104, 107, 126}, span(152, 156), []int{184, 246})...), "item-265"},
+	"spring":   {items(slices.Concat(span(43, 56), []int{81, 82, 84, 125, 127}, span(130, 134), []int{215, 263})...), "item-263"},
+	"summer":   {items(143, 144, 145, 146, 147, 148, 149, 158, 169, 182, 263), "item-263"},
+	"autumn":   {items(slices.Concat(span(1, 3), span(6, 8), []int{10}, span(16, 22), span(16, 22), []int{263})...), "item-263"},
+	"winter":   {items(slices.Concat([]int{13}, span(30, 39), []int{75, 85, 184, 263})...), "item-263"},
+}
+
+func TestEXTreasureCreationPoolsCountsAndAllowanceReset(t *testing.T) {
+	for key, want := range exPools {
+		t.Run(key, func(t *testing.T) {
+			s, r, _ := exFixture(t, key)
+			r.Floor, r.StageCleared = EXBossFloor, false
+			r.Recipients = map[string]RunRecipient{"a": {Inspected: 1, Conditional: RunEarnings{Gold: 7}}, "b": {Inspected: 2}}
+			if !slices.Equal(r.Stage.exTreasureItems(), want.pool) || r.Stage.FixedTreasure != want.fixed {
+				t.Fatalf("pool %v fixed %q", r.Stage.exTreasureItems(), r.Stage.FixedTreasure)
+			}
+			n := len(want.pool)
+			// Roster a (alive) and b (fallen) plus a living helper: $#partys=2, minus one fallen,
+			// so two EX chests; fixed chests count real members only, fallen included.
+			values, wantCalls := []int{3, n - 1, 0, 1}, []int{7, n, 7, n}
+			if want.fixed != "" {
+				values, wantCalls = append(values, 1, 0), append(wantCalls, 2, 2)
+			}
+			d := &exDraws{values: values}
+			s.cfg.RNG = d
+			if err := s.advance(context.Background(), r, "a"); err != nil {
+				t.Fatal(err)
+			}
+			wantBoxes := []TreasureBox{{ID: "box-1", Name: "黒い宝箱A", ItemID: want.pool[n-1]}, {ID: "box-2", Name: "普通の宝箱B", ItemID: want.pool[1]}}
+			if want.fixed != "" {
+				wantBoxes = append(wantBoxes, TreasureBox{ID: "box-3", Name: "金の宝箱A", ItemID: want.fixed, Fixed: true}, TreasureBox{ID: "box-4", Name: "煤けた宝箱B", ItemID: want.fixed, Fixed: true})
+			}
+			if !reflect.DeepEqual(r.Boxes, wantBoxes) || !slices.Equal(d.calls, wantCalls) {
+				t.Fatalf("boxes %+v draws %v", r.Boxes, d.calls)
+			}
+			if r.Floor != EXTreasureFloor || r.EncounterFloor != EXTreasureFloor || r.Recipients["a"].Inspected != 0 || r.Recipients["b"].Inspected != 0 || r.StageCleared || r.Recipients["a"].Conditional.Gold != 7 || r.Recipients["a"].Pending.Gold != 0 {
+				t.Fatalf("%+v", r)
+			}
+			if err := s.advance(context.Background(), r, "a"); !errors.Is(err, ErrInvalidFloorAction) {
+				t.Fatal("advance past EX treasure", err)
+			}
+		})
+	}
+}
+
+func TestTreasurePartyCountsLivingHelpersOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		helperHP int
+		floor    int
+		want     int
+	}{
+		{"ordinary living helper", 2, BossFloor, 2},
+		{"ordinary fallen helper", 0, BossFloor, 1},
+		{"EX living helper", 2, EXBossFloor, 2},
+		{"EX fallen helper", 0, EXBossFloor, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, r, _ := exFixture(t, "stage-22")
+			r.Floor = tc.floor
+			r.actor("helper").HP = tc.helperHP
+			s.cfg.Clock = &testClock{now: time.Unix(100, 0)}
+			if err := s.advance(context.Background(), r, "a"); err != nil {
+				t.Fatal(err)
+			}
+			if len(r.Boxes) != tc.want {
+				t.Fatal(len(r.Boxes))
+			}
+		})
+	}
+}
+
+func TestEXFixedChestsBypassOrdinaryAllowance(t *testing.T) {
+	s, r, _ := exFixture(t, "stage-24")
+	r.Floor = EXBossFloor
+	r.Recipients = map[string]RunRecipient{"a": {}, "b": {}}
+	if err := s.advance(context.Background(), r, "a"); err != nil {
+		t.Fatal(err)
+	}
+	var fixed, ordinary []string
+	for _, b := range r.Boxes {
+		if b.Fixed {
+			fixed = append(fixed, b.ID)
+		} else {
+			ordinary = append(ordinary, b.ID)
+		}
+	}
+	// is_get_fixed is not in @battle_datas, so it never survives the request (config.cgi:102–104).
+	for _, id := range fixed {
+		box, consumed, err := s.claimChest(context.Background(), r, "a", id)
+		if err != nil || box.OpenedBy != "a" || len(consumed) != 0 || r.Recipients["a"].Inspected != 0 {
+			t.Fatal(box, consumed, err)
+		}
+	}
+	if _, _, err := s.claimChest(context.Background(), r, "a", ordinary[0]); err != nil || r.Recipients["a"].Inspected != 1 {
+		t.Fatal("fixed claim consumed the ordinary allowance", err)
+	}
+	if _, _, err := s.claimChest(context.Background(), r, "a", fixed[0]); !errors.Is(err, ErrNoUnopenedTreasure) {
+		t.Fatal("opened fixed chest reclaimed", err)
+	}
+	if _, _, err := s.claimChest(context.Background(), r, "b", ordinary[1]); !errors.Is(err, ErrUnconsciousCharacter) {
+		t.Fatal("fallen member claimed", err)
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
-	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
@@ -68,13 +68,6 @@ func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 	f.send(t, runID, 0, "kill", "")
 	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.FloorsCleared != adventure.EXBossFloor || len(r.Boxes) != 0 || r.StageCleared {
 		t.Fatal("EX defeat recorded incorrectly", r, err)
-	}
-	gate := exCommand(t, f, runID, "ex-treasure", "advance")
-	if _, err := f.svc.Command(context.Background(), gate); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal("EX treasure entry accepted before #1808", err)
-	}
-	if after, err := f.store.FindRun(context.Background(), runID); err != nil || !reflect.DeepEqual(r, after) {
-		t.Fatal("gated EX treasure mutated", err)
 	}
 	f.send(t, runID, 0, "fall", "")
 	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.Floor != adventure.EXBossFloor || len(r.Roster) != 1 || len(r.Boxes) != 0 {
@@ -180,5 +173,168 @@ func TestNormalRunEXEntryVersusExitStress(t *testing.T) {
 		if after.Money-before.Money+recipient.Pending.Gold+recipient.Conditional.Gold != 5 {
 			t.Fatal("asset conservation failed", before.ID, after.Money, recipient)
 		}
+	}
+}
+
+// exTreasureRun reaches a cleared stage26 spring EX encounter at floor 12.
+func exTreasureRun(t *testing.T, f *normalFixture, runID string) {
+	t.Helper()
+	f.send(t, runID, 0, "ex11", "stage-26")
+	f.send(t, runID, 0, "advance", "")
+	f.send(t, runID, 0, "kill", "")
+}
+
+func countItem(t *testing.T, f *normalFixture, characterID, itemID string) int {
+	t.Helper()
+	inv, err := f.invs.FindByCharacterID(context.Background(), characterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dep, err := f.depots.FindByCharacterID(context.Background(), characterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, item := range append(inv.Items, dep.Items...) {
+		if item.DefinitionID == itemID {
+			n += item.Quantity
+		}
+	}
+	return n
+}
+
+func TestNormalRunEXTreasureEntryAndSeparateClaims(t *testing.T) {
+	f := newNormalFixture(t, 1)
+	c := f.actors[0]
+	runID := f.enter(t, "normal").Command.RunID
+	exTreasureRun(t, f, runID)
+	f.send(t, runID, 0, "spent", "")
+	before, err := f.store.FindRun(context.Background(), runID)
+	if err != nil || before.Recipients[c.ID].Inspected != 1 {
+		t.Fatal(before, err)
+	}
+	cmd := exCommand(t, f, runID, "ex-treasure", "advance")
+	f.store.failWrite.Store(true)
+	if _, err := f.svc.Command(context.Background(), cmd); err == nil {
+		t.Fatal("failed receipt write committed EX treasure")
+	}
+	f.store.failWrite.Store(false)
+	if after, err := f.store.FindRun(context.Background(), runID); err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatal("rolled-back EX treasure persisted", err)
+	}
+	f.store.loseCommit.Store(true)
+	result, err := f.svc.Command(context.Background(), cmd)
+	if err != nil || result.Floor != adventure.EXTreasureFloor {
+		t.Fatal("commit-unknown EX treasure not resolved from receipt", result, err)
+	}
+	r, err := f.store.FindRun(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Solo: one EX chest from the spring pool and one fixed chest; the allowance reset.
+	want := []adventure.TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-043"}, {ID: "box-2", Name: "煤けた宝箱A", ItemID: "item-263", Fixed: true}}
+	if !reflect.DeepEqual(r.Boxes, want) || r.Recipients[c.ID].Inspected != 0 || r.EncounterFloor != adventure.EXTreasureFloor {
+		t.Fatalf("EX treasure: %+v %+v", r.Boxes, r.Recipients[c.ID])
+	}
+	f.restart(t)
+	drawn := f.rng.calls.Load()
+	if again, err := f.svc.Command(context.Background(), cmd); err != nil || !reflect.DeepEqual(again, result) || f.rng.calls.Load() != drawn {
+		t.Fatal("receipt replay changed EX treasure", again, err)
+	}
+	if _, err := f.svc.Command(context.Background(), exCommand(t, f, runID, "past-13", "advance")); !errors.Is(err, adventure.ErrInvalidFloorAction) {
+		t.Fatal("advanced past terminal 13", err)
+	}
+
+	inv, err := f.invs.FindByCharacterID(context.Background(), c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := coreitem.NewInstance(adventure.ItemTreasurePocket, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inv.Add(key); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.invs.Save(context.Background(), inv); err != nil {
+		t.Fatal(err)
+	}
+	f.restart(t)
+	for _, box := range []string{"box-2", "box-1"} {
+		claim := exCommand(t, f, runID, "claim-"+box, "chest")
+		claim.TargetID = box
+		if _, err := f.svc.Command(context.Background(), claim); err != nil {
+			t.Fatal(box, err)
+		}
+		if _, err := f.svc.Command(context.Background(), claim); err != nil {
+			t.Fatal("claim replay", box, err)
+		}
+	}
+	r, err = f.store.FindRun(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Boxes[0].OpenedBy != c.ID || r.Boxes[1].OpenedBy != c.ID || r.Recipients[c.ID].Inspected != 1 {
+		t.Fatalf("claims: %+v %+v", r.Boxes, r.Recipients[c.ID])
+	}
+	if countItem(t, f, c.ID, "item-263") != 1 || countItem(t, f, c.ID, "item-043") != 1 || countItem(t, f, c.ID, adventure.ItemTreasurePocket) != 1 {
+		t.Fatal("fixed and ordinary claims delivered or consumed incorrectly")
+	}
+}
+
+func TestNormalRunEXFixedClaimVersusExitStress(t *testing.T) {
+	f := newNormalFixture(t, 2)
+	_, lobby := f.waitingParty(t, "normal")
+	a, b := f.actors[0], f.actors[1]
+	entry, err := f.svc.EnterParty(context.Background(), a.PlayerID, a.ID, lobby)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := entry.Command.RunID
+	exTreasureRun(t, f, runID)
+	f.send(t, runID, 0, "advance", "")
+	r, err := f.store.FindRun(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixed := ""
+	for _, box := range r.Boxes {
+		if box.Fixed {
+			fixed = box.ID
+		}
+	}
+	if r.Floor != adventure.EXTreasureFloor || fixed == "" {
+		t.Fatalf("EX treasure missing: %+v", r)
+	}
+	f.clock.add(3 * time.Second)
+	commands := []adventure.RunCommand{
+		{PlayerID: a.PlayerID, ActorID: a.ID, RunID: runID, ID: "claim-a", Version: r.Version, Action: "chest", TargetID: fixed},
+		{PlayerID: b.PlayerID, ActorID: b.ID, RunID: runID, ID: "claim-b", Version: r.Version, Action: "chest", TargetID: fixed},
+		{PlayerID: b.PlayerID, ActorID: b.ID, RunID: runID, ID: "exit-b", Version: r.Version, Action: "exit"},
+	}
+	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
+		_, err := f.svc.Command(context.Background(), commands[(worker+op)%len(commands)])
+		if errors.Is(err, adventure.ErrRunConflict) || errors.Is(err, adventure.ErrRunForbidden) || errors.Is(err, adventure.ErrRunRecovery) {
+			return nil
+		}
+		return err
+	})
+	if stats.Failures != 0 {
+		t.Fatal(stats)
+	}
+	r, err = f.store.FindRun(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened := 0
+	for _, box := range r.Boxes {
+		if box.ID == fixed && box.OpenedBy != "" {
+			opened = 1
+		}
+	}
+	delivered := countItem(t, f, a.ID, "item-263") + countItem(t, f, b.ID, "item-263")
+	// Exactly one competing command committed against the shared version.
+	if delivered != opened || opened+2-len(r.Roster) != 1 {
+		t.Fatalf("opened=%d delivered=%d roster=%v", opened, delivered, r.Roster)
 	}
 }
