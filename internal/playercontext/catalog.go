@@ -257,14 +257,6 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{}, // item_id is optional while held gold is collected first.
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
-	{
-		ID:             "auction_send",
-		Label:          "仕送り・送金",
-		Category:       "economy",
-		OperationID:    "executeCharacterAction",
-		RequiredParams: []string{},
-		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
 	{ID: "fleamarket_list", Label: "フリーマーケット出品", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "price"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "fleamarket_purchase", Label: "フリーマーケット購入", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
 	{ID: "fleamarket_cancel", Label: "フリーマーケット出品取消", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},

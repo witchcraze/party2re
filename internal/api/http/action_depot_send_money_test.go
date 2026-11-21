@@ -41,7 +41,7 @@ func depotSendMoneyRouter(t *testing.T) depotSendMoneyRig {
 	f := &depotSendMoneyFixture{depotSaleFixture: &depotSaleFixture{depotExpansionFixture: &depotExpansionFixture{gatewayFixture: newGatewayFixture(t), dep: depot.Depot{CharacterID: "hero", Capacity: 10}}}}
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "depot"}}
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
-		playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "depot", Parent: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"}))
+		playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "depot", Parent: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"}, playercontext.SceneDefinition{ID: "auction", Parent: "town"}))
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithDepot(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture })
 	if err != nil {
 		t.Fatal(err)
@@ -128,9 +128,14 @@ func TestDepotSendMoneyGatewayGuardsAndDiscovery(t *testing.T) {
 	if status, got := f.send(`{"amount":1,"recipient_character_id":"r"}`); status != 409 || f.executions != 0 {
 		t.Fatalf("outside Depot: %d %s", status, got)
 	}
+	// Auction okuru is the same routine, so the venue offers the same command.
+	f.store.selection.Destination = "auction"
+	if status, got := f.send(`{"amount":1,"recipient_character_id":"r"}`); status != 200 || f.executions != 1 {
+		t.Fatalf("auction venue: %d %s", status, got)
+	}
 	f.store.selection.Destination = "depot"
 	f.char.PendingWake = true
-	if status, got := f.send(`{"amount":1,"recipient_character_id":"r"}`); status != 409 || f.executions != 0 {
+	if status, got := f.send(`{"amount":1,"recipient_character_id":"r"}`); status != 409 || f.executions != 1 {
 		t.Fatalf("pending wake: %d %s", status, got)
 	}
 	f.char.PendingWake = false
@@ -157,7 +162,7 @@ func TestDepotSendMoneyGatewayGuardsAndDiscovery(t *testing.T) {
 	if _, got := navigationGET(t, f.router); slices.ContainsFunc(got.AvailableActions, func(a ContextAction) bool { return a.Action == "depot_send_money" }) {
 		t.Fatal("empty wallet offered a remittance")
 	}
-	if f.executions != 0 || f.store.writes != 0 {
+	if f.executions != 1 || f.store.writes != 0 {
 		t.Fatal("GET mutated state")
 	}
 }

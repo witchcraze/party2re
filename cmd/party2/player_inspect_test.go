@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -37,8 +36,8 @@ func (s *inspectSources) FindGemByID(id string) (customskill.GemDefinition, bool
 	return customskill.GemDefinition{ID: id, Name: "名前:" + id}, id != "missing"
 }
 
-func (s *inspectSources) Inspect(_ context.Context, _, targetID, _ string) (auction.InspectResult, error) {
-	return auction.InspectResult{CharacterID: targetID, Name: "相手"}, nil
+func (s *inspectSources) Inspect(_ context.Context, _, targetID, _ string) (character.InspectResult, error) {
+	return character.InspectResult{CharacterID: targetID, Name: "相手"}, nil
 }
 func (s *inspectSources) GetByCharacter(context.Context, string) (guild.Guild, guild.Member, error) {
 	return s.guild, guild.Member{}, s.guildErr

@@ -250,7 +250,7 @@ func TestNotificationService(t *testing.T) {
 			t.Errorf("expected notification to be unread")
 		}
 
-		n2, err := service.NotifyPlayer(ctx, "player-1", NotificationCategoryAuction, "Item Sold", "Your Iron Sword was sold.", "/auction")
+		n2, err := service.NotifyPlayer(ctx, "player-1", NotificationCategoryGuild, "Guild", "You joined a guild.", "/guilds")
 		if err != nil {
 			t.Fatalf("unexpected error notifying player: %v", err)
 		}

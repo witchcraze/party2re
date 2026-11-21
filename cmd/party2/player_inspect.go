@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/api/http"
-	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -18,7 +17,7 @@ import (
 // Every source is a required read: a failure fails the whole inspection.
 type playerInspectAdapter struct {
 	status interface {
-		Inspect(ctx context.Context, inspectorID, targetID, targetName string) (auction.InspectResult, error)
+		Inspect(ctx context.Context, inspectorID, targetID, targetName string) (character.InspectResult, error)
 	}
 	guild interface {
 		GetByCharacter(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)

@@ -478,40 +478,22 @@ func moduleForRoute(route Route) string {
 		return "admin"
 	case strings.HasPrefix(p, "/adventures") || p == "/characters/{id}/adventures" || p == "/characters/{id}/adventure-chronicle":
 		return "adventure"
-	case strings.HasPrefix(p, "/auction") || strings.Contains(p, "/auction/"):
-		return "auction"
 	case p == "/players" || p == "/sessions":
 		return "auth"
 	case strings.HasPrefix(p, "/players/"):
 		return "player"
-	case strings.HasPrefix(p, "/characters/{id}/blackmarket"):
-		return "blackmarket"
-	case strings.HasPrefix(p, "/characters/{id}/blacksmith") || strings.HasPrefix(p, "/blacksmith"):
-		return "blacksmith"
 	case strings.HasPrefix(p, "/characters/{id}/bosses"):
 		return "boss"
 	case strings.HasPrefix(p, "/challenges") || strings.HasPrefix(p, "/characters/{id}/challenges"):
 		return "challenge"
 	case strings.HasPrefix(p, "/characters/{id}/contest") || strings.HasPrefix(p, "/characters/{id}/photos") || strings.HasPrefix(p, "/contest"):
 		return "contest"
-	case strings.HasPrefix(p, "/characters/{id}/delivery"):
-		return "delivery"
-	case strings.HasPrefix(p, "/characters/{id}/depot"):
-		return "depot"
 	case strings.HasPrefix(p, "/characters/{id}/dungeons"):
 		return "dungeon"
 	case strings.HasPrefix(p, "/eventplaza"):
 		return "eventplaza"
-	case strings.HasPrefix(p, "/characters/{id}/farm"):
-		return "farm"
-	case strings.HasPrefix(p, "/characters/{id}/fleamarket") || strings.HasPrefix(p, "/fleamarket"):
-		return "fleamarket"
-	case strings.HasPrefix(p, "/characters/{id}/gemstore") || strings.HasPrefix(p, "/gemstore"):
-		return "gemstore"
 	case strings.HasPrefix(p, "/homes"):
 		return "home"
-	case strings.HasPrefix(p, "/characters/{id}/lottery"):
-		return "lottery"
 	case strings.HasPrefix(p, "/characters/{id}/monsters") || strings.HasPrefix(p, "/monster"):
 		return "monster"
 	case strings.HasPrefix(p, "/news"):
@@ -524,18 +506,8 @@ func moduleForRoute(route Route) string {
 		return "pvp"
 	case strings.HasPrefix(p, "/rankings"):
 		return "ranking"
-	case strings.HasPrefix(p, "/rescues"):
-		return "rescue"
-	case strings.HasPrefix(p, "/characters/{id}/secretshop"):
-		return "secretshop"
-	case strings.HasPrefix(p, "/characters/{id}/shop") || strings.HasPrefix(p, "/shop"):
-		return "shop"
-	case strings.HasPrefix(p, "/characters/{id}/tavern") || strings.HasPrefix(p, "/tavern"):
-		return "tavern"
 	case p == "/health" || p == "/maintenance" || p == "/openapi.json":
 		return "system"
-	case strings.HasPrefix(p, "/characters/{id}/oracle"):
-		return "oracle"
 	case strings.HasPrefix(p, "/characters") || strings.HasPrefix(p, "/naming-hall"):
 		return "character"
 	default:
@@ -555,36 +527,22 @@ func moduleToTagName(module string) string {
 	tagMap := map[string]string{
 		"admin":        "Admin",
 		"adventure":    "Adventure",
-		"auction":      "Auctions",
 		"auth":         "Auth",
-		"blackmarket":  "Black Market",
-		"blacksmith":   "Blacksmith",
 		"boss":         "Combat",
 		"challenge":    "Combat",
 		"character":    "Character",
 		"contest":      "Contest",
-		"delivery":     "Delivery",
-		"depot":        "Depot",
 		"dungeon":      "Combat",
 		"eventplaza":   "EventPlaza",
-		"farm":         "Farm",
-		"fleamarket":   "FleaMarket",
-		"gemstore":     "GemStore",
 		"home":         "Homes",
-		"lottery":      "Lottery",
 		"monster":      "Monster",
 		"news":         "News",
 		"notification": "Notifications",
-		"oracle":       "Oracle Shop",
 		"party":        "Party",
 		"player":       "Player",
 		"pvp":          "Combat",
 		"ranking":      "Rankings",
-		"rescue":       "Rescues",
-		"secretshop":   "Secret Shop",
-		"shop":         "Shop",
 		"system":       "System",
-		"tavern":       "Tavern",
 	}
 	if tag, ok := tagMap[module]; ok {
 		return tag

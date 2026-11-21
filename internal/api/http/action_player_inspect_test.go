@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/witchcraze/party2re/internal/auction"
+	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -22,7 +22,7 @@ type playerInspectFixture struct {
 func (f *playerInspectFixture) InspectPlayer(ctx context.Context, actorID, targetID, targetName string) (PlayerInspection, error) {
 	f.executions++
 	f.actor, f.id, f.name = actorID, targetID, targetName
-	return PlayerInspection{InspectResult: auction.InspectResult{CharacterID: "peer", Name: "相手"}, Gems: []string{}, GemNames: []string{}, Location: f.location}, f.err
+	return PlayerInspection{InspectResult: character.InspectResult{CharacterID: "peer", Name: "相手"}, Gems: []string{}, GemNames: []string{}, Location: f.location}, f.err
 }
 
 func TestPlayerInspectGatewayLocation(t *testing.T) {

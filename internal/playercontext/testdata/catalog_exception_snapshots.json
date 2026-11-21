@@ -46,7 +46,6 @@
     "depot_send_item",
     "depot_send_money",
     "depot_withdraw",
-    "auction_send",
     "fleamarket_list",
     "fleamarket_purchase",
     "fleamarket_cancel",

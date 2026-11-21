@@ -137,7 +137,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 ### CL-03: Economy, Shops & Trading (商業・流通・装備強化)
 - **Cluster Summary**: 武器・防具・道具・装飾品・宝石店・闇市・秘密の店、鍛冶屋、酒場、銀行、オークション、フリーマーケット、個人商店
 - **Shared Dependencies**: `party2/lib/_data.cgi` (アイテム・装備マスタ定数), `party2/config.cgi`, `party2/lib/depot.cgi`
-- **Primary Domain Packages**: `internal/shop/`, `internal/blacksmith/`, `internal/secretshop/`, `internal/blackmarket/`, `internal/gemstore/`, `internal/tavern/`, `internal/bank/`, `internal/auction/`, `internal/fleamarket/`, `internal/economy/`
+- **Primary Domain Packages**: `internal/shop/`, `internal/blacksmith/`, `internal/secretshop/`, `internal/blackmarket/`, `internal/gemstore/`, `internal/tavern/`, `internal/bank/`, `internal/fleamarket/`, `internal/economy/`
 - **Key Testing / Linter Focus**: 売却価格50%、MasterCard10%割引、刻印晶による武器刻印、Depot直結入出庫、並行購入デッドロック防止
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
@@ -153,7 +153,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/store.cgi`, `lib/goods.cgi` | プレイヤーストア・オラクル屋 | `internal/store/`<br/>`internal/api/http/oracle.go` | [design/store.md](../design/store.md)<br/>[design/oracle-shop.md](../design/oracle-shop.md) | Review against source | オラクル屋は `oracle` シーン。`かう`/`かべがみ`/`やみいちば` → `oracle_buy`/`oracle_wallpaper`/`oracle_blackmarket`。 店舗建設(50,000G/90日)、ゴールド・物々交換出品、壁紙50種（最大50,000G実控除）・看板(5,000G残高要・控除なし)・家具15種内装(1,000G残高要・控除なし)。詳細は [design/store.md](../design/store.md#customization-charges-1146) 参照。 |
 | `lib/bar.cgi` | ルイーダの酒場 (@ルイーダ) | `internal/tavern/`<br/>`internal/api/http/tavern.go` | [design/tavern.md](../design/tavern.md) | Review against source | `tavern` シーン。`ちゅうもん`/`でりばりー`は Gateway コマンド、`はなす`は `npc_talk`。冒険完了時に出前を自動配達 |
 | `lib/bank.cgi` | ゴールド銀行 (@タクシード) | `internal/bank/` | [design/bank.md](../design/bank.md) | Review against source | 預金・引出、上限99兆G、所持金999,999G上限クランプ＆超過預金返還。架空の日次利息は非存在 |
-| `lib/auction.cgi` | オークション (@ワイルド) | `internal/auction/` | [design/auction.md](../design/auction.md)<br/>[api/paths/auction.json](../api/paths/auction.json) | Review against source | リアルタイムP2P送金・装備/アイテムDepot直送譲渡(`＠おくる`)、他PC調査(`＠しらべる`)。架空の入札・競売システムは非存在 |
+| `lib/auction.cgi` | オークション (@ワイルド) | `internal/depot/`<br/>`internal/character/` | [design/depot.md](../design/depot.md#5-mailing-items-and-money-おくる)<br/>[design/player-and-character.md](../design/player-and-character.md#215-player-inspection-しらべる) | Review against source | `auction` シーン。`＠おくる`は預かり所と同一ルーチンのため `depot_send_item`/`depot_send_money`、`＠しらべる`は共通 `player_inspect`。入札・競売システムは原典に非存在 |
 | `lib/free.cgi` | フリーマーケット | `internal/fleamarket/` | [design/fleamarket.md](../design/fleamarket.md) | Review against source | Depotから直接出品(サーバー上限120件・個人上限5+OverFlea)、購入品・キャンセル品はDepotへ即時格納 |
 
 ---

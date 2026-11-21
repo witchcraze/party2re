@@ -109,10 +109,10 @@ func TestNotificationRepository_Database(t *testing.T) {
 		n2 := notification.PlayerNotification{
 			ID:        notif2ID,
 			PlayerID:  player1.ID,
-			Category:  notification.NotificationCategoryAuction,
-			Title:     "Auction Won",
-			Body:      "You won the auction!",
-			Link:      "/auction",
+			Category:  notification.NotificationCategoryGuild,
+			Title:     "Guild Joined",
+			Body:      "You joined a guild.",
+			Link:      "/guilds",
 			IsRead:    false,
 			CreatedAt: now,
 		}

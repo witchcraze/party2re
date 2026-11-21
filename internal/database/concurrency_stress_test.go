@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -302,17 +301,13 @@ func TestConcurrencyStressShopStockDepletion(t *testing.T) {
 		res.Successes, outOfStockCount, res.Duration)
 }
 
-func TestConcurrencyStressAuctionP2PTrading(t *testing.T) {
+// Bidirectional Depot remittances neither deadlock nor create or lose gold.
+func TestConcurrencyStressDepotRemittanceCrossTransfers(t *testing.T) {
 	db := OpenTestDB(t)
 
 	ctx := context.Background()
 
-	txProvider := NewTransactionProvider(db)
 	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	equipRepo, err := NewEquipmentRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,12 +319,8 @@ func TestConcurrencyStressAuctionP2PTrading(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := coreitem.InitialCatalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	auctionSvc, err := auction.NewService(txProvider, charRepo, equipRepo, invRepo, depotRepo, catalog)
+	depotSvc, err := depot.NewService(depotRepo, charRepo, invRepo,
+		depot.WithTransactionProvider(NewTransactionProvider(db)), depot.WithRemittanceRepository(depotRepo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,29 +347,28 @@ func TestConcurrencyStressAuctionP2PTrading(t *testing.T) {
 		pairs[i] = pair{charA: cA, charB: cB}
 	}
 
-	// 10 concurrent workers (2 per pair) executing concurrent cross-transfers (A -> B and B -> A simultaneously)
-	// Testing deadlock prevention via id.Sort2 locking ordering
-	numWorkers := numPairs * 2
-	res := RunConcurrentStressTest(t, ConcurrencyStressConfig{Workers: numWorkers, OpsPerWorker: 5}, func(workerID int, op int) error {
+	// Two workers per pair send in opposite directions to exercise id.Sort2 lock ordering.
+	res := RunConcurrentStressTest(t, ConcurrencyStressConfig{Workers: numPairs * 2, OpsPerWorker: 5}, func(workerID int, op int) error {
 		p := pairs[workerID/2]
-		var senderID, receiverID string
-		if workerID%2 == 0 {
-			senderID = p.charA.ID
-			receiverID = p.charB.ID
-		} else {
-			senderID = p.charB.ID
-			receiverID = p.charA.ID
+		from, to := p.charA.ID, p.charB.ID
+		if workerID%2 == 1 {
+			from, to = to, from
 		}
-
-		_, err := auctionSvc.Send(ctx, auction.SendRequest{
-			SenderCharacterID: senderID,
-			TargetCharacterID: receiverID,
-			Gold:              10,
-		})
+		_, err := depotSvc.SendMoney(ctx, from, to, 10)
 		return err
 	})
 
-	// Verify Total Money across each pair is conserved (neither created nor lost)
+	held := func(characterID string) int {
+		values, err := depotRepo.ListRemittances(ctx, characterID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := 0
+		for _, v := range values {
+			total += v.Amount
+		}
+		return total
+	}
 	for i, p := range pairs {
 		cA, err := charRepo.FindByID(ctx, p.charA.ID)
 		if err != nil {
@@ -388,16 +378,13 @@ func TestConcurrencyStressAuctionP2PTrading(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		pairTotal := cA.Money + cB.Money
-		expectedTotal := initialMoney * 2
-		if pairTotal != expectedTotal {
-			t.Fatalf("Pair %d money conservation failed! Expected %d, got %d", i, expectedTotal, pairTotal)
+		if total := cA.Money + cB.Money + held(cA.ID) + held(cB.ID); total != initialMoney*2 {
+			t.Fatalf("pair %d: wallets plus held gold = %d, want %d", i, total, initialMoney*2)
 		}
 	}
-
-	t.Logf("Auction P2P Trading Concurrency Stress Test Completed: %d successful transfers in %v",
-		res.Successes, res.Duration)
+	if res.Failures != 0 {
+		t.Fatalf("unexpected failures: %+v", res)
+	}
 }
 
 func TestConcurrencyStressMultiDomainChaos(t *testing.T) {

@@ -97,7 +97,6 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 var whitelistedLegacyPresentationFields = map[string]string{
 	"alchemy.SynthesisResult.Message":     "#2304",
 	"alchemy.ClaimResult.Message":         "#2304",
-	"auction.SendResult.Message":          "#2304",
 	"bank.DepositResult.Message":          "#2304",
 	"bank.WithdrawResult.Message":         "#2304",
 	"blackmarket.SacrificeResult.Message": "#2304",

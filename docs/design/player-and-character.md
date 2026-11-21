@@ -252,3 +252,10 @@ Legacy `player.cgi` publicly shows a character's milestone log (`write_memory`) 
 - **Decision:** unlike `GET /characters/{id}/profile`, the trajectory exposes past level, job and gender, as legacy does.
 - **Pitfall:** legacy captures the entry's header where `write_memory` is called, not after the action completes. A job change or mastery therefore shows the departing job and its level, and leaving or disbanding a guild still shows the guild. Recall and manual restoration instead capture the resulting job and SP (`job_change.cgi:422–431,503–512,535–543`).
 - **Pitfall:** guild renaming (`＠かいめい`) and its entry are commented out of the dispatch table (`join_guild.cgi:55,63`), so no rename entry exists.
+
+### 2.15 Player Inspection (しらべる)
+
+`しらべる` on a player is the common `system.cgi` `shiraberu`, available in every place, and is the scene-independent `player_inspect` command. An omitted or nonexistent target shows the actor's own status (`system.cgi:385`); the actor's self-only facts (money, coins, medals, next-level experience) are already in its context.
+
+- **Finding:** legacy never shows another player's money, so the "落札金" that the Auction venue words say can be checked cannot be.
+- **Decision:** legacy prints armor only `if $p{wea}` (`system.cgi:373,402`), a copy of the weapon condition; armor is shown whenever equipped.

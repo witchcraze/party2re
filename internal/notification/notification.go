@@ -41,7 +41,6 @@ const (
 // Standard notification categories
 const (
 	NotificationCategorySystem    = "system"
-	NotificationCategoryAuction   = "auction"
 	NotificationCategoryGuild     = "guild"
 	NotificationCategoryAdventure = "adventure"
 	NotificationCategoryGift      = "gift"

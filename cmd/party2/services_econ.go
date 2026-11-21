@@ -5,7 +5,6 @@ import (
 
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/alchemy"
-	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/blacksmith"
 	"github.com/witchcraze/party2re/internal/costume"
@@ -25,7 +24,6 @@ type econServices struct {
 	alchemy        *alchemy.Service
 	plantation     *plantation.Service
 	bank           *bank.Service
-	auction        *auction.Service
 	fleamarket     *fleamarket.Service
 	gemStore       *gemstore.Service
 	store          *store.Service
@@ -142,18 +140,6 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		return nil, err
 	}
 
-	auctionService, err := auction.NewService(
-		core.txProvider,
-		core.charRepo,
-		equipRepo,
-		core.invRepo,
-		depotRepo,
-		core.itemCatalog,
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	fleamarketRepo, err := database.NewFleaMarketRepository(db)
 	if err != nil {
 		return nil, err
@@ -199,7 +185,6 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	)
 
 	depotService.SetMutationCheck(normalWriter(core).check)
-	auctionService.SetMutationCheck(normalWriter(core).check)
 	fleamarketService.SetMutationCheck(normalWriter(core).check)
 	gemStoreService.SetMutationCheck(normalWriter(core).check)
 	storeService.SetMutationCheck(normalWriter(core).check)
@@ -211,7 +196,6 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		alchemy:        alchemyService,
 		plantation:     plantationService,
 		bank:           bankService,
-		auction:        auctionService,
 		fleamarket:     fleamarketService,
 		gemStore:       gemStoreService,
 		store:          storeService,
