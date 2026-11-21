@@ -62,6 +62,17 @@ func NewMemoryRoomRepository() *MemoryRoomRepository {
 	}
 }
 
+func cloneTeamScores(scores map[string]int) map[string]int {
+	if scores == nil {
+		return nil
+	}
+	out := make(map[string]int, len(scores))
+	for k, v := range scores {
+		out[k] = v
+	}
+	return out
+}
+
 func (m *MemoryRoomRepository) SaveRoom(_ context.Context, room ColosseumRoom, members []RoomMember) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -69,8 +80,11 @@ func (m *MemoryRoomRepository) SaveRoom(_ context.Context, room ColosseumRoom, m
 	membersCopy := make([]RoomMember, len(members))
 	copy(membersCopy, members)
 
+	roomCopy := room
+	roomCopy.TeamScores = cloneTeamScores(room.TeamScores)
+
 	m.rooms[room.ID] = RoomDetail{
-		Room:    room,
+		Room:    roomCopy,
 		Members: membersCopy,
 	}
 	return nil
@@ -86,7 +100,11 @@ func (m *MemoryRoomRepository) GetRoom(_ context.Context, id string) (RoomDetail
 	}
 	membersCopy := make([]RoomMember, len(detail.Members))
 	copy(membersCopy, detail.Members)
-	return RoomDetail{Room: detail.Room, Members: membersCopy}, nil
+
+	roomCopy := detail.Room
+	roomCopy.TeamScores = cloneTeamScores(detail.Room.TeamScores)
+
+	return RoomDetail{Room: roomCopy, Members: membersCopy}, nil
 }
 
 func (m *MemoryRoomRepository) DeleteRoom(_ context.Context, id string) error {

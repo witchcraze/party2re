@@ -217,6 +217,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	if err != nil {
 		return RoomDetail{}, err
 	}
+	leaderMP := max(0, char.Stats.MP)
 	leaderMember := RoomMember{
 		RoomID:        roomID,
 		CharacterID:   char.ID,
@@ -225,6 +226,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 		Level:         char.Level,
 		HP:            char.Stats.HP,
 		MaxHP:         leaderMaxHP,
+		MP:            &leaderMP,
 		MaxMP:         leaderMaxMP,
 		TeamColor:     "",
 		IsLeader:      true,
@@ -325,6 +327,7 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 		if err != nil {
 			return err
 		}
+		memberMP := max(0, char.Stats.MP)
 		newMember := RoomMember{
 			RoomID:        roomID,
 			CharacterID:   char.ID,
@@ -333,6 +336,7 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 			Level:         char.Level,
 			HP:            char.Stats.HP,
 			MaxHP:         maxHP,
+			MP:            &memberMP,
 			MaxMP:         maxMP,
 			TeamColor:     "",
 			IsLeader:      false,

@@ -213,6 +213,7 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 	if err != nil {
 		return RoomDetail{}, err
 	}
+	leaderMP := max(0, char.Stats.MP)
 	member := GvGMember{
 		RoomID:        roomID,
 		CharacterID:   char.ID,
@@ -221,6 +222,7 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 		Level:         char.Level,
 		HP:            char.Stats.HP,
 		MaxHP:         leaderMaxHP,
+		MP:            &leaderMP,
 		MaxMP:         leaderMaxMP,
 		GuildID:       g.ID,
 		GuildName:     g.Name,
@@ -315,6 +317,7 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 		if err != nil {
 			return err
 		}
+		memberMP := max(0, char.Stats.MP)
 		newMember := GvGMember{
 			RoomID:        roomID,
 			CharacterID:   char.ID,
@@ -323,6 +326,7 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 			Level:         char.Level,
 			HP:            char.Stats.HP,
 			MaxHP:         maxHP,
+			MP:            &memberMP,
 			MaxMP:         maxMP,
 			GuildID:       g.ID,
 			GuildName:     g.Name,

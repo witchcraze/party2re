@@ -134,6 +134,7 @@ type GvGMember struct {
 	Level         int       `json:"level"`
 	HP            int       `json:"hp"`
 	MaxHP         int       `json:"max_hp"`
+	MP            *int      `json:"mp,omitempty"`
 	MaxMP         *int      `json:"max_mp,omitempty"`
 	GuildID       string    `json:"guild_id"`
 	GuildName     string    `json:"guild_name"`
