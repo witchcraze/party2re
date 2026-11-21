@@ -34,8 +34,8 @@ func TestRefreshHandler_HandleAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllSnapshots: %v", err)
 	}
-	if len(snapshots) < 11 {
-		t.Errorf("expected 11 snapshots, got %d", len(snapshots))
+	if len(snapshots) != 8 {
+		t.Errorf("expected 8 snapshots, got %d", len(snapshots))
 	}
 }
 
@@ -49,23 +49,23 @@ func TestRefreshHandler_HandleSingleType(t *testing.T) {
 
 	handler := ranking.NewRefreshHandler(svc)
 
-	// Refresh LEVEL only
+	// Refresh MONSTER_KILLS only
 	action := core_scheduling.ScheduledAction{
 		ID:         "act-2",
 		ActionType: ranking.RankingActionTypeRefresh,
-		Params:     map[string]string{"ranking_type": "LEVEL"},
+		Params:     map[string]string{"ranking_type": "MONSTER_KILLS"},
 	}
 
 	if err := handler.Handle(ctx, action); err != nil {
-		t.Fatalf("Handle(LEVEL): %v", err)
+		t.Fatalf("Handle(MONSTER_KILLS): %v", err)
 	}
 
-	snap, err := svc.GetSnapshot(ctx, ranking.RankingTypeLevel)
+	snap, err := svc.GetSnapshot(ctx, ranking.RankingTypeMonsterKills)
 	if err != nil {
-		t.Fatalf("GetSnapshot(LEVEL): %v", err)
+		t.Fatalf("GetSnapshot(MONSTER_KILLS): %v", err)
 	}
-	if snap.RankingType != ranking.RankingTypeLevel {
-		t.Errorf("expected snapshot LEVEL, got %s", snap.RankingType)
+	if snap.RankingType != ranking.RankingTypeMonsterKills {
+		t.Errorf("expected snapshot monster_kills, got %s", snap.RankingType)
 	}
 }
 

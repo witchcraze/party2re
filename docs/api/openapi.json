@@ -15158,85 +15158,6 @@
         ],
         "type": "object"
       },
-      "RankingPageRankingPlayerWealthRankingEntry": {
-        "additionalProperties": false,
-        "properties": {
-          "calculated_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/RankingPlayerWealthRankingEntry"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "is_snapshot": {
-            "type": "boolean"
-          },
-          "limit": {
-            "type": "integer"
-          },
-          "offset": {
-            "type": "integer"
-          },
-          "ranking_type": {
-            "type": "string"
-          },
-          "total": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "ranking_type",
-          "entries",
-          "total",
-          "limit",
-          "offset",
-          "calculated_at",
-          "is_snapshot"
-        ],
-        "type": "object"
-      },
-      "RankingPlayerWealthRankingEntry": {
-        "additionalProperties": false,
-        "properties": {
-          "bank_balance": {
-            "type": "integer"
-          },
-          "character_count": {
-            "type": "integer"
-          },
-          "characters_money": {
-            "type": "integer"
-          },
-          "player_id": {
-            "type": "string"
-          },
-          "rank": {
-            "type": "integer"
-          },
-          "total_wealth": {
-            "type": "integer"
-          },
-          "username": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "rank",
-          "player_id",
-          "username",
-          "total_wealth",
-          "bank_balance",
-          "characters_money",
-          "character_count"
-        ],
-        "type": "object"
-      },
       "RecordEntryResult": {
         "additionalProperties": false,
         "properties": {
@@ -27562,63 +27483,6 @@
         ]
       }
     },
-    "/rankings/characters-wealth": {
-      "get": {
-        "operationId": "getCharacterWealthRanking",
-        "parameters": [
-          {
-            "description": "Limit",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RankingPageRankingCharacterRankingEntry"
-                }
-              }
-            },
-            "description": "Character wealth ranking"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get character wealth ranking leaderboard",
-        "tags": [
-          "Rankings"
-        ]
-      }
-    },
     "/rankings/helpers": {
       "get": {
         "operationId": "getHelperRanking",
@@ -27751,63 +27615,6 @@
         ]
       }
     },
-    "/rankings/job-mastery": {
-      "get": {
-        "operationId": "getJobMasteryRanking",
-        "parameters": [
-          {
-            "description": "Limit",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RankingPageRankingCharacterRankingEntry"
-                }
-              }
-            },
-            "description": "Job mastery ranking"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get job mastery ranking leaderboard",
-        "tags": [
-          "Rankings"
-        ]
-      }
-    },
     "/rankings/job-popularity": {
       "get": {
         "operationId": "getJobPopularityRanking",
@@ -27849,63 +27656,6 @@
         },
         "security": [],
         "summary": "Get job popularity distribution",
-        "tags": [
-          "Rankings"
-        ]
-      }
-    },
-    "/rankings/levels": {
-      "get": {
-        "operationId": "getLevelRanking",
-        "parameters": [
-          {
-            "description": "Limit",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RankingPageRankingCharacterRankingEntry"
-                }
-              }
-            },
-            "description": "Level ranking list"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get character level ranking leaderboard",
         "tags": [
           "Rankings"
         ]
@@ -27981,63 +27731,6 @@
         },
         "security": [],
         "summary": "Get demon king defeats ranking leaderboard (mao_c / 魔王ランキング)",
-        "tags": [
-          "Rankings"
-        ]
-      }
-    },
-    "/rankings/medals": {
-      "get": {
-        "operationId": "getSmallMedalRanking",
-        "parameters": [
-          {
-            "description": "Limit",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RankingPageRankingCharacterRankingEntry"
-                }
-              }
-            },
-            "description": "Small medal ranking"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get small medal collection ranking",
         "tags": [
           "Rankings"
         ]
@@ -28198,63 +27891,6 @@
         ]
       }
     },
-    "/rankings/wealth": {
-      "get": {
-        "operationId": "getPlayerWealthRanking",
-        "parameters": [
-          {
-            "description": "Limit",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RankingPageRankingPlayerWealthRankingEntry"
-                }
-              }
-            },
-            "description": "Player wealth ranking"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get player wealth ranking leaderboard",
-        "tags": [
-          "Rankings"
-        ]
-      }
-    },
     "/rankings/weekly-job-change": {
       "get": {
         "operationId": "getWeeklyJobChangeRanking",
@@ -28364,9 +28000,6 @@
                     },
                     {
                       "$ref": "#/components/schemas/RankingPageRankingCharacterRankingEntry"
-                    },
-                    {
-                      "$ref": "#/components/schemas/RankingPageRankingPlayerWealthRankingEntry"
                     }
                   ]
                 }

@@ -97,26 +97,12 @@ func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
 // GetRankingByType retrieves ranking for a dynamic type string.
 func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType, limit, offset int, useSnapshot bool) (any, error) {
 	switch NormalizeRankingType(rankingType) {
-	case RankingTypeLevel:
-		return s.GetLevelRanking(ctx, limit, offset, useSnapshot)
-	case RankingTypePlayerWealth:
-		return s.GetPlayerWealthRanking(ctx, limit, offset, useSnapshot)
-	case RankingTypeCharacterWealth:
-		return s.GetCharacterWealthRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypePvPVictory:
 		return s.GetPvPVictoryRanking(ctx, limit, offset, useSnapshot)
-	case RankingTypeBossDefeat:
-		return s.GetBossDefeatRanking(ctx, limit, offset, useSnapshot)
-	case RankingTypeAdventureVictory:
-		return s.GetAdventureVictoryRanking(ctx, limit, offset, useSnapshot)
-	case RankingTypeJobMastery:
-		return s.GetJobMasteryRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypeJobPopularity:
 		return s.GetJobPopularityRanking(ctx, useSnapshot)
 	case RankingTypeHelper:
 		return s.GetHelperRanking(ctx, limit, offset, useSnapshot)
-	case RankingTypeSmallMedals:
-		return s.GetSmallMedalRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypeCasinoWins:
 		return s.GetCasinoWinsRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypeAlchemy:
@@ -136,12 +122,6 @@ func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType,
 
 func unmarshalSnapshotData(t RankingType, raw string) (any, error) {
 	switch t {
-	case RankingTypePlayerWealth:
-		var list []PlayerWealthRankingEntry
-		if err := json.Unmarshal([]byte(raw), &list); err != nil {
-			return nil, err
-		}
-		return list, nil
 	case RankingTypeJobPopularity:
 		var list []JobPopularityEntry
 		if err := json.Unmarshal([]byte(raw), &list); err != nil {
@@ -220,17 +200,6 @@ func (s *Service) getCachedCharacterRanking(ctx context.Context, t RankingType, 
 		return nil, 0, time.Time{}, false
 	}
 	if list, ok := data.([]CharacterRankingEntry); ok {
-		return paginateSlice(list, limit, offset), total, calcTime, true
-	}
-	return nil, 0, time.Time{}, false
-}
-
-func (s *Service) getCachedPlayerWealthRanking(ctx context.Context, t RankingType, limit, offset int) ([]PlayerWealthRankingEntry, int, time.Time, bool) {
-	data, total, calcTime, ok := s.getOrLoadSnapshot(ctx, t)
-	if !ok {
-		return nil, 0, time.Time{}, false
-	}
-	if list, ok := data.([]PlayerWealthRankingEntry); ok {
 		return paginateSlice(list, limit, offset), total, calcTime, true
 	}
 	return nil, 0, time.Time{}, false

@@ -28,20 +28,20 @@ func TestRankingServiceIntegration(t *testing.T) {
 	}
 
 	// 1. Live queries
-	lvlPage, err := svc.GetLevelRanking(ctx, 10, 0, false)
+	pvpPage, err := svc.GetPvPVictoryRanking(ctx, 10, 0, false)
 	if err != nil {
-		t.Fatalf("GetLevelRanking failed: %v", err)
+		t.Fatalf("GetPvPVictoryRanking failed: %v", err)
 	}
-	if lvlPage.RankingType != ranking.RankingTypeLevel {
-		t.Errorf("expected level ranking type, got %s", lvlPage.RankingType)
+	if pvpPage.RankingType != ranking.RankingTypePvPVictory {
+		t.Errorf("expected pvp_victory ranking type, got %s", pvpPage.RankingType)
 	}
 
-	wealthPage, err := svc.GetPlayerWealthRanking(ctx, 10, 0, false)
+	helpPage, err := svc.GetHelperRanking(ctx, 10, 0, false)
 	if err != nil {
-		t.Fatalf("GetPlayerWealthRanking failed: %v", err)
+		t.Fatalf("GetHelperRanking failed: %v", err)
 	}
-	if wealthPage.RankingType != ranking.RankingTypePlayerWealth {
-		t.Errorf("expected player_wealth ranking type, got %s", wealthPage.RankingType)
+	if helpPage.RankingType != ranking.RankingTypeHelper {
+		t.Errorf("expected helper ranking type, got %s", helpPage.RankingType)
 	}
 
 	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, false)
@@ -103,29 +103,29 @@ func TestRankingServiceIntegration(t *testing.T) {
 		t.Fatalf("RefreshAllSnapshots failed: %v", err)
 	}
 
-	cachedLvlPage, err := svc.GetLevelRanking(ctx, 10, 0, true)
+	cachedMKPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
 	if err != nil {
-		t.Fatalf("GetLevelRanking (cached) failed: %v", err)
+		t.Fatalf("GetMonsterKillsRanking (cached) failed: %v", err)
 	}
-	if !cachedLvlPage.IsSnapshot {
+	if !cachedMKPage.IsSnapshot {
 		t.Errorf("expected IsSnapshot=true for cached page")
 	}
 
 	// 3. Snapshot retrieval
-	snap, err := svc.GetSnapshot(ctx, ranking.RankingTypeLevel)
+	snap, err := svc.GetSnapshot(ctx, ranking.RankingTypeMonsterKills)
 	if err != nil {
 		t.Fatalf("GetSnapshot failed: %v", err)
 	}
-	if snap.RankingType != ranking.RankingTypeLevel {
-		t.Errorf("expected ranking type level, got %s", snap.RankingType)
+	if snap.RankingType != ranking.RankingTypeMonsterKills {
+		t.Errorf("expected ranking type monster_kills, got %s", snap.RankingType)
 	}
 
 	allSnaps, err := svc.GetAllSnapshots(ctx)
 	if err != nil {
 		t.Fatalf("GetAllSnapshots failed: %v", err)
 	}
-	if len(allSnaps) < 13 {
-		t.Errorf("expected at least 13 snapshots, got %d", len(allSnaps))
+	if len(allSnaps) < 8 {
+		t.Errorf("expected at least 8 snapshots, got %d", len(allSnaps))
 	}
 
 	// 3b. Casino wins and Alchemy rankings
@@ -184,11 +184,11 @@ func TestRankingServiceIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	coldLvlPage, err := freshSvc.GetLevelRanking(ctx, 10, 0, true)
+	coldMKPage, err := freshSvc.GetMonsterKillsRanking(ctx, 10, 0, true)
 	if err != nil {
-		t.Fatalf("GetLevelRanking (cold snapshot fallback) failed: %v", err)
+		t.Fatalf("GetMonsterKillsRanking (cold snapshot fallback) failed: %v", err)
 	}
-	if !coldLvlPage.IsSnapshot {
+	if !coldMKPage.IsSnapshot {
 		t.Errorf("expected IsSnapshot=true for cold start snapshot query")
 	}
 
@@ -200,9 +200,9 @@ func TestRankingServiceIntegration(t *testing.T) {
 	if err := warmupSvc.WarmupCache(ctx); err != nil {
 		t.Fatalf("WarmupCache failed: %v", err)
 	}
-	warmLvlPage, err := warmupSvc.GetLevelRanking(ctx, 10, 0, true)
-	if err != nil || !warmLvlPage.IsSnapshot {
-		t.Fatalf("expected cached ranking after warmup: %v, %+v", err, warmLvlPage)
+	warmMKPage, err := warmupSvc.GetMonsterKillsRanking(ctx, 10, 0, true)
+	if err != nil || !warmMKPage.IsSnapshot {
+		t.Fatalf("expected cached ranking after warmup: %v, %+v", err, warmMKPage)
 	}
 }
 

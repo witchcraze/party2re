@@ -5,20 +5,15 @@ import (
 	"time"
 )
 
-// ProgressionRankingRepository defines queries for level, wealth, and job progression leaderboards.
+// ProgressionRankingRepository defines queries for job popularity tracking and leaderboards.
 type ProgressionRankingRepository interface {
-	GetLevelRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
-	GetCharacterWealthRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
-	GetJobMasteryRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetJobPopularityRanking(ctx context.Context) ([]JobPopularityEntry, error)
 	RecordJobPopularity(ctx context.Context, jobID string, gender string, points int) error
 }
 
-// CombatRankingRepository defines queries for battle, PvP, boss, and adventure leaderboards.
+// CombatRankingRepository defines queries for battle, PvP, and boss-sealing leaderboards.
 type CombatRankingRepository interface {
 	GetPvPVictoryRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
-	GetBossDefeatRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
-	GetAdventureVictoryRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetMonsterKillsRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetMaoCountRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetHeroCountRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
@@ -27,7 +22,6 @@ type CombatRankingRepository interface {
 // ActivityRankingRepository defines queries for auxiliary activities and side-system leaderboards.
 type ActivityRankingRepository interface {
 	GetHelperRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
-	GetSmallMedalRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetCasinoWinsRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetAlchemyRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
@@ -40,15 +34,9 @@ type CharacterRankingRepository interface {
 	ActivityRankingRepository
 }
 
-// PlayerWealthRankingRepository defines data access operations for account-level player wealth leaderboards.
-type PlayerWealthRankingRepository interface {
-	GetPlayerWealthRanking(ctx context.Context, limit, offset int) ([]PlayerWealthRankingEntry, int, error)
-}
-
-// LeaderboardRepository composes character and player ranking query operations.
+// LeaderboardRepository composes ranking query operations.
 type LeaderboardRepository interface {
 	CharacterRankingRepository
-	PlayerWealthRankingRepository
 }
 
 // SnapshotRepository defines persistence and retrieval operations for ranking snapshots.

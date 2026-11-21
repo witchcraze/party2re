@@ -143,38 +143,3 @@ func (s *Service) GetPvPVictoryRanking(ctx context.Context, limit, offset int, u
 		IsSnapshot:   false,
 	}, nil
 }
-
-// GetBossDefeatRanking returns character rankings sorted by World Boss defeats.
-func (s *Service) GetBossDefeatRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	limit, offset = NormalizePagination(limit, offset)
-	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeBossDefeat, limit, offset)
-		if found {
-			return RankingPage[CharacterRankingEntry]{
-				RankingType:  RankingTypeBossDefeat,
-				Entries:      entries,
-				Total:        total,
-				Limit:        limit,
-				Offset:       offset,
-				CalculatedAt: calcTime,
-				IsSnapshot:   true,
-			}, nil
-		}
-	}
-
-	entries, total, err := s.repo.GetBossDefeatRanking(ctx, limit, offset)
-	if err != nil {
-		return RankingPage[CharacterRankingEntry]{}, err
-	}
-
-	now := s.nowFunc().UTC()
-	return RankingPage[CharacterRankingEntry]{
-		RankingType:  RankingTypeBossDefeat,
-		Entries:      entries,
-		Total:        total,
-		Limit:        limit,
-		Offset:       offset,
-		CalculatedAt: now,
-		IsSnapshot:   false,
-	}, nil
-}

@@ -6,9 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/boss"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	corejob "github.com/witchcraze/party2re/internal/core/job"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/ranking"
 )
@@ -25,13 +23,6 @@ func TestRankingRepository_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 	playerRepo, err := NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	jobRepo, err := NewCharacterJobRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,24 +83,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 4. Job Masteries
-	if err := jobRepo.Save(ctx, corejob.CharacterJob{
-		CharacterID:  c1.ID,
-		CurrentJobID: "warrior",
-		MasteredJobs: []string{"warrior", "knight", "paladin"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := jobRepo.Save(ctx, corejob.CharacterJob{
-		CharacterID:  c2.ID,
-		CurrentJobID: "mage",
-		MasteredJobs: []string{"mage"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// 5. PvP Wins & Authentic Combat Counters
+	// 3. PvP Wins & Authentic Combat Counters
 	_, err = db.ExecContext(ctx, `
 		UPDATE characters SET pvp_wins = 25, monster_kills = 88, mao_count = 5, hero_count = 14 WHERE id = ?
 	`, c1.ID)
@@ -123,80 +97,31 @@ func TestRankingRepository_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 6. Boss Defeats
-	_, err = db.ExecContext(ctx, `
-		INSERT INTO character_boss_records (character_id, highest_tier_cleared, total_boss_defeats)
-		VALUES (?, 5, 12), (?, 2, 3)
-		ON DUPLICATE KEY UPDATE total_boss_defeats = VALUES(total_boss_defeats)
-	`, c1.ID, c2.ID)
+	// === Test PvP Victory Ranking (kill_p / 王者ランキング) ===
+	pvpRankings, total, err := rankingRepo.GetPvPVictoryRanking(ctx, 10000, 0)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	// 7. Adventure Wins
-	_, err = db.ExecContext(ctx, `
-		INSERT INTO adventures (id, character_id, adventure_type, started_at, floors_cleared, is_cleared, party_size, experience_reward, outcome, resolved)
-		VALUES (?, ?, 'stage_1', ?, 10, TRUE, 1, 100, 'WIN', TRUE),
-		       (?, ?, 'stage_2', ?, 10, TRUE, 1, 200, 'WIN', TRUE)
-	`, prefix+"adv1", c1.ID, now, prefix+"adv2", c1.ID, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// === Test Level Ranking ===
-	levelRankings, total, err := rankingRepo.GetLevelRanking(ctx, 10000, 0)
-	if err != nil {
-		t.Fatalf("GetLevelRanking failed: %v", err)
+		t.Fatalf("GetPvPVictoryRanking failed: %v", err)
 	}
 	if total < 2 {
 		t.Fatalf("expected total >= 2, got %d", total)
 	}
-	// Verify c2 (Lv90) ranks above c1 (Lv80)
 	var c1Rank, c2Rank int
-	for _, entry := range levelRankings {
+	for _, entry := range pvpRankings {
 		if entry.CharacterID == c1.ID {
 			c1Rank = entry.Rank
+			if entry.Score != 25 {
+				t.Fatalf("expected c1 pvp_wins 25, got %d", entry.Score)
+			}
 		}
 		if entry.CharacterID == c2.ID {
 			c2Rank = entry.Rank
+			if entry.Score != 5 {
+				t.Fatalf("expected c2 pvp_wins 5, got %d", entry.Score)
+			}
 		}
 	}
-	if c2Rank == 0 || c1Rank == 0 || c2Rank >= c1Rank {
-		t.Fatalf("expected c2 (Lv 90) rank (%d) < c1 (Lv 80) rank (%d)", c2Rank, c1Rank)
-	}
-
-	// === Test Player Wealth Ranking ===
-	wealthRankings, pTotal, err := rankingRepo.GetPlayerWealthRanking(ctx, 10000, 0)
-	if err != nil {
-		t.Fatalf("GetPlayerWealthRanking failed: %v", err)
-	}
-	if pTotal < 2 {
-		t.Fatalf("expected pTotal >= 2, got %d", pTotal)
-	}
-	var p1Wealth, p2Wealth int64
-	for _, entry := range wealthRankings {
-		if entry.PlayerID == p1.ID {
-			p1Wealth = entry.TotalWealth
-		}
-		if entry.PlayerID == p2.ID {
-			p2Wealth = entry.TotalWealth
-		}
-	}
-	// p1 = 500,000 bank + 50,000 char = 550,000
-	// p2 = 200,000 bank + 300,000 char = 500,000
-	if p1Wealth != 550000 || p2Wealth != 500000 {
-		t.Fatalf("expected p1Wealth=550000, p2Wealth=500000, got p1=%d, p2=%d", p1Wealth, p2Wealth)
-	}
-
-	// === Test Character Wealth Ranking ===
-	charWealthRankings, _, err := rankingRepo.GetCharacterWealthRanking(ctx, 10000, 0)
-	if err != nil {
-		t.Fatalf("GetCharacterWealthRanking failed: %v", err)
-	}
-	for _, entry := range charWealthRankings {
-		if entry.CharacterID == c2.ID && entry.Score != 300000 {
-			t.Fatalf("expected c2 held gold 300000, got %d", entry.Score)
-		}
+	if c1Rank == 0 || c2Rank == 0 || c1Rank >= c2Rank {
+		t.Fatalf("expected c1 rank (%d) < c2 rank (%d)", c1Rank, c2Rank)
 	}
 
 	// === Test Monster Kills Ranking (kill_m / 英雄ランキング) ===
@@ -238,20 +163,6 @@ func TestRankingRepository_Integration(t *testing.T) {
 		}
 		if entry.CharacterID == c2.ID && entry.Score != 2 {
 			t.Fatalf("expected c2 hero count 2, got %d", entry.Score)
-		}
-	}
-
-	// === Test Job Mastery Ranking ===
-	masteryRankings, _, err := rankingRepo.GetJobMasteryRanking(ctx, 10000, 0)
-	if err != nil {
-		t.Fatalf("GetJobMasteryRanking failed: %v", err)
-	}
-	for _, entry := range masteryRankings {
-		if entry.CharacterID == c1.ID && entry.Score != 3 {
-			t.Fatalf("expected c1 mastered count 3, got %d", entry.Score)
-		}
-		if entry.CharacterID == c2.ID && entry.Score != 1 {
-			t.Fatalf("expected c2 mastered count 1, got %d", entry.Score)
 		}
 	}
 
@@ -308,20 +219,9 @@ func TestRankingRepository_Integration(t *testing.T) {
 		}
 	}
 
-	// === Test Small Medal Ranking ===
-	medalRankings, _, err := rankingRepo.GetSmallMedalRanking(ctx, 10000, 0)
-	if err != nil {
-		t.Fatalf("GetSmallMedalRanking failed: %v", err)
-	}
-	for _, entry := range medalRankings {
-		if entry.CharacterID == c2.ID && entry.Score != 50 {
-			t.Fatalf("expected c2 medal count 50, got %d", entry.Score)
-		}
-	}
-
 	// === Test Snapshots ===
 	snap := ranking.RankingSnapshot{
-		RankingType:  ranking.RankingTypeLevel,
+		RankingType:  ranking.RankingTypeMonsterKills,
 		SnapshotData: `[{"rank":1,"character_id":"test"}]`,
 		TotalCount:   1,
 		CalculatedAt: now,
@@ -331,7 +231,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 		t.Fatalf("SaveSnapshot failed: %v", err)
 	}
 
-	gotSnap, err := rankingRepo.GetSnapshot(ctx, ranking.RankingTypeLevel)
+	gotSnap, err := rankingRepo.GetSnapshot(ctx, ranking.RankingTypeMonsterKills)
 	if err != nil {
 		t.Fatalf("GetSnapshot failed: %v", err)
 	}
@@ -343,8 +243,8 @@ func TestRankingRepository_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllSnapshots failed: %v", err)
 	}
-	if _, ok := allSnaps[ranking.RankingTypeLevel]; !ok {
-		t.Fatalf("expected level snapshot in all snapshots")
+	if _, ok := allSnaps[ranking.RankingTypeMonsterKills]; !ok {
+		t.Fatalf("expected monster_kills snapshot in all snapshots")
 	}
 
 	_, err = rankingRepo.GetSnapshot(ctx, ranking.RankingType("non_existent"))
@@ -352,8 +252,3 @@ func TestRankingRepository_Integration(t *testing.T) {
 		t.Fatalf("expected ErrSnapshotNotFound, got %v", err)
 	}
 }
-
-// Unused imports check suppression
-var (
-	_ = boss.ErrBossNotFound
-)

@@ -17,18 +17,6 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 	)
 
 	switch rankingType {
-	case RankingTypeLevel:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetLevelRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypePlayerWealth:
-		var entries []PlayerWealthRankingEntry
-		entries, totalCount, err = s.repo.GetPlayerWealthRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeCharacterWealth:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetCharacterWealthRanking(ctx, 100, 0)
-		data = entries
 	case RankingTypeMonsterKills:
 		var entries []CharacterRankingEntry
 		entries, totalCount, err = s.repo.GetMonsterKillsRanking(ctx, 100, 0)
@@ -45,18 +33,6 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 		var entries []CharacterRankingEntry
 		entries, totalCount, err = s.repo.GetPvPVictoryRanking(ctx, 100, 0)
 		data = entries
-	case RankingTypeBossDefeat:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetBossDefeatRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeAdventureVictory:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetAdventureVictoryRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeJobMastery:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetJobMasteryRanking(ctx, 100, 0)
-		data = entries
 	case RankingTypeJobPopularity:
 		var entries []JobPopularityEntry
 		entries, err = s.repo.GetJobPopularityRanking(ctx)
@@ -65,10 +41,6 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 	case RankingTypeHelper:
 		var entries []CharacterRankingEntry
 		entries, totalCount, err = s.repo.GetHelperRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeSmallMedals:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetSmallMedalRanking(ctx, 100, 0)
 		data = entries
 	case RankingTypeCasinoWins:
 		var entries []CharacterRankingEntry
@@ -126,16 +98,9 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 // RefreshAllSnapshots recalculates and updates snapshots for all supported ranking types.
 func (s *Service) RefreshAllSnapshots(ctx context.Context) error {
 	types := []RankingType{
-		RankingTypeLevel,
-		RankingTypePlayerWealth,
-		RankingTypeCharacterWealth,
 		RankingTypePvPVictory,
-		RankingTypeBossDefeat,
-		RankingTypeAdventureVictory,
-		RankingTypeJobMastery,
 		RankingTypeJobPopularity,
 		RankingTypeHelper,
-		RankingTypeSmallMedals,
 		RankingTypeCasinoWins,
 		RankingTypeAlchemy,
 		RankingTypeMonsterKills,
@@ -172,26 +137,12 @@ func (s *Service) WarmupCache(ctx context.Context) error {
 	}
 	now := s.nowFunc().UTC()
 	for rankingType, snapshot := range snapshots {
-		if snapshot.SnapshotData == "" {
+		if !IsValidRankingType(rankingType) || snapshot.SnapshotData == "" {
 			continue
 		}
-		var parsedData any
-		switch rankingType {
-		case RankingTypePlayerWealth:
-			var list []PlayerWealthRankingEntry
-			if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
-				parsedData = list
-			}
-		case RankingTypeJobPopularity:
-			var list []JobPopularityEntry
-			if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
-				parsedData = list
-			}
-		default:
-			var list []CharacterRankingEntry
-			if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
-				parsedData = list
-			}
+		parsedData, err := unmarshalSnapshotData(rankingType, snapshot.SnapshotData)
+		if err != nil {
+			continue
 		}
 
 		if parsedData != nil {

@@ -9,22 +9,15 @@ import (
 type RankingType string
 
 const (
-	RankingTypeLevel            RankingType = "level"
-	RankingTypePlayerWealth     RankingType = "player_wealth"
-	RankingTypeCharacterWealth  RankingType = "character_wealth"
-	RankingTypePvPVictory       RankingType = "pvp_victory"
-	RankingTypeBossDefeat       RankingType = "boss_defeat"
-	RankingTypeAdventureVictory RankingType = "adventure_victory"
-	RankingTypeJobMastery       RankingType = "job_mastery"
-	RankingTypeJobPopularity    RankingType = "job_popularity"
-	RankingTypeHelper           RankingType = "helper"
-	RankingTypeSmallMedals      RankingType = "small_medals"
-	RankingTypeCasinoWins       RankingType = "casino_wins"
-	RankingTypeAlchemy          RankingType = "alchemy"
-	RankingTypeWeeklyJobChange  RankingType = "weekly_job_change"
-	RankingTypeMonsterKills     RankingType = "monster_kills"
-	RankingTypeMaoCount         RankingType = "mao_count"
-	RankingTypeHeroCount        RankingType = "hero_count"
+	RankingTypePvPVictory      RankingType = "pvp_victory"
+	RankingTypeJobPopularity   RankingType = "job_popularity"
+	RankingTypeHelper          RankingType = "helper"
+	RankingTypeCasinoWins      RankingType = "casino_wins"
+	RankingTypeAlchemy         RankingType = "alchemy"
+	RankingTypeWeeklyJobChange RankingType = "weekly_job_change"
+	RankingTypeMonsterKills    RankingType = "monster_kills"
+	RankingTypeMaoCount        RankingType = "mao_count"
+	RankingTypeHeroCount       RankingType = "hero_count"
 )
 
 var (
@@ -51,17 +44,6 @@ type CharacterRankingEntry struct {
 	SP             int    `json:"sp"`
 	Score          int64  `json:"score"`
 	SecondaryScore int64  `json:"secondary_score,omitempty"`
-}
-
-// PlayerWealthRankingEntry represents a player's aggregated wealth ranking.
-type PlayerWealthRankingEntry struct {
-	Rank            int    `json:"rank"`
-	PlayerID        string `json:"player_id"`
-	Username        string `json:"username"`
-	TotalWealth     int64  `json:"total_wealth"`
-	BankBalance     int64  `json:"bank_balance"`
-	CharactersMoney int64  `json:"characters_money"`
-	CharacterCount  int    `json:"character_count"`
 }
 
 // JobPopularityEntry represents the distribution and popularity of a job across characters.
@@ -121,16 +103,9 @@ func NormalizeRankingType(t RankingType) RankingType {
 // IsValidRankingType returns true if the specified ranking type is supported.
 func IsValidRankingType(t RankingType) bool {
 	switch NormalizeRankingType(t) {
-	case RankingTypeLevel,
-		RankingTypePlayerWealth,
-		RankingTypeCharacterWealth,
-		RankingTypePvPVictory,
-		RankingTypeBossDefeat,
-		RankingTypeAdventureVictory,
-		RankingTypeJobMastery,
+	case RankingTypePvPVictory,
 		RankingTypeJobPopularity,
 		RankingTypeHelper,
-		RankingTypeSmallMedals,
 		RankingTypeCasinoWins,
 		RankingTypeAlchemy,
 		RankingTypeWeeklyJobChange,
