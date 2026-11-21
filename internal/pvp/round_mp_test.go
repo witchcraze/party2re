@@ -316,12 +316,7 @@ func TestColosseum_MPCarryOver_FailureRecoveryDoesNotDoubleApply(t *testing.T) {
 
 	engine := &scriptedMPBattleEngine{
 		results: []corebattle.PartyBattleResult{
-			// Round 1 attempt 1 fails at SaveRoom -> attempt 2 re-runs Round 1 cleanly.
-			{
-				Outcome:     corebattle.OutcomeWin,
-				RemainingHP: map[string]int{"char-1": 50, "char-2": 0},
-				RemainingMP: map[string]int{"char-1": 20, "char-2": 0},
-			},
+			// Round 1 commits transition and fails at SaveRoom -> retry recovers Round 1 without rerunning battle.
 			{
 				Outcome:     corebattle.OutcomeWin,
 				RemainingHP: map[string]int{"char-1": 50, "char-2": 0},
@@ -375,16 +370,17 @@ func TestColosseum_MPCarryOver_FailureRecoveryDoesNotDoubleApply(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Non-final Round 1 SaveRoom failure must leave pre-round MP intact for retry.
+	// Non-final Round 1 SaveRoom failure must recover Round 1 and preserve RemainingMP=20/0 without rerunning battle.
 	roomRepo.failSave.Store(true)
 	if _, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID); err == nil {
 		t.Fatal("expected round 1 SaveRoom failure")
 	}
-	if _, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID); err != nil {
+	res1, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID)
+	if err != nil {
 		t.Fatalf("round 1 retry failed: %v", err)
 	}
-	if engine.requests[1].Allies[0].MP != 30 {
-		t.Fatalf("round 1 retry did not start from pre-round MP 30: got %d", engine.requests[1].Allies[0].MP)
+	if res1.MatchCompleted || res1.Round != 2 || engine.calls.Load() != 1 {
+		t.Fatalf("expected recovered round 1 without extra combat call: calls=%d res=%+v", engine.calls.Load(), res1)
 	}
 
 	// Final Round 2 fails on Valkey publication after SQL settle commit.
@@ -392,8 +388,8 @@ func TestColosseum_MPCarryOver_FailureRecoveryDoesNotDoubleApply(t *testing.T) {
 	if _, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID); err == nil {
 		t.Fatal("expected round 2 publish failure")
 	}
-	if engine.requests[2].Allies[0].MP != 20 || engine.requests[2].Enemies[0].MP != 0 {
-		t.Fatalf("round 2 did not receive round 1 RemainingMP (20/0): got %d/%d", engine.requests[2].Allies[0].MP, engine.requests[2].Enemies[0].MP)
+	if engine.requests[1].Allies[0].MP != 20 || engine.requests[1].Enemies[0].MP != 0 {
+		t.Fatalf("round 2 did not receive round 1 RemainingMP (20/0): got %d/%d", engine.requests[1].Allies[0].MP, engine.requests[1].Enemies[0].MP)
 	}
 
 	// Retry replays SQL result without rerunning combat or double-applying MP.
@@ -401,7 +397,7 @@ func TestColosseum_MPCarryOver_FailureRecoveryDoesNotDoubleApply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("round 2 replay failed: %v", err)
 	}
-	if !replayed.MatchCompleted || engine.calls.Load() != 3 {
+	if !replayed.MatchCompleted || engine.calls.Load() != 2 {
 		t.Fatalf("expected replayed completion without extra combat call: calls=%d res=%+v", engine.calls.Load(), replayed)
 	}
 	tr, err := transRepo.FindTransition(ctx, detail.Room.ID)

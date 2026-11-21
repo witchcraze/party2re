@@ -81,9 +81,10 @@ abandonment, or inactivity cleanup. Pre-start departure refunds only the departi
 participant; post-start departure preserves remaining escrow for active teams or
 records forfeited escrow (`ForfeitedPool`) on last-member forfeit, undecided
 max-round draw, settlement remainder, lost-room abandonment, and inactivity
-timeout. Financial versions also reject stale cached rosters, and `TouchActivity`
-persists room-log activity timestamps for team selection, match start, and
-non-final rounds.
+timeout. Financial versions also reject stale cached rosters, and team
+selection, match start, and non-final rounds commit `last_activity_at`, the
+resulting room, non-final `PendingPvPKills` and round outcome through the same
+versioned transition and pending-publication boundary.
 
 Valkey publication happens after commit. Before subsequent room mutations, pending
 publication is retried under the room lock without repeating financial effects,
@@ -92,7 +93,10 @@ extending it, and never resurrecting an already-expired room). Creation discover
 unpublished or overdue rooms through the character's SQL claim. Removed claims
 remain reserved until room, reverse-mapping, and any timeout sleep-timer writes
 all succeed; mapping deletion compares the room ID so it cannot erase newer
-membership. Final round retries return the stored result until the room times out.
+membership. Retrying a pending team selection, match start, or non-final round
+completes publication and returns its stored result without advancing another
+round; once acknowledged, non-final rounds advance normally while final round
+retries return the stored result until the room times out.
 Password hashes, activity timestamps, and financial versions use private
 persistence fields and remain absent from public room responses.
 

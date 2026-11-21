@@ -367,6 +367,14 @@ func (s *Service) SelectTeam(ctx context.Context, characterID string, roomID str
 
 	var result RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		last := lastTransitionFromContext(lockedCtx)
+		if recoveredPendingFromContext(lockedCtx) && last.Kind == "select" && last.ActorID == characterID && last.Detail.Room.Status == StatusRecruiting && last.Detail.Room.Round == 0 && memberHasTeamColor(last.Detail.Members, characterID, normColor) {
+			if err := s.checkRecoveredInactive(lockedCtx, roomID, last); err != nil {
+				return err
+			}
+			result = last.Detail
+			return nil
+		}
 		detail, err := s.checkInactiveLocked(lockedCtx, roomID)
 		if err != nil {
 			return err
@@ -390,22 +398,28 @@ func (s *Service) SelectTeam(ctx context.Context, characterID string, roomID str
 		now := s.now()
 		detail.Room.UpdatedAt = now
 		detail.Room.LastActivityAt = now
-		if err := s.transitions.TouchActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now); err != nil {
-			if errors.Is(err, ErrRoomInactive) {
-				if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, lastTransitionFromContext(lockedCtx), now); cleanErr != nil {
-					return cleanErr
-				}
-				return ErrRoomNotFound
-			}
+		if err := s.commitActivityTransition(lockedCtx, last, Transition{
+			Kind:           "select",
+			ActorID:        characterID,
+			Detail:         detail,
+			LastActivityAt: now,
+		}); err != nil {
 			return err
 		}
-		if err := s.saveLiveRoom(lockedCtx, detail); err != nil {
-			return err
-		}
+		detail.Room.FinancialVersion++
 		result = detail
 		return nil
 	})
 	return result, err
+}
+
+func memberHasTeamColor(members []RoomMember, characterID, teamColor string) bool {
+	for _, m := range members {
+		if m.CharacterID == characterID {
+			return m.TeamColor == teamColor
+		}
+	}
+	return false
 }
 
 func (s *Service) GetRoom(ctx context.Context, roomID string) (RoomDetail, error) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"maps"
 	"sync"
 	"time"
 
@@ -38,8 +37,11 @@ type TransitionRepository interface {
 	FindCharacterClaim(context.Context, string) (string, error)
 	CommitTransition(context.Context, Transition, func(context.Context) error) error
 	AcknowledgeTransition(context.Context, string, int) error
-	TouchActivity(context.Context, string, int, time.Time) error
-	TouchRoundActivity(context.Context, string, int, time.Time, map[string]int) error
+}
+
+// IsActivityTransitionKind reports whether kind is a room-activity writer subject to inactivity guards.
+func IsActivityTransitionKind(kind string) bool {
+	return kind == "select" || kind == "start" || kind == "advance"
 }
 
 func WithTransitionRepository(repo TransitionRepository) Option {
@@ -71,6 +73,9 @@ func (s *Service) commitTransition(ctx context.Context, t Transition, mutate fun
 		t.LastActivityAt = t.Detail.Room.CreatedAt
 	}
 	t.Detail.Room.LastActivityAt = t.LastActivityAt
+	if mutate == nil {
+		mutate = func(context.Context) error { return nil }
+	}
 	if err := s.transitions.CommitTransition(ctx, t, func(txCtx context.Context) error {
 		return s.runInTx(txCtx, mutate)
 	}); err != nil {
@@ -234,6 +239,13 @@ func (r *MemoryTransitionRepository) CommitTransition(ctx context.Context, t Tra
 	if previous.Version+1 != t.Version || previous.Pending || !CanTransitionFrom(previous.Detail.Room.Status, t.Kind) {
 		return ErrTransitionConflict
 	}
+	last := previous.LastActivityAt
+	if last.IsZero() {
+		last = previous.Detail.Room.CreatedAt
+	}
+	if IsActivityTransitionKind(t.Kind) && !last.IsZero() && t.LastActivityAt.After(last.Add(InactivityTimeout)) {
+		return ErrRoomInactive
+	}
 	if t.AddedID != "" && r.claims[t.AddedID] != "" {
 		return ErrAlreadyInRoom
 	}
@@ -267,55 +279,6 @@ func (r *MemoryTransitionRepository) AcknowledgeTransition(_ context.Context, ro
 		}
 	}
 	t.Pending = false
-	data, err := json.Marshal(t)
-	if err != nil {
-		return err
-	}
-	r.states[roomID] = data
-	return nil
-}
-
-func (r *MemoryTransitionRepository) TouchActivity(_ context.Context, roomID string, version int, at time.Time) error {
-	return r.touchActivity(roomID, version, at, false, nil)
-}
-
-func (r *MemoryTransitionRepository) TouchRoundActivity(_ context.Context, roomID string, version int, at time.Time, pendingKills map[string]int) error {
-	return r.touchActivity(roomID, version, at, true, pendingKills)
-}
-
-func (r *MemoryTransitionRepository) touchActivity(roomID string, version int, at time.Time, updateKills bool, pendingKills map[string]int) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	raw := r.states[roomID]
-	if len(raw) == 0 {
-		return ErrTransitionConflict
-	}
-	var t Transition
-	if err := json.Unmarshal(raw, &t); err != nil {
-		return err
-	}
-	if t.Version != version || t.Pending || t.Detail.Room.Status == StatusDisbanded || t.Detail.Room.Status == StatusCompleted {
-		return ErrTransitionConflict
-	}
-	last := t.LastActivityAt
-	if last.IsZero() {
-		last = t.Detail.Room.CreatedAt
-	}
-	if !last.IsZero() && at.After(last.Add(InactivityTimeout)) {
-		return ErrRoomInactive
-	}
-	activityChanged := last.IsZero() || at.After(last)
-	killsChanged := updateKills && !maps.Equal(t.PendingPvPKills, pendingKills)
-	if !activityChanged && !killsChanged {
-		return nil
-	}
-	if activityChanged {
-		t.LastActivityAt = at
-		t.Detail.Room.LastActivityAt = at
-	}
-	if killsChanged {
-		t.PendingPvPKills = cloneIntMap(pendingKills)
-	}
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err

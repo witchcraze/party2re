@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/pvp"
@@ -81,9 +80,10 @@ func (r *PvPTransitionRepository) CommitTransition(ctx context.Context, t pvp.Tr
 		}
 		var version int
 		var pending bool
+		var lastActivity sql.NullTime
 		var oldData []byte
-		if err := executor.QueryRowContext(txCtx, `SELECT version, pending, transition_json
-			FROM pvp_room_transitions WHERE room_id = ? FOR UPDATE`, roomID).Scan(&version, &pending, &oldData); err != nil {
+		if err := executor.QueryRowContext(txCtx, `SELECT version, pending, last_activity_at, transition_json
+			FROM pvp_room_transitions WHERE room_id = ? FOR UPDATE`, roomID).Scan(&version, &pending, &lastActivity, &oldData); err != nil {
 			return err
 		}
 		var previous pvp.Transition
@@ -94,6 +94,15 @@ func (r *PvPTransitionRepository) CommitTransition(ctx context.Context, t pvp.Tr
 		}
 		if version+1 != t.Version || pending || !pvp.CanTransitionFrom(previous.Detail.Room.Status, t.Kind) {
 			return pvp.ErrTransitionConflict
+		}
+		effectiveLast := previous.LastActivityAt
+		if lastActivity.Valid {
+			effectiveLast = lastActivity.Time.UTC()
+		} else if effectiveLast.IsZero() {
+			effectiveLast = previous.Detail.Room.CreatedAt
+		}
+		if pvp.IsActivityTransitionKind(t.Kind) && !effectiveLast.IsZero() && t.LastActivityAt.After(effectiveLast.Add(pvp.InactivityTimeout)) {
+			return pvp.ErrRoomInactive
 		}
 		if err := mutate(txCtx); err != nil {
 			return err
@@ -107,9 +116,9 @@ func (r *PvPTransitionRepository) CommitTransition(ctx context.Context, t pvp.Tr
 				return err
 			}
 		}
-		lastActivity := sql.NullTime{Time: t.LastActivityAt.UTC(), Valid: !t.LastActivityAt.IsZero()}
+		nextActivity := sql.NullTime{Time: t.LastActivityAt.UTC(), Valid: !t.LastActivityAt.IsZero()}
 		_, err := executor.ExecContext(txCtx, `UPDATE pvp_room_transitions
-			SET version = ?, pending = TRUE, last_activity_at = ?, transition_json = ? WHERE room_id = ?`, t.Version, lastActivity, data, roomID)
+			SET version = ?, pending = TRUE, last_activity_at = ?, transition_json = ? WHERE room_id = ?`, t.Version, nextActivity, data, roomID)
 		return err
 	})
 }
@@ -137,77 +146,6 @@ func (r *PvPTransitionRepository) AcknowledgeTransition(ctx context.Context, roo
 			}
 		}
 		_, err = executor.ExecContext(txCtx, "UPDATE pvp_room_transitions SET pending = FALSE WHERE room_id = ?", roomID)
-		return err
-	})
-}
-
-// TouchActivity advances last_activity_at for an active non-terminal room.
-// Transaction: RunInTx
-// Lock Order: pvp_room_transitions(0)
-func (r *PvPTransitionRepository) TouchActivity(ctx context.Context, roomID string, version int, at time.Time) error {
-	return r.touchActivity(ctx, roomID, version, at, false, nil)
-}
-
-// TouchRoundActivity advances last_activity_at and persists non-final PendingPvPKills
-// in the same Rank-0 lock transaction so lazy timeout cleanup can flush earned kill_p.
-// Transaction: RunInTx
-// Lock Order: pvp_room_transitions(0)
-func (r *PvPTransitionRepository) TouchRoundActivity(ctx context.Context, roomID string, version int, at time.Time, pendingKills map[string]int) error {
-	return r.touchActivity(ctx, roomID, version, at, true, pendingKills)
-}
-
-func (r *PvPTransitionRepository) touchActivity(ctx context.Context, roomID string, version int, at time.Time, updateKills bool, pendingKills map[string]int) error {
-	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		executor := ExecutorFromContext(txCtx, r.db)
-		var current int
-		var pending bool
-		var lastActivity sql.NullTime
-		var oldData []byte
-		if err := executor.QueryRowContext(txCtx, `SELECT version, pending, last_activity_at, transition_json
-			FROM pvp_room_transitions WHERE room_id = ? FOR UPDATE`, roomID).Scan(&current, &pending, &lastActivity, &oldData); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return pvp.ErrTransitionConflict
-			}
-			return err
-		}
-		var previous pvp.Transition
-		if len(oldData) > 0 {
-			if err := json.Unmarshal(oldData, &previous); err != nil {
-				return err
-			}
-		}
-		if current != version || pending || previous.Detail.Room.Status == pvp.StatusDisbanded || previous.Detail.Room.Status == pvp.StatusCompleted {
-			return pvp.ErrTransitionConflict
-		}
-		effectiveLast := previous.LastActivityAt
-		if lastActivity.Valid {
-			effectiveLast = lastActivity.Time.UTC()
-		} else if effectiveLast.IsZero() {
-			effectiveLast = previous.Detail.Room.CreatedAt
-		}
-		if !effectiveLast.IsZero() && at.After(effectiveLast.Add(pvp.InactivityTimeout)) {
-			return pvp.ErrRoomInactive
-		}
-		activityChanged := effectiveLast.IsZero() || at.After(effectiveLast)
-		killsChanged := updateKills && !maps.Equal(previous.PendingPvPKills, pendingKills)
-		if !activityChanged && !killsChanged {
-			return nil
-		}
-		if killsChanged {
-			previous.PendingPvPKills = maps.Clone(pendingKills)
-			previous.Detail.Room.PendingPvPKills = nil
-			updatedData, err := json.Marshal(previous)
-			if err != nil {
-				return err
-			}
-			if activityChanged {
-				_, err = executor.ExecContext(txCtx, `UPDATE pvp_room_transitions SET last_activity_at = ?, transition_json = ? WHERE room_id = ?`, at.UTC(), updatedData, roomID)
-				return err
-			}
-			_, err = executor.ExecContext(txCtx, `UPDATE pvp_room_transitions SET transition_json = ? WHERE room_id = ?`, updatedData, roomID)
-			return err
-		}
-		_, err := executor.ExecContext(txCtx, `UPDATE pvp_room_transitions SET last_activity_at = ? WHERE room_id = ?`, at.UTC(), roomID)
 		return err
 	})
 }

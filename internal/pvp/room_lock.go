@@ -26,6 +26,7 @@ func withRoomLockedContext(ctx context.Context, roomID string) context.Context {
 }
 
 type lastTransitionContextKey struct{}
+type recoveredPendingContextKey struct{}
 
 // withRoomLock executes fn inside an exclusive room lock if a room repository is configured.
 func (s *Service) withRoomLock(ctx context.Context, roomID string, fn func(ctx context.Context) error) error {
@@ -34,14 +35,17 @@ func (s *Service) withRoomLock(ctx context.Context, roomID string, fn func(ctx c
 		if err != nil {
 			return err
 		}
+		recoveredPending := false
 		if t.Pending {
 			if err := s.publishTransition(lockedCtx, t); err != nil {
 				return err
 			}
 			t.Pending = false
+			recoveredPending = true
 		}
 		lockedCtx = context.WithValue(lockedCtx, transitionVersionKey{}, t.Version)
 		lockedCtx = context.WithValue(lockedCtx, lastTransitionContextKey{}, t)
+		lockedCtx = context.WithValue(lockedCtx, recoveredPendingContextKey{}, recoveredPending)
 		return fn(lockedCtx)
 	})
 }
@@ -49,4 +53,9 @@ func (s *Service) withRoomLock(ctx context.Context, roomID string, fn func(ctx c
 func lastTransitionFromContext(ctx context.Context) Transition {
 	t, _ := ctx.Value(lastTransitionContextKey{}).(Transition)
 	return t
+}
+
+func recoveredPendingFromContext(ctx context.Context) bool {
+	recovered, _ := ctx.Value(recoveredPendingContextKey{}).(bool)
+	return recovered
 }
