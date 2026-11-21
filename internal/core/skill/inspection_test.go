@@ -165,3 +165,66 @@ func TestInspectionValuationThresholdsAndBranches(t *testing.T) {
 		t.Fatal(result)
 	}
 }
+
+func TestInspectionCallbackContextOverlayPreservesPortDefaults(t *testing.T) {
+	s, c, d := ordinaryToolFixture()
+	c.Inspection["enemy"] = corebattle.InspectionContent{Treasure: true, Empty: true}
+	f := corebattle.CallbackContext{
+		TargetContext: c.TargetContext,
+		Arguments:     []string{"enemy"},
+		Inspection: map[string]corebattle.InspectionContent{
+			"enemy": {Treasure: true, RewardKind: 3, DefinitionID: "item-200", Price: 15000},
+		},
+	}
+	ops, err := d.InvocationAction(&s, &f, []string{"job-78-entry-1"}, noArithmeticDraws{t})
+	if err != nil || !c.Inspection["enemy"].Empty {
+		t.Fatalf("overlay mutated port defaults during validation: ops=%+v err=%v c=%+v", ops, err, c.Inspection)
+	}
+	if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Results) != 1 || len(c.Results[0].Facts) != 1 || c.Results[0].Facts[0].Kind != "valuation" || c.Results[0].Facts[0].Band != 4 {
+		t.Fatalf("unexpected overlay inspection result: %+v", c.Results)
+	}
+}
+
+func TestInspectionCallbackContextEmptyPlaceholderPreservesExistingRewards(t *testing.T) {
+	s, c, d := ordinaryToolFixture()
+	c.Inspection["enemy"] = corebattle.InspectionContent{RewardKind: 1, DefinitionID: "weapon-1", Price: 100}
+	chest := s.Actors[1]
+	chest.ID = "box-1"
+	s.Actors = append(s.Actors, chest)
+	c.EnemyIDs = append(c.EnemyIDs, "box-1")
+	c.Inspection["box-1"] = corebattle.InspectionContent{Treasure: true, RewardKind: 3, DefinitionID: "item-1", Price: 50}
+
+	f := corebattle.CallbackContext{
+		TargetContext: c.TargetContext,
+		Arguments:     []string{"weapon-1"},
+		Inspection: map[string]corebattle.InspectionContent{
+			"self":   {Empty: true},
+			"enemy":  {Empty: true}, // Non-box placeholder such as ProjectCombat produces.
+			"fallen": {Empty: true},
+			"box-1":  {Treasure: true, Empty: true}, // Explicit empty chest still updates.
+		},
+	}
+	ops, err := d.InvocationAction(&s, &f, []string{"job-78-entry-1"}, noArithmeticDraws{t})
+	if err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+	if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Results) != 1 || len(c.Results[0].Facts) != 1 {
+		t.Fatalf("unexpected inspection results: %+v", c.Results)
+	}
+	fact := c.Results[0].Facts[0]
+	if fact.Kind != "reward-search" || !fact.Found || fact.TargetID != "enemy" {
+		t.Fatalf("expected enemy reward search hit, got %+v", fact)
+	}
+	if got := c.Inspection["enemy"]; got.DefinitionID != "weapon-1" || got.Empty {
+		t.Fatalf("ordinary enemy inspection overwritten: %+v", got)
+	}
+	if got := c.Inspection["box-1"]; !got.Treasure || !got.Empty {
+		t.Fatalf("explicit empty chest overlay did not apply: %+v", got)
+	}
+}

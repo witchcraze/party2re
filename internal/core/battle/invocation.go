@@ -14,6 +14,9 @@ import (
 type CallbackContext struct {
 	TargetContext
 	Arguments []string
+	// Inspection supplies encounter-local inspection metadata when rebuilt per
+	// operation without mutating shared port defaults.
+	Inspection map[string]InspectionContent
 	// Damage supplies an enclosing intrinsic operation's counters and hit facts.
 	// Definitions that accept it write back only during execution.
 	Damage *DamageContext

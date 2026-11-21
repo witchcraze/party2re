@@ -231,13 +231,15 @@ func GetDayOfWeekOrb(t time.Time, rng func(n int) int) string {
 
 // TreasureBox represents an individual treasure chest discovered on Floor 11.
 type TreasureBox struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	OpenedBy    string `json:"opened_by,omitempty"`
-	ItemID      string `json:"item_id,omitempty"`
-	ItemName    string `json:"item_name,omitempty"`
-	DeliveredTo string `json:"delivered_to,omitempty"` // "inventory" or "depot"
-	Fixed       bool   `json:"fixed,omitempty"`        // EX fixed-item chest (over_lv); never uses the ordinary allowance
+	ID          string                    `json:"id"`
+	Name        string                    `json:"name"`
+	OpenedBy    string                    `json:"opened_by,omitempty"`
+	Defeated    bool                      `json:"defeated,omitempty"`
+	ItemID      string                    `json:"item_id,omitempty"`
+	ItemName    string                    `json:"item_name,omitempty"`
+	DeliveredTo string                    `json:"delivered_to,omitempty"` // "inventory" or "depot"
+	Fixed       bool                      `json:"fixed,omitempty"`        // EX fixed-item chest (over_lv); never uses the ordinary allowance
+	Combat      *corebattle.LifetimeActor `json:"combat,omitempty"`
 }
 
 // GenerateTreasureBoxes creates the list of treasure chests for Floor 11 (legacy convenience wrapper).

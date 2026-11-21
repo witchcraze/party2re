@@ -52,7 +52,7 @@ func NewRunDefeatRewards(r *NormalRun, requester corecharacter.Character, blessi
 				return err
 			}
 			actor, target := find(s, c.ActorID), find(s, id)
-			if actor.NPC || id == c.ActorID {
+			if actor.NPC || id == c.ActorID || r.hasBox(id) {
 				return nil
 			}
 			strength := battle.Strong(target.MaxHP, target.MaxMP, target.Attack, target.Defense, target.Agility)

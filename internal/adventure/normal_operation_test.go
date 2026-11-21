@@ -1,6 +1,7 @@
 package adventure
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -309,15 +310,153 @@ func TestDiscoverFallenAndSpectatorOperations(t *testing.T) {
 	}
 }
 
-func TestDiscoverOrdinaryTreasureKeepsUnrepresentedCombatGated(t *testing.T) {
+func TestDiscoverOrdinaryTreasureProjectsUnopenedBoxes(t *testing.T) {
 	r, ctx := operationFixture()
 	r.Floor, r.Enemies = TreasureRoomFloor, nil
-	r.Boxes = []TreasureBox{{ID: "first-box"}}
+	r.Boxes = []TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"}}
 	ctx.Requester = &corecharacter.Character{Level: 1, Experience: 10}
 	choices, err := r.DiscoverNormalOperations(RunCommand{ActorID: "a"}, ctx)
-	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "attack" && c.Gated }) ||
+	if err != nil ||
+		!slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "attack" && !c.Gated }) ||
+		!slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "chest" && c.Gated }) ||
 		slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "stock-level" }) {
-		t.Fatalf("treasure discovery: %+v %v", choices, err)
+		t.Fatalf("treasure discovery with unopened box: %+v %v", choices, err)
+	}
+	// When the actor has attack > 0 without a defeat port, admission against the projected box still gates attack.
+	r.actor("a").Attack = 10
+	choices, err = r.DiscoverNormalOperations(RunCommand{ActorID: "a"}, ctx)
+	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "attack" && c.Gated }) {
+		t.Fatalf("unrepresented attack against projected box not gated: %+v %v", choices, err)
+	}
+	// Targeting the unopened box un-gates chest discovery.
+	choices, err = r.DiscoverNormalOperations(RunCommand{ActorID: "a", TargetID: "box-1"}, ctx)
+	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "chest" && !c.Gated }) {
+		t.Fatalf("targeted chest discovery gated: %+v %v", choices, err)
+	}
+	// Once opened (or defeated), combat choices disappear and stock-level returns.
+	r.Boxes[0].OpenedBy = "a"
+	choices, err = r.DiscoverNormalOperations(RunCommand{ActorID: "a"}, ctx)
+	if err != nil ||
+		slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "attack" }) ||
+		!slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "chest" && c.Gated }) ||
+		!slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "stock-level" }) {
+		t.Fatalf("post-open treasure discovery: %+v %v", choices, err)
+	}
+}
+
+func TestParseNormalOperationTreasureChestTargets(t *testing.T) {
+	r, ctx := operationFixture()
+	r.Floor, r.Enemies = TreasureRoomFloor, nil
+	r.Boxes = []TreasureBox{
+		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
+		{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
+		{ID: "box-3", Name: "黒い宝箱C", Defeated: true, ItemID: "item-003"},
+	}
+	for _, tc := range []struct {
+		name    string
+		cmd     RunCommand
+		wantID  string
+		wantErr error
+	}{
+		{"typed unopened ID", RunCommand{ActorID: "a", Action: "chest", TargetID: "box-1"}, "box-1", nil},
+		{"legacy unopened name", RunCommand{ActorID: "a", Input: "＠しらべる>普通の宝箱A"}, "box-1", nil},
+		{"legacy unopened @name", RunCommand{ActorID: "a", Input: "＠しらべる>@普通の宝箱A"}, "box-1", nil},
+		{"typed empty target", RunCommand{ActorID: "a", Action: "chest", TargetID: ""}, "", ErrNoUnopenedTreasure},
+		{"legacy empty target", RunCommand{ActorID: "a", Input: "＠しらべる"}, "", ErrNoUnopenedTreasure},
+		{"typed foreign target", RunCommand{ActorID: "a", Action: "chest", TargetID: "foreign"}, "", ErrNoUnopenedTreasure},
+		{"legacy foreign target", RunCommand{ActorID: "a", Input: "＠しらべる>foreign"}, "", ErrNoUnopenedTreasure},
+		{"typed opened target", RunCommand{ActorID: "a", Action: "chest", TargetID: "box-2"}, "", ErrNoUnopenedTreasure},
+		{"legacy opened target", RunCommand{ActorID: "a", Input: "＠しらべる>青い宝箱B"}, "", ErrNoUnopenedTreasure},
+		{"typed defeated target", RunCommand{ActorID: "a", Action: "chest", TargetID: "box-3"}, "", ErrNoUnopenedTreasure},
+		{"legacy defeated target", RunCommand{ActorID: "a", Input: "＠しらべる>黒い宝箱C"}, "", ErrNoUnopenedTreasure},
+		{"typed display name rejected", RunCommand{ActorID: "a", Action: "chest", TargetID: "普通の宝箱A"}, "", ErrNoUnopenedTreasure},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := r.ParseNormalOperation(tc.cmd, ctx)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("got err=%v want %v (op=%+v)", err, tc.wantErr, got)
+			}
+			if err == nil && (got.Kind != RunOperationRoom || got.First.Action != "chest" || got.First.TargetID != tc.wantID || !slices.Equal(got.First.Arguments, []string{tc.wantID})) {
+				t.Fatalf("unexpected parsed chest op: %+v", got)
+			}
+		})
+	}
+}
+
+func TestNormalOperationTreasureCallbacksAndValuationSearch(t *testing.T) {
+	r, ctx := operationFixture()
+	r.Floor, r.Enemies = TreasureRoomFloor, nil
+	r.Boxes = []TreasureBox{
+		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
+		{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
+	}
+	a := r.actor("a")
+	a.Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 200, OldJobID: "job-81", OldSP: 30}
+	a.Gear = &corebattle.BattleGearStats{}
+	a.HeldToolID = new("item-151")
+	stages, err := InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Stage, err = stages.FindByID("stage-00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools := &corebattle.OrdinaryToolContext{DamageContext: *ctx.Callback.Damage}
+	level := 10
+	s := &NormalRunService{cfg: NormalRunConfig{Stages: stages, Monsters: monsters}}
+	jobEnc, _, err := s.PrepareJobEncounters(context.Background(), r, "a", &corebattle.EquipmentResetContext{TargetContext: corebattle.TargetContext{ActorID: "a"}, RequesterLevel: &level})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.Definitions.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{
+		BaseGuard:       &corebattle.BaseGuardContext{DamageContext: *ctx.Callback.Damage},
+		BasicMagic:      &corebattle.BasicMagicContext{DamageContext: *ctx.Callback.Damage},
+		ProtectiveMagic: &corebattle.ProtectiveMagicContext{DamageContext: *ctx.Callback.Damage},
+		Transformations: &corebattle.TransformationContext{},
+		Revival:         &corebattle.RevivalContext{},
+		Tools:           tools,
+		JobEncounters:   jobEnc,
+	}, 2)
+	ctx.Definitions.RegisterOrdinaryTools(tools)
+
+	choices, err := r.DiscoverNormalOperations(RunCommand{ActorID: "a"}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"job-78-entry-1", "job-81-entry-1", "job-78-entry-6", "tool"} {
+		if !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == action && !c.Gated }) {
+			t.Fatalf("expected ungated %s in treasure choices: %+v", action, choices)
+		}
+	}
+
+	for _, tc := range []struct {
+		name, action, target, input, wantEntry, wantTarget string
+		wantErr                                            error
+	}{
+		{"valuation by box ID", "job-78-entry-1", "box-1", "", "job-78-entry-1", "box-1", nil},
+		{"valuation by legacy box name", "", "", "＠トレハンのかん>普通の宝箱A", "job-78-entry-1", "box-1", nil},
+		{"reward search by item ID", "job-78-entry-1", "item-001", "", "job-78-entry-1", "item-001", nil},
+		{"reward search by legacy item name", "", "", "＠トレハンのかん>薬草", "job-78-entry-1", "item-001", nil},
+		{"valuation rejects opened box", "job-78-entry-1", "box-2", "", "", "", ErrRunConflict},
+		{"valuation rejects unknown ID", "job-78-entry-1", "foreign", "", "", "", ErrRunConflict},
+		{"content inspection by legacy box name", "", "", "＠とうぞくのはな>普通の宝箱A", "job-81-entry-1", "box-1", nil},
+		{"tool151 inspection", "tool", "", "", "tool-151", "", nil},
+		{"job78.6 by legacy box name", "", "", "＠トレハンのいじ>普通の宝箱A", "job-78-entry-6", "box-1", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Action: tc.action, TargetID: tc.target, Input: tc.input}, ctx)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("got err=%v want %v", err, tc.wantErr)
+			}
+			if err == nil && (got.First.EntryID != tc.wantEntry || got.First.TargetID != tc.wantTarget) {
+				t.Fatalf("got %+v want entry=%s target=%s", got.First, tc.wantEntry, tc.wantTarget)
+			}
+		})
 	}
 }
 

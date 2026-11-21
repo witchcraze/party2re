@@ -12,6 +12,7 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 	c.MemberOnlyIDs = slices.Clone(c.MemberOnlyIDs)
 	c.PhantomEnemyIDs = slices.Clone(c.PhantomEnemyIDs)
 	c.Arguments = slices.Clone(c.Arguments)
+	c.Inspection = maps.Clone(c.Inspection)
 	c.Invoke = nil
 	if c.Assets != nil {
 		assets := *c.Assets

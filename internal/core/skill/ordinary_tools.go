@@ -1,6 +1,8 @@
 package skill
 
 import (
+	"maps"
+
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
 )
@@ -19,6 +21,23 @@ func (d *BattleDefinitions) RegisterOrdinaryTools(c *corebattle.OrdinaryToolCont
 	}
 }
 
+func mergeOrdinaryInspection(base, overlay map[string]corebattle.InspectionContent) map[string]corebattle.InspectionContent {
+	if len(overlay) == 0 {
+		return base
+	}
+	merged := maps.Clone(base)
+	if merged == nil {
+		merged = make(map[string]corebattle.InspectionContent, len(overlay))
+	}
+	for id, content := range overlay {
+		if _, exists := merged[id]; exists && content == (corebattle.InspectionContent{Empty: true}) {
+			continue
+		}
+		merged[id] = content
+	}
+	return merged
+}
+
 func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool bool) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
@@ -27,6 +46,7 @@ func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool b
 			}
 			child := *c
 			child.TargetContext, child.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
+			child.Inspection = mergeOrdinaryInspection(c.Inspection, f.Inspection)
 			return s.ValidateOrdinaryTool(&child, id, random.Default())
 		},
 		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
@@ -38,6 +58,7 @@ func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool b
 				return corebattle.ErrUnsupportedEffect
 			}
 			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
+			c.Inspection = mergeOrdinaryInspection(c.Inspection, f.Inspection)
 			var err error
 			if tool {
 				err = s.ApplyOrdinaryTool(c, id, rng)

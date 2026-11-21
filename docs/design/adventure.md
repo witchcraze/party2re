@@ -43,7 +43,7 @@ Evidence: `quest.cgi:579–586`; `vs_monster.cgi:37–82,89–109`; `_battle.cgi
 
 **Decision (#1327, 2026-10-12):** normal-run discovery follows original behavior. The [Battle action matrix](battle.md#normal-adventure-action-and-target-matrix) owns shared targeting and effect rules. The legacy free-text path supplies the optional second command, and the typed Gateway input contract is tracked in [#1330](https://github.com/witchcraze/party2re/issues/1330).
 
-[Ordinary treasure targeting](https://github.com/witchcraze/party2re/issues/2378) tracks the source's use of unopened boxes as opposing members alongside the separate claim operation.
+**Decision ([#2528](https://github.com/witchcraze/party2re/pull/2528), 2026-11-21):** although original `lib/_battle.cgi:28–275` passes defeated chests into `defeat`, intentionally suppress chest defeat rewards, monster capture, and monster-book registration; defeating a box makes it fallen and removes it from the next request's opposing pool without opening it or granting defeat drops (approved departure from the `get_exp`/`get_money` field-overload side effect).
 
 Whisper recipients can be outside the encounter, and an omitted recipient makes a public comment (`system.cgi:251–262,622–630`). Manual screenshots capture the owned scene and public lines while omitting private lines (`system.cgi:165–207`). [#948](https://github.com/witchcraze/party2re/issues/948) tracks the remaining room dispatch and [Replay](replay.md#capture-and-display-projection) owns capture.
 
