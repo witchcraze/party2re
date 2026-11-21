@@ -45,7 +45,7 @@ type bookCostume struct {
 func (c *bookCostume) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, exp time.Time) (func(context.Context) error, error) {
 	c.calls.Add(1)
 	if c.fail {
-		return nil, errors.New("injected appearance store failure")
+		return nil, errInjectedAppearance
 	}
 	c.mu.Lock()
 	onApply := c.onApply
@@ -89,7 +89,10 @@ type bookFailures struct {
 	profileSave, characterSave, depotConsume, appearance bool
 }
 
-var errInjectedBook = errors.New("injected failure")
+var (
+	errInjectedBook       = errors.New("injected failure")
+	errInjectedAppearance = errors.New("injected appearance store failure")
+)
 
 type failingEconomyCharacters struct {
 	*database.CharacterRepository
@@ -492,16 +495,25 @@ func TestItemAppearance_WrittenUnderCharacterLockAndStoreFailureRollsBack(t *tes
 	}
 	f.costume.onApply = nil
 
-	f.costume.fail = true
-	for _, source := range []string{"inventory", "depot"} {
-		c := f.character(t, "f")
-		id := f.stock(t, c, source)
-		if _, err := f.svc.UseHomeItem(ctx, c.ID, id, source); err == nil {
-			t.Fatalf("%s: appearance failure reported as success", source)
-		}
-		st, _ := f.presence.State(ctx, c.ID)
-		if st.LoginMessage != "" || !f.held(t, c, source, id) || f.newsCount(t, c) != 0 {
-			t.Fatalf("%s: use not rolled back", source)
+	// The store's cause propagates (a 5xx at the Gateway), never ErrCannotUseHere,
+	// for the book and an ordinary costume; a healthy retry then consumes it.
+	for _, def := range []string{bookDefinition, "item-044"} {
+		for _, source := range []string{"inventory", "depot"} {
+			f.costume.fail = true
+			c := f.character(t, "f")
+			id := f.stockItem(t, c, source, def)
+			_, err := f.svc.UseHomeItem(ctx, c.ID, id, source)
+			if !errors.Is(err, errInjectedAppearance) || errors.Is(err, home.ErrCannotUseHere) {
+				t.Fatalf("%s %s: want the store cause, got %v", def, source, err)
+			}
+			st, _ := f.presence.State(ctx, c.ID)
+			if st.LoginMessage != "" || !f.held(t, c, source, id) || f.newsCount(t, c) != 0 || f.costume.active(t, c.ID) != nil {
+				t.Fatalf("%s %s: use not rolled back", def, source)
+			}
+			f.costume.fail = false
+			if res, err := f.svc.UseHomeItem(ctx, c.ID, id, source); err != nil || !res.Consumed || f.held(t, c, source, id) {
+				t.Fatalf("%s %s: healthy retry %+v %v", def, source, res, err)
+			}
 		}
 	}
 }

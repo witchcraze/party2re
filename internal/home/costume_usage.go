@@ -142,7 +142,7 @@ func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacte
 	}
 
 	if err := s.wearAppearance(ctx, char.ID, itemNo, itemName, icon); err != nil {
-		return "", false, err
+		return "", true, err
 	}
 	return msg, true, nil
 }

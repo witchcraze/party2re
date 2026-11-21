@@ -27,6 +27,7 @@ const (
 	// returned hash, so use consumes one without any stat change.
 	lifeBraceletName = "命のブレスレット"
 	sorceryRingName  = "ソーサリーリング"
+	sacredManaName   = "聖なるマナ"
 )
 
 // orbItems are the legacy items 60..65 (_data.cgi); using one offers it to
@@ -161,7 +162,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	_, isOrb := orbItems[def.Name]
 	if _, isBag := rewardBags[def.Name]; !isBag && !isOrb && !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
 		switch def.Name {
-		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ", veteranRewardName, personalityBookName, heavenReinsName, underworldReinsName, lifeBraceletName, sorceryRingName:
+		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ", veteranRewardName, personalityBookName, heavenReinsName, underworldReinsName, lifeBraceletName, sorceryRingName, sacredManaName:
 		default:
 			return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 		}
@@ -409,6 +410,11 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 			return "", err
 		}
 		msg = fmt.Sprintf("%sのSPが %d あがった！", char.Name, v)
+	case sacredManaName:
+		if err := char.AddSP(200); err != nil {
+			return "", err
+		}
+		msg = fmt.Sprintf("%sのSPが 200 あがった！", char.Name)
 	case "幸せの種":
 		if err := progression.ApplyHappySeed(char); err != nil {
 			return "", err
