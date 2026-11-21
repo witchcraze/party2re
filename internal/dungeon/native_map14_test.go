@@ -195,7 +195,7 @@ func pointsRoute(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	if view, err := f.svc.ObserveExpedition(context.Background(), id); err != nil || view.FloorName != "沈没の海峡" {
 		t.Fatalf("main floor name %+v err=%v", view, err)
 	}
-	enter("ESSSEE", []int{1}, 3, 8, 8, "沈没の海峡最深部") // A → _K
+	enter("ESSSEE", []int{1}, 3, 8, 8, "深海峡谷最深部") // A → _K
 	enter("EENNWWWWWWWNN", []int{0}, 1, 3, 4, "沈没の海峡")
 	firstShip := enter("NWNWN", []int{1, 0, 9, 0, 7, 0}, 4, 1, 1, "宝船") // B → _T, then disable sites
 	var route struct {
@@ -211,7 +211,7 @@ func pointsRoute(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	enter("SSSS", []int{0}, 1, 1, 5, "沈没の海峡")
 	enter("SSS", []int{0}, 2, 1, 8, "海賊船") // C → _P
 	enter("NNEEEESSS", []int{0}, 1, 5, 9, "沈没の海峡")
-	enter("NEEE", nil, 3, 8, 8, "沈没の海峡最深部") // A again
+	enter("NEEE", nil, 3, 8, 8, "深海峡谷最深部") // A again
 }
 
 func (f *nativeFixture) rejectStaleMap14Step(t *testing.T, id string, before, after dungeon.ActiveExpedition) {
