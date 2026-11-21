@@ -79,7 +79,7 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 		Tail:  corebattle.PlayerTailContext{DamageContext: damage, DefeatContext: defeat},
 		Field: corebattle.NamedFieldContext{DamageContext: damage, Death: defeat},
 		// Treasure rooms disable NPC-dependent field exercises even after all boxes open.
-		ResponseEnabled: r.Floor != TreasureRoomFloor && r.Floor != EXBossFloor+1,
+		ResponseEnabled: !isTreasureFloor(r.Floor),
 		LevelUp: func(b *corebattle.LifetimeState, rng random.Generator) (bool, error) {
 			if b.SpecialBossField || requester.Level != level {
 				return false, nil

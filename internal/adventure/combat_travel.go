@@ -188,7 +188,7 @@ func (s *NormalRunService) ApplyCombatTravel(ctx context.Context, r *NormalRun, 
 	if err := ctx.Err(); err != nil {
 		return CombatTravelTransition{}, err
 	}
-	t := CombatTravelTransition{Consume: true, ResponseSuppressed: r.Floor == TreasureRoomFloor}
+	t := CombatTravelTransition{Consume: true, ResponseSuppressed: isTreasureFloor(r.Floor)}
 	if stage := travelStage(tool, input); stage != "" {
 		destination, err := s.cfg.Stages.FindByID(stage)
 		if err != nil {
@@ -257,7 +257,7 @@ func (r *NormalRun) discardEncounter() {
 }
 
 func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *NormalRun, actor string, floor int, blessing string) (CombatTravelTransition, error) {
-	t := CombatTravelTransition{ResponseSuppressed: r.Floor == TreasureRoomFloor, Reload: true}
+	t := CombatTravelTransition{ResponseSuppressed: isTreasureFloor(r.Floor), Reload: true}
 	t.replaced, t.oldFloor, t.oldStage = true, r.EncounterFloor, r.EncounterStageID
 	t.oldTimes = make(map[string]time.Time, len(r.Enemies))
 	for _, id := range r.Enemies {
@@ -267,9 +267,12 @@ func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *Normal
 	r.discardEncounter()
 	r.Floor = floor
 	var err error
-	if floor == TreasureRoomFloor {
+	switch floor {
+	case TreasureRoomFloor:
 		err = s.createTreasureEncounter(r, actor, blessing)
-	} else {
+	case EXTreasureFloor:
+		err = s.createEXTreasure(r, actor, blessing)
+	default:
 		err = s.createEncounter(ctx, r, actor)
 	}
 	if err != nil {

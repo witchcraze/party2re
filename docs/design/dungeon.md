@@ -145,8 +145,7 @@ Not yet implemented ([#2119](https://github.com/witchcraze/party2re/issues/2119)
   symbol in between. Native treasure events therefore carry an allowance key that
   is equal exactly where the legacy symbols are equal; map0's single event gives
   one chest per actor per run. **Finding:** the Dungeon check precedes the
-  fixed-chest check, so fixed chests (map13 EX, map16) share this allowance; Dungeon
-  has no separate fixed allowance, unlike normal adventure.
+  fixed-chest check, so fixed chests (map13 EX, map16) share this allowance.
 - **Delivery.** Immediate, under the [Depot treasure rule](depot.md#delivery-capacity-by-caller).
   A tool entering the empty hand also registers the actor's equipped items in the
   Collection (`add_collection`). An empty chest (pool entry `0`) still spends the

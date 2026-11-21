@@ -326,3 +326,20 @@ func TestNormalOperationSourceKeysCoverRegisteredTablePositions(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalOperationsEXTreasureFloors(t *testing.T) {
+	r, ctx := operationFixture()
+	r.Stage, r.EXUnlocked, r.Enemies = Stage{ID: "stage-24", EXTreasureItems: []string{"item-104"}}, true, nil
+	r.Floor = EXBossFloor
+	if got, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Action: "advance"}, ctx); err != nil || got.First.Action != "advance" {
+		t.Fatalf("12→13 advance: %+v %v", got, err)
+	}
+	r.Floor, r.Boxes = EXTreasureFloor, []TreasureBox{{ID: "box-1", Fixed: true}}
+	if got, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Action: "chest", TargetID: "box-1"}, ctx); err != nil || got.First.TargetID != "box-1" {
+		t.Fatalf("floor-13 chest: %+v %v", got, err)
+	}
+	choices, err := r.DiscoverNormalOperations(RunCommand{ActorID: "a"}, ctx)
+	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "chest" }) || slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "advance" }) {
+		t.Fatalf("floor-13 discovery: %+v %v", choices, err)
+	}
+}

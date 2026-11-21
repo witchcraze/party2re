@@ -129,11 +129,11 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 				return ParsedRunAction{}, ErrRunForbidden
 			}
 		case "advance":
-			if o.run.Floor == EXBossFloor || o.run.Floor == TreasureRoomFloor && (o.run.Stage.Ordinary == nil || len(o.run.Stage.Ordinary.EXRoster) == 0) {
+			if o.run.Floor == EXBossFloor && len(o.run.Stage.exTreasureItems()) == 0 || o.run.Floor == TreasureRoomFloor && (o.run.Stage.Ordinary == nil || len(o.run.Stage.Ordinary.EXRoster) == 0) {
 				return ParsedRunAction{}, ErrRunUnavailable
 			}
 		case "chest":
-			if o.run.Floor != TreasureRoomFloor || !slices.ContainsFunc(o.run.Boxes, func(box TreasureBox) bool {
+			if !isTreasureFloor(o.run.Floor) || !slices.ContainsFunc(o.run.Boxes, func(box TreasureBox) bool {
 				return box.OpenedBy == "" && (target == "" || box.ID == target)
 			}) {
 				return ParsedRunAction{}, ErrNoUnopenedTreasure

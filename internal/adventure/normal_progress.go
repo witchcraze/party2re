@@ -22,8 +22,8 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	case r.Floor < TreasureRoomFloor:
 	case !r.HasEX() || r.Floor > EXBossFloor: // ordinary end at 11, terminal 13
 		return ErrInvalidFloorAction
-	case r.Floor == EXBossFloor || r.Stage.Ordinary == nil || len(r.Stage.Ordinary.EXRoster) == 0:
-		// 12→13 EX treasure belongs to #1808; reject before reset or draws.
+	case r.Floor == EXBossFloor && len(r.Stage.exTreasureItems()) == 0,
+		r.Floor == TreasureRoomFloor && (r.Stage.Ordinary == nil || len(r.Stage.Ordinary.EXRoster) == 0):
 		return corebattle.ErrUnsupportedEffect
 	}
 	if s.cfg.Combat == nil {
@@ -50,8 +50,11 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	r.EncounterPool, r.AppearancePositions = nil, nil
 	r.markEXOnAdvance(actorID)
 	r.Floor++
-	if r.Floor == TreasureRoomFloor {
+	switch r.Floor {
+	case TreasureRoomFloor:
 		return s.createTreasureEncounter(r, actorID, blessing)
+	case EXTreasureFloor:
+		return s.createEXTreasure(r, actorID, blessing)
 	}
 	return s.createEncounter(ctx, r, actorID)
 }
@@ -122,7 +125,7 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 }
 
 func (s *NormalRunService) claimChest(ctx context.Context, r *NormalRun, actorID, boxID string) (*TreasureBox, map[string][]corebattle.ConsumedItem, error) {
-	if r.Floor != TreasureRoomFloor {
+	if !isTreasureFloor(r.Floor) {
 		return nil, nil, ErrInvalidFloorAction
 	}
 	a := r.actor(actorID)
@@ -133,8 +136,12 @@ func (s *NormalRunService) claimChest(ctx context.Context, r *NormalRun, actorID
 	if i < 0 || r.Boxes[i].OpenedBy != "" {
 		return nil, nil, ErrNoUnopenedTreasure
 	}
-	p := r.Recipients[actorID]
 	consumed := map[string][]corebattle.ConsumedItem{}
+	if r.Boxes[i].Fixed {
+		r.Boxes[i].OpenedBy = actorID
+		return &r.Boxes[i], consumed, nil
+	}
+	p := r.Recipients[actorID]
 	if p.Inspected > 0 {
 		if s.cfg.Inventories == nil {
 			return nil, nil, ErrRunUnavailable
@@ -163,14 +170,7 @@ func (s *NormalRunService) claimChest(ctx context.Context, r *NormalRun, actorID
 
 // createTreasureEncounter is shared by advance and job-driven room recreation.
 func (s *NormalRunService) createTreasureEncounter(r *NormalRun, actorID, blessing string) error {
-	alive := 0
-	for _, id := range r.Roster {
-		if p := r.actor(id); p != nil && p.HP > 0 {
-			alive++
-		}
-	}
-	a := r.actor(actorID)
-	count := CalculateTreasureCount(TreasureCalculationInput{StageID: r.Stage.ID, AliveMembers: alive, DeadMembers: len(r.Roster) - alive, TotalMembers: len(r.Roster), HasMerchant: IsMerchantJob(a.Jobs.JobID), HasGambler: IsGamblerJob(a.Jobs.JobID), HasTreasureHunter: IsTreasureHunterJob(a.Jobs.JobID), HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: IsTreasureBlessing(blessing), Rng: s.cfg.RNG.Intn})
+	count, _ := r.treasureCount(actorID, blessing, s.cfg.RNG.Intn)
 	r.Boxes = GenerateTreasureBoxesWithPools(count, StageTreasurePools{Weapons: r.Stage.TreasureWeapons, Armors: r.Stage.TreasureArmors, Items: r.Stage.TreasureItems}, s.cfg.Clock.Now(), s.cfg.RNG.Intn)
 	if r.Mode == CrawlModeTry {
 		for _, id := range r.Roster {

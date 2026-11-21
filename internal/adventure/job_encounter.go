@@ -31,7 +31,7 @@ func (s *NormalRunService) PrepareJobEncounters(ctx context.Context, r *NormalRu
 	if reset != nil {
 		c.Cursor = reset.Cursor
 	}
-	transition := &CombatTravelTransition{ResponseSuppressed: r.Floor == TreasureRoomFloor}
+	transition := &CombatTravelTransition{ResponseSuppressed: isTreasureFloor(r.Floor)}
 	_, modeErr := ValidateCrawlMode(r.Mode)
 	room := &corebattle.JobRoomContext{ActorID: actor, NormalStage: modeErr == nil, Floor: r.Floor}
 	room.Cursor = c.Cursor
@@ -43,6 +43,9 @@ func (s *NormalRunService) PrepareJobEncounters(ctx context.Context, r *NormalRu
 	room.Validate = func(id string) error {
 		if id == "job-78-entry-2" {
 			return s.ValidateCombatTravel(r, actor, "item-150", CombatTravelInput{Floor: r.Floor + 1}, reset)
+		}
+		if r.Floor == EXTreasureFloor && len(r.Stage.exTreasureItems()) > 0 {
+			return nil
 		}
 		if r.Stage.Ordinary == nil || r.Floor < 0 || r.Floor > TreasureRoomFloor {
 			return corebattle.ErrUnsupportedEffect
@@ -63,7 +66,7 @@ func (s *NormalRunService) PrepareJobEncounters(ctx context.Context, r *NormalRu
 			return frame, err
 		}
 		blessing := ""
-		if r.Floor == TreasureRoomFloor && s.cfg.Blessings != nil {
+		if isTreasureFloor(r.Floor) && s.cfg.Blessings != nil {
 			var err error
 			blessing, err = s.cfg.Blessings.GetActiveBlessing(ctx, actor)
 			if err != nil {
