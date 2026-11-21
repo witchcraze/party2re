@@ -486,60 +486,11 @@ func TestCalculateTreasureCount_DeadMembersPenalty(t *testing.T) {
 	}
 }
 
-func TestCalculateTreasureCount_CanonicalJobAndItemAliases(t *testing.T) {
-	// Verify Merchant job aliases
-	merchantAliases := []string{"job-07", "job-7", "7", "merchant", "商人"}
-	for _, alias := range merchantAliases {
-		if !adventure.IsMerchantJob(alias) {
-			t.Errorf("IsMerchantJob(%q) = false, want true", alias)
-		}
-	}
-	nonMerchant := []string{"job-01", "hero", "warrior", "78", "81", ""}
-	for _, alias := range nonMerchant {
-		if adventure.IsMerchantJob(alias) {
-			t.Errorf("IsMerchantJob(%q) = true, want false", alias)
-		}
-	}
-
-	// Verify Treasure Hunter job aliases
-	thAliases := []string{"job-78", "78", "treasure_hunter", "treasurehunter", "トレジャーハンター", "トレハン"}
-	for _, alias := range thAliases {
-		if !adventure.IsTreasureHunterJob(alias) {
-			t.Errorf("IsTreasureHunterJob(%q) = false, want true", alias)
-		}
-	}
-	nonTH := []string{"job-07", "7", "81", "thief", ""}
-	for _, alias := range nonTH {
-		if adventure.IsTreasureHunterJob(alias) {
-			t.Errorf("IsTreasureHunterJob(%q) = true, want false", alias)
-		}
-	}
-
-	// Verify Gambler / Pirate job aliases
-	gamblerAliases := []string{"job-81", "81", "gambler", "pirate", "海賊", "勝負師"}
-	for _, alias := range gamblerAliases {
-		if !adventure.IsGamblerJob(alias) {
-			t.Errorf("IsGamblerJob(%q) = false, want true", alias)
-		}
-	}
-	nonGambler := []string{"job-07", "job-78", "7", "78", ""}
-	for _, alias := range nonGambler {
-		if adventure.IsGamblerJob(alias) {
-			t.Errorf("IsGamblerJob(%q) = true, want false", alias)
-		}
-	}
-
-	// Verify Lucky Pendant item aliases
-	pendantAliases := []string{"item-191", "191", "lucky_pendant", "lucky-pendant", "海賊ハット", "ラッキーペンダント"}
-	for _, alias := range pendantAliases {
-		if !adventure.IsLuckyPendantID(alias) {
-			t.Errorf("IsLuckyPendantID(%q) = false, want true", alias)
-		}
-	}
-	nonPendant := []string{"item-001", "item-215", "158", ""}
-	for _, alias := range nonPendant {
-		if adventure.IsLuckyPendantID(alias) {
-			t.Errorf("IsLuckyPendantID(%q) = true, want false", alias)
+func TestIsTreasureBlessingAcceptsOnlyStoredChapelValue(t *testing.T) {
+	// The chapel adapter supplies chapel.BlessingDrop ("DROP"); display names and numbers never reach adventure.
+	for _, b := range []string{"DROP", "drop", "4", "宝箱がほしい", ""} {
+		if got := adventure.IsTreasureBlessing(b); got != (b == "DROP") {
+			t.Errorf("IsTreasureBlessing(%q) = %v", b, got)
 		}
 	}
 }

@@ -225,7 +225,7 @@ func TestApplyPostBattleResult_ExpBlessing_UnluckyRoll(t *testing.T) {
 
 func TestApplyPostBattleResult_DropBlessing_DoesNotDuplicateDrops(t *testing.T) {
 	ctx := context.Background()
-	for _, blessing := range []string{"DROP", "4", "treasure_wish", "宝箱がほしい"} {
+	for _, blessing := range []string{"DROP"} {
 		t.Run(blessing, func(t *testing.T) {
 			// Even with lucky RNG roll (0 % 5 == 0), post-battle settlement must NOT duplicate acquired items;
 			// Chapel Blessing 4 ("宝箱がほしい") applies only at the chest-generation boundary.

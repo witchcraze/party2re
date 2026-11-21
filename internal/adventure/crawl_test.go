@@ -33,7 +33,7 @@ func createTestCharacters() []corecharacter.Character {
 		{
 			ID:       "char-merchant",
 			Name:     "商人",
-			JobID:    "merchant",
+			JobID:    "job-07",
 			Level:    10,
 			JobLevel: 5,
 			Stats: corecharacter.Stats{
@@ -49,7 +49,7 @@ func createTestCharacters() []corecharacter.Character {
 		{
 			ID:       "char-thief",
 			Name:     "盗賊",
-			JobID:    "treasure_hunter",
+			JobID:    "job-78",
 			Level:    10,
 			JobLevel: 5,
 			Stats: corecharacter.Stats{
@@ -318,7 +318,7 @@ func TestCrawlSession_GamblerAndStageMultipliers(t *testing.T) {
 		{
 			ID:       "gambler-1",
 			Name:     "勝負師",
-			JobID:    "81",
+			JobID:    "job-81",
 			Level:    50,
 			JobLevel: 10,
 			Stats: corecharacter.Stats{
@@ -1039,7 +1039,7 @@ func TestCrawlSession_ExamineTreasure_AllowanceAndMasterKey(t *testing.T) {
 		{ID: "char-dead", Name: "Dead Hero", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
 	}
 	p1 := corebattle.MustNewParticipant("char-1", 100, 10, 10)
-	p1.ItemDefinitionIDs = []string{adventure.ItemMasterKey} // char-1 has 1 master key
+	p1.ItemDefinitionIDs = []string{adventure.ItemTreasurePocket} // char-1 has 1 master key
 	p2 := corebattle.MustNewParticipant("char-2", 100, 10, 10)
 	// char-2 has no keys
 	pDead := corebattle.MustNewParticipant("char-dead", 100, 10, 10)
@@ -1107,7 +1107,7 @@ func TestCrawlSession_ExamineTreasure_AllowanceAndMasterKey(t *testing.T) {
 		t.Errorf("box3 opened by %s, want char-1", box3.OpenedBy)
 	}
 	consumed := sess.ConsumedItems["char-1"]
-	if len(consumed) != 1 || consumed[0].ID != adventure.ItemMasterKey || consumed[0].Quantity != 1 {
+	if len(consumed) != 1 || consumed[0].ID != adventure.ItemTreasurePocket || consumed[0].Quantity != 1 {
 		t.Fatalf("char-1 consumed items = %v, want 1 master key", consumed)
 	}
 
