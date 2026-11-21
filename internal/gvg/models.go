@@ -11,6 +11,7 @@ const (
 	DefaultColor       = "#FFFFFF"
 	InitialPrizeGP     = 2
 	JoinPrizeGP        = 1
+	LeavePrizeGP       = 2
 	RoundWinGP         = 3
 	MatchParticipantGP = 4
 	MinMembers         = 2
@@ -127,20 +128,21 @@ type GvGRoom struct {
 
 // GvGMember represents a participant in a guild battle room.
 type GvGMember struct {
-	RoomID        string    `json:"room_id"`
-	CharacterID   string    `json:"character_id"`
-	CharacterName string    `json:"character_name"`
-	JobID         string    `json:"job_id"`
-	Level         int       `json:"level"`
-	HP            int       `json:"hp"`
-	MaxHP         int       `json:"max_hp"`
-	MP            *int      `json:"mp,omitempty"`
-	MaxMP         *int      `json:"max_mp,omitempty"`
-	GuildID       string    `json:"guild_id"`
-	GuildName     string    `json:"guild_name"`
-	GuildColor    string    `json:"guild_color"`
-	IsLeader      bool      `json:"is_leader"`
-	JoinedAt      time.Time `json:"joined_at"`
+	RoomID        string                    `json:"room_id"`
+	CharacterID   string                    `json:"character_id"`
+	CharacterName string                    `json:"character_name"`
+	JobID         string                    `json:"job_id"`
+	Level         int                       `json:"level"`
+	HP            int                       `json:"hp"`
+	MaxHP         int                       `json:"max_hp"`
+	MP            *int                      `json:"mp,omitempty"`
+	MaxMP         *int                      `json:"max_mp,omitempty"`
+	ConsumedItems []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	GuildID       string                    `json:"guild_id"`
+	GuildName     string                    `json:"guild_name"`
+	GuildColor    string                    `json:"guild_color"`
+	IsLeader      bool                      `json:"is_leader"`
+	JoinedAt      time.Time                 `json:"joined_at"`
 }
 
 // RoomDetail contains composite room data and members.

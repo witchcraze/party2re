@@ -83,7 +83,7 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 				}
 				return err
 			}
-			if gp := transition.GuildRewardGP(guildID); gp > 0 {
+			if gp := transition.GuildRewardGP(guildID); gp != 0 {
 				if err := guilds.AddPoints(txCtx, guildID, gp); err != nil {
 					return err
 				}
@@ -100,7 +100,7 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 			if err := executor.QueryRowContext(txCtx, "SELECT guild_id FROM gvg_standings WHERE guild_id = ? FOR UPDATE", guildID).Scan(&lockedID); err != nil {
 				return err
 			}
-			if gp := transition.GuildRewardGP(guildID); gp > 0 {
+			if gp := transition.GuildRewardGP(guildID); gp != 0 {
 				if _, err := executor.ExecContext(txCtx, `
 					UPDATE gvg_standings SET victory_points = victory_points + ?, updated_at = NOW() WHERE guild_id = ?
 				`, gp, guildID); err != nil {

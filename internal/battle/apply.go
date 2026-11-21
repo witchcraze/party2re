@@ -29,6 +29,7 @@ type ApplyPostBattleRequest struct {
 	ExplicitDefeats       []ExplicitDefeat // Already evaluated for RecipientCharacterID at each reached defeat.
 	Habitat               string           // Habitat/stage name for monster book recording
 	ExitFatigue           int              // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
+	ExitBonusRounds       int              // Equipped item-105/item-106 exit bonus rounds (lib/_battle.cgi:1219-1220)
 	UnsealDemonKing       bool             // Explicit stage19 treasure-creation event, independent of battle victory.
 }
 
@@ -93,8 +94,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		// 2. Apply HP, MP, fatigue
 		s.applyResourceUpdates(&tc.Character, charID, req.BattleResult, req.ExitFatigue)
 
-		// 3. Process item consumption
+		// 3. Process item consumption (read held accessory before consumption for exit bonus parity)
 		heldInstID := activeHeldInstanceID(tc.Inventory, equip)
+		heldDefID := activeHeldDefinitionID(tc.Inventory, heldInstID)
 		slots := equip.Slots
 		if err := consumeBufferedItems(&tc.Inventory, &equip, req.BattleResult.ConsumedItems[charID]); err != nil {
 			return err
@@ -115,12 +117,16 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			if req.BattleResult.Outcome == corebattle.OutcomeWin {
 				charDrops = req.dropsForCharacter(charID)
 			}
+			reward, err := s.resolveCharacterReward(req, charID, heldDefID)
+			if err != nil {
+				return err
+			}
 			gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, err := s.applyRewardsForCharacter(
 				tc.Context,
 				&tc.Character,
 				&tc.Inventory,
-				activeHeldDefinitionID(tc.Inventory, heldInstID),
-				req.rewardForCharacter(charID),
+				heldDefID,
+				reward,
 				charDrops,
 				req.RecipientRewards != nil,
 			)
@@ -226,6 +232,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			s.applyResourceUpdates(&char, id, req.BattleResult, req.ExitFatigue)
 
 			heldInstID := activeHeldInstanceID(inv, equip)
+			heldDefID := activeHeldDefinitionID(inv, heldInstID)
 			slots := equip.Slots
 			if err := consumeBufferedItems(&inv, &equip, req.BattleResult.ConsumedItems[id]); err != nil {
 				return err
@@ -243,12 +250,16 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 				if req.BattleResult.Outcome == corebattle.OutcomeWin {
 					charDrops = req.dropsForCharacter(id)
 				}
+				reward, err := s.resolveCharacterReward(req, id, heldDefID)
+				if err != nil {
+					return err
+				}
 				gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, err := s.applyRewardsForCharacter(
 					txCtx,
 					&char,
 					&inv,
-					activeHeldDefinitionID(inv, heldInstID),
-					req.rewardForCharacter(id),
+					heldDefID,
+					reward,
 					charDrops,
 					req.RecipientRewards != nil,
 				)
@@ -397,6 +408,53 @@ func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID str
 	}
 	if exitFatigue > 0 {
 		char.AddTired(exitFatigue)
+	}
+}
+
+func (s *Service) resolveCharacterReward(req ApplyPostBattleRequest, charID, heldDefID string) (corebattle.Reward, error) {
+	reward := req.rewardForCharacter(charID)
+	if req.ExitBonusRounds <= 0 {
+		return reward, nil
+	}
+	bonusExp, bonusGold, err := s.exitAccessoryBonus(req.ExitBonusRounds, heldDefID)
+	if err != nil {
+		return corebattle.Reward{}, err
+	}
+	exp := reward.Experience
+	if bonusExp > 0 {
+		exp, err = economy.SafeAdd(exp, bonusExp)
+		if err != nil {
+			return corebattle.Reward{}, err
+		}
+	}
+	gold := reward.Currency
+	if bonusGold > 0 {
+		gold, err = economy.SafeAdd(gold, bonusGold)
+		if err != nil {
+			return corebattle.Reward{}, err
+		}
+	}
+	return corebattle.Reward{
+		Experience:       exp,
+		Currency:         gold,
+		Crystals:         reward.Crystals,
+		ItemDefinitionID: reward.ItemDefinitionID,
+		ItemQuantity:     reward.ItemQuantity,
+	}, nil
+}
+
+func (s *Service) exitAccessoryBonus(rounds int, heldDefID string) (exp, gold int, err error) {
+	switch heldDefID {
+	case "item-105":
+		exp, err = economy.SafeMultiply(rounds, 20)
+		return exp, 0, err
+	case "item-106":
+		if _, err = economy.SafeMultiply(rounds, 77); err != nil {
+			return 0, 0, err
+		}
+		return 0, int(float64(rounds) * s.rollFloat64() * 77), nil
+	default:
+		return 0, 0, nil
 	}
 }
 

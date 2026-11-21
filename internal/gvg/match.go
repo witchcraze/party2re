@@ -3,6 +3,7 @@ package gvg
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -129,7 +130,13 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		var allies, enemies []corebattle.Participant
 		for _, m := range detail.Members {
 			var p corebattle.Participant
-			if s.participantBuilder != nil {
+			if sb, ok := s.participantBuilder.(StatefulParticipantBuilder); ok {
+				var err error
+				p, err = sb.BuildParticipantWithState(lockedCtx, m.CharacterID, m.HP, m.MP, m.ConsumedItems)
+				if err != nil {
+					return err
+				}
+			} else if s.participantBuilder != nil {
 				var err error
 				p, err = s.participantBuilder.BuildParticipantWithCurrentHP(lockedCtx, m.CharacterID, m.HP)
 				if err != nil {
@@ -166,71 +173,85 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			}
 		}
 
-		req := corebattle.PartyBattleRequest{
-			Allies:  allies,
-			Enemies: enemies,
-		}
-
-		res, err := s.battleEngine.ResolvePartyBattle(req)
-		if err != nil {
-			return fmt.Errorf("resolve gvg battle round: %w", err)
-		}
-
-		for i := range detail.Members {
-			if remMP, ok := res.RemainingMP[detail.Members[i].CharacterID]; ok {
-				mp := max(0, remMP)
-				if maxMP := detail.Members[i].MaxMP; maxMP != nil && *maxMP > 0 {
-					mp = min(mp, *maxMP)
-				}
-				detail.Members[i].MP = &mp
-			}
-		}
-
+		var res corebattle.PartyBattleResult
 		var roundWinnerGuildID string
 		var roundWinnerGuildName string
 		var roundWinnerGuildColor string
 		var roundOutcome string
 
-		if len(res.RemainingHP) > 0 {
-			type guildInfo struct {
-				id    string
-				name  string
-				color string
+		if len(enemies) == 0 {
+			// Legacy vs_guild.cgi:72-132 awards the round win when only one guild remains.
+			roundWinnerGuildID = leaderGuildID
+			roundWinnerGuildName = leaderGuildName
+			roundWinnerGuildColor = leaderGuildColor
+			roundOutcome = "round_win"
+		} else {
+			req := corebattle.PartyBattleRequest{
+				Allies:  allies,
+				Enemies: enemies,
 			}
-			aliveGuilds := make(map[string]guildInfo)
-			for _, m := range detail.Members {
-				if hp, ok := res.RemainingHP[m.CharacterID]; ok && hp > 0 {
-					aliveGuilds[m.GuildID] = guildInfo{
-						id:    m.GuildID,
-						name:  m.GuildName,
-						color: m.GuildColor,
+
+			var err error
+			res, err = s.battleEngine.ResolvePartyBattle(req)
+			if err != nil {
+				return fmt.Errorf("resolve gvg battle round: %w", err)
+			}
+
+			for i := range detail.Members {
+				cID := detail.Members[i].CharacterID
+				if remMP, ok := res.RemainingMP[cID]; ok {
+					mp := max(0, remMP)
+					if maxMP := detail.Members[i].MaxMP; maxMP != nil && *maxMP > 0 {
+						mp = min(mp, *maxMP)
 					}
+					detail.Members[i].MP = &mp
+				}
+				if consumed := res.ConsumedItems[cID]; len(consumed) > 0 {
+					detail.Members[i].ConsumedItems = append(slices.Clone(detail.Members[i].ConsumedItems), consumed...)
 				}
 			}
 
-			if len(aliveGuilds) == 1 {
-				for _, g := range aliveGuilds {
-					roundWinnerGuildID = g.id
-					roundWinnerGuildName = g.name
-					roundWinnerGuildColor = g.color
+			if len(res.RemainingHP) > 0 {
+				type guildInfo struct {
+					id    string
+					name  string
+					color string
 				}
-				roundOutcome = "round_win"
+				aliveGuilds := make(map[string]guildInfo)
+				for _, m := range detail.Members {
+					if hp, ok := res.RemainingHP[m.CharacterID]; ok && hp > 0 {
+						aliveGuilds[m.GuildID] = guildInfo{
+							id:    m.GuildID,
+							name:  m.GuildName,
+							color: m.GuildColor,
+						}
+					}
+				}
+
+				if len(aliveGuilds) == 1 {
+					for _, g := range aliveGuilds {
+						roundWinnerGuildID = g.id
+						roundWinnerGuildName = g.name
+						roundWinnerGuildColor = g.color
+					}
+					roundOutcome = "round_win"
+				} else {
+					roundOutcome = "draw"
+				}
 			} else {
-				roundOutcome = "draw"
-			}
-		} else {
-			if res.Outcome == corebattle.OutcomeWin {
-				roundWinnerGuildID = leaderGuildID
-				roundWinnerGuildName = leaderGuildName
-				roundWinnerGuildColor = leaderGuildColor
-				roundOutcome = "round_win"
-			} else if res.Outcome == corebattle.OutcomeDefeat {
-				roundWinnerGuildID = otherGuildID
-				roundWinnerGuildName = otherGuildName
-				roundWinnerGuildColor = otherGuildColor
-				roundOutcome = "round_win"
-			} else {
-				roundOutcome = "draw"
+				if res.Outcome == corebattle.OutcomeWin {
+					roundWinnerGuildID = leaderGuildID
+					roundWinnerGuildName = leaderGuildName
+					roundWinnerGuildColor = leaderGuildColor
+					roundOutcome = "round_win"
+				} else if res.Outcome == corebattle.OutcomeDefeat {
+					roundWinnerGuildID = otherGuildID
+					roundWinnerGuildName = otherGuildName
+					roundWinnerGuildColor = otherGuildColor
+					roundOutcome = "round_win"
+				} else {
+					roundOutcome = "draw"
+				}
 			}
 		}
 
@@ -286,6 +307,11 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 
 			detail.Room.Status = StatusCompleted
 			detail.Room.WinnerGuildID = overallWinnerGuildID
+			for i := range detail.Members {
+				if remHP, ok := res.RemainingHP[detail.Members[i].CharacterID]; ok {
+					detail.Members[i].HP = max(0, remHP)
+				}
+			}
 		} else {
 			// Advance to next round and restore HP to MaxHP for all participants (vs_guild.cgi:142)
 			detail.Room.Round++

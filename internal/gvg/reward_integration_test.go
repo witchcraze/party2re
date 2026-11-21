@@ -279,15 +279,18 @@ func TestGvGRewardCleanupFailureIntegration(t *testing.T) {
 	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round); err != nil {
 		t.Fatal(err)
 	}
+	if err := f.service.LeaveRoom(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
+		t.Fatalf("leader leave: %v", err)
+	}
 	f.rooms.failDelete = true
-	if err := f.service.LeaveRoom(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); !errors.Is(err, errRoomPublication) {
+	if err := f.service.LeaveRoom(ctx, f.detail.Members[1].CharacterID, f.detail.Room.ID); !errors.Is(err, errRoomPublication) {
 		t.Fatalf("cleanup: %v", err)
 	}
-	if _, err := f.service.AdvanceRound(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID, f.detail.Room.Round); err != nil {
+	if _, err := f.service.AdvanceRound(ctx, f.detail.Members[1].CharacterID, f.detail.Room.ID, f.detail.Room.Round); err != nil {
 		t.Fatalf("completed room retry: %v", err)
 	}
 	f.rooms.failDelete = false
-	if err := f.service.LeaveRoom(ctx, f.detail.Room.LeaderCharacterID, f.detail.Room.ID); err != nil {
+	if err := f.service.LeaveRoom(ctx, f.detail.Members[1].CharacterID, f.detail.Room.ID); err != nil {
 		t.Fatal(err)
 	}
 	committed, found, err := f.standings.FindRoundTransition(ctx, f.detail.Room.ID)

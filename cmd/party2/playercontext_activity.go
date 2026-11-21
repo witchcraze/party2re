@@ -170,12 +170,9 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if !found {
 			return nil, errors.New("gvg activity membership mismatch")
 		}
-		a := playercontext.Activity{Kind: "gvg", ID: gv.Room.ID, Phase: gv.Room.Status, Round: gv.Room.Round, Role: "member", Actions: []string{}}
+		a := playercontext.Activity{Kind: "gvg", ID: gv.Room.ID, Phase: gv.Room.Status, Round: gv.Room.Round, Role: "member", Actions: []string{"gvg_leave"}}
 		if gv.Room.LeaderCharacterID == actor {
 			a.Role = "leader"
-		}
-		if a.Role == "leader" || gv.Room.Status == gvg.StatusRecruiting || gv.Room.Status == gvg.StatusCompleted {
-			a.Actions = append(a.Actions, "gvg_leave")
 		}
 		if a.Role == "leader" && gv.Room.Status == gvg.StatusRecruiting && gv.Room.Round == 0 {
 			a.Actions = append(a.Actions, "gvg_start")
