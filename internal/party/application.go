@@ -10,24 +10,25 @@ import (
 )
 
 type Service struct {
-	lobbyBoundary      func(context.Context, string, func(context.Context) error) error
-	activityCheck      func(context.Context, string) error
-	repo               Repository
-	charRepo           CharacterRepository
-	invRepo            InventoryRepository
-	advRepo            AdventureRepository
-	stages             StageProvider
-	monsters           MonsterProvider
-	battleEngine       BattleEngine
-	news               NewsPublisher
-	txProvider         TransactionProvider
-	postAdventureHook  PostAdventureHook
-	participantBuilder ParticipantBuilder
-	battleSettler      PostBattleSettler
-	depotRepo          DepotRepository
-	blessingProvider   BlessingProvider
-	timer              TimerService
-	rng                func(n int) int
+	lobbyBoundary        func(context.Context, string, func(context.Context) error) error
+	activityCheck        func(context.Context, string) error
+	repo                 Repository
+	charRepo             CharacterRepository
+	invRepo              InventoryRepository
+	advRepo              AdventureRepository
+	stages               StageProvider
+	monsters             MonsterProvider
+	battleEngine         BattleEngine
+	news                 NewsPublisher
+	txProvider           TransactionProvider
+	postAdventureHook    PostAdventureHook
+	participantBuilder   ParticipantBuilder
+	lifetimeActorBuilder LifetimeActorBuilder
+	battleSettler        PostBattleSettler
+	depotRepo            DepotRepository
+	blessingProvider     BlessingProvider
+	timer                TimerService
+	rng                  func(n int) int
 }
 
 func NewService(
@@ -117,6 +118,17 @@ func (s *Service) ListParties(ctx context.Context, status string, limit, offset 
 	return pagination.NewPage(items, total, limit, offset), nil
 }
 
+func (s *Service) buildBattleActor(ctx context.Context, characterID string) (*battle.LifetimeActor, error) {
+	if s.lifetimeActorBuilder == nil {
+		return nil, nil
+	}
+	actor, err := s.lifetimeActorBuilder.BuildLifetimeActor(ctx, characterID, "")
+	if err != nil {
+		return nil, err
+	}
+	return &actor, nil
+}
+
 // JoinParty joins a character into an existing recruiting party.
 func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password string) (PartyDetail, error) {
 	var detail PartyDetail
@@ -180,6 +192,15 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 			return ErrHPRequirementNotMet
 		}
 
+		battleActor, err := s.buildBattleActor(txCtx, char.ID)
+		if err != nil {
+			return err
+		}
+		maxHP := char.Stats.MaxHP
+		if battleActor != nil {
+			maxHP = battleActor.MaxHP
+		}
+
 		newMember := Member{
 			PartyID:       partyID,
 			CharacterID:   char.ID,
@@ -187,10 +208,11 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 			JobID:         char.JobID,
 			Level:         char.Level,
 			HP:            char.Stats.HP,
-			MaxHP:         char.Stats.MaxHP,
+			MaxHP:         maxHP,
 			IsLeader:      false,
 			ReadyState:    false,
 			JoinedAt:      time.Now().UTC(),
+			BattleActor:   battleActor,
 		}
 		if err := s.repo.AddMember(txCtx, newMember); err != nil {
 			return err

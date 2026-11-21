@@ -2,9 +2,11 @@ package party
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -151,6 +153,7 @@ func (r *mockPartyRepository) AddMember(_ context.Context, m Member) error {
 	if _, ok := r.members[m.PartyID]; !ok {
 		r.members[m.PartyID] = make(map[string]Member)
 	}
+	m.BattleActor = cloneBattleActor(m.BattleActor)
 	r.members[m.PartyID][m.CharacterID] = m
 	r.memberParty[m.CharacterID] = m.PartyID
 	return nil
@@ -163,6 +166,7 @@ func (r *mockPartyRepository) GetMembers(_ context.Context, partyID string) ([]M
 	}
 	var list []Member
 	for _, m := range mMap {
+		m.BattleActor = cloneBattleActor(m.BattleActor)
 		list = append(list, m)
 	}
 	sort.Slice(list, func(i, j int) bool {
@@ -1265,5 +1269,130 @@ func TestPartyService_StartPartyAdventure_PostAdventureHook(t *testing.T) {
 		if !expectedIDs[id] {
 			t.Errorf("unexpected character ID hooked: %s", id)
 		}
+	}
+}
+
+type stubLifetimePartyBuilder struct {
+	actors map[string]battle.LifetimeActor
+	err    error
+}
+
+func (b *stubLifetimePartyBuilder) BuildParticipant(_ context.Context, characterID string) (battle.Participant, error) {
+	if b.err != nil {
+		return battle.Participant{}, b.err
+	}
+	return b.actors[characterID].Participant, nil
+}
+
+func (b *stubLifetimePartyBuilder) BuildLifetimeActor(_ context.Context, characterID, _ string) (battle.LifetimeActor, error) {
+	if b.err != nil {
+		return battle.LifetimeActor{}, b.err
+	}
+	return b.actors[characterID].Clone(), nil
+}
+
+func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockPartyRepository()
+	charRepo := newMockCharacterRepository()
+	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
+	stages, _ := adventure.InitialStageCatalog()
+	monsters, _ := adventure.InitialMonsterCatalog()
+
+	builder := &stubLifetimePartyBuilder{
+		actors: map[string]battle.LifetimeActor{
+			"leader": {
+				Participant: battle.Participant{
+					ID: "leader", Name: "Hero1", HP: 120, MaxHP: 220, MP: 20, MaxMP: 30,
+					Attack: 50, Defense: 25, Agility: 15,
+					Gear: &battle.BattleGearStats{WeaponID: "weapon-01"},
+				},
+				Tension: 1, Hit: 95,
+			},
+			"joiner": {
+				Participant: battle.Participant{
+					ID: "joiner", Name: "Hero2", HP: 90, MaxHP: 90, MP: 40, MaxMP: 140,
+					Attack: 30, Defense: 40, Agility: 20,
+					Gear: &battle.BattleGearStats{ArmorID: "armor-01"},
+				},
+				Tension: 1, Hit: 95,
+			},
+		},
+	}
+
+	svc, err := NewService(repo, charRepo, invRepo, stages, monsters, nil, WithParticipantBuilder(builder))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	charRepo.chars["leader"] = corecharacter.Character{
+		ID: "leader", Name: "Hero1", Level: 5,
+		Stats: corecharacter.Stats{HP: 120, MaxHP: 120, MP: 20, MaxMP: 30},
+	}
+	charRepo.chars["joiner"] = corecharacter.Character{
+		ID: "joiner", Name: "Hero2", Level: 5,
+		Stats: corecharacter.Stats{HP: 90, MaxHP: 90, MP: 40, MaxMP: 40},
+	}
+
+	created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{Name: "BattleRowParty", StageID: adventure.StarterAdventure})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	if len(created.Members) != 1 || created.Members[0].MaxHP != 220 || created.Members[0].BattleActor == nil {
+		t.Fatalf("leader battle row not captured on CreateParty: %+v", created.Members)
+	}
+
+	joined, err := svc.JoinParty(ctx, created.Party.ID, "joiner", "")
+	if err != nil {
+		t.Fatalf("JoinParty failed: %v", err)
+	}
+	if len(joined.Members) != 2 || joined.Members[1].BattleActor == nil || joined.Members[1].BattleActor.MaxMP != 140 {
+		t.Fatalf("joiner battle row not captured on JoinParty: %+v", joined.Members)
+	}
+
+	// Public lobby response must not serialize internal battle row or unequipped persistent fields.
+	raw, err := json.Marshal(joined)
+	if err != nil {
+		t.Fatalf("json.Marshal(PartyDetail) failed: %v", err)
+	}
+	for _, forbidden := range []string{"battle_actor", "weapon-01", "armor-01", "max_mp"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Fatalf("public PartyDetail JSON unexpectedly included %q: %s", forbidden, string(raw))
+		}
+	}
+
+	// Builder error must abort CreateParty and JoinParty cleanly without leaving a partial lobby.
+	builder.err = errors.New("builder unavailable")
+	charRepo.chars["other"] = corecharacter.Character{ID: "other", Name: "Other", Level: 5, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
+	if _, err := svc.CreateParty(ctx, "other", CreatePartyRequest{Name: "FailCreate", StageID: adventure.StarterAdventure}); err == nil {
+		t.Fatal("expected CreateParty to fail when battle row capture fails")
+	}
+	if _, _, err := svc.GetActiveParty(ctx, "other"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("failed CreateParty left active party for leader: %v", err)
+	}
+	if page, err := svc.ListParties(ctx, StatusRecruiting, 10, 0); err != nil || page.Total != 1 {
+		t.Fatalf("failed CreateParty left partial lobby in listing: page=%+v err=%v", page, err)
+	}
+	if _, err := svc.JoinParty(ctx, created.Party.ID, "other", ""); err == nil {
+		t.Fatal("expected JoinParty to fail when battle row capture fails")
+	}
+	if _, _, err := svc.GetActiveParty(ctx, "other"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("failed JoinParty left active party for joiner: %v", err)
+	}
+
+	// Verify against ValkeyRepository (in-memory) that CreateParty failure leaves zero lobby or character keys.
+	valkeyRepo := NewValkeyRepository(nil)
+	valkeySvc, err := NewService(valkeyRepo, charRepo, invRepo, stages, monsters, nil, WithParticipantBuilder(builder))
+	if err != nil {
+		t.Fatalf("NewService(ValkeyRepository) failed: %v", err)
+	}
+	if _, err := valkeySvc.CreateParty(ctx, "other", CreatePartyRequest{Name: "FailValkeyCreate", StageID: adventure.StarterAdventure}); err == nil {
+		t.Fatal("expected CreateParty to fail when battle row capture fails")
+	}
+	if page, err := valkeySvc.ListParties(ctx, StatusRecruiting, 10, 0); err != nil || page.Total != 0 {
+		t.Fatalf("failed CreateParty left partial Valkey lobby: page=%+v err=%v", page, err)
+	}
+	if _, _, err := valkeySvc.GetActiveParty(ctx, "other"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("failed CreateParty left character-party mapping: %v", err)
 	}
 }

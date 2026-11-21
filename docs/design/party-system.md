@@ -8,6 +8,7 @@ Starting a party currently resolves every floor and inspects treasure automatica
 
 ## Rules
 
+- Normal waiting lobbies capture each member's battle row (stats, gear, and held-tool vitality maxima) when that member creates or joins the lobby (`quest.cgi:583, 1010, 1163–1211`), while join conditions (`need_join`) and start eligibility evaluate the character's live state.
 - The room speed (3/18/25 seconds) is the original per-actor action interval (`_battle.cgi:468,641–644`); the batch crawl stores but does not enforce it.
 - Join conditions (`need_join`, `{key}_{val}_{u|o}` for max HP or job level) apply to the creator at creation and to each joining member; the stage's job-level gate (`$job_lv[$stage]`) also applies.
 - A character belongs to at most one waiting or running party. Waiting lobbies idle out after 30 minutes (`quest.cgi`).

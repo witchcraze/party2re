@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
 func TestReadyRosterConsent(t *testing.T) {
@@ -69,5 +71,41 @@ func TestReadyRosterRejectsCorruptMembership(t *testing.T) {
 		if !errors.Is(err, ErrCharacterNotInParty) {
 			t.Fatalf("corrupt roster accepted: %v", err)
 		}
+	}
+}
+
+func TestWithNormalRosterAndAdmissionFromRoster(t *testing.T) {
+	svc, repo, _, _ := setupTestService(t)
+	repo.parties["p"] = Party{ID: "p", LeaderCharacterID: "leader", StageID: "stage-01", Mode: "normal", Speed: 3, Status: StatusRecruiting}
+	repo.members["p"] = map[string]Member{
+		"member": {
+			PartyID: "p", CharacterID: "member", ReadyState: true,
+			BattleActor: &corebattle.LifetimeActor{Participant: corebattle.Participant{ID: "member", MaxHP: 150, MaxMP: 120}},
+		},
+		"leader": {
+			PartyID: "p", CharacterID: "leader", IsLeader: true, ReadyState: true,
+			BattleActor: &corebattle.LifetimeActor{Participant: corebattle.Participant{ID: "leader", MaxHP: 220, MaxMP: 30}},
+		},
+	}
+
+	var called bool
+	if err := svc.WithNormalRoster(context.Background(), "leader", "p", func(_ context.Context, p Party, members []Member) error {
+		called = true
+		if len(members) != 2 || members[0].CharacterID != "leader" || members[1].CharacterID != "member" {
+			t.Fatalf("unexpected member order: %+v", members)
+		}
+		adm := NormalAdmissionFromRoster("leader", p, members)
+		if len(adm.Actors) != 2 || adm.Actors[0].MaxHP != 220 || adm.Actors[1].MaxMP != 120 {
+			t.Fatalf("unexpected NormalAdmission actors: %+v", adm.Actors)
+		}
+		return nil
+	}); err != nil || !called {
+		t.Fatalf("WithNormalRoster failed: called=%v err=%v", called, err)
+	}
+
+	// Legacy lobby without BattleActor keeps Actors nil.
+	legacy := NormalAdmissionFromRoster("leader", repo.parties["p"], []Member{{CharacterID: "leader"}, {CharacterID: "member"}})
+	if legacy.Actors != nil {
+		t.Fatalf("expected nil Actors for legacy lobby, got %+v", legacy.Actors)
 	}
 }
