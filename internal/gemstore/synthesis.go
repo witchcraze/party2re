@@ -3,7 +3,6 @@ package gemstore
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -187,7 +186,6 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 				IsGem:          true,
 				IdentifiedGem:  &gem,
 				IdentifiedName: gem.Name,
-				Message:        fmt.Sprintf("これは… %sですね。%sさんの宝石箱に入れておきました", gem.Name, char.Name),
 			}
 			return nil
 		}
@@ -199,7 +197,6 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 			Depot:          dep,
 			IsGem:          false,
 			IdentifiedName: itemName,
-			Message:        fmt.Sprintf("これは… %sですね", itemName),
 		}
 		return nil
 	}

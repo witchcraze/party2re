@@ -172,20 +172,20 @@ func TestBankGatewaySuccessAndRefreshFailure(t *testing.T) {
 					t.Fatalf("wrong or nonconserving funds: %+v", f.char)
 				}
 				if tc.action == "bank_deposit" {
-					var result bank.DepositResult
+					var result BankDepositResult
 					if err := json.Unmarshal(got["result"], &result); err != nil {
 						t.Fatal(err)
 					}
-					want := bank.DepositResult{CharacterID: "hero", Money: tc.wantMoney, Deposit: tc.wantDeposit, Amount: tc.amount, Message: fmt.Sprintf("%d Gお預かりいたしました", tc.amount)}
+					want := BankDepositResult{bank.DepositResult{CharacterID: "hero", Money: tc.wantMoney, Deposit: tc.wantDeposit, Amount: tc.amount}, fmt.Sprintf("%d Gお預かりいたしました", tc.amount)}
 					if result != want {
 						t.Fatalf("lost deposit result: %+v", result)
 					}
 				} else {
-					var result bank.WithdrawResult
+					var result BankWithdrawResult
 					if err := json.Unmarshal(got["result"], &result); err != nil {
 						t.Fatal(err)
 					}
-					want := bank.WithdrawResult{CharacterID: "hero", Money: tc.wantMoney, Deposit: tc.wantDeposit, Amount: tc.amount, ActualWithdrawn: tc.actual, Refunded: tc.refunded, Message: fmt.Sprintf("%d Gお返しいたします", tc.amount)}
+					want := BankWithdrawResult{bank.WithdrawResult{CharacterID: "hero", Money: tc.wantMoney, Deposit: tc.wantDeposit, Amount: tc.amount, ActualWithdrawn: tc.actual, Refunded: tc.refunded}, fmt.Sprintf("%d Gお返しいたします", tc.amount)}
 					if result != want {
 						t.Fatalf("lost withdrawal result: %+v", result)
 					}

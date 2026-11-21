@@ -555,10 +555,6 @@ func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
 	if resOrb.IdentifiedGem == nil || resOrb.IdentifiedGem.ID != "gem_sky_atk_1" {
 		t.Errorf("expected revealed gem_sky_atk_1, got %+v", resOrb.IdentifiedGem)
 	}
-	expectedMsg := "これは… 攻撃の天珠Ⅰですね。Heroさんの宝石箱に入れておきました"
-	if resOrb.Message != expectedMsg {
-		t.Errorf("expected message %q, got %q", expectedMsg, resOrb.Message)
-	}
 
 	// Verify Gem Box has the gem
 	box, err := svc.GetGemBox(ctx, char.ID)
@@ -593,9 +589,6 @@ func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
 	}
 	if resSword.IdentifiedName != "鉄の剣" {
 		t.Errorf("expected identified name 鉄の剣, got %s", resSword.IdentifiedName)
-	}
-	if resSword.Message != "これは… 鉄の剣ですね" {
-		t.Errorf("expected message これは… 鉄の剣ですね, got %s", resSword.Message)
 	}
 
 	// Verify sword still exists in Depot

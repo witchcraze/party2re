@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -360,11 +359,6 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 			}
 		}
 
-		msg := fmt.Sprintf("…%s…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…", itemName)
-		if yield.URarePoints > 0 {
-			msg = fmt.Sprintf("これは……! ……いいだろう…。お前の特別なレアポイントを%d加算しておこう…", yield.URarePoints)
-		}
-
 		result = &SacrificeResult{
 			CharacterID:       char.ID,
 			ItemInstanceID:    itemInstanceID,
@@ -374,7 +368,6 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 			URarePointsGained: yield.URarePoints,
 			TotalRarePoints:   points.RarePoints,
 			TotalURarePoints:  points.URarePoints,
-			Message:           msg,
 		}
 		return nil
 	}
@@ -481,7 +474,6 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 			IsURare:          prize.IsURare,
 			RemainingRare:    points.RarePoints,
 			RemainingURare:   points.URarePoints,
-			Message:          "取引成立だ…。" + itemName + " はお前の預かり所に送っておいた…",
 		}
 		return nil
 	}

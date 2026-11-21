@@ -12,7 +12,7 @@ import (
 // sceneEnterResult keeps the selection fields and adds what entry itself delivered.
 type sceneEnterResult struct {
 	playercontext.Selection
-	AlchemyClaim    *alchemy.ClaimResult         `json:"alchemy_claim,omitempty"`
+	AlchemyClaim    *AlchemyClaimResult          `json:"alchemy_claim,omitempty"`
 	AdventureRecord *adventure.RecordEntryResult `json:"adventure_record,omitempty"`
 }
 
@@ -36,7 +36,8 @@ func (h *Handler) deliverOnEntry(ctx context.Context, playerID, actor string, se
 	claim, err := h.alchemy.Claim(ctx, actor)
 	switch {
 	case err == nil:
-		result.AlchemyClaim = &claim
+		reply := alchemyClaimReply(claim)
+		result.AlchemyClaim = &reply
 	case errors.Is(err, alchemy.ErrNoActiveSynthesis), errors.Is(err, alchemy.ErrSynthesisNotReady):
 		// Nothing to deliver: an ordinary entry.
 	default:

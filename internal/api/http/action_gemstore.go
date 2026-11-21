@@ -10,6 +10,20 @@ import (
 	"github.com/witchcraze/party2re/internal/gemstore"
 )
 
+// GemStoreAppraiseResult adds the appraiser's reply.
+type GemStoreAppraiseResult struct {
+	gemstore.AppraiseResult
+	Message string `json:"message"`
+}
+
+func gemStoreAppraiseReply(res gemstore.AppraiseResult) GemStoreAppraiseResult {
+	msg := "これは… " + res.IdentifiedName + "ですね" // gem_store.cgi:350-378
+	if res.IsGem {
+		msg += "。" + res.Character.Name + "さんの宝石箱に入れておきました"
+	}
+	return GemStoreAppraiseResult{res, msg}
+}
+
 // GemStoreService is the Gem Store surface used by the scene and its commands.
 type GemStoreService interface {
 	BuyGem(ctx context.Context, characterID, gemID string) (gemstore.BuyResult, error)
@@ -80,7 +94,11 @@ func WithGemStore(service GemStoreService) Option {
 			return service.SynthesizeGem(ctx, actor, p.RecipeID)
 		}, gemStoreActionRejection)(h)
 		withActionCommand("gemstore_appraise", func(ctx context.Context, actor string, p gemStoreItemRequest) (any, error) {
-			return service.AppraiseItem(ctx, actor, p.ItemID)
+			res, err := service.AppraiseItem(ctx, actor, p.ItemID)
+			if err != nil {
+				return nil, err
+			}
+			return gemStoreAppraiseReply(res), nil
 		}, gemStoreActionRejection)(h)
 		withActionCommand("gemstore_sort", func(ctx context.Context, actor string, _ struct{}) (any, error) {
 			box, err := service.SortGemBox(ctx, actor)

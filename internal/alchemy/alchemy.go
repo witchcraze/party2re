@@ -45,14 +45,18 @@ type SynthesisResult struct {
 	Recipe    RecipeView     `json:"recipe"`
 	State     SynthesisState `json:"state"`
 	StartedAt time.Time      `json:"started_at"`
-	Message   string         `json:"message"`
+	// IngredientNames and ResultItemName (only once crafted) are for the reply.
+	IngredientNames []string `json:"-"`
+	ResultItemName  string   `json:"-"`
 }
 
 type ClaimResult struct {
 	Recipe      Recipe            `json:"recipe"`
 	CreatedItem coreitem.Instance `json:"created_item"`
 	TotalCrafts int               `json:"total_crafts"`
-	Message     string            `json:"message"`
+	// IngredientNames and ResultItemName are for the reply.
+	IngredientNames []string `json:"-"`
+	ResultItemName  string   `json:"-"`
 }
 
 type CharacterRepository interface {
@@ -300,19 +304,14 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 			return fmt.Errorf("save synthesis state: %w", err)
 		}
 
-		var msg string
-		if targetDiscovered.IsCrafted {
-			resItem, _ := s.items.FindByID(recipe.ResultItemDefinitionID)
-			msg = fmt.Sprintf("ふむ、この組み合わせなら %s ができるぞ！完成する頃にまた来るがよい", resItem.Name)
-		} else {
-			msg = "おお、錬金可能なようじゃ！何が出来るか楽しみじゃな！一晩たてば完成するじゃろう。完成する頃にまた来るがよい"
-		}
-
 		res = SynthesisResult{
-			Recipe:    viewRecipe(recipe, targetDiscovered.IsCrafted),
-			State:     StateOngoing,
-			StartedAt: now,
-			Message:   msg,
+			Recipe:          viewRecipe(recipe, targetDiscovered.IsCrafted),
+			State:           StateOngoing,
+			StartedAt:       now,
+			IngredientNames: s.ingredientNames(recipe),
+		}
+		if targetDiscovered.IsCrafted {
+			res.ResultItemName = s.itemName(recipe.ResultItemDefinitionID)
 		}
 		_ = char
 		return nil
@@ -404,14 +403,12 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 			return fmt.Errorf("save synthesis state: %w", err)
 		}
 
-		resultItem, _ := s.items.FindByID(recipe.ResultItemDefinitionID)
-		msg := fmt.Sprintf("まっておったぞ！%s が完成したぞい！出来上がったアイテムは預かり所の方に送っておいたぞい！", resultItem.Name)
-
 		res = ClaimResult{
-			Recipe:      recipe,
-			CreatedItem: createdInstance,
-			TotalCrafts: state.TotalCrafts,
-			Message:     msg,
+			Recipe:          recipe,
+			CreatedItem:     createdInstance,
+			TotalCrafts:     state.TotalCrafts,
+			IngredientNames: s.ingredientNames(recipe),
+			ResultItemName:  s.itemName(recipe.ResultItemDefinitionID),
 		}
 
 		return nil
@@ -420,4 +417,20 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 		return ClaimResult{}, err
 	}
 	return res, nil
+}
+
+// itemName falls back to the definition ID for an item missing from the catalog.
+func (s *Service) itemName(definitionID string) string {
+	if def, err := s.items.FindByID(definitionID); err == nil && def.Name != "" {
+		return def.Name
+	}
+	return definitionID
+}
+
+func (s *Service) ingredientNames(recipe Recipe) []string {
+	names := make([]string, len(recipe.Ingredients))
+	for i, ing := range recipe.Ingredients {
+		names[i] = s.itemName(ing.DefinitionID)
+	}
+	return names
 }

@@ -48,7 +48,7 @@ func (s *alchemySceneService) Claim(_ context.Context, actor string) (alchemy.Cl
 	if s.claimErr != nil {
 		return alchemy.ClaimResult{}, s.claimErr
 	}
-	return alchemy.ClaimResult{TotalCrafts: 1, Message: "delivered"}, nil
+	return alchemy.ClaimResult{TotalCrafts: 1, IngredientNames: []string{"薬草", "聖水"}, ResultItemName: "エリクサー"}, nil
 }
 
 func alchemyTestService(entries int) *alchemySceneService {
@@ -205,7 +205,7 @@ func TestAlchemyEntryDelivery(t *testing.T) {
 			if result.Destination != "alchemy" || (result.AlchemyClaim != nil) != tc.claimed {
 				t.Fatalf("result: %s", got["result"])
 			}
-			if tc.claimed && result.AlchemyClaim.Message != "delivered" {
+			if tc.claimed && result.AlchemyClaim.Message != "まっておったぞ！薬草と聖水を錬金した エリクサー が完成したぞい！出来上がったアイテムは預かり所の方に送っておいたぞい！" {
 				t.Fatalf("lost claim facts: %s", got["result"])
 			}
 			assertGatewayContext(t, got)

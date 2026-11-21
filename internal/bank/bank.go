@@ -3,7 +3,6 @@ package bank
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -41,7 +40,6 @@ type DepositResult struct {
 	Money       int    `json:"money"`
 	Deposit     int64  `json:"deposit"`
 	Amount      int64  `json:"amount"`
-	Message     string `json:"message"`
 }
 
 // WithdrawResult represents the result of withdrawing gold from the bank.
@@ -52,7 +50,6 @@ type WithdrawResult struct {
 	Amount          int64  `json:"amount"`
 	ActualWithdrawn int    `json:"actual_withdrawn"`
 	Refunded        int64  `json:"refunded"`
-	Message         string `json:"message"`
 }
 
 // Repository defines the storage contract for character bank accounts.
@@ -160,7 +157,6 @@ func (s *Service) Deposit(ctx context.Context, characterID string, amount int64)
 		Money:       char.Money,
 		Deposit:     char.Deposit,
 		Amount:      amount,
-		Message:     fmt.Sprintf("%d Gお預かりいたしました", amount),
 	}, nil
 }
 
@@ -185,6 +181,5 @@ func (s *Service) Withdraw(ctx context.Context, characterID string, amount int64
 		Amount:          amount,
 		ActualWithdrawn: actualWithdrawn,
 		Refunded:        refunded,
-		Message:         fmt.Sprintf("%d Gお返しいたします", amount),
 	}, nil
 }

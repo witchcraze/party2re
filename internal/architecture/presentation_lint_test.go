@@ -95,23 +95,15 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 // Each entry maps pkg.Struct.Field to the issue tracking its decoupling.
 // No new fields may be added. When a field is decoupled, it MUST be removed from this map to ratchet down.
 var whitelistedLegacyPresentationFields = map[string]string{
-	"alchemy.SynthesisResult.Message":     "#2304",
-	"alchemy.ClaimResult.Message":         "#2304",
-	"bank.DepositResult.Message":          "#2304",
-	"bank.WithdrawResult.Message":         "#2304",
-	"blackmarket.SacrificeResult.Message": "#2304",
-	"blackmarket.TradeResult.Message":     "#2304",
-	"gemstore.AppraiseResult.Message":     "#2304",
-	"tavern.OrderResult.Message":          "#2304",
-	"altar.PrayResult.Message":            "#2305",
-	"altar.WishResult.Message":            "#2305",
-	"god.WishResult.Message":              "#2305",
-	"wishingwell.ExchangeResult.Message":  "#2305",
-	"home.SleepResult.Message":            "#2306",
-	"home.SleepStatus.Message":            "#2306",
-	"home.WakeResult.Message":             "#2306",
-	"home.UseHomeItemResult.Message":      "#2306",
-	"contest.SettlementResult.Message":    "#2308",
+	"altar.PrayResult.Message":           "#2305",
+	"altar.WishResult.Message":           "#2305",
+	"god.WishResult.Message":             "#2305",
+	"wishingwell.ExchangeResult.Message": "#2305",
+	"home.SleepResult.Message":           "#2306",
+	"home.SleepStatus.Message":           "#2306",
+	"home.WakeResult.Message":            "#2306",
+	"home.UseHomeItemResult.Message":     "#2306",
+	"contest.SettlementResult.Message":   "#2308",
 }
 
 // TestProhibitPresentationFieldsInDomainModels verifies that domain service result structs

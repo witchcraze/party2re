@@ -31,7 +31,7 @@ func (f *alchemyGatewayFixture) Synthesize(ctx context.Context, actor, recipeID 
 	if _, err := f.execute(ctx, actor, 0); err != nil {
 		return alchemy.SynthesisResult{}, err
 	}
-	return alchemy.SynthesisResult{Recipe: alchemy.RecipeView{ID: recipeID, Ingredients: []alchemy.Ingredient{}}, State: alchemy.StateOngoing, Message: "started"}, nil
+	return alchemy.SynthesisResult{Recipe: alchemy.RecipeView{ID: recipeID, Ingredients: []alchemy.Ingredient{}}, State: alchemy.StateOngoing, IngredientNames: []string{"薬草", "聖水"}}, nil
 }
 
 func (f *alchemyGatewayFixture) ViewRecipes(ctx context.Context, actor string) (alchemy.RecipeListResult, error) {
@@ -85,7 +85,7 @@ func TestAlchemyGatewayOutcomes(t *testing.T) {
 				}
 				if rejected {
 					assertGatewayError(t, got, "ALCHEMY_INSUFFICIENT_MATERIALS")
-				} else if string(got["success"]) != "true" || !strings.Contains(string(got["result"]), `"message":"started"`) {
+				} else if string(got["success"]) != "true" || !strings.Contains(string(got["result"]), `"message":"薬草 と 聖水 じゃな！おお、錬金可能なようじゃ！何が出来るか楽しみじゃな！一晩たてば完成するじゃろう。完成する頃にまた来るがよい"`) {
 					t.Fatalf("lost result facts: %s", got)
 				}
 				if refreshFailure {

@@ -41,7 +41,6 @@ func (s *stubBankService) Deposit(ctx context.Context, characterID string, amoun
 		Money:       2000,
 		Deposit:     13000,
 		Amount:      amount,
-		Message:     "3000 Gお預かりいたしました",
 	}, nil
 }
 
@@ -56,7 +55,6 @@ func (s *stubBankService) Withdraw(ctx context.Context, characterID string, amou
 		Amount:          amount,
 		ActualWithdrawn: int(amount),
 		Refunded:        0,
-		Message:         "3000 Gお返しいたします",
 	}, nil
 }
 

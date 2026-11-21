@@ -71,7 +71,7 @@ func (f *gemStoreGatewayFixture) SynthesizeGem(ctx context.Context, actor, recip
 func (f *gemStoreGatewayFixture) AppraiseItem(ctx context.Context, actor, itemID string) (gemstore.AppraiseResult, error) {
 	f.inputs = []string{itemID}
 	_, err := f.execute(ctx, actor, 0)
-	return gemstore.AppraiseResult{GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, IsGem: true, Message: "appraised"}, err
+	return gemstore.AppraiseResult{GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Character: f.char, IsGem: true, IdentifiedName: "攻撃の天珠Ⅰ"}, err
 }
 
 func (f *gemStoreGatewayFixture) SellGem(ctx context.Context, actor, itemID string) (gemstore.SellResult, error) {
@@ -201,7 +201,7 @@ func TestGemStoreGatewayOutcomes(t *testing.T) {
 							}
 						}
 						if (input.action == "gemstore_buy" && result.Cost != 300) || (input.action == "gemstore_send" && result.Gem.ID != "gem_atk_1") ||
-							(input.action == "gemstore_synthesize" && result.CreatedGem.ID != "gem_atk_2") || (input.action == "gemstore_appraise" && (!result.IsGem || result.Message != "appraised")) {
+							(input.action == "gemstore_synthesize" && result.CreatedGem.ID != "gem_atk_2") || (input.action == "gemstore_appraise" && (!result.IsGem || result.Message != "これは… 攻撃の天珠Ⅰですね。"+f.char.Name+"さんの宝石箱に入れておきました")) {
 							t.Fatalf("command facts: %s", got["result"])
 						}
 						if input.action == "gemstore_sell" && (f.itemID != "owned-gem" || result.Payout != 250 || result.Gem.ID != "gem_atk_1") {

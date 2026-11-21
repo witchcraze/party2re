@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/witchcraze/party2re/internal/blackmarket"
@@ -17,6 +18,30 @@ type blackMarketTradeRequest struct {
 	PrizeID string `json:"prize_id"`
 }
 
+// BlackMarketSacrificeResult and BlackMarketTradeResult add the dealer's reply
+// (black_market.cgi:119,138,188-259).
+type BlackMarketSacrificeResult struct {
+	*blackmarket.SacrificeResult
+	Message string `json:"message"`
+}
+
+type BlackMarketTradeResult struct {
+	*blackmarket.TradeResult
+	Message string `json:"message"`
+}
+
+// Legacy appends one reply per list the item is on.
+func blackMarketSacrificeReply(res *blackmarket.SacrificeResult) BlackMarketSacrificeResult {
+	msg := ""
+	if res.RarePointsGained > 0 {
+		msg += "…" + res.ItemName + "…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…"
+	}
+	if res.URarePointsGained > 0 {
+		msg += fmt.Sprintf("これは……! ……いいだろう…。お前の特別なレアポイントを%d加算しておこう…", res.URarePointsGained)
+	}
+	return BlackMarketSacrificeResult{res, msg}
+}
+
 // WithBlackMarket configures the scene observation, retained NPC reads and two barter commands.
 func WithBlackMarket(service BlackMarketService) Option {
 	return func(h *Handler) {
@@ -27,10 +52,18 @@ func WithBlackMarket(service BlackMarketService) Option {
 			return
 		}
 		withActionCommand("blackmarket_sacrifice", func(ctx context.Context, actor string, p blackMarketSacrificeRequest) (any, error) {
-			return service.SacrificeItem(ctx, actor, p.ItemInstanceID)
+			res, err := service.SacrificeItem(ctx, actor, p.ItemInstanceID)
+			if err != nil {
+				return nil, err
+			}
+			return blackMarketSacrificeReply(res), nil
 		}, blackMarketActionRejection)(h)
 		withActionCommand("blackmarket_trade", func(ctx context.Context, actor string, p blackMarketTradeRequest) (any, error) {
-			return service.TradePrize(ctx, actor, p.PrizeID)
+			res, err := service.TradePrize(ctx, actor, p.PrizeID)
+			if err != nil {
+				return nil, err
+			}
+			return BlackMarketTradeResult{res, "取引成立だ…。" + res.ItemName + " はお前の預かり所に送っておいた…"}, nil
 		}, blackMarketActionRejection)(h)
 	}
 }

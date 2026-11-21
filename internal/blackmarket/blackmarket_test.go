@@ -383,9 +383,6 @@ func TestSacrificeItem_Inventory(t *testing.T) {
 	if res.RarePointsGained != 1 || res.TotalRarePoints != 1 {
 		t.Errorf("expected 1 rare point, got gained=%d total=%d", res.RarePointsGained, res.TotalRarePoints)
 	}
-	if res.Message != "…はやぶさの剣…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…" {
-		t.Errorf("unexpected dialogue: %s", res.Message)
-	}
 
 	// Verify item was consumed
 	inv, _ = invRepo.FindByCharacterID(ctx, "char-hero")
@@ -405,9 +402,6 @@ func TestSacrificeItem_Inventory(t *testing.T) {
 	if resURare.URarePointsGained != 1 || resURare.TotalURarePoints != 1 {
 		t.Errorf("expected 1 u-rare point, got gained=%d total=%d", resURare.URarePointsGained, resURare.TotalURarePoints)
 	}
-	if resURare.Message != "これは……! ……いいだろう…。お前の特別なレアポイントを1加算しておこう…" {
-		t.Errorf("unexpected dialogue: %s", resURare.Message)
-	}
 
 	// Sacrifice restored item-059 (天馬のたづな)
 	inst059, _ := coreitem.NewInstance("item-059", 1)
@@ -424,9 +418,6 @@ func TestSacrificeItem_Inventory(t *testing.T) {
 	}
 	if res059.TotalRarePoints != 2 || res059.TotalURarePoints != 1 {
 		t.Errorf("expected total rare=2 u-rare=1, got rare=%d u-rare=%d", res059.TotalRarePoints, res059.TotalURarePoints)
-	}
-	if res059.Message != "…天馬のたづな…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…" {
-		t.Errorf("unexpected dialogue for item-059: %s", res059.Message)
 	}
 
 	// Verify item-059 was consumed from inventory
@@ -709,9 +700,6 @@ func TestTradePrize_ToDepot(t *testing.T) {
 	if res.ItemName != "時の砂" {
 		t.Errorf("expected item name 時の砂, got %s", res.ItemName)
 	}
-	if res.Message != "取引成立だ…。時の砂 はお前の預かり所に送っておいた…" {
-		t.Errorf("unexpected message: %s", res.Message)
-	}
 
 	// Verify item in depot
 	dep, _ := depotRepo.FindByCharacterID(ctx, "char-trader")
@@ -960,10 +948,6 @@ func TestPrizeItemDefinitionsParity(t *testing.T) {
 		}
 		if res.ItemName != tc.expectedName {
 			t.Errorf("expected trade result ItemName %q, got %q", tc.expectedName, res.ItemName)
-		}
-		expectedMsg := "取引成立だ…。" + tc.expectedName + " はお前の預かり所に送っておいた…"
-		if res.Message != expectedMsg {
-			t.Errorf("expected trade message %q, got %q", expectedMsg, res.Message)
 		}
 	}
 

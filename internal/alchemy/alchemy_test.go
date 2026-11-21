@@ -273,6 +273,10 @@ func TestSynthesize_RequiresZeroGoldFeeAndConsumesFromDepot(t *testing.T) {
 	if res.State != StateOngoing {
 		t.Errorf("expected StateOngoing, got %v", res.State)
 	}
+	// An uncrafted recipe keeps its result unnamed for the reply.
+	if !slices.Equal(res.IngredientNames, []string{"Herb"}) || res.ResultItemName != "" {
+		t.Errorf("reply facts = %v %q", res.IngredientNames, res.ResultItemName)
+	}
 
 	// Verify depot materials deducted: 3 - 2 = 1 remaining
 	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
@@ -615,8 +619,8 @@ func TestSynthesize_CompletesOnlyThroughSleep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim failed after sleep: %v", err)
 	}
-	if claimRes.CreatedItem.DefinitionID != "item-002" {
-		t.Errorf("expected item-002, got %s", claimRes.CreatedItem.DefinitionID)
+	if claimRes.CreatedItem.DefinitionID != "item-002" || claimRes.ResultItemName != "Super Herb" || !slices.Equal(claimRes.IngredientNames, []string{"Herb"}) {
+		t.Errorf("unexpected claim facts: %+v", claimRes)
 	}
 
 	// Verify product was delivered into Depot
