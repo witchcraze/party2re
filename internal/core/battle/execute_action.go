@@ -29,6 +29,7 @@ type battleContext struct {
 	crystalDroppedMap map[string]bool
 	droppedCrystals   int
 	defeatEarnings    []DefeatEarnings
+	defeats           []PartyBattleDefeat
 }
 
 func (ctx *battleContext) executeDefend(actor Participant) {
@@ -135,6 +136,7 @@ func (ctx *battleContext) applyDamageWithCategory(actor Participant, target Part
 				ctx.checkCrystalDrop(target)
 				if targetWasAlive {
 					ctx.recordDefeatEarnings(actor, target, ctx.droppedCrystals-crystalsBefore)
+					ctx.recordPartyDefeat(actor, target)
 				}
 			}
 		}
@@ -181,6 +183,19 @@ func (ctx *battleContext) recordDefeatEarnings(actor, target Participant, crysta
 		}
 	}
 	ctx.defeatEarnings = append(ctx.defeatEarnings, e)
+}
+
+func (ctx *battleContext) recordPartyDefeat(actor, target Participant) {
+	if actor.ID == target.ID || ctx.teamMap[actor.ID] == ctx.teamMap[target.ID] {
+		return
+	}
+	if ctx.hpMap[actor.ID] <= 0 || ctx.banishedMap[actor.ID] {
+		return
+	}
+	ctx.defeats = append(ctx.defeats, PartyBattleDefeat{
+		ActorID:  actor.ID,
+		TargetID: target.ID,
+	})
 }
 
 func (ctx *battleContext) applyMazinSynergy(fallen Participant) {

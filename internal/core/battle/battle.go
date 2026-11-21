@@ -165,6 +165,7 @@ type PartyBattleResult struct {
 	BonusPercent    int                       `json:"bonus_percent"`
 	TotalReward     Reward                    `json:"total_reward"`
 	DefeatEarnings  []DefeatEarnings          `json:"-"`
+	Defeats         []PartyBattleDefeat       `json:"-"`
 	AlliesSurvived  []string                  `json:"allies_survived"`
 	AlliesFallen    []string                  `json:"allies_fallen"`
 	RemainingHP     map[string]int            `json:"remaining_hp"`
@@ -181,6 +182,12 @@ type PartyBattleResult struct {
 type DefeatEarnings struct {
 	Reward       Reward   `json:"reward"`
 	RecipientIDs []string `json:"recipient_ids"`
+}
+
+// PartyBattleDefeat records a non-revived combat defeat inflicted by a surviving actor on an opposing-team target.
+type PartyBattleDefeat struct {
+	ActorID  string `json:"actor_id"`
+	TargetID string `json:"target_id"`
 }
 
 type Engine struct{}

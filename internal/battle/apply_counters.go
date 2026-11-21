@@ -3,6 +3,7 @@ package battle
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,6 +16,83 @@ import (
 // UnsealClockWriter persists the demon king unseal clock timestamp within the settlement transaction.
 type UnsealClockWriter interface {
 	SaveUnsealedAt(ctx context.Context, unsealedAt time.Time) error
+}
+
+// ParticipantStrong computes combat strength for a battle participant matching legacy strong() (_battle.cgi:1380-1383).
+func ParticipantStrong(p corebattle.Participant) int {
+	mhp := p.MaxHP
+	if mhp <= 0 {
+		mhp = p.HP
+	}
+	mmp := p.MaxMP
+	if mmp <= 0 {
+		mmp = p.MP
+	}
+	return Strong(mhp, mmp, p.Attack, p.Defense, p.Agility)
+}
+
+// CountStrongPvPKills returns per-actor kill_p increments for non-revived combat defeats
+// where the defeated opponent satisfies IsStrongEnemy (_battle.cgi:231-232).
+func CountStrongPvPKills(participants []corebattle.Participant, defeats []corebattle.PartyBattleDefeat) map[string]int {
+	if len(defeats) == 0 {
+		return nil
+	}
+	byID := make(map[string]corebattle.Participant, len(participants))
+	for _, p := range participants {
+		byID[p.ID] = p
+	}
+	var kills map[string]int
+	for _, d := range defeats {
+		if d.ActorID == "" || d.TargetID == "" || d.ActorID == d.TargetID {
+			continue
+		}
+		actor, okA := byID[d.ActorID]
+		target, okT := byID[d.TargetID]
+		if !okA || !okT {
+			continue
+		}
+		if IsStrongEnemy(ParticipantStrong(target), ParticipantStrong(actor)) {
+			if kills == nil {
+				kills = make(map[string]int)
+			}
+			kills[d.ActorID]++
+		}
+	}
+	return kills
+}
+
+// MergeKillCounts returns a combined copy of base plus delta kill counts.
+func MergeKillCounts(base, delta map[string]int) map[string]int {
+	if len(base) == 0 && len(delta) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(base)+len(delta))
+	for k, v := range base {
+		if v > 0 {
+			out[k] = v
+		}
+	}
+	for k, v := range delta {
+		if v > 0 {
+			out[k] += v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// SortedPositiveKillIDs returns character IDs with positive kill counts in ascending order for Rank 2 locking.
+func SortedPositiveKillIDs(kills map[string]int) []string {
+	var ids []string
+	for id, count := range kills {
+		if id != "" && count > 0 {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 // applyMonsterKills evaluates defeated non-player enemies against player combat strength
@@ -57,16 +135,7 @@ func (s *Service) applyMonsterKills(
 		if strings.HasPrefix(enemy.ID, "char-") || strings.HasPrefix(enemy.ID, "user-") {
 			continue
 		}
-		enemyMHP := enemy.MaxHP
-		if enemyMHP <= 0 {
-			enemyMHP = enemy.HP
-		}
-		enemyMMP := enemy.MaxMP
-		if enemyMMP <= 0 {
-			enemyMMP = enemy.MP
-		}
-		enemyStrong := Strong(enemyMHP, enemyMMP, enemy.Attack, enemy.Defense, enemy.Agility)
-		if IsStrongEnemy(enemyStrong, playerStrong) {
+		if IsStrongEnemy(ParticipantStrong(enemy), playerStrong) {
 			char.MonsterKills++
 		}
 	}

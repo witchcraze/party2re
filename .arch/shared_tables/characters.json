@@ -182,10 +182,17 @@
     },
     {
       "module": "pvp",
-      "caller_method": "internal/pvp/settlement.go#Service.awardPrizes",
+      "caller_method": "internal/pvp/settlement.go#Service.settleRewards",
       "lock_mode": "SELECT ... FOR UPDATE (ascending ID for multiple characters)",
       "lock_order": 2,
-      "purpose": "Financial mutation inside the durable room transition transaction; room claim precedes characters and participation claims follow them"
+      "purpose": "Financial and kill_p mutation inside the durable room transition transaction; room claim precedes characters and participation claims follow them"
+    },
+    {
+      "module": "gvg",
+      "caller_method": "internal/database/gvg_transition_repository.go#GvGRepository.CommitRoundTransition",
+      "lock_mode": "SELECT ... FOR UPDATE (ascending ID via FindByIDForUpdate before guild locks)",
+      "lock_order": 2,
+      "purpose": "Increment characters.pvp_wins (kill_p) for stronger-opponent GvG round defeats after gvg_match_transitions(0) and before guilds(7)/gvg_standings(8)"
     },
     {
       "module": "challenge",

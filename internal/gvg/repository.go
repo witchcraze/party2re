@@ -33,6 +33,7 @@ type RoundTransition struct {
 	Detail        RoomDetail
 	Result        RoundResolution
 	Settlement    *MatchSettlement
+	KillCounts    map[string]int `json:"kill_counts,omitempty"`
 }
 
 // GuildRewardGP returns earned GP; a deciding round replaces the intermediate win reward.

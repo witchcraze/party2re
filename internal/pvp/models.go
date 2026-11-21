@@ -120,6 +120,7 @@ type ColosseumRoom struct {
 	UpdatedAt         time.Time      `json:"updated_at"`
 	LastActivityAt    time.Time      `json:"-"`
 	FinancialVersion  int            `json:"-"`
+	PendingPvPKills   map[string]int `json:"-"`
 }
 
 // RoomMember represents a participant in a colosseum room.

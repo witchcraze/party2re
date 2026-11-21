@@ -101,12 +101,15 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 		case StatusInProgress:
 			kind := "forfeit"
 			forfeitedPool := 0
+			var pendingKills map[string]int
 			if hasRemaining {
 				kind = "leave"
 			} else {
 				forfeitedPool = detail.Room.PrizePool
 				detail.Room.Status = StatusDisbanded
 				detail.Room.PrizePool = 0
+				pendingKills = cloneIntMap(detail.Room.PendingPvPKills)
+				detail.Room.PendingPvPKills = nil
 			}
 			detail.Room.UpdatedAt = now
 			detail.Room.LastActivityAt = now
@@ -117,7 +120,9 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				RemovedIDs:     []string{char.ID},
 				ForfeitedPool:  forfeitedPool,
 				LastActivityAt: now,
-			}, func(context.Context) error { return nil })
+			}, func(txCtx context.Context) error {
+				return s.settleRewards(txCtx, nil, "", 0, pendingKills)
+			})
 
 		case StatusCompleted:
 			kind := "disband"

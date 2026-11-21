@@ -58,7 +58,7 @@ type Character struct {
 	SmallMedals      int
 	HelpCount        int
 	HeroCount        int    // Hero count (勇者カウント hero_c): incremented when sealing a king boss.
-	PvPWins          int    // PvP Colosseum wins count (王者カウント kill_p): incremented on winning colosseum matches.
+	PvPWins          int    // PvP/GvG stronger-opponent defeat count (王者カウント kill_p): incremented per qualifying stronger-opponent defeat (_battle.cgi:231-232).
 	CasinoWins       int    // Casino wins count (勝負師カウント cas_c): incremented on winning casino table games.
 	MonsterKills     int    // Monster defeat count (撃退数 kill_m): incremented on winning monster battles.
 	MaoCount         int    // Demon king unseal count (魔王カウント mao_c): incremented on unsealing the demon king.

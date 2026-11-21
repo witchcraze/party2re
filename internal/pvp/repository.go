@@ -62,12 +62,12 @@ func NewMemoryRoomRepository() *MemoryRoomRepository {
 	}
 }
 
-func cloneTeamScores(scores map[string]int) map[string]int {
-	if scores == nil {
+func cloneIntMap(m map[string]int) map[string]int {
+	if m == nil {
 		return nil
 	}
-	out := make(map[string]int, len(scores))
-	for k, v := range scores {
+	out := make(map[string]int, len(m))
+	for k, v := range m {
 		out[k] = v
 	}
 	return out
@@ -81,7 +81,8 @@ func (m *MemoryRoomRepository) SaveRoom(_ context.Context, room ColosseumRoom, m
 	copy(membersCopy, members)
 
 	roomCopy := room
-	roomCopy.TeamScores = cloneTeamScores(room.TeamScores)
+	roomCopy.TeamScores = cloneIntMap(room.TeamScores)
+	roomCopy.PendingPvPKills = cloneIntMap(room.PendingPvPKills)
 
 	m.rooms[room.ID] = RoomDetail{
 		Room:    roomCopy,
@@ -102,7 +103,8 @@ func (m *MemoryRoomRepository) GetRoom(_ context.Context, id string) (RoomDetail
 	copy(membersCopy, detail.Members)
 
 	roomCopy := detail.Room
-	roomCopy.TeamScores = cloneTeamScores(detail.Room.TeamScores)
+	roomCopy.TeamScores = cloneIntMap(detail.Room.TeamScores)
+	roomCopy.PendingPvPKills = cloneIntMap(detail.Room.PendingPvPKills)
 
 	return RoomDetail{Room: roomCopy, Members: membersCopy}, nil
 }
@@ -235,10 +237,11 @@ func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room ColosseumRoom,
 	detail := RoomDetail{Room: room, Members: members}
 	data, err := json.Marshal(struct {
 		RoomDetail
-		PasswordHash     string    `json:"password_hash,omitempty"`
-		FinancialVersion int       `json:"financial_version,omitempty"`
-		LastActivityAt   time.Time `json:"last_activity_at,omitempty"`
-	}{detail, room.PasswordHash, room.FinancialVersion, room.LastActivityAt})
+		PasswordHash     string         `json:"password_hash,omitempty"`
+		FinancialVersion int            `json:"financial_version,omitempty"`
+		LastActivityAt   time.Time      `json:"last_activity_at,omitempty"`
+		PendingPvPKills  map[string]int `json:"pending_pvp_kills,omitempty"`
+	}{detail, room.PasswordHash, room.FinancialVersion, room.LastActivityAt, room.PendingPvPKills})
 	if err != nil {
 		return err
 	}
@@ -276,9 +279,10 @@ func (v *ValkeyRoomRepository) GetRoom(ctx context.Context, id string) (RoomDeta
 
 	var detail struct {
 		RoomDetail
-		PasswordHash     string    `json:"password_hash,omitempty"`
-		FinancialVersion int       `json:"financial_version,omitempty"`
-		LastActivityAt   time.Time `json:"last_activity_at,omitempty"`
+		PasswordHash     string         `json:"password_hash,omitempty"`
+		FinancialVersion int            `json:"financial_version,omitempty"`
+		LastActivityAt   time.Time      `json:"last_activity_at,omitempty"`
+		PendingPvPKills  map[string]int `json:"pending_pvp_kills,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(str), &detail); err != nil {
 		return RoomDetail{}, err
@@ -286,6 +290,7 @@ func (v *ValkeyRoomRepository) GetRoom(ctx context.Context, id string) (RoomDeta
 	detail.Room.PasswordHash = detail.PasswordHash
 	detail.Room.FinancialVersion = detail.FinancialVersion
 	detail.Room.LastActivityAt = detail.LastActivityAt
+	detail.Room.PendingPvPKills = detail.PendingPvPKills
 	return detail.RoomDetail, nil
 }
 

@@ -23,7 +23,10 @@ Each job change credits floor(previous level × 0.5) points to the **previous** 
 
 Completion of all jobs, the monster book, the weapon, armor and item encyclopedias, or all alchemy recipes inducts a character permanently and once per category, in induction order.
 
+## `kill_p` (王者) Counter Rule
+
+- **`kill_p` (`characters.pvp_wins`, ranking category `pvp_victory`)** increments in PvP (`internal/pvp`) and GvG (`internal/gvg`) only when a surviving participant inflicts a non-revived combat defeat on an opponent satisfying `enemyStrong > playerStrong * 0.5` (`party2/lib/_battle.cgi:231–232`, `strong = int(mhp + mmp + at + df*0.5 + ag)`). Winning a Colosseum match (`give_bet`, `vs_player.cgi:186–216`) does not grant `pvp_wins`.
+
 ## Known legacy parity gaps
 
-- **王者 (`kill_p` / `pvp_victory`) counter rule ([#2539](https://github.com/witchcraze/party2re/issues/2539)):** Legacy `party2/lib/_battle.cgi:231–232` increments `$m{kill_p}` only when a surviving character defeats an opponent satisfying `is_strong` in a `$win`-bearing battle (`vs_player.cgi` PvP and `vs_guild.cgi` GvG), while `vs_player.cgi:186–216` (`give_bet`) does not increment `kill_p` on match win. Go currently increments `characters.pvp_wins` for every winning-team member at Colosseum match victory (`internal/pvp/settlement.go:108`) and omits per-defeat `is_strong` attribution in PvP and GvG.
 - **Cross-board exclusions and top-10 cap ([#2540](https://github.com/witchcraze/party2re/issues/2540)):** Legacy `party2/login.cgi:258–365` (`write_ranking`) caps each `ranking.cgi` board to 10 entries, excludes `kill_p` top-10 characters from `kill_m` (`login.cgi:287`), and excludes `mao_c` top-10 characters from `hero_c` (`login.cgi:316`). Go currently queries each board independently with paginated `limit`/`offset` without cross-board exclusion; whether to adopt the exclusions or approve independent boards awaits specification alignment.

@@ -13,7 +13,7 @@ Unlike modern asynchronous snapshot Elo ladders, authentic Party2 PvP features r
 - **Purge of Fictional Elo Arena**: Asynchronous Elo rating calculation, defense logs, and rating tables (`arena_ratings`, `arena_matches`) have been completely purged.
 - **Relational vs Ephemeral Authority**:
   - Room state, participant roster, team assignments, and round scores are stored ephemerally in Valkey Master (`party2:pvp:room:<id>`, `party2:pvp:character:<id>`, `party2:pvp:rooms:active`) with a 30-minute inactivity TTL.
-  - Canonical player wealth (`characters.money`) and PvP victories (`characters.pvp_wins`, legacy `$m{kill_p}`) are durably persisted in MariaDB Master.
+  - Canonical player wealth (`characters.money`) and stronger-opponent combat defeats (`characters.pvp_wins`, legacy `$m{kill_p}`) are durably persisted in MariaDB Master.
   - Financial transitions also retain a durable SQL claim and publication result. Failed room/membership writes are retried without charging or paying twice; SQL participation claims prevent concurrent admission to different rooms. See [financial publication and its recovery limits](../architecture/transient-run-state.md#pvp-financial-publication).
 - **Core Battle Engine Integration**: Round combat utilizes `corebattle.Engine.ResolvePartyBattle`, treating teammates as allies and opposing color participants as enemies.
 
@@ -75,7 +75,8 @@ A character can host a Colosseum room with configurable parameters:
 
 ### 5. Match Settlement & Prize Pool Split
 
-- When a team reaches `target_wins`, `prize_pool` is split evenly among its members (`prize_per_member = prize_pool / winners`), awarding `pvp_wins` to each winner and retaining any integer-division remainder as closed forfeited escrow.
+- When a team reaches `target_wins`, `prize_pool` is split evenly among its members (`prize_per_member = prize_pool / winners`), retaining any integer-division remainder as closed forfeited escrow.
+- Match victory (`give_bet`, `vs_player.cgi:186–216`) awards prize gold only; `characters.pvp_wins` (`kill_p`) is credited per surviving character who defeats an opponent satisfying `enemyStrong > playerStrong * 0.5` (`party2/lib/_battle.cgi:231–232`) in round combat (excluding auto-revived falls), settled atomically when the match concludes or disbands.
 - If no team reaches `target_wins` by round 10 (`MaxRounds`), the match finishes as a draw (`match_draw`) without refunding bets, closing the remaining `prize_pool` as forfeited escrow.
 
 ---

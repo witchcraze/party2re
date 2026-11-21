@@ -125,6 +125,7 @@ func TestPvPIntegration_MatchPrizeDistributionTransactional(t *testing.T) {
 			WinnerSide: pvp.ColorRed,
 			WinnerTeam: pvp.ColorRed,
 			Turns:      1,
+			Defeats:    []corebattle.PartyBattleDefeat{{ActorID: c1.ID, TargetID: c2.ID}},
 		},
 	}
 	svc, err := pvp.NewService(
