@@ -50,6 +50,7 @@ func duelCrownInvocation(c *corebattle.DuelCrownContext, id string) corebattle.C
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(frame, c)
 			c.TargetContext, c.Arguments = frame.TargetContext, append([]string(nil), frame.Arguments...)
 			err := s.ApplyDuelCrown(c, id, rng)
 			frame.TargetContext, frame.Arguments = c.TargetContext, c.Arguments

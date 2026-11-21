@@ -14,9 +14,12 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 	c.Arguments = slices.Clone(c.Arguments)
 	c.Inspection = maps.Clone(c.Inspection)
 	c.Invoke = nil
+	c.rollbacks = nil
 	if c.Assets != nil {
 		assets := *c.Assets
 		assets.HelperToolIDs = slices.Clone(assets.HelperToolIDs)
+		assets.StoredTools = slices.Clone(assets.StoredTools)
+		assets.StoredOutcomes = slices.Clone(assets.StoredOutcomes)
 		if assets.HeldToolID != nil {
 			held := *assets.HeldToolID
 			assets.HeldToolID = &held
@@ -92,7 +95,18 @@ func (s LifetimeState) callbackCopy() LifetimeState {
 	for i := range s.Actors {
 		s.Actors[i] = s.Actors[i].Clone()
 	}
+	s.rollbacks = nil
 	return s
+}
+
+func (s LifetimeState) executionCopy() LifetimeState {
+	copy := s.callbackCopy()
+	if s.npcResponse != nil {
+		facts := *s.npcResponse
+		facts.defeats = slices.Clone(facts.defeats)
+		copy.npcResponse = &facts
+	}
+	return copy
 }
 
 // Clone isolates mutable encounter/template facts and admission projections.

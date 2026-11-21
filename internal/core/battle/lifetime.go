@@ -14,6 +14,7 @@ type LifetimeState struct {
 	// StoredToolHistory is job50's used definitions per color for the room.
 	StoredToolHistory map[string]map[string]bool `json:"stored_tool_history,omitempty"`
 	npcResponse       *npcResponseFacts
+	rollbacks         *[]func()
 }
 
 // LifetimeActor keeps current resources and effect facts together. Participant

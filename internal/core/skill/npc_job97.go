@@ -35,6 +35,8 @@ func npcJob97Invocation(c *corebattle.NPCJob97Context, id string) corebattle.Cal
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(f, c)
+			rollbackContext(f, c.EquipmentReset)
 			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			err := s.ApplyNPCJob97(c, id, rng)
 			f.TargetContext, f.Arguments = c.TargetContext, c.Arguments

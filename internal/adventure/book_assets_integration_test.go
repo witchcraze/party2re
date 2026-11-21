@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/adventure"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
@@ -140,4 +144,83 @@ func TestBookSQLPairedReturnsConserveInstances(t *testing.T) {
 	if returned != 1 || c.calls.Load() != 1 {
 		t.Fatal("paired commands duplicated a return", returned, c.calls.Load())
 	}
+}
+
+// Execution-time rejection after job-86-entry-0 restores retained in-memory
+// hands/assets and rolls back SQL inventory, depot, run and receipt.
+func TestBookSQLWithdrawalRejectionRestoresCallerReferentsAndStorage(t *testing.T) {
+	f := newNormalFixture(t, 1)
+	_, depots := installStored(t, f)
+	grantHeldTo(t, f, 0, "item-169")
+	entry := f.enter(t, "normal")
+	run := entry.Command.RunID
+	seedAssetEncounter(t, f, run)
+	owner := f.actors[0].ID
+	rows := seedDepot(t, depots, owner, "item-001", "item-170")
+	held := heldItems(t, f, 0)
+	beforeRun, err := f.store.FindRun(context.Background(), run)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var retainedAssets *corebattle.JobAssets
+	var retainedAssetsHeld, retainedActorHeld *string
+	f.cfg.Combat = &bookRejectCombat{normalCombat: f.combat, f: f, onCapture: func(assets *corebattle.JobAssets, actorHeld *string) {
+		retainedAssets, retainedAssetsHeld, retainedActorHeld = assets, assets.HeldToolID, actorHeld
+	}}
+	f.restart(t)
+
+	cmd := assetCommand(t, f, run, 0, "job-86-entry-0", "book-withdraw-reject")
+	cmd.TargetID = "item-170"
+	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatalf("err = %v, want ErrUnsupportedEffect", err)
+	}
+	if retainedAssets == nil || *retainedAssetsHeld != "item-169" || *retainedActorHeld != "item-169" || len(retainedAssets.StoredOutcomes) != 0 {
+		t.Fatalf("caller referents leaked: assets=%+v assetsHeld=%q actorHeld=%q", retainedAssets, *retainedAssetsHeld, *retainedActorHeld)
+	}
+	afterRun, err := f.store.FindRun(context.Background(), run)
+	if err != nil || !reflect.DeepEqual(beforeRun, afterRun) || !reflect.DeepEqual(depotItems(t, depots, owner), rows) || !reflect.DeepEqual(heldItems(t, f, 0), held) {
+		t.Fatalf("SQL state mutated on rejection: err=%v depot=%+v held=%+v", err, depotItems(t, depots, owner), heldItems(t, f, 0))
+	}
+	if receipt, err := f.store.FindRunReceipt(context.Background(), run, cmd.ID); err != nil || receipt != nil {
+		t.Fatalf("unexpected receipt %+v err=%v", receipt, err)
+	}
+}
+
+type bookRejectCombat struct {
+	*normalCombat
+	f         *normalFixture
+	onCapture func(*corebattle.JobAssets, *string)
+}
+
+func (c *bookRejectCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
+	if cmd.Action != "job-86-entry-0" {
+		return c.normalCombat.ExecuteRunAction(ctx, r, cmd)
+	}
+	err := c.f.svc.WithJobAssets(ctx, r, cmd, func(assets *corebattle.JobAssets) error {
+		c.onCapture(assets, r.Battle.Actors[0].HeldToolID)
+		frame := corebattle.CallbackContext{
+			TargetContext: corebattle.TargetContext{ActorID: cmd.ActorID, PartyIDs: slices.Clone(r.Roster), EnemyIDs: slices.Clone(r.Enemies)},
+			Arguments:     []string{cmd.TargetID},
+			Assets:        assets,
+		}
+		operation := &corebattle.JobAssetContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: frame.TargetContext}, GuaranteedHit: true}}
+		var d skill.BattleDefinitions
+		d.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{JobAssets: operation}, len(r.Roster))
+		d.Invocations.Entries["reject-if-item-170"] = corebattle.CallbackDefinition{
+			Validate: func(state *corebattle.LifetimeState, _ *corebattle.CallbackContext) error {
+				if state.Actors[0].HeldToolID != nil && *state.Actors[0].HeldToolID == "item-170" {
+					return corebattle.ErrUnsupportedEffect
+				}
+				return nil
+			},
+			Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
+		}
+		ops, err := d.InvocationAction(&r.Battle, &frame, []string{"job-86-entry-0", "reject-if-item-170"}, c.f.rng)
+		if err != nil {
+			return err
+		}
+		return r.Battle.ApplyInvocations(&frame, d.Invocations, ops, c.f.rng)
+	})
+	return adventure.RunActionEffects{RoomActivity: true}, err
 }

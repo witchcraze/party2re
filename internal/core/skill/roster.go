@@ -57,6 +57,8 @@ func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id stri
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(frame, c)
+			rollbackContext(frame, c.Death)
 			c.TargetContext = frame.TargetContext
 			target := ""
 			if len(frame.Arguments) > 0 {

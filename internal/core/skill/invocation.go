@@ -18,3 +18,11 @@ func (d BattleDefinitions) InvocationAction(s *corebattle.LifetimeState, c *core
 	}
 	return ops, nil
 }
+
+func rollbackContext[T any](f *corebattle.CallbackContext, c *T) {
+	if c == nil {
+		return
+	}
+	saved := *c
+	f.OnRollback(func() { *c = saved })
+}

@@ -84,6 +84,7 @@ func (d BattleDefinitions) TransformationInvocation(c *corebattle.Transformation
 			if err != nil {
 				return err
 			}
+			rollbackContext(frame, c)
 			c.TargetContext = frame.TargetContext
 			if err := d.transformationGate(s, c, id, target, rng); err != nil {
 				return err

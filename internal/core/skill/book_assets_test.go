@@ -279,3 +279,72 @@ func TestBookDoubleUseConcreteChildren(t *testing.T) {
 		})
 	}
 }
+
+func TestBookWithdrawalRollbackRestoresRetainedReferentsAndHealthyContrast(t *testing.T) {
+	registerRejectIfHeld170 := func(d *BattleDefinitions) {
+		d.Invocations.Entries["reject-if-item-170"] = corebattle.CallbackDefinition{
+			Validate: func(state *corebattle.LifetimeState, _ *corebattle.CallbackContext) error {
+				if state.Actors[0].HeldToolID != nil && *state.Actors[0].HeldToolID == "item-170" {
+					return corebattle.ErrUnsupportedEffect
+				}
+				return nil
+			},
+			Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
+		}
+	}
+
+	// Exact reproduction: heldBookFixture("item-169", stored("book", "item-170"))
+	// with retained f.Assets and s.Actors[0].HeldToolID references.
+	s, f, d := heldBookFixture("item-169", stored("book", "item-170"))
+	registerRejectIfHeld170(&d)
+	f.Arguments = []string{"item-170"}
+	origAssets := f.Assets
+	origAssetsHeld := f.Assets.HeldToolID
+	origActorHeld := s.Actors[0].HeldToolID
+	ops, err := d.InvocationAction(&s, &f, []string{"job-86-entry-0", "reject-if-item-170"}, noArithmeticDraws{t})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatalf("err = %v, want ErrUnsupportedEffect", err)
+	}
+	if *origActorHeld != "item-169" || *s.Actors[0].HeldToolID != "item-169" {
+		t.Fatalf("actor hand = %q / %q, want item-169", *origActorHeld, *s.Actors[0].HeldToolID)
+	}
+	if *origAssetsHeld != "item-169" || *origAssets.HeldToolID != "item-169" || *f.Assets.HeldToolID != "item-169" {
+		t.Fatalf("requester hand = %q / %q / %q, want item-169", *origAssetsHeld, *origAssets.HeldToolID, *f.Assets.HeldToolID)
+	}
+	if len(origAssets.StoredOutcomes) != 0 || !reflect.DeepEqual(origAssets.StoredTools, []corebattle.StoredTool{stored("book", "item-170")}) {
+		t.Fatalf("stored outcomes/tools leaked: %+v", origAssets)
+	}
+
+	// Bound producer context + wallet debit + release recoil/ban rollback after real native callbacks.
+	s, c, f, d := jobAssetFixture()
+	*s.Actors[0].HeldToolID, *f.Assets.HeldToolID = "item-169", "item-169"
+	f.Assets.StoredTools = []corebattle.StoredTool{stored("book", "item-170")}
+	f.Arguments = []string{"item-170"}
+	registerRejectIfHeld170(&d)
+	origAssets, origAssetsHeld, origActorHeld = f.Assets, f.Assets.HeldToolID, s.Actors[0].HeldToolID
+	ops, err = d.InvocationAction(&s, &f, []string{"job-86-entry-3", "job-28-entry-3", "reject-if-item-170"}, noArithmeticDraws{t})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplyInvocations(&f, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{0, 0}}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatalf("err = %v, want ErrUnsupportedEffect", err)
+	}
+	if origAssets.Wallet != 100 || *origActorHeld != "item-169" || *origAssetsHeld != "item-169" || len(origAssets.StoredOutcomes) != 0 || len(s.SkillBans) != 0 || s.Actors[0].HP != 500 {
+		t.Fatalf("state/assets leaked after job-86-entry-3 + job-28-entry-3: wallet=%d hand=%q outcomes=%+v bans=%v hp=%d", origAssets.Wallet, *origActorHeld, origAssets.StoredOutcomes, s.SkillBans, s.Actors[0].HP)
+	}
+	if c.ResponseSuppressed || c.AreaDamageCalls != 0 || c.DamageCalls != 0 {
+		t.Fatalf("bound JobAssetContext leaked: %+v", c)
+	}
+
+	// Healthy contrast: caller observes updates through original references.
+	s, f, d = heldBookFixture("item-169", stored("book", "item-170"))
+	f.Arguments = []string{"item-170"}
+	origAssets, origAssetsHeld, origActorHeld = f.Assets, f.Assets.HeldToolID, s.Actors[0].HeldToolID
+	executeJobAsset(t, &s, &f, d, "job-86-entry-0")
+	if *origActorHeld != "item-170" || *origAssetsHeld != "item-170" || len(origAssets.StoredTools) != 0 || !reflect.DeepEqual(origAssets.StoredOutcomes, []corebattle.StoredToolOutcome{{InstanceID: "book", Result: corebattle.StoredToolExchanged}}) {
+		t.Fatalf("healthy contrast missing updates: actor=%q assets=%q outcomes=%+v", *origActorHeld, *origAssetsHeld, origAssets.StoredOutcomes)
+	}
+}

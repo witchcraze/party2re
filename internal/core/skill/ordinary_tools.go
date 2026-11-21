@@ -57,6 +57,7 @@ func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool b
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(f, c)
 			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			c.Inspection = mergeOrdinaryInspection(c.Inspection, f.Inspection)
 			var err error

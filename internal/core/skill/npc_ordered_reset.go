@@ -35,6 +35,8 @@ func npcOrderedResetInvocation(c *corebattle.NPCOrderedResetContext, id string) 
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(f, c)
+			rollbackContext(f, c.EquipmentReset)
 			c.TargetContext, c.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			err := s.ApplyNPCOrderedReset(c, id, rng)
 			f.TargetContext, f.Arguments = c.TargetContext, c.Arguments

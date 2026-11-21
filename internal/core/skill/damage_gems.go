@@ -58,6 +58,7 @@ func (d BattleDefinitions) DamageGemInvocation(c *corebattle.DamageContext, id s
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(frame, c)
 			c.TargetContext = frame.TargetContext
 			target := ""
 			if len(frame.Arguments) > 0 {

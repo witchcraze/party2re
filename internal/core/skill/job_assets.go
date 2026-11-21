@@ -33,6 +33,8 @@ func (d *BattleDefinitions) RegisterJobAssets(c *corebattle.JobAssetContext) {
 				if c == nil {
 					return corebattle.ErrUnsupportedEffect
 				}
+				rollbackContext(f, c)
+				rollbackContext(f, c.DefeatContext)
 				c.TargetContext, c.Arguments, c.Assets = f.TargetContext, append([]string(nil), f.Arguments...), f.Assets
 				c.Frame, c.Catalog = f, d.Invocations
 				if f.Defeat != nil {

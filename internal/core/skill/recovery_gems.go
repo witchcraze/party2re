@@ -127,6 +127,7 @@ func (d BattleDefinitions) RecoveryStatInvocation(c *corebattle.EffectContext, i
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect
 			}
+			rollbackContext(frame, c)
 			*c = context(frame)
 			target := ""
 			if len(frame.Arguments) > 0 {
