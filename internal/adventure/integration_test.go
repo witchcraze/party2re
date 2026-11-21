@@ -284,7 +284,7 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 		if errors.Is(err, tavern.ErrInsufficientFunds) {
 			return "酒場から出前が届きましたが、お金が足りませんでした", nil
 		}
-		return result.Message, err
+		return result.Item.Name, err
 	})
 
 	// 3. Start adventure (immediate execution + PostAdventureHook)
@@ -468,7 +468,7 @@ func TestAdventurePostAdventureHook_TavernDelivery_ZeroFundsLifecycle(t *testing
 		if errors.Is(err, tavern.ErrInsufficientFunds) {
 			return "酒場から出前が届きましたが、お金が足りませんでした", nil
 		}
-		return result.Message, err
+		return result.Item.Name, err
 	})
 
 	// 5. Start adventure: character finishes with small reward (< 750G)

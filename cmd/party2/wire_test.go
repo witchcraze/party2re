@@ -178,10 +178,11 @@ func TestWirePostAdventureHook_Messages(t *testing.T) {
 		want    string
 		wantErr error
 	}{
-		{"delivered", tavern.OrderResult{Message: "酒場からスープが届きました！ HPが20、MPが10回復した！"}, nil, "酒場からスープが届きました！ HPが20、MPが10回復した！", nil},
-		{"insufficient funds", tavern.OrderResult{}, fmt.Errorf("claim: %w", tavern.ErrInsufficientFunds), "酒場から出前が届きましたが、お金が足りませんでした", nil},
+		// Legacy shows no recovery amounts and names the unpaid meal (_battle.cgi:1366-1372).
+		{"delivered", tavern.OrderResult{Item: tavern.MenuItem{Name: "スープ"}, HPHealed: 20, MPHealed: 10}, nil, "酒場からスープが届きました！", nil},
+		{"insufficient funds", tavern.OrderResult{}, fmt.Errorf("claim: %w", tavern.UnaffordableDeliveryError{ItemName: "スープ"}), "酒場からスープが届きましたが、お金が足りませんでした", nil},
 		{"no reservation", tavern.OrderResult{}, tavern.ErrNoActiveDelivery, "", nil},
-		{"storage failure", tavern.OrderResult{Message: "uncommitted delivery"}, claimErr, "", claimErr},
+		{"storage failure", tavern.OrderResult{Item: tavern.MenuItem{Name: "スープ"}}, claimErr, "", claimErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			tavernMock := &mockTavernService{claimResult: tt.result, claimErr: tt.err}

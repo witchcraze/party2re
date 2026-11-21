@@ -74,7 +74,6 @@ type OrderResult struct {
 	RemainingGold  int      `json:"remaining_gold"`
 	TicketsAwarded int      `json:"tickets_awarded"`
 	TotalTickets   int      `json:"total_tickets"`
-	Message        string   `json:"message"`
 }
 
 // NPCName is the tavern's barkeep, a clean-room replacement for the legacy name.

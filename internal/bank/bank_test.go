@@ -256,9 +256,6 @@ func TestService_DepositAndWithdraw(t *testing.T) {
 		if res.Money != 400000 || res.Deposit != 300000 {
 			t.Errorf("unexpected deposit result: %+v", res)
 		}
-		if res.Message != "100000 Gお預かりいたしました" {
-			t.Errorf("unexpected message: %s", res.Message)
-		}
 	})
 
 	t.Run("deposit invalid inputs", func(t *testing.T) {
@@ -321,9 +318,6 @@ func TestService_DepositAndWithdraw(t *testing.T) {
 		}
 		if res.ActualWithdrawn != 250000 || res.Refunded != 0 {
 			t.Errorf("unexpected actual/refunded: actual=%d, refunded=%d", res.ActualWithdrawn, res.Refunded)
-		}
-		if res.Message != "250000 Gお返しいたします" {
-			t.Errorf("unexpected message: %s", res.Message)
 		}
 	})
 

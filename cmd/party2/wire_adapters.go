@@ -39,17 +39,18 @@ func buildPostAdventureHook(t postAdventureTavern) func(ctx context.Context, cha
 		if err := t.ResetFullness(ctx, characterID); err != nil {
 			return "", err
 		}
+		// Battle-end notices from _battle.cgi:1366-1372.
 		result, err := t.ClaimDelivery(ctx, characterID)
 		if errors.Is(err, tavern.ErrNoActiveDelivery) {
 			return "", nil
 		}
-		if errors.Is(err, tavern.ErrInsufficientFunds) {
-			return "酒場から出前が届きましたが、お金が足りませんでした", nil
+		if unpaid, ok := errors.AsType[tavern.UnaffordableDeliveryError](err); ok {
+			return "酒場から" + unpaid.ItemName + "が届きましたが、お金が足りませんでした", nil
 		}
 		if err != nil {
 			return "", err
 		}
-		return result.Message, nil
+		return "酒場から" + result.Item.Name + "が届きました！", nil
 	}
 }
 

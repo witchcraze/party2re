@@ -895,8 +895,8 @@ func TestTavern_Delivery_ZeroFundsLifecycle(t *testing.T) {
 
 	// 3. Claim before acquiring funds -> fails with ErrInsufficientFunds
 	_, err = svc.ClaimDelivery(ctx, charID)
-	if !errors.Is(err, tavern.ErrInsufficientFunds) {
-		t.Fatalf("expected ErrInsufficientFunds on claim with 0G, got %v", err)
+	if unpaid, ok := errors.AsType[tavern.UnaffordableDeliveryError](err); !ok || !errors.Is(err, tavern.ErrInsufficientFunds) || unpaid.ItemName != delivOmelet.ItemName {
+		t.Fatalf("expected the unpaid meal named in ErrInsufficientFunds, got %v", err)
 	}
 
 	// Reservation retained

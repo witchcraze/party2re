@@ -141,7 +141,7 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 		}
 
 		if char.Money < delivery.Price {
-			return ErrInsufficientFunds
+			return UnaffordableDeliveryError{ItemName: delivery.ItemName}
 		}
 
 		// Calculate HP/MP healing
@@ -190,15 +190,6 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 			return fmt.Errorf("failed to update tavern character status: %w", err)
 		}
 
-		msg := fmt.Sprintf("酒場から%sが届きました！", delivery.ItemName)
-		if hpHealed > 0 && mpHealed > 0 {
-			msg += fmt.Sprintf(" HPが%d、MPが%d回復した！", hpHealed, mpHealed)
-		} else if hpHealed > 0 {
-			msg += fmt.Sprintf(" HPが%d回復した！", hpHealed)
-		} else if mpHealed > 0 {
-			msg += fmt.Sprintf(" MPが%d回復した！", mpHealed)
-		}
-
 		result = OrderResult{
 			CharacterID:    char.ID,
 			Item:           item,
@@ -209,7 +200,6 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 			RemainingGold:  char.Money,
 			TicketsAwarded: 0,
 			TotalTickets:   0,
-			Message:        msg,
 		}
 		return nil
 	})
@@ -219,3 +209,10 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 	}
 	return result, nil
 }
+
+// UnaffordableDeliveryError is ErrInsufficientFunds for a delivery, naming the
+// meal for the battle-end notice (_battle.cgi:1372).
+type UnaffordableDeliveryError struct{ ItemName string }
+
+func (e UnaffordableDeliveryError) Error() string { return ErrInsufficientFunds.Error() }
+func (e UnaffordableDeliveryError) Unwrap() error { return ErrInsufficientFunds }

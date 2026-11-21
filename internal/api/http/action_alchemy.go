@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/witchcraze/party2re/internal/alchemy"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -24,6 +25,33 @@ type alchemySynthesizeRequest struct {
 
 type alchemyRecipesRequest struct{}
 
+// AlchemySynthesisResult and AlchemyClaimResult add the alchemist's reply,
+// which opens with the two ingredient names (alchemy.cgi:120-122,186-187).
+type AlchemySynthesisResult struct {
+	alchemy.SynthesisResult
+	Message string `json:"message"`
+}
+
+type AlchemyClaimResult struct {
+	alchemy.ClaimResult
+	Message string `json:"message"`
+}
+
+func alchemySynthesisReply(res alchemy.SynthesisResult) AlchemySynthesisResult {
+	msg := strings.Join(res.IngredientNames, " と ") + " じゃな！"
+	if res.ResultItemName != "" {
+		msg += "ふむ、この組み合わせなら " + res.ResultItemName + " ができるぞ！完成する頃にまた来るがよい"
+	} else {
+		msg += "おお、錬金可能なようじゃ！何が出来るか楽しみじゃな！一晩たてば完成するじゃろう。完成する頃にまた来るがよい"
+	}
+	return AlchemySynthesisResult{res, msg}
+}
+
+func alchemyClaimReply(res alchemy.ClaimResult) AlchemyClaimResult {
+	return AlchemyClaimResult{res, "まっておったぞ！" + strings.Join(res.IngredientNames, "と") + "を錬金した " + res.ResultItemName +
+		" が完成したぞい！出来上がったアイテムは預かり所の方に送っておいたぞい！"}
+}
+
 // WithAlchemy configures the scene observation, synthesis and recipe-list commands and entry delivery.
 func WithAlchemy(service AlchemyService) Option {
 	return func(h *Handler) {
@@ -34,7 +62,11 @@ func WithAlchemy(service AlchemyService) Option {
 			return
 		}
 		withActionCommand("alchemy_synthesize", func(ctx context.Context, actor string, p alchemySynthesizeRequest) (any, error) {
-			return service.Synthesize(ctx, actor, p.RecipeID)
+			res, err := service.Synthesize(ctx, actor, p.RecipeID)
+			if err != nil {
+				return nil, err
+			}
+			return alchemySynthesisReply(res), nil
 		}, alchemyActionRejection)(h)
 		withActionCommand("alchemy_recipes", func(ctx context.Context, actor string, _ alchemyRecipesRequest) (any, error) {
 			return service.ViewRecipes(ctx, actor)

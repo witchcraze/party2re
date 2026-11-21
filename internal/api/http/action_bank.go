@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/witchcraze/party2re/internal/bank"
@@ -15,6 +16,18 @@ type bankDepositRequest struct {
 
 type bankWithdrawRequest struct {
 	Amount int64 `json:"amount"`
+}
+
+// BankDepositResult and BankWithdrawResult add the teller's reply, which names
+// the requested amount even when a withdrawal is refunded (bank.cgi:58,89).
+type BankDepositResult struct {
+	bank.DepositResult
+	Message string `json:"message"`
+}
+
+type BankWithdrawResult struct {
+	bank.WithdrawResult
+	Message string `json:"message"`
 }
 
 // WithBank configures the BankService and its deposit/withdraw Gateway commands.
@@ -31,7 +44,11 @@ func bankDepositCommand(service BankService) Option {
 		return withActionCommand[bankDepositRequest]("bank_deposit", nil, nil)
 	}
 	return withActionCommand("bank_deposit", func(ctx context.Context, actorID string, params bankDepositRequest) (any, error) {
-		return service.Deposit(ctx, actorID, params.Amount)
+		res, err := service.Deposit(ctx, actorID, params.Amount)
+		if err != nil {
+			return nil, err
+		}
+		return BankDepositResult{res, fmt.Sprintf("%d Gお預かりいたしました", res.Amount)}, nil
 	}, bankActionRejection)
 }
 
@@ -40,7 +57,11 @@ func bankWithdrawCommand(service BankService) Option {
 		return withActionCommand[bankWithdrawRequest]("bank_withdraw", nil, nil)
 	}
 	return withActionCommand("bank_withdraw", func(ctx context.Context, actorID string, params bankWithdrawRequest) (any, error) {
-		return service.Withdraw(ctx, actorID, params.Amount)
+		res, err := service.Withdraw(ctx, actorID, params.Amount)
+		if err != nil {
+			return nil, err
+		}
+		return BankWithdrawResult{res, fmt.Sprintf("%d Gお返しいたします", res.Amount)}, nil
 	}, bankActionRejection)
 }
 

@@ -47,7 +47,6 @@ func (s *stubBlackMarketService) SacrificeItem(ctx context.Context, characterID 
 		URarePointsGained: 0,
 		TotalRarePoints:   11,
 		TotalURarePoints:  2,
-		Message:           "…はやぶさの剣…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…",
 	}, nil
 }
 
@@ -65,7 +64,6 @@ func (s *stubBlackMarketService) TradePrize(ctx context.Context, characterID str
 		IsURare:          false,
 		RemainingRare:    9,
 		RemainingURare:   2,
-		Message:          "取引成立だ…。時の砂 はお前の預かり所に送っておいた…",
 	}, nil
 }
 

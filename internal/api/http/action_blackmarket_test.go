@@ -34,7 +34,7 @@ func (f *blackMarketGatewayFixture) SacrificeItem(ctx context.Context, actor, it
 	if _, err := f.execute(ctx, actor, 0); err != nil {
 		return nil, err
 	}
-	return &blackmarket.SacrificeResult{CharacterID: actor, ItemInstanceID: itemID, RarePointsGained: 1, TotalRarePoints: 3, Message: "sacrificed"}, nil
+	return &blackmarket.SacrificeResult{CharacterID: actor, ItemInstanceID: itemID, ItemName: "はやぶさの剣", RarePointsGained: 1, TotalRarePoints: 3}, nil
 }
 
 func (f *blackMarketGatewayFixture) TradePrize(ctx context.Context, actor, prizeID string) (*blackmarket.TradeResult, error) {
@@ -42,7 +42,7 @@ func (f *blackMarketGatewayFixture) TradePrize(ctx context.Context, actor, prize
 	if _, err := f.execute(ctx, actor, 0); err != nil {
 		return nil, err
 	}
-	return &blackmarket.TradeResult{CharacterID: actor, PrizeID: prizeID, DepotInstanceID: "delivered", Cost: 1, RemainingRare: 2, Message: "traded"}, nil
+	return &blackmarket.TradeResult{CharacterID: actor, PrizeID: prizeID, DepotInstanceID: "delivered", ItemName: "時の砂", Cost: 1, RemainingRare: 2}, nil
 }
 
 func (f *blackMarketGatewayFixture) router(t *testing.T, timers timer.Service, options ...Option) nethttp.Handler {
@@ -103,9 +103,9 @@ func TestBlackMarketGatewayOutcomes(t *testing.T) {
 						if err := json.Unmarshal(got["result"], &result); err != nil {
 							t.Fatal(err)
 						}
-						ok := result.Message == "sacrificed" && result.ItemInstanceID == "owned-item" && f.target == "owned-item"
+						ok := result.Message == "…はやぶさの剣…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…" && result.ItemInstanceID == "owned-item" && f.target == "owned-item"
 						if input.action == "blackmarket_trade" {
-							ok = result.Message == "traded" && result.PrizeID == "bm_prize_087" && result.DepotInstanceID == "delivered" && f.target == "bm_prize_087"
+							ok = result.Message == "取引成立だ…。時の砂 はお前の預かり所に送っておいた…" && result.PrizeID == "bm_prize_087" && result.DepotInstanceID == "delivered" && f.target == "bm_prize_087"
 						}
 						if string(got["success"]) != "true" || !ok {
 							t.Fatalf("lost result facts: %s", got)

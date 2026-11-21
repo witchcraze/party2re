@@ -66,7 +66,6 @@ type SacrificeResult struct {
 	URarePointsGained int    `json:"u_rare_points_gained"`
 	TotalRarePoints   int    `json:"total_rare_points"`
 	TotalURarePoints  int    `json:"total_u_rare_points"`
-	Message           string `json:"message"`
 }
 
 type TradeResult struct {
@@ -79,5 +78,4 @@ type TradeResult struct {
 	IsURare          bool   `json:"is_u_rare"`
 	RemainingRare    int    `json:"remaining_rare"`
 	RemainingURare   int    `json:"remaining_u_rare"`
-	Message          string `json:"message"`
 }
