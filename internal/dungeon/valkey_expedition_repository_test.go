@@ -972,6 +972,7 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 		{"non-string member character_id", "state", "members", `[{"character_id":123}]`},
 		{"non-array member item_ids", "state", "members", `[{"item_ids":{"bad":1}}]`},
 		{"non-array member consumed_items", "state", "members", `[{"consumed_items":"oops"}]`},
+		{"array element member consumed_items", "state", "members", `[{"consumed_items":[[1,2]]}]`},
 		{"corrupted round", "state", "round", "nan"},
 		{"corrupted map_variant", "state", "map_variant", "nan"},
 		{"corrupted round_limit", "state", "round_limit", "nan"},
@@ -1125,6 +1126,8 @@ func TestValkeyExpeditionRepository_CorruptedARGVArgsFailClosed(t *testing.T) {
 		{"array consumed_items", 13, `["bad"]`},
 		{"non-array consumed_items value", 13, `{"char-argv":"bad"}`},
 		{"bad consumed_items element quantity", 13, `{"char-argv":[{"id":"item-1","quantity":"oops"}]}`},
+		{"array element consumed_items", 13, `{"char-argv":[[1,2]]}`},
+		{"empty array element consumed_items", 13, `{"char-argv":[[]]}`},
 		{"bad member_exp_deltas json", 14, "{bad-json"},
 		{"non-int member_exp_deltas", 14, `{"char-argv":"oops"}`},
 		{"bad member_gold_deltas json", 15, "{bad-json"},
@@ -1188,4 +1191,80 @@ func TestValkeyExpeditionRepository_CorruptedARGVArgsFailClosed(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("compatible empty consumed_items array in state and ARGV", func(t *testing.T) {
+		charID := "char-argv-empty-consumed"
+		cleanupDungeonValkey(t, client, charID)
+		defer cleanupDungeonValkey(t, client, charID)
+
+		repo, err := dungeon.NewValkeyExpeditionRepository(client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exp := sampleExpedition("exp-empty-consumed", charID, dungeon.NativeMap0ID)
+		exp.Members = []dungeon.ExpeditionMember{{CharacterID: charID, Name: "Hero", CurrentHP: 100, MaxHP: 100}}
+		if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+			t.Fatal(err)
+		}
+		sKey := fmt.Sprintf("party2:dungeon:{char:%s}:state", charID)
+		membersWithEmpty := fmt.Sprintf(`[{"character_id":%q,"name":"Hero","current_hp":100,"max_hp":100,"consumed_items":[]}]`, charID)
+		if err := client.Do(ctx, client.B().Hset().Key(sKey).FieldValue().FieldValue("members", membersWithEmpty).Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
+
+		out, err := repo.Step(ctx, charID, dungeon.StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewX:                 1,
+			NewY:                 0,
+			RoundDelta:           1,
+			ConsumedItems:        map[string][]corebattle.ConsumedItem{charID: {}},
+			Now:                  time.Now().UTC(),
+		})
+		if err != nil {
+			t.Fatalf("Step with empty consumed_items failed: %v", err)
+		}
+		if len(out.Expedition.Members) != 1 || len(out.Expedition.Members[0].ConsumedItems) != 0 {
+			t.Fatalf("unexpected Members after empty consumed_items Step: %+v", out.Expedition.Members)
+		}
+		reloaded, err := repo.GetActiveExpedition(ctx, charID)
+		if err != nil || len(reloaded.Members) != 1 || len(reloaded.Members[0].ConsumedItems) != 0 {
+			t.Fatalf("GetActiveExpedition failed after empty consumed_items Step: %+v err=%v", reloaded, err)
+		}
+	})
+
+	t.Run("valid consumed_items succeeds", func(t *testing.T) {
+		charID := "char-argv-valid-consumed"
+		cleanupDungeonValkey(t, client, charID)
+		defer cleanupDungeonValkey(t, client, charID)
+
+		repo, err := dungeon.NewValkeyExpeditionRepository(client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exp := sampleExpedition("exp-valid-consumed", charID, dungeon.NativeMap0ID)
+		exp.Members = []dungeon.ExpeditionMember{{CharacterID: charID, Name: "Hero", CurrentHP: 100, MaxHP: 100}}
+		if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+			t.Fatal(err)
+		}
+
+		wantItem := corebattle.ConsumedItem{ID: "potion", InstanceID: "inst-1", Quantity: 1}
+		out, err := repo.Step(ctx, charID, dungeon.StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewX:                 1,
+			NewY:                 0,
+			RoundDelta:           1,
+			ConsumedItems:        map[string][]corebattle.ConsumedItem{charID: {wantItem}},
+			Now:                  time.Now().UTC(),
+		})
+		if err != nil {
+			t.Fatalf("Step with valid consumed_items failed: %v", err)
+		}
+		if len(out.Expedition.Members) != 1 || len(out.Expedition.Members[0].ConsumedItems) != 1 || out.Expedition.Members[0].ConsumedItems[0] != wantItem {
+			t.Fatalf("unexpected ConsumedItems after Step: %+v", out.Expedition.Members)
+		}
+		reloaded, err := repo.GetActiveExpedition(ctx, charID)
+		if err != nil || len(reloaded.Members) != 1 || len(reloaded.Members[0].ConsumedItems) != 1 || reloaded.Members[0].ConsumedItems[0] != wantItem {
+			t.Fatalf("GetActiveExpedition mismatch after valid consumed_items Step: %+v err=%v", reloaded, err)
+		}
+	})
 }

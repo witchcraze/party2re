@@ -43,8 +43,13 @@ local function is_int_number(v)
 end
 
 local function validate_consumed_item(c)
-    if type(c) ~= 'table' then
+    if type(c) ~= 'table' or next(c) == nil then
         return false
+    end
+    for k, _ in pairs(c) do
+        if type(k) ~= 'string' then
+            return false
+        end
     end
     if c['id'] ~= nil and c['id'] ~= cjson.null and type(c['id']) ~= 'string' then
         return false
@@ -335,13 +340,18 @@ if has_members then
     if has_consumed_items then
         for _, m in ipairs(members) do
             local cid = m['character_id']
-            if cid and decoded_items[cid] then
+            if cid and decoded_items[cid] and #decoded_items[cid] > 0 then
                 local existing = m['consumed_items'] or {}
                 for _, item in ipairs(decoded_items[cid]) do
                     table.insert(existing, item)
                 end
                 m['consumed_items'] = existing
             end
+        end
+    end
+    for _, m in ipairs(members) do
+        if type(m['consumed_items']) == 'table' and #m['consumed_items'] == 0 then
+            m['consumed_items'] = nil
         end
     end
 end
