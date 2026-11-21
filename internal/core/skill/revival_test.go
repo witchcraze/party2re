@@ -187,18 +187,35 @@ func TestSacrificeAutomaticRevivalControlsLaterSlotsAndCMP(t *testing.T) {
 }
 
 func TestRevivalOrdinaryFallenAndBanGatesRetainIndirectBodySemantics(t *testing.T) {
-	for _, helperHP := range []int{-1, 0, 1} {
+	for _, helperHP := range []int{-1, 0, 1, 9} {
 		s, c, d := revivalRegistryFixture()
 		s.Actors[0].HP = 0
-		if helperHP >= 0 {
+		if helperHP == 9 {
+			s.Actors[2].Icon, s.Actors[2].HP = "assets/images/placeholders/battle/forms.svg#job-66-", helperHP
+		} else if helperHP >= 0 {
 			s.Actors[2].RosterIdentity, s.Actors[2].HP = "calling-66", helperHP
 		}
 		d.RegisterRevivals(&c)
-		if _, err := d.RevivalAction(&s, &c, "job-66-revive", "", noArithmeticDraws{t}); (err == nil) != (helperHP > 0) {
+		if _, err := d.RevivalAction(&s, &c, "job-66-revive", "", noArithmeticDraws{t}); err != nil {
 			t.Fatal(helperHP, err)
 		}
 		if _, err := d.RevivalAction(&s, &c, "gem_revive_sky_2", "fallen", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(err)
+		}
+		frame := corebattle.CallbackContext{TargetContext: c.TargetContext}
+		ops, err := d.InvocationAction(&s, &frame, []string{"job-66-revive"}, noArithmeticDraws{t})
+		if err != nil {
+			t.Fatal(helperHP, err)
+		}
+		if err = s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); err != nil {
+			t.Fatal(helperHP, err)
+		}
+		if helperHP > 0 {
+			if s.Actors[0].HP != s.Actors[0].MaxHP/2 || s.Actors[0].Status != corebattle.StatusDofuu || s.Actors[2].HP != helperHP/2 || s.SkillBans["job-66-revive"] != 3 {
+				t.Fatal(helperHP, s)
+			}
+		} else if s.Actors[0].HP != 0 || s.Actors[0].Status != "" || s.SkillBans["job-66-revive"] != 0 {
+			t.Fatal(helperHP, s)
 		}
 	}
 	s, c, d := revivalRegistryFixture()

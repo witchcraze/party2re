@@ -177,7 +177,7 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 		return ParsedRunAction{}, err
 	}
 	switch action.EntryID {
-	case "front", "back", "between-encounter-survival", "br":
+	case "front", "back", "between-encounter-survival", "br", "job-66-revive":
 		bindOrdinaryPlayerAction(&action, frame, o.ctx.Definitions.Invocations)
 	}
 	return action, nil

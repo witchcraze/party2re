@@ -126,6 +126,11 @@ func TestHelperRevivalBranchesBanAndReload(t *testing.T) {
 				if helperHP >= 0 {
 					s.actor("ally").RosterIdentity, s.actor("ally").HP = "calling-66", helperHP
 				}
+				if hp <= 0 {
+					if err := s.ValidateRevivalAction(&c, "job-66-revive", "fallen", &targetRNG{t: t}); err != nil {
+						t.Fatal(hp, mp, helperHP, err)
+					}
+				}
 				r, err := s.ApplyRevival(&c, "job-66-revive", "fallen", &targetRNG{t: t})
 				if err != nil {
 					t.Fatal(err)
@@ -133,6 +138,11 @@ func TestHelperRevivalBranchesBanAndReload(t *testing.T) {
 				applied := helperHP > 0 && (hp <= 0 || mp > 40)
 				if r.Applied != applied {
 					t.Fatal(hp, mp, helperHP, r)
+				}
+				if !applied {
+					if s.actor("self").HP != hp || s.actor("self").Status != "" || s.SkillBans["job-66-revive"] != 0 || (helperHP == 0 && s.actor("ally").HP != 0) {
+						t.Fatal(hp, mp, helperHP, s)
+					}
 				}
 				if applied {
 					id, wantHP, wantMP := "fallen", 1, mp-40
@@ -155,6 +165,42 @@ func TestHelperRevivalBranchesBanAndReload(t *testing.T) {
 				}
 			}
 		}
+	}
+
+	for _, tc := range []struct {
+		name              string
+		namedHP, iconHP   int
+		wantApplied       bool
+		wantSelf, wantBan int
+	}{
+		{"absent appearance fallback", -1, -1, false, 0, 0},
+		{"fallen appearance fallback", -1, 0, false, 0, 0},
+		{"living appearance fallback", -1, 9, true, 50, 3},
+		{"fallen named helper blocks living appearance fallback", 0, 9, false, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, c := revivalFixture()
+			s.actor("self").HP = 0
+			if tc.namedHP >= 0 {
+				s.actor("fallen").RosterIdentity, s.actor("fallen").HP = "calling-66", tc.namedHP
+			}
+			if tc.iconHP >= 0 {
+				s.actor("ally").Icon, s.actor("ally").HP = nativeFormIcon("job-66", ""), tc.iconHP
+			}
+			if err := s.ValidateRevivalAction(&c, "job-66-revive", "", &targetRNG{t: t}); err != nil {
+				t.Fatal(err)
+			}
+			r, err := s.ApplyRevival(&c, "job-66-revive", "", &targetRNG{t: t})
+			if err != nil || r.Applied != tc.wantApplied || s.actor("self").HP != tc.wantSelf || s.SkillBans["job-66-revive"] != tc.wantBan {
+				t.Fatal(r, err, s)
+			}
+			if !tc.wantApplied && tc.iconHP >= 0 && s.actor("ally").HP != tc.iconHP {
+				t.Fatal("no-effect changed appearance helper HP", s)
+			}
+			if tc.wantApplied && (s.actor("self").Status != StatusDofuu || s.actor("ally").HP != tc.iconHP/2) {
+				t.Fatal(s)
+			}
+		})
 	}
 }
 
