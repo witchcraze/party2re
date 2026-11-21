@@ -23,6 +23,10 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
+type noPresence struct{}
+
+func (noPresence) GetOnlineCount(context.Context) (int, error) { return 0, nil }
+
 type wakeCharacterRepository struct {
 	*database.CharacterRepository
 	afterLock func(context.Context) error
@@ -169,7 +173,7 @@ func TestWake_SQLRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(locked), home.WithEconomy(eco), home.WithTimer(timers))
+			svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(locked), home.WithEconomy(eco), home.WithOnlineCounter(noPresence{}), home.WithTimer(timers))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -331,7 +335,7 @@ func TestWake_RealTavernFullnessReset(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	homeSvc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithTimer(timers))
+	homeSvc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithOnlineCounter(noPresence{}), home.WithTimer(timers))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +506,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithTimer(timers))
+		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithOnlineCounter(noPresence{}), home.WithTimer(timers))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -621,7 +625,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithTimer(timers))
+		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithOnlineCounter(noPresence{}), home.WithTimer(timers))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -652,7 +656,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 		defer cancel()
 		char := newChar(t, ctx, "WakeCycleStress")
 
-		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithTimer(timers))
+		svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithOnlineCounter(noPresence{}), home.WithTimer(timers))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -737,7 +741,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(ft),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(ft),
 			home.WithJobStateRestorer(wakeJobRestorerHook(func(context.Context, string, string) error {
 				jobRestoreCalls++
 				return nil
@@ -793,7 +797,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(timers),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(timers),
 			home.WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
 		)
 		if err != nil {
@@ -883,7 +887,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(timers),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(timers),
 			home.WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
 		)
 		if err != nil {
@@ -989,7 +993,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(skippedTimer),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(skippedTimer),
 			home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
 		)
 		if err != nil {
@@ -1098,7 +1102,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(skippedTimer),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(skippedTimer),
 			home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
 		)
 		if err != nil {
@@ -1110,7 +1114,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(timers),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(timers),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -1211,7 +1215,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(timers),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(timers),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -1272,7 +1276,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(ft),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(ft),
 			home.WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
 		)
 		if err != nil {
@@ -1417,7 +1421,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 				// does not hold an uncommitted MariaDB row lock across the artificial pause barrier.
 				svc1Opts := []home.ServiceOption{
 					home.WithCharacterUpdater(charRepo),
-					home.WithTimer(ft),
+					home.WithOnlineCounter(noPresence{}), home.WithTimer(ft),
 					home.WithJobStateRestorer(restorer),
 					home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
 				}
@@ -1434,7 +1438,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 					charRepo,
 					home.WithCharacterUpdater(charRepo),
 					home.WithEconomy(eco),
-					home.WithTimer(timers),
+					home.WithOnlineCounter(noPresence{}), home.WithTimer(timers),
 					home.WithJobStateRestorer(jobSvc),
 				)
 				if err != nil {
@@ -1578,7 +1582,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			charRepo,
 			home.WithCharacterUpdater(charRepo),
 			home.WithEconomy(eco),
-			home.WithTimer(timers),
+			home.WithOnlineCounter(noPresence{}), home.WithTimer(timers),
 			home.WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
 		)
 		if err != nil {

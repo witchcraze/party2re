@@ -71,7 +71,7 @@ type JobStateRestorer interface {
 	RestoreActiveJob(ctx context.Context, characterID, jobID string) error
 }
 
-// OnlineCounter counts currently logged in players for sleep duration scaling.
+// OnlineCounter returns the public presence character count that scales sleep duration.
 type OnlineCounter interface {
 	GetOnlineCount(ctx context.Context) (int, error)
 }
