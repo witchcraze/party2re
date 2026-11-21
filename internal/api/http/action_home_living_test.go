@@ -47,7 +47,7 @@ func TestHomeOwnerLivingCommandsAndVisitorBoundary(t *testing.T) {
 	f.repo.notices = []home.DeliveryNotice{{ID: "n1", CharacterID: "hero", Message: "届きました"}}
 
 	status, response := navigationGET(t, router)
-	data := decodeHomeData(t, response)
+	data := decodeSceneData[HomeSceneData](t, response)
 	if status != 200 || data.View.Private == nil || len(data.View.Private.Phrases) != 1 || len(data.View.Private.Notices) != 1 || data.View.Private.Items == nil || len(data.ColorSamples) != 11 {
 		t.Fatalf("owned observation: %d %+v", status, data)
 	}
@@ -87,7 +87,7 @@ func TestHomeOwnerLivingCommandsAndVisitorBoundary(t *testing.T) {
 		t.Fatalf("select: %d %s", status, raw)
 	}
 	status, response = navigationGET(t, router)
-	data = decodeHomeData(t, response)
+	data = decodeSceneData[HomeSceneData](t, response)
 	if status != 200 || data.View.Private != nil || len(data.ColorSamples) != 0 || !hasHomeAction(response, "home_sleep") || !hasHomeAction(response, "npc_talk") {
 		t.Fatalf("visitor observation: %+v", response)
 	}

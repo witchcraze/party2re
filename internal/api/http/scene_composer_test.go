@@ -24,14 +24,7 @@ func TestSelectedScenesAndConnectedChoices(t *testing.T) {
 	if !slices.EqualFunc(town.AvailableActions, []string{"scene_enter", "adventure_start", "npc_talk", "npc_inspect", "park_divinate"}, func(a ContextAction, id string) bool { return a.Action == id }) {
 		t.Fatalf("unconnected or irrelevant commands offered: %+v", town.AvailableActions)
 	}
-	var data TownSceneData
-	raw, err := json.Marshal(town.Scene.Data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(raw, &data); err != nil {
-		t.Fatal(err)
-	}
+	data := decodeSceneData[TownSceneData](t, town)
 	if len(data.Destinations) != 2 || data.Page.Limit != 20 || data.Page.Mode != "offset" || data.Page.Next != nil {
 		t.Fatalf("town collection: %+v", data)
 	}

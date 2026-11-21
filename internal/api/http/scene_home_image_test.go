@@ -42,7 +42,7 @@ func TestHomeImageOfferedOnlyInOwnHomeAfterUnlock(t *testing.T) {
 			}
 			_, response := navigationGET(t, router)
 			ids := []string{}
-			for _, d := range decodeHomeData(t, response).Destinations {
+			for _, d := range decodeSceneData[HomeSceneData](t, response).Destinations {
 				ids = append(ids, d.ID)
 			}
 			if slices.Contains(ids, "home_image") != (tc.unlock && !tc.visitor) || hasHomeAction(response, "home_image_update") {
@@ -110,7 +110,7 @@ func sceneEnterDestinations(t *testing.T, response PlayerContextResponse) []stri
 // the unlock reader so context stays 200 without offering home_image.
 func TestHomeImageUnlockReadBoundaryAndErrorPropagation(t *testing.T) {
 	f, store, router := homeSceneRouter(t, withFixtureHomeImage)
-	if status, response := navigationGET(t, router); status != 200 || slices.ContainsFunc(decodeHomeData(t, response).Destinations, func(d SceneDestination) bool { return d.ID == "home_image" }) || slices.Contains(sceneEnterDestinations(t, response), "home_image") {
+	if status, response := navigationGET(t, router); status != 200 || slices.ContainsFunc(decodeSceneData[HomeSceneData](t, response).Destinations, func(d SceneDestination) bool { return d.ID == "home_image" }) || slices.Contains(sceneEnterDestinations(t, response), "home_image") {
 		t.Fatalf("locked own home: %d %+v", status, response.Scene)
 	}
 	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"home_image"}}`, nil); status != 403 || !strings.Contains(string(raw["error"]), "SCENE_ACCESS_DENIED") {
@@ -135,7 +135,7 @@ func TestHomeImageUnlockReadBoundaryAndErrorPropagation(t *testing.T) {
 		if slices.Contains(sceneEnterDestinations(t, response), "home_image") {
 			t.Fatalf("%s offered home_image in scene_enter", tc.name)
 		}
-		if tc.selection.Destination == "home" && slices.ContainsFunc(decodeHomeData(t, response).Destinations, func(d SceneDestination) bool { return d.ID == "home_image" }) {
+		if tc.selection.Destination == "home" && slices.ContainsFunc(decodeSceneData[HomeSceneData](t, response).Destinations, func(d SceneDestination) bool { return d.ID == "home_image" }) {
 			t.Fatalf("%s offered home_image in home destinations", tc.name)
 		}
 		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"home_image"}}`, nil)
@@ -163,7 +163,7 @@ func TestHomeImageUnlockReadBoundaryAndErrorPropagation(t *testing.T) {
 	f.imageUnlocks.Image = true
 	store.selection = playercontext.Selection{Destination: "home"}
 	status, response := navigationGET(t, router)
-	if status != 200 || !slices.Contains(sceneEnterDestinations(t, response), "home_image") || !slices.ContainsFunc(decodeHomeData(t, response).Destinations, func(d SceneDestination) bool { return d.ID == "home_image" }) {
+	if status != 200 || !slices.Contains(sceneEnterDestinations(t, response), "home_image") || !slices.ContainsFunc(decodeSceneData[HomeSceneData](t, response).Destinations, func(d SceneDestination) bool { return d.ID == "home_image" }) {
 		t.Fatalf("unlocked own home: %d %+v", status, response.Scene)
 	}
 }

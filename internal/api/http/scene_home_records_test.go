@@ -65,7 +65,7 @@ func homeRecordRouter(t *testing.T) (*homeRecordStub, *gatewayNavigationStore, f
 
 func homeDestinationIDs(t *testing.T, response PlayerContextResponse) []string {
 	var ids []string
-	for _, d := range decodeHomeData(t, response).Destinations {
+	for _, d := range decodeSceneData[HomeSceneData](t, response).Destinations {
 		ids = append(ids, d.ID)
 	}
 	return ids

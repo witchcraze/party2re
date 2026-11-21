@@ -202,35 +202,10 @@ func homeSceneRouter(t *testing.T, options ...Option) (*homeSceneFixture, *gatew
 	return f, store, h.Router()
 }
 
-func decodeHomeData(t *testing.T, response PlayerContextResponse) HomeSceneData {
-	t.Helper()
-	raw, err := json.Marshal(response.Scene.Data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var data HomeSceneData
-	if err := json.Unmarshal(raw, &data); err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-func decodeMailboxData(t *testing.T, response PlayerContextResponse) HomeMailboxSceneData {
-	t.Helper()
-	raw, err := json.Marshal(response.Scene.Data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var data HomeMailboxSceneData
-	if err := json.Unmarshal(raw, &data); err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
 func TestHomeScenesPublicOwnedTargetsAndRecovery(t *testing.T) {
 	f, store, router := homeSceneRouter(t)
 	status, response := navigationGET(t, router)
-	data := decodeHomeData(t, response)
+	data := decodeSceneData[HomeSceneData](t, response)
 	if status != 200 || !data.View.IsOwner || data.View.Private == nil || len(data.Destinations) != 9 || response.Scene.Support.Observation != "details" {
 		t.Fatalf("owned: %d %+v", status, response)
 	}
@@ -241,7 +216,7 @@ func TestHomeScenesPublicOwnedTargetsAndRecovery(t *testing.T) {
 	}
 	refreshed := homeObservation(t, raw)
 	status, response = navigationGET(t, router)
-	data = decodeHomeData(t, response)
+	data = decodeSceneData[HomeSceneData](t, response)
 	if status != 200 || !reflect.DeepEqual(refreshed.Scene, response.Scene) || response.Character.ID != "hero" || data.View.Owner.ID != "other" || data.View.IsOwner || data.View.Private != nil || len(data.Destinations) != 5 || f.repo.privateReads != before {
 		t.Fatalf("public: %+v", response)
 	}
@@ -342,7 +317,7 @@ func TestHomeMailboxPagingUsesActorAndNeverReadsLetters(t *testing.T) {
 					}
 				}
 				status, response := navigationGET(t, router)
-				data := decodeMailboxData(t, response)
+				data := decodeSceneData[HomeMailboxSceneData](t, response)
 				if status != 200 || len(data.Letters) != 1 || data.Page.Mode != mode || data.Page.Next == nil || data.Letters[0].IsRead {
 					t.Fatalf("first: %+v", data)
 				}
@@ -356,7 +331,7 @@ func TestHomeMailboxPagingUsesActorAndNeverReadsLetters(t *testing.T) {
 				}
 				refreshed := homeObservation(t, raw)
 				status, response = navigationGET(t, router)
-				data = decodeMailboxData(t, response)
+				data = decodeSceneData[HomeMailboxSceneData](t, response)
 				wantWrites := 1
 				if mode == "cursor" {
 					wantWrites = 2
@@ -366,7 +341,7 @@ func TestHomeMailboxPagingUsesActorAndNeverReadsLetters(t *testing.T) {
 				}
 				f.repo.letters = nil
 				status, response = navigationGET(t, router)
-				data = decodeMailboxData(t, response)
+				data = decodeSceneData[HomeMailboxSceneData](t, response)
 				if status != 200 || data.Letters == nil || len(data.Letters) != 0 || f.executions != 0 || f.updates != 0 {
 					t.Fatal("empty/mutation")
 				}
