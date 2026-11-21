@@ -121,27 +121,34 @@ func (d BattleDefinitions) npcChoicePool(s *corebattle.LifetimeState, c *corebat
 	for _, e := range previous {
 		appendEntry(e, a.Jobs.OldSP, a.Jobs.OldJobID)
 	}
-	if load := a.NPCLoadout; load != nil && load.CustomName != "" && a.CMP >= load.CustomCost {
-		choice := NPCChoice{Custom: true, CallbackBinding: corebattle.CallbackBinding{CallbackEntry: corebattle.CallbackEntry{ID: "npc-custom", Name: load.CustomName}}}
-		for _, id := range load.Gems {
-			if id != "" {
-				choice.Invocations = append(choice.Invocations, corebattle.CallbackInvocation{Kind: "entry", EntryID: id})
+	customKey := ""
+	if load := a.NPCLoadout; load != nil && load.CustomName != "" {
+		customKey = OperationNameKey(load.CustomName)
+		if _, ok := bindings[customKey]; !ok {
+			if displayKey := byDisplay[load.CustomName]; displayKey != "" {
+				customKey = displayKey
 			}
 		}
-		if len(choice.Invocations) > 0 {
-			key := OperationNameKey(load.CustomName)
-			if _, ok := bindings[key]; !ok {
-				if displayKey := byDisplay[load.CustomName]; displayKey != "" {
-					key = displayKey
+		if a.CMP >= load.CustomCost {
+			choice := NPCChoice{Custom: true, ChargeCustom: true, CallbackBinding: corebattle.CallbackBinding{CallbackEntry: corebattle.CallbackEntry{ID: "npc-custom", Name: load.CustomName}}}
+			for _, id := range load.Gems {
+				if id != "" {
+					choice.Invocations = append(choice.Invocations, corebattle.CallbackInvocation{Kind: "entry", EntryID: id})
 				}
 			}
-			positions = append(positions, key)
-			bindings[key] = choice
+			if len(choice.Invocations) > 0 {
+				positions = append(positions, customKey)
+				bindings[customKey] = choice
+			}
 		}
 	}
 	choices := make([]NPCChoice, 0, len(positions))
 	for _, key := range positions {
-		choices = append(choices, bindings[key])
+		choice := bindings[key]
+		if customKey != "" && key == customKey {
+			choice.ChargeCustom = true
+		}
+		choices = append(choices, choice)
 	}
 	return corebattle.NPCActionPlan{Choices: choices, NextSeed: previous, Catalog: d.Invocations}, nil
 }

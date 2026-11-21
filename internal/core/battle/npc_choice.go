@@ -5,8 +5,9 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // NPCChoice is a weighted position with the last eligible binding for its name.
 type NPCChoice struct {
 	CallbackBinding
-	Custom      bool
-	Invocations []CallbackInvocation
+	Custom       bool
+	ChargeCustom bool
+	Invocations  []CallbackInvocation
 }
 
 func (choice NPCChoice) frame(c *CallbackContext) CallbackContext {
@@ -28,7 +29,7 @@ func (choice NPCChoice) invocations() []CallbackInvocation {
 
 func (choice NPCChoice) charge(a *LifetimeActor) {
 	a.MP = max(0, a.MP-choice.MPCost)
-	if load := a.NPCLoadout; load != nil && (choice.Custom || choice.Name == load.CustomName) {
+	if load := a.NPCLoadout; load != nil && (choice.Custom || choice.ChargeCustom) {
 		a.CMP -= load.CustomCost
 	}
 }
