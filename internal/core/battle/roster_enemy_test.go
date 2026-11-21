@@ -115,4 +115,25 @@ func TestEnemySummonWeightsFallbackAndReloadContinuation(t *testing.T) {
 	if string(before) != string(after) {
 		t.Fatal("rejected summon mutated state")
 	}
+
+	// Negative NPCLoadout costs reject before any summon RNG draw or mutation.
+	for _, loadout := range []*NPCLoadout{
+		{CustomCost: -1},
+		{GemCosts: [3]int{10, 0, -2}},
+	} {
+		s, c = rosterFixture()
+		enemy := enemySummonPayload()
+		enemy.NPCLoadout = loadout
+		c.EnemyPool = []LifetimeActor{enemy}
+		before, _ = json.Marshal(s)
+		rng := &targetRNG{t: t}
+		if _, err := s.ApplyRoster(&c, "tool-78", "", rng); !errors.Is(err, ErrInvalidParticipant) {
+			t.Fatalf("loadout=%+v: err=%v", loadout, err)
+		}
+		after, _ = json.Marshal(s)
+		if string(before) != string(after) {
+			t.Fatalf("loadout=%+v mutated state", loadout)
+		}
+		rng.done()
+	}
 }

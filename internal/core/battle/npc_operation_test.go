@@ -180,3 +180,30 @@ func TestNPCActionPlanSelectChoiceBounds(t *testing.T) {
 		rng.done()
 	}
 }
+
+func TestNPCLoadoutNegativeCostsRejectedAndClamped(t *testing.T) {
+	if got := CustomGemCost([3]string{"g1", "g2"}, [3]int{-20, 10}); got != 11 {
+		t.Fatalf("CustomGemCost clamped=%d, want 11", got)
+	}
+	if got := CustomGemCost([3]string{"g1"}, [3]int{-5}); got != 0 {
+		t.Fatalf("CustomGemCost single negative=%d, want 0", got)
+	}
+	for _, loadout := range []*NPCLoadout{
+		{CustomName: "neg-custom", CustomCost: -1},
+		{CustomName: "neg-gem", GemCosts: [3]int{0, -5, 0}},
+	} {
+		s, c := equipmentTailFixture(true, 1)
+		s.actor("self").NPCLoadout = loadout
+		before := s.callbackCopy()
+		rng := &targetRNG{t: t}
+		if _, err := s.BeginNPCAction(&c, rng); !errors.Is(err, ErrInvalidParticipant) || !reflect.DeepEqual(s, before) {
+			t.Fatalf("loadout=%+v: err=%v state=%+v", loadout, err, s)
+		}
+		rng.done()
+	}
+	actor := LifetimeActor{Participant: Participant{CMP: 10}, NPCLoadout: &NPCLoadout{CustomCost: -25}}
+	NPCChoice{Custom: true, ChargeCustom: true}.charge(&actor)
+	if actor.CMP != 10 {
+		t.Fatalf("charge with negative CustomCost mutated CMP: %d", actor.CMP)
+	}
+}
