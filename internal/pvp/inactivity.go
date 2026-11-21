@@ -81,7 +81,10 @@ func (s *Service) cleanupInactiveRoom(ctx context.Context, last Transition, now 
 	for _, id := range memberIDs {
 		memberSet[id] = true
 	}
-	pendingKills := cloneIntMap(last.Detail.Room.PendingPvPKills)
+	pendingKills := cloneIntMap(last.PendingPvPKills)
+	if len(pendingKills) == 0 {
+		pendingKills = cloneIntMap(last.Detail.Room.PendingPvPKills)
+	}
 	lockIDs := append([]string(nil), memberIDs...)
 	for id, count := range pendingKills {
 		if id != "" && count > 0 {

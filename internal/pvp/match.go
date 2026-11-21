@@ -304,7 +304,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 				return err
 			}
 		} else {
-			if err := s.transitions.TouchActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now); err != nil {
+			if err := s.transitions.TouchRoundActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now, detail.Room.PendingPvPKills); err != nil {
 				if errors.Is(err, ErrRoomInactive) {
 					if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, lastTransitionFromContext(lockedCtx), now); cleanErr != nil {
 						return cleanErr

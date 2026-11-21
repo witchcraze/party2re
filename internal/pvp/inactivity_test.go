@@ -498,3 +498,89 @@ func (r *failingDeleteRooms) SaveRoom(ctx context.Context, room pvp.ColosseumRoo
 	}
 	return r.RoomRepository.SaveRoom(ctx, room, members)
 }
+
+func TestPvPInactivity_NonFinalKillsSurviveValkeyExpiryAndRetry(t *testing.T) {
+	ctx := context.Background()
+	t0 := time.Now().UTC().Truncate(time.Second)
+	now := t0
+
+	chars := newMockCharRepo()
+	alice := createTestCharacter("char-1", "Alice", 500)
+	bob := createTestCharacter("char-2", "Bob", 500)
+	chars.add(alice)
+	chars.add(bob)
+
+	rooms := pvp.NewMemoryRoomRepository()
+	trans := pvp.NewMemoryTransitionRepository()
+	baseTimer := timer.NewService(nil)
+	timerErr := errors.New("timer unavailable")
+	ft := &failingTimer{Service: baseTimer, failOnID: bob.ID, failErr: timerErr}
+
+	battleEngine := mockBattleEngine{
+		result: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeDraw,
+			Turns:       3,
+			RemainingHP: map[string]int{alice.ID: 50, bob.ID: 50},
+			Defeats:     []corebattle.PartyBattleDefeat{{ActorID: alice.ID, TargetID: bob.ID}},
+		},
+	}
+
+	svc, err := pvp.NewService(
+		rooms,
+		chars,
+		battleEngine,
+		pvp.WithTransitionRepository(trans),
+		pvp.WithTimerService(ft),
+		pvp.WithPrizeRemitter(chars),
+		pvp.WithClock(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	room, err := svc.CreateRoom(ctx, alice.ID, pvp.CreateRoomRequest{Name: "TimeoutKills", Bet: 100, MaxMembers: 2, TargetWins: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = svc.JoinRoom(ctx, bob.ID, room.Room.ID, "")
+	_, _ = svc.SelectTeam(ctx, alice.ID, room.Room.ID, pvp.ColorRed)
+	_, _ = svc.SelectTeam(ctx, bob.ID, room.Room.ID, pvp.ColorBlue)
+	_, _ = svc.StartMatch(ctx, alice.ID, room.Room.ID)
+
+	// Non-final round 1: Alice defeats strong Bob; kills stay pending and are NOT in characters yet.
+	res1, err := svc.AdvanceRound(ctx, alice.ID, room.Room.ID)
+	if err != nil || res1.MatchCompleted {
+		t.Fatalf("expected non-final round 1, got res=%+v err=%v", res1, err)
+	}
+	if midAlice, _ := chars.FindByID(ctx, alice.ID); midAlice.PvPWins != 0 {
+		t.Fatalf("expected PvPWins=0 before settlement/timeout, got %d", midAlice.PvPWins)
+	}
+
+	// Simulate Valkey TTL expiration alongside inactivity timeout.
+	now = t0.Add(pvp.InactivityTimeout + time.Second)
+	if err := rooms.DeleteRoom(ctx, room.Room.ID); err != nil {
+		t.Fatal(err)
+	}
+	_ = rooms.DeleteCharacterRoom(ctx, alice.ID, room.Room.ID)
+	_ = rooms.DeleteCharacterRoom(ctx, bob.ID, room.Room.ID)
+
+	// First cleanup attempt fails during timer publication after SQL timeout commit.
+	if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, timerErr) {
+		t.Fatalf("expected timerErr on interrupted timeout cleanup, got %v", err)
+	}
+
+	// Retry on fresh service instance finishes publication without double-incrementing PvPWins.
+	ft.failOnID = ""
+	if err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
+		t.Fatalf("retry LeaveRoom after timeout: %v", err)
+	}
+
+	afterAlice, _ := chars.FindByID(ctx, alice.ID)
+	afterBob, _ := chars.FindByID(ctx, bob.ID)
+	if afterAlice.PvPWins != 1 || !afterAlice.PendingWake {
+		t.Fatalf("Alice after timeout recovery = %+v (want PvPWins=1, PendingWake=true)", afterAlice)
+	}
+	if afterBob.PvPWins != 0 || !afterBob.PendingWake {
+		t.Fatalf("Bob after timeout recovery = %+v (want PvPWins=0, PendingWake=true)", afterBob)
+	}
+}

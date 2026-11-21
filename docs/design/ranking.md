@@ -25,7 +25,7 @@ Completion of all jobs, the monster book, the weapon, armor and item encyclopedi
 
 ## `kill_p` (王者) Counter Rule
 
-- **`kill_p` (`characters.pvp_wins`, ranking category `pvp_victory`)** increments in PvP (`internal/pvp`) and GvG (`internal/gvg`) only when a surviving participant inflicts a non-revived combat defeat on an opponent satisfying `enemyStrong > playerStrong * 0.5` (`party2/lib/_battle.cgi:231–232`, `strong = int(mhp + mmp + at + df*0.5 + ag)`). Winning a Colosseum match (`give_bet`, `vs_player.cgi:186–216`) does not grant `pvp_wins`.
+- Ranking category `pvp_victory` orders `characters.pvp_wins` (`kill_p`), credited per stronger-opponent combat defeat rather than Colosseum match wins as specified in [PvP](pvp.md) and [GvG](gvg.md).
 
 ## Known legacy parity gaps
 

@@ -76,7 +76,7 @@ A character can host a Colosseum room with configurable parameters:
 ### 5. Match Settlement & Prize Pool Split
 
 - When a team reaches `target_wins`, `prize_pool` is split evenly among its members (`prize_per_member = prize_pool / winners`), retaining any integer-division remainder as closed forfeited escrow.
-- Match victory (`give_bet`, `vs_player.cgi:186–216`) awards prize gold only; `characters.pvp_wins` (`kill_p`) is credited per surviving character who defeats an opponent satisfying `enemyStrong > playerStrong * 0.5` (`party2/lib/_battle.cgi:231–232`) in round combat (excluding auto-revived falls), settled atomically when the match concludes or disbands.
+- Match victory (`give_bet`, `vs_player.cgi:186–216`) awards prize gold only; `characters.pvp_wins` (`kill_p`) is credited per surviving character who inflicts a non-revived stronger-opponent combat defeat (`party2/lib/_battle.cgi:231–232`, `battle.IsStrongEnemy`) across rounds and flushed atomically on match settlement or closure (including inactivity timeout).
 - If no team reaches `target_wins` by round 10 (`MaxRounds`), the match finishes as a draw (`match_draw`) without refunding bets, closing the remaining `prize_pool` as forfeited escrow.
 
 ---
