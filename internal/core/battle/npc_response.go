@@ -138,7 +138,10 @@ func (s *LifetimeState) applyNPCResponse(field *NamedFieldContext, frame *Callba
 	result.NormalAction = decision.NormalAction
 	result.NextSeed = plan.NextSeed
 	if decision.NormalAction {
-		choice := plan.Choices[int(rng.Float64()*float64(len(plan.Choices)))]
+		choice, err := plan.SelectChoice(rng)
+		if err != nil {
+			return result, err
+		}
 		if err := s.actor(c.ActorID).BeginNormalAction(true, false, false, rng); err != nil {
 			return result, err
 		}

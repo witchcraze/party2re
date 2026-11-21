@@ -8,7 +8,31 @@ import (
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
+
+type npcActionResult struct {
+	NPCChoice
+	NextSeed []corebattle.CallbackBinding
+}
+
+func applyNPCAction(d BattleDefinitions, s *corebattle.LifetimeState, c *corebattle.CallbackContext, seed []corebattle.CallbackBinding, rng random.Generator) (npcActionResult, error) {
+	plan, err := d.npcChoicePool(s, c, seed)
+	if err != nil {
+		return npcActionResult{}, err
+	}
+	if err := s.ValidateNPCChoices(c, plan, rng); err != nil {
+		return npcActionResult{}, err
+	}
+	choice, err := plan.SelectChoice(rng)
+	if err != nil {
+		return npcActionResult{}, err
+	}
+	if err := s.ApplyNPCChoice(c, plan.Catalog, choice, rng); err != nil {
+		return npcActionResult{}, err
+	}
+	return npcActionResult{NPCChoice: choice, NextSeed: plan.NextSeed}, nil
+}
 
 type npcSelectionRNG struct {
 	value float64
@@ -59,7 +83,7 @@ func TestNPCDefaultIndependentSPAndDuplicateBinding(t *testing.T) {
 		t.Fatal(choices, err)
 	}
 	s.Actors[0].Jobs.OldSP = 10
-	result, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+	result, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
 	if err != nil || len(result.NextSeed) != 5 {
 		t.Fatal(result, err)
 	}
@@ -109,7 +133,7 @@ func TestNPCActualActionLateCostAndReload(t *testing.T) {
 			d.RegisterBaseGuard(c)
 		}
 		before := s.Actors[0].MP
-		choice, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: .999})
+		choice, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: .999})
 		if err != nil || choice.ID != "job-1-entry-3" || s.Actors[0].Attack != 200 || s.Actors[0].MP != before-8 {
 			t.Fatal(choice, s.Actors[0], err)
 		}
@@ -159,7 +183,7 @@ func TestNPCProxyAndGeneratedBindingsUseCurrentRole(t *testing.T) {
 			t.Fatal(job, binding)
 		}
 		mp := s.Actors[0].MP
-		if _, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: .999}); err != nil {
+		if _, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: .999}); err != nil {
 			t.Fatal(job, err)
 		}
 		if s.Actors[0].MP != mp-binding.MPCost || !s.Actors[0].NPC {
@@ -173,7 +197,7 @@ func TestNPCCustomOrderedRepeatedSlotsAndUnsupportedClosure(t *testing.T) {
 	d.RegisterDefenseGems()
 	s.Actors[0].CMP = 200
 	s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{CustomName: "custom", Gems: [3]string{"gem_guard_1", "gem_guard_1", "gem_guard_1"}, GemCosts: [3]int{20, 20, 20}, CustomCost: 72}
-	choice, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: .999})
+	choice, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: .999})
 	if err != nil || !choice.Custom || len(choice.Invocations) != 3 || s.Actors[0].CMP != 128 || s.Actors[0].Temporary != corebattle.TemporaryDefense {
 		t.Fatal(choice, s.Actors[0], err)
 	}
@@ -185,7 +209,7 @@ func TestNPCCustomOrderedRepeatedSlotsAndUnsupportedClosure(t *testing.T) {
 		t.Fatal(err)
 	}
 	rng := &npcSelectionRNG{}
-	if _, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+	if _, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatal(err)
 	}
 	after, err := json.Marshal(s)
@@ -208,7 +232,7 @@ func TestNPCCustomOriginalOrder(t *testing.T) {
 	d.RegisterDefenseGems()
 	s.Actors[0].CMP = 200
 	s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{CustomName: "ordered", Gems: [3]string{"gem_guard_1", "gem_big_guard_sky", "gem_guard_1"}, GemCosts: [3]int{20, 37, 20}, CustomCost: 92}
-	result, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: .999})
+	result, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: .999})
 	if err != nil || !result.Custom || s.Actors[0].Temporary != corebattle.TemporaryDefense || s.Actors[0].CMP != 108 {
 		t.Fatal(result, s.Actors[0], err)
 	}
@@ -222,7 +246,7 @@ func TestNPCUnsupportedProducerCannotBypassSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+	if _, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatal(err)
 	}
 	after, err := json.Marshal(s)
@@ -249,7 +273,7 @@ func TestNPCCustomNameOverridesPriorBindingsWithoutLosingWeight(t *testing.T) {
 			t.Fatal("last custom binding lost", choices)
 		}
 	}
-	result, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+	result, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
 	if err != nil || !result.Custom || s.Actors[0].CMP != 80 || s.Actors[0].Temporary != corebattle.TemporaryDefense || f.Damage.DamageCalls != 0 {
 		t.Fatal(result, s.Actors[0], err)
 	}
@@ -313,7 +337,7 @@ func TestNPCSourceNameLastWriteAcrossDifferentDisplayStrings(t *testing.T) {
 	for _, draw := range []float64{4.0 / 8.0, 7.0 / 8.0} {
 		s, f, d := setup()
 		beforeEnemyHP := s.Actors[1].HP
-		res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: draw})
+		res, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: draw})
 		if err != nil || res.ID != "job-70-entry-2" || res.Name != "magic-storm" || s.Actors[0].MP != 0 || s.Actors[1].HP >= beforeEnemyHP {
 			t.Fatalf("draw=%v: res=%+v actor=%+v enemy=%+v err=%v", draw, res, s.Actors[0], s.Actors[1], err)
 		}
@@ -322,7 +346,7 @@ func TestNPCSourceNameLastWriteAcrossDifferentDisplayStrings(t *testing.T) {
 	// Index 3 (originally 34.2) also resolves to 70.0.
 	s, f, d = setup()
 	s.Actors[0].HP = 50
-	res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: 3.0 / 8.0})
+	res, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: 3.0 / 8.0})
 	if err != nil || res.ID != "job-70-entry-0" || res.Name != "meditation" || s.Actors[0].MP != 15 || s.Actors[0].HP <= 50 {
 		t.Fatalf("index 3 resolution: res=%+v actor=%+v err=%v", res, s.Actors[0], err)
 	}
@@ -375,7 +399,7 @@ func TestNPCDistinctSourceNamesWithSameDisplayStringStaySeparate(t *testing.T) {
 	} {
 		s, f, d := setup()
 		beforeEnemyHP := s.Actors[1].HP
-		res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: tc.draw})
+		res, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: tc.draw})
 		if err != nil || res.ID != tc.wantID || s.Actors[0].MP != 0 || s.Actors[1].HP >= beforeEnemyHP {
 			t.Fatalf("draw=%v: res=%+v actor=%+v enemy=%+v err=%v", tc.draw, res, s.Actors[0], s.Actors[1], err)
 		}
@@ -424,7 +448,7 @@ func TestNPCDistinctSourceNamesWithSameDisplayStringStaySeparate(t *testing.T) {
 			CustomCost: 20,
 		}
 		beforeEnemyHP := s.Actors[1].HP
-		res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: tc.draw})
+		res, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: tc.draw})
 		if err != nil || res.ID != tc.wantID || res.Custom != tc.wantCustom ||
 			s.Actors[0].MP != tc.wantMP || s.Actors[0].CMP != tc.wantCMP ||
 			s.Actors[0].Temporary != tc.wantTemp || (tc.wantCustom == (s.Actors[1].HP < beforeEnemyHP)) {
@@ -511,7 +535,7 @@ func TestNPCContextDependentSourceNamesAndCustomCollision(t *testing.T) {
 				t.Fatalf("wantCollide=%v got pos3=%+v pos4=%+v", tc.wantCollide, choices[3], choices[4])
 			}
 			if !tc.wantCollide {
-				res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &damageGemDraws{t: t, draws: []float64{3.0 / 5.0, 0, 0}})
+				res, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &damageGemDraws{t: t, draws: []float64{3.0 / 5.0, 0, 0}})
 				if err != nil || res.ID != "job-84-entry-2" || s.Actors[1].HP != tc.wantEnemyHP {
 					t.Fatalf("execution mismatch: res=%+v enemyHP=%d want=%d err=%v", res, s.Actors[1].HP, tc.wantEnemyHP, err)
 				}
@@ -577,7 +601,7 @@ func TestNPCLateCMPSourceIdentitySettlement(t *testing.T) {
 			if err != nil || len(choices) != 4 || choices[3].Custom {
 				t.Fatalf("choices=%+v err=%v", choices, err)
 			}
-			res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &damageGemDraws{t: t, draws: []float64{3.0 / 4.0, 0, 0}})
+			res, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &damageGemDraws{t: t, draws: []float64{3.0 / 4.0, 0, 0}})
 			if err != nil || res.ID != "job-84-entry-2" || res.Custom ||
 				s.Actors[0].MP != 4 || s.Actors[0].CMP != tc.wantCMP || s.Actors[1].HP != tc.wantEnemyHP {
 				t.Fatalf("res=%+v actor=%+v enemyHP=%d wantCMP=%d err=%v", res, s.Actors[0], s.Actors[1].HP, tc.wantCMP, err)
@@ -595,7 +619,7 @@ func TestNPCLateCMPSourceIdentitySettlement(t *testing.T) {
 		GemCosts:   [3]int{20},
 		CustomCost: 20,
 	}
-	res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: 0})
+	res, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: 0})
 	if err != nil || res.ID != "npc-normal-attack" || res.Custom || s.Actors[0].CMP != -10 {
 		t.Fatalf("unambiguous display fallback: res=%+v actor=%+v err=%v", res, s.Actors[0], err)
 	}
@@ -613,7 +637,7 @@ func TestNPCLateCMPSourceIdentitySettlement(t *testing.T) {
 			GemCosts:   [3]int{20},
 			CustomCost: 20,
 		}
-		res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: draw})
+		res, err := applyNPCAction(d, &s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: draw})
 		if err != nil || res.Custom || s.Actors[0].MP != 0 || s.Actors[0].CMP != 10 {
 			t.Fatalf("draw=%v: res=%+v actor=%+v err=%v", draw, res, s.Actors[0], err)
 		}

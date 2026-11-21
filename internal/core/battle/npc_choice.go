@@ -39,6 +39,19 @@ func (s *LifetimeState) ValidateNPCChoices(c *CallbackContext, plan NPCActionPla
 	return s.validateNPCChoices(c, plan, rng, nil)
 }
 
+// SelectChoice picks a weighted position from the admitted pool, clamping edge RNG draws.
+func (plan NPCActionPlan) SelectChoice(rng random.Generator) (NPCChoice, error) {
+	if rng == nil {
+		return NPCChoice{}, ErrInvalidRequest
+	}
+	if len(plan.Choices) == 0 {
+		return NPCChoice{}, ErrUnsupportedEffect
+	}
+	idx := int(rng.Float64() * float64(len(plan.Choices)))
+	idx = max(0, min(len(plan.Choices)-1, idx))
+	return plan.Choices[idx], nil
+}
+
 func (s *LifetimeState) validateNPCChoices(c *CallbackContext, plan NPCActionPlan, rng random.Generator, after func(*LifetimeState, *CallbackContext) error) error {
 	if rng == nil || c == nil {
 		return ErrInvalidRequest
