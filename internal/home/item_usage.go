@@ -163,7 +163,8 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	var resMsg string
 	var kept bool
-	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: source == "inventory"}
+	// The inventory is locked for both sources: a Depot callback may take a held item.
+	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: true}
 	if source == "inventory" {
 		req.CostFunc = func(c corecharacter.Character) (economy.ResourceCost, error) {
 			if homeItemKept(def, c) {
@@ -180,8 +181,13 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		}
 		// The effect runs before Depot consumption so that a no-effect sentinel
 		// aborts the transaction without touching the Depot.
-		msg, err := effect(s, tc.Context, &tc.Character, def)
+		msg, err := effect(s, tc, def)
 		resMsg = msg // errNoEffect carries the message
+		// D4: legacy never checks mes after a Depot category-4 callback, so the
+		// item is consumed even when the callback had no effect.
+		if errors.Is(err, errNoEffect) && source == "depot" && def.UsageCategory == item.UsageCategoryDepotAfterAction {
+			err = nil
+		}
 		if err != nil || kept || source != "depot" {
 			return err
 		}
@@ -243,29 +249,37 @@ func committedHomeItemResult(def item.Definition, msg string, kept bool, char *c
 	}
 }
 
-// homeEffect is one Home callback, run inside the item transaction.
-type homeEffect func(s *Service, ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error)
+// homeEffect is one Home callback, run inside the item transaction. It mutates
+// tc.Character and, for held items, tc.Inventory.
+type homeEffect func(s *Service, tc *economy.TxContext, def item.Definition) (string, error)
+
+// charEffect adapts a callback that only touches the character.
+func charEffect(f func(s *Service, ctx context.Context, c *corecharacter.Character, def item.Definition) (string, error)) homeEffect {
+	return func(s *Service, tc *economy.TxContext, def item.Definition) (string, error) {
+		return f(s, tc.Context, &tc.Character, def)
+	}
+}
 
 // homeEffectFor is the only list of items Home dispatches; anything else is
 // rejected before a transaction starts.
 func homeEffectFor(name string) (homeEffect, bool) {
 	if isRecipeScrollItem(name) {
-		return func(s *Service, ctx context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
+		return charEffect(func(s *Service, ctx context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
 			return s.applyRecipeScrollConsumable(ctx, c, d.Name)
-		}, true
+		}), true
 	}
 	if bag, ok := rewardBags[name]; ok {
-		return func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		return charEffect(func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 			return s.applyRewardBag(ctx, c, bag)
-		}, true
+		}), true
 	}
 	if isCostumeItem(name) {
-		return func(s *Service, ctx context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
+		return charEffect(func(s *Service, ctx context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
 			return s.applyCostumeConsumable(ctx, c, d.Name)
-		}, true
+		}), true
 	}
 	if orb, ok := orbItems[name]; ok {
-		return func(_ *Service, _ context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
+		return charEffect(func(_ *Service, _ context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
 			added, err := c.AddOrb(orb)
 			if err != nil {
 				return "", err
@@ -274,7 +288,7 @@ func homeEffectFor(name string) (homeEffect, bool) {
 				return "すでにささげられています", errNoEffect
 			}
 			return d.Name + "を復活の祭壇にささげた！", nil
-		}, true
+		}), true
 	}
 	e, ok := homeEffects[name]
 	return e, ok
@@ -283,7 +297,7 @@ func homeEffectFor(name string) (homeEffect, bool) {
 // statGain is a seed: base+U[0,spread) to one stat, drawn even when over-level
 // nullifies it.
 func statGain(spread, base int, label string, stat func(*corecharacter.Stats) *int) homeEffect {
-	return func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	return charEffect(func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		v := s.randomInt(spread) + base
 		if c.OverLevel {
 			v = 0
@@ -291,36 +305,36 @@ func statGain(spread, base int, label string, stat func(*corecharacter.Stats) *i
 		*stat(&c.Stats) += v
 		c.Stats.Clamp(c.OverLevel, c.Level)
 		return fmt.Sprintf("%sの%sが %d あがった！", c.Name, label, v), nil
-	}
+	})
 }
 
 // spGain credits SP, ignoring over-level.
 func spGain(amount func(*Service) int) homeEffect {
-	return func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	return charEffect(func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		v := amount(s)
 		if err := c.AddSP(v); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("%sのSPが %d あがった！", c.Name, v), nil
-	}
+	})
 }
 
-func resetTired(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+var resetTired = charEffect(func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 	c.ResetTired()
 	return fmt.Sprintf("元気全快！%sの疲労が回復した！", c.Name), nil
-}
+})
 
 func godReins(visit, ride string) homeEffect {
-	return func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	return charEffect(func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		if c.GodVisit != "" {
 			return noEffectMessage, errNoEffect // already admitted; keep the reins
 		}
 		c.GodVisit = visit
 		return fmt.Sprintf("%sは、%s", c.Name, ride), nil
-	}
+	})
 }
 
-func noStatChange(*Service, context.Context, *corecharacter.Character, item.Definition) (string, error) {
+func noStatChange(*Service, *economy.TxContext, item.Definition) (string, error) {
 	return "", nil
 }
 
@@ -332,25 +346,26 @@ var homeEffects = map[string]homeEffect{
 	"素早さの種":        statGain(6, 1, "素早さ", func(st *corecharacter.Stats) *int { return &st.Agility }),
 	"スキルの種":        spGain(func(s *Service) int { return s.randomInt(3) + 1 }),
 	sacredManaName: spGain(func(*Service) int { return 200 }),
-	"幸せの種": func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	"幸せの種": charEffect(func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		if err := progression.ApplyHappySeed(c); err != nil {
 			return "", err
 		}
 		return "次のクエスト時にレベルアップ！", nil
-	},
+	}),
 	"ファイト一発":            resetTired,
 	"気合の霊薬":             resetTired,
 	heavenReinsName:     godReins(corecharacter.GodVisitHeaven, "天馬に乗り天界へと導かれた！"),
 	underworldReinsName: godReins(corecharacter.GodVisitUnderworld, "黒い天馬に乗り天界?へと導かれた！"),
 	lifeBraceletName:    noStatChange,
 	sorceryRingName:     noStatChange,
-	"小さなメダル": func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	sealedKeyName:       (*Service).openSealedBox,
+	"小さなメダル": charEffect(func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		if err := c.AddSmallMedals(1); err != nil {
 			return "", err
 		}
 		return "メダル伯爵にメダルを１枚献上しました", nil
-	},
-	"水晶の原石": func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	}),
+	"水晶の原石": charEffect(func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		if c.WeaponSeal <= 0 {
 			return noEffectMessage, errNoEffect // no seal to remove; keep the crystal
 		}
@@ -360,14 +375,14 @@ var homeEffects = map[string]homeEffect{
 			return "", err
 		}
 		return fmt.Sprintf("武器に施された刻印が剥がれ落ちた！刻印晶を %d 個回収した！", refund), nil
-	},
-	"未来のカケラ": func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	}),
+	"未来のカケラ": charEffect(func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		return s.applyFutureMemoryConsumable(ctx, *c)
-	},
-	veteranRewardName: func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	}),
+	veteranRewardName: charEffect(func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		return s.applyVeteranReward(c)
-	},
-	personalityBookName: func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	}),
+	personalityBookName: charEffect(func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
 		return s.applyPersonalityBook(ctx, c)
-	},
+	}),
 }

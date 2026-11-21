@@ -655,6 +655,9 @@ func (m *mockTransactionRunner) ExecuteTransaction(ctx context.Context, req econ
 
 	m.chars[req.CharacterID] = tc.Character
 	if req.LockInventory {
+		if m.invs == nil {
+			m.invs = map[string]coreinventory.Inventory{}
+		}
 		m.invs[req.CharacterID] = tc.Inventory
 	}
 	return &economy.TransactionResult{
@@ -781,9 +784,6 @@ func TestUseHomeItem_TransactionalSuccess(t *testing.T) {
 	}
 	if len(depotMgr.depots[charID].Items) != 0 {
 		t.Errorf("expected depot item to be consumed, got %d items", len(depotMgr.depots[charID].Items))
-	}
-	if runner.lastReq.LockInventory {
-		t.Errorf("expected LockInventory=false for depot item usage")
 	}
 }
 

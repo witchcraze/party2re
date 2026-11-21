@@ -68,23 +68,32 @@ func (s *Service) applyRewardBag(ctx context.Context, char *corecharacter.Charac
 	if s.depotMgr == nil || s.catalog == nil {
 		return "", ErrCannotUseHere
 	}
-	numbers := bag.draw(s.randomInt)
+	names, err := s.deliverItemNumbers(ctx, char.ID, bag.draw(s.randomInt))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(bag.format, strings.Join(names, "、")), nil
+}
+
+// deliverItemNumbers appends one instance per legacy item number to the
+// Depot, ignoring capacity, and returns their names in order.
+func (s *Service) deliverItemNumbers(ctx context.Context, characterID string, numbers []int) ([]string, error) {
 	rewards := make([]item.Instance, 0, len(numbers))
 	names := make([]string, 0, len(numbers))
 	for _, n := range numbers {
 		def, err := s.catalog.FindByID(fmt.Sprintf("item-%03d", n))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		inst, err := def.NewInstance(1)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		rewards = append(rewards, inst)
 		names = append(names, def.Name)
 	}
-	if err := s.depotMgr.AppendDeliveries(ctx, char.ID, rewards); err != nil {
-		return "", err
+	if err := s.depotMgr.AppendDeliveries(ctx, characterID, rewards); err != nil {
+		return nil, err
 	}
-	return fmt.Sprintf(bag.format, strings.Join(names, "、")), nil
+	return names, nil
 }

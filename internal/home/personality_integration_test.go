@@ -96,19 +96,27 @@ var (
 
 type failingEconomyCharacters struct {
 	*database.CharacterRepository
-	fail        *atomic.Bool
-	afterUpdate *atomic.Pointer[func(context.Context)]
+	fail *atomic.Bool
 }
 
 func (r failingEconomyCharacters) Update(ctx context.Context, c corecharacter.Character) error {
 	if r.fail == nil || r.fail.Load() {
 		return errInjectedBook
 	}
-	if err := r.CharacterRepository.Update(ctx, c); err != nil {
+	return r.CharacterRepository.Update(ctx, c)
+}
+
+type afterSaveInventories struct {
+	*database.InventoryRepository
+	afterSave *atomic.Pointer[func(context.Context)]
+}
+
+func (r afterSaveInventories) Save(ctx context.Context, inv coreinventory.Inventory) error {
+	if err := r.InventoryRepository.Save(ctx, inv); err != nil {
 		return err
 	}
-	if r.afterUpdate != nil {
-		if fn := r.afterUpdate.Load(); fn != nil && *fn != nil {
+	if r.afterSave != nil {
+		if fn := r.afterSave.Load(); fn != nil && *fn != nil {
 			(*fn)(ctx)
 		}
 	}
@@ -147,7 +155,7 @@ type bookFixture struct {
 	// beforeDepotFail runs inside a failing Depot consumption, after the appearance write.
 	beforeDepotFail func(characterID string)
 	charSaveFail    *atomic.Bool
-	afterCharUpdate *atomic.Pointer[func(context.Context)]
+	afterInvSave    *atomic.Pointer[func(context.Context)]
 	invRepo         *database.InventoryRepository
 	depots          *database.DepotRepository
 	charRepo        *database.CharacterRepository
@@ -171,8 +179,8 @@ func newBookFixture(t *testing.T, fail bookFailures) *bookFixture {
 			repo:  repo,
 			fail:  fail.appearance,
 		},
-		charSaveFail:    charSaveFail,
-		afterCharUpdate: &atomic.Pointer[func(context.Context)]{},
+		charSaveFail: charSaveFail,
+		afterInvSave: &atomic.Pointer[func(context.Context)]{},
 	}
 	var err error
 	if f.charRepo, err = database.NewCharacterRepository(db); err != nil {
@@ -213,8 +221,9 @@ func newBookFixture(t *testing.T, fail bookFailures) *bookFixture {
 	if f.presence, err = character.NewPresenceService(presenceRepo, tx, nil); err != nil {
 		t.Fatal(err)
 	}
-	ecoChars := failingEconomyCharacters{f.charRepo, f.charSaveFail, f.afterCharUpdate}
-	eco, err := economy.NewService(ecoChars, f.invRepo, economy.WithTransactionProvider(tx))
+	ecoChars := failingEconomyCharacters{f.charRepo, f.charSaveFail}
+	ecoInvs := afterSaveInventories{f.invRepo, f.afterInvSave}
+	eco, err := economy.NewService(ecoChars, ecoInvs, economy.WithTransactionProvider(tx))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -886,8 +895,8 @@ func TestItemAppearance_ContextCancelHoldsLockUntilUndoAndBlocksConcurrentWriter
 		f.costume.mu.Unlock()
 
 		cancelAfterSQL := func(context.Context) { cancelA() }
-		f.afterCharUpdate.Store(&cancelAfterSQL)
-		defer f.afterCharUpdate.Store(nil)
+		f.afterInvSave.Store(&cancelAfterSQL)
+		defer f.afterInvSave.Store(nil)
 
 		_, err := f.svc.UseHomeItem(ctxA, c.ID, bookID, "depot")
 		if !errors.Is(err, context.Canceled) {
@@ -935,8 +944,8 @@ func TestItemAppearance_CommitErrorSkipsRollbackAndPropagatesError(t *testing.T)
 			_ = tx.Commit()
 		}
 	}
-	f.afterCharUpdate.Store(&forceCommitErr)
-	defer f.afterCharUpdate.Store(nil)
+	f.afterInvSave.Store(&forceCommitErr)
+	defer f.afterInvSave.Store(nil)
 
 	res, err := f.svc.UseHomeItem(ctx, c.ID, bookID, "depot")
 	if !errors.Is(err, sql.ErrTxDone) || res != nil {

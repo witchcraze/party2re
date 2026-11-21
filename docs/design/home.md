@@ -53,7 +53,7 @@ Resident companions combine ranch monsters at home and Heaven Wish NPC companion
 
 - **H2/H4 — held tool** (`284–292`): call without arguments; a nonempty `mes` stops consumption, otherwise clear the held tool. The return value is ignored, and changes made before setting `mes` are not undone.
 - **D2 — Depot category 2** (`298–348`): call while scanning the Depot, before removing the row. `mes` returns without removing it.
-- **D4 — Depot category 4** (`330–373`): **pitfall** — keep the row in the first rewrite, call without arguments, then remove the first remaining row of that item number, with no post-callback `mes` check. This is not consume-before-callback or rollback-on-no-effect.
+- **D4 — Depot category 4** (`330–373`): **pitfall** — keep the row in the first rewrite, call without arguments, then remove the first remaining row of that item number, with no post-callback `mes` check. This is not consume-before-callback or rollback-on-no-effect. Go runs the callback first and commits, consuming the submitted instance even on a no-effect message.
 - Depot capacity never blocks dispatch: `send_item` appends rewards to an existing Depot even when full, without inventory routing, collection registration or a self-delivery notice; `get_depot_c` only counts.
 - **Pitfall — random rewards** (items125/126/199/259): each reward selects slot **1 through N−1** of the N-slot list; slot 0 is unreachable and repeated slots keep their weight. Rewards and consumption commit together.
 - **Pitfall — item237:** when d=EXP−98010 is not positive, legacy sets `mes` but keeps executing, still crediting gold and setting EXP=98010, and the item is kept (Go: committed `no_effect`). **Decision:** gold has no lower clamp, so d<0 may leave it negative.
@@ -65,7 +65,6 @@ Open items:
 | --- | --- | --- |
 | 043 transformation staff | Uniform monster appearance 001–108, fallback if the image is absent; consumes | #1837 |
 | 231–236, 245 wallpapers | Replace own background with field 0/1/2/4/5/6/8; consumes, no gold or lease prerequisite (unlike the Store's paid wallpaper) | #1836 |
-| 259 sealed key | Prefer held box, otherwise first Depot box. With a box: remove it, deliver 059 plus 2–4 weighted rewards, then consume the key. Without a box: held key kept, Depot key consumed. Full Depot accepts every reward | #1842 |
 
 Appearance and wallpaper items use newly authored assets ([asset contract](https://github.com/witchcraze/party2re/issues/654), [resolution](https://github.com/witchcraze/party2re/issues/729)), not legacy images.
 
