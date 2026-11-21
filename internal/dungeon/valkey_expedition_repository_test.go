@@ -2,6 +2,7 @@ package dungeon_test
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"strings"
@@ -1099,4 +1100,92 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 			t.Fatalf("Step compat failed: %+v err=%v", out, err)
 		}
 	})
+}
+
+//go:embed lua/dungeon_step.lua
+var testDungeonStepLua string
+
+func TestValkeyExpeditionRepository_CorruptedARGVArgsFailClosed(t *testing.T) {
+	client := testutil.OpenValkey(t)
+	ctx := context.Background()
+	script := valkeygo.NewLuaScript(testDungeonStepLua)
+
+	for _, tc := range []struct {
+		name string
+		idx  int // 0-based ARGV index (11..15 correspond to ARGV[12]..ARGV[16])
+		val  string
+	}{
+		{"bad member_hp_deltas json", 11, "{bad-json"},
+		{"array member_hp_deltas", 11, "[1,2]"},
+		{"non-int member_hp_deltas", 11, `{"char-argv":"oops"}`},
+		{"float member_hp_deltas", 11, `{"char-argv":1.5}`},
+		{"bad member_mp_deltas json", 12, "{bad-json"},
+		{"non-int member_mp_deltas", 12, `{"char-argv":"oops"}`},
+		{"bad consumed_items json", 13, "{bad-json"},
+		{"array consumed_items", 13, `["bad"]`},
+		{"non-array consumed_items value", 13, `{"char-argv":"bad"}`},
+		{"bad consumed_items element quantity", 13, `{"char-argv":[{"id":"item-1","quantity":"oops"}]}`},
+		{"bad member_exp_deltas json", 14, "{bad-json"},
+		{"non-int member_exp_deltas", 14, `{"char-argv":"oops"}`},
+		{"bad member_gold_deltas json", 15, "{bad-json"},
+		{"non-int member_gold_deltas", 15, `{"char-argv":"oops"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			charID := "char-argv-" + strings.ReplaceAll(tc.name, " ", "-")
+			cleanupDungeonValkey(t, client, charID)
+			defer cleanupDungeonValkey(t, client, charID)
+
+			repo, err := dungeon.NewValkeyExpeditionRepository(client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			exp := sampleExpedition("exp-argv", charID, dungeon.NativeMap0ID)
+			exp.Members = []dungeon.ExpeditionMember{{CharacterID: charID, Name: "Hero", CurrentHP: 100, MaxHP: 100}}
+			if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+				t.Fatal(err)
+			}
+
+			sKey := fmt.Sprintf("party2:dungeon:{char:%s}:state", charID)
+			rKey := fmt.Sprintf("party2:dungeon:{char:%s}:rewards", charID)
+			beforeState, err := client.Do(ctx, client.B().Hgetall().Key(sKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			beforeRewards, err := client.Do(ctx, client.B().Hgetall().Key(rKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			args := []string{
+				exp.ID, "1", "0", "0", "1", "10", "20", "",
+				time.Now().UTC().Format(time.RFC3339Nano), "7200", "C:1:1",
+				"{}", "{}", "{}", "{}", "{}", "", "false", "", "", "0", "0", "", "false",
+			}
+			args[tc.idx] = tc.val
+
+			err = script.Exec(ctx, client, []string{sKey, rKey}, args).Error()
+			if err == nil || !strings.Contains(err.Error(), "ERR_EXPEDITION_CORRUPTED") {
+				t.Fatalf("%s: expected ERR_EXPEDITION_CORRUPTED, got %v", tc.name, err)
+			}
+
+			afterState, err := client.Do(ctx, client.B().Hgetall().Key(sKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			afterRewards, err := client.Do(ctx, client.B().Hgetall().Key(rKey).Build()).AsStrMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for k, v := range beforeState {
+				if afterState[k] != v {
+					t.Fatalf("state field %q mutated after corrupted ARGV: got %q, want %q", k, afterState[k], v)
+				}
+			}
+			for k, v := range beforeRewards {
+				if afterRewards[k] != v {
+					t.Fatalf("rewards field %q mutated after corrupted ARGV: got %q, want %q", k, afterRewards[k], v)
+				}
+			}
+		})
+	}
 }

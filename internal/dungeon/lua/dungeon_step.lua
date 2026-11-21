@@ -42,6 +42,22 @@ local function is_int_number(v)
     return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge and math.floor(v) == v
 end
 
+local function validate_consumed_item(c)
+    if type(c) ~= 'table' then
+        return false
+    end
+    if c['id'] ~= nil and c['id'] ~= cjson.null and type(c['id']) ~= 'string' then
+        return false
+    end
+    if c['instance_id'] ~= nil and c['instance_id'] ~= cjson.null and type(c['instance_id']) ~= 'string' then
+        return false
+    end
+    if c['quantity'] ~= nil and c['quantity'] ~= cjson.null and not is_int_number(c['quantity']) then
+        return false
+    end
+    return true
+end
+
 local function validate_member(m)
     if type(m) ~= 'table' then
         return false
@@ -75,21 +91,52 @@ local function validate_member(m)
             return false
         end
         for _, c in ipairs(consumed) do
-            if type(c) ~= 'table' then
-                return false
-            end
-            if c['id'] ~= nil and c['id'] ~= cjson.null and type(c['id']) ~= 'string' then
-                return false
-            end
-            if c['instance_id'] ~= nil and c['instance_id'] ~= cjson.null and type(c['instance_id']) ~= 'string' then
-                return false
-            end
-            if c['quantity'] ~= nil and c['quantity'] ~= cjson.null and not is_int_number(c['quantity']) then
+            if not validate_consumed_item(c) then
                 return false
             end
         end
     end
     return true
+end
+
+local function decode_object_arg(raw, name, elem_kind)
+    if not raw then
+        return {}, false
+    end
+    local trimmed = string.match(raw, '^%s*(.-)%s*$')
+    if trimmed == '' or trimmed == '{}' then
+        return {}, false
+    end
+    if string.sub(trimmed, 1, 1) ~= '{' then
+        return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. name .. ' json'
+    end
+    local ok, decoded = pcall(cjson.decode, trimmed)
+    if not ok or type(decoded) ~= 'table' then
+        return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. name .. ' json'
+    end
+    for k, v in pairs(decoded) do
+        if type(k) ~= 'string' then
+            return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. name .. ' json'
+        end
+        if elem_kind == 'int' then
+            if not is_int_number(v) then
+                return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. name .. ' json'
+            end
+        elseif elem_kind == 'consumed_items' then
+            if type(v) ~= 'table' or (#v == 0 and next(v) ~= nil) then
+                return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. name .. ' json'
+            end
+            for _, c in ipairs(v) do
+                if not validate_consumed_item(c) then
+                    return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. name .. ' json'
+                end
+            end
+        end
+    end
+    if next(decoded) == nil then
+        return {}, false
+    end
+    return decoded, true
 end
 
 local function validate_optional_timestamp(hash_key, field)
@@ -220,24 +267,34 @@ if has_members then
 end
 local members_str = '[]'
 
-if has_members then
-    local deltas = {}
-    local has_deltas = false
-    if member_hp_deltas_str ~= '' and member_hp_deltas_str ~= '{}' then
-        local ok, decoded_deltas = pcall(cjson.decode, member_hp_deltas_str)
-        if ok and type(decoded_deltas) == 'table' then
-            deltas = decoded_deltas
-            has_deltas = true
-        end
-    end
+local deltas, has_deltas, hp_deltas_err = decode_object_arg(member_hp_deltas_str, 'member_hp_deltas', 'int')
+if hp_deltas_err then
+    return redis.error_reply(hp_deltas_err)
+end
+local decoded_mp, has_mp_deltas, mp_deltas_err = decode_object_arg(member_mp_deltas_str, 'member_mp_deltas', 'int')
+if mp_deltas_err then
+    return redis.error_reply(mp_deltas_err)
+end
+local decoded_items, has_consumed_items, consumed_err = decode_object_arg(consumed_items_str, 'consumed_items', 'consumed_items')
+if consumed_err then
+    return redis.error_reply(consumed_err)
+end
+local decoded_exp, has_exp_deltas, exp_deltas_err = decode_object_arg(member_exp_deltas_str, 'member_exp_deltas', 'int')
+if exp_deltas_err then
+    return redis.error_reply(exp_deltas_err)
+end
+local decoded_gold, has_gold_deltas, gold_deltas_err = decode_object_arg(member_gold_deltas_str, 'member_gold_deltas', 'int')
+if gold_deltas_err then
+    return redis.error_reply(gold_deltas_err)
+end
 
+if has_members then
     if has_deltas then
         local all_dead = true
         for _, m in ipairs(members) do
             local cid = m['character_id']
             if cid and deltas[cid] then
-                local delta = tonumber(deltas[cid]) or 0
-                local m_hp = (tonumber(m['current_hp']) or 0) + delta
+                local m_hp = (tonumber(m['current_hp']) or 0) + deltas[cid]
                 if m_hp < 0 then
                     m_hp = 0
                 end
@@ -258,39 +315,32 @@ if has_members then
         members[1]['current_hp'] = m_hp
     end
 
-    if member_mp_deltas_str ~= '' and member_mp_deltas_str ~= '{}' then
-        local ok, decoded_mp = pcall(cjson.decode, member_mp_deltas_str)
-        if ok and type(decoded_mp) == 'table' then
-            for _, m in ipairs(members) do
-                local cid = m['character_id']
-                if cid and decoded_mp[cid] then
-                    local delta = tonumber(decoded_mp[cid]) or 0
-                    local m_mp = (tonumber(m['current_mp']) or 0) + delta
-                    if m_mp < 0 then
-                        m_mp = 0
-                    end
-                    local max_mp = tonumber(m['max_mp']) or 0
-                    if max_mp > 0 and m_mp > max_mp then
-                        m_mp = max_mp
-                    end
-                    m['current_mp'] = m_mp
+    if has_mp_deltas then
+        for _, m in ipairs(members) do
+            local cid = m['character_id']
+            if cid and decoded_mp[cid] then
+                local m_mp = (tonumber(m['current_mp']) or 0) + decoded_mp[cid]
+                if m_mp < 0 then
+                    m_mp = 0
                 end
+                local max_mp = tonumber(m['max_mp']) or 0
+                if max_mp > 0 and m_mp > max_mp then
+                    m_mp = max_mp
+                end
+                m['current_mp'] = m_mp
             end
         end
     end
 
-    if consumed_items_str ~= '' and consumed_items_str ~= '{}' then
-        local ok, decoded_items = pcall(cjson.decode, consumed_items_str)
-        if ok and type(decoded_items) == 'table' then
-            for _, m in ipairs(members) do
-                local cid = m['character_id']
-                if cid and decoded_items[cid] and type(decoded_items[cid]) == 'table' then
-                    local existing = m['consumed_items'] or {}
-                    for _, item in ipairs(decoded_items[cid]) do
-                        table.insert(existing, item)
-                    end
-                    m['consumed_items'] = existing
+    if has_consumed_items then
+        for _, m in ipairs(members) do
+            local cid = m['character_id']
+            if cid and decoded_items[cid] then
+                local existing = m['consumed_items'] or {}
+                for _, item in ipairs(decoded_items[cid]) do
+                    table.insert(existing, item)
                 end
+                m['consumed_items'] = existing
             end
         end
     end
@@ -349,34 +399,22 @@ end
 
 -- Apply member rewards only if event was consumed (one-time event idempotency)
 if has_members and event_consumed == 1 then
-    if member_exp_deltas_str ~= '' and member_exp_deltas_str ~= '{}' then
-        local ok, decoded_exp = pcall(cjson.decode, member_exp_deltas_str)
-        if ok and type(decoded_exp) == 'table' then
-            for _, m in ipairs(members) do
-                local cid = m['character_id']
-                if cid and decoded_exp[cid] then
-                    local delta = tonumber(decoded_exp[cid]) or 0
-                    if delta > 0 then
-                        m['accumulated_exp'] = (tonumber(m['accumulated_exp']) or 0) + delta
-                    end
-                end
+    if has_exp_deltas then
+        for _, m in ipairs(members) do
+            local cid = m['character_id']
+            if cid and decoded_exp[cid] and decoded_exp[cid] > 0 then
+                m['accumulated_exp'] = (tonumber(m['accumulated_exp']) or 0) + decoded_exp[cid]
             end
         end
     elseif #members == 1 and exp_delta > 0 then
         members[1]['accumulated_exp'] = (tonumber(members[1]['accumulated_exp']) or 0) + exp_delta
     end
 
-    if member_gold_deltas_str ~= '' and member_gold_deltas_str ~= '{}' then
-        local ok, decoded_gold = pcall(cjson.decode, member_gold_deltas_str)
-        if ok and type(decoded_gold) == 'table' then
-            for _, m in ipairs(members) do
-                local cid = m['character_id']
-                if cid and decoded_gold[cid] then
-                    local delta = tonumber(decoded_gold[cid]) or 0
-                    if delta > 0 then
-                        m['accumulated_gold'] = (tonumber(m['accumulated_gold']) or 0) + delta
-                    end
-                end
+    if has_gold_deltas then
+        for _, m in ipairs(members) do
+            local cid = m['character_id']
+            if cid and decoded_gold[cid] and decoded_gold[cid] > 0 then
+                m['accumulated_gold'] = (tonumber(m['accumulated_gold']) or 0) + decoded_gold[cid]
             end
         end
     elseif #members == 1 and gold_delta > 0 then

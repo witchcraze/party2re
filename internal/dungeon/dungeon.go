@@ -447,24 +447,13 @@ func decodeItems(data string) ([]string, error) {
 	return items, nil
 }
 
-func EncodeMemberHPDeltas(deltas map[string]int) string {
-	if len(deltas) == 0 {
-		return "{}"
+func encodeJSONMap[V any](m map[string]V) (string, error) {
+	if len(m) == 0 {
+		return "{}", nil
 	}
-	b, err := json.Marshal(deltas)
+	b, err := json.Marshal(m)
 	if err != nil {
-		return "{}"
+		return "", err
 	}
-	return string(b)
-}
-
-func EncodeConsumedItems(items map[string][]corebattle.ConsumedItem) string {
-	if len(items) == 0 {
-		return "{}"
-	}
-	b, err := json.Marshal(items)
-	if err != nil {
-		return "{}"
-	}
-	return string(b)
+	return string(b), nil
 }
