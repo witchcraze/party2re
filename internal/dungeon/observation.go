@@ -65,7 +65,7 @@ func (s *Service) ObserveExpedition(ctx context.Context, actor string) (*Expedit
 	}
 	view.Map = &m
 	// A pitfall to a floor with a lower limit can leave the round above it.
-	view.Round, view.RoundLimit, view.Floor, view.FloorName = exp.Round, exp.RoundLimit, floor.FloorNumber, d.floorName(floor)
+	view.Round, view.RoundLimit, view.Floor, view.FloorName = exp.Round, exp.RoundLimit, floor.floorNumber(), d.floorName(floor)
 	// Legacy registers all four directions; walls are rejected on use, so
 	// the list cannot reveal a hidden passage.
 	if view.Controls.CanMove {

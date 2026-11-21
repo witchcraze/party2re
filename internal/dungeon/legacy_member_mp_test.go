@@ -158,12 +158,11 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 		RoundLimit: 21,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       3,
-				Height:      1,
-				StartX:      0,
-				StartY:      0,
-				Grid:        []string{"S0D"},
+				Width:  3,
+				Height: 1,
+				StartX: 0,
+				StartY: 0,
+				Grid:   []string{"S0D"},
 				Monsters: []dungeon.DungeonMonster{
 					{ID: "slime", Name: "Slime", HP: 10, Attack: 1, Defense: 1, Agility: 1, ExpReward: 10, GoldReward: 10},
 				},
@@ -531,12 +530,11 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			RoundLimit: 21,
 			Variants: []dungeon.Floor{
 				{
-					FloorNumber: 1,
-					Width:       3,
-					Height:      1,
-					StartX:      0,
-					StartY:      0,
-					Grid:        []string{"S0D"},
+					Width:  3,
+					Height: 1,
+					StartX: 0,
+					StartY: 0,
+					Grid:   []string{"S0D"},
 					Monsters: []dungeon.DungeonMonster{
 						{ID: "slime", Name: "Slime", HP: 10, Attack: 1, Defense: 1, Agility: 1, ExpReward: 10, GoldReward: 10},
 					},
@@ -692,12 +690,11 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 			RoundLimit: 21,
 			Variants: []dungeon.Floor{
 				{
-					FloorNumber: 1,
-					Width:       3,
-					Height:      1,
-					StartX:      0,
-					StartY:      0,
-					Grid:        []string{"S0D"},
+					Width:  3,
+					Height: 1,
+					StartX: 0,
+					StartY: 0,
+					Grid:   []string{"S0D"},
 					Monsters: []dungeon.DungeonMonster{
 						{ID: "slime", Name: "Slime", HP: 10, Attack: 1, Defense: 1, Agility: 1, ExpReward: 10, GoldReward: 10},
 					},

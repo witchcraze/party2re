@@ -57,12 +57,11 @@ func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 		RoundLimit: 11,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       2,
-				Height:      1,
-				StartX:      0,
-				StartY:      0,
-				Grid:        []string{"S0"},
+				Width:  2,
+				Height: 1,
+				StartX: 0,
+				StartY: 0,
+				Grid:   []string{"S0"},
 				Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "glass-cannon-monster",
@@ -145,12 +144,11 @@ func TestDungeonSolo_ParticipantWithSkillsUsesSkills(t *testing.T) {
 		RoundLimit: 11,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       2,
-				Height:      1,
-				StartX:      0,
-				StartY:      0,
-				Grid:        []string{"S0"},
+				Width:  2,
+				Height: 1,
+				StartX: 0,
+				StartY: 0,
+				Grid:   []string{"S0"},
 				Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "iron-turtle",
@@ -277,12 +275,11 @@ func TestDungeonSolo_CustomRNGWithoutIntN(t *testing.T) {
 		RoundLimit: 11,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       2,
-				Height:      1,
-				StartX:      0,
-				StartY:      0,
-				Grid:        []string{"S0"},
+				Width:  2,
+				Height: 1,
+				StartX: 0,
+				StartY: 0,
+				Grid:   []string{"S0"},
 				Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "target-monster",
@@ -371,12 +368,11 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 		RoundLimit: 11,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       3,
-				Height:      1,
-				StartX:      0,
-				StartY:      0,
-				Grid:        []string{"S00"},
+				Width:  3,
+				Height: 1,
+				StartX: 0,
+				StartY: 0,
+				Grid:   []string{"S00"},
 				Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "monster-1",

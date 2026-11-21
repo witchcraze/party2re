@@ -32,11 +32,10 @@ func TestPartyCombat_MultiMemberBattleAndVitalityTracking(t *testing.T) {
 		RoundLimit: 21,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       3,
-				Height:      3,
-				StartX:      0,
-				StartY:      0,
+				Width:  3,
+				Height: 3,
+				StartX: 0,
+				StartY: 0,
 				Grid: []string{
 					"S00",
 					"000",
@@ -153,11 +152,10 @@ func TestPartyCombat_LeaderKilledAllySurvivesAndWins_ExplorationContinues(t *tes
 		RoundLimit: 21,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       3,
-				Height:      3,
-				StartX:      0,
-				StartY:      0,
+				Width:  3,
+				Height: 3,
+				StartX: 0,
+				StartY: 0,
 				Grid: []string{
 					"S00",
 					"000",
@@ -268,11 +266,10 @@ func TestPartyCombat_AllMembersKilled_WipesOut(t *testing.T) {
 		RoundLimit: 21,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       3,
-				Height:      3,
-				StartX:      0,
-				StartY:      0,
+				Width:  3,
+				Height: 3,
+				StartX: 0,
+				StartY: 0,
 				Grid: []string{
 					"S00",
 					"000",
@@ -371,11 +368,10 @@ func TestPartySettlement_EscapeWithFallenLeader(t *testing.T) {
 		RoundLimit: 21,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       3,
-				Height:      3,
-				StartX:      0,
-				StartY:      0,
+				Width:  3,
+				Height: 3,
+				StartX: 0,
+				StartY: 0,
 				Grid: []string{
 					"SX0",
 					"000",

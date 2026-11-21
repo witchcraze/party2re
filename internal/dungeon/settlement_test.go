@@ -37,7 +37,7 @@ func customSettlementDungeons() []dungeon.Dungeon {
 		Name:       "テストダンジョン",
 		RoundLimit: 26,
 		Variants: []dungeon.Floor{{
-			FloorNumber: 1, Width: 3, Height: 1,
+			Width: 3, Height: 1,
 			Grid: []string{"SB0"},
 			Boss: &dungeon.DungeonMonster{ID: "floor-boss", Name: "階層ボス", HP: 40, Attack: 10, Defense: 5, ExpReward: 150, GoldReward: 300, DropItemID: "boss-orb"},
 		}},

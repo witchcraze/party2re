@@ -175,7 +175,7 @@ func (f *nativeFixture) walkMap14(t *testing.T, id, path string) {
 func pointsRoute(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	f := newNativeFixtureOn(t, store, map14Hero(id))
 	f.startMap14(t, id, 0, 0, 0) // A, B, C active
-	enter := func(path string, draws []int, variant, x, y int, wantName string) dungeon.ActiveExpedition {
+	enter := func(path string, draws []int, variant, x, y, wantFloor int, wantName string) dungeon.ActiveExpedition {
 		t.Helper()
 		last := len(path) - 1
 		f.walkMap14(t, id, path[:last])
@@ -186,32 +186,32 @@ func pointsRoute(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 		if exp.MapVariant != variant || exp.PosX != x || exp.PosY != y || exp.Round != before.Round+1 || f.rng.intCalls != len(draws) || f.rng.floatCalls != 0 {
 			t.Fatalf("enter %s: variant %d at (%d,%d), round %d, draws %d/%d", path, exp.MapVariant, exp.PosX, exp.PosY, exp.Round, f.rng.intCalls, f.rng.floatCalls)
 		}
-		if view, err := f.svc.ObserveExpedition(context.Background(), id); err != nil || view.FloorName != wantName {
-			t.Fatalf("enter %s floor name %q, want %q err=%v", path, view.FloorName, wantName, err)
+		if view, err := f.svc.ObserveExpedition(context.Background(), id); err != nil || view.Floor != wantFloor || view.FloorName != wantName {
+			t.Fatalf("enter %s floor %d/%q, want %d/%q err=%v", path, view.Floor, view.FloorName, wantFloor, wantName, err)
 		}
 		f.rejectStaleMap14Step(t, id, before, exp)
 		return exp
 	}
-	if view, err := f.svc.ObserveExpedition(context.Background(), id); err != nil || view.FloorName != "沈没の海峡" {
-		t.Fatalf("main floor name %+v err=%v", view, err)
+	if view, err := f.svc.ObserveExpedition(context.Background(), id); err != nil || view.Floor != 1 || view.FloorName != "沈没の海峡" {
+		t.Fatalf("main floor %+v err=%v", view, err)
 	}
-	enter("ESSSEE", []int{1}, 3, 8, 8, "深海峡谷最深部") // A → _K
-	enter("EENNWWWWWWWNN", []int{0}, 1, 3, 4, "沈没の海峡")
-	firstShip := enter("NWNWN", []int{1, 0, 9, 0, 7, 0}, 4, 1, 1, "宝船") // B → _T, then disable sites
+	enter("ESSSEE", []int{1}, 3, 8, 8, 2, "深海峡谷最深部") // A → _K
+	enter("EENNWWWWWWWNN", []int{0}, 1, 3, 4, 1, "沈没の海峡")
+	firstShip := enter("NWNWN", []int{1, 0, 9, 0, 7, 0}, 4, 1, 1, 2, "宝船") // B → _T, then disable sites
 	var route struct {
 		Disabled string `json:"disabled_treasure"`
 	}
 	if err := json.Unmarshal(firstShip.MapState, &route); err != nil || route.Disabled != "codne" {
 		t.Fatalf("first ship state %s, err=%v", firstShip.MapState, err)
 	}
-	enter("SSSS", []int{0}, 1, 1, 5, "沈没の海峡")
-	if again := enter("SSEEENENNNWWWNWN", nil, 4, 1, 1, "宝船"); string(again.MapState) != string(firstShip.MapState) {
+	enter("SSSS", []int{0}, 1, 1, 5, 1, "沈没の海峡")
+	if again := enter("SSEEENENNNWWWNWN", nil, 4, 1, 1, 2, "宝船"); string(again.MapState) != string(firstShip.MapState) {
 		t.Fatalf("ship re-entry changed route state to %s", again.MapState)
 	}
-	enter("SSSS", []int{0}, 1, 1, 5, "沈没の海峡")
-	enter("SSS", []int{0}, 2, 1, 8, "海賊船") // C → _P
-	enter("NNEEEESSS", []int{0}, 1, 5, 9, "沈没の海峡")
-	enter("NEEE", nil, 3, 8, 8, "深海峡谷最深部") // A again
+	enter("SSSS", []int{0}, 1, 1, 5, 1, "沈没の海峡")
+	enter("SSS", []int{0}, 2, 1, 8, 2, "海賊船") // C → _P
+	enter("NNEEEESSS", []int{0}, 1, 5, 9, 1, "沈没の海峡")
+	enter("NEEE", nil, 3, 8, 8, 2, "深海峡谷最深部") // A again
 }
 
 func (f *nativeFixture) rejectStaleMap14Step(t *testing.T, id string, before, after dungeon.ActiveExpedition) {

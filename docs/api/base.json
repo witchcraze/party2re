@@ -16724,7 +16724,7 @@
           },
           "floor": {
             "type": "integer",
-            "description": "Floor number of the current layout (1 on single-floor maps)."
+            "description": "Floor number of the current layout (1 on single-floor or entry layouts; branches and deeper floors increment from 1)."
           },
           "floor_name": {
             "type": "string",

@@ -550,11 +550,10 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 			Name:       "Contrast Fallen Dungeon",
 			RoundLimit: 20,
 			Variants: []dungeon.Floor{{
-				FloorNumber: 1,
-				Width:       2,
-				Height:      1,
-				Grid:        []string{"S0"},
-				Monsters:    []dungeon.DungeonMonster{{ID: "slime", Name: "Slime", HP: 30, Attack: 10, ExpReward: 15, GoldReward: 25}},
+				Width:    2,
+				Height:   1,
+				Grid:     []string{"S0"},
+				Monsters: []dungeon.DungeonMonster{{ID: "slime", Name: "Slime", HP: 30, Attack: 10, ExpReward: 15, GoldReward: 25}},
 			}},
 		}
 		svc, err := dungeon.NewService(repo, chars, lossEngine, dungeon.WithActiveExpeditionStore(store), dungeon.WithInventoryProvider(invs), dungeon.WithCustomDungeons([]dungeon.Dungeon{custom}))

@@ -108,7 +108,7 @@ func TestEncounterAlliedStatusAcrossDraws(t *testing.T) {
 			char := createTestChar(id.New(), 10, 100, 30, 20)
 			chars := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10}
-			catalog := []dungeon.Dungeon{{ID: "status", RoundLimit: 21, Variants: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
+			catalog := []dungeon.Dungeon{{ID: "status", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
 			calls := 0
 			engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 				calls++

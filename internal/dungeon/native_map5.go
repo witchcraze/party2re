@@ -33,7 +33,7 @@ var nativeMap5Events = map[byte]mapEvent{
 func nativeMap5() Dungeon {
 	pools := stagePools(5, 8)
 	marks := map[byte]string{'L': "★"}
-	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: marks, events: nativeMap5Events}, nativeMap5Grids)
+	variants := variantFloors(Floor{Pools: pools, Marks: marks, events: nativeMap5Events}, nativeMap5Grids)
 	return Dungeon{
 		ID:             NativeMap5ID,
 		Name:           "仕掛けの神殿",

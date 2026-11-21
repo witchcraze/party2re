@@ -372,20 +372,20 @@ func nativeMap15() Dungeon {
 			Exits:  map[byte]FloorExit{'2': {Variants: []int{2}}, '4': {Variants: []int{3}}},
 			Marks:  map[byte]string{'A': "◎", 'B': "◎", 'C': "◎", '2': "凸", '4': "凸"},
 			events: map[byte]mapEvent{'A': {action: nm15MainPool, perSymbol: true}, 'B': {action: nm15MainPool, perSymbol: true}, 'C': {action: nm15MainPool, perSymbol: true}}},
-		{Pools: pool, RoundLimit: 60,
+		{FloorNumber: 2, Pools: pool, RoundLimit: 60,
 			Exits: map[byte]FloorExit{'3': {Variants: []int{4}}},
 			Marks: map[byte]string{'D': "◎", 'E': "◎", 'F': "◎", 'a': "宝", 'd': "■", '3': "凸"},
 			events: map[byte]mapEvent{'D': {action: nm15NorthPool, perSymbol: true}, 'E': {action: nm15NorthPool, perSymbol: true}, 'F': {action: nm15NorthPool, perSymbol: true},
 				'a': {action: treasure, perSymbol: true}, 'd': {action: gateEvent{open: func(st map15State) bool { return st.drew(5) }}}}},
 		// shortcut: chests hold no contents until #2451 binds map15's sources, _2's own pool included.
 		// _2 and __1 share the z flag safely: the branches never meet.
-		{Pools: pool, RoundLimit: 50,
+		{FloorNumber: 2, Pools: pool, RoundLimit: 50,
 			Marks: map[byte]string{'J': "◎", 'K': "◎", 'Y': "◎", 'z': "宝", 'j': "宝", 'k': "宝", 'd': "■"},
 			events: map[byte]mapEvent{'J': {action: crossBossEvent{groups: nm15SouthGroups}, perSymbol: true}, 'K': {action: crossBossEvent{groups: nm15SouthGroups}, perSymbol: true},
 				'Y': {action: fortressBoss{boss: nm15Panzer}, perSymbol: true}, 'd': {action: gateEvent{open: func(st map15State) bool { return st.SouthOpen }}},
 				'z': {action: treasure, perSymbol: true}, 'j': {action: liveTreasure{}, perSymbol: true}, 'k': {action: liveTreasure{}, perSymbol: true}}},
 		// __1's passages spawn nothing (event_0 is empty).
-		{RoundLimit: 90,
+		{FloorNumber: 3, RoundLimit: 90,
 			Marks: map[byte]string{'w': "宝", 'z': "宝", 'v': "宝", 'G': "○", 'X': "◎"},
 			events: map[byte]mapEvent{'0': {action: passageEvent{}}, 'G': {action: recoveryOutcome{base: 300}, perSymbol: true},
 				'X': {action: fortressBoss{boss: nm15Core}, perSymbol: true}, 'z': {action: fixedTreasureEvent{}, perSymbol: true},
@@ -393,7 +393,6 @@ func nativeMap15() Dungeon {
 	}
 	variants := make([]Floor, len(floors))
 	for i, f := range floors {
-		f.FloorNumber = 1
 		variants[i] = gridFloor(f, nativeMap15Floors[i])
 	}
 	return Dungeon{

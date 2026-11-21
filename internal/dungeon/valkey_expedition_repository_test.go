@@ -840,12 +840,11 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 		RoundLimit: 11,
 		Variants: []dungeon.Floor{
 			{
-				FloorNumber: 1,
-				Width:       3,
-				Height:      1,
-				StartX:      0,
-				StartY:      0,
-				Grid:        []string{"S00"},
+				Width:  3,
+				Height: 1,
+				StartX: 0,
+				StartY: 0,
+				Grid:   []string{"S00"},
 				Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "monster-v1",

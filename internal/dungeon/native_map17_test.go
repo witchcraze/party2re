@@ -200,6 +200,9 @@ func undergroundDrawnOnce(t *testing.T, store dungeon.ActiveExpeditionStore, id 
 			t.Fatalf("draw %d: variant %d at (%d,%d) round %d state %s", draw, down.MapVariant, down.PosX, down.PosY, down.Round, down.MapState)
 		}
 		f.rejectStaleMap14Step(t, id, before, down)
+		if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Floor != 2 {
+			t.Fatalf("underground floor %+v err=%v", view, err)
+		}
 		// Step off the landing and back onto u.
 		if _, err := f.svc.Move(ctx, id, dungeon.DirectionEast); err != nil {
 			t.Fatal(err)
@@ -209,6 +212,9 @@ func undergroundDrawnOnce(t *testing.T, store dungeon.ActiveExpeditionStore, id 
 		}
 		if up := f.reload(t, id); up.MapVariant != 1 || up.PosX != 3 || up.PosY != 16 {
 			t.Fatalf("u: variant %d at (%d,%d)", up.MapVariant, up.PosX, up.PosY)
+		}
+		if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Floor != 1 {
+			t.Fatalf("return main floor %+v err=%v", view, err)
 		}
 		f.moveTo(t, id, 15, 16)
 		f.rng.ints, f.rng.intCalls = []int{(draw + 1) % 3}, 0
@@ -795,17 +801,20 @@ func TestNativeMap17_FloorNames(t *testing.T) {
 	ctx := context.Background()
 	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "title")
 	for _, tc := range []struct {
-		variant int
-		want    string
+		variant   int
+		wantFloor int
+		wantName  string
 	}{
-		{1, "王墓"},
-		{2, "王墓"},
-		{5, "王墓の秘室"},
+		{1, 1, "王墓"},
+		{2, 2, "王墓"},
+		{3, 2, "王墓"},
+		{4, 2, "王墓"},
+		{5, 2, "王墓の秘室"},
 	} {
 		f.setFloor(t, "title", tc.variant, 9, 9)
 		view, err := f.svc.ObserveExpedition(ctx, "title")
-		if err != nil || view.FloorName != tc.want {
-			t.Fatalf("variant %d floor name %+v err=%v", tc.variant, view, err)
+		if err != nil || view.Floor != tc.wantFloor || view.FloorName != tc.wantName {
+			t.Fatalf("variant %d floor %+v err=%v", tc.variant, view, err)
 		}
 	}
 }

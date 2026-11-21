@@ -44,7 +44,7 @@ func nativeMap3() Dungeon {
 	pools := stagePools(5, 8)
 	variants := make([]Floor, len(nativeMap3Grids))
 	for i, rows := range nativeMap3Grids {
-		variants[i] = gridFloor(Floor{FloorNumber: 1, Warps: nativeMap3Warps[i], Pools: pools, events: nativeMap3Events}, rows)
+		variants[i] = gridFloor(Floor{Warps: nativeMap3Warps[i], Pools: pools, events: nativeMap3Events}, rows)
 	}
 	return Dungeon{
 		ID:             NativeMap3ID,
