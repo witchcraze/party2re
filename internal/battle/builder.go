@@ -17,17 +17,16 @@ import (
 
 // Legacy item IDs with passive or active combat mechanics.
 const (
-	ItemToukiShield       = "item-161"         // 闘気の盾 (UsageCategory 3, revive)
-	ItemDokuroAmulet      = "item-193"         // ドクロのお守り (UsageCategory 3, revive)
-	ItemCursedTalisman    = "item-260"         // 転生の呪魂符 (UsageCategory 3, cursed revive)
-	ItemPrayerRing        = "item-012"         // 祈りの指輪 (UsageCategory 1, accessory + in-battle MP heal)
-	ItemSkillOrb          = "item-157"         // スキルの宝珠 (UsageCategory 3, 25% SP bonus on level-up)
-	ItemExAmulet          = "item-158"         // エクスアミュレット / 神秘のアミュレット (UsageCategory 3, Excalibur awakening)
-	ItemAwakeningRuby     = "item-240"         // 覚醒の紅玉 (UsageCategory 3, Excalibur awakening + stat mod)
-	ItemAwakeningSapphire = "item-241"         // 覚醒の蒼玉 (UsageCategory 3, Excalibur awakening + stat mod)
-	ItemAwakeningEmerald  = "item-242"         // 覚醒の翠玉 (UsageCategory 3, Excalibur awakening + stat mod)
-	ItemTreasurePocket    = "item-215"         // トレジャーポケット (Floor 11 treasure chest inspection; _data.cgi:1913)
-	ItemMasterKey         = ItemTreasurePocket // alias for backward compatibility
+	ItemToukiShield       = "item-161" // 闘気の盾 (UsageCategory 3, revive)
+	ItemDokuroAmulet      = "item-193" // ドクロのお守り (UsageCategory 3, revive)
+	ItemCursedTalisman    = "item-260" // 転生の呪魂符 (UsageCategory 3, cursed revive)
+	ItemPrayerRing        = "item-012" // 祈りの指輪 (UsageCategory 1, accessory + in-battle MP heal)
+	ItemSkillOrb          = "item-157" // スキルの宝珠 (UsageCategory 3, 25% SP bonus on level-up)
+	ItemExAmulet          = "item-158" // エクスアミュレット / 神秘のアミュレット (UsageCategory 3, Excalibur awakening)
+	ItemAwakeningRuby     = "item-240" // 覚醒の紅玉 (UsageCategory 3, Excalibur awakening + stat mod)
+	ItemAwakeningSapphire = "item-241" // 覚醒の蒼玉 (UsageCategory 3, Excalibur awakening + stat mod)
+	ItemAwakeningEmerald  = "item-242" // 覚醒の翠玉 (UsageCategory 3, Excalibur awakening + stat mod)
+	ItemTreasurePocket    = "item-215" // トレジャーポケット (Floor 11 treasure chest inspection; _data.cgi:1913)
 )
 
 // MaxTreasurePocketParticipantAllowance defines the upper bound of ItemTreasurePocket entries

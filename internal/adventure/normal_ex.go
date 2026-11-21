@@ -91,7 +91,7 @@ func (r *NormalRun) treasureCount(actorID, blessing string, rng func(int) int) (
 			real++
 		}
 	}
-	return CalculateTreasureCount(TreasureCalculationInput{StageID: r.Stage.ID, AliveMembers: alive, DeadMembers: total - alive, TotalMembers: total, HasMerchant: IsMerchantJob(a.Jobs.JobID), HasGambler: IsGamblerJob(a.Jobs.JobID), HasTreasureHunter: IsTreasureHunterJob(a.Jobs.JobID), HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: IsTreasureBlessing(blessing), Rng: rng}), real
+	return CalculateTreasureCount(TreasureCalculationInput{StageID: r.Stage.ID, AliveMembers: alive, DeadMembers: total - alive, TotalMembers: total, HasMerchant: a.Jobs.JobID == merchantJob, HasGambler: a.Jobs.JobID == gamblerJob, HasTreasureHunter: a.Jobs.JobID == treasureHunterJob, HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: IsTreasureBlessing(blessing), Rng: rng}), real
 }
 
 var fixedBoxNames = []string{"煤けた宝箱", "金の宝箱"}

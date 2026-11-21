@@ -13,9 +13,15 @@ import (
 
 // Legacy item IDs with special adventure interactions.
 const (
-	ItemLuckyPendant   = "item-191"         // ラッキーペンダント (1/3 chance +1 treasure box)
-	ItemTreasurePocket = "item-215"         // トレジャーポケット (allows opening additional treasure boxes; _data.cgi:1913)
-	ItemMasterKey      = ItemTreasurePocket // alias for backward compatibility with earlier tickets and drafts
+	ItemLuckyPendant   = "item-191" // ラッキーペンダント (1/3 chance +1 treasure box)
+	ItemTreasurePocket = "item-215" // トレジャーポケット (allows opening additional treasure boxes; _data.cgi:1913)
+)
+
+// Acting-player treasure bonus jobs (vs_monster.cgi:93–98).
+const (
+	merchantJob       = "job-07"
+	gamblerJob        = "job-81"
+	treasureHunterJob = "job-78"
 )
 
 var defaultBoxNames = []string{
@@ -147,50 +153,10 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 	return count + 1
 }
 
-// IsMerchantJob reports whether the job ID represents the Merchant class (job 7 / job-07).
-func IsMerchantJob(jobID string) bool {
-	switch strings.ToLower(strings.TrimSpace(jobID)) {
-	case "job-07", "job-7", "7", "merchant", "商人":
-		return true
-	default:
-		return false
-	}
-}
-
-// IsGamblerJob reports whether the job ID represents the Gambler / Pirate class (job 81 / job-81).
-func IsGamblerJob(jobID string) bool {
-	switch strings.ToLower(strings.TrimSpace(jobID)) {
-	case "job-81", "81", "gambler", "pirate", "海賊", "勝負師":
-		return true
-	default:
-		return false
-	}
-}
-
-// IsTreasureHunterJob reports whether the job ID represents the Treasure Hunter class (job 78 / job-78).
-func IsTreasureHunterJob(jobID string) bool {
-	switch strings.ToLower(strings.TrimSpace(jobID)) {
-	case "job-78", "78", "treasure_hunter", "treasurehunter", "トレジャーハンター", "トレハン":
-		return true
-	default:
-		return false
-	}
-}
-
-// IsLuckyPendantID reports whether the item ID represents the Lucky Pendant (item-191).
-func IsLuckyPendantID(id string) bool {
-	switch strings.ToLower(strings.TrimSpace(id)) {
-	case ItemLuckyPendant, "191", "lucky_pendant", "lucky-pendant", "海賊ハット", "ラッキーペンダント":
-		return true
-	default:
-		return false
-	}
-}
-
 // ParticipantHasLuckyPendant reports whether a combat participant has equipped Lucky Pendant (item-191).
 // In legacy Party2 ($m{ite} eq '191'), this checks the currently equipped accessory slot, not unequipped inventory.
 func ParticipantHasLuckyPendant(p corebattle.Participant) bool {
-	return p.Gear != nil && IsLuckyPendantID(p.Gear.AccessoryID)
+	return p.Gear != nil && p.Gear.AccessoryID == ItemLuckyPendant
 }
 
 func (s *CrawlSession) spawnTreasureBoxes() {
@@ -224,27 +190,12 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 		leader = &s.Characters[0]
 	}
 
-	hasMerchant := false
-	hasGambler := false
-	hasTreasureHunter := false
-	hasLuckyPendant := false
-
+	var hasMerchant, hasGambler, hasTreasureHunter, hasLuckyPendant bool
 	if leader != nil {
-		if IsMerchantJob(leader.JobID) {
-			hasMerchant = true
-		}
-		if IsGamblerJob(leader.JobID) {
-			hasGambler = true
-		}
-		if IsTreasureHunterJob(leader.JobID) {
-			hasTreasureHunter = true
-		}
-
+		hasMerchant, hasGambler, hasTreasureHunter = leader.JobID == merchantJob, leader.JobID == gamblerJob, leader.JobID == treasureHunterJob
 		for _, p := range s.Participants {
 			if p.ID == leader.ID {
-				if ParticipantHasLuckyPendant(p) {
-					hasLuckyPendant = true
-				}
+				hasLuckyPendant = ParticipantHasLuckyPendant(p)
 				break
 			}
 		}
@@ -270,15 +221,8 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 	}
 }
 
-// IsTreasureBlessing reports whether the blessing string matches Chapel Blessing 4 ("宝箱がほしい") or its supported aliases.
-func IsTreasureBlessing(blessing string) bool {
-	switch strings.ToLower(strings.TrimSpace(blessing)) {
-	case "drop", "4", "treasure_wish", "宝箱がほしい":
-		return true
-	default:
-		return false
-	}
-}
+// IsTreasureBlessing reports Chapel Blessing 4 ("宝箱がほしい") as the chapel stores it.
+func IsTreasureBlessing(blessing string) bool { return blessing == "DROP" }
 
 // StageTreasurePools defines candidate item pools across equipment and consumables for Floor 11.
 type StageTreasurePools struct {

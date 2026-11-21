@@ -745,7 +745,7 @@ func (c *memoryCharRepo) FindByIDForUpdate(ctx context.Context, id string) (core
 }
 
 func TestAdventure_TreasureBlessing_SingleChestGenerationNoItemDuplication(t *testing.T) {
-	aliases := []string{"DROP", "4", "treasure_wish", "宝箱がほしい"}
+	aliases := []string{"DROP"}
 	for _, blessing := range aliases {
 		t.Run("blessing_"+blessing, func(t *testing.T) {
 			ctx := context.Background()
@@ -831,20 +831,20 @@ func TestAdventure_TreasureBlessing_ActorScope(t *testing.T) {
 		},
 		{
 			name:        "leader_only",
-			leaderBless: "4",
+			leaderBless: "DROP",
 			memberBless: "",
 			wantChests:  3,
 		},
 		{
 			name:        "member_only",
 			leaderBless: "",
-			memberBless: "4",
+			memberBless: "DROP",
 			wantChests:  2,
 		},
 		{
 			name:        "both",
-			leaderBless: "4",
-			memberBless: "4",
+			leaderBless: "DROP",
+			memberBless: "DROP",
 			wantChests:  3,
 		},
 	}
@@ -1252,7 +1252,7 @@ func TestAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
 		StageID:      "stage-00",
 		Rng:          func(n int) int { return 0 },
 	}
-	blessingProv.blessings = map[string]string{char.ID: "4"}
+	blessingProv.blessings = map[string]string{char.ID: "DROP"}
 	battleResolver.calls = 0
 
 	resActive, err := svc.ExecuteCrawl(ctx, reqNormal)

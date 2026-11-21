@@ -992,7 +992,7 @@ func TestPartyAdventure_TreasureBlessing_ChestGenerationAndNoSettlementDuplicati
 
 	blessingProv := mockPartyBlessingProvider{
 		blessings: map[string]string{
-			leader.ID: "宝箱がほしい",
+			leader.ID: "DROP",
 		},
 	}
 
@@ -1059,20 +1059,20 @@ func TestPartyAdventure_TreasureBlessing_ActorScope(t *testing.T) {
 		},
 		{
 			name:        "leader_only",
-			leaderBless: "宝箱がほしい",
+			leaderBless: "DROP",
 			memberBless: "",
 			wantChests:  3,
 		},
 		{
 			name:        "member_only",
 			leaderBless: "",
-			memberBless: "宝箱がほしい",
+			memberBless: "DROP",
 			wantChests:  2,
 		},
 		{
 			name:        "both",
-			leaderBless: "宝箱がほしい",
-			memberBless: "宝箱がほしい",
+			leaderBless: "DROP",
+			memberBless: "DROP",
 			wantChests:  3,
 		},
 	}
@@ -1846,7 +1846,7 @@ func TestPartyAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	blessingProv.blessings = map[string]string{leader.ID: "4"}
+	blessingProv.blessings = map[string]string{leader.ID: "DROP"}
 	battleEngine.calls = 0
 
 	resActive, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)

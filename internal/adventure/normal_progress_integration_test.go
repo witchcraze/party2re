@@ -103,9 +103,9 @@ func TestNormalRunAdvanceUsesExecutingActorAndRequiredReads(t *testing.T) {
 			f.send(t, runID, 1, "travel10", "")
 			b := &normalBlessings{values: map[string]string{}, err: errors.New("blessing storage unavailable")}
 			if memberWish {
-				b.values[member.ID] = "4"
+				b.values[member.ID] = "DROP"
 			} else {
-				b.values[leader.ID] = "4"
+				b.values[leader.ID] = "DROP"
 			}
 			f.cfg.Blessings = b
 			f.restart(t)
