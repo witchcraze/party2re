@@ -8,7 +8,9 @@ type stateSnapshot struct {
 	actorPtrs         []actorPtrSnapshot
 	origSkillBans     map[string]int
 	origSkillHistory  map[string]map[string]bool
+	origSkillInners   map[string]map[string]bool
 	origStoredHistory map[string]map[string]bool
+	origStoredInners  map[string]map[string]bool
 }
 
 type actorPtrSnapshot struct {
@@ -43,8 +45,31 @@ func snapshotState(s *LifetimeState) stateSnapshot {
 		actorPtrs:         ptrs,
 		origSkillBans:     s.SkillBans,
 		origSkillHistory:  s.SkillHistory,
+		origSkillInners:   maps.Clone(s.SkillHistory),
 		origStoredHistory: s.StoredToolHistory,
+		origStoredInners:  maps.Clone(s.StoredToolHistory),
 	}
+}
+
+func restoreNestedBoolMaps(origOuter, savedOuter, origInners map[string]map[string]bool) map[string]map[string]bool {
+	if origOuter == nil {
+		return savedOuter
+	}
+	for k, origInner := range origInners {
+		if origInner != nil {
+			clear(origInner)
+			maps.Copy(origInner, savedOuter[k])
+		}
+	}
+	clear(origOuter)
+	for k, savedInner := range savedOuter {
+		if origInner := origInners[k]; origInner != nil {
+			origOuter[k] = origInner
+		} else {
+			origOuter[k] = savedInner
+		}
+	}
+	return origOuter
 }
 
 func (snap stateSnapshot) restore(s *LifetimeState) {
@@ -87,33 +112,27 @@ func (snap stateSnapshot) restore(s *LifetimeState) {
 		maps.Copy(snap.origSkillBans, saved.SkillBans)
 		saved.SkillBans = snap.origSkillBans
 	}
-	if snap.origSkillHistory != nil {
-		clear(snap.origSkillHistory)
-		maps.Copy(snap.origSkillHistory, saved.SkillHistory)
-		saved.SkillHistory = snap.origSkillHistory
-	}
-	if snap.origStoredHistory != nil {
-		clear(snap.origStoredHistory)
-		maps.Copy(snap.origStoredHistory, saved.StoredToolHistory)
-		saved.StoredToolHistory = snap.origStoredHistory
-	}
+	saved.SkillHistory = restoreNestedBoolMaps(snap.origSkillHistory, saved.SkillHistory, snap.origSkillInners)
+	saved.StoredToolHistory = restoreNestedBoolMaps(snap.origStoredHistory, saved.StoredToolHistory, snap.origStoredInners)
 	saved.rollbacks = s.rollbacks
 	*s = saved
 }
 
 type contextSnapshot struct {
-	ctx            CallbackContext
-	origAssets     *JobAssets
-	origAssetsHeld *string
-	origDamage     *DamageContext
-	origStatus     *StatusContext
-	origDefeat     *DefeatContext
-	origInspection map[string]InspectionContent
-	origPartyIDs   []string
-	origEnemyIDs   []string
-	origMemberIDs  []string
-	origPhantomIDs []string
-	origArguments  []string
+	ctx              CallbackContext
+	origAssets       *JobAssets
+	origAssetsHeld   *string
+	origDamage       *DamageContext
+	origRespDefeat   *DefeatContext
+	origStatus       *StatusContext
+	origStatusDefeat *DefeatContext
+	origDefeat       *DefeatContext
+	origInspection   map[string]InspectionContent
+	origPartyIDs     []string
+	origEnemyIDs     []string
+	origMemberIDs    []string
+	origPhantomIDs   []string
+	origArguments    []string
 }
 
 func snapshotContext(c *CallbackContext) contextSnapshot {
@@ -121,19 +140,28 @@ func snapshotContext(c *CallbackContext) contextSnapshot {
 	if c.Assets != nil {
 		origAssetsHeld = c.Assets.HeldToolID
 	}
+	var origRespDefeat, origStatusDefeat *DefeatContext
+	if c.Damage != nil {
+		origRespDefeat = c.Damage.responseDefeat
+	}
+	if c.Status != nil {
+		origStatusDefeat = c.Status.Defeat
+	}
 	return contextSnapshot{
-		ctx:            cloneCallbackContext(*c),
-		origAssets:     c.Assets,
-		origAssetsHeld: origAssetsHeld,
-		origDamage:     c.Damage,
-		origStatus:     c.Status,
-		origDefeat:     c.Defeat,
-		origInspection: c.Inspection,
-		origPartyIDs:   c.PartyIDs,
-		origEnemyIDs:   c.EnemyIDs,
-		origMemberIDs:  c.MemberOnlyIDs,
-		origPhantomIDs: c.PhantomEnemyIDs,
-		origArguments:  c.Arguments,
+		ctx:              cloneCallbackContext(*c),
+		origAssets:       c.Assets,
+		origAssetsHeld:   origAssetsHeld,
+		origDamage:       c.Damage,
+		origRespDefeat:   origRespDefeat,
+		origStatus:       c.Status,
+		origStatusDefeat: origStatusDefeat,
+		origDefeat:       c.Defeat,
+		origInspection:   c.Inspection,
+		origPartyIDs:     c.PartyIDs,
+		origEnemyIDs:     c.EnemyIDs,
+		origMemberIDs:    c.MemberOnlyIDs,
+		origPhantomIDs:   c.PhantomEnemyIDs,
+		origArguments:    c.Arguments,
 	}
 }
 
@@ -149,11 +177,19 @@ func (snap contextSnapshot) restorePointers() {
 	if snap.origDefeat != nil && saved.Defeat != nil {
 		*snap.origDefeat = *saved.Defeat
 	}
+	if snap.origStatusDefeat != nil && snap.origStatusDefeat != snap.origDefeat && saved.Status != nil && saved.Status.Defeat != nil {
+		*snap.origStatusDefeat = *saved.Status.Defeat
+	}
+	if snap.origRespDefeat != nil && snap.origRespDefeat != snap.origDefeat && snap.origRespDefeat != snap.origStatusDefeat && saved.Damage != nil && saved.Damage.responseDefeat != nil {
+		*snap.origRespDefeat = *saved.Damage.responseDefeat
+	}
 	if snap.origStatus != nil && saved.Status != nil {
 		*snap.origStatus = *saved.Status
+		snap.origStatus.Defeat = snap.origStatusDefeat
 	}
 	if snap.origDamage != nil && saved.Damage != nil {
 		*snap.origDamage = *saved.Damage
+		snap.origDamage.responseDefeat = snap.origRespDefeat
 	}
 }
 
@@ -170,9 +206,6 @@ func (snap contextSnapshot) restore(c *CallbackContext) {
 		saved.Status = snap.origStatus
 	}
 	if snap.origDamage != nil {
-		if saved.Damage != nil && snap.origDefeat != nil && saved.Damage.responseDefeat != nil && saved.Damage.responseDefeat == saved.Defeat {
-			saved.Damage.responseDefeat = snap.origDefeat
-		}
 		saved.Damage = snap.origDamage
 	}
 	if snap.origInspection != nil {

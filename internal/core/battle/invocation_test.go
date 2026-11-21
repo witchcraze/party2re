@@ -131,6 +131,7 @@ func TestApplyInvocationsRestoresRetainedReferentsAndHealthyContrast(t *testing.
 		s.Actors[0].HeldToolID = &actorHeld
 		s.Actors[0].Gear = &BattleGearStats{AccessoryID: "item-169", WeaponAttack: &weaponAtk}
 		s.SkillBans = map[string]int{"existing": 1}
+		s.SkillHistory = map[string]map[string]bool{"self": {"prior": true}}
 		s.StoredToolHistory = map[string]map[string]bool{"party": {"item-001": true}}
 		c.Assets = &JobAssets{
 			RequesterID:    "self",
@@ -140,9 +141,10 @@ func TestApplyInvocationsRestoresRetainedReferentsAndHealthyContrast(t *testing.
 			StoredTools:    []StoredTool{{InstanceID: "book", DefinitionID: "item-170"}},
 			StoredOutcomes: make([]StoredToolOutcome, 0, 2),
 		}
-		c.Damage = &DamageContext{EffectContext: EffectContext{TargetContext: c.TargetContext}}
-		c.Status = &StatusContext{EffectContext: EffectContext{TargetContext: c.TargetContext}}
-		c.Defeat = &DefeatContext{EquipmentResetContext: EquipmentResetContext{TargetContext: c.TargetContext}}
+		sharedDefeat := &DefeatContext{EquipmentResetContext: EquipmentResetContext{TargetContext: c.TargetContext}}
+		c.Defeat = sharedDefeat
+		c.Damage = &DamageContext{EffectContext: EffectContext{TargetContext: c.TargetContext}, responseDefeat: sharedDefeat}
+		c.Status = &StatusContext{EffectContext: EffectContext{TargetContext: c.TargetContext}, Defeat: sharedDefeat}
 		c.Inspection = map[string]InspectionContent{"a": {Empty: true}}
 		d.Entries["debit-and-swap"] = CallbackDefinition{
 			Validate: func(*LifetimeState, *CallbackContext) error { return nil },
@@ -151,6 +153,7 @@ func TestApplyInvocationsRestoresRetainedReferentsAndHealthyContrast(t *testing.
 				a.setHeldTool("item-170")
 				*a.Gear.WeaponAttack = 99
 				state.SkillBans["job-86-entry-3"] = 2
+				state.SkillHistory["self"]["item-170"] = true
 				state.StoredToolHistory["party"]["item-170"] = true
 				frame.Assets.Wallet -= 30
 				*frame.Assets.HeldToolID = "item-170"
@@ -159,6 +162,10 @@ func TestApplyInvocationsRestoresRetainedReferentsAndHealthyContrast(t *testing.
 				frame.Damage.DamageCalls++
 				frame.Status.HealCalls++
 				frame.Defeat.Cursor = TargetCursor{ActorID: "enemy"}
+				replacementDefeat := *frame.Defeat
+				replacementDefeat.Cursor = TargetCursor{ActorID: "other"}
+				frame.Status.Defeat = &replacementDefeat
+				frame.Damage.responseDefeat = &replacementDefeat
 				frame.Inspection["b"] = InspectionContent{Empty: true}
 				return nil
 			},
@@ -179,7 +186,9 @@ func TestApplyInvocationsRestoresRetainedReferentsAndHealthyContrast(t *testing.
 	origGear := s.Actors[0].Gear
 	origActors := s.Actors
 	origBans := s.SkillBans
+	origSkillInner := s.SkillHistory["self"]
 	origStoredHist := s.StoredToolHistory
+	origStoredInner := s.StoredToolHistory["party"]
 	origInspection := c.Inspection
 	ops := []CallbackInvocation{{Kind: "entry", EntryID: "debit-and-swap"}, {Kind: "entry", EntryID: "reject-if-debited"}}
 	if err := s.ApplyInvocations(&c, d, ops, &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {
@@ -197,8 +206,35 @@ func TestApplyInvocationsRestoresRetainedReferentsAndHealthyContrast(t *testing.
 	if origDamage.DamageCalls != 0 || origStatus.HealCalls != 0 || origDefeat.Cursor.ActorID != "" {
 		t.Fatalf("context pointers leaked: %+v %+v %+v", origDamage, origStatus, origDefeat)
 	}
-	if len(origBans) != 1 || origBans["existing"] != 1 || origStoredHist["party"]["item-170"] || len(origInspection) != 1 {
-		t.Fatalf("maps leaked: %v %v %v", origBans, origStoredHist, origInspection)
+	if origDamage.responseDefeat != origDefeat || origStatus.Defeat != origDefeat || c.Damage != origDamage || c.Status != origStatus || c.Defeat != origDefeat {
+		t.Fatalf("Defeat sharing broke on restore: dmg=%p status=%p defeat=%p", origDamage.responseDefeat, origStatus.Defeat, origDefeat)
+	}
+	if len(origBans) != 1 || origBans["existing"] != 1 || origStoredHist["party"]["item-170"] || origStoredInner["item-170"] || !origStoredInner["item-001"] || origSkillInner["item-170"] || !origSkillInner["prior"] || len(origInspection) != 1 {
+		t.Fatalf("maps leaked: bans=%v stored=%v innerStored=%v innerSkill=%v insp=%v", origBans, origStoredHist, origStoredInner, origSkillInner, origInspection)
+	}
+
+	// Independent non-shared Status.Defeat / Damage.responseDefeat referents also restore.
+	s, c, d, _, _, _, origDamage, origStatus, origDefeat, _ = setup()
+	statusDefeat := &DefeatContext{EquipmentResetContext: EquipmentResetContext{TargetContext: c.TargetContext, Cursor: TargetCursor{ActorID: "status-orig"}}}
+	respDefeat := &DefeatContext{EquipmentResetContext: EquipmentResetContext{TargetContext: c.TargetContext, Cursor: TargetCursor{ActorID: "resp-orig"}}}
+	c.Status.Defeat = statusDefeat
+	c.Damage.responseDefeat = respDefeat
+	d.Entries["mutate-independent-defeats"] = CallbackDefinition{
+		Validate: func(*LifetimeState, *CallbackContext) error { return nil },
+		Execute: func(state *LifetimeState, frame *CallbackContext, _ random.Generator) error {
+			state.actor(frame.ActorID).setHeldTool("item-170")
+			frame.Assets.Wallet -= 30
+			frame.Defeat.Cursor = TargetCursor{ActorID: "mutated-defeat"}
+			frame.Status.Defeat.Cursor = TargetCursor{ActorID: "mutated-status-defeat"}
+			frame.Damage.responseDefeat.Cursor = TargetCursor{ActorID: "mutated-resp-defeat"}
+			return nil
+		},
+	}
+	if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: "entry", EntryID: "mutate-independent-defeats"}, {Kind: "entry", EntryID: "reject-if-debited"}}, &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {
+		t.Fatalf("err = %v, want ErrUnsupportedEffect", err)
+	}
+	if origDefeat.Cursor.ActorID != "" || statusDefeat.Cursor.ActorID != "status-orig" || respDefeat.Cursor.ActorID != "resp-orig" || origStatus.Defeat != statusDefeat || origDamage.responseDefeat != respDefeat {
+		t.Fatalf("independent defeat referents leaked: defeat=%+v status=%+v resp=%+v", origDefeat.Cursor, statusDefeat.Cursor, respDefeat.Cursor)
 	}
 
 	// Healthy contrast: caller observes updates through original references.

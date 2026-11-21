@@ -26,12 +26,6 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 		}
 		c.Assets = &assets
 	}
-	if c.Status != nil {
-		status := *c.Status
-		f := cloneCallbackContext(CallbackContext{Damage: &DamageContext{EffectContext: status.EffectContext}, Defeat: status.Defeat})
-		status.EffectContext, status.Defeat = f.Damage.EffectContext, f.Defeat
-		c.Status = &status
-	}
 	if c.Defeat != nil {
 		defeat := *c.Defeat
 		f := cloneCallbackContext(CallbackContext{TargetContext: defeat.TargetContext})
@@ -53,6 +47,19 @@ func cloneCallbackContext(c CallbackContext) CallbackContext {
 			defeat.Fortress = &fortress
 		}
 		c.Defeat = &defeat
+	}
+	if c.Status != nil {
+		status := *c.Status
+		f := cloneCallbackContext(CallbackContext{Damage: &DamageContext{EffectContext: status.EffectContext}})
+		status.EffectContext = f.Damage.EffectContext
+		if status.Defeat != nil {
+			if status.Defeat == originalDefeat {
+				status.Defeat = c.Defeat
+			} else {
+				status.Defeat = cloneCallbackContext(CallbackContext{Defeat: status.Defeat}).Defeat
+			}
+		}
+		c.Status = &status
 	}
 	if c.Damage != nil {
 		damage := *c.Damage
