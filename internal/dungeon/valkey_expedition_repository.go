@@ -372,11 +372,26 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	sKey := r.stateKey(characterID)
 	rKey := r.rewardsKey(characterID)
 
-	memberHPDeltasJSON := EncodeMemberHPDeltas(params.MemberHPDeltas)
-	memberMPDeltasJSON := EncodeMemberHPDeltas(params.MemberMPDeltas)
-	consumedItemsJSON := EncodeConsumedItems(params.ConsumedItems)
-	memberExpDeltasJSON := EncodeMemberHPDeltas(params.MemberExpDeltas)
-	memberGoldDeltasJSON := EncodeMemberHPDeltas(params.MemberGoldDeltas)
+	memberHPDeltasJSON, err := encodeJSONMap(params.MemberHPDeltas)
+	if err != nil {
+		return StepOutcome{}, err
+	}
+	memberMPDeltasJSON, err := encodeJSONMap(params.MemberMPDeltas)
+	if err != nil {
+		return StepOutcome{}, err
+	}
+	consumedItemsJSON, err := encodeJSONMap(params.ConsumedItems)
+	if err != nil {
+		return StepOutcome{}, err
+	}
+	memberExpDeltasJSON, err := encodeJSONMap(params.MemberExpDeltas)
+	if err != nil {
+		return StepOutcome{}, err
+	}
+	memberGoldDeltasJSON, err := encodeJSONMap(params.MemberGoldDeltas)
+	if err != nil {
+		return StepOutcome{}, err
+	}
 
 	encounterJSON, err := encodeEncounter(params.Encounter)
 	if err != nil {
