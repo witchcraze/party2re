@@ -11,19 +11,12 @@ import (
 
 // RankingService defines leaderboard and ranking queries exposed over HTTP.
 type RankingService interface {
-	GetLevelRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
-	GetPlayerWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.PlayerWealthRankingEntry], error)
-	GetCharacterWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetMonsterKillsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetMaoCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetHeroCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetPvPVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
-	GetBossDefeatRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
-	GetAdventureVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
-	GetJobMasteryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetJobPopularityRanking(ctx context.Context, useSnapshot bool) (ranking.RankingPage[ranking.JobPopularityEntry], error)
 	GetHelperRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
-	GetSmallMedalRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetCasinoWinsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetAlchemyRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
@@ -62,48 +55,6 @@ func parsePaginationAndSnapshotParams(r *http.Request) (limit int, offset int, u
 		useSnapshot = false
 	}
 	return limit, offset, useSnapshot
-}
-
-func (h *Handler) handleGetLevelRanking(w http.ResponseWriter, r *http.Request) {
-	if h.rankings == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
-		return
-	}
-	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
-	page, err := h.rankings.GetLevelRanking(r.Context(), limit, offset, useSnapshot)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
-}
-
-func (h *Handler) handleGetPlayerWealthRanking(w http.ResponseWriter, r *http.Request) {
-	if h.rankings == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
-		return
-	}
-	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
-	page, err := h.rankings.GetPlayerWealthRanking(r.Context(), limit, offset, useSnapshot)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
-}
-
-func (h *Handler) handleGetCharacterWealthRanking(w http.ResponseWriter, r *http.Request) {
-	if h.rankings == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
-		return
-	}
-	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
-	page, err := h.rankings.GetCharacterWealthRanking(r.Context(), limit, offset, useSnapshot)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
 }
 
 func (h *Handler) handleGetMonsterKillsRanking(w http.ResponseWriter, r *http.Request) {
@@ -148,20 +99,6 @@ func (h *Handler) handleGetHeroCountRanking(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, page)
 }
 
-func (h *Handler) handleGetJobMasteryRanking(w http.ResponseWriter, r *http.Request) {
-	if h.rankings == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
-		return
-	}
-	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
-	page, err := h.rankings.GetJobMasteryRanking(r.Context(), limit, offset, useSnapshot)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
-}
-
 func (h *Handler) handleGetJobPopularityRanking(w http.ResponseWriter, r *http.Request) {
 	if h.rankings == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
@@ -183,20 +120,6 @@ func (h *Handler) handleGetHelperRanking(w http.ResponseWriter, r *http.Request)
 	}
 	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
 	page, err := h.rankings.GetHelperRanking(r.Context(), limit, offset, useSnapshot)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
-}
-
-func (h *Handler) handleGetSmallMedalRanking(w http.ResponseWriter, r *http.Request) {
-	if h.rankings == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
-		return
-	}
-	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
-	page, err := h.rankings.GetSmallMedalRanking(r.Context(), limit, offset, useSnapshot)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

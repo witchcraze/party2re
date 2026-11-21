@@ -12,24 +12,32 @@ func TestIsValidRankingType(t *testing.T) {
 		input    ranking.RankingType
 		expected bool
 	}{
-		{"level", ranking.RankingTypeLevel, true},
-		{"player_wealth", ranking.RankingTypePlayerWealth, true},
-		{"character_wealth", ranking.RankingTypeCharacterWealth, true},
 		{"monster_kills", ranking.RankingTypeMonsterKills, true},
 		{"mao_count", ranking.RankingTypeMaoCount, true},
 		{"hero_count", ranking.RankingTypeHeroCount, true},
+		{"pvp_victory", ranking.RankingTypePvPVictory, true},
+		{"job_popularity", ranking.RankingTypeJobPopularity, true},
+		{"helper", ranking.RankingTypeHelper, true},
+		{"casino_wins", ranking.RankingTypeCasinoWins, true},
+		{"alchemy", ranking.RankingTypeAlchemy, true},
+		{"weekly_job_change", ranking.RankingTypeWeeklyJobChange, true},
+		{"kill_p alias", "kill_p", true},
 		{"kill_m alias", "kill_m", true},
 		{"mao_c alias", "mao_c", true},
 		{"hero_c alias", "hero_c", true},
-		{"pvp_victory", ranking.RankingTypePvPVictory, true},
-		{"boss_defeat", ranking.RankingTypeBossDefeat, true},
-		{"adventure_victory", ranking.RankingTypeAdventureVictory, true},
-		{"job_mastery", ranking.RankingTypeJobMastery, true},
-		{"job_popularity", ranking.RankingTypeJobPopularity, true},
-		{"helper", ranking.RankingTypeHelper, true},
+		{"cas_c alias", "cas_c", true},
+		{"help_c alias", "help_c", true},
+		{"alc_c alias", "alc_c", true},
+		{"week_job_change alias", "week_job_change", true},
+		{"level removed", ranking.RankingType("level"), false},
+		{"player_wealth removed", ranking.RankingType("player_wealth"), false},
+		{"character_wealth removed", ranking.RankingType("character_wealth"), false},
+		{"boss_defeat removed", ranking.RankingType("boss_defeat"), false},
+		{"adventure_victory removed", ranking.RankingType("adventure_victory"), false},
+		{"job_mastery removed", ranking.RankingType("job_mastery"), false},
+		{"small_medals removed", ranking.RankingType("small_medals"), false},
 		{"battle_victory purged", "battle_victory", false},
 		{"rebirth", ranking.RankingType("rebirth"), false},
-		{"small_medals", ranking.RankingTypeSmallMedals, true},
 		{"invalid", ranking.RankingType("invalid_type"), false},
 		{"empty", ranking.RankingType(""), false},
 	}
@@ -71,7 +79,6 @@ func TestNormalizePagination(t *testing.T) {
 func TestRepositoryInterfaceComposition(t *testing.T) {
 	repo := newMockRepo()
 	var _ ranking.CharacterRankingRepository = repo
-	var _ ranking.PlayerWealthRankingRepository = repo
 	var _ ranking.LeaderboardRepository = repo
 	var _ ranking.SnapshotRepository = repo
 	var _ ranking.Repository = repo

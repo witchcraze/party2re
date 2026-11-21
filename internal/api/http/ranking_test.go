@@ -16,16 +16,12 @@ import (
 )
 
 type mockHTTPRankingService struct {
-	levelPage         ranking.RankingPage[ranking.CharacterRankingEntry]
-	wealthPage        ranking.RankingPage[ranking.PlayerWealthRankingEntry]
-	charWealthPage    ranking.RankingPage[ranking.CharacterRankingEntry]
+	pvpVictoryPage    ranking.RankingPage[ranking.CharacterRankingEntry]
 	monsterKillsPage  ranking.RankingPage[ranking.CharacterRankingEntry]
 	maoCountPage      ranking.RankingPage[ranking.CharacterRankingEntry]
 	heroCountPage     ranking.RankingPage[ranking.CharacterRankingEntry]
-	jobMasteryPage    ranking.RankingPage[ranking.CharacterRankingEntry]
 	jobPopularityPage ranking.RankingPage[ranking.JobPopularityEntry]
 	helperPage        ranking.RankingPage[ranking.CharacterRankingEntry]
-	medalPage         ranking.RankingPage[ranking.CharacterRankingEntry]
 	casinoWinsPage    ranking.RankingPage[ranking.CharacterRankingEntry]
 	alchemyPage       ranking.RankingPage[ranking.CharacterRankingEntry]
 	weeklyJobPage     ranking.RankingPage[ranking.CharacterRankingEntry]
@@ -35,15 +31,6 @@ type mockHTTPRankingService struct {
 	refreshedAll      bool
 }
 
-func (m *mockHTTPRankingService) GetLevelRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.levelPage, nil
-}
-func (m *mockHTTPRankingService) GetPlayerWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.PlayerWealthRankingEntry], error) {
-	return m.wealthPage, nil
-}
-func (m *mockHTTPRankingService) GetCharacterWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.charWealthPage, nil
-}
 func (m *mockHTTPRankingService) GetMonsterKillsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.monsterKillsPage, nil
 }
@@ -54,25 +41,13 @@ func (m *mockHTTPRankingService) GetHeroCountRanking(ctx context.Context, limit,
 	return m.heroCountPage, nil
 }
 func (m *mockHTTPRankingService) GetPvPVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.monsterKillsPage, nil
-}
-func (m *mockHTTPRankingService) GetBossDefeatRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.monsterKillsPage, nil
-}
-func (m *mockHTTPRankingService) GetAdventureVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.monsterKillsPage, nil
-}
-func (m *mockHTTPRankingService) GetJobMasteryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.jobMasteryPage, nil
+	return m.pvpVictoryPage, nil
 }
 func (m *mockHTTPRankingService) GetJobPopularityRanking(ctx context.Context, useSnapshot bool) (ranking.RankingPage[ranking.JobPopularityEntry], error) {
 	return m.jobPopularityPage, nil
 }
 func (m *mockHTTPRankingService) GetHelperRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.helperPage, nil
-}
-func (m *mockHTTPRankingService) GetSmallMedalRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.medalPage, nil
 }
 func (m *mockHTTPRankingService) GetCasinoWinsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.casinoWinsPage, nil
@@ -99,12 +74,12 @@ func (m *mockHTTPRankingService) GetLegendCategory(ctx context.Context, category
 }
 func (m *mockHTTPRankingService) GetRankingByType(ctx context.Context, rankingType ranking.RankingType, limit, offset int, useSnapshot bool) (any, error) {
 	switch ranking.NormalizeRankingType(rankingType) {
-	case ranking.RankingTypeLevel:
-		return m.levelPage, nil
-	case ranking.RankingTypePlayerWealth:
-		return m.wealthPage, nil
+	case ranking.RankingTypePvPVictory:
+		return m.pvpVictoryPage, nil
 	case ranking.RankingTypeJobPopularity:
 		return m.jobPopularityPage, nil
+	case ranking.RankingTypeHelper:
+		return m.helperPage, nil
 	case ranking.RankingTypeCasinoWins:
 		return m.casinoWinsPage, nil
 	case ranking.RankingTypeAlchemy:
@@ -161,38 +136,23 @@ func TestRankingEndpoints(t *testing.T) {
 				Entries:  []ranking.LegendEntry{{CharacterID: "c1", CharacterName: "Hero", Color: "#123456"}},
 			},
 		},
-		levelPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
-			RankingType:  ranking.RankingTypeLevel,
-			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", CharacterName: "Hero", Level: 50}},
+		pvpVictoryPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
+			RankingType:  ranking.RankingTypePvPVictory,
+			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", CharacterName: "Hero", Score: 12}},
 			Total:        1,
 			Limit:        20,
 			Offset:       0,
 			CalculatedAt: now,
 			IsSnapshot:   true,
 		},
-		wealthPage: ranking.RankingPage[ranking.PlayerWealthRankingEntry]{
-			RankingType:  ranking.RankingTypePlayerWealth,
-			Entries:      []ranking.PlayerWealthRankingEntry{{Rank: 1, PlayerID: "p1", Username: "rich", TotalWealth: 1000000}},
-			Total:        1,
-			Limit:        20,
-			Offset:       0,
-			CalculatedAt: now,
-		},
-		charWealthPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
-			RankingType:  ranking.RankingTypeCharacterWealth,
-			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 50000}},
-			Total:        1,
-			Limit:        20,
-			Offset:       0,
-			CalculatedAt: now,
-		},
 		monsterKillsPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
 			RankingType:  ranking.RankingTypeMonsterKills,
-			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 42}},
+			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", CharacterName: "Hero", Score: 42}},
 			Total:        1,
 			Limit:        20,
 			Offset:       0,
 			CalculatedAt: now,
+			IsSnapshot:   true,
 		},
 		maoCountPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
 			RankingType:  ranking.RankingTypeMaoCount,
@@ -205,14 +165,6 @@ func TestRankingEndpoints(t *testing.T) {
 		heroCountPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
 			RankingType:  ranking.RankingTypeHeroCount,
 			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 7}},
-			Total:        1,
-			Limit:        20,
-			Offset:       0,
-			CalculatedAt: now,
-		},
-		jobMasteryPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
-			RankingType:  ranking.RankingTypeJobMastery,
-			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 4}},
 			Total:        1,
 			Limit:        20,
 			Offset:       0,
@@ -234,14 +186,6 @@ func TestRankingEndpoints(t *testing.T) {
 			Offset:       0,
 			CalculatedAt: now,
 		},
-		medalPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
-			RankingType:  ranking.RankingTypeSmallMedals,
-			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 100}},
-			Total:        1,
-			Limit:        20,
-			Offset:       0,
-			CalculatedAt: now,
-		},
 	}
 
 	h := setupRankingHandler(mock)
@@ -257,46 +201,19 @@ func TestRankingEndpoints(t *testing.T) {
 		checkBody  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
-			name:       "GET /rankings/levels",
+			name:       "GET /rankings/monster-kills",
 			method:     http.MethodGet,
-			url:        "/rankings/levels?limit=10&offset=0&snapshot=true",
+			url:        "/rankings/monster-kills?limit=10&offset=0&snapshot=true",
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var res ranking.RankingPage[ranking.CharacterRankingEntry]
 				if err := json.NewDecoder(rr.Body).Decode(&res); err != nil {
 					t.Fatalf("decode failed: %v", err)
 				}
-				if res.Total != 1 || len(res.Entries) != 1 || res.Entries[0].CharacterName != "Hero" {
+				if res.Total != 1 || len(res.Entries) != 1 || res.Entries[0].CharacterName != "Hero" || res.Entries[0].Score != 42 {
 					t.Fatalf("unexpected body: %+v", res)
 				}
 			},
-		},
-		{
-			name:       "GET /rankings/wealth",
-			method:     http.MethodGet,
-			url:        "/rankings/wealth",
-			wantStatus: http.StatusOK,
-			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
-				var res ranking.RankingPage[ranking.PlayerWealthRankingEntry]
-				if err := json.NewDecoder(rr.Body).Decode(&res); err != nil {
-					t.Fatalf("decode failed: %v", err)
-				}
-				if res.Entries[0].TotalWealth != 1000000 {
-					t.Fatalf("unexpected wealth: %+v", res)
-				}
-			},
-		},
-		{
-			name:       "GET /rankings/characters-wealth",
-			method:     http.MethodGet,
-			url:        "/rankings/characters-wealth",
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "GET /rankings/monster-kills",
-			method:     http.MethodGet,
-			url:        "/rankings/monster-kills",
-			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "GET /rankings/mao-count",
@@ -311,12 +228,6 @@ func TestRankingEndpoints(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "GET /rankings/job-mastery",
-			method:     http.MethodGet,
-			url:        "/rankings/job-mastery",
-			wantStatus: http.StatusOK,
-		},
-		{
 			name:       "GET /rankings/job-popularity",
 			method:     http.MethodGet,
 			url:        "/rankings/job-popularity",
@@ -328,23 +239,16 @@ func TestRankingEndpoints(t *testing.T) {
 			url:        "/rankings/helpers",
 			wantStatus: http.StatusOK,
 		},
-
 		{
-			name:       "GET /rankings/medals",
+			name:       "GET /rankings/pvp_victory (dynamic route)",
 			method:     http.MethodGet,
-			url:        "/rankings/medals",
+			url:        "/rankings/pvp_victory",
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "GET /rankings/level (dynamic route)",
+			name:       "GET /rankings/kill_p (legacy alias dynamic route)",
 			method:     http.MethodGet,
-			url:        "/rankings/level",
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "GET /rankings/player_wealth (dynamic route)",
-			method:     http.MethodGet,
-			url:        "/rankings/player_wealth",
+			url:        "/rankings/kill_p",
 			wantStatus: http.StatusOK,
 		},
 		{
@@ -388,6 +292,42 @@ func TestRankingEndpoints(t *testing.T) {
 			method:     http.MethodGet,
 			url:        "/rankings/hero_c",
 			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/levels (removed -> 400 via dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/levels",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "GET /rankings/level (removed -> 400)",
+			method:     http.MethodGet,
+			url:        "/rankings/level",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "GET /rankings/wealth (removed -> 400)",
+			method:     http.MethodGet,
+			url:        "/rankings/wealth",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "GET /rankings/characters-wealth (removed -> 400)",
+			method:     http.MethodGet,
+			url:        "/rankings/characters-wealth",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "GET /rankings/job-mastery (removed -> 400)",
+			method:     http.MethodGet,
+			url:        "/rankings/job-mastery",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "GET /rankings/medals (removed -> 400)",
+			method:     http.MethodGet,
+			url:        "/rankings/medals",
+			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "GET /rankings/unknown_type (400 Bad Request)",
@@ -494,14 +434,22 @@ func TestRankingEndpoints(t *testing.T) {
 			name:       "POST /rankings/refresh (single type with X-Admin-Key)",
 			method:     http.MethodPost,
 			url:        "/rankings/refresh",
-			body:       `{"ranking_type":"level"}`,
+			body:       `{"ranking_type":"monster_kills"}`,
 			headers:    map[string]string{"X-Admin-Key": "test-admin-key"},
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
-				if len(mock.refreshedTypes) == 0 || mock.refreshedTypes[0] != ranking.RankingTypeLevel {
-					t.Fatalf("expected level in refreshedTypes: %+v", mock.refreshedTypes)
+				if len(mock.refreshedTypes) == 0 || mock.refreshedTypes[0] != ranking.RankingTypeMonsterKills {
+					t.Fatalf("expected monster_kills in refreshedTypes: %+v", mock.refreshedTypes)
 				}
 			},
+		},
+		{
+			name:       "POST /rankings/refresh (removed type with X-Admin-Key)",
+			method:     http.MethodPost,
+			url:        "/rankings/refresh",
+			body:       `{"ranking_type":"level"}`,
+			headers:    map[string]string{"X-Admin-Key": "test-admin-key"},
+			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "POST /rankings/refresh (invalid type with X-Admin-Key)",
@@ -544,7 +492,7 @@ func TestRankingEndpoints_NotConfigured(t *testing.T) {
 	h := setupRankingHandler(nil)
 	router := h.Router()
 
-	req := httptest.NewRequest(http.MethodGet, "/rankings/levels", nil)
+	req := httptest.NewRequest(http.MethodGet, "/rankings/monster-kills", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

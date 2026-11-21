@@ -357,16 +357,11 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("GET /homes/{id}", h.handleGetHomeView)
 
-	mux.HandleFunc("GET /rankings/levels", h.handleGetLevelRanking)
-	mux.HandleFunc("GET /rankings/wealth", h.handleGetPlayerWealthRanking)
-	mux.HandleFunc("GET /rankings/characters-wealth", h.handleGetCharacterWealthRanking)
 	mux.HandleFunc("GET /rankings/monster-kills", h.handleGetMonsterKillsRanking)
 	mux.HandleFunc("GET /rankings/mao-count", h.handleGetMaoCountRanking)
 	mux.HandleFunc("GET /rankings/hero-count", h.handleGetHeroCountRanking)
-	mux.HandleFunc("GET /rankings/job-mastery", h.handleGetJobMasteryRanking)
 	mux.HandleFunc("GET /rankings/job-popularity", h.handleGetJobPopularityRanking)
 	mux.HandleFunc("GET /rankings/helpers", h.handleGetHelperRanking)
-	mux.HandleFunc("GET /rankings/medals", h.handleGetSmallMedalRanking)
 	mux.HandleFunc("GET /rankings/casino-wins", h.handleGetCasinoWinsRanking)
 	mux.HandleFunc("GET /rankings/alchemy", h.handleGetAlchemyRanking)
 	mux.HandleFunc("GET /rankings/weekly-job-change", h.handleGetWeeklyJobChangeRanking)

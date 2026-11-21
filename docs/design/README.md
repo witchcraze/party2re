@@ -122,7 +122,7 @@ graph TD
 - [`lottery.md`](lottery.md) — Server-wide 20-ticket Takarakuji lottery with rollover jackpot, and Tavern Fukubiki raffle.
 - [`photo-contest.md`](photo-contest.md) — 10-day seasonal cycles, screenshot submissions, community voting, prize delivery, and Hall of Fame.
 - [`collection.md`](collection.md) — Illustrated monster encyclopedia and item discovery compendium with auto-record.
-- [`ranking.md`](ranking.md) — 16 competitive leaderboards with Valkey snapshot caching and singleflight stampede guard.
+- [`ranking.md`](ranking.md) — 9 competitive leaderboards (7 `ranking.cgi` boards, job popularity, weekly job changes) and 6 hall-of-fame categories with Valkey snapshot caching.
 - [`rescue-and-helper.md`](rescue-and-helper.md) — Emergency unstuck rescue with cooldown penalty, and 4-category helper quest board.
 - [`activities.md`](activities.md) — Delayed background training actions with push-based worker resolution.
 - [`game-overview.md`](game-overview.md) — High-level domain overview and feature expansion model.

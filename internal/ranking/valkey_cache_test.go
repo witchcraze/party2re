@@ -50,10 +50,10 @@ func (m *mockSnapshotCache) Delete(ctx context.Context, rankingType ranking.Rank
 func TestService_ValkeyCache_HitAndInvalidation(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockRepo()
-	repo.levelRankings = []ranking.CharacterRankingEntry{
-		{Rank: 1, CharacterID: "char-1", CharacterName: "Alice", Level: 50, Experience: 10000},
+	repo.monsterKillsRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "char-1", CharacterName: "Alice", Level: 50, Score: 100},
 	}
-	repo.levelTotal = 1
+	repo.monsterKillsTotal = 1
 
 	mockCache := newMockSnapshotCache()
 	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
@@ -67,11 +67,11 @@ func TestService_ValkeyCache_HitAndInvalidation(t *testing.T) {
 	}
 
 	// 1. Refresh snapshot -> should save to repo and mockCache
-	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeLevel); err != nil {
+	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeMonsterKills); err != nil {
 		t.Fatalf("RefreshSnapshot: %v", err)
 	}
 
-	snap, found, err := mockCache.Get(ctx, ranking.RankingTypeLevel)
+	snap, found, err := mockCache.Get(ctx, ranking.RankingTypeMonsterKills)
 	if err != nil || !found {
 		t.Fatalf("expected snapshot in cache, found=%v, err=%v", found, err)
 	}
@@ -80,9 +80,9 @@ func TestService_ValkeyCache_HitAndInvalidation(t *testing.T) {
 	}
 
 	// 2. Query with useSnapshot = true -> returns from cache
-	page, err := svc.GetLevelRanking(ctx, 10, 0, true)
+	page, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
 	if err != nil {
-		t.Fatalf("GetLevelRanking: %v", err)
+		t.Fatalf("GetMonsterKillsRanking: %v", err)
 	}
 	if !page.IsSnapshot {
 		t.Errorf("expected IsSnapshot = true")
@@ -92,8 +92,8 @@ func TestService_ValkeyCache_HitAndInvalidation(t *testing.T) {
 	}
 
 	// 3. Delete from cache
-	_ = mockCache.Delete(ctx, ranking.RankingTypeLevel)
-	_, found, _ = mockCache.Get(ctx, ranking.RankingTypeLevel)
+	_ = mockCache.Delete(ctx, ranking.RankingTypeMonsterKills)
+	_, found, _ = mockCache.Get(ctx, ranking.RankingTypeMonsterKills)
 	if found {
 		t.Errorf("expected cache entry to be deleted")
 	}
@@ -115,10 +115,10 @@ func TestService_Singleflight_PreventsCacheStampede(t *testing.T) {
 	countingRepo := &countingRankingRepository{
 		mockRankingRepository: *newMockRepo(),
 	}
-	countingRepo.levelRankings = []ranking.CharacterRankingEntry{
-		{Rank: 1, CharacterID: "char-1", CharacterName: "Alice", Level: 50, Experience: 10000},
+	countingRepo.monsterKillsRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "char-1", CharacterName: "Alice", Level: 50, Score: 100},
 	}
-	countingRepo.levelTotal = 1
+	countingRepo.monsterKillsTotal = 1
 
 	mockCache := newMockSnapshotCache()
 	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
@@ -133,8 +133,8 @@ func TestService_Singleflight_PreventsCacheStampede(t *testing.T) {
 
 	// Save snapshot directly in DB repo (not in cache)
 	if err := countingRepo.SaveSnapshot(ctx, ranking.RankingSnapshot{
-		RankingType:  ranking.RankingTypeLevel,
-		SnapshotData: `[{"rank":1,"character_id":"char-1","character_name":"Alice","level":50,"experience":10000}]`,
+		RankingType:  ranking.RankingTypeMonsterKills,
+		SnapshotData: `[{"rank":1,"character_id":"char-1","character_name":"Alice","level":50,"score":100}]`,
 		TotalCount:   1,
 		CalculatedAt: fixedTime,
 		UpdatedAt:    fixedTime,
@@ -151,7 +151,7 @@ func TestService_Singleflight_PreventsCacheStampede(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			page, err := svc.GetLevelRanking(ctx, 10, 0, true)
+			page, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
 			if err != nil {
 				errCh <- err
 				return
@@ -188,7 +188,7 @@ func TestValkeySnapshotCache_RealOrNop(t *testing.T) {
 
 	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	testSnap := ranking.RankingSnapshot{
-		RankingType:  ranking.RankingTypeLevel,
+		RankingType:  ranking.RankingTypeMonsterKills,
 		SnapshotData: `[{"rank":1,"character_id":"char-1","character_name":"Alice","level":50}]`,
 		TotalCount:   1,
 		CalculatedAt: fixedTime,
@@ -196,12 +196,12 @@ func TestValkeySnapshotCache_RealOrNop(t *testing.T) {
 	}
 
 	// 1. Set snapshot
-	if err := cache.Set(ctx, ranking.RankingTypeLevel, testSnap, 2*time.Second); err != nil {
+	if err := cache.Set(ctx, ranking.RankingTypeMonsterKills, testSnap, 2*time.Second); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
 	// 2. Get snapshot
-	got, found, err := cache.Get(ctx, ranking.RankingTypeLevel)
+	got, found, err := cache.Get(ctx, ranking.RankingTypeMonsterKills)
 	if err != nil || !found {
 		t.Fatalf("Get failed: found=%v, err=%v", found, err)
 	}
@@ -210,11 +210,11 @@ func TestValkeySnapshotCache_RealOrNop(t *testing.T) {
 	}
 
 	// 3. Delete snapshot
-	if err := cache.Delete(ctx, ranking.RankingTypeLevel); err != nil {
+	if err := cache.Delete(ctx, ranking.RankingTypeMonsterKills); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	_, found, err = cache.Get(ctx, ranking.RankingTypeLevel)
+	_, found, err = cache.Get(ctx, ranking.RankingTypeMonsterKills)
 	if err != nil || found {
 		t.Errorf("expected not found after delete, got found=%v, err=%v", found, err)
 	}
