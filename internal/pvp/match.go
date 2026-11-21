@@ -145,6 +145,9 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			if m.MaxMP != nil {
 				p.MaxHP, p.MaxMP = m.MaxHP, *m.MaxMP
 			}
+			if m.MP != nil {
+				p.MP = max(0, *m.MP)
+			}
 			if m.HP > 0 {
 				p.HP = m.HP
 			} else if p.HP <= 0 {
@@ -203,6 +206,16 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 					roundOutcome = "round_win"
 				} else {
 					roundOutcome = "draw"
+				}
+			}
+
+			for i := range detail.Members {
+				if remMP, ok := res.RemainingMP[detail.Members[i].CharacterID]; ok {
+					mp := max(0, remMP)
+					if maxMP := detail.Members[i].MaxMP; maxMP != nil && *maxMP > 0 {
+						mp = min(mp, *maxMP)
+					}
+					detail.Members[i].MP = &mp
 				}
 			}
 		}
