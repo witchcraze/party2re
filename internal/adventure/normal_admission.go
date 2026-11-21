@@ -356,3 +356,17 @@ func (r *NormalRun) livingEnemies() bool {
 func runReward(e RunEarnings) corebattle.Reward {
 	return corebattle.Reward{Experience: e.EXP, Currency: e.Gold, Crystals: e.Crystals}
 }
+
+// pruneFallenNPCs is write_member's save boundary: fallen NPCs and helpers leave
+// the room, fallen real players keep their place (_battle.cgi:516–523).
+func (r *NormalRun) pruneFallenNPCs(actorID string) {
+	frame := corebattle.TargetContext{ActorID: actorID}
+	r.Battle.PruneRoster(&frame)
+	r.Enemies = slices.DeleteFunc(r.Enemies, func(id string) bool {
+		if r.actor(id) != nil {
+			return false
+		}
+		delete(r.LastActions, id)
+		return true
+	})
+}
