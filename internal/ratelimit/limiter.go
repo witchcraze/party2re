@@ -37,11 +37,18 @@ type memoryEntry struct {
 	expiresAt time.Time
 }
 
+const (
+	memorySweepThreshold = 1024
+	memorySweepInterval  = time.Minute
+)
+
 // MemoryLimiter provides an in-memory thread-safe rate limiter.
 type MemoryLimiter struct {
-	mu      sync.Mutex
-	entries map[string]memoryEntry
-	nowFunc func() time.Time
+	mu            sync.Mutex
+	entries       map[string]memoryEntry
+	nowFunc       func() time.Time
+	lastSweep     time.Time
+	nextSweepSize int
 }
 
 // NewMemoryLimiter creates a new in-memory rate limiter.
@@ -65,6 +72,9 @@ func (m *MemoryLimiter) Allow(_ context.Context, key string, limit int64, window
 	defer m.mu.Unlock()
 
 	now := m.nowFunc()
+	if len(m.entries) >= memorySweepThreshold && (m.lastSweep.IsZero() || !now.Before(m.lastSweep.Add(memorySweepInterval)) || (m.nextSweepSize > 0 && len(m.entries) >= m.nextSweepSize)) {
+		m.evictExpiredLocked(now)
+	}
 	entry, exists := m.entries[key]
 
 	if !exists || now.After(entry.expiresAt) {
@@ -107,6 +117,16 @@ func (m *MemoryLimiter) Allow(_ context.Context, key string, limit int64, window
 		Remaining:  limit - entry.count,
 		ResetAfter: resetAfter,
 	}, nil
+}
+
+func (m *MemoryLimiter) evictExpiredLocked(now time.Time) {
+	for k, entry := range m.entries {
+		if now.After(entry.expiresAt) {
+			delete(m.entries, k)
+		}
+	}
+	m.lastSweep = now
+	m.nextSweepSize = max(memorySweepThreshold, len(m.entries)*2)
 }
 
 const defaultKeyPrefix = "party2:ratelimit:"
