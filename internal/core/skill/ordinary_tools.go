@@ -30,6 +30,9 @@ func mergeOrdinaryInspection(base, overlay map[string]corebattle.InspectionConte
 		merged = make(map[string]corebattle.InspectionContent, len(overlay))
 	}
 	for id, content := range overlay {
+		if _, exists := merged[id]; exists && content == (corebattle.InspectionContent{Empty: true}) {
+			continue
+		}
 		merged[id] = content
 	}
 	return merged

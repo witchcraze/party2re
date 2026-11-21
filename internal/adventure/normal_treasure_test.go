@@ -226,3 +226,75 @@ func TestNormalRunTreasureReconcilePreservesOrderAfterMemberRemoval(t *testing.T
 		t.Fatalf("unexpected box order after reconcile: %+v", r.Boxes)
 	}
 }
+
+func TestNormalRunMixedEnemyAndTreasureInspectionPreservesEnemyReward(t *testing.T) {
+	r, requester := treasureCombatRun(t)
+	r.Floor = 3
+	r.Enemies = []string{"enemy-1"}
+	r.Battle.Actors = append(r.Battle.Actors, corebattle.LifetimeActor{
+		Participant: corebattle.Participant{ID: "enemy-1", Name: "Slime", TeamID: "enemies", HP: 100, MaxHP: 100},
+		NPC:         true,
+	})
+	r.Boxes = []TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"}}
+
+	state, frame, projectionInspection, err := r.ProjectCombat("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	level := requester.Level
+	damage := corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: frame, RequesterLevel: &level}}
+	tools := &corebattle.OrdinaryToolContext{
+		DamageContext: damage,
+		OrdinaryToolInput: corebattle.OrdinaryToolInput{
+			Inspection: map[string]corebattle.InspectionContent{
+				"a":       {Empty: true},
+				"enemy-1": {RewardKind: 1, DefinitionID: "weapon-01", Price: 500},
+			},
+		},
+	}
+	var defs skill.BattleDefinitions
+	defs.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{Tools: tools}, len(r.Roster))
+	defs.RegisterOrdinaryTools(tools)
+
+	// Intentionally leave Callback.Inspection empty so normalOperations overlays ProjectCombat's map.
+	opCtx := NormalOperationContext{
+		Definitions: defs,
+		Callback:    corebattle.CallbackContext{Damage: &damage},
+		Requester:   &requester,
+	}
+	searchCmd, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Action: "job-78-entry-1", TargetID: "weapon-01"}, opCtx)
+	if err != nil {
+		t.Fatalf("parse enemy reward search failed: %v", err)
+	}
+	boxCmd, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Input: "＠トレハンのかん>普通の宝箱A"}, opCtx)
+	if err != nil {
+		t.Fatalf("parse box valuation failed: %v", err)
+	}
+
+	for _, parsed := range []ParsedRunOperation{searchCmd, boxCmd} {
+		cb := corebattle.CallbackContext{
+			TargetContext: frame,
+			Arguments:     parsed.First.Arguments,
+			Inspection:    projectionInspection,
+		}
+		if err := state.ValidateInvocations(&cb, defs.Invocations, []corebattle.CallbackInvocation{parsed.First.Invocation}, &ordinaryRNG{}); err != nil {
+			t.Fatalf("validate %+v: %v", parsed.First, err)
+		}
+		if err := state.ApplyInvocations(&cb, defs.Invocations, []corebattle.CallbackInvocation{parsed.First.Invocation}, &ordinaryRNG{}); err != nil {
+			t.Fatalf("apply %+v: %v", parsed.First, err)
+		}
+	}
+
+	if len(tools.Results) != 2 || len(tools.Results[0].Facts) != 1 || len(tools.Results[1].Facts) != 1 {
+		t.Fatalf("unexpected inspection results: %+v", tools.Results)
+	}
+	if f := tools.Results[0].Facts[0]; f.Kind != "reward-search" || !f.Found || f.TargetID != "enemy-1" {
+		t.Fatalf("ordinary enemy reward lost during mixed inspection: %+v", f)
+	}
+	if f := tools.Results[1].Facts[0]; f.Kind != "valuation" || f.TargetID != "box-1" {
+		t.Fatalf("projected box valuation failed: %+v", f)
+	}
+	if got := tools.Inspection["enemy-1"]; got.DefinitionID != "weapon-01" || got.Empty {
+		t.Fatalf("ordinary enemy inspection entry overwritten: %+v", got)
+	}
+}
