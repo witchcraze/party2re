@@ -29,6 +29,9 @@ func (s *LifetimeState) validateEnemySummon(c *RosterContext, id string) error {
 				return ErrInvalidParticipant
 			}
 		}
+		if err := a.NPCLoadout.validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

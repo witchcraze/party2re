@@ -674,4 +674,21 @@ func TestNPCLateCMPSourceIdentitySettlement(t *testing.T) {
 			t.Fatalf("ApplyNPCOperation draw=%v: got=%+v actor=%+v err=%v", tc.draw, got, s.Actors[0], err)
 		}
 	}
+
+	// Negative NPCLoadout costs reject before state mutation or RNG draws.
+	for _, loadout := range []*corebattle.NPCLoadout{
+		{CustomName: "neg-custom", Gems: [3]string{"gem_guard_1"}, CustomCost: -1},
+		{CustomName: "neg-gem", Gems: [3]string{"gem_guard_1"}, GemCosts: [3]int{-20}},
+	} {
+		s, op := runNPCFixture(t)
+		s.Actors[0].NPCLoadout = loadout
+		before, _ := json.Marshal(s)
+		rng := &npcJobRNG{t: t}
+		if _, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), registerDualAgility, rng); !errors.Is(err, corebattle.ErrInvalidParticipant) {
+			t.Fatalf("loadout=%+v: err=%v", loadout, err)
+		}
+		if after, _ := json.Marshal(s); string(after) != string(before) || len(rng.draws) != 0 {
+			t.Fatalf("loadout=%+v mutated state or drew RNG", loadout)
+		}
+	}
 }

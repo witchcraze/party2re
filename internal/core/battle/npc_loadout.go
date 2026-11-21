@@ -20,6 +20,21 @@ type CustomLoadout struct {
 	Cost int       `json:"cost"`
 }
 
+func (load *NPCLoadout) validate() error {
+	if load == nil {
+		return nil
+	}
+	if load.CustomCost < 0 {
+		return ErrInvalidParticipant
+	}
+	for _, cost := range load.GemCosts {
+		if cost < 0 {
+			return ErrInvalidParticipant
+		}
+	}
+	return nil
+}
+
 // ValidateOrdinaryNPC excludes shared hooks with no ordinary producer proof.
 func (a LifetimeActor) ValidateOrdinaryNPC() error {
 	if !a.NPC {
@@ -28,7 +43,7 @@ func (a LifetimeActor) ValidateOrdinaryNPC() error {
 	if hasAbility(a.Abilities, "specter") {
 		return fmt.Errorf("%w: npc specter producer", ErrUnsupportedEffect)
 	}
-	return nil
+	return a.NPCLoadout.validate()
 }
 
 // CustomGemCost counts occupied slots, including repeated identities.
@@ -37,7 +52,7 @@ func CustomGemCost(gems [3]string, costs [3]int) int {
 	for i, id := range gems {
 		if id != "" {
 			count++
-			sum += costs[i]
+			sum += max(0, costs[i])
 		}
 	}
 	rate := 1.0

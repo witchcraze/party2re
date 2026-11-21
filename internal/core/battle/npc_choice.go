@@ -29,7 +29,7 @@ func (choice NPCChoice) invocations() []CallbackInvocation {
 
 func (choice NPCChoice) charge(a *LifetimeActor) {
 	a.MP = max(0, a.MP-choice.MPCost)
-	if load := a.NPCLoadout; load != nil && (choice.Custom || choice.ChargeCustom) {
+	if load := a.NPCLoadout; load != nil && load.CustomCost > 0 && (choice.Custom || choice.ChargeCustom) {
 		a.CMP -= load.CustomCost
 	}
 }
