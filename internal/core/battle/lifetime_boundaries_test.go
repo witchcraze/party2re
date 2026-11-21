@@ -45,6 +45,17 @@ func TestLifetimeOperationAdmissionAndTails(t *testing.T) {
 			}
 		})
 	}
+
+	recharged := true
+	s := LifetimeState{Actors: []LifetimeActor{{Participant: Participant{ID: "actor", HP: 100, CMP: 2, MaxCMP: 10}, CMPCharge: 3, CMPNeedCharge: 3}}}
+	result, err := s.CompleteOperation(LifetimeCompletion{ActorID: "actor", Accepted: true, EnemiesRemain: true, CMPRecharged: &recharged}, nil)
+	if err != nil || !result.CMPRecharged || s.Actors[0].CMP != 2 || s.Actors[0].CMPCharge != 3 || s.Actors[0].CMPNeedCharge != 3 {
+		t.Fatal(result, err, s.Actors[0])
+	}
+	npcResult, err := s.CompleteOperation(LifetimeCompletion{ActorID: "actor", Accepted: true, NPC: true, EnemiesRemain: true, CMPRecharged: &recharged}, nil)
+	if err != nil || npcResult.CMPRecharged || s.Actors[0].CMP != 2 || s.Actors[0].CMPCharge != 3 {
+		t.Fatal(npcResult, err, s.Actors[0])
+	}
 }
 
 func TestLifetimeStatusPlayerNPC(t *testing.T) {

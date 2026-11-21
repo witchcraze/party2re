@@ -300,7 +300,11 @@ func (s *LifetimeState) finishPlayerOperation(op *PlayerOperation, result Player
 	if err := equipment("item-208-combat-tail"); err != nil {
 		return result, err
 	}
-	if err := tails("cmp-recharge-tail", "frenzy-tail", "crown-tail"); err != nil {
+	if err := tails("cmp-recharge-tail"); err != nil {
+		return result, err
+	}
+	recharged := s.actor(c.ActorID).AdvanceCMP(c.Completion.CMPAmount, c.Completion.NextCMPThreshold)
+	if err := tails("frenzy-tail", "crown-tail"); err != nil {
 		return result, err
 	}
 	if err := s.ApplyIncenseHealing(&c.EffectContext, rng); err != nil {
@@ -309,6 +313,7 @@ func (s *LifetimeState) finishPlayerOperation(op *PlayerOperation, result Player
 	// Counters finish before item246 and the death mark; the end queue flushes last.
 	completion := c.Completion
 	completion.Tail = LifetimeTail{DamageCalls: c.DamageCalls, BowAction: c.BowEffect, SecondSubmitted: op.Second != nil && op.Second.Whitelisted}
+	completion.CMPRecharged = &recharged
 	completion.End = EndProcessing{}
 	lifetime, err := s.CompleteOperation(completion, c.PartyIDs)
 	if err != nil {

@@ -14,7 +14,10 @@ type LifetimeCompletion struct {
 	Tail             LifetimeTail
 	CMPAmount        int
 	NextCMPThreshold int
-	End              EndProcessing
+	// CMPRecharged carries a pre-applied AdvanceCMP outcome from
+	// finishPlayerOperation so CompleteOperation does not advance CMP twice.
+	CMPRecharged *bool
+	End          EndProcessing
 }
 
 type LifetimeResult struct {
@@ -47,7 +50,7 @@ func (s *LifetimeState) CompleteOperation(c LifetimeCompletion, partyIDs []strin
 				return result, ErrInvalidParticipant
 			}
 		}
-		if actor.CMPCharge >= actor.CMPNeedCharge && (c.CMPAmount < 1 || c.NextCMPThreshold < 3 || c.NextCMPThreshold > 9) {
+		if c.CMPRecharged == nil && actor.CMPCharge >= actor.CMPNeedCharge && (c.CMPAmount < 1 || c.NextCMPThreshold < 3 || c.NextCMPThreshold > 9) {
 			return result, ErrInvalidRequest
 		}
 	}
@@ -55,7 +58,11 @@ func (s *LifetimeState) CompleteOperation(c LifetimeCompletion, partyIDs []strin
 		facts := c.Tail
 		facts.NPC = c.NPC
 		if playerTail {
-			result.CMPRecharged = actor.AdvanceCMP(c.CMPAmount, c.NextCMPThreshold)
+			if c.CMPRecharged != nil {
+				result.CMPRecharged = *c.CMPRecharged
+			} else {
+				result.CMPRecharged = actor.AdvanceCMP(c.CMPAmount, c.NextCMPThreshold)
+			}
 		}
 		result.ExtendedExpired = actor.FinishExtended(facts)
 		if playerTail {

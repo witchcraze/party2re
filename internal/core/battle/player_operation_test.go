@@ -296,3 +296,112 @@ func TestPlayerOperationLeavesCallerContextUnchanged(t *testing.T) {
 		t.Fatal(err, *calls)
 	}
 }
+
+// _battle.cgi:1039–1069: CMP recharge or charge increment applies before
+// frenzy, crown and incense healing, once per eligible tail.
+func TestPlayerOperationAppliesCMPRechargeBeforeFrenzy(t *testing.T) {
+	s, op, _ := playerOperationFixture()
+	s.Actors[0].CMP, s.Actors[0].CMPCharge, s.Actors[0].CMPNeedCharge = 1, 3, 3
+	s.Actors[0].BaseStats.Attack, s.Actors[0].Attack = 100, 100
+	s.Actors[0].Extended, s.Actors[0].ExtendedTurns = ExtendedFrenzy, 2
+	s.Actors[2].HP = 1
+	op.First.Execute = func(*LifetimeState, random.Generator) (PlayerActionFacts, error) {
+		return PlayerActionFacts{}, nil
+	}
+	var seen []struct {
+		target            string
+		cmp, charge, need int
+	}
+	op.Tail.DefeatContext.Rewards.Apply = func(s *LifetimeState, _ TargetContext, id string) error {
+		a := s.actor("a")
+		seen = append(seen, struct {
+			target            string
+			cmp, charge, need int
+		}{id, a.CMP, a.CMPCharge, a.CMPNeedCharge})
+		return nil
+	}
+	rng := &playerOperationRNG{values: []float64{.9, 0, 0, .9, 0, 0, .9, .9}}
+	result, err := s.ApplyPlayerOperation(op, rng)
+	if err != nil || !result.Accepted || !result.CMPRecharged || !result.ResponseReached {
+		t.Fatal(result, err)
+	}
+	if len(seen) != 1 || seen[0].target != "e" || seen[0].cmp != 2 || seen[0].charge != 0 || seen[0].need != 3 {
+		t.Fatal(seen)
+	}
+	a := s.Actors[0]
+	if a.CMP != 2 || a.CMPCharge != 0 || a.CMPNeedCharge != 3 || a.ExtendedTurns != 1 || s.Actors[2].HP != 0 {
+		t.Fatal(a, s.Actors[2])
+	}
+}
+
+func TestPlayerOperationCMPChargeSingleIncrementClampAndRestore(t *testing.T) {
+	t.Run("no_recharge_before_frenzy", func(t *testing.T) {
+		s, op, _ := playerOperationFixture()
+		s.Actors[0].CMP, s.Actors[0].CMPCharge, s.Actors[0].CMPNeedCharge = 1, 2, 3
+		s.Actors[0].BaseStats.Attack, s.Actors[0].Attack = 100, 100
+		s.Actors[0].Extended, s.Actors[0].ExtendedTurns = ExtendedFrenzy, 2
+		s.Actors[2].HP = 1
+		op.First.Execute = func(*LifetimeState, random.Generator) (PlayerActionFacts, error) {
+			return PlayerActionFacts{}, nil
+		}
+		var seenCharge, seenCMP int
+		op.Tail.DefeatContext.Rewards.Apply = func(s *LifetimeState, _ TargetContext, _ string) error {
+			a := s.actor("a")
+			seenCharge, seenCMP = a.CMPCharge, a.CMP
+			return nil
+		}
+		result, err := s.ApplyPlayerOperation(op, &playerOperationRNG{values: []float64{.9, .9, 0, 0, .9, .9}})
+		if err != nil || !result.Accepted || result.CMPRecharged || !result.ResponseReached {
+			t.Fatal(result, err)
+		}
+		if seenCMP != 1 || seenCharge != 3 || s.Actors[0].CMP != 1 || s.Actors[0].CMPCharge != 3 || s.Actors[0].CMPNeedCharge != 3 {
+			t.Fatal(seenCMP, seenCharge, s.Actors[0])
+		}
+	})
+
+	t.Run("clamp", func(t *testing.T) {
+		s, op, _ := playerOperationFixture()
+		s.Actors[0].CMP, s.Actors[0].MaxCMP, s.Actors[0].CMPCharge, s.Actors[0].CMPNeedCharge = 9, 10, 3, 3
+		result, err := s.ApplyPlayerOperation(op, &playerOperationRNG{values: []float64{.9, .9, .9}})
+		if err != nil || !result.Accepted || !result.CMPRecharged || !result.ResponseReached {
+			t.Fatal(result, err)
+		}
+		if s.Actors[0].CMP != 10 || s.Actors[0].CMPCharge != 0 || s.Actors[0].CMPNeedCharge != 9 {
+			t.Fatal(s.Actors[0])
+		}
+	})
+
+	t.Run("ineligible_tail", func(t *testing.T) {
+		s, op, _ := playerOperationFixture()
+		s.Actors[0].CMP, s.Actors[0].CMPCharge, s.Actors[0].CMPNeedCharge = 1, 3, 3
+		op.First.Execute = func(*LifetimeState, random.Generator) (PlayerActionFacts, error) {
+			return PlayerActionFacts{Suppressed: true}, nil
+		}
+		result, err := s.ApplyPlayerOperation(op, &playerOperationRNG{values: []float64{.9}})
+		if err != nil || !result.Accepted || !result.Suppressed || result.CMPRecharged || result.ResponseReached {
+			t.Fatal(result, err)
+		}
+		if s.Actors[0].CMP != 1 || s.Actors[0].CMPCharge != 3 || s.Actors[0].CMPNeedCharge != 3 {
+			t.Fatal(s.Actors[0])
+		}
+	})
+
+	t.Run("failed_frenzy_restores_cmp", func(t *testing.T) {
+		s, op, _ := playerOperationFixture()
+		s.Actors[0].CMP, s.Actors[0].CMPCharge, s.Actors[0].CMPNeedCharge = 1, 3, 3
+		s.Actors[0].BaseStats.Attack, s.Actors[0].Attack = 100, 100
+		s.Actors[0].Extended, s.Actors[0].ExtendedTurns = ExtendedFrenzy, 2
+		s.Actors[2].HP = 1
+		op.First.Execute = func(*LifetimeState, random.Generator) (PlayerActionFacts, error) {
+			return PlayerActionFacts{}, nil
+		}
+		op.Tail.DefeatContext.Rewards.Apply = func(*LifetimeState, TargetContext, string) error {
+			return ErrUnsupportedEffect
+		}
+		before := reloadLifetime(t, s)
+		result, err := s.ApplyPlayerOperation(op, &playerOperationRNG{values: []float64{.9, 0, 0, .9, 0, 0, .9, .9}})
+		if !errors.Is(err, ErrUnsupportedEffect) || result.Accepted || result.CMPRecharged || result.ResponseReached || !reflect.DeepEqual(before, s) {
+			t.Fatal(result, err, s)
+		}
+	})
+}
