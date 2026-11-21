@@ -216,9 +216,12 @@ func (r *ValkeyRepository) SaveParty(ctx context.Context, p Party) error {
 		return nil
 	}
 
-	state := LobbyState{
-		Party:   p,
-		Members: []Member{},
+	state := storedLobbyState{
+		Party: storedParty{
+			Party:        p,
+			PasswordHash: p.PasswordHash,
+		},
+		Members: []storedMember{},
 	}
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -272,16 +275,17 @@ func (r *ValkeyRepository) GetParty(ctx context.Context, id string) (Party, erro
 		return Party{}, err
 	}
 
-	var state LobbyState
+	var state storedLobbyState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return Party{}, err
 	}
 
-	if state.Party.Status == StatusDisbanded {
+	p := state.Party.toParty()
+	if p.Status == StatusDisbanded {
 		return Party{}, ErrNotFound
 	}
 
-	return state.Party, nil
+	return p, nil
 }
 
 // GetPartyForUpdate retrieves party lobby state for update.
@@ -367,12 +371,13 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 			continue
 		}
 
-		var state LobbyState
+		var state storedLobbyState
 		if err := json.Unmarshal(pData, &state); err != nil {
 			continue
 		}
 
-		if status != "" && state.Party.Status != status {
+		p := state.Party.toParty()
+		if status != "" && p.Status != status {
 			continue
 		}
 
@@ -385,21 +390,21 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 		}
 
 		summaries = append(summaries, PartySummary{
-			ID:                state.Party.ID,
-			Name:              state.Party.Name,
-			LeaderCharacterID: state.Party.LeaderCharacterID,
+			ID:                p.ID,
+			Name:              p.Name,
+			LeaderCharacterID: p.LeaderCharacterID,
 			LeaderName:        leaderName,
-			StageID:           state.Party.StageID,
-			Speed:             state.Party.Speed,
+			StageID:           p.StageID,
+			Speed:             p.Speed,
 			CurrentMembers:    len(state.Members),
-			MaxMembers:        state.Party.MaxMembers,
-			HasPassword:       state.Party.PasswordHash != "",
-			MinLevel:          state.Party.MinLevel,
-			MaxLevel:          state.Party.MaxLevel,
-			MinHP:             state.Party.MinHP,
-			NeedJoin:          state.Party.NeedJoin,
-			Status:            state.Party.Status,
-			CreatedAt:         state.Party.CreatedAt,
+			MaxMembers:        p.MaxMembers,
+			HasPassword:       p.PasswordHash != "",
+			MinLevel:          p.MinLevel,
+			MaxLevel:          p.MaxLevel,
+			MinHP:             p.MinHP,
+			NeedJoin:          p.NeedJoin,
+			Status:            p.Status,
+			CreatedAt:         p.CreatedAt,
 		})
 	}
 
@@ -431,7 +436,7 @@ func (r *ValkeyRepository) UpdateParty(ctx context.Context, p Party) error {
 		return nil
 	}
 
-	partyJSON, err := json.Marshal(p)
+	partyJSON, err := marshalStoredParty(p)
 	if err != nil {
 		return err
 	}
@@ -466,7 +471,7 @@ func (r *ValkeyRepository) DeleteParty(ctx context.Context, id string) error {
 	}
 	var keys []string
 	if err == nil {
-		var state LobbyState
+		var state storedLobbyState
 		if err := json.Unmarshal(data, &state); err != nil {
 			return err
 		}

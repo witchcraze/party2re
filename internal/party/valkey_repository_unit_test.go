@@ -761,3 +761,114 @@ func TestValkeyRepository_BattleActorRoundTripAndPublicJSON(t *testing.T) {
 		t.Fatalf("public lobby JSON exposed private battle row fields: %s", string(publicJSON))
 	}
 }
+
+func TestValkeyRepository_PasswordHashRoundTripAndPublicJSON(t *testing.T) {
+	ctx := context.Background()
+	p := sampleTestParty("party-pw-1", "char-lead-1", "合言葉隊")
+	const wantHash = "deadbeef1234567890abcdef"
+	p.PasswordHash = wantHash
+	members := sampleTestMembers(p.ID, p.LeaderCharacterID)
+
+	var storedPayload string
+	var updatePartyArg string
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		c := cmd.Commands()
+		switch c[0] {
+		case "SET":
+			if c[1] == party.DefaultLobbyKeyPrefix+p.ID {
+				storedPayload = c[2]
+			}
+			return valkeytest.MakeOKResult()
+		case "GET":
+			if c[1] == party.DefaultLobbyKeyPrefix+p.ID {
+				return valkeytest.MakeStringResult(storedPayload)
+			}
+			if c[1] == party.DefaultCharacterKeyPrefix+p.LeaderCharacterID {
+				return valkeytest.MakeStringResult(p.ID)
+			}
+			return valkeytest.MakeNilResult()
+		case "ZREVRANGE":
+			return valkeytest.MakeStringSliceResult([]string{p.ID})
+		case "EXISTS":
+			return valkeytest.MakeIntResult(1)
+		case "EVAL", "EVALSHA":
+			// update_party.lua passes [lobbyKey, indexKey] and [partyJSON, ttl, status, id]
+			if len(c) >= 6 && c[3] == party.DefaultLobbyKeyPrefix+p.ID && c[4] == party.DefaultLobbiesIndexKey {
+				updatePartyArg = c[5]
+			}
+			return valkeytest.MakeOKResult()
+		default:
+			return valkeytest.MakeOKResult()
+		}
+	}))
+	repo := party.NewValkeyRepository(client)
+
+	if err := repo.SaveParty(ctx, p); err != nil {
+		t.Fatalf("SaveParty failed: %v", err)
+	}
+	if !strings.Contains(storedPayload, `"password_hash":"`+wantHash+`"`) {
+		t.Fatalf("expected stored Valkey payload to contain password_hash, got: %s", storedPayload)
+	}
+	// Populate the leader member inside the stored lobby JSON while preserving the party payload from SaveParty.
+	leaderJSON, err := json.Marshal(members[0])
+	if err != nil {
+		t.Fatalf("Marshal leader member failed: %v", err)
+	}
+	storedPayload = strings.Replace(storedPayload, `"members":[]`, `"members":[`+string(leaderJSON)+`]`, 1)
+
+	gotParty, err := repo.GetParty(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("GetParty failed: %v", err)
+	}
+	if gotParty.PasswordHash != wantHash {
+		t.Fatalf("GetParty PasswordHash = %q, want %q", gotParty.PasswordHash, wantHash)
+	}
+
+	gotForUpdate, err := repo.GetPartyForUpdate(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("GetPartyForUpdate failed: %v", err)
+	}
+	if gotForUpdate.PasswordHash != wantHash {
+		t.Fatalf("GetPartyForUpdate PasswordHash = %q, want %q", gotForUpdate.PasswordHash, wantHash)
+	}
+
+	summaries, total, err := repo.ListParties(ctx, party.StatusRecruiting, 10, 0)
+	if err != nil {
+		t.Fatalf("ListParties failed: %v", err)
+	}
+	if total != 1 || len(summaries) != 1 || !summaries[0].HasPassword {
+		t.Fatalf("expected HasPassword=true in ListParties summary, got total=%d summaries=%+v", total, summaries)
+	}
+
+	activeParty, _, err := repo.GetActivePartyByCharacter(ctx, p.LeaderCharacterID)
+	if err != nil {
+		t.Fatalf("GetActivePartyByCharacter failed: %v", err)
+	}
+	if activeParty.PasswordHash != wantHash {
+		t.Fatalf("GetActivePartyByCharacter PasswordHash = %q, want %q", activeParty.PasswordHash, wantHash)
+	}
+
+	if err := repo.UpdateParty(ctx, gotParty); err != nil {
+		t.Fatalf("UpdateParty failed: %v", err)
+	}
+	if !strings.Contains(updatePartyArg, `"password_hash":"`+wantHash+`"`) {
+		t.Fatalf("expected UpdateParty Lua payload to contain password_hash, got: %s", updatePartyArg)
+	}
+
+	publicDetailJSON, err := json.Marshal(party.PartyDetail{Party: gotParty, Members: members})
+	if err != nil {
+		t.Fatalf("Marshal PartyDetail failed: %v", err)
+	}
+	if strings.Contains(string(publicDetailJSON), "password_hash") || strings.Contains(string(publicDetailJSON), wantHash) {
+		t.Fatalf("public PartyDetail JSON exposed password hash: %s", string(publicDetailJSON))
+	}
+
+	publicListJSON, err := json.Marshal(summaries)
+	if err != nil {
+		t.Fatalf("Marshal PartySummary failed: %v", err)
+	}
+	if strings.Contains(string(publicListJSON), "password_hash") || strings.Contains(string(publicListJSON), wantHash) {
+		t.Fatalf("public PartySummary JSON exposed password hash: %s", string(publicListJSON))
+	}
+}

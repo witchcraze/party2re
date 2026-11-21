@@ -2,15 +2,19 @@ package party_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
+	"github.com/witchcraze/party2re/internal/adventure"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/party"
 )
 
@@ -767,5 +771,222 @@ func TestValkeyRepository_ConcurrentJoinStress_LiveValkey(t *testing.T) {
 			t.Errorf("duplicate member %s found in party", m.CharacterID)
 		}
 		seen[m.CharacterID] = true
+	}
+}
+
+type liveTestCharRepo struct {
+	chars map[string]corecharacter.Character
+}
+
+func (r *liveTestCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	c, ok := r.chars[id]
+	if !ok {
+		return corecharacter.Character{}, party.ErrNotFound
+	}
+	return c, nil
+}
+
+func (r *liveTestCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
+func (r *liveTestCharRepo) Update(_ context.Context, value corecharacter.Character) error {
+	r.chars[value.ID] = value
+	return nil
+}
+
+type liveTestStageProvider struct{}
+
+func (liveTestStageProvider) FindByID(id string) (adventure.Stage, error) {
+	return adventure.Stage{ID: id, Name: "草原"}, nil
+}
+
+func (liveTestStageProvider) CanAccessStage(corecharacter.Character, string) error {
+	return nil
+}
+
+type liveTestMonsterProvider struct{}
+
+func (liveTestMonsterProvider) FindByID(string) (adventure.Monster, error) {
+	return adventure.Monster{}, nil
+}
+
+func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
+	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
+	if valkeyAddr == "" {
+		valkeyAddr = "127.0.0.1:6379"
+	}
+
+	client, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{valkeyAddr},
+	})
+	if err != nil {
+		t.Skipf("skipping live Valkey test: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
+		t.Skipf("skipping live Valkey test (cannot ping Valkey at %s): %v", valkeyAddr, err)
+	}
+
+	testLobbyPrefix := "party2:test:pw:party:lobby:"
+	testReadyPrefix := "party2:test:pw:party:ready:"
+	testCharPrefix := "party2:test:pw:party:character:"
+	testIndexKey := "party2:test:pw:party:lobbies"
+
+	repo := party.NewValkeyRepository(client,
+		party.WithLobbyKeyPrefix(testLobbyPrefix),
+		party.WithReadyKeyPrefix(testReadyPrefix),
+		party.WithCharacterKeyPrefix(testCharPrefix),
+		party.WithLobbiesIndexKey(testIndexKey),
+	)
+
+	leaderID := "pw-live-leader"
+	memberID := "pw-live-member"
+	var createdPartyID string
+
+	cleanup := func() {
+		if createdPartyID != "" {
+			_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+createdPartyID).Build()).Error()
+			_ = client.Do(ctx, client.B().Del().Key(testReadyPrefix+createdPartyID+":"+leaderID).Build()).Error()
+			_ = client.Do(ctx, client.B().Del().Key(testReadyPrefix+createdPartyID+":"+memberID).Build()).Error()
+			_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(createdPartyID).Build()).Error()
+		}
+		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+leaderID).Build()).Error()
+		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+memberID).Build()).Error()
+	}
+	cleanup()
+	defer cleanup()
+
+	charRepo := &liveTestCharRepo{
+		chars: map[string]corecharacter.Character{
+			leaderID: {
+				ID:    leaderID,
+				Name:  "リーダー",
+				JobID: "job-01",
+				Level: 10,
+				Stats: corecharacter.Stats{HP: 100, MaxHP: 100},
+			},
+			memberID: {
+				ID:    memberID,
+				Name:  "メンバー",
+				JobID: "job-02",
+				Level: 10,
+				Stats: corecharacter.Stats{HP: 100, MaxHP: 100},
+			},
+		},
+	}
+
+	svc, err := party.NewService(repo, charRepo, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1. Create password-protected party
+	detail, err := svc.CreateParty(ctx, leaderID, party.CreatePartyRequest{
+		Name:       "合言葉パーティ",
+		StageID:    "stage-1",
+		Password:   "secret",
+		MaxMembers: 4,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	createdPartyID = detail.Party.ID
+	if detail.Party.PasswordHash == "" {
+		t.Fatal("expected created party to have non-empty PasswordHash")
+	}
+	wantHash := detail.Party.PasswordHash
+
+	assertNoPasswordLeak := func(label string, v any) {
+		t.Helper()
+		raw, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("%s json.Marshal failed: %v", label, err)
+		}
+		s := string(raw)
+		if strings.Contains(s, "password_hash") || strings.Contains(s, wantHash) || strings.Contains(s, `"secret"`) {
+			t.Fatalf("%s exposed secret password data: %s", label, s)
+		}
+	}
+	assertNoPasswordLeak("CreateParty", detail)
+
+	// 2. ListParties reflects HasPassword = true without exposing hash
+	page, err := svc.ListParties(ctx, party.StatusRecruiting, 10, 0)
+	if err != nil {
+		t.Fatalf("ListParties failed: %v", err)
+	}
+	if len(page.Items) != 1 || !page.Items[0].HasPassword {
+		t.Fatalf("expected HasPassword=true in ListParties, got %+v", page.Items)
+	}
+	assertNoPasswordLeak("ListParties", page)
+
+	// 3. Ready toggle via update_member_ready.lua preserves PasswordHash
+	readyDetail, err := svc.SetReady(ctx, createdPartyID, leaderID, false)
+	if err != nil {
+		t.Fatalf("SetReady(false) failed: %v", err)
+	}
+	assertNoPasswordLeak("SetReady(false)", readyDetail)
+	if _, err := svc.SetReady(ctx, createdPartyID, leaderID, true); err != nil {
+		t.Fatalf("SetReady(true) failed: %v", err)
+	}
+	gotParty, err := repo.GetParty(ctx, createdPartyID)
+	if err != nil || gotParty.PasswordHash != wantHash {
+		t.Fatalf("PasswordHash lost after SetReady: got %q, want %q (err=%v)", gotParty.PasswordHash, wantHash, err)
+	}
+
+	// 4. Wrong and empty passwords are rejected with ErrInvalidPassword
+	if _, err := svc.JoinParty(ctx, createdPartyID, memberID, "wrong"); !errors.Is(err, party.ErrInvalidPassword) {
+		t.Fatalf("expected ErrInvalidPassword for wrong password, got %v", err)
+	}
+	if _, err := svc.JoinParty(ctx, createdPartyID, memberID, ""); !errors.Is(err, party.ErrInvalidPassword) {
+		t.Fatalf("expected ErrInvalidPassword for empty password, got %v", err)
+	}
+
+	// 5. Correct password joins via add_member.lua and preserves PasswordHash
+	joinedDetail, err := svc.JoinParty(ctx, createdPartyID, memberID, "secret")
+	if err != nil {
+		t.Fatalf("JoinParty with valid password failed: %v", err)
+	}
+	assertNoPasswordLeak("JoinParty", joinedDetail)
+	gotParty, err = repo.GetParty(ctx, createdPartyID)
+	if err != nil || gotParty.PasswordHash != wantHash {
+		t.Fatalf("PasswordHash lost after JoinParty: got %q, want %q (err=%v)", gotParty.PasswordHash, wantHash, err)
+	}
+
+	// 6. LeaveParty via remove_member.lua preserves PasswordHash
+	if err := svc.LeaveParty(ctx, createdPartyID, memberID); err != nil {
+		t.Fatalf("LeaveParty failed: %v", err)
+	}
+	gotParty, err = repo.GetParty(ctx, createdPartyID)
+	if err != nil || gotParty.PasswordHash != wantHash {
+		t.Fatalf("PasswordHash lost after LeaveParty: got %q, want %q (err=%v)", gotParty.PasswordHash, wantHash, err)
+	}
+
+	// 7. UpdateParty via update_party.lua preserves PasswordHash and HasPassword
+	gotParty.Status = party.StatusInProgress
+	if err := repo.UpdateParty(ctx, gotParty); err != nil {
+		t.Fatalf("UpdateParty(in_progress) failed: %v", err)
+	}
+	gotParty.Status = party.StatusRecruiting
+	if err := repo.UpdateParty(ctx, gotParty); err != nil {
+		t.Fatalf("UpdateParty(recruiting) failed: %v", err)
+	}
+	gotParty, err = repo.GetParty(ctx, createdPartyID)
+	if err != nil || gotParty.PasswordHash != wantHash {
+		t.Fatalf("PasswordHash lost after UpdateParty: got %q, want %q (err=%v)", gotParty.PasswordHash, wantHash, err)
+	}
+	page, err = svc.ListParties(ctx, party.StatusRecruiting, 10, 0)
+	if err != nil || len(page.Items) != 1 || !page.Items[0].HasPassword {
+		t.Fatalf("expected HasPassword=true after UpdateParty, got %+v (err=%v)", page.Items, err)
+	}
+	if _, err := svc.JoinParty(ctx, createdPartyID, memberID, "wrong"); !errors.Is(err, party.ErrInvalidPassword) {
+		t.Fatalf("expected ErrInvalidPassword after UpdateParty, got %v", err)
+	}
+	if _, err := svc.JoinParty(ctx, createdPartyID, memberID, "secret"); err != nil {
+		t.Fatalf("expected JoinParty with valid password to succeed after UpdateParty, got %v", err)
 	}
 }

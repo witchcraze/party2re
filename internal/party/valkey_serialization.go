@@ -13,13 +13,31 @@ type LobbyState struct {
 	Members []Member `json:"members"`
 }
 
+type storedParty struct {
+	Party
+	PasswordHash string `json:"password_hash,omitempty"`
+}
+
+func marshalStoredParty(p Party) ([]byte, error) {
+	return json.Marshal(storedParty{
+		Party:        p,
+		PasswordHash: p.PasswordHash,
+	})
+}
+
+func (sp storedParty) toParty() Party {
+	p := sp.Party
+	p.PasswordHash = sp.PasswordHash
+	return p
+}
+
 type storedMember struct {
 	Member
 	BattleActorJSON string `json:"battle_actor_json,omitempty"`
 }
 
 type storedLobbyState struct {
-	Party   Party          `json:"party"`
+	Party   storedParty    `json:"party"`
 	Members []storedMember `json:"members"`
 }
 
