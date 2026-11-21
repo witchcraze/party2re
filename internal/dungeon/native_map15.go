@@ -34,12 +34,31 @@ type map15State struct {
 func (st map15State) drew(outcome int) bool { return slices.Contains(st.Outcomes, outcome) }
 
 func decodeMap15(raw json.RawMessage) (map15State, error) {
-	var st map15State
 	if len(raw) == 0 {
-		return st, nil
+		return map15State{}, nil
 	}
-	if err := json.Unmarshal(raw, &st); err != nil {
-		return st, fmt.Errorf("dungeon: map15 state: %w", err)
+	// Read legacy flags snapshots alongside typed fields; encode writes only typed fields.
+	var payload struct {
+		map15State
+		Flags string `json:"flags"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return map15State{}, fmt.Errorf("dungeon: map15 state: %w", err)
+	}
+	st := payload.map15State
+	for i := range len(payload.Flags) {
+		switch ch := payload.Flags[i]; ch {
+		case '2', '3', '4', '5', '6', '7':
+			if outcome := int(ch - '0'); !st.drew(outcome) {
+				st.Outcomes = append(st.Outcomes, outcome)
+			}
+		case 'j', 'k':
+			if st.Killed == "" {
+				st.Killed = string(ch)
+			}
+		case '9':
+			st.SouthOpen = true
+		}
 	}
 	return st, nil
 }
