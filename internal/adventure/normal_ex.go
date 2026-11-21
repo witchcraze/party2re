@@ -86,15 +86,14 @@ func (s Stage) exTreasureItems() []string {
 	return s.EX.TreasureItems
 }
 
-// treasureCount mirrors @partys at creation: same-side roster members, fallen
-// included, plus living helpers; fallen helpers left at the previous save
-// (_battle.cgi:486–493,521). real counts only roster members.
+// treasureCount mirrors @partys at creation: same-side members, fallen roster
+// members included (_battle.cgi:486–493). real counts only roster members.
 func (r *NormalRun) treasureCount(actorID, blessing string, rng func(int) int) (count, real int) {
 	a := r.actor(actorID)
 	alive, total := 0, 0
 	for _, m := range r.Battle.Actors {
 		inRoster := slices.Contains(r.Roster, m.ID)
-		if m.TeamID != a.TeamID || m.Banished || m.RosterDetached || !inRoster && m.HP <= 0 {
+		if m.TeamID != a.TeamID || m.Banished || m.RosterDetached {
 			continue
 		}
 		total++

@@ -219,6 +219,7 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				}
 			}
 		}
+		r.pruneFallenNPCs(cmd.ActorID)
 		if effects.RoomActivity && len(r.Roster) > 0 {
 			r.LastActivity = now
 		}

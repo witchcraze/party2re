@@ -300,6 +300,7 @@ func TestTreasurePartyCountsLivingHelpersOnly(t *testing.T) {
 			s, r, _ := exFixture(t, "stage-22")
 			r.Floor = tc.floor
 			r.actor("helper").HP = tc.helperHP
+			r.pruneFallenNPCs("a") // the previous command's save boundary
 			s.cfg.Clock = &testClock{now: time.Unix(100, 0)}
 			if err := s.advance(context.Background(), r, "a"); err != nil {
 				t.Fatal(err)

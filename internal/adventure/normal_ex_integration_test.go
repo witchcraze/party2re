@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -336,5 +338,31 @@ func TestNormalRunEXFixedClaimVersusExitStress(t *testing.T) {
 	// Exactly one competing command committed against the shared version.
 	if delivered != opened || opened+2-len(r.Roster) != 1 {
 		t.Fatalf("opened=%d delivered=%d roster=%v", opened, delivered, r.Roster)
+	}
+}
+
+func TestNormalRunSaveBoundaryDropsFallenNPCs(t *testing.T) {
+	f := newNormalFixture(t, 1)
+	c := f.actors[0]
+	runID := f.enter(t, "normal").Command.RunID
+	f.send(t, runID, 0, "advance", "")
+	f.send(t, runID, 0, "stage23-helper", "")
+	r, err := f.store.FindRun(context.Background(), runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range r.Battle.Actors {
+		if a.ID == "helper" || slices.Contains(r.Enemies, a.ID) {
+			t.Fatalf("fallen NPC survived the save: %+v", a)
+		}
+	}
+	// Legacy sees one ally at the next advance, so stage23 creates no marker.
+	f.send(t, runID, 0, "advance", "")
+	f.send(t, runID, 0, "fall", "")
+	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.EXUnlocked || r.Floor != adventure.TreasureRoomFloor {
+		t.Fatal("fallen helper counted toward the stage23 marker", r, err)
+	}
+	if !slices.ContainsFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == c.ID && a.HP <= 0 }) {
+		t.Fatal("fallen real player left the room")
 	}
 }

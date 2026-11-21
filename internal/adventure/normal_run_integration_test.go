@@ -91,6 +91,23 @@ func (e *normalCombat) ExecuteRunAction(_ context.Context, r *adventure.NormalRu
 		r.Battle.Actors[actor].ExtendedTurns = 4
 		r.Battle.Actors[actor].MP = 7
 		r.Battle.Fields.AntiTurns = 2
+	case "stage23-helper": // a cleared stage23 floor 10 whose helper fell this operation
+		stages, err := adventure.InitialStageCatalog()
+		if err != nil {
+			return fx, err
+		}
+		if r.Stage, err = stages.FindByID("stage-23"); err != nil {
+			return fx, err
+		}
+		r.Floor = 10
+		for i := range r.Battle.Actors {
+			if slices.Contains(r.Enemies, r.Battle.Actors[i].ID) {
+				r.Battle.Actors[i].HP = 0
+			}
+		}
+		helper := r.Battle.Actors[actor].Clone()
+		helper.ID, helper.NPC, helper.RosterIdentity, helper.HP = "helper", true, "calling-64", 0
+		r.Battle.Actors = append(r.Battle.Actors, helper)
 	case "spent": // the ordinary allowance used earlier in the room
 		p := r.Recipients[cmd.ActorID]
 		p.Inspected = 1
