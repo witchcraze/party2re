@@ -1361,13 +1361,38 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 		}
 	}
 
-	// Builder error must abort CreateParty and JoinParty cleanly.
+	// Builder error must abort CreateParty and JoinParty cleanly without leaving a partial lobby.
 	builder.err = errors.New("builder unavailable")
 	charRepo.chars["other"] = corecharacter.Character{ID: "other", Name: "Other", Level: 5, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
 	if _, err := svc.CreateParty(ctx, "other", CreatePartyRequest{Name: "FailCreate", StageID: adventure.StarterAdventure}); err == nil {
 		t.Fatal("expected CreateParty to fail when battle row capture fails")
 	}
+	if _, _, err := svc.GetActiveParty(ctx, "other"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("failed CreateParty left active party for leader: %v", err)
+	}
+	if page, err := svc.ListParties(ctx, StatusRecruiting, 10, 0); err != nil || page.Total != 1 {
+		t.Fatalf("failed CreateParty left partial lobby in listing: page=%+v err=%v", page, err)
+	}
 	if _, err := svc.JoinParty(ctx, created.Party.ID, "other", ""); err == nil {
 		t.Fatal("expected JoinParty to fail when battle row capture fails")
+	}
+	if _, _, err := svc.GetActiveParty(ctx, "other"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("failed JoinParty left active party for joiner: %v", err)
+	}
+
+	// Verify against ValkeyRepository (in-memory) that CreateParty failure leaves zero lobby or character keys.
+	valkeyRepo := NewValkeyRepository(nil)
+	valkeySvc, err := NewService(valkeyRepo, charRepo, invRepo, stages, monsters, nil, WithParticipantBuilder(builder))
+	if err != nil {
+		t.Fatalf("NewService(ValkeyRepository) failed: %v", err)
+	}
+	if _, err := valkeySvc.CreateParty(ctx, "other", CreatePartyRequest{Name: "FailValkeyCreate", StageID: adventure.StarterAdventure}); err == nil {
+		t.Fatal("expected CreateParty to fail when battle row capture fails")
+	}
+	if page, err := valkeySvc.ListParties(ctx, StatusRecruiting, 10, 0); err != nil || page.Total != 0 {
+		t.Fatalf("failed CreateParty left partial Valkey lobby: page=%+v err=%v", page, err)
+	}
+	if _, _, err := valkeySvc.GetActiveParty(ctx, "other"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("failed CreateParty left character-party mapping: %v", err)
 	}
 }

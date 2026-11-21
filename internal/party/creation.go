@@ -119,6 +119,15 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			}
 		}
 
+		battleActor, err := s.buildBattleActor(txCtx, leaderChar.ID)
+		if err != nil {
+			return err
+		}
+		maxHP := leaderChar.Stats.MaxHP
+		if battleActor != nil {
+			maxHP = battleActor.MaxHP
+		}
+
 		now := time.Now().UTC()
 		partyID := id.New()
 		passHash := hashPassword(req.Password)
@@ -148,15 +157,6 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 		}
 		if err := s.repo.SaveParty(txCtx, createdParty); err != nil {
 			return err
-		}
-
-		battleActor, err := s.buildBattleActor(txCtx, leaderChar.ID)
-		if err != nil {
-			return err
-		}
-		maxHP := leaderChar.Stats.MaxHP
-		if battleActor != nil {
-			maxHP = battleActor.MaxHP
 		}
 
 		createdMember = Member{
