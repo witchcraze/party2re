@@ -98,7 +98,7 @@ func (s *Service) Fight(ctx context.Context, characterID string) (ExpeditionStep
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monster, enc.EventType, enc.X, enc.Y, "", "", nil, StepParams{})
+	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monster, enc.EventType, enc.X, enc.Y, "", "", nil, StepParams{}, nil)
 }
 
 // encounterRecord adds private enemy data only to the stored buffer.

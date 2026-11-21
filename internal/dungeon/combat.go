@@ -21,7 +21,7 @@ func (s *Service) resolveEncounter(
 		return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
 	}
 	if len(allies) == 0 {
-		return corebattle.Result{Outcome: corebattle.OutcomeDefeat}, nil, false, nil, nil, nil, -exp.CurrentHP, nil
+		return corebattle.Result{Outcome: corebattle.OutcomeDefeat}, nil, false, make(map[string]int), nil, nil, -exp.CurrentHP, nil
 	}
 	initialMP := make(map[string]int, len(allies))
 	for _, a := range allies {
@@ -150,6 +150,7 @@ func (s *Service) resolveMonsterCombat(
 	revived map[string]int,
 	// carry holds the event's map state and floor change, saved with the combat step.
 	carry StepParams,
+	memberDamages map[string]int,
 ) (ExpeditionStepResult, error) {
 	rounds, stayX, stayY := exp.combatProgress(newX, newY)
 	var enemy corebattle.Participant
@@ -213,6 +214,7 @@ func (s *Service) resolveMonsterCombat(
 			Expedition:    stepRes.Expedition,
 			EventType:     eventType,
 			BattleResult:  &battleRes,
+			MemberDamages: memberDamages,
 			ExpEarned:     leaderExpDelta,
 			GoldFound:     leaderGoldDelta,
 			ItemFound:     monster.DropItemID,
@@ -253,6 +255,7 @@ func (s *Service) resolveMonsterCombat(
 		Expedition:    stepRes.Expedition,
 		EventType:     eventType,
 		BattleResult:  &battleRes,
+		MemberDamages: memberDamages,
 		Monster:       &monster,
 		CombatOutcome: battleRes.Outcome,
 	}, nil
