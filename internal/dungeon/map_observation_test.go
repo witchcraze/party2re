@@ -249,6 +249,9 @@ func TestMapObservationRecoversMissingSavedInventory(t *testing.T) {
 				if err != nil || got == nil || got.Map == nil || got.Map.Radius != radius {
 					t.Fatalf("wrong actor radius: %+v %v want=%d", got, err, radius)
 				}
+				if origin == "start-with-provider" && len(inv.actors) != 0 {
+					t.Fatalf("snapshotted inventory re-read invRepo: %v", inv.actors)
+				}
 				for _, actor := range inv.actors {
 					if actor != "hero" {
 						t.Fatalf("read another member inventory: %s", actor)
@@ -256,16 +259,23 @@ func TestMapObservationRecoversMissingSavedInventory(t *testing.T) {
 				}
 				failure := errors.New("inventory read failed")
 				inv.err = failure
-				if len(run.Members[0].ItemIDs) == 0 {
+				noReader, err := dungeon.NewService(newMockDungeonRepo(), chars, &corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !run.Members[0].HasInventorySnapshot() {
 					if got, err := svc.ObserveExpedition(ctx, "hero"); got != nil || !errors.Is(err, failure) {
 						t.Fatalf("partial map on failed enrichment: %+v %v", got, err)
 					}
-					noReader, err := dungeon.NewService(newMockDungeonRepo(), chars, &corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store))
-					if err != nil {
-						t.Fatal(err)
-					}
 					if got, err := noReader.ObserveExpedition(ctx, "hero"); got != nil || err == nil {
 						t.Fatalf("missing reader fabricated map: %+v %v", got, err)
+					}
+				} else {
+					if got, err := svc.ObserveExpedition(ctx, "hero"); err != nil || got.Map == nil || got.Map.Radius != radius {
+						t.Fatalf("snapshotted inventory should not fail on inv error: %+v %v", got, err)
+					}
+					if got, err := noReader.ObserveExpedition(ctx, "hero"); err != nil || got.Map == nil || got.Map.Radius != radius {
+						t.Fatalf("snapshotted inventory should not require invRepo: %+v %v", got, err)
 					}
 				}
 				saved, err := store.GetActiveExpedition(ctx, "hero")
@@ -274,5 +284,14 @@ func TestMapObservationRecoversMissingSavedInventory(t *testing.T) {
 				}
 			})
 		}
+	}
+
+	// Verify Valkey Lua cjson empty-object ("{}") encoding of empty item_ids round-trips as snapshotted empty.
+	decoded := dungeon.DecodeMembers(`[{"character_id":"hero","job_id":"job-01","item_ids":{}}]`)
+	if len(decoded) != 1 || !decoded[0].HasInventorySnapshot() || len(decoded[0].ItemIDs) != 0 {
+		t.Fatalf("cjson empty object roundtrip: %+v", decoded)
+	}
+	if enc := dungeon.EncodeMembers(decoded); !strings.Contains(enc, `"item_ids":[]`) {
+		t.Fatalf("re-encoded snapshot missing item_ids:[]: %s", enc)
 	}
 }

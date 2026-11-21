@@ -317,3 +317,50 @@ func TestPartyRequiresAdmission(t *testing.T) {
 		t.Fatalf("party start without consent port: %v", err)
 	}
 }
+
+type passthroughAdmission struct{}
+
+func (passthroughAdmission) AdmitParty(ctx context.Context, _ string, partyID string, ids []string, start func(context.Context, string, []string) error) error {
+	return start(ctx, partyID, ids)
+}
+func (passthroughAdmission) AdmitSolo(ctx context.Context, _ string, start func(context.Context) error) error {
+	return start(ctx)
+}
+
+func TestStartPartyExpedition_RejectsInvalidRoster(t *testing.T) {
+	ctx := context.Background()
+	store := dungeon.NewMemoryExpeditionRepository()
+	chars := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"lead": createTestChar("lead", 10, 100, 30, 20),
+		"ally": createTestChar("ally", 10, 100, 30, 20),
+	}}
+	svc, err := dungeon.NewService(newMockDungeonRepo(), chars, &corebattle.Engine{},
+		dungeon.WithActiveExpeditionStore(store),
+		dungeon.WithAdmission(passthroughAdmission{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		leader  string
+		members []string
+		wantErr error
+	}{
+		{"empty roster", "lead", []string{}, dungeon.ErrPartyEmpty},
+		{"duplicate member", "lead", []string{"lead", "lead"}, dungeon.ErrForbidden},
+		{"empty member id", "lead", []string{"lead", " "}, dungeon.ErrForbidden},
+		{"leader missing from roster", "lead", []string{"ally"}, dungeon.ErrForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := svc.StartPartyExpedition(ctx, tc.leader, tc.members, dungeon.NativeMap0ID, "p"); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("StartPartyExpedition(%v) err=%v, want %v", tc.members, err, tc.wantErr)
+			}
+			for _, id := range []string{"lead", "ally"} {
+				if run, err := store.GetActiveExpedition(ctx, id); err != nil || run != nil {
+					t.Fatalf("unexpected active expedition for %s: %+v err=%v", id, run, err)
+				}
+			}
+		})
+	}
+}
