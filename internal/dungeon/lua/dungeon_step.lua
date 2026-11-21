@@ -35,12 +35,69 @@ local function decode_array_field(hash_key, field, elem_type)
     return decoded, true
 end
 
+local member_str_fields = {'character_id', 'name', 'job_id'}
+local member_int_fields = {'level', 'current_hp', 'max_hp', 'current_mp', 'max_mp', 'accumulated_exp', 'accumulated_gold'}
+
+local function is_int_number(v)
+    return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge and math.floor(v) == v
+end
+
+local function validate_member(m)
+    if type(m) ~= 'table' then
+        return false
+    end
+    for _, f in ipairs(member_str_fields) do
+        local v = m[f]
+        if v ~= nil and v ~= cjson.null and type(v) ~= 'string' then
+            return false
+        end
+    end
+    for _, f in ipairs(member_int_fields) do
+        local v = m[f]
+        if v ~= nil and v ~= cjson.null and not is_int_number(v) then
+            return false
+        end
+    end
+    local item_ids = m['item_ids']
+    if item_ids ~= nil and item_ids ~= cjson.null then
+        if type(item_ids) ~= 'table' or (#item_ids == 0 and next(item_ids) ~= nil) then
+            return false
+        end
+        for _, id in ipairs(item_ids) do
+            if type(id) ~= 'string' then
+                return false
+            end
+        end
+    end
+    local consumed = m['consumed_items']
+    if consumed ~= nil and consumed ~= cjson.null then
+        if type(consumed) ~= 'table' or (#consumed == 0 and next(consumed) ~= nil) then
+            return false
+        end
+        for _, c in ipairs(consumed) do
+            if type(c) ~= 'table' then
+                return false
+            end
+            if c['id'] ~= nil and c['id'] ~= cjson.null and type(c['id']) ~= 'string' then
+                return false
+            end
+            if c['instance_id'] ~= nil and c['instance_id'] ~= cjson.null and type(c['instance_id']) ~= 'string' then
+                return false
+            end
+            if c['quantity'] ~= nil and c['quantity'] ~= cjson.null and not is_int_number(c['quantity']) then
+                return false
+            end
+        end
+    end
+    return true
+end
+
 local function validate_optional_timestamp(hash_key, field)
     local raw = redis.call('HGET', hash_key, field)
     if not raw or raw == '' then
         return nil
     end
-    local yr_s, mon_s, day_s, hr_s, min_s, sec_s, rest = string.match(raw, '^(%d%d%d%d)%-(%d%d)%-(%d%d)[Tt](%d%d):(%d%d):(%d%d)(.*)$')
+    local yr_s, mon_s, day_s, hr_s, min_s, sec_s, rest = string.match(raw, '^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)(.*)$')
     if not yr_s then
         return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
     end
@@ -63,7 +120,7 @@ local function validate_optional_timestamp(hash_key, field)
             return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
         end
     end
-    if rest == 'Z' or rest == 'z' then
+    if rest == 'Z' then
         return nil
     end
     local tz_h, tz_m = string.match(rest, '^[+-](%d%d):(%d%d)$')
@@ -153,6 +210,13 @@ end
 local members, has_members, members_err = decode_array_field(state_key, 'members', 'table')
 if members_err then
     return redis.error_reply(members_err)
+end
+if has_members then
+    for _, m in ipairs(members) do
+        if not validate_member(m) then
+            return redis.error_reply('ERR_EXPEDITION_CORRUPTED: invalid members json')
+        end
+    end
 end
 local members_str = '[]'
 
