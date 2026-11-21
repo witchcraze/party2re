@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -39,6 +40,7 @@ func (r *PvPTransitionRepository) FindTransition(ctx context.Context, roomID str
 	}
 	t.Pending = pending
 	t.Detail.Room.PasswordHash = t.PasswordHash
+	t.Detail.Room.PendingPvPKills = maps.Clone(t.PendingPvPKills)
 	t.Detail.Room.FinancialVersion = t.Version
 	if lastActivity.Valid {
 		t.LastActivityAt = lastActivity.Time.UTC()
@@ -143,6 +145,18 @@ func (r *PvPTransitionRepository) AcknowledgeTransition(ctx context.Context, roo
 // Transaction: RunInTx
 // Lock Order: pvp_room_transitions(0)
 func (r *PvPTransitionRepository) TouchActivity(ctx context.Context, roomID string, version int, at time.Time) error {
+	return r.touchActivity(ctx, roomID, version, at, false, nil)
+}
+
+// TouchRoundActivity advances last_activity_at and persists non-final PendingPvPKills
+// in the same Rank-0 lock transaction so lazy timeout cleanup can flush earned kill_p.
+// Transaction: RunInTx
+// Lock Order: pvp_room_transitions(0)
+func (r *PvPTransitionRepository) TouchRoundActivity(ctx context.Context, roomID string, version int, at time.Time, pendingKills map[string]int) error {
+	return r.touchActivity(ctx, roomID, version, at, true, pendingKills)
+}
+
+func (r *PvPTransitionRepository) touchActivity(ctx context.Context, roomID string, version int, at time.Time, updateKills bool, pendingKills map[string]int) error {
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 		var current int
@@ -174,10 +188,26 @@ func (r *PvPTransitionRepository) TouchActivity(ctx context.Context, roomID stri
 		if !effectiveLast.IsZero() && at.After(effectiveLast.Add(pvp.InactivityTimeout)) {
 			return pvp.ErrRoomInactive
 		}
-		if effectiveLast.IsZero() || at.After(effectiveLast) {
-			_, err := executor.ExecContext(txCtx, `UPDATE pvp_room_transitions SET last_activity_at = ? WHERE room_id = ?`, at.UTC(), roomID)
+		activityChanged := effectiveLast.IsZero() || at.After(effectiveLast)
+		killsChanged := updateKills && !maps.Equal(previous.PendingPvPKills, pendingKills)
+		if !activityChanged && !killsChanged {
+			return nil
+		}
+		if killsChanged {
+			previous.PendingPvPKills = maps.Clone(pendingKills)
+			previous.Detail.Room.PendingPvPKills = nil
+			updatedData, err := json.Marshal(previous)
+			if err != nil {
+				return err
+			}
+			if activityChanged {
+				_, err = executor.ExecContext(txCtx, `UPDATE pvp_room_transitions SET last_activity_at = ?, transition_json = ? WHERE room_id = ?`, at.UTC(), updatedData, roomID)
+				return err
+			}
+			_, err = executor.ExecContext(txCtx, `UPDATE pvp_room_transitions SET transition_json = ? WHERE room_id = ?`, updatedData, roomID)
 			return err
 		}
-		return nil
+		_, err := executor.ExecContext(txCtx, `UPDATE pvp_room_transitions SET last_activity_at = ? WHERE room_id = ?`, at.UTC(), roomID)
+		return err
 	})
 }

@@ -279,6 +279,10 @@ func TestSettlement_AdvanceRound_PrizeDistribution_RollbackOnFailure(t *testing.
 			WinnerSide: pvp.ColorRed,
 			WinnerTeam: pvp.ColorRed,
 			Turns:      1,
+			Defeats: []corebattle.PartyBattleDefeat{
+				{ActorID: c1.ID, TargetID: c3.ID},
+				{ActorID: c2.ID, TargetID: c3.ID},
+			},
 		},
 	}
 
@@ -496,5 +500,54 @@ func TestSettlement_HappyPath_AscendingLockOrder_AndCommit(t *testing.T) {
 	calls := charRepo.getLockCalls()
 	if len(calls) != 2 || !sort.StringsAreSorted(calls) {
 		t.Fatalf("lock calls were not sorted ascending: %v", calls)
+	}
+}
+
+func TestSettlement_LeaveForfeit_FlushesPendingPvPKills(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newTransactionalCharRepo()
+	roomRepo := pvp.NewMemoryRoomRepository()
+
+	c1 := createTestCharacter("char-b", "LeaderB", 500)
+	c2 := createTestCharacter("char-a", "MemberA", 500)
+	charRepo.add(c1)
+	charRepo.add(c2)
+
+	svc, err := pvp.NewService(
+		roomRepo,
+		charRepo,
+		mockBattleEngine{result: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeDraw,
+			Turns:       2,
+			RemainingHP: map[string]int{c1.ID: 50, c2.ID: 50},
+			Defeats:     []corebattle.PartyBattleDefeat{{ActorID: c2.ID, TargetID: c1.ID}},
+		}},
+		pvp.WithTransactionProvider(charRepo),
+		pvp.WithPrizeRemitter(charRepo),
+		pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	detail, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Forfeit Kills", Bet: 100, MaxMembers: 2, TargetWins: 2})
+	_, _ = svc.JoinRoom(ctx, c2.ID, detail.Room.ID, "")
+	_, _ = svc.SelectTeam(ctx, c1.ID, detail.Room.ID, pvp.ColorRed)
+	_, _ = svc.SelectTeam(ctx, c2.ID, detail.Room.ID, pvp.ColorBlue)
+	_, _ = svc.StartMatch(ctx, c1.ID, detail.Room.ID)
+
+	if _, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID); err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+	// Member leaves mid-match (kills stay pending on room), then remaining leader leaves -> disbanded & flushes c2's kill_p.
+	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
+		t.Fatalf("member LeaveRoom failed: %v", err)
+	}
+	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
+		t.Fatalf("leader LeaveRoom failed: %v", err)
+	}
+
+	gotC2, _ := charRepo.FindByID(ctx, c2.ID)
+	if gotC2.PvPWins != 1 {
+		t.Fatalf("expected flushed PvPWins=1 for %s after match disband, got %d", c2.ID, gotC2.PvPWins)
 	}
 }

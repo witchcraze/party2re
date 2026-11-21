@@ -77,12 +77,27 @@ func (s *Service) cleanupInactiveRoom(ctx context.Context, last Transition, now 
 	for _, m := range last.Detail.Members {
 		memberIDs = append(memberIDs, m.CharacterID)
 	}
-	memberIDs = sortCharacterIDs(memberIDs)
+	memberSet := make(map[string]bool, len(memberIDs))
+	for _, id := range memberIDs {
+		memberSet[id] = true
+	}
+	pendingKills := cloneIntMap(last.PendingPvPKills)
+	if len(pendingKills) == 0 {
+		pendingKills = cloneIntMap(last.Detail.Room.PendingPvPKills)
+	}
+	lockIDs := append([]string(nil), memberIDs...)
+	for id, count := range pendingKills {
+		if id != "" && count > 0 {
+			lockIDs = append(lockIDs, id)
+		}
+	}
+	lockIDs = sortCharacterIDs(lockIDs)
 
 	beforePool := last.Detail.Room.PrizePool
 	detail := last.Detail
 	detail.Room.Status = StatusDisbanded
 	detail.Room.PrizePool = 0
+	detail.Room.PendingPvPKills = nil
 	detail.Room.UpdatedAt = now
 	detail.Room.LastActivityAt = now
 
@@ -101,12 +116,15 @@ func (s *Service) cleanupInactiveRoom(ctx context.Context, last Transition, now 
 		PenaltyUntil:   penaltyUntil,
 	}
 	if err := s.commitTransition(ctx, t, func(txCtx context.Context) error {
-		for _, id := range memberIDs {
+		for _, id := range lockIDs {
 			c, err := s.characters.FindByIDForUpdate(txCtx, id)
 			if err != nil {
 				return err
 			}
-			c.PendingWake = true
+			if memberSet[id] {
+				c.PendingWake = true
+			}
+			c.PvPWins += pendingKills[id]
 			if err := s.characters.Update(txCtx, c); err != nil {
 				return err
 			}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
@@ -181,6 +183,9 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 				return fmt.Errorf("resolve pvp battle round: %w", err)
 			}
 
+			kills := battle.CountStrongPvPKills(slices.Concat(allies, enemies), res.Defeats)
+			detail.Room.PendingPvPKills = battle.MergeKillCounts(detail.Room.PendingPvPKills, kills)
+
 			if len(res.RemainingHP) > 0 {
 				aliveTeams := make(map[string]bool)
 				for _, m := range detail.Members {
@@ -291,16 +296,15 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			BattleLog:           res.Logs,
 		}
 		if matchCompleted {
+			pendingKills := cloneIntMap(detail.Room.PendingPvPKills)
+			detail.Room.PendingPvPKills = nil
 			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &result, ForfeitedPool: forfeitedPool, LastActivityAt: now}, func(txCtx context.Context) error {
-				if err := s.awardPrizes(txCtx, awardedIDs, detail.Room.Name, prizePerMember); err != nil {
-					return err
-				}
-				return nil
+				return s.settleRewards(txCtx, awardedIDs, detail.Room.Name, prizePerMember, pendingKills)
 			}); err != nil {
 				return err
 			}
 		} else {
-			if err := s.transitions.TouchActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now); err != nil {
+			if err := s.transitions.TouchRoundActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now, detail.Room.PendingPvPKills); err != nil {
 				if errors.Is(err, ErrRoomInactive) {
 					if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, lastTransitionFromContext(lockedCtx), now); cleanErr != nil {
 						return cleanErr

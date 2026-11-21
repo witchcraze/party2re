@@ -88,10 +88,10 @@ func TestPvPPrizeRollbackAndRetryIntegration(t *testing.T) {
 			if _, err := f.db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id IN (?, ?)", corecharacter.MaxMoney, f.sender.ID, other.ID); err != nil {
 				t.Fatal(err)
 			}
-			assertWinner := func(actor string, wins, amount int) {
+			assertWinner := func(actor string, prizes, amount int) {
 				t.Helper()
 				char, err := f.core.charRepo.FindByID(ctx, actor)
-				if err != nil || char.Money != corecharacter.MaxMoney || char.PvPWins != wins {
+				if err != nil || char.Money != corecharacter.MaxMoney || char.PvPWins != 0 {
 					t.Fatalf("wallet=%d wins=%d: %v", char.Money, char.PvPWins, err)
 				}
 				held, err := f.econ.depotRepo.ListRemittances(ctx, actor)
@@ -102,10 +102,10 @@ func TestPvPPrizeRollbackAndRetryIntegration(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(held) != wins || len(notices) != wins {
-					t.Fatalf("held=%+v notices=%+v; want %d each", held, notices, wins)
+				if len(held) != prizes || len(notices) != prizes {
+					t.Fatalf("held=%+v notices=%+v; want %d each", held, notices, prizes)
 				}
-				if wins == 1 && (held[0].Amount != amount || held[0].Source != depot.RemittancePvPPrize || held[0].SenderName != arena || notices[0].NoticeType != depot.NoticeMoneyTransfer || notices[0].Message != "お金が預かり所に届いています") {
+				if prizes == 1 && (held[0].Amount != amount || held[0].Source != depot.RemittancePvPPrize || held[0].SenderName != arena || notices[0].NoticeType != depot.NoticeMoneyTransfer || notices[0].Message != "お金が預かり所に届いています") {
 					t.Fatalf("prize=%+v notice=%+v", held, notices)
 				}
 			}
@@ -209,7 +209,40 @@ func TestPvPPrizeProductionWiringIntegration(t *testing.T) {
 		t.Fatalf("collected prize: %+v, %v", collected, err)
 	}
 	char, err := f.core.charRepo.FindByID(ctx, f.sender.ID)
-	if err != nil || char.Money != 1100 || char.PvPWins != 1 {
-		t.Fatalf("collected wallet=%d wins=%d: %v", char.Money, char.PvPWins, err)
+	if err != nil || char.Money != 1100 || char.PvPWins != 0 {
+		t.Fatalf("collected wallet=%d wins=%d (expected 0 for weak opponent): %v", char.Money, char.PvPWins, err)
+	}
+}
+
+func TestPvPKillPProductionWiringIntegration(t *testing.T) {
+	f := newDepotEquipmentFixture(t, item.SlotNone, false)
+	ctx := context.Background()
+	soc, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmbt, err := newCmbtServices(f.db, f.core, soc, f.econ, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.ExecContext(ctx, "UPDATE characters SET hp = 300, max_hp = 300, mp = 0, max_mp = 0, attack = 2000, defense = 0, agility = 200 WHERE id = ?", f.sender.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Strong(recipient) = 1500 > Strong(sender)*0.5 (~1250); recipient deals 0 damage so sender wins cleanly.
+	if _, err := f.db.ExecContext(ctx, "UPDATE characters SET hp = 1500, max_hp = 1500, mp = 0, max_mp = 0, attack = 0, defense = 0, agility = 0 WHERE id = ?", f.recipient.ID); err != nil {
+		t.Fatal(err)
+	}
+	room := preparePrizeMatch(t, cmbt.pvp, []string{f.sender.ID, f.recipient.ID}, "KillP Arena")
+	result, err := cmbt.pvp.AdvanceRound(ctx, f.sender.ID, room)
+	if err != nil || !result.MatchCompleted || result.OverallWinnerTeam != pvp.ColorRed {
+		t.Fatalf("production settlement: %+v, %v", result, err)
+	}
+	winner, err := f.core.charRepo.FindByID(ctx, f.sender.ID)
+	if err != nil || winner.PvPWins != 1 {
+		t.Fatalf("winner PvPWins=%d (want 1): %v", winner.PvPWins, err)
+	}
+	loser, err := f.core.charRepo.FindByID(ctx, f.recipient.ID)
+	if err != nil || loser.PvPWins != 0 {
+		t.Fatalf("loser PvPWins=%d (want 0): %v", loser.PvPWins, err)
 	}
 }

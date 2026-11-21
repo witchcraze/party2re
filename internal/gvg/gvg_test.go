@@ -21,6 +21,7 @@ type mockStandingRepo struct {
 	roundWins   map[string]int
 	transitions map[string][]byte
 	rounds      map[string]int
+	chars       *mockCharRepo
 }
 
 func newMockStandingRepo() *mockStandingRepo {
@@ -77,6 +78,21 @@ func (m *mockStandingRepo) CommitRoundTransition(ctx context.Context, roomID str
 	if transition.Settlement != nil {
 		if err := m.recordMatchSettlement(ctx, *transition.Settlement); err != nil {
 			return gvg.RoundTransition{}, err
+		}
+	}
+	if m.chars != nil {
+		for charID, count := range transition.KillCounts {
+			if count <= 0 {
+				continue
+			}
+			char, err := m.chars.FindByID(ctx, charID)
+			if err != nil {
+				return gvg.RoundTransition{}, err
+			}
+			char.PvPWins += count
+			if err := m.chars.Update(ctx, char); err != nil {
+				return gvg.RoundTransition{}, err
+			}
 		}
 	}
 	data, err := json.Marshal(transition)

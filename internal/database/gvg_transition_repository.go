@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/witchcraze/party2re/internal/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/gvg"
 )
@@ -35,7 +37,7 @@ func (r *GvGRepository) FindRoundTransition(ctx context.Context, roomID string) 
 // CommitRoundTransition atomically claims a round, its rewards and final settlement.
 // A completed match cannot be claimed again, even with a different round number.
 // Transaction: RunInTx
-// Lock Order: gvg_match_transitions(0) -> guilds(7, ascending ID) -> gvg_standings(8, ascending guild ID)
+// Lock Order: gvg_match_transitions(0) -> characters(2, ascending ID) -> guilds(7, ascending ID) -> gvg_standings(8, ascending guild ID)
 func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string, round int, transition gvg.RoundTransition) (gvg.RoundTransition, error) {
 	if roomID == "" || round < 1 || round > gvg.MaxRounds || transition.Detail.Room.ID != roomID {
 		return gvg.RoundTransition{}, fmt.Errorf("invalid gvg round transition")
@@ -63,6 +65,23 @@ func (r *GvGRepository) CommitRoundTransition(ctx context.Context, roomID string
 			committed.ResolvedRound = previous
 			if previous >= round || committed.Result.MatchCompleted {
 				return nil
+			}
+		}
+
+		if killIDs := battle.SortedPositiveKillIDs(transition.KillCounts); len(killIDs) > 0 {
+			chars := CharacterRepository{db: r.db}
+			if err := economy.LockInOrder(txCtx, killIDs, func(txCtx context.Context, charID string) error {
+				char, err := chars.FindByIDForUpdate(txCtx, charID)
+				if err != nil {
+					if errors.Is(err, corecharacter.ErrNotFound) {
+						return gvg.ErrCharacterNotFound
+					}
+					return err
+				}
+				char.PvPWins += transition.KillCounts[charID]
+				return chars.Update(txCtx, char)
+			}); err != nil {
+				return err
 			}
 		}
 

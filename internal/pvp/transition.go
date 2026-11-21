@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"sync"
 	"time"
 
@@ -13,20 +14,21 @@ import (
 var ErrTransitionConflict = errors.New("colosseum transition changed; retry the operation")
 
 // Transition is the durable financial claim and the exact publication to retry.
-// PasswordHash is persisted separately because the public room DTO omits it.
+// PasswordHash and PendingPvPKills are persisted separately because ColosseumRoom omits them from public JSON.
 type Transition struct {
-	Version        int
-	Kind           string
-	ActorID        string
-	Detail         RoomDetail
-	PasswordHash   string
-	AddedID        string
-	RemovedIDs     []string
-	Result         *RoundResolution
-	ForfeitedPool  int
-	LastActivityAt time.Time
-	PenaltyUntil   time.Time
-	Pending        bool
+	Version         int
+	Kind            string
+	ActorID         string
+	Detail          RoomDetail
+	PasswordHash    string
+	PendingPvPKills map[string]int
+	AddedID         string
+	RemovedIDs      []string
+	Result          *RoundResolution
+	ForfeitedPool   int
+	LastActivityAt  time.Time
+	PenaltyUntil    time.Time
+	Pending         bool
 }
 
 // TransitionRepository commits a unique room version with its asset mutation.
@@ -37,6 +39,7 @@ type TransitionRepository interface {
 	CommitTransition(context.Context, Transition, func(context.Context) error) error
 	AcknowledgeTransition(context.Context, string, int) error
 	TouchActivity(context.Context, string, int, time.Time) error
+	TouchRoundActivity(context.Context, string, int, time.Time, map[string]int) error
 }
 
 func WithTransitionRepository(repo TransitionRepository) Option {
@@ -60,6 +63,7 @@ func (s *Service) commitTransition(ctx context.Context, t Transition, mutate fun
 	t.Detail.Room.FinancialVersion = t.Version
 	t.Pending = true
 	t.PasswordHash = t.Detail.Room.PasswordHash
+	t.PendingPvPKills = cloneIntMap(t.Detail.Room.PendingPvPKills)
 	if t.LastActivityAt.IsZero() {
 		t.LastActivityAt = t.Detail.Room.LastActivityAt
 	}
@@ -77,6 +81,7 @@ func (s *Service) commitTransition(ctx context.Context, t Transition, mutate fun
 
 func (s *Service) publishTransition(ctx context.Context, t Transition) error {
 	t.Detail.Room.PasswordHash = t.PasswordHash
+	t.Detail.Room.PendingPvPKills = cloneIntMap(t.PendingPvPKills)
 	t.Detail.Room.FinancialVersion = t.Version
 	t.Detail.Room.LastActivityAt = t.LastActivityAt
 	if t.Detail.Room.Status == StatusDisbanded {
@@ -206,6 +211,7 @@ func (r *MemoryTransitionRepository) FindTransition(_ context.Context, roomID st
 	}
 	t.Detail.Room.FinancialVersion = t.Version
 	t.Detail.Room.PasswordHash = t.PasswordHash
+	t.Detail.Room.PendingPvPKills = cloneIntMap(t.PendingPvPKills)
 	t.Detail.Room.LastActivityAt = t.LastActivityAt
 	return t, nil
 }
@@ -270,6 +276,14 @@ func (r *MemoryTransitionRepository) AcknowledgeTransition(_ context.Context, ro
 }
 
 func (r *MemoryTransitionRepository) TouchActivity(_ context.Context, roomID string, version int, at time.Time) error {
+	return r.touchActivity(roomID, version, at, false, nil)
+}
+
+func (r *MemoryTransitionRepository) TouchRoundActivity(_ context.Context, roomID string, version int, at time.Time, pendingKills map[string]int) error {
+	return r.touchActivity(roomID, version, at, true, pendingKills)
+}
+
+func (r *MemoryTransitionRepository) touchActivity(roomID string, version int, at time.Time, updateKills bool, pendingKills map[string]int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	raw := r.states[roomID]
@@ -290,14 +304,22 @@ func (r *MemoryTransitionRepository) TouchActivity(_ context.Context, roomID str
 	if !last.IsZero() && at.After(last.Add(InactivityTimeout)) {
 		return ErrRoomInactive
 	}
-	if last.IsZero() || at.After(last) {
+	activityChanged := last.IsZero() || at.After(last)
+	killsChanged := updateKills && !maps.Equal(t.PendingPvPKills, pendingKills)
+	if !activityChanged && !killsChanged {
+		return nil
+	}
+	if activityChanged {
 		t.LastActivityAt = at
 		t.Detail.Room.LastActivityAt = at
-		data, err := json.Marshal(t)
-		if err != nil {
-			return err
-		}
-		r.states[roomID] = data
 	}
+	if killsChanged {
+		t.PendingPvPKills = cloneIntMap(pendingKills)
+	}
+	data, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	r.states[roomID] = data
 	return nil
 }

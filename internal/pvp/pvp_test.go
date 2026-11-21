@@ -377,8 +377,8 @@ func TestColosseum_AdvanceRoundAndMatchVictory(t *testing.T) {
 	if updatedAlice.Money != 400 || charRepo.prizes[c1.ID] != 200 {
 		t.Errorf("expected wallet 400 and held prize 200, got %d / %d", updatedAlice.Money, charRepo.prizes[c1.ID])
 	}
-	if updatedAlice.PvPWins != 1 {
-		t.Errorf("expected Alice PvPWins 1, got %d", updatedAlice.PvPWins)
+	if updatedAlice.PvPWins != 0 {
+		t.Errorf("expected Alice PvPWins 0 without strong defeats, got %d", updatedAlice.PvPWins)
 	}
 
 	// Verify Bob's wallet has 500 - 100 bet = 400G
@@ -459,22 +459,113 @@ func TestColosseum_MultiRound_2v2TeamBattle(t *testing.T) {
 	if updatedAlice.Money != 900 || charRepo.prizes[c1.ID] != 200 {
 		t.Errorf("expected wallet 900 and held prize 200, got %d / %d", updatedAlice.Money, charRepo.prizes[c1.ID])
 	}
-	if updatedAlice.PvPWins != 1 {
-		t.Errorf("expected Alice PvPWins 1, got %d", updatedAlice.PvPWins)
+	if updatedAlice.PvPWins != 0 {
+		t.Errorf("expected Alice PvPWins 0 without strong defeats, got %d", updatedAlice.PvPWins)
 	}
 
 	updatedCharlie, _ := charRepo.FindByID(ctx, c3.ID)
 	if updatedCharlie.Money != 900 || charRepo.prizes[c3.ID] != 200 {
 		t.Errorf("expected wallet 900 and held prize 200, got %d / %d", updatedCharlie.Money, charRepo.prizes[c3.ID])
 	}
-	if updatedCharlie.PvPWins != 1 {
-		t.Errorf("expected Charlie PvPWins 1, got %d", updatedCharlie.PvPWins)
+	if updatedCharlie.PvPWins != 0 {
+		t.Errorf("expected Charlie PvPWins 0 without strong defeats, got %d", updatedCharlie.PvPWins)
 	}
 
 	// Losers (Bob & Dave) should have 900G each (1000 - 100) and 0 PvPWins
 	updatedBob, _ := charRepo.FindByID(ctx, c2.ID)
 	if updatedBob.Money != 900 || updatedBob.PvPWins != 0 {
 		t.Errorf("expected Bob money 900 and 0 wins, got %d / %d", updatedBob.Money, updatedBob.PvPWins)
+	}
+}
+
+type scriptedBattleEngine struct {
+	results []corebattle.PartyBattleResult
+	idx     int
+}
+
+func (e *scriptedBattleEngine) ResolvePartyBattle(_ corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	res := e.results[e.idx]
+	e.idx++
+	return res, nil
+}
+
+func TestColosseum_KillPRecordedPerStrongDefeatAcrossRounds(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	roomRepo := pvp.NewMemoryRoomRepository()
+
+	// Alice (strong=170) vs StrongBob (strong=170 > 85) and WeakFoe (strong=50 <= 85)
+	alice := createTestCharacter("char-1", "Alice", 500)
+	teammate := createTestCharacter("char-2", "Teammate", 500)
+	strongBob := createTestCharacter("char-3", "StrongBob", 500)
+	weakFoe := createTestCharacter("char-4", "WeakFoe", 500)
+	weakFoe.Stats.MaxHP, weakFoe.Stats.HP = 50, 50
+	weakFoe.Stats.Attack, weakFoe.Stats.Defense, weakFoe.Stats.Agility = 0, 0, 0
+	for _, c := range []corecharacter.Character{alice, teammate, strongBob, weakFoe} {
+		charRepo.add(c)
+	}
+
+	engine := &scriptedBattleEngine{
+		results: []corebattle.PartyBattleResult{
+			{
+				// Round 1: ends in draw, but Alice defeated StrongBob earlier in combat (teammate did not).
+				Outcome:     corebattle.OutcomeDraw,
+				Turns:       4,
+				RemainingHP: map[string]int{"char-1": 50, "char-2": 0, "char-3": 0, "char-4": 50},
+				Defeats:     []corebattle.PartyBattleDefeat{{ActorID: "char-1", TargetID: "char-3"}},
+			},
+			{
+				// Round 2: Alice defeats StrongBob and WeakFoe -> only StrongBob counts; teammate gets 0.
+				Outcome:     corebattle.OutcomeWin,
+				Turns:       3,
+				RemainingHP: map[string]int{"char-1": 80, "char-2": 80, "char-3": 0, "char-4": 0},
+				Defeats: []corebattle.PartyBattleDefeat{
+					{ActorID: "char-1", TargetID: "char-3"},
+					{ActorID: "char-1", TargetID: "char-4"},
+				},
+			},
+		},
+	}
+
+	svc, err := pvp.NewService(roomRepo, charRepo, engine, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()), pvp.WithPrizeRemitter(charRepo))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	detail, _ := svc.CreateRoom(ctx, alice.ID, pvp.CreateRoomRequest{Name: "Strong KillP", Bet: 100, MaxMembers: 4, TargetWins: 1})
+	_, _ = svc.JoinRoom(ctx, teammate.ID, detail.Room.ID, "")
+	_, _ = svc.JoinRoom(ctx, strongBob.ID, detail.Room.ID, "")
+	_, _ = svc.JoinRoom(ctx, weakFoe.ID, detail.Room.ID, "")
+	_, _ = svc.SelectTeam(ctx, alice.ID, detail.Room.ID, pvp.ColorRed)
+	_, _ = svc.SelectTeam(ctx, teammate.ID, detail.Room.ID, pvp.ColorRed)
+	_, _ = svc.SelectTeam(ctx, strongBob.ID, detail.Room.ID, pvp.ColorBlue)
+	_, _ = svc.SelectTeam(ctx, weakFoe.ID, detail.Room.ID, pvp.ColorBlue)
+	_, _ = svc.StartMatch(ctx, alice.ID, detail.Room.ID)
+
+	if _, err := svc.AdvanceRound(ctx, alice.ID, detail.Room.ID); err != nil {
+		t.Fatalf("round 1 failed: %v", err)
+	}
+	// Non-final round keeps kills pending in room until match completion.
+	midAlice, _ := charRepo.FindByID(ctx, alice.ID)
+	if midAlice.PvPWins != 0 {
+		t.Fatalf("expected pending PvPWins=0 before settlement, got %d", midAlice.PvPWins)
+	}
+
+	res2, err := svc.AdvanceRound(ctx, alice.ID, detail.Room.ID)
+	if err != nil || !res2.MatchCompleted {
+		t.Fatalf("round 2 settlement failed: res=%+v err=%v", res2, err)
+	}
+
+	finAlice, _ := charRepo.FindByID(ctx, alice.ID)
+	finTeammate, _ := charRepo.FindByID(ctx, teammate.ID)
+	finBob, _ := charRepo.FindByID(ctx, strongBob.ID)
+	if finAlice.PvPWins != 2 {
+		t.Errorf("expected Alice PvPWins 2 (1 per strong defeat across rounds, excluding weak foe), got %d", finAlice.PvPWins)
+	}
+	if finTeammate.PvPWins != 0 || charRepo.prizes[teammate.ID] != 200 {
+		t.Errorf("expected winning teammate with 0 kills to get prize 200 and PvPWins 0, got prize=%d wins=%d", charRepo.prizes[teammate.ID], finTeammate.PvPWins)
+	}
+	if finBob.PvPWins != 0 {
+		t.Errorf("expected StrongBob PvPWins 0, got %d", finBob.PvPWins)
 	}
 }
 

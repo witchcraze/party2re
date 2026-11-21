@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
@@ -174,6 +175,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		}
 
 		var res corebattle.PartyBattleResult
+		var killCounts map[string]int
 		var roundWinnerGuildID string
 		var roundWinnerGuildName string
 		var roundWinnerGuildColor string
@@ -196,6 +198,8 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			if err != nil {
 				return fmt.Errorf("resolve gvg battle round: %w", err)
 			}
+
+			killCounts = battle.CountStrongPvPKills(slices.Concat(allies, enemies), res.Defeats)
 
 			for i := range detail.Members {
 				cID := detail.Members[i].CharacterID
@@ -336,7 +340,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			BattleLog:              res.Logs,
 		}
 		committed, err = s.standings.CommitRoundTransition(lockedCtx, roomID, round, RoundTransition{
-			Detail: detail, Result: result, Settlement: settlement,
+			Detail: detail, Result: result, Settlement: settlement, KillCounts: killCounts,
 		})
 		if err != nil {
 			return err

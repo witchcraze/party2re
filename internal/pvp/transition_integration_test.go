@@ -65,6 +65,21 @@ func (r *transitionCharacters) Update(ctx context.Context, c corecharacter.Chara
 	return nil
 }
 
+type transitionPrizes struct {
+	pvp.PrizeRemitter
+	fail *atomic.Bool
+}
+
+func (p transitionPrizes) HoldPrize(ctx context.Context, characterID, arenaName string, amount int) error {
+	if err := p.PrizeRemitter.HoldPrize(ctx, characterID, arenaName, amount); err != nil {
+		return err
+	}
+	if p.fail.CompareAndSwap(true, false) {
+		return errors.New("injected SQL failure after prize hold")
+	}
+	return nil
+}
+
 type transitionBattle struct {
 	calls   atomic.Int64
 	outcome corebattle.Outcome
@@ -238,7 +253,7 @@ func (f *transitionFixture) restart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := pvp.NewService(f.rooms, f.chars, f.battle, pvp.WithTransactionProvider(database.NewTransactionProvider(f.db)), pvp.WithTransitionRepository(store), pvp.WithPrizeRemitter(newSQLPrizeRemitter(t, f.db)))
+	svc, err := pvp.NewService(f.rooms, f.chars, f.battle, pvp.WithTransactionProvider(database.NewTransactionProvider(f.db)), pvp.WithTransitionRepository(store), pvp.WithPrizeRemitter(transitionPrizes{PrizeRemitter: newSQLPrizeRemitter(t, f.db), fail: &f.chars.fail}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,10 +326,10 @@ func (f *transitionFixture) act(t *testing.T, kind string) error {
 		return err
 	}
 }
-func (f *transitionFixture) assertFunds(t *testing.T, leaderMoney, memberMoney, wins, pool int) {
-	f.assertConservedFunds(t, leaderMoney, memberMoney, wins, pool, 0)
+func (f *transitionFixture) assertFunds(t *testing.T, leaderMoney, memberMoney, prizes, pool int) {
+	f.assertConservedFunds(t, leaderMoney, memberMoney, prizes, pool, 0)
 }
-func (f *transitionFixture) assertConservedFunds(t *testing.T, leaderMoney, memberMoney, wins, pool, forfeited int) {
+func (f *transitionFixture) assertConservedFunds(t *testing.T, leaderMoney, memberMoney, prizes, pool, forfeited int) {
 	t.Helper()
 	ctx := context.Background()
 	leader, err := f.chars.FindByID(ctx, f.leader.ID)
@@ -325,8 +340,8 @@ func (f *transitionFixture) assertConservedFunds(t *testing.T, leaderMoney, memb
 	if err != nil {
 		t.Fatal(err)
 	}
-	if leader.Money != leaderMoney || member.Money != memberMoney || leader.PvPWins != wins {
-		t.Fatalf("money=%d/%d wins=%d; want %d/%d wins=%d", leader.Money, member.Money, leader.PvPWins, leaderMoney, memberMoney, wins)
+	if leader.Money != leaderMoney || member.Money != memberMoney || leader.PvPWins != 0 {
+		t.Fatalf("money=%d/%d wins=%d; want %d/%d wins=0", leader.Money, member.Money, leader.PvPWins, leaderMoney, memberMoney)
 	}
 	roomID := f.room.Room.ID
 	if roomID == "" {
@@ -350,8 +365,8 @@ func (f *transitionFixture) assertConservedFunds(t *testing.T, leaderMoney, memb
 	if err := f.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM character_delivery_notices WHERE character_id IN (?, ?) AND is_cleared = FALSE", f.leader.ID, f.member.ID).Scan(&notices); err != nil {
 		t.Fatal(err)
 	}
-	if held != wins*200 || notices != wins || receipts != wins {
-		t.Fatalf("held=%d receipts=%d notices=%d; wins=%d", held, receipts, notices, wins)
+	if held != prizes*200 || notices != prizes || receipts != prizes {
+		t.Fatalf("held=%d receipts=%d notices=%d; prizes=%d", held, receipts, notices, prizes)
 	}
 	if leader.Money+member.Money+actualPool+held+state.ForfeitedPool != 2000 {
 		t.Fatalf("assets not conserved: leader=%d member=%d pool=%d held=%d forfeited=%d", leader.Money, member.Money, actualPool, held, state.ForfeitedPool)

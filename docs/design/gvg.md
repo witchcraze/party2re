@@ -59,6 +59,7 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
     - If 0 guilds survive (mutual wipeout) or multiple guilds remain, the round results in a draw (`draw`) with no score or round GP awarded.
   - **Intermediate Victory Reward**: A round winner that has not reached `TargetWins` receives **+3 GP** (`vs_guild.cgi:126–128`). This also applies to a round win below the target at the round limit. A match-deciding win receives only the final settlement below, without an additional +3 GP (`vs_guild.cgi:112–128`).
   - Round scores are tracked per guild (`guild_scores[guild_id]++`).
+  - Surviving characters who inflict a non-revived stronger-opponent combat defeat during round combat (`party2/lib/_battle.cgi:231–232`, `battle.IsStrongEnemy`) atomically increment `characters.pvp_wins` (`kill_p`) inside each round's `CommitRoundTransition` transaction before guild/standing locks.
 - **Match Decider & Target Wins**:
   - When a guild achieves the specified `TargetWins` (1..3):
     - The match completes (`status = completed`, `outcome = match_won`).

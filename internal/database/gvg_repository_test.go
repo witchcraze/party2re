@@ -177,4 +177,31 @@ func TestGvGRepository(t *testing.T) {
 	if err != nil || len(leaderboard) < 2 {
 		t.Fatalf("GetLeaderboard failed: len=%d, err=%v", len(leaderboard), err)
 	}
+
+	// 8. Verify GvG per-round kill_p increments and idempotent retry safety
+	killRoomID := id.New()
+	killTransition := gvg.RoundTransition{
+		Detail:     gvg.RoomDetail{Room: gvg.GvGRoom{ID: killRoomID, Round: 2, Status: gvg.StatusInProgress}},
+		Result:     gvg.RoundResolution{Round: 2, WinnerGuildID: guildA_ID},
+		KillCounts: map[string]int{charB.ID: 1, charA.ID: 2},
+	}
+	if _, err := gvgRepo.CommitRoundTransition(ctx, killRoomID, 1, killTransition); err != nil {
+		t.Fatalf("commit round with kill counts: %v", err)
+	}
+	// Idempotent retry on the same round must not double-increment pvp_wins.
+	if _, err := gvgRepo.CommitRoundTransition(ctx, killRoomID, 1, killTransition); err != nil {
+		t.Fatalf("retry round with kill counts: %v", err)
+	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotA, err := charRepo.FindByID(ctx, charA.ID)
+	if err != nil || gotA.PvPWins != 2 {
+		t.Fatalf("charA PvPWins = %d (want 2), err=%v", gotA.PvPWins, err)
+	}
+	gotB, err := charRepo.FindByID(ctx, charB.ID)
+	if err != nil || gotB.PvPWins != 1 {
+		t.Fatalf("charB PvPWins = %d (want 1), err=%v", gotB.PvPWins, err)
+	}
 }

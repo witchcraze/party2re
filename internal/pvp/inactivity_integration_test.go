@@ -287,3 +287,109 @@ func TestPvPInactivityInterruptedCleanupIntegration(t *testing.T) {
 		t.Fatalf("leader longer sleep=%d, want %d", exp, longer.UnixMilli())
 	}
 }
+
+type scriptDefeatBattle struct {
+	defeats []corebattle.PartyBattleDefeat
+}
+
+func (b scriptDefeatBattle) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	rem := make(map[string]int, len(req.Allies)+len(req.Enemies))
+	for _, p := range append(req.Allies, req.Enemies...) {
+		rem[p.ID] = max(1, p.HP)
+	}
+	return corebattle.PartyBattleResult{
+		Outcome:     corebattle.OutcomeDraw,
+		Turns:       2,
+		RemainingHP: rem,
+		Defeats:     b.defeats,
+	}, nil
+}
+
+func TestPvPInactivity_PendingKillsExpiredRoomAndRetryIntegration(t *testing.T) {
+	f := newTransitionFixture(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	baseTimer := timer.NewService(f.client)
+	cleanupSleepTimers(t, baseTimer, f.leader.ID, f.member.ID)
+
+	timerErr := errors.New("injected sleep timer error")
+	ft := &faultTimer{Service: baseTimer, failOnID: f.member.ID, err: timerErr}
+	engine := scriptDefeatBattle{defeats: []corebattle.PartyBattleDefeat{{ActorID: f.leader.ID, TargetID: f.member.ID}}}
+
+	svc, err := pvp.NewService(f.rooms, f.chars, engine,
+		pvp.WithTransactionProvider(database.NewTransactionProvider(f.db)),
+		pvp.WithTransitionRepository(f.store),
+		pvp.WithPrizeRemitter(newSQLPrizeRemitter(t, f.db)),
+		pvp.WithTimerService(ft),
+		pvp.WithClock(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.service = svc
+
+	room, err := svc.CreateRoom(ctx, f.leader.ID, pvp.CreateRoomRequest{Name: "ExpiredKillP", Bet: 100, MaxMembers: 2, TargetWins: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.room = room
+	f.roomIDs[room.Room.ID] = true
+	if _, err := svc.JoinRoom(ctx, f.member.ID, room.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SelectTeam(ctx, f.leader.ID, room.Room.ID, pvp.ColorRed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SelectTeam(ctx, f.member.ID, room.Room.ID, pvp.ColorBlue); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartMatch(ctx, f.leader.ID, room.Room.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Non-final round 1: leader scores kill_p without changing FinancialVersion.
+	res1, err := svc.AdvanceRound(ctx, f.leader.ID, room.Room.ID)
+	if err != nil || res1.MatchCompleted {
+		t.Fatalf("round 1 failed: res=%+v err=%v", res1, err)
+	}
+	if midLeader, _ := f.chars.FindByID(ctx, f.leader.ID); midLeader.PvPWins != 0 {
+		t.Fatalf("expected PvPWins=0 mid-match before timeout/settlement, got %d", midLeader.PvPWins)
+	}
+
+	// Simulate Valkey room expiration after 30 minutes of inactivity.
+	timeoutAt := now.Add(pvp.InactivityTimeout + time.Second)
+	now = timeoutAt
+	losePvPRoom(t, f)
+
+	// Arm timer failure after SQL timeout commit, then retry on a fresh service instance.
+	ft.armed.Store(true)
+	if err := svc.LeaveRoom(ctx, f.leader.ID, room.Room.ID); !errors.Is(err, timerErr) {
+		t.Fatalf("expected injected timer failure, got %v", err)
+	}
+	restarted, err := pvp.NewService(f.rooms, f.chars, engine,
+		pvp.WithTransactionProvider(database.NewTransactionProvider(f.db)),
+		pvp.WithTransitionRepository(f.store),
+		pvp.WithPrizeRemitter(newSQLPrizeRemitter(t, f.db)),
+		pvp.WithTimerService(baseTimer),
+		pvp.WithClock(func() time.Time { return timeoutAt.Add(time.Minute) }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.LeaveRoom(ctx, f.member.ID, room.Room.ID); err != nil {
+		t.Fatalf("retry LeaveRoom: %v", err)
+	}
+	// Repeating cleanup/leave must never double-increment PvPWins.
+	if err := restarted.LeaveRoom(ctx, f.leader.ID, room.Room.ID); err != nil && !errors.Is(err, pvp.ErrRoomNotFound) && !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+		t.Fatalf("second retry LeaveRoom unexpected error: %v", err)
+	}
+
+	gotLeader, err := f.chars.FindByID(ctx, f.leader.ID)
+	if err != nil || gotLeader.PvPWins != 1 || !gotLeader.PendingWake {
+		t.Fatalf("leader after timeout recovery = %+v (want PvPWins=1, PendingWake=true), err=%v", gotLeader, err)
+	}
+	gotMember, err := f.chars.FindByID(ctx, f.member.ID)
+	if err != nil || gotMember.PvPWins != 0 || !gotMember.PendingWake {
+		t.Fatalf("member after timeout recovery = %+v (want PvPWins=0, PendingWake=true), err=%v", gotMember, err)
+	}
+}
