@@ -156,6 +156,9 @@ func wireHooks(
 		if cmbt.party != nil {
 			cmbt.party.SetPostAdventureHook(postAdventureHook)
 		}
+		if cmbt.gvg != nil {
+			cmbt.gvg.SetPostExitHook(postAdventureHook)
+		}
 	}
 	if misc.monsterRepo != nil || misc.homeMemberRepo != nil {
 		soc.home.SetHomePetReader(&homePetAdapter{

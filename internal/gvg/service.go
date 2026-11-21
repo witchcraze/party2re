@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -39,6 +40,36 @@ type ParticipantBuilder interface {
 	BuildBattleMaxima(ctx context.Context, char corecharacter.Character) (hp, mp int, err error)
 }
 
+// StatefulParticipantBuilder builds a combat participant with current vitality and buffered item consumption.
+type StatefulParticipantBuilder interface {
+	BuildParticipantWithState(ctx context.Context, characterID string, hp int, mp *int, consumed []corebattle.ConsumedItem) (corebattle.Participant, error)
+}
+
+// PostBattleSettler persists post-exit character vitality, fatigue, item consumption, and accessory bonuses.
+type PostBattleSettler interface {
+	ApplyPostBattleResult(ctx context.Context, req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error)
+}
+
+// TransactionProvider executes a callback within a database transaction.
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// ExitClaimState tracks idempotent exit settlement per character within a room.
+type ExitClaimState struct {
+	AlreadyClaimed bool
+	DeliveryDone   bool
+}
+
+// ExitClaimRepository records durable per-join GvG exit claims for retry safety.
+type ExitClaimRepository interface {
+	ClaimRoomExitForUpdate(ctx context.Context, roomID, characterID, joinID string) (ExitClaimState, error)
+	MarkExitDeliveryDone(ctx context.Context, roomID, characterID, joinID string) error
+}
+
+// PostExitHook resets meal fullness and delivers reserved tavern food upon room exit.
+type PostExitHook func(ctx context.Context, characterID string) (string, error)
+
 // Option configures Service dependencies.
 type Option func(*Service)
 
@@ -46,6 +77,34 @@ type Option func(*Service)
 func WithParticipantBuilder(builder ParticipantBuilder) Option {
 	return func(s *Service) {
 		s.participantBuilder = builder
+	}
+}
+
+// WithPostBattleSettler configures the PostBattleSettler for GvG exit side-effects.
+func WithPostBattleSettler(settler PostBattleSettler) Option {
+	return func(s *Service) {
+		s.settler = settler
+	}
+}
+
+// WithTransactionProvider configures the TransactionProvider for exit claim atomicity.
+func WithTransactionProvider(provider TransactionProvider) Option {
+	return func(s *Service) {
+		s.txProvider = provider
+	}
+}
+
+// WithExitClaimRepository configures the ExitClaimRepository for idempotent exit side-effects.
+func WithExitClaimRepository(repo ExitClaimRepository) Option {
+	return func(s *Service) {
+		s.exitClaims = repo
+	}
+}
+
+// WithPostExitHook configures the post-exit hook (e.g., tavern fullness reset and delivery claim).
+func WithPostExitHook(hook PostExitHook) Option {
+	return func(s *Service) {
+		s.postExitHook = hook
 	}
 }
 
@@ -57,6 +116,15 @@ type Service struct {
 	characters         CharacterRepository
 	battleEngine       BattleEngine
 	participantBuilder ParticipantBuilder
+	settler            PostBattleSettler
+	txProvider         TransactionProvider
+	exitClaims         ExitClaimRepository
+	postExitHook       PostExitHook
+}
+
+// SetPostExitHook configures the post-exit hook after service construction.
+func (s *Service) SetPostExitHook(hook PostExitHook) {
+	s.postExitHook = hook
 }
 
 // NewService constructs a new GvG service.
@@ -217,6 +285,7 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 	member := GvGMember{
 		RoomID:        roomID,
 		CharacterID:   char.ID,
+		JoinID:        id.New(),
 		CharacterName: char.Name,
 		JobID:         char.JobID,
 		Level:         char.Level,
@@ -321,6 +390,7 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 		newMember := GvGMember{
 			RoomID:        roomID,
 			CharacterID:   char.ID,
+			JoinID:        id.New(),
 			CharacterName: char.Name,
 			JobID:         char.JobID,
 			Level:         char.Level,
@@ -350,63 +420,6 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 		return nil
 	})
 	return result, err
-}
-
-// LeaveRoom exits a GvG room or disbands if caller is leader.
-func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) error {
-	roomID = strings.TrimSpace(roomID)
-	if roomID == "" {
-		return ErrRoomNotFound
-	}
-	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		detail, err := s.repo.GetRoom(lockedCtx, roomID)
-		if err != nil {
-			return err
-		}
-
-		isMember := false
-		for _, m := range detail.Members {
-			if m.CharacterID == charID {
-				isMember = true
-				break
-			}
-		}
-		if !isMember {
-			return ErrCharacterNotInRoom
-		}
-
-		// Disband room if leader leaves or match completed
-		if detail.Room.LeaderCharacterID == charID || detail.Room.Status == StatusCompleted {
-			for _, m := range detail.Members {
-				if err := s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID); err != nil {
-					return err
-				}
-			}
-			return s.repo.DeleteRoom(lockedCtx, roomID)
-		}
-
-		if detail.Room.Status != StatusRecruiting {
-			return ErrMatchNotInProgress
-		}
-
-		// Remove regular member
-		newMembers := make([]GvGMember, 0, len(detail.Members)-1)
-		for _, m := range detail.Members {
-			if m.CharacterID != charID {
-				newMembers = append(newMembers, m)
-			}
-		}
-		detail.Members = newMembers
-		if detail.Room.PrizePool > InitialPrizeGP {
-			detail.Room.PrizePool -= JoinPrizeGP
-		}
-		detail.Room.UpdatedAt = time.Now().UTC()
-
-		if err := s.repo.DeleteCharacterRoom(lockedCtx, charID); err != nil {
-			return err
-		}
-		return s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members)
-	})
 }
 
 // GetRoom retrieves details of a specific GvG room.

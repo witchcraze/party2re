@@ -128,6 +128,9 @@ func TestGvGExpectedRoundHTTPReplayIntegration(t *testing.T) {
 					if err := f.service.LeaveRoom(ctx, leader.ID, f.detail.Room.ID); err != nil {
 						t.Fatal(err)
 					}
+					if err := f.service.LeaveRoom(ctx, opponent.ID, f.detail.Room.ID); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if rec := request(leader.ID, leader.PlayerID, tc.round); rec.Code != 404 {
 					t.Fatalf("missing room resurrected: %d %s", rec.Code, rec.Body.String())

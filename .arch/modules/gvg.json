@@ -15,6 +15,24 @@
       "target_module": "gvg",
       "relation_type": "contract_interface",
       "source_ref": "internal/gvg/repository.go#RoomRepository"
+    },
+    {
+      "name": "exit_claims",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/gvg/service.go#ExitClaimRepository"
+    },
+    {
+      "name": "battle_settler",
+      "target_module": "battle",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/gvg/service.go#PostBattleSettler"
+    },
+    {
+      "name": "tx_provider",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/gvg/service.go#TransactionProvider"
     }
   ],
   "transaction_boundaries": [
@@ -40,6 +58,25 @@
           "tier": 8,
           "mode": "SELECT ... FOR UPDATE (ascending guild ID)",
           "note": "Lock affected standings before cumulative reward GP, win/loss/draw and medal mutations."
+        }
+      ]
+    },
+    {
+      "method": "applyExitSideEffects",
+      "source_ref": "internal/gvg/leave.go#Service.applyExitSideEffects",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "gvg_exit_claims",
+          "tier": 0,
+          "mode": "INSERT IGNORE / SELECT ... FOR UPDATE",
+          "note": "Claim per-join exit (room_id, character_id, join_id) before applying departure settlement."
+        },
+        {
+          "table": "characters / inventory_items / equipment_slots / character_depots / depot_items",
+          "tier": 2,
+          "mode": "delegated via PostBattleSettler.ApplyPostBattleResult",
+          "note": "Battle settlement reuses the ambient RunInTx transaction (tier 2 character -> tier 3 inventory/equipment -> conditional tier 5 depot); postExitHook, MarkExitDeliveryDone, and LeaveRoom Valkey cleanup run separately after commit."
         }
       ]
     }

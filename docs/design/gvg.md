@@ -12,7 +12,7 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
 
 - **Live Team Battle Resolution**: Combats are resolved dynamically through `internal/core/battle.Engine` via `ResolvePartyBattle`. All participants sharing the room leader's guild color form the Ally party, while opposing guild participants form the Enemy party.
 - **Dual-Tier Storage Model**:
-  - **Ephemeral Room State (Valkey Master)**: Rooms, active rosters, and character-to-room mappings are stored in Valkey (`party2:gvg:room:<id>`, `party2:gvg:character:<id>`, `party2:gvg:rooms:active`) with a 30-minute inactivity TTL. Disbanding or match completion immediately cleans up active mappings.
+  - **Ephemeral Room State (Valkey Master)**: Rooms, active rosters, and character-to-room mappings are stored in Valkey (`party2:gvg:room:<id>`, `party2:gvg:character:<id>`, `party2:gvg:rooms:active`) with a 30-minute inactivity TTL. Disbanding or all participants departing cleans up active mappings.
   - **Canonical Persistence (MariaDB Master)**: Spendable GP is stored in `guilds.points` and awarded through the existing guild points writer. `gvg_standings` records cumulative GvG reward GP (`victory_points`), wins, losses, draws, and permanent 7-tier trophy decorations. The ranking counter is not the guild balance: other guild activities and point decay do not change it. Guilds store their official team color in `guilds.color`.
   - **Reward Retry Boundary**: The SQL repository commits rewards and the latest room transition together, then publishes the room to Valkey. The [GvG reward publication contract](../architecture/transient-run-state.md#gvg-reward-publication) owns claim identity, retry and retention guarantees.
 - **Authorization & Ownership**: All room creation, joining, starting, and advancing operations enforce strict character ownership through standard authentication middleware (`withAuthenticatedCharacter`).
@@ -36,6 +36,11 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
   - Characters cannot join if unconscious (`HP <= 0`), exhausted (`Tired >= 100`), or already in an active room.
   - **Guild Member Limit (`quest.cgi:1003-1005`)**: Independent of the room max member limit (up to 8), at most 4 members from the same guild can enroll in the battle room (`ErrGuildMemberLimitExceeded` / `"同じギルドメンバー５人以上は参加することができません"`).
 
+- **Room Departure (`@にげる`, `party2/lib/_battle.cgi:1184-1248,1330-1375`)**:
+  - Any participant (leader or member) may leave across `recruiting`, `in_progress`, and `completed`; leadership transfers to the first remaining participant if the leader leaves, and the room is deleted only when the last participant departs.
+  - **Pre-Start GP Adjustment (non-obvious legacy behavior)**: Leaving while `recruiting` (`round == 0`) with remaining members subtracts **2 GP** from `prize_pool` without a lower floor (`_battle.cgi:1238`, `system.cgi:1357`), so repeated pre-start joins (`+1`) and leaves (`-2`) can drive `prize_pool` negative and offset final guild GP settlement; future balance adjustment is tracked in [#2534](https://github.com/witchcraze/party2re/issues/2534).
+  - **Exit Side-Effects**: Departure applies standard post-combat settlement (HP/MP copyback, fatigue, `item-105`/`item-106` exit bonuses, and clearing items consumed during match rounds) plus meal-fullness reset and pending tavern delivery claims. Fallen participants (`0` HP) receive the codebase's `1` HP survival floor rather than legacy raw `0` HP copyback (`_battle.cgi:1215`).
+
 ---
 
 ### 2. Multi-Round Match Progression (`@かいし`, `vs_guild.cgi:44-154`)
@@ -47,8 +52,8 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
   - Restores all participants' HP to MaxHP (`$ms{$name}{hp} = $ms{$name}{mhp}`).
   - Transitions room status from `recruiting` to `in_progress` and initializes Round 1.
 - **Round Combat Resolution**:
-  - Living participants are partitioned into Allies (sharing Room Leader's guild color) and Enemies (opposing guild colors).
-  - Combat executes through `corebattle.ResolvePartyBattle`.
+  - If mid-match departures leave only one guild color in the room, that surviving guild is awarded `round_win` without invoking `ResolvePartyBattle` (`vs_guild.cgi:72-132`).
+  - Otherwise, living participants are partitioned into Allies (sharing Room Leader's guild color) and Enemies (opposing guild colors), and combat executes through `corebattle.ResolvePartyBattle`.
   - **Round Winner**: Determined from the unique surviving guild among participants (`res.RemainingHP`, `vs_guild.cgi:106-122`):
     - If exactly 1 guild has surviving members (`alive_team_c == 1`), that guild wins the round (`round_win`).
     - If 0 guilds survive (mutual wipeout) or multiple guilds remain, the round results in a draw (`draw`) with no score or round GP awarded.

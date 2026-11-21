@@ -150,6 +150,9 @@ func newCmbtServices(
 		core.charRepo,
 		battleEngine,
 		gvg.WithParticipantBuilder(battleAdapter),
+		gvg.WithPostBattleSettler(battleAdapter),
+		gvg.WithTransactionProvider(core.txProvider),
+		gvg.WithExitClaimRepository(gvgRepo),
 	)
 	if err != nil {
 		return nil, err

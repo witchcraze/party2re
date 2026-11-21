@@ -279,3 +279,15 @@ func (s *Service) rollIntn(n int) int {
 	}
 	return random.Intn(n)
 }
+
+func (s *Service) rollFloat64() float64 {
+	if f, ok := s.rng.(interface{ Float64() float64 }); ok {
+		return f.Float64()
+	}
+	if s.rng != nil {
+		if n, err := s.rng.Intn(1_000_000); err == nil && n >= 0 {
+			return float64(n) / 1_000_000
+		}
+	}
+	return random.Float64()
+}

@@ -1008,3 +1008,97 @@ func TestApplyPostBattleResult_Job49PreservesRequestStartSP(t *testing.T) {
 		}
 	})
 }
+
+func TestApplyPostBattleResult_ExitBonusRounds(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("item-105 awards 20*round EXP without chapel blessing multiplication", func(t *testing.T) {
+		rng := &scriptedFloatRNG{values: []float64{0.0}}
+		svc, charRepo, invRepo, equipRepo := setupOrbSettlementService(t, false, rng, nil)
+		svc.SetBlessingProvider(&mockBlessingProvider{blessing: "EXP"})
+
+		char := corecharacter.Character{
+			ID: "char-105", Name: "Shoes", JobID: "warrior", Level: 1,
+			Stats: corecharacter.Stats{MaxHP: 50, HP: 50, MaxMP: 10, MP: 10},
+		}
+		_ = charRepo.Update(ctx, char)
+		inv, _ := coreinventory.New(char.ID)
+		shoes, _ := coreitem.NewInstance("item-105", 1)
+		_ = inv.Add(shoes)
+		_ = invRepo.Save(ctx, inv)
+		equip, _ := coreequipment.New(char.ID)
+		equip.Slots[coreitem.SlotAccessory] = shoes.ID
+		_ = equipRepo.Save(ctx, equip)
+
+		resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs:          []string{char.ID},
+			PreserveEarnedRewards: true,
+			RecipientRewards:      map[string]corebattle.Reward{char.ID: {}},
+			ExitFatigue:           10,
+			ExitBonusRounds:       3,
+			BattleResult: corebattle.PartyBattleResult{
+				RemainingHP: map[string]int{char.ID: 40},
+			},
+		})
+		if err != nil {
+			t.Fatalf("ApplyPostBattleResult failed: %v", err)
+		}
+		if resp.GainedExperience[char.ID] != 60 {
+			t.Fatalf("gained EXP = %d, want 60", resp.GainedExperience[char.ID])
+		}
+		updated, _ := charRepo.FindByID(ctx, char.ID)
+		if updated.Tired != 10 || updated.Stats.HP != 40 {
+			t.Fatalf("updated = %+v, want Tired=10 HP=40", updated)
+		}
+	})
+
+	t.Run("item-106 awards int(round*rand*77) gold and round 0 gives 0", func(t *testing.T) {
+		rng := &scriptedFloatRNG{values: []float64{0.5}}
+		svc, charRepo, invRepo, equipRepo := setupOrbSettlementService(t, true, rng, nil)
+
+		char := corecharacter.Character{
+			ID: "char-106", Name: "Chicken", Money: 10,
+			Stats: corecharacter.Stats{MaxHP: 50, HP: 50, MaxMP: 10, MP: 10},
+		}
+		_ = charRepo.Update(ctx, char)
+		inv, _ := coreinventory.New(char.ID)
+		chicken, _ := coreitem.NewInstance("item-106", 1)
+		_ = inv.Add(chicken)
+		_ = invRepo.Save(ctx, inv)
+		equip, _ := coreequipment.New(char.ID)
+		equip.Slots[coreitem.SlotAccessory] = chicken.ID
+		_ = equipRepo.Save(ctx, equip)
+
+		resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs:          []string{char.ID},
+			PreserveEarnedRewards: true,
+			RecipientRewards:      map[string]corebattle.Reward{char.ID: {}},
+			ExitBonusRounds:       3,
+			BattleResult: corebattle.PartyBattleResult{
+				RemainingHP: map[string]int{char.ID: 50},
+			},
+		})
+		if err != nil {
+			t.Fatalf("ApplyPostBattleResult failed: %v", err)
+		}
+		if resp.GainedGold[char.ID] != 115 {
+			t.Fatalf("gained gold = %d, want 115", resp.GainedGold[char.ID])
+		}
+
+		respZero, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+			CharacterIDs:          []string{char.ID},
+			PreserveEarnedRewards: true,
+			RecipientRewards:      map[string]corebattle.Reward{char.ID: {}},
+			ExitBonusRounds:       0,
+			BattleResult: corebattle.PartyBattleResult{
+				RemainingHP: map[string]int{char.ID: 50},
+			},
+		})
+		if err != nil {
+			t.Fatalf("round 0 ApplyPostBattleResult failed: %v", err)
+		}
+		if respZero.GainedGold[char.ID] != 0 || respZero.GainedExperience[char.ID] != 0 {
+			t.Fatalf("round 0 gained = %d/%d, want 0/0", respZero.GainedGold[char.ID], respZero.GainedExperience[char.ID])
+		}
+	})
+}
