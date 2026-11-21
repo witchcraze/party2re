@@ -1,6 +1,8 @@
 package http
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strconv"
@@ -103,7 +105,8 @@ func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
 
 		targetKey := "http:general:" + ip
 		if token := sessionIDFromRequest(r); token != "" {
-			targetKey = "http:auth:" + token
+			sum := sha256.Sum256([]byte(token))
+			targetKey = "http:auth:" + hex.EncodeToString(sum[:])
 		}
 
 		targetRes, targetErr := h.limiter.Allow(r.Context(), targetKey, tokenLimit, tokenWindow)

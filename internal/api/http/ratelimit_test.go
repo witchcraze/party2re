@@ -3,6 +3,8 @@ package http_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -798,5 +800,64 @@ func TestRateLimitMiddleware_GeneralEndpointFailOpenOnError(t *testing.T) {
 		if strings.HasPrefix(k, "http:auth:") {
 			t.Fatalf("whitespace-only Bearer created auth rate-limit key %q", k)
 		}
+	}
+}
+
+func TestRateLimitMiddleware_BearerTokenHashedInKey(t *testing.T) {
+	var authKeys []string
+	limiter := &stubRateLimiter{
+		allowFn: func(ctx context.Context, key string, limit int64, window time.Duration) (ratelimit.Result, error) {
+			if strings.HasPrefix(key, "http:auth:") {
+				authKeys = append(authKeys, key)
+			}
+			return ratelimit.Result{Allowed: true, Limit: limit, Remaining: limit - 1, ResetAfter: window}, nil
+		},
+	}
+	cfg := apihttp.RateLimitConfig{
+		GeneralLimit:  10,
+		GeneralWindow: time.Minute,
+		IPLimit:       50,
+		IPWindow:      time.Minute,
+	}
+	playerSvc := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			return coreplayer.Player{ID: "player-1"}, nil
+		},
+	}
+	router := newTestHandler(t, playerSvc, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithRateLimiter(limiter, cfg),
+	).Router()
+
+	longToken := strings.Repeat("a", 4096)
+	tokens := []string{"secret-session-token-1", "secret-session-token-1", "secret-session-token-2", longToken}
+	for _, tok := range tokens {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		req.RemoteAddr = "192.168.1.100:12345"
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+	}
+
+	if len(authKeys) != len(tokens) {
+		t.Fatalf("expected %d auth rate-limit keys, got %d (%v)", len(tokens), len(authKeys), authKeys)
+	}
+	for i, tok := range tokens {
+		sum := sha256.Sum256([]byte(tok))
+		want := "http:auth:" + hex.EncodeToString(sum[:])
+		if authKeys[i] != want {
+			t.Fatalf("token[%d] key = %q, want %q", i, authKeys[i], want)
+		}
+		if len(authKeys[i]) != len("http:auth:")+sha256.Size*2 {
+			t.Fatalf("token[%d] unexpected key length %d: %q", i, len(authKeys[i]), authKeys[i])
+		}
+		if strings.Contains(authKeys[i], tok) {
+			t.Fatalf("token[%d] raw token leaked in rate-limit key %q", i, authKeys[i])
+		}
+	}
+	if authKeys[0] != authKeys[1] {
+		t.Fatalf("same token produced different keys: %q vs %q", authKeys[0], authKeys[1])
+	}
+	if authKeys[0] == authKeys[2] {
+		t.Fatalf("different tokens collided on key %q", authKeys[0])
 	}
 }
