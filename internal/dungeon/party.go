@@ -1,6 +1,7 @@
 package dungeon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,11 +33,17 @@ type ExpeditionMember struct {
 	ItemIDs         []string                  `json:"item_ids,omitempty"`
 	ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
 	mpKnown         bool
+	itemsKnown      bool
 }
 
 // HasCurrentMP reports whether the member carries an explicit MP snapshot rather than a pre-MP legacy payload.
 func (m ExpeditionMember) HasCurrentMP() bool {
 	return m.mpKnown || m.CurrentMP > 0
+}
+
+// HasInventorySnapshot reports whether the member carries a snapshotted inventory (including empty).
+func (m ExpeditionMember) HasInventorySnapshot() bool {
+	return m.itemsKnown || len(m.ItemIDs) > 0
 }
 
 type rawExpeditionMember struct {
@@ -50,7 +57,7 @@ type rawExpeditionMember struct {
 	MaxMP           *int                      `json:"max_mp,omitempty"`
 	AccumulatedExp  int                       `json:"accumulated_exp"`
 	AccumulatedGold int                       `json:"accumulated_gold"`
-	ItemIDs         []string                  `json:"item_ids,omitempty"`
+	ItemIDs         json.RawMessage           `json:"item_ids,omitempty"`
 	ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
 }
 
@@ -68,8 +75,23 @@ func (m *ExpeditionMember) UnmarshalJSON(data []byte) error {
 		MaxHP:           raw.MaxHP,
 		AccumulatedExp:  raw.AccumulatedExp,
 		AccumulatedGold: raw.AccumulatedGold,
-		ItemIDs:         raw.ItemIDs,
 		ConsumedItems:   raw.ConsumedItems,
+	}
+	if trimmed := bytes.TrimSpace(raw.ItemIDs); len(trimmed) > 0 {
+		// Valkey Lua cjson encodes an empty nested array as "{}".
+		if bytes.Equal(trimmed, []byte("{}")) {
+			m.ItemIDs = []string{}
+			m.itemsKnown = true
+		} else {
+			var ids []string
+			if err := json.Unmarshal(trimmed, &ids); err != nil {
+				return err
+			}
+			if ids != nil {
+				m.ItemIDs = ids
+				m.itemsKnown = true
+			}
+		}
 	}
 	if raw.CurrentMP != nil {
 		m.CurrentMP = *raw.CurrentMP
@@ -82,9 +104,23 @@ func (m *ExpeditionMember) UnmarshalJSON(data []byte) error {
 }
 
 func EncodeMembers(members []ExpeditionMember) string {
-	raw := make([]rawExpeditionMember, len(members))
+	type encodedMember struct {
+		CharacterID     string                    `json:"character_id"`
+		Name            string                    `json:"name"`
+		JobID           string                    `json:"job_id"`
+		Level           int                       `json:"level"`
+		CurrentHP       int                       `json:"current_hp"`
+		MaxHP           int                       `json:"max_hp"`
+		CurrentMP       *int                      `json:"current_mp,omitempty"`
+		MaxMP           *int                      `json:"max_mp,omitempty"`
+		AccumulatedExp  int                       `json:"accumulated_exp"`
+		AccumulatedGold int                       `json:"accumulated_gold"`
+		ItemIDs         *[]string                 `json:"item_ids,omitempty"`
+		ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	}
+	raw := make([]encodedMember, len(members))
 	for i, m := range members {
-		entry := rawExpeditionMember{
+		entry := encodedMember{
 			CharacterID:     m.CharacterID,
 			Name:            m.Name,
 			JobID:           m.JobID,
@@ -93,8 +129,14 @@ func EncodeMembers(members []ExpeditionMember) string {
 			MaxHP:           m.MaxHP,
 			AccumulatedExp:  m.AccumulatedExp,
 			AccumulatedGold: m.AccumulatedGold,
-			ItemIDs:         m.ItemIDs,
 			ConsumedItems:   m.ConsumedItems,
+		}
+		if m.HasInventorySnapshot() {
+			ids := m.ItemIDs
+			if ids == nil {
+				ids = []string{}
+			}
+			entry.ItemIDs = &ids
 		}
 		if m.HasCurrentMP() {
 			currMP := m.CurrentMP
@@ -168,8 +210,21 @@ func (s *Service) startRoster(
 		return nil, ErrDungeonNotFound
 	}
 
+	if len(memberIDs) == 0 {
+		return nil, ErrPartyEmpty
+	}
 	if len(memberIDs) > 4 {
 		return nil, ErrTooManyPartyMembers
+	}
+	seen := make(map[string]bool, len(memberIDs))
+	for _, mID := range memberIDs {
+		if strings.TrimSpace(mID) == "" || seen[mID] {
+			return nil, ErrForbidden
+		}
+		seen[mID] = true
+	}
+	if !seen[leaderCharID] {
+		return nil, ErrForbidden
 	}
 
 	if len(dungeon.Variants) == 0 {
@@ -242,11 +297,13 @@ func (s *Service) startRoster(
 		}
 
 		var itemIDs []string
+		itemsKnown := false
 		if s.invRepo != nil {
 			inv, err := s.invRepo.FindByCharacterID(ctx, char.ID)
 			if err != nil {
 				return nil, err
 			}
+			itemsKnown = true
 			maxHP, maxMP = battle.HeldVitalityMaxima(inv, maxHP, maxMP)
 			for _, it := range inv.Items {
 				if it.Quantity > 0 {
@@ -266,6 +323,7 @@ func (s *Service) startRoster(
 			MaxMP:       maxMP,
 			ItemIDs:     itemIDs,
 			mpKnown:     true,
+			itemsKnown:  itemsKnown,
 		})
 	}
 

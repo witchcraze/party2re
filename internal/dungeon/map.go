@@ -57,7 +57,7 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 		actorFound = true
 		hasScoutJob = isScoutingJob(m.JobID)
 		hasGoggles = hasScopeGoggles(m.ItemIDs)
-		needsInventory = len(m.ItemIDs) == 0
+		needsInventory = !m.HasInventorySnapshot()
 		scoutReason = "Scouting Job (" + m.JobID + "): " + m.Name
 		goggleReason = "Item 197 (Scope Goggles): " + m.Name
 	}
