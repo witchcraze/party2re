@@ -400,6 +400,37 @@ func TestNPCDistinctSourceNamesWithSameDisplayStringStaySeparate(t *testing.T) {
 		!choices[3].Custom {
 		t.Fatalf("ambiguous custom display name overwrote job entries: %+v", choices)
 	}
+
+	// Late CMP settlement uses source command identity rather than Go display equality.
+	for _, tc := range []struct {
+		draw       float64
+		wantID     string
+		wantCustom bool
+		wantMP     int
+		wantCMP    int
+		wantTemp   corebattle.TemporaryEffect
+	}{
+		{0.30, "job-2-entry-1", false, 0, 100, ""},
+		{0.55, "job-83-entry-0", false, 0, 100, ""},
+		{0.85, "npc-custom", true, 3, 80, corebattle.TemporaryDefense},
+	} {
+		s, f, d := setup()
+		d.RegisterDefenseGems()
+		s.Actors[0].CMP = 100
+		s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+			CustomName: "agile-strike",
+			Gems:       [3]string{"gem_guard_1"},
+			GemCosts:   [3]int{20},
+			CustomCost: 20,
+		}
+		beforeEnemyHP := s.Actors[1].HP
+		res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: tc.draw})
+		if err != nil || res.ID != tc.wantID || res.Custom != tc.wantCustom ||
+			s.Actors[0].MP != tc.wantMP || s.Actors[0].CMP != tc.wantCMP ||
+			s.Actors[0].Temporary != tc.wantTemp || (tc.wantCustom == (s.Actors[1].HP < beforeEnemyHP)) {
+			t.Fatalf("ApplyNPCAction draw=%v: res=%+v actor=%+v enemyHP=%d err=%v", tc.draw, res, s.Actors[0], s.Actors[1].HP, err)
+		}
+	}
 }
 
 func TestNPCContextDependentSourceNamesAndCustomCollision(t *testing.T) {
@@ -509,5 +540,114 @@ func TestNPCSourceKeysCoverRegisteredTables(t *testing.T) {
 	}
 	if k1, k2 := EntrySourceKey("job-84-entry-2", false), EntrySourceKey("job-84-entry-2", true); k1 == "" || k2 == "" || k1 == k2 {
 		t.Fatalf("unexpected job-84-entry-2 source keys: %q vs %q", k1, k2)
+	}
+}
+
+func TestNPCLateCMPSourceIdentitySettlement(t *testing.T) {
+	// Original-name match deducts CMP even when insufficient CMP prevents custom binding.
+	for _, tc := range []struct {
+		name, custom string
+		burn         bool
+		wantCMP      int
+		wantEnemyHP  int
+	}{
+		{"base source match charges CMP without custom binding", "ほのおのこぶし", false, -10, 910},
+		{"base non-match leaves CMP unchanged", "ブレイズストライク", false, 10, 910},
+		{"burn source match charges CMP without custom binding", "ブレイズストライク", true, -10, 888},
+		{"burn non-match leaves CMP unchanged", "ほのおのこぶし", true, 10, 888},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, c, f, d := npcSelectionFixture()
+			s.Actors[1].Defense, s.Actors[1].BaseStats.Defense = 0, 0
+			d.RegisterLateBreathSong(&corebattle.LateBreathSongContext{
+				DamageContext: c.DamageContext,
+				BurnStrike:    tc.burn,
+				HeldBooks:     map[string]string{"self": "none"},
+			})
+			d.RegisterDefenseGems()
+			s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-84", SP: 50, OldJobID: "starter"}
+			s.Actors[0].MP, s.Actors[0].CMP = 30, 10
+			s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+				CustomName: tc.custom,
+				Gems:       [3]string{"gem_guard_1"},
+				GemCosts:   [3]int{20},
+				CustomCost: 20,
+			}
+			choices, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{})
+			if err != nil || len(choices) != 4 || choices[3].Custom {
+				t.Fatalf("choices=%+v err=%v", choices, err)
+			}
+			res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &damageGemDraws{t: t, draws: []float64{3.0 / 4.0, 0, 0}})
+			if err != nil || res.ID != "job-84-entry-2" || res.Custom ||
+				s.Actors[0].MP != 4 || s.Actors[0].CMP != tc.wantCMP || s.Actors[1].HP != tc.wantEnemyHP {
+				t.Fatalf("res=%+v actor=%+v enemyHP=%d wantCMP=%d err=%v", res, s.Actors[0], s.Actors[1].HP, tc.wantCMP, err)
+			}
+		})
+	}
+
+	// Unambiguous display compatibility retains CMP deduction without custom binding.
+	s, _, f, d := npcSelectionFixture()
+	d.RegisterDefenseGems()
+	s.Actors[0].CMP = 10
+	s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+		CustomName: "normal-attack",
+		Gems:       [3]string{"gem_guard_1"},
+		GemCosts:   [3]int{20},
+		CustomCost: 20,
+	}
+	res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: 0})
+	if err != nil || res.ID != "npc-normal-attack" || res.Custom || s.Actors[0].CMP != -10 {
+		t.Fatalf("unambiguous display fallback: res=%+v actor=%+v err=%v", res, s.Actors[0], err)
+	}
+
+	// Ambiguous display name without custom binding leaves CMP unchanged on both entries.
+	for _, draw := range []float64{0.4, 0.7} {
+		s, c, f, d := npcSelectionFixture()
+		d.RegisterDualAgility(&corebattle.DualAgilityContext{DamageContext: c.DamageContext})
+		d.RegisterDefenseGems()
+		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-02", SP: 5, OldJobID: "job-83", OldSP: 5}
+		s.Actors[0].MP, s.Actors[0].CMP = 3, 10
+		s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+			CustomName: "agile-strike",
+			Gems:       [3]string{"gem_guard_1"},
+			GemCosts:   [3]int{20},
+			CustomCost: 20,
+		}
+		res, err := d.ApplyNPCAction(&s, &f, NPCDefaultSeed(), &npcSelectionRNG{value: draw})
+		if err != nil || res.Custom || s.Actors[0].MP != 0 || s.Actors[0].CMP != 10 {
+			t.Fatalf("draw=%v: res=%+v actor=%+v err=%v", draw, res, s.Actors[0], err)
+		}
+	}
+
+	// Full ApplyNPCOperation path uses the same resolved source-identity CMP settlement.
+	registerDualAgility := func(d *BattleDefinitions, f *corebattle.CallbackContext) {
+		d.RegisterNPCCallbacks(PlayerCallbackContexts{
+			BaseGuard:   &corebattle.BaseGuardContext{DamageContext: *f.Damage},
+			DualAgility: &corebattle.DualAgilityContext{DamageContext: *f.Damage},
+		}, f)
+	}
+	for _, tc := range []struct {
+		draw    float64
+		wantID  string
+		wantMP  int
+		wantCMP int
+	}{
+		{0.30, "job-2-entry-1", 0, 100},
+		{0.55, "job-83-entry-0", 0, 100},
+		{0.85, "npc-custom", 3, 80},
+	} {
+		s, op := runNPCFixture(t)
+		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-02", SP: 5, OldJobID: "job-83", OldSP: 5}
+		s.Actors[0].MP, s.Actors[0].CMP = 3, 100
+		s.Actors[0].NPCLoadout = &corebattle.NPCLoadout{
+			CustomName: "agile-strike",
+			Gems:       [3]string{"gem_guard_1"},
+			GemCosts:   [3]int{20},
+			CustomCost: 20,
+		}
+		got, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), registerDualAgility, &npcSelectionRNG{value: tc.draw})
+		if err != nil || !got.NormalAction || got.Choice.ID != tc.wantID || s.Actors[0].MP != tc.wantMP || s.Actors[0].CMP != tc.wantCMP {
+			t.Fatalf("ApplyNPCOperation draw=%v: got=%+v actor=%+v err=%v", tc.draw, got, s.Actors[0], err)
+		}
 	}
 }
