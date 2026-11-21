@@ -61,7 +61,7 @@ func TestHomeLetterCommandsAreOfferedOnlyInOwnedMailboxScenes(t *testing.T) {
 	}
 	// The owner's Home observes the unread count; a visitor's does not.
 	store.selection = playercontext.Selection{Destination: "home"}
-	if _, response := navigationGET(t, router); decodeHomeData(t, response).View.Private.UnreadLetterCount != 1 {
+	if _, response := navigationGET(t, router); decodeSceneData[HomeSceneData](t, response).View.Private.UnreadLetterCount != 1 {
 		t.Fatal("owned Home lacks the unread letter count")
 	}
 	store.selection = playercontext.Selection{Destination: "home", Subject: playercontext.Subject{Kind: "home", ID: "other"}}

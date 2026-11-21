@@ -55,7 +55,7 @@ func TestHomePlaceLogAndMembersAreScopedToObservedOwner(t *testing.T) {
 	guest.char.ID, guest.char.Name = "guest", "Guest"
 	guest.pets = f.pets
 	guestStore.selection.Subject = playercontext.Subject{Kind: "home", ID: "hero"}
-	if status, visitor := navigationGETForActor(t, guestRouter, "guest"); status != 200 || decodeHomeData(t, visitor).View.IsOwner || !reflect.DeepEqual(visitor.Scene.PlaceLog, owner.Scene.PlaceLog) || !slices.Equal(visitor.Scene.Members, wantMembers) {
+	if status, visitor := navigationGETForActor(t, guestRouter, "guest"); status != 200 || decodeSceneData[HomeSceneData](t, visitor).View.IsOwner || !reflect.DeepEqual(visitor.Scene.PlaceLog, owner.Scene.PlaceLog) || !slices.Equal(visitor.Scene.Members, wantMembers) {
 		t.Fatalf("visitor: %d %+v", status, visitor.Scene)
 	}
 	if status, raw := gatewayRequest(t, guestRouter, "guest", "session", "application/json", `{"action":"place_whisper","params":{"recipient_name":"Hero","text":"private in A"}}`, nil); status != 200 {
