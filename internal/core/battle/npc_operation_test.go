@@ -149,3 +149,34 @@ func TestNPCPoisonAndProducerGatesPrecedeMutation(t *testing.T) {
 	}
 	rng.done()
 }
+
+func TestNPCActionPlanSelectChoiceBounds(t *testing.T) {
+	if _, err := (NPCActionPlan{}).SelectChoice(nil); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("nil rng err=%v, want %v", err, ErrInvalidRequest)
+	}
+	if _, err := (NPCActionPlan{}).SelectChoice(&targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {
+		t.Fatalf("empty choices err=%v, want %v", err, ErrUnsupportedEffect)
+	}
+	plan := NPCActionPlan{Choices: []NPCChoice{
+		{CallbackBinding: CallbackBinding{CallbackEntry: CallbackEntry{ID: "first"}}},
+		{CallbackBinding: CallbackBinding{CallbackEntry: CallbackEntry{ID: "second"}}},
+		{CallbackBinding: CallbackBinding{CallbackEntry: CallbackEntry{ID: "third"}}},
+	}}
+	for _, tc := range []struct {
+		draw float64
+		want string
+	}{
+		{-0.5, "first"},
+		{0.0, "first"},
+		{0.5, "second"},
+		{0.999, "third"},
+		{1.0, "third"},
+	} {
+		rng := &targetRNG{t: t, draws: []float64{tc.draw}}
+		got, err := plan.SelectChoice(rng)
+		if err != nil || got.ID != tc.want {
+			t.Fatalf("draw=%v: got=%+v want=%q err=%v", tc.draw, got, tc.want, err)
+		}
+		rng.done()
+	}
+}

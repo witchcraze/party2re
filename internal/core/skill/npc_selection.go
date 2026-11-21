@@ -14,13 +14,6 @@ import (
 // Callbacks and definition ports are rebuilt per request, never cached on actors.
 type NPCChoice = corebattle.NPCChoice
 
-// NPCActionResult carries the request-local table left by source construction.
-// The next request starts from its mode seed; only a same-request repeat uses it.
-type NPCActionResult struct {
-	NPCChoice
-	NextSeed []corebattle.CallbackBinding
-}
-
 // NPCDefaultSeed belongs to the request's mode, independently of job0's SP gates.
 // A repeated response in the same request receives the previous table as seed.
 func NPCDefaultSeed() []corebattle.CallbackBinding {
@@ -151,22 +144,4 @@ func (d BattleDefinitions) npcChoicePool(s *corebattle.LifetimeState, c *corebat
 		choices = append(choices, choice)
 	}
 	return corebattle.NPCActionPlan{Choices: choices, NextSeed: previous, Catalog: d.Invocations}, nil
-}
-
-// ApplyNPCAction derives execution from the same server-owned discovery pool.
-// Costs are late, after a successful callback, including accepted no-effect.
-// Status/temporary checks precede this boundary; outer tails follow it.
-func (d BattleDefinitions) ApplyNPCAction(s *corebattle.LifetimeState, c *corebattle.CallbackContext, seed []corebattle.CallbackBinding, rng random.Generator) (NPCActionResult, error) {
-	plan, err := d.npcChoicePool(s, c, seed)
-	if err != nil {
-		return NPCActionResult{}, err
-	}
-	if err := s.ValidateNPCChoices(c, plan, rng); err != nil {
-		return NPCActionResult{}, err
-	}
-	choice := plan.Choices[int(rng.Float64()*float64(len(plan.Choices)))]
-	if err := s.ApplyNPCChoice(c, plan.Catalog, choice, rng); err != nil {
-		return NPCActionResult{}, err
-	}
-	return NPCActionResult{NPCChoice: choice, NextSeed: plan.NextSeed}, nil
 }
