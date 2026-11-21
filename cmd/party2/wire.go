@@ -53,6 +53,7 @@ func wireApp(
 	}
 	soc.home.SetCompanionPhraseLimit(cfg.Home.CompanionPhraseLimit)
 	soc.home.SetLetterLimits(cfg.Home.LetterLogLimit, cfg.Home.LetterMaxLength)
+	home.WithBaseSleepDuration(cfg.Home.SleepBase)(soc.home)
 	soc.placeLog = placelog.New(valkeyClient, cfg.PlaceLog)
 	soc.placeMembers = placelog.NewMembers(valkeyClient, cfg.PlaceMemberTTL)
 	referrals := referralDeliveryAdapter{depots: econ.depotRepo, home: soc.home, items: core.itemCatalog}

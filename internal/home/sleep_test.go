@@ -111,10 +111,13 @@ func (m *mockCostumeResetter) ResetCostume(ctx context.Context, characterID stri
 
 type mockOnlineCounter struct {
 	count int
+	err   error
+	calls int
 }
 
 func (m *mockOnlineCounter) GetOnlineCount(ctx context.Context) (int, error) {
-	return m.count, nil
+	m.calls++
+	return m.count, m.err
 }
 
 func TestCalculateSleepDuration(t *testing.T) {
@@ -289,7 +292,7 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
 		WithJobStateRestorer(jobSvc),
 		WithBaseSleepDuration(10*time.Millisecond),
@@ -355,7 +358,7 @@ func TestSleep_PersistentJobMemoryRetained(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
 		WithJobStateRestorer(jobSvc),
 		WithBaseSleepDuration(10*time.Millisecond),
@@ -417,7 +420,7 @@ func TestSleep_VisitingPrivateHome(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
 		WithBaseSleepDuration(10*time.Millisecond),
 	)
@@ -505,7 +508,7 @@ func TestSleep_JobMemoryRevertUpdateErrorPropagates(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
 		WithBaseSleepDuration(10*time.Millisecond),
 	)
@@ -554,7 +557,7 @@ func TestSleep_JobStateRestorerErrorPropagates(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
 		WithJobStateRestorer(jobRestorer),
 		WithBaseSleepDuration(10*time.Millisecond),
@@ -618,7 +621,7 @@ func TestSleep_TransactionalJobMemoryReversal(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charReader,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithJobStateRestorer(jobSvc),
 		WithTransactionRunner(runner),
 		WithBaseSleepDuration(10*time.Millisecond),
@@ -673,7 +676,7 @@ func TestSleep_TransactionalJobStateRestorerFailureRollback(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charReader,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithJobStateRestorer(failingJobRestorer),
 		WithTransactionRunner(runner),
 		WithBaseSleepDuration(10*time.Millisecond),
@@ -719,7 +722,7 @@ func TestWake_ResetsCostume(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
 		WithBaseSleepDuration(10*time.Millisecond),
 	)
@@ -764,7 +767,7 @@ func TestWake_ResetsDailyOnceDungeon(t *testing.T) {
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
-		WithTimer(timerSvc),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
 	)
 	if err != nil {
@@ -877,7 +880,7 @@ func TestWake_PropagatesHookErrors_AndDoesNotFinalizeRecovery(t *testing.T) {
 			svc, err := NewService(
 				newMockHomeRepo(),
 				charRepo,
-				WithTimer(mt),
+				WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt),
 				WithCharacterUpdater(charRepo),
 				WithFullnessResetter(fullness),
 				WithBlessingCleaner(blessing),
@@ -948,7 +951,7 @@ func TestWake_HealthyContrast_CompletesAllHooksAndClearsRecovery(t *testing.T) {
 	svc, err := NewService(
 		newMockHomeRepo(),
 		charRepo,
-		WithTimer(mt),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt),
 		WithCharacterUpdater(charRepo),
 		WithFullnessResetter(fullness),
 		WithBlessingCleaner(blessing),
@@ -1013,7 +1016,7 @@ func TestWake_RetryAfterHookFailure(t *testing.T) {
 	svc, err := NewService(
 		newMockHomeRepo(),
 		charRepo,
-		WithTimer(mt),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt),
 		WithCharacterUpdater(charRepo),
 		WithFullnessResetter(fullness),
 	)
@@ -1058,7 +1061,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 
 	t.Run("duration read failure propagates", func(t *testing.T) {
 		mt := &mockTimer{getRemainingLockErr: errors.New("valkey sleep lock failure")}
-		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1070,7 +1073,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 
 	t.Run("pending-recovery read failure propagates when duration lock expired", func(t *testing.T) {
 		mt := &mockTimer{isLockedErr: errors.New("valkey asleep lock failure")}
-		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1084,7 +1087,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 		mt := &mockTimer{}
 		_ = mt.SetLock(ctx, timer.CategorySleep, "c1", 10*time.Minute)
 		_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
-		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1100,7 +1103,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 	t.Run("pending wake contrast when duration lock expired but asleep locked", func(t *testing.T) {
 		mt := &mockTimer{}
 		_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
-		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1115,7 +1118,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 
 	t.Run("awake contrast when neither lock active", func(t *testing.T) {
 		mt := &mockTimer{}
-		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1132,7 +1135,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 		dbReadErr := errors.New("sql pending_wake read failure")
 		reader := &failingCharReader{err: dbReadErr}
 		mt := &mockTimer{}
-		svc, err := NewService(newMockHomeRepo(), reader, WithTimer(mt))
+		svc, err := NewService(newMockHomeRepo(), reader, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1152,7 +1155,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 			"c1": {ID: "c1", Name: "Hero", PendingWake: true},
 		}}
 		mt := &mockTimer{}
-		svc, err := NewService(newMockHomeRepo(), reader, WithTimer(mt))
+		svc, err := NewService(newMockHomeRepo(), reader, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1165,7 +1168,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 	t.Run("true non-existent character returns ErrCharacterNotFound", func(t *testing.T) {
 		reader := &mockCharReader{chars: map[string]corecharacter.Character{}}
 		mt := &mockTimer{}
-		svc, err := NewService(newMockHomeRepo(), reader, WithTimer(mt))
+		svc, err := NewService(newMockHomeRepo(), reader, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1265,7 +1268,7 @@ func TestWake_PostClaimRecheckReadFailures(t *testing.T) {
 		svc, err := NewService(
 			newMockHomeRepo(),
 			reader,
-			WithTimer(mt),
+			WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt),
 			WithCharacterUpdater(charRepo),
 			WithFullnessResetter(fullness),
 			WithBlessingCleaner(blessing),
@@ -1333,7 +1336,7 @@ func TestWake_PostClaimRecheckReadFailures(t *testing.T) {
 		svc, err := NewService(
 			newMockHomeRepo(),
 			charRepo,
-			WithTimer(ct),
+			WithOnlineCounter(&mockOnlineCounter{}), WithTimer(ct),
 			WithCharacterUpdater(charRepo),
 			WithFullnessResetter(fullness),
 			WithBlessingCleaner(blessing),
@@ -1396,7 +1399,7 @@ func TestWake_PostClaimRecheckReadFailures(t *testing.T) {
 		svc, err := NewService(
 			newMockHomeRepo(),
 			reader,
-			WithTimer(mt),
+			WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt),
 			WithCharacterUpdater(charRepo),
 			WithFullnessResetter(fullness),
 		)

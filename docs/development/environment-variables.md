@@ -21,6 +21,7 @@ services:
       PARTY2_HOME_COMPANION_PHRASE_LIMIT: "30"
       PARTY2_HOME_LETTER_LOG_LIMIT: "30"
       PARTY2_HOME_LETTER_MAX_LENGTH: "500"
+      PARTY2_HOME_SLEEP_BASE_SECONDS: "300"
       PARTY2_ACTION_WAIT_SECONDS: "4"
       PARTY2_PLACE_LOG_LIMIT: "30"
       PARTY2_PLACE_LOG_TTL_HOURS: "168"
@@ -45,6 +46,7 @@ services:
 | `PARTY2_HOME_COMPANION_PHRASE_LIMIT` | Companion phrases kept per character (default `30`). The oldest phrases are removed beyond the limit. An unset, empty, non-integer, overflowing, zero or negative value uses `30`, and an invalid value logs a warning. See [Home design](../design/home.md#3-companion-greeting-phrases--resident-companions-character_companion_phrases-home_members). | `50` |
 | `PARTY2_HOME_LETTER_LOG_LIMIT` | Letters kept in each inbox and outbox (default `30`). The oldest letters leave a box beyond the limit on its next send. An unset, empty, non-integer, overflowing, zero or negative value uses `30`, and an invalid value logs a warning. See [Home design](../design/home.md#letter-settings). | `50` |
 | `PARTY2_HOME_LETTER_MAX_LENGTH` | Maximum letter body length, counted after legacy HTML escaping (default `500`). Guild notices must also fit. A stored body above about 64 KiB fails. An unset, empty, non-integer, overflowing, zero or negative value uses `500`, and an invalid value logs a warning. See [Home design](../design/home.md#letter-settings). | `1000` |
+| `PARTY2_HOME_SLEEP_BASE_SECONDS` | Base sleep duration in seconds before population scaling (default `300`). Unset or empty uses `300`; any other value must be a positive integer whose triple fits a Go duration, otherwise startup fails. See [Home design](../design/home.md#5-resting--sleeping-sleepcgi-homecgi). | `120` |
 | `PARTY2_ACTION_WAIT_SECONDS` | Seconds every Gateway command except rescue, wake, speech and `presence_refresh` is blocked after a successful command (default `4`, legacy `$act_time`). An unset, empty, non-integer, overflowing, zero or negative value uses `4`, and an invalid value logs a warning. See [action wait](../architecture/place-log.md#action-wait). | `2` |
 | `PARTY2_PLACE_LOG_LIMIT` | Rows kept in each place log (default `30`, legacy `$max_log`). Older rows are trimmed on the next append. An unset, empty, non-integer, overflowing, zero or negative value uses `30`, and an invalid value logs a warning. See [place log](../architecture/place-log.md#place-log). | `100` |
 | `PARTY2_PLACE_LOG_TTL_HOURS` | Hours a place log is kept after its last append (default `168`, 7 days). Idle home, guild and room logs expire. An unset, empty, non-integer, overflowing, zero or negative value uses `168`, and an invalid value logs a warning. See [place log](../architecture/place-log.md#place-log). | `72` |

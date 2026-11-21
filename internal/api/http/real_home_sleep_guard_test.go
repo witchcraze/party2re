@@ -202,6 +202,10 @@ func (c *inMemoryRealCharRepo) Update(ctx context.Context, char corecharacter.Ch
 	return nil
 }
 
+type realZeroPresence struct{}
+
+func (realZeroPresence) GetOnlineCount(context.Context) (int, error) { return 0, nil }
+
 func setupRealHomeGuardTest(
 	t *testing.T,
 	timerSvc *inMemoryRealTimer,
@@ -214,6 +218,7 @@ func setupRealHomeGuardTest(
 		&inMemoryRealHomeRepo{},
 		charRepo,
 		home.WithTimer(timerSvc),
+		home.WithOnlineCounter(realZeroPresence{}),
 		home.WithCharacterUpdater(charRepo),
 	)
 	if err != nil {

@@ -138,7 +138,7 @@ func TestHomeGatewaySuccessSurvivesRefreshFailure(t *testing.T) {
 				if status != 200 || f.executions != 1 || string(got["success"]) != "true" || len(got["result"]) == 0 || string(got["context"]) != "null" || !strings.Contains(string(got["context_error"]), "CONTEXT_REFRESH_FAILED") {
 					t.Fatalf("lost success/result: %d %s", status, got)
 				}
-				if action == "home_sleep" && !strings.Contains(string(got["result"]), `"duration_seconds":60`) {
+				if action == "home_sleep" && !strings.Contains(string(got["result"]), `"duration_seconds":300`) {
 					t.Fatal("lost sleep result")
 				}
 				if action == "home_wake" && (f.updates != 1 || f.char.Stats.HP != 100 || !strings.Contains(string(got["result"]), `"success":true`)) {

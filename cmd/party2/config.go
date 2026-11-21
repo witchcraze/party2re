@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ type Config struct {
 		CompanionPhraseLimit int
 		LetterLogLimit       int
 		LetterMaxLength      int
+		SleepBase            time.Duration
 	}
 	PlaceLog placelog.Config
 	// PlaceMemberTTL is the legacy $limit_member_time.
@@ -74,6 +76,11 @@ func ConfigFromEnv() (Config, error) {
 		maxPlayers = parsed
 	}
 
+	sleepBase, err := parseSleepBase(os.Getenv("PARTY2_HOME_SLEEP_BASE_SECONDS"))
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		DB:     dbCfg,
 		Valkey: valkey.ConfigFromEnvironment(),
@@ -97,10 +104,12 @@ func ConfigFromEnv() (Config, error) {
 			CompanionPhraseLimit int
 			LetterLogLimit       int
 			LetterMaxLength      int
+			SleepBase            time.Duration
 		}{
 			CompanionPhraseLimit: resolvePositiveInt("PARTY2_HOME_COMPANION_PHRASE_LIMIT", os.Getenv("PARTY2_HOME_COMPANION_PHRASE_LIMIT"), home.DefaultCompanionPhraseLimit),
 			LetterLogLimit:       resolvePositiveInt("PARTY2_HOME_LETTER_LOG_LIMIT", os.Getenv("PARTY2_HOME_LETTER_LOG_LIMIT"), home.DefaultLetterLogLimit),
 			LetterMaxLength:      resolvePositiveInt("PARTY2_HOME_LETTER_MAX_LENGTH", os.Getenv("PARTY2_HOME_LETTER_MAX_LENGTH"), home.DefaultLetterMaxLength),
+			SleepBase:            sleepBase,
 		},
 		ActionWait: time.Duration(resolvePositiveInt("PARTY2_ACTION_WAIT_SECONDS", os.Getenv("PARTY2_ACTION_WAIT_SECONDS"), int(playercontext.DefaultActionWait/time.Second))) * time.Second,
 		PlaceLog: placelog.Config{
@@ -109,6 +118,19 @@ func ConfigFromEnv() (Config, error) {
 		},
 		PlaceMemberTTL: time.Duration(resolvePositiveInt("PARTY2_PLACE_MEMBER_SECONDS", os.Getenv("PARTY2_PLACE_MEMBER_SECONDS"), int(placelog.DefaultMemberTTL/time.Second))) * time.Second,
 	}, nil
+}
+
+// parseSleepBase fails startup on invalid input (#1123) because the 3x sleep timer must stay representable.
+func parseSleepBase(raw string) (time.Duration, error) {
+	val := strings.TrimSpace(raw)
+	if val == "" {
+		return home.DefaultBaseSleepDuration, nil
+	}
+	n, err := strconv.ParseInt(val, 10, 64)
+	if err != nil || n <= 0 || n > math.MaxInt64/int64(3*time.Second) {
+		return 0, fmt.Errorf("invalid PARTY2_HOME_SLEEP_BASE_SECONDS %q: want a positive integer number of seconds", val)
+	}
+	return time.Duration(n) * time.Second, nil
 }
 
 // resolvePositiveInt falls back to the default instead of failing startup, as approved in #1125 and #1126.

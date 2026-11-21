@@ -27,6 +27,10 @@ type homeGatewayFixture struct {
 	returnedWake  home.WakeResult
 }
 
+type zeroPresence struct{}
+
+func (zeroPresence) GetOnlineCount(context.Context) (int, error) { return 0, nil }
+
 func newHomeGatewayFixture(t *testing.T) *homeGatewayFixture {
 	f := &homeGatewayFixture{gatewayFixture: newGatewayFixture(t), timers: timer.NewService(nil)}
 	f.char.Name = "Hero"
@@ -34,7 +38,7 @@ func newHomeGatewayFixture(t *testing.T) *homeGatewayFixture {
 	f.char.Tired = 80
 	f.expectedContext = context.WithValue(context.Background(), struct{}{}, "request")
 	service, err := home.NewService(homeGatewayRepository{fixture: f}, f,
-		home.WithTimer(f.timers), home.WithCharacterUpdater(f))
+		home.WithTimer(f.timers), home.WithCharacterUpdater(f), home.WithOnlineCounter(zeroPresence{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +177,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 	if err := json.Unmarshal(got["result"], &result); err != nil {
 		t.Fatal(err)
 	}
-	if !result.Sleeping || result.DurationSeconds != 60 || result.HomeCharacterID != "hero" || result.Message != f.returnedSleep.Message {
+	if !result.Sleeping || result.DurationSeconds != 300 || result.HomeCharacterID != "hero" || result.Message != f.returnedSleep.Message {
 		t.Fatalf("lost service defaults/result: %+v", result)
 	}
 	observation := homeObservation(t, got)

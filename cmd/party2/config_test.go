@@ -255,3 +255,23 @@ func TestConfigStructParallelCreation(t *testing.T) {
 		t.Errorf("unexpected player max players: %d", cfg.Player.MaxPlayers)
 	}
 }
+
+func TestConfigHomeSleepBase(t *testing.T) {
+	t.Setenv("PARTY2_DB_DSN", "test:test@tcp(127.0.0.1:3306)/test_db")
+	t.Setenv("PARTY2_TRUSTED_PROXIES", "")
+	for _, tc := range []struct {
+		raw  string
+		want time.Duration
+	}{{"", 300 * time.Second}, {" ", 300 * time.Second}, {"120", 120 * time.Second}, {"3074457345", 3074457345 * time.Second}} {
+		t.Setenv("PARTY2_HOME_SLEEP_BASE_SECONDS", tc.raw)
+		if cfg, err := ConfigFromEnv(); err != nil || cfg.Home.SleepBase != tc.want {
+			t.Errorf("%q: got %v, %v; want %v", tc.raw, cfg.Home.SleepBase, err, tc.want)
+		}
+	}
+	for _, raw := range []string{"0", "-5", "1.5", "5m", "abc", "3074457346", "99999999999999999999"} {
+		t.Setenv("PARTY2_HOME_SLEEP_BASE_SECONDS", raw)
+		if _, err := ConfigFromEnv(); err == nil {
+			t.Errorf("%q: expected startup error", raw)
+		}
+	}
+}

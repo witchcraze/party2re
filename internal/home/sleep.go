@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	DefaultBaseSleepDuration = 60 * time.Second
+	DefaultBaseSleepDuration = 300 * time.Second
 
 	// sleepRollbackTimeout bounds best-effort SQL/Valkey cleanup when Sleep fails
 	// even if the caller's request context was canceled or timed out.
@@ -66,6 +66,9 @@ func CalculateSleepDuration(base time.Duration, onlineCount int) time.Duration {
 func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (SleepResult, error) {
 	if s.timer == nil {
 		return SleepResult{}, errors.New("timer service not configured")
+	}
+	if s.onlineCounter == nil {
+		return SleepResult{}, errors.New("online counter not configured")
 	}
 	if s.sleepAdmission != nil {
 		if err := s.sleepAdmission(ctx, characterID); err != nil {
@@ -132,11 +135,10 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 		return SleepResult{}, ErrAlreadySleeping
 	}
 
-	onlineCount := 0
-	if s.onlineCounter != nil {
-		if count, err := s.onlineCounter.GetOnlineCount(ctx); err == nil {
-			onlineCount = count
-		}
+	// One observation fixes this cycle's duration before any Sleep effect; failure aborts.
+	onlineCount, err := s.onlineCounter.GetOnlineCount(ctx)
+	if err != nil {
+		return SleepResult{}, err
 	}
 	duration := CalculateSleepDuration(s.baseSleepDuration, onlineCount)
 

@@ -18,7 +18,7 @@ import (
 func newWakeTestService(t *testing.T, tm TimerService, chars map[string]corecharacter.Character) (*Service, *mockCharRepo) {
 	t.Helper()
 	repo := &mockCharRepo{chars: chars}
-	svc, err := NewService(newMockHomeRepo(), repo, WithTimer(tm), WithCharacterUpdater(repo))
+	svc, err := NewService(newMockHomeRepo(), repo, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm), WithCharacterUpdater(repo))
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestWake_HookFailureRetainsPendingWakeInSQL(t *testing.T) {
 			"c1": {ID: "c1", Name: "Hero", Tired: 60, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}, PendingWake: true},
 		},
 	}
-	svc, err := NewService(newMockHomeRepo(), repo, WithTimer(tm), WithCharacterUpdater(repo), WithFullnessResetter(fullness))
+	svc, err := NewService(newMockHomeRepo(), repo, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm), WithCharacterUpdater(repo), WithFullnessResetter(fullness))
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -335,10 +335,10 @@ func TestSleep_TimerSetFailurePreservesTemporaryJobMemoryAndRevertsPendingWake(t
 				var runner *mockTransactionRunner
 				if useRunner {
 					runner = &mockTransactionRunner{chars: chars}
-					svc, err = NewService(newMockHomeRepo(chars), &mockCharReader{chars: chars}, WithTimer(mt), WithTransactionRunner(runner), WithJobStateRestorer(jobSvc))
+					svc, err = NewService(newMockHomeRepo(chars), &mockCharReader{chars: chars}, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt), WithTransactionRunner(runner), WithJobStateRestorer(jobSvc))
 				} else {
 					charRepo = &mockCharRepo{chars: chars}
-					svc, err = NewService(newMockHomeRepo(), charRepo, WithTimer(mt), WithCharacterUpdater(charRepo), WithJobStateRestorer(jobSvc))
+					svc, err = NewService(newMockHomeRepo(), charRepo, WithOnlineCounter(&mockOnlineCounter{}), WithTimer(mt), WithCharacterUpdater(charRepo), WithJobStateRestorer(jobSvc))
 				}
 				if err != nil {
 					t.Fatalf("NewService: %v", err)
@@ -458,7 +458,7 @@ func TestWake_KeepAliveRenewsLeaseDuringSlowHook(t *testing.T) {
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(tm),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 		WithCharacterUpdater(repo),
 		WithWakeClaimTTL(60*time.Millisecond, 20*time.Millisecond),
 	)
@@ -541,7 +541,7 @@ func TestWake_AbortsImmediatelyWhenClaimOwnershipLost(t *testing.T) {
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(tm),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 		WithCharacterUpdater(repo),
 		WithWakeClaimTTL(50*time.Millisecond, 15*time.Millisecond),
 	)
@@ -678,7 +678,7 @@ func TestWake_ClaimLostImmediatelyBeforeDungeonReset_AbortsWithoutAlteringState(
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(tm),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 		WithCharacterUpdater(repo),
 		WithWakeClaimTTL(1*time.Second, 200*time.Millisecond),
 	)
@@ -763,7 +763,7 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(tm),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 		WithCharacterUpdater(repo),
 		WithWakeClaimTTL(50*time.Millisecond, 15*time.Millisecond),
 	)
@@ -876,7 +876,7 @@ func TestWake_CostumeClearedOnSuccessfulWake_MemoryRepository(t *testing.T) {
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(tm),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 		WithCharacterUpdater(repo),
 		WithCostumeResetter(storeSvc),
 	)
@@ -926,7 +926,7 @@ func TestWake_CostumeRefusesUnsafeDeletionWhenTimerNil(t *testing.T) {
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(tm),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 		WithCharacterUpdater(repo),
 		WithCostumeResetter(storeSvc),
 	)
@@ -977,7 +977,7 @@ func TestWake_LegacyCostumeResetter_ExecutesOnValidWake(t *testing.T) {
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(tm),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 		WithCharacterUpdater(repo),
 		WithCostumeResetter(legacyHook),
 	)
@@ -1008,7 +1008,7 @@ func TestWake_PauseImmediatelyAfterOwnershipVerification_PreservesSuccessorNewCo
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(tm),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 		WithCharacterUpdater(repo),
 		WithWakeClaimTTL(50*time.Millisecond, 15*time.Millisecond),
 	)
@@ -1147,7 +1147,7 @@ func TestSleep_KeepAliveRenewsLeaseDuringSlowStartup(t *testing.T) {
 	svc, err := NewService(
 		newMockHomeRepo(),
 		repo,
-		WithTimer(it),
+		WithOnlineCounter(&mockOnlineCounter{}), WithTimer(it),
 		WithCharacterUpdater(repo),
 		WithWakeClaimTTL(60*time.Millisecond, 20*time.Millisecond),
 	)
@@ -1276,7 +1276,7 @@ func TestSleep_ExpiredClaimPreservesSuccessorSleepState(t *testing.T) {
 			svc1, err := NewService(
 				newMockHomeRepo(),
 				repo,
-				WithTimer(it),
+				WithOnlineCounter(&mockOnlineCounter{}), WithTimer(it),
 				WithCharacterUpdater(repo),
 				WithJobStateRestorer(restorer),
 				WithWakeClaimTTL(1*time.Second, 250*time.Millisecond),
@@ -1288,7 +1288,7 @@ func TestSleep_ExpiredClaimPreservesSuccessorSleepState(t *testing.T) {
 			svc2, err := NewService(
 				newMockHomeRepo(),
 				repo,
-				WithTimer(tm),
+				WithOnlineCounter(&mockOnlineCounter{}), WithTimer(tm),
 				WithCharacterUpdater(repo),
 				WithJobStateRestorer(jobSvc),
 			)

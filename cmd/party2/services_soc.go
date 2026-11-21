@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/chapel"
+	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/contest"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
@@ -90,6 +91,14 @@ type socServices struct {
 	exileRepo    *database.ExileRepository
 }
 
+// presenceCounter feeds Home's sleep scaling from the public presence observation.
+type presenceCounter struct{ presence *character.PresenceService }
+
+func (c presenceCounter) GetOnlineCount(ctx context.Context) (int, error) {
+	obs, err := c.presence.Observe(ctx)
+	return obs.OnlineCount, err
+}
+
 func newSocServices(
 
 	db *sql.DB,
@@ -166,6 +175,7 @@ func newSocServices(
 		home.WithEconomy(core.economy),
 		home.WithTransactionProvider(core.txProvider),
 		home.WithGuildPoints(guildRepo),
+		home.WithOnlineCounter(presenceCounter{core.presence}),
 	)
 	if err != nil {
 		return nil, err
