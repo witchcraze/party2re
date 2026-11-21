@@ -47,28 +47,25 @@ Resident companions combine ranch monsters at home and Heaven Wish NPC companion
 
 ### 4. Remote Depot & Inventory Item Usage (`＠つかう`)
 
-Equipment is inspected without consumption. Home recovery uses [Sleep](#5-resting--sleeping-sleepcgi-homecgi), not combat recovery items.
-
 #### Legacy dispatch and consumption contract
 
-**Decision (#1124):** retain observable legacy behavior, including the no-stat consumption of 113/114 and the source-dependent missing-box result. Own Home alone registers `つかう` (`home.cgi:26–39,73–105`). By name it prefers held weapon, armor, then tool, then the first matching Depot entry (`237–340`); Go uses explicit source and instance IDs instead. Categories 0/1/3 do not dispatch callbacks. All 53 category-2 and 3 category-4 entries are accounted for.
+**Decision (#1124):** retain observable legacy behavior, including the no-stat consumption of 113/114 and the source-dependent missing-box result. Own Home alone registers `つかう`. By name it prefers held weapon, armor, then tool, then the first matching Depot entry (`home.cgi:237–340`); Go uses explicit source and instance IDs instead. All 53 category-2 and 3 category-4 entries are accounted for.
 
 - **H2/H4 — held tool** (`284–292`): call without arguments; a nonempty `mes` stops consumption, otherwise clear the held tool. The return value is ignored, and changes made before setting `mes` are not undone.
 - **D2 — Depot category 2** (`298–348`): call while scanning the Depot, before removing the row. `mes` returns without removing it.
 - **D4 — Depot category 4** (`330–373`): **pitfall** — keep the row in the first rewrite, call without arguments, then remove the first remaining row of that item number, with no post-callback `mes` check. This is not consume-before-callback or rollback-on-no-effect.
-- Depot capacity never blocks dispatch: `send_item` (`system.cgi:818–835`) appends rewards to an existing Depot even when full, without inventory routing, collection registration or a self-delivery notice; `get_depot_c` (`1267–1291`) only counts.
-- Go outcomes: `no_effect` rolls back; `consumed` commits and consumes one; where legacy sets `mes` after mutating (item237), the mutations commit, the item is kept and the result is `no_effect`. Appearance writes are ordered by the item transaction's character lock and undone on root-transaction rollback before lock release, only while still current.
+- Depot capacity never blocks dispatch: `send_item` appends rewards to an existing Depot even when full, without inventory routing, collection registration or a self-delivery notice; `get_depot_c` only counts.
 - **Pitfall — random rewards** (items125/126/199/259): each reward selects slot **1 through N−1** of the N-slot list; slot 0 is unreachable and repeated slots keep their weight. Rewards and consumption commit together.
-- **Item237** (`_data.cgi:1994`): below level 99 nothing happens and the item is kept. Otherwise d=EXP−98010, credit trunc(d×U[1,1.5)) capped at 999999 gold, set EXP=98010; d≤0 sets `mes` but still executes those mutations and keeps the item. **Decision:** gold has no lower clamp, so d<0 may leave it negative.
-- **Item058** (`_data.cgi:929–955`): legacy always has a profile file, so the profile write and public news are the normal path.
+- **Pitfall — item237:** when d=EXP−98010 is not positive, legacy sets `mes` but keeps executing, still crediting gold and setting EXP=98010, and the item is kept (Go: committed `no_effect`). **Decision:** gold has no lower clamp, so d<0 may leave it negative.
+- **Item058:** legacy always has a profile file, so the profile write and public news are the normal path.
 
-Open items (`lib/_data.cgi` lines):
+Open items:
 
 | Items | Legacy behavior | Owner |
 | --- | --- | --- |
-| 043 transformation staff (`789–799`) | Uniform monster appearance 001–108, fallback if the image is absent; consumes | #1837 |
-| 231–236, 245 wallpapers (`1940–1993;2002–2010`) | Replace own background with field 0/1/2/4/5/6/8; consumes, no gold or lease prerequisite (unlike the Store's paid wallpaper) | #1836 |
-| 259 sealed key (`2024–2068`) | Prefer held box, otherwise first Depot box. With a box: remove it, deliver 059 plus 2–4 weighted rewards, then consume the key. Without a box: held key kept, Depot key consumed. Full Depot accepts every reward | #1842 |
+| 043 transformation staff | Uniform monster appearance 001–108, fallback if the image is absent; consumes | #1837 |
+| 231–236, 245 wallpapers | Replace own background with field 0/1/2/4/5/6/8; consumes, no gold or lease prerequisite (unlike the Store's paid wallpaper) | #1836 |
+| 259 sealed key | Prefer held box, otherwise first Depot box. With a box: remove it, deliver 059 plus 2–4 weighted rewards, then consume the key. Without a box: held key kept, Depot key consumed. Full Depot accepts every reward | #1842 |
 
 Appearance and wallpaper items use newly authored assets ([asset contract](https://github.com/witchcraze/party2re/issues/654), [resolution](https://github.com/witchcraze/party2re/issues/729)), not legacy images.
 

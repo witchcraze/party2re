@@ -134,7 +134,7 @@ func TestUseHomeItem_RewardBag_BothSourcesDeliverAboveCapacity(t *testing.T) {
 			depots := &mockDepotManager{depots: map[string]depot.Depot{charID: dp}}
 			// Slot 72 of 福袋 is item-125: the bag itself is the reward.
 			svc, err := NewService(newMockHomeRepo(chars), &mockCharReader{chars: chars},
-				WithCharacterUpdater(&mockCharUpdater{chars: chars}),
+				WithCharacterUpdater(&mockCharUpdater{chars: chars}), WithTransactionRunner(&mockTransactionRunner{chars: chars, invs: invs.invs}),
 				WithInventoryManager(invs), WithDepotManager(depots), WithItemCatalog(cat),
 				WithRNG(&scriptedRNG{vals: []int{0, 71}}))
 			if err != nil {

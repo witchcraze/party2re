@@ -143,6 +143,7 @@ func TestRecipeScroll_BasicRecipe_Learn(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(catalog),
@@ -181,7 +182,7 @@ func TestRecipeScroll_BasicRecipe_Learn(t *testing.T) {
 }
 
 func TestRecipeScroll_AdvancedRecipe_Learn(t *testing.T) {
-	ctx, catalog, invMgr, depotMgr, _, charReader, charUpdater, repo := setupRecipeTestEnvironment()
+	ctx, catalog, invMgr, depotMgr, chars, charReader, charUpdater, repo := setupRecipeTestEnvironment()
 
 	inv, _ := coreinventory.New("char-hero")
 	_ = inv.Add(coreitem.Instance{ID: "inst-128", DefinitionID: "item-128", Quantity: 1})
@@ -195,6 +196,7 @@ func TestRecipeScroll_AdvancedRecipe_Learn(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(catalog),
@@ -223,7 +225,7 @@ func TestRecipeScroll_AdvancedRecipe_Learn(t *testing.T) {
 }
 
 func TestRecipeScroll_GodRecipe_Learn(t *testing.T) {
-	ctx, catalog, invMgr, depotMgr, _, charReader, charUpdater, repo := setupRecipeTestEnvironment()
+	ctx, catalog, invMgr, depotMgr, chars, charReader, charUpdater, repo := setupRecipeTestEnvironment()
 
 	inv, _ := coreinventory.New("char-hero")
 	_ = inv.Add(coreitem.Instance{ID: "inst-129", DefinitionID: "item-129", Quantity: 1})
@@ -237,6 +239,7 @@ func TestRecipeScroll_GodRecipe_Learn(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(catalog),
@@ -265,7 +268,7 @@ func TestRecipeScroll_GodRecipe_Learn(t *testing.T) {
 }
 
 func TestRecipeScroll_ExhaustedPool_StillConsumesItem(t *testing.T) {
-	ctx, catalog, invMgr, depotMgr, _, charReader, charUpdater, repo := setupRecipeTestEnvironment()
+	ctx, catalog, invMgr, depotMgr, chars, charReader, charUpdater, repo := setupRecipeTestEnvironment()
 
 	inv, _ := coreinventory.New("char-hero")
 	_ = inv.Add(coreitem.Instance{ID: "inst-127", DefinitionID: "item-127", Quantity: 1})
@@ -279,6 +282,7 @@ func TestRecipeScroll_ExhaustedPool_StillConsumesItem(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(catalog),
@@ -309,7 +313,7 @@ func TestRecipeScroll_ExhaustedPool_StillConsumesItem(t *testing.T) {
 }
 
 func TestRecipeScroll_LearnerUnavailable(t *testing.T) {
-	ctx, catalog, invMgr, depotMgr, _, charReader, charUpdater, repo := setupRecipeTestEnvironment()
+	ctx, catalog, invMgr, depotMgr, chars, charReader, charUpdater, repo := setupRecipeTestEnvironment()
 
 	inv, _ := coreinventory.New("char-hero")
 	_ = inv.Add(coreitem.Instance{ID: "inst-127", DefinitionID: "item-127", Quantity: 1})
@@ -320,6 +324,7 @@ func TestRecipeScroll_LearnerUnavailable(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(catalog),
@@ -341,7 +346,7 @@ func TestRecipeScroll_LearnerUnavailable(t *testing.T) {
 }
 
 func TestRecipeScroll_LearnerUnexpectedError(t *testing.T) {
-	ctx, catalog, invMgr, depotMgr, _, charReader, charUpdater, repo := setupRecipeTestEnvironment()
+	ctx, catalog, invMgr, depotMgr, chars, charReader, charUpdater, repo := setupRecipeTestEnvironment()
 
 	inv, _ := coreinventory.New("char-hero")
 	_ = inv.Add(coreitem.Instance{ID: "inst-127", DefinitionID: "item-127", Quantity: 1})
@@ -356,6 +361,7 @@ func TestRecipeScroll_LearnerUnexpectedError(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(catalog),
@@ -442,7 +448,7 @@ func TestRecipeScroll_WithTransactionRunner(t *testing.T) {
 }
 
 func TestRecipeScroll_DepotConsumption(t *testing.T) {
-	ctx, catalog, invMgr, depotMgr, _, charReader, charUpdater, repo := setupRecipeTestEnvironment()
+	ctx, catalog, invMgr, depotMgr, chars, charReader, charUpdater, repo := setupRecipeTestEnvironment()
 
 	dp, _ := depot.NewDepot("char-hero")
 	dp.Items = append(dp.Items, coreitem.Instance{ID: "inst-depot-127", DefinitionID: "item-127", Quantity: 1})
@@ -456,6 +462,7 @@ func TestRecipeScroll_DepotConsumption(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(catalog),

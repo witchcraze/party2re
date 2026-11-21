@@ -39,7 +39,6 @@ var orbItems = map[string]rune{
 
 type InventoryManager interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	Consume(ctx context.Context, characterID, instanceID string, quantity int) (coreinventory.Inventory, error)
 }
 
 type ItemCatalog interface {
@@ -154,172 +153,77 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	if def.UsageCategory == item.UsageCategoryCombatOnly {
 		return nil, fmt.Errorf("%w: %sは戦闘中でしか使えません", ErrCannotUseHere, def.Name)
 	}
-	if def.UsageCategory != item.UsageCategoryNone && !def.UsageCategory.IsUsableAtHome() {
+	effect, ok := homeEffectFor(def.Name)
+	if !ok || (def.UsageCategory != item.UsageCategoryNone && !def.UsageCategory.IsUsableAtHome()) {
 		return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}
-
-	// Validate supported consumable items before transaction
-	_, isOrb := orbItems[def.Name]
-	if _, isBag := rewardBags[def.Name]; !isBag && !isOrb && !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
-		switch def.Name {
-		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石", "未来のカケラ", veteranRewardName, personalityBookName, heavenReinsName, underworldReinsName, lifeBraceletName, sorceryRingName, sacredManaName:
-		default:
-			return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
-		}
+	if s.runner == nil {
+		return nil, ErrTransactionRunnerRequired
 	}
 
-	if s.runner != nil {
-		var resMsg string
-		var kept bool
-		if source == "inventory" {
-			req := economy.TransactionRequest{
-				CharacterID:   characterID,
-				LockInventory: true,
-				CostFunc: func(c corecharacter.Character) (economy.ResourceCost, error) {
-					if homeItemKept(def, c) {
-						return economy.ResourceCost{}, nil
-					}
-					return economy.ResourceCost{ItemInstanceID: instanceID, ItemInstanceQty: 1}, nil
-				},
+	var resMsg string
+	var kept bool
+	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: source == "inventory"}
+	if source == "inventory" {
+		req.CostFunc = func(c corecharacter.Character) (economy.ResourceCost, error) {
+			if homeItemKept(def, c) {
+				return economy.ResourceCost{}, nil
 			}
-			txRes, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-				if kept = homeItemKept(def, tc.Character); kept {
-					if _, ok := tc.Inventory.Find(instanceID); !ok {
-						return ErrItemNotFound
-					}
-				}
-				msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
-				resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
-				if err != nil {
-					return err
-				}
-				return nil
-			})
-			if err != nil {
-				if errors.Is(err, errNoEffect) {
-					// Item had no effect; transaction was rolled back, nothing consumed.
-					return &UseHomeItemResult{
-						Action:    "no_effect",
-						Message:   resMsg,
-						ItemName:  def.Name,
-						Kind:      3,
-						Consumed:  false,
-						Character: &char,
-					}, nil
-				}
-				if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) || errors.Is(err, ErrItemNotFound) {
-					return nil, ErrItemNotFound
-				}
-				if errors.Is(err, economy.ErrCharacterNotFound) {
-					return nil, ErrCharacterNotFound
-				}
-				return nil, err
+			return economy.ResourceCost{ItemInstanceID: instanceID, ItemInstanceQty: 1}, nil
+		}
+	}
+	txRes, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		if kept = homeItemKept(def, tc.Character); kept {
+			if err := s.requireHeld(tc, source, instanceID); err != nil {
+				return err
 			}
-			return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
 		}
-
-		// source == "depot"
-		req := economy.TransactionRequest{
-			CharacterID:   characterID,
-			LockInventory: false,
+		// The effect runs before Depot consumption so that a no-effect sentinel
+		// aborts the transaction without touching the Depot.
+		msg, err := effect(s, tc.Context, &tc.Character, def)
+		resMsg = msg // errNoEffect carries the message
+		if err != nil || kept || source != "depot" {
+			return err
 		}
-		txRes, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			if s.depotMgr == nil {
+		if err := s.depotMgr.ConsumeOne(tc.Context, characterID, instanceID); err != nil {
+			if errors.Is(err, depot.ErrItemNotFound) || errors.Is(err, depot.ErrNotFound) {
 				return ErrItemNotFound
 			}
-			if kept = homeItemKept(def, tc.Character); kept {
-				dp, err := s.depotMgr.FindByCharacterID(tc.Context, characterID)
-				if err != nil {
-					return err
-				}
-				if !slices.ContainsFunc(dp.Items, func(it item.Instance) bool { return it.ID == instanceID }) {
-					return ErrItemNotFound
-				}
-			}
-			// Apply effect before consuming so that a no-effect sentinel aborts
-			// the transaction without touching the depot.
-			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
-			resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
-			if err != nil {
-				return err
-			}
-			if kept {
-				return nil
-			}
-			if err := s.depotMgr.ConsumeOne(tc.Context, characterID, instanceID); err != nil {
-				if errors.Is(err, depot.ErrItemNotFound) || errors.Is(err, depot.ErrNotFound) {
-					return ErrItemNotFound
-				}
-				return err
-			}
-			resMsg = msg
-			return nil
-		})
-		if err != nil {
-			if errors.Is(err, errNoEffect) {
-				// Item had no effect; transaction was rolled back, nothing consumed.
-				return &UseHomeItemResult{
-					Action:    "no_effect",
-					Message:   resMsg,
-					ItemName:  def.Name,
-					Kind:      3,
-					Consumed:  false,
-					Character: &char,
-				}, nil
-			}
-			if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, ErrItemNotFound) {
-				return nil, ErrItemNotFound
-			}
-			if errors.Is(err, economy.ErrCharacterNotFound) {
-				return nil, ErrCharacterNotFound
-			}
-			return nil, err
-		}
-		return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
-	}
-
-	// Fallback path for unit test mocks without runner configured.
-	// Decide consumption before the effect mutates the character.
-	kept := homeItemKept(def, char)
-	var msg string
-	err = economy.WithRollbackScope(ctx, func(scopedCtx context.Context) error {
-		var applyErr error
-		msg, applyErr = s.applyConsumableEffect(scopedCtx, &char, def)
-		if applyErr != nil {
-			return applyErr
-		}
-		if !kept && source == "inventory" && s.invMgr != nil {
-			if _, err := s.invMgr.Consume(scopedCtx, characterID, instanceID, 1); err != nil {
-				return err
-			}
-		} else if !kept && source == "depot" && s.depotMgr != nil {
-			if err := s.depotMgr.ConsumeOne(scopedCtx, characterID, instanceID); err != nil {
-				return err
-			}
-		}
-		if s.charUpdater != nil {
-			if err := s.charUpdater.Update(scopedCtx, char); err != nil {
-				return err
-			}
+			return err
 		}
 		return nil
 	})
-	if err != nil {
-		if errors.Is(err, errNoEffect) {
-			// Item had no effect; skip consumption and return early.
-			return &UseHomeItemResult{
-				Action:    "no_effect",
-				Message:   msg,
-				ItemName:  def.Name,
-				Kind:      3,
-				Consumed:  false,
-				Character: &char,
-			}, nil
-		}
+	switch {
+	case err == nil:
+		return committedHomeItemResult(def, resMsg, kept, &txRes.Character), nil
+	case errors.Is(err, errNoEffect):
+		// Rolled back: nothing consumed or changed.
+		return &UseHomeItemResult{Action: "no_effect", Message: resMsg, ItemName: def.Name, Kind: 3, Character: &char}, nil
+	case errors.Is(err, economy.ErrItemNotFound), errors.Is(err, economy.ErrInsufficientItemQuantity), errors.Is(err, ErrItemNotFound):
+		return nil, ErrItemNotFound
+	case errors.Is(err, economy.ErrCharacterNotFound):
+		return nil, ErrCharacterNotFound
+	default:
 		return nil, err
 	}
+}
 
-	return committedHomeItemResult(def, msg, kept, &char), nil
+// requireHeld rechecks, under the transaction's locks, that a kept item is still held.
+func (s *Service) requireHeld(tc *economy.TxContext, source, instanceID string) error {
+	if source == "inventory" {
+		if _, ok := tc.Inventory.Find(instanceID); !ok {
+			return ErrItemNotFound
+		}
+		return nil
+	}
+	dp, err := s.depotMgr.FindByCharacterID(tc.Context, tc.Character.ID)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(dp.Items, func(it item.Instance) bool { return it.ID == instanceID }) {
+		return ErrItemNotFound
+	}
+	return nil
 }
 
 // committedHomeItemResult reports a committed callback; a kept item reports
@@ -339,128 +243,131 @@ func committedHomeItemResult(def item.Definition, msg string, kept bool, char *c
 	}
 }
 
-func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error) {
-	if isRecipeScrollItem(def.Name) {
-		return s.applyRecipeScrollConsumable(ctx, char, def.Name)
-	}
-	if bag, ok := rewardBags[def.Name]; ok {
-		return s.applyRewardBag(ctx, char, bag)
-	}
-	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name); ok {
-		return costumeMsg, err
-	}
+// homeEffect is one Home callback, run inside the item transaction.
+type homeEffect func(s *Service, ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error)
 
-	if orb, ok := orbItems[def.Name]; ok {
-		added, err := char.AddOrb(orb)
-		if err != nil {
-			return "", err
-		}
-		if !added {
-			return "すでにささげられています", errNoEffect
-		}
-		return def.Name + "を復活の祭壇にささげた！", nil
+// homeEffectFor is the only list of items Home dispatches; anything else is
+// rejected before a transaction starts.
+func homeEffectFor(name string) (homeEffect, bool) {
+	if isRecipeScrollItem(name) {
+		return func(s *Service, ctx context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
+			return s.applyRecipeScrollConsumable(ctx, c, d.Name)
+		}, true
 	}
-
-	var msg string
-
-	switch def.Name {
-	case "命の木の実":
-		v := s.randomInt(4) + 3
-		if char.OverLevel {
-			v = 0
-		}
-		char.Stats.MaxHP += v
-		char.Stats.Clamp(char.OverLevel, char.Level)
-		msg = fmt.Sprintf("%sのHPが %d あがった！", char.Name, v)
-	case "不思議な木の実":
-		v := s.randomInt(4) + 3
-		if char.OverLevel {
-			v = 0
-		}
-		char.Stats.MaxMP += v
-		char.Stats.Clamp(char.OverLevel, char.Level)
-		msg = fmt.Sprintf("%sのMPが %d あがった！", char.Name, v)
-	case "力の種":
-		v := s.randomInt(6) + 1
-		if char.OverLevel {
-			v = 0
-		}
-		char.Stats.Attack += v
-		char.Stats.Clamp(char.OverLevel, char.Level)
-		msg = fmt.Sprintf("%sの攻撃力が %d あがった！", char.Name, v)
-	case "守りの種":
-		v := s.randomInt(6) + 1
-		if char.OverLevel {
-			v = 0
-		}
-		char.Stats.Defense += v
-		char.Stats.Clamp(char.OverLevel, char.Level)
-		msg = fmt.Sprintf("%sの守備力が %d あがった！", char.Name, v)
-	case "素早さの種":
-		v := s.randomInt(6) + 1
-		if char.OverLevel {
-			v = 0
-		}
-		char.Stats.Agility += v
-		char.Stats.Clamp(char.OverLevel, char.Level)
-		msg = fmt.Sprintf("%sの素早さが %d あがった！", char.Name, v)
-	case "スキルの種":
-		v := s.randomInt(3) + 1
-		if err := char.AddSP(v); err != nil {
-			return "", err
-		}
-		msg = fmt.Sprintf("%sのSPが %d あがった！", char.Name, v)
-	case sacredManaName:
-		if err := char.AddSP(200); err != nil {
-			return "", err
-		}
-		msg = fmt.Sprintf("%sのSPが 200 あがった！", char.Name)
-	case "幸せの種":
-		if err := progression.ApplyHappySeed(char); err != nil {
-			return "", err
-		}
-		msg = "次のクエスト時にレベルアップ！"
-	case "ファイト一発", "気合の霊薬":
-		char.ResetTired()
-		msg = fmt.Sprintf("元気全快！%sの疲労が回復した！", char.Name)
-	case heavenReinsName, underworldReinsName:
-		if char.GodVisit != "" {
-			return noEffectMessage, errNoEffect // already admitted; keep the reins
-		}
-		char.GodVisit = corecharacter.GodVisitHeaven
-		msg = fmt.Sprintf("%sは、天馬に乗り天界へと導かれた！", char.Name)
-		if def.Name == underworldReinsName {
-			char.GodVisit = corecharacter.GodVisitUnderworld
-			msg = fmt.Sprintf("%sは、黒い天馬に乗り天界?へと導かれた！", char.Name)
-		}
-	case "小さなメダル":
-		if err := char.AddSmallMedals(1); err != nil {
-			return "", err
-		}
-		msg = "メダル伯爵にメダルを１枚献上しました"
-	case "水晶の原石":
-		if char.WeaponSeal <= 0 {
-			// No seal to remove: return the no-effect sentinel so the caller
-			// knows to skip consumption and rollback the transaction.
-			return noEffectMessage, errNoEffect
-		} else {
-			refund := sealRefundCrystals(char.WeaponSeal)
-			char.WeaponSeal = 0
-			if err := char.AddCrystal(refund); err != nil {
+	if bag, ok := rewardBags[name]; ok {
+		return func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+			return s.applyRewardBag(ctx, c, bag)
+		}, true
+	}
+	if isCostumeItem(name) {
+		return func(s *Service, ctx context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
+			return s.applyCostumeConsumable(ctx, c, d.Name)
+		}, true
+	}
+	if orb, ok := orbItems[name]; ok {
+		return func(_ *Service, _ context.Context, c *corecharacter.Character, d item.Definition) (string, error) {
+			added, err := c.AddOrb(orb)
+			if err != nil {
 				return "", err
 			}
-			msg = fmt.Sprintf("武器に施された刻印が剥がれ落ちた！刻印晶を %d 個回収した！", refund)
-		}
-	case lifeBraceletName, sorceryRingName:
-	case "未来のカケラ":
-		return s.applyFutureMemoryConsumable(ctx, *char)
-	case veteranRewardName:
-		return s.applyVeteranReward(char)
-	case personalityBookName:
-		return s.applyPersonalityBook(ctx, char)
-	default:
-		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
+			if !added {
+				return "すでにささげられています", errNoEffect
+			}
+			return d.Name + "を復活の祭壇にささげた！", nil
+		}, true
 	}
+	e, ok := homeEffects[name]
+	return e, ok
+}
 
-	return msg, nil
+// statGain is a seed: base+U[0,spread) to one stat, drawn even when over-level
+// nullifies it.
+func statGain(spread, base int, label string, stat func(*corecharacter.Stats) *int) homeEffect {
+	return func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		v := s.randomInt(spread) + base
+		if c.OverLevel {
+			v = 0
+		}
+		*stat(&c.Stats) += v
+		c.Stats.Clamp(c.OverLevel, c.Level)
+		return fmt.Sprintf("%sの%sが %d あがった！", c.Name, label, v), nil
+	}
+}
+
+// spGain credits SP, ignoring over-level.
+func spGain(amount func(*Service) int) homeEffect {
+	return func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		v := amount(s)
+		if err := c.AddSP(v); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%sのSPが %d あがった！", c.Name, v), nil
+	}
+}
+
+func resetTired(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+	c.ResetTired()
+	return fmt.Sprintf("元気全快！%sの疲労が回復した！", c.Name), nil
+}
+
+func godReins(visit, ride string) homeEffect {
+	return func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		if c.GodVisit != "" {
+			return noEffectMessage, errNoEffect // already admitted; keep the reins
+		}
+		c.GodVisit = visit
+		return fmt.Sprintf("%sは、%s", c.Name, ride), nil
+	}
+}
+
+func noStatChange(*Service, context.Context, *corecharacter.Character, item.Definition) (string, error) {
+	return "", nil
+}
+
+var homeEffects = map[string]homeEffect{
+	"命の木の実":        statGain(4, 3, "HP", func(st *corecharacter.Stats) *int { return &st.MaxHP }),
+	"不思議な木の実":      statGain(4, 3, "MP", func(st *corecharacter.Stats) *int { return &st.MaxMP }),
+	"力の種":          statGain(6, 1, "攻撃力", func(st *corecharacter.Stats) *int { return &st.Attack }),
+	"守りの種":         statGain(6, 1, "守備力", func(st *corecharacter.Stats) *int { return &st.Defense }),
+	"素早さの種":        statGain(6, 1, "素早さ", func(st *corecharacter.Stats) *int { return &st.Agility }),
+	"スキルの種":        spGain(func(s *Service) int { return s.randomInt(3) + 1 }),
+	sacredManaName: spGain(func(*Service) int { return 200 }),
+	"幸せの種": func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		if err := progression.ApplyHappySeed(c); err != nil {
+			return "", err
+		}
+		return "次のクエスト時にレベルアップ！", nil
+	},
+	"ファイト一発":            resetTired,
+	"気合の霊薬":             resetTired,
+	heavenReinsName:     godReins(corecharacter.GodVisitHeaven, "天馬に乗り天界へと導かれた！"),
+	underworldReinsName: godReins(corecharacter.GodVisitUnderworld, "黒い天馬に乗り天界?へと導かれた！"),
+	lifeBraceletName:    noStatChange,
+	sorceryRingName:     noStatChange,
+	"小さなメダル": func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		if err := c.AddSmallMedals(1); err != nil {
+			return "", err
+		}
+		return "メダル伯爵にメダルを１枚献上しました", nil
+	},
+	"水晶の原石": func(_ *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		if c.WeaponSeal <= 0 {
+			return noEffectMessage, errNoEffect // no seal to remove; keep the crystal
+		}
+		refund := sealRefundCrystals(c.WeaponSeal)
+		c.WeaponSeal = 0
+		if err := c.AddCrystal(refund); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("武器に施された刻印が剥がれ落ちた！刻印晶を %d 個回収した！", refund), nil
+	},
+	"未来のカケラ": func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		return s.applyFutureMemoryConsumable(ctx, *c)
+	},
+	veteranRewardName: func(s *Service, _ context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		return s.applyVeteranReward(c)
+	},
+	personalityBookName: func(s *Service, ctx context.Context, c *corecharacter.Character, _ item.Definition) (string, error) {
+		return s.applyPersonalityBook(ctx, c)
+	},
 }
