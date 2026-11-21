@@ -790,3 +790,22 @@ func TestNativeMap17_VaultThresholds(t *testing.T) {
 		t.Fatalf("D: event %s err=%v", res.EventType, err)
 	}
 }
+
+func TestNativeMap17_FloorNames(t *testing.T) {
+	ctx := context.Background()
+	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "title")
+	for _, tc := range []struct {
+		variant int
+		want    string
+	}{
+		{1, "王墓"},
+		{2, "王墓"},
+		{5, "王墓の秘室"},
+	} {
+		f.setFloor(t, "title", tc.variant, 9, 9)
+		view, err := f.svc.ObserveExpedition(ctx, "title")
+		if err != nil || view.FloorName != tc.want {
+			t.Fatalf("variant %d floor name %+v err=%v", tc.variant, view, err)
+		}
+	}
+}

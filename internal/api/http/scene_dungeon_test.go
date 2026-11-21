@@ -179,6 +179,12 @@ func TestDungeonMapRetirementPreservesRemainingRoutes(t *testing.T) {
 	if len(spec.Components.Schemas["DungeonExpeditionObservation"]) == 0 || len(spec.Components.Schemas["DungeonMapView"]) == 0 {
 		t.Fatal("independent scene schemas missing")
 	}
+	var obsSchema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(spec.Components.Schemas["DungeonExpeditionObservation"], &obsSchema); err != nil || len(obsSchema.Properties["floor_name"]) == 0 {
+		t.Fatalf("observation schema missing floor_name: %v", err)
+	}
 	for _, route := range []struct{ method, path string }{
 		{"get", "/characters/{id}/dungeons"}, {"get", "/api/v1/characters/{id}/context"}, {"post", "/api/v1/characters/{id}/actions"},
 		{"post", "/characters/{id}/dungeons/start"}, {"post", "/characters/{id}/dungeons/party-start"}, {"post", "/characters/{id}/dungeons/move"}, {"post", "/characters/{id}/dungeons/fight"}, {"post", "/characters/{id}/dungeons/escape"},

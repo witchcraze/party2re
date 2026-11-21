@@ -18,3 +18,13 @@ func TestGridFloor_DerivesGeometryAndRejectsRaggedGrid(t *testing.T) {
 		}()
 	}
 }
+
+func TestDungeon_FloorNameFallback(t *testing.T) {
+	d := Dungeon{Name: "元の迷宮"}
+	if got := d.floorName(Floor{}); got != "元の迷宮" {
+		t.Fatalf("default floor name = %q, want 元の迷宮", got)
+	}
+	if got := d.floorName(Floor{Name: "秘密の部屋"}); got != "秘密の部屋" {
+		t.Fatalf("override floor name = %q, want 秘密の部屋", got)
+	}
+}

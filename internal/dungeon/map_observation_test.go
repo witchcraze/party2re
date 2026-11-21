@@ -58,7 +58,7 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 		t.Fatal(err)
 	}
 	view, err := svc.ObserveExpedition(ctx, "hero")
-	if err != nil || view.Map.Radius != 3 || !slices.Equal(view.Directions, []dungeon.Direction{dungeon.DirectionNorth, dungeon.DirectionSouth, dungeon.DirectionEast, dungeon.DirectionWest}) || !view.Controls.CanMove || view.Controls.CanFight || !view.Controls.CanEscape {
+	if err != nil || view.Map.Radius != 3 || view.FloorName != "地下迷路" || !slices.Equal(view.Directions, []dungeon.Direction{dungeon.DirectionNorth, dungeon.DirectionSouth, dungeon.DirectionEast, dungeon.DirectionWest}) || !view.Controls.CanMove || view.Controls.CanFight || !view.Controls.CanEscape {
 		t.Fatalf("solo map: %+v %v", view, err)
 	}
 	// Only item 197 itself qualifies; look-alike IDs do not.
@@ -117,7 +117,7 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 		run.Status = status
 		chars.err, inventory.err = errors.New("terminal map must not read character"), errors.New("terminal map must not read inventory")
 		got, err := svc.ObserveExpedition(ctx, "hero")
-		if err != nil || got.Map != nil || got.Controls.CanMove || !got.Controls.CanFight || !got.Controls.CanEscape || got.Status != status {
+		if err != nil || got.Map != nil || got.FloorName != "" || got.Controls.CanMove || !got.Controls.CanFight || !got.Controls.CanEscape || got.Status != status {
 			t.Fatalf("terminal %s: %+v %v", status, got, err)
 		}
 	}

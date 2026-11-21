@@ -27,19 +27,20 @@ var nativeMap2FloorOf = [11]int{1, 1, 1, 2, 2, 2, 2, 3, 4, 4, 4}
 // loads one of its stage files per request; floor bosses 7/8 always load
 // stages 3/4, while the third floor's B uses that request's stage.
 func nativeMap2() Dungeon {
+	const name = "落穴の塔"
 	s2, s3, s4, s5, s6 := stagePool(2), stagePool(3), stagePool(4), stagePool(5), stagePool(6)
 	up := map[byte]string{'F': "凸"}
 	floors := [4]Floor{
-		{FloorNumber: 1, Pools: []EncounterPool{s2, s3, s4}, Marks: up,
+		{FloorNumber: 1, Name: name + "１階", Pools: []EncounterPool{s2, s3, s4}, Marks: up,
 			Exits:  map[byte]FloorExit{'F': {Variants: []int{4, 5, 6}}},
 			Bosses: map[byte]DungeonMonster{'7': *s3.Boss}},
-		{FloorNumber: 2, RoundLimit: 40, Pools: []EncounterPool{s3, s4, s5}, Marks: up,
+		{FloorNumber: 2, Name: name + "２階", RoundLimit: 40, Pools: []EncounterPool{s3, s4, s5}, Marks: up,
 			Exits:  map[byte]FloorExit{'F': {Variants: []int{8}}, 'T': {Variants: []int{1, 2, 3}, Trap: 30}},
 			Bosses: map[byte]DungeonMonster{'8': *s4.Boss}},
-		{FloorNumber: 3, RoundLimit: 50, Pools: []EncounterPool{s4, s5, s6},
+		{FloorNumber: 3, Name: name + "３階", RoundLimit: 50, Pools: []EncounterPool{s4, s5, s6},
 			Marks: map[byte]string{'F': "凸", 'B': "◎", 'Q': "　", 'T': "　"},
 			Exits: map[byte]FloorExit{'F': {Variants: []int{9, 10, 11}}, 'T': {Variants: []int{4, 5, 6, 7}, Trap: 70}}},
-		{FloorNumber: 4, RoundLimit: 50, Pools: []EncounterPool{s3, s4, s5, s6},
+		{FloorNumber: 4, Name: name + "４階[宝物庫]", RoundLimit: 50, Pools: []EncounterPool{s3, s4, s5, s6},
 			Marks: map[byte]string{'2': "宝", '3': "宝", '4': "宝"},
 			Exits: map[byte]FloorExit{'T': {Variants: []int{8}, Trap: 40}}},
 	}
@@ -56,7 +57,7 @@ func nativeMap2() Dungeon {
 	}
 	return Dungeon{
 		ID:             NativeMap2ID,
-		Name:           "落穴の塔",
+		Name:           name,
 		Description:    "四層の塔。階段の先は選べず、落とし穴は下の階へ戻す。最上階は宝物庫。",
 		RoundLimit:     30,
 		LeaderJobLevel: 5,

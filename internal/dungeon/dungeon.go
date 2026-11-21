@@ -73,14 +73,16 @@ type DungeonMonster struct {
 }
 
 type Floor struct {
-	FloorNumber int              `json:"floor_number"`
-	Width       int              `json:"width"`
-	Height      int              `json:"height"`
-	StartX      int              `json:"start_x"`
-	StartY      int              `json:"start_y"`
-	Grid        []string         `json:"grid"`
-	Monsters    []DungeonMonster `json:"monsters"`
-	Boss        *DungeonMonster  `json:"boss,omitempty"`
+	FloorNumber int `json:"floor_number"`
+	// Name overrides the dungeon's display name on this floor (legacy $d_name).
+	Name     string           `json:"-"`
+	Width    int              `json:"width"`
+	Height   int              `json:"height"`
+	StartX   int              `json:"start_x"`
+	StartY   int              `json:"start_y"`
+	Grid     []string         `json:"grid"`
+	Monsters []DungeonMonster `json:"monsters"`
+	Boss     *DungeonMonster  `json:"boss,omitempty"`
 	// Warps send a party entering the keyed cell to (x, y) without dispatching the landing cell.
 	Warps map[byte][2]int `json:"-"`
 	// Pools, when set, replace Monsters/Boss: each event draws one pool, as legacy maps load one stage file per request.
@@ -131,6 +133,13 @@ func (d Dungeon) limitOf(f Floor) int {
 		return f.RoundLimit
 	}
 	return d.RoundLimit
+}
+
+func (d Dungeon) floorName(f Floor) string {
+	if f.Name != "" {
+		return f.Name
+	}
+	return d.Name
 }
 
 type ActiveExpedition struct {

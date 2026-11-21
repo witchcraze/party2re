@@ -298,8 +298,9 @@ var nm14Pools = [3]EncounterPool{
 // of @ex_dungeon. Points route to a destination; R returns to the main floor
 // at the same coordinate; 9 is narration only.
 func nativeMap14() Dungeon {
+	const name = "沈没の海峡"
 	back := map[byte]FloorExit{'R': {Variants: []int{1}}}
-	ship := Floor{Pools: nm14Pools[:1], Exits: back, Marks: map[byte]string{'R': "★"}, events: map[byte]mapEvent{}}
+	ship := Floor{Name: "宝船", Pools: nm14Pools[:1], Exits: back, Marks: map[byte]string{'R': "★"}, events: map[byte]mapEvent{}}
 	sites := map14DisablableSites + "k"
 	for i := range len(sites) {
 		ship.Marks[sites[i]] = "宝"
@@ -308,9 +309,9 @@ func nativeMap14() Dungeon {
 	floors := [4]Floor{
 		{Pools: nm14Pools[:1], Marks: map[byte]string{'A': "★", 'B': "★", 'C': "★", 'D': "★", 'E': "★"},
 			events: map[byte]mapEvent{'A': {action: routeEvent{}}, 'B': {action: routeEvent{}}, 'C': {action: routeEvent{}}, 'D': {action: routeEvent{}}, 'E': {action: routeEvent{}}}},
-		{Pools: nm14Pools[1:2], Exits: back, Marks: map[byte]string{'P': "◎", 'R': "★", 'a': "宝", 'b': "宝"},
+		{Name: "海賊船", Pools: nm14Pools[1:2], Exits: back, Marks: map[byte]string{'P': "◎", 'R': "★", 'a': "宝", 'b': "宝"},
 			events: map[byte]mapEvent{'P': {action: bossEvent{}, perSymbol: true}, 'a': {action: treasureEvent{}, perSymbol: true}, 'b': {action: treasureEvent{}, perSymbol: true}}},
-		{Pools: nm14Pools[2:3], Exits: back, Marks: map[byte]string{'K': "◎", 'R': "★", 't': "宝", 'u': "宝", 'v': "宝"},
+		{Name: name + "最深部", Pools: nm14Pools[2:3], Exits: back, Marks: map[byte]string{'K': "◎", 'R': "★", 't': "宝", 'u': "宝", 'v': "宝"},
 			events: map[byte]mapEvent{'K': {action: bossEvent{}, perSymbol: true}, 't': {action: treasureEvent{}, perSymbol: true}, 'u': {action: treasureEvent{}, perSymbol: true}, 'v': {action: treasureEvent{}, perSymbol: true}}},
 		ship,
 	}
@@ -321,7 +322,7 @@ func nativeMap14() Dungeon {
 	}
 	return Dungeon{
 		ID:             NativeMap14ID,
-		Name:           "沈没の海峡",
+		Name:           name,
 		Description:    "海底に沈む船と深い峡谷。光る目印の先は、潜るたびに行き先が定まる。",
 		RoundLimit:     200,
 		LeaderJobLevel: 30,

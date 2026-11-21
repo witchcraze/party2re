@@ -52,6 +52,9 @@ func TestNativeMap2_RouteCarriesPositionAndRound(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, map2Hero("route", 5000))
 	f.placeMap2(t, "route", 1, 1, 0, 5, "7")
+	if view, err := f.svc.ObserveExpedition(ctx, "route"); err != nil || view.Floor != 1 || view.FloorName != "落穴の塔１階" {
+		t.Fatalf("floor 1 view %+v err=%v", view, err)
+	}
 	f.rng.ints = []int{2}
 	res, err := f.svc.Move(ctx, "route", dungeon.DirectionWest)
 	if err != nil {
@@ -63,12 +66,18 @@ func TestNativeMap2_RouteCarriesPositionAndRound(t *testing.T) {
 		t.Fatalf("route %+v draws=%d/%d", exp, f.rng.intCalls, f.rng.floatCalls)
 	}
 	view, err := f.svc.ObserveExpedition(ctx, "route")
-	if err != nil || view.Floor != 2 || view.Round != 6 || view.RoundLimit != 40 {
+	if err != nil || view.Floor != 2 || view.FloorName != "落穴の塔２階" || view.Round != 6 || view.RoundLimit != 40 {
 		t.Fatalf("view %+v err=%v", view, err)
 	}
 
 	// Third floor F leads to the vault (___1–___3); second floor F always to __1.
-	for _, tc := range []struct{ from, x, y, draw, want int }{{4, 2, 3, 0, 8}, {8, 1, 1, 1, 10}} {
+	for _, tc := range []struct {
+		from, x, y, draw, want, floorNo int
+		floorName                       string
+	}{
+		{4, 2, 3, 0, 8, 3, "落穴の塔３階"},
+		{8, 1, 1, 1, 10, 4, "落穴の塔４階[宝物庫]"},
+	} {
 		g := newNativeFixture(t, map2Hero("up", 5000))
 		g.placeMap2(t, "up", tc.from, tc.x, tc.y, 10, "8", "B:1:1")
 		g.rng.ints = []int{tc.draw}
@@ -81,6 +90,9 @@ func TestNativeMap2_RouteCarriesPositionAndRound(t *testing.T) {
 		}
 		if exp := g.reload(t, "up"); exp.MapVariant != tc.want || exp.RoundLimit != 50 {
 			t.Fatalf("from %d: %+v", tc.from, exp)
+		}
+		if v, err := g.svc.ObserveExpedition(ctx, "up"); err != nil || v.Floor != tc.floorNo || v.FloorName != tc.floorName {
+			t.Fatalf("from %d view %+v err=%v", tc.from, v, err)
 		}
 	}
 }

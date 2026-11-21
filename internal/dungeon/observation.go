@@ -38,6 +38,7 @@ type ExpeditionObservation struct {
 	Round      int                  `json:"round,omitempty"`
 	RoundLimit int                  `json:"round_limit,omitempty"`
 	Floor      int                  `json:"floor,omitempty"`
+	FloorName  string               `json:"floor_name,omitempty"`
 	Map        *MapView             `json:"map"`
 	Directions []Direction          `json:"directions"`
 	Controls   ContinuationControls `json:"controls"`
@@ -54,17 +55,17 @@ func (s *Service) ObserveExpedition(ctx context.Context, actor string) (*Expedit
 	if exp.Status != StatusExploring {
 		return view, nil
 	}
-	m, err := s.viewMap(ctx, actor, exp)
+	d, floor, err := s.activeFloor(exp)
+	if err != nil {
+		return nil, err
+	}
+	m, err := s.viewMap(ctx, actor, exp, floor)
 	if err != nil {
 		return nil, err
 	}
 	view.Map = &m
-	_, floor, err := s.activeFloor(exp)
-	if err != nil {
-		return nil, err
-	}
 	// A pitfall to a floor with a lower limit can leave the round above it.
-	view.Round, view.RoundLimit, view.Floor = exp.Round, exp.RoundLimit, floor.FloorNumber
+	view.Round, view.RoundLimit, view.Floor, view.FloorName = exp.Round, exp.RoundLimit, floor.FloorNumber, d.floorName(floor)
 	// Legacy registers all four directions; walls are rejected on use, so
 	// the list cannot reveal a hidden passage.
 	if view.Controls.CanMove {
