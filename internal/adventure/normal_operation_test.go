@@ -204,6 +204,21 @@ func TestParseNormalOperationDuplicateAndSecondCost(t *testing.T) {
 	if got, err := r.ParseNormalOperation(cmd, ctx); err != nil || got.Second != nil {
 		t.Fatalf("second parsed without additional submission: %+v %v", got, err)
 	}
+	a.Extended = corebattle.ExtendedAdditional
+	cmd.Input = "＠マジックバリア　＠フバーハ>Bob"
+	secondDef := ctx.Definitions.Invocations.Entries["job-33-entry-2"]
+	secondDef.Validate = func(*corebattle.LifetimeState, *corebattle.CallbackContext) error {
+		return errors.New("entry state validator should not run for second parse")
+	}
+	ctx.Definitions.Invocations.Entries["job-33-entry-2"] = secondDef
+	if got, err := r.ParseNormalOperation(cmd, ctx); err != nil || got.Second == nil || got.Second.EntryID != "job-33-entry-2" {
+		t.Fatalf("second parse ran state validator: %+v %v", got, err)
+	}
+	secondDef.Children = []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "unregistered-child"}}
+	ctx.Definitions.Invocations.Entries["job-33-entry-2"] = secondDef
+	if _, err := r.ParseNormalOperation(cmd, ctx); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatalf("unregistered reachable second descendant not rejected: %v", err)
+	}
 }
 
 func TestParseNormalOperationCustomAndUnsupportedAdmissionArePure(t *testing.T) {

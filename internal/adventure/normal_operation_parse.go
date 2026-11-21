@@ -90,8 +90,16 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 			if err != nil {
 				return ParsedRunOperation{}, err
 			}
-			if action.Whitelisted && first.Whitelisted && !ops.registered(second) {
-				return ParsedRunOperation{}, ErrRunUnavailable
+			if action.Whitelisted && first.Whitelisted {
+				if !ops.registered(second) {
+					return ParsedRunOperation{}, ErrRunUnavailable
+				}
+				frame := ops.ctx.Callback
+				frame.Arguments = slices.Clone(action.Arguments)
+				frame.Command = action.EntryID
+				if err := ops.state.CertifyInvocations(&frame, ops.ctx.Definitions.Invocations, []corebattle.CallbackInvocation{action.Invocation}, random.Default()); err != nil {
+					return ParsedRunOperation{}, err
+				}
 			}
 			action.Cost = second.binding.MPCost
 			result.Second = &action

@@ -6,6 +6,16 @@ import "github.com/witchcraze/party2re/internal/core/random"
 // original graph (including cycles and generated, tool/book/helper descendants)
 // without selecting a random child or changing resources, arguments or counters.
 func (s *LifetimeState) ValidateInvocations(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, rng random.Generator) error {
+	return s.admitInvocations(c, d, ops, true, rng)
+}
+
+// CertifyInvocations verifies registration of every reachable callback in ops
+// and its descendants without running state-dependent validators.
+func (s *LifetimeState) CertifyInvocations(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, rng random.Generator) error {
+	return s.admitInvocations(c, d, ops, false, rng)
+}
+
+func (s *LifetimeState) admitInvocations(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, known bool, rng random.Generator) error {
 	if c == nil {
 		return ErrInvalidRequest
 	}
@@ -13,15 +23,19 @@ func (s *LifetimeState) ValidateInvocations(c *CallbackContext, d CallbackCatalo
 	for i := range arguments {
 		arguments[i] = c.Arguments
 	}
-	return s.validateSequence(c, d, ops, arguments, rng)
+	return s.admitSequence(c, d, ops, arguments, known, rng, nil)
 }
 
 // validateSequence is ValidateInvocations with each slot's own arguments.
 func (s *LifetimeState) validateSequence(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, rng random.Generator) error {
-	return s.validateSequenceThen(c, d, ops, arguments, rng, nil)
+	return s.admitSequence(c, d, ops, arguments, true, rng, nil)
 }
 
 func (s *LifetimeState) validateSequenceThen(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, rng random.Generator, after func(*LifetimeState, *CallbackContext) error) error {
+	return s.admitSequence(c, d, ops, arguments, true, rng, after)
+}
+
+func (s *LifetimeState) admitSequence(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, known bool, rng random.Generator, after func(*LifetimeState, *CallbackContext) error) error {
 	if s == nil || c == nil || len(ops) == 0 || len(arguments) != len(ops) {
 		return ErrInvalidRequest
 	}
@@ -33,7 +47,7 @@ func (s *LifetimeState) validateSequenceThen(c *CallbackContext, d CallbackCatal
 	remaining := maxInvocationContinuations
 	context.admissionBudget = &remaining
 	p := callbackAdmission{s: &state, c: &context, d: d, remaining: &remaining}
-	return p.sequence(ops, arguments, true, after)
+	return p.sequence(ops, arguments, known, after)
 }
 
 func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments [][]string, known bool, after func(*LifetimeState, *CallbackContext) error) error {
