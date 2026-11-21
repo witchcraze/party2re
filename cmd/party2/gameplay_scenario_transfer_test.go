@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"testing"
@@ -46,7 +48,11 @@ func TestGameplayScenario_TwoAccountTransfers(t *testing.T) {
 	check := func(step string) [2]scenarioContext {
 		t.Helper()
 		// A journey spans HTTP rate-limit windows; expire only its own buckets.
-		for _, key := range []string{"http:ip:" + ip, "http:auth:" + senderToken, "http:auth:" + recipientToken} {
+		authBucketKey := func(tok string) string {
+			sum := sha256.Sum256([]byte(tok))
+			return "http:auth:" + hex.EncodeToString(sum[:])
+		}
+		for _, key := range []string{"http:ip:" + ip, authBucketKey(senderToken), authBucketKey(recipientToken)} {
 			if err := a.valkey.Do(context.Background(), a.valkey.B().Expire().Key("party2:ratelimit:"+key).Seconds(0).Build()).Error(); err != nil {
 				t.Fatal(err)
 			}
