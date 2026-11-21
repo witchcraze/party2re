@@ -200,14 +200,15 @@ func nativeMap10Events() map[byte]mapEvent {
 // nativeMap10 has round limit 30 on every floor and the menu threshold for
 // dungeon 10 (job level 21). Only the first floor is an initial variant.
 func nativeMap10() Dungeon {
+	const name = "封刃の魔塔"
 	events := nativeMap10Events()
 	pools := []EncounterPool{nm10Pool}
 	floors := [3]Floor{
-		{FloorNumber: 1, Marks: map[byte]string{'F': "凸", 'A': "◎"},
+		{FloorNumber: 1, Name: name + "１階", Marks: map[byte]string{'F': "凸", 'A': "◎"},
 			Exits: map[byte]FloorExit{'F': {Variants: []int{2}}}, Bosses: map[byte]DungeonMonster{'A': nm10Bosses[0]}},
-		{FloorNumber: 2, Marks: map[byte]string{'F': "凸", 'B': "◎"},
+		{FloorNumber: 2, Name: name + "２階", Marks: map[byte]string{'F': "凸", 'B': "◎"},
 			Exits: map[byte]FloorExit{'F': {Variants: []int{3}}}, Bosses: map[byte]DungeonMonster{'B': nm10Bosses[1]}},
-		{FloorNumber: 3, Marks: map[byte]string{'2': "宝", '3': "宝", '4': "宝", 'C': "◎"},
+		{FloorNumber: 3, Name: name + "３階", Marks: map[byte]string{'2': "宝", '3': "宝", '4': "宝", 'C': "◎"},
 			Bosses: map[byte]DungeonMonster{'C': nm10Bosses[2]}},
 	}
 	variants := make([]Floor, len(floors))
@@ -217,7 +218,7 @@ func nativeMap10() Dungeon {
 	}
 	return Dungeon{
 		ID:             NativeMap10ID,
-		Name:           "封刃の魔塔",
+		Name:           name,
 		Description:    "刃を封じる呪いに満ちた三層の塔。頼れるのは魔法だけだ。",
 		RoundLimit:     30,
 		LeaderJobLevel: 21,

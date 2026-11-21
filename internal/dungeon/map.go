@@ -32,11 +32,7 @@ func hasScopeGoggles(itemIDs []string) bool {
 }
 
 // viewMap projects one owned snapshot; bonuses belong to the viewing actor.
-func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveExpedition) (MapView, error) {
-	_, floor, err := s.activeFloor(exp)
-	if err != nil {
-		return MapView{}, err
-	}
+func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveExpedition, floor Floor) (MapView, error) {
 	if floor.Width <= 0 || floor.Height <= 0 || len(floor.Grid) != floor.Height || exp.PosX < 0 || exp.PosX >= floor.Width || exp.PosY < 0 || exp.PosY >= floor.Height {
 		return MapView{}, fmt.Errorf("invalid dungeon map geometry")
 	}
@@ -136,6 +132,7 @@ func (s *Service) viewMap(ctx context.Context, characterID string, exp *ActiveEx
 					symbol = wall // out of bounds
 				} else {
 					tileChar := floor.Grid[targetY][targetX]
+					var err error
 					symbol, err = floor.event(tileChar).tileSymbol(exp, tileChar, targetX, targetY, floor.Marks[tileChar], wall)
 					if err != nil {
 						return MapView{}, err

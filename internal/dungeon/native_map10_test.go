@@ -83,12 +83,19 @@ func routesCarry(t *testing.T, store dungeon.ActiveExpeditionStore, lead string)
 	if err := store.SaveActiveExpedition(ctx, exp); err != nil {
 		t.Fatal(err)
 	}
+	if v, err := f.svc.ObserveExpedition(ctx, ally); err != nil || v.Floor != 1 || v.FloorName != "封刃の魔塔１階" {
+		t.Fatalf("floor 1 view %+v err=%v", v, err)
+	}
 	for _, tc := range []struct {
 		mover          string
 		dir            dungeon.Direction
 		variant, y     int
 		round, floorNo int
-	}{{ally, dungeon.DirectionNorth, 2, 0, 8, 2}, {lead, dungeon.DirectionSouth, 3, 6, 9, 3}} {
+		floorName      string
+	}{
+		{ally, dungeon.DirectionNorth, 2, 0, 8, 2, "封刃の魔塔２階"},
+		{lead, dungeon.DirectionSouth, 3, 6, 9, 3, "封刃の魔塔３階"},
+	} {
 		if tc.variant == 3 {
 			f.moveTo(t, lead, 1, 5)
 		}
@@ -102,7 +109,7 @@ func routesCarry(t *testing.T, store dungeon.ActiveExpeditionStore, lead string)
 			exp.Encounter != nil || !slices.Equal(exp.ConsumedEvents, []string{"A"}) || len(exp.Members) != 2 {
 			t.Fatalf("route to %d %+v", tc.variant, exp)
 		}
-		if v, err := f.svc.ObserveExpedition(ctx, ally); err != nil || v.Floor != tc.floorNo {
+		if v, err := f.svc.ObserveExpedition(ctx, ally); err != nil || v.Floor != tc.floorNo || v.FloorName != tc.floorName {
 			t.Fatalf("view %+v err=%v", v, err)
 		}
 		rev := before.Revision

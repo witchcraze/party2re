@@ -10125,6 +10125,10 @@
             "description": "Floor number of the current layout (1 on single-floor maps).",
             "type": "integer"
           },
+          "floor_name": {
+            "description": "Display title of the current floor (legacy $d_name, defaulting to the dungeon name).",
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },

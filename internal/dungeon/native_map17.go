@@ -331,6 +331,7 @@ func nativeMap17() Dungeon {
 		events: nm17Underground,
 	}
 	room := Floor{
+		Name:  "王墓の秘室",
 		Exits: map[byte]FloorExit{'U': {Variants: []int{1}}},
 		Marks: map[byte]string{'D': "宝", 'E': "宝", 'F': "宝", 'G': "宝", 'L': "宝", 'M': "宝", 'Q': "宝", 'O': "宝", 'N': "☆", 'U': "凹"},
 		events: map[byte]mapEvent{
