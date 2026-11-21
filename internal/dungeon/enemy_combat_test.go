@@ -48,7 +48,7 @@ func TestDungeonEnemyCombatSurvivesReload(t *testing.T) {
 					}, nil
 				}}
 				catalog := []dungeon.Dungeon{{ID: "payload", RoundLimit: 20, Variants: []dungeon.Floor{{
-					FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"SB"}, Boss: &tc.monster,
+					Width: 2, Height: 1, Grid: []string{"SB"}, Boss: &tc.monster,
 				}}}}
 				repo := newMockDungeonRepo()
 				chars := &mockCharRepo{chars: map[string]corecharacter.Character{hero.ID: hero}}

@@ -31,7 +31,7 @@ var nativeMap1Events = map[byte]mapEvent{
 // nativeMap1 has round limit 50 and the menu threshold for dungeon 1 (job level 3).
 func nativeMap1() Dungeon {
 	pools := []EncounterPool{stagePool(2)}
-	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: map[byte]string{'K': "★", 'D': "扉"}, events: nativeMap1Events}, nativeMap1Grids)
+	variants := variantFloors(Floor{Pools: pools, Marks: map[byte]string{'K': "★", 'D': "扉"}, events: nativeMap1Events}, nativeMap1Grids)
 	return Dungeon{
 		ID:             NativeMap1ID,
 		Name:           "封じの地下墓所",

@@ -78,7 +78,7 @@ func nativeMap12() Dungeon {
 		bosses[sym] = *stagePool(stage).Boss
 	}
 	marks := map[byte]string{'2': "宝", '3': "宝", '4': "宝", 'A': "◎", 'B': "◎", 'C': "◎", 'D': "◎", 'E': "◎", 'F': "◎"}
-	floor := gridFloor(Floor{FloorNumber: 1, Pools: []EncounterPool{{Monsters: nm11Monsters}}, Bosses: bosses, Marks: marks, events: nativeMap11Events}, nativeMap11Grid)
+	floor := gridFloor(Floor{Pools: []EncounterPool{{Monsters: nm11Monsters}}, Bosses: bosses, Marks: marks, events: nativeMap11Events}, nativeMap11Grid)
 	return Dungeon{
 		ID:             NativeMap12ID,
 		Name:           "深淵の回廊",

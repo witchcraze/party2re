@@ -31,7 +31,7 @@ func nativeMap0() Dungeon {
 		{"C0000", "11B11", "00000", "11110", "00S00"},
 		{"C0000", "11B11", "00000", "01111", "00S00"},
 	}
-	variants := variantFloors(Floor{FloorNumber: 1, Monsters: monsters, Boss: boss,
+	variants := variantFloors(Floor{Monsters: monsters, Boss: boss,
 		events: map[byte]mapEvent{'H': {action: hiddenEvent{}}, 'C': {action: treasureEvent{}}}}, grids)
 	return Dungeon{
 		ID:          NativeMap0ID,

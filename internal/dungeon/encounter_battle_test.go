@@ -16,7 +16,7 @@ func TestActiveEncounterSharedResolver(t *testing.T) {
 	ctx := context.Background()
 	char := createTestChar("hero", 10, 5000, 10, 0)
 	monster := dungeon.DungeonMonster{ID: "enemy", HP: 750, Attack: 0, ExpReward: 17, GoldReward: 23}
-	catalog := []dungeon.Dungeon{{ID: "real", RoundLimit: 21, Variants: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
+	catalog := []dungeon.Dungeon{{ID: "real", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
 	expectedEnemyHP := 750
 	calls := 0
 	engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
@@ -78,7 +78,7 @@ func TestActiveEncounterPartyLeaderFallen(t *testing.T) {
 			repo := newMockDungeonRepo()
 			chars := &mockCharRepo{chars: map[string]corecharacter.Character{leader.ID: leader, ally.ID: ally}}
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23}
-			catalog := []dungeon.Dungeon{{ID: "party", RoundLimit: 21, Variants: []dungeon.Floor{{FloorNumber: 1, Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
+			catalog := []dungeon.Dungeon{{ID: "party", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
 			calls := 0
 			engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 				calls++

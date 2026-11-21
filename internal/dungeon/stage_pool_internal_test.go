@@ -42,7 +42,7 @@ func TestNativeMaps_DrawTheirLegacyStages(t *testing.T) {
 		for i, f := range d.Variants {
 			exp, ok := want[d.ID]
 			if d.ID == NativeMap2ID {
-				exp, ok = floor2[f.FloorNumber], true
+				exp, ok = floor2[f.floorNumber()], true
 			}
 			if !ok {
 				continue

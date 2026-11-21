@@ -37,7 +37,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 				charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 				repo := newMockDungeonRepo()
 				monster := dungeon.DungeonMonster{ID: "enemy", Name: "Enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23, DropItemID: "potion"}
-				floor := dungeon.Floor{FloorNumber: 1, Width: 3, Height: 3, StartX: 1, StartY: 1, Grid: []string{"1T1", "ES0", "1D1"}, Monsters: []dungeon.DungeonMonster{monster}}
+				floor := dungeon.Floor{Width: 3, Height: 3, StartX: 1, StartY: 1, Grid: []string{"1T1", "ES0", "1D1"}, Monsters: []dungeon.DungeonMonster{monster}}
 				catalog := []dungeon.Dungeon{{ID: "encounter", RoundLimit: 21, Variants: []dungeon.Floor{floor}}}
 				calls := 0
 				engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {

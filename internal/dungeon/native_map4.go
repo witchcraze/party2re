@@ -35,7 +35,7 @@ var nativeMap4Events = map[byte]mapEvent{
 func nativeMap4() Dungeon {
 	pools := stagePools(4, 8)
 	marks := map[byte]string{'B': "◎", 'b': "◎", '2': "宝", '3': "宝", '4': "宝"}
-	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: marks, events: nativeMap4Events}, nativeMap4Grids)
+	variants := variantFloors(Floor{Pools: pools, Marks: marks, events: nativeMap4Events}, nativeMap4Grids)
 	return Dungeon{
 		ID:             NativeMap4ID,
 		Name:           "命削りの大迷路",

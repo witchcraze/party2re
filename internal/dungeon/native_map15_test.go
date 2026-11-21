@@ -179,6 +179,9 @@ func TestNativeMap15_Stairs(t *testing.T) {
 		limit   int
 	}{{1, dungeon.DirectionNorth, 2, 0, 60}, {7, dungeon.DirectionSouth, 3, 8, 50}} {
 		f := newMap15Fixture(t, dungeon.NewMemoryExpeditionRepository(), "stairs")
+		if view, err := f.svc.ObserveExpedition(context.Background(), "stairs"); err != nil || view.Floor != 1 {
+			t.Fatalf("main floor %+v err=%v", view, err)
+		}
 		f.moveTo(t, "stairs", 2, tc.fromY)
 		before := f.reload(t, "stairs")
 		if res, err := f.svc.Move(context.Background(), "stairs", tc.dir); err != nil || res.EventType != dungeon.EventMove {
@@ -187,6 +190,9 @@ func TestNativeMap15_Stairs(t *testing.T) {
 		after := f.reload(t, "stairs")
 		if after.MapVariant != tc.variant || after.PosX != 2 || after.PosY != tc.toY || after.Round != before.Round+1 || after.RoundLimit != tc.limit {
 			t.Fatalf("stairs to %d: %+v", tc.variant, after)
+		}
+		if view, err := f.svc.ObserveExpedition(context.Background(), "stairs"); err != nil || view.Floor != 2 || view.FloorName != "機兵の砦" {
+			t.Fatalf("branch floor %+v err=%v", view, err)
 		}
 	}
 }
@@ -298,6 +304,9 @@ func northPool(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	}
 	if exp := f.reload(t, id); exp.MapVariant != 4 || exp.PosX != 2 || exp.PosY != 6 || exp.RoundLimit != 90 {
 		t.Fatalf("stairs to __1: %+v", exp)
+	}
+	if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Floor != 3 || view.FloorName != "機兵の砦" {
+		t.Fatalf("final floor %+v err=%v", view, err)
 	}
 }
 

@@ -19,6 +19,23 @@ func TestGridFloor_DerivesGeometryAndRejectsRaggedGrid(t *testing.T) {
 	}
 }
 
+func TestFloor_FloorNumberDefaultAndOverride(t *testing.T) {
+	for _, tc := range []struct {
+		in   int
+		want int
+	}{
+		{0, 1},
+		{-1, 1},
+		{1, 1},
+		{2, 2},
+		{4, 4},
+	} {
+		if got := (Floor{FloorNumber: tc.in}).floorNumber(); got != tc.want {
+			t.Fatalf("Floor{FloorNumber: %d}.floorNumber() = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestDungeon_FloorNameFallback(t *testing.T) {
 	d := Dungeon{Name: "元の迷宮"}
 	if got := d.floorName(Floor{}); got != "元の迷宮" {

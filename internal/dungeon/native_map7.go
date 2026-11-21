@@ -78,7 +78,7 @@ func nativeMap7() Dungeon {
 		if i == 5 {
 			delete(marks, 'K') // map/7/6.cgi defines no switch mark
 		}
-		variants[i] = gridFloor(Floor{FloorNumber: 1, Pools: pools, Marks: marks, events: nativeMap7Events(trapBase)}, rows)
+		variants[i] = gridFloor(Floor{Pools: pools, Marks: marks, events: nativeMap7Events(trapBase)}, rows)
 	}
 	return Dungeon{
 		ID:             NativeMap7ID,

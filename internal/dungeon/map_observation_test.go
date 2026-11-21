@@ -58,7 +58,7 @@ func TestMapObservationSourcesAndContinuations(t *testing.T) {
 		t.Fatal(err)
 	}
 	view, err := svc.ObserveExpedition(ctx, "hero")
-	if err != nil || view.Map.Radius != 3 || view.FloorName != "地下迷路" || !slices.Equal(view.Directions, []dungeon.Direction{dungeon.DirectionNorth, dungeon.DirectionSouth, dungeon.DirectionEast, dungeon.DirectionWest}) || !view.Controls.CanMove || view.Controls.CanFight || !view.Controls.CanEscape {
+	if err != nil || view.Map.Radius != 3 || view.Floor != 1 || view.FloorName != "地下迷路" || !slices.Equal(view.Directions, []dungeon.Direction{dungeon.DirectionNorth, dungeon.DirectionSouth, dungeon.DirectionEast, dungeon.DirectionWest}) || !view.Controls.CanMove || view.Controls.CanFight || !view.Controls.CanEscape {
 		t.Fatalf("solo map: %+v %v", view, err)
 	}
 	// Only item 197 itself qualifies; look-alike IDs do not.
@@ -137,6 +137,41 @@ func TestMapObservationRejectsInvalidGeometry(t *testing.T) {
 		if got, err := svc.ObserveExpedition(context.Background(), "hero"); got != nil || err == nil {
 			t.Fatalf("partial broken map: %+v %v", got, err)
 		}
+	}
+}
+
+func TestMapObservationDefaultsAndPreservesFloorNumber(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name        string
+		floorNumber int
+		wantFloor   int
+	}{
+		{"omitted defaults to 1", 0, 1},
+		{"explicit > 1 preserved", 3, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &mapRunReader{run: &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", DungeonID: "floors", MapVariant: 1, Status: dungeon.StatusExploring}}
+			chars := &mapCharacterReader{char: corecharacter.Character{ID: "hero", JobID: "job-01"}}
+			inv := &mapInventoryReader{}
+			svc, err := dungeon.NewService(newMockDungeonRepo(), chars, &corebattle.Engine{},
+				dungeon.WithActiveExpeditionStore(store),
+				dungeon.WithInventoryProvider(inv),
+				dungeon.WithCustomDungeons([]dungeon.Dungeon{{
+					ID: "floors",
+					Variants: []dungeon.Floor{{
+						FloorNumber: tc.floorNumber, Width: 2, Height: 1, Grid: []string{"S0"},
+					}},
+				}}),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			view, err := svc.ObserveExpedition(ctx, "hero")
+			if err != nil || view.Floor != tc.wantFloor {
+				t.Fatalf("ObserveExpedition() floor=%v want=%d err=%v", view, tc.wantFloor, err)
+			}
+		})
 	}
 }
 

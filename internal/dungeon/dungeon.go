@@ -73,7 +73,7 @@ type DungeonMonster struct {
 }
 
 type Floor struct {
-	FloorNumber int `json:"floor_number"`
+	FloorNumber int `json:"-"`
 	// Name overrides the dungeon's display name on this floor (legacy $d_name).
 	Name     string           `json:"-"`
 	Width    int              `json:"width"`
@@ -126,6 +126,13 @@ type Dungeon struct {
 	Initial int `json:"-"`
 	// newState draws the map's run state in the accepted start (map14 points).
 	newState func(RandomSource) json.RawMessage
+}
+
+func (f Floor) floorNumber() int {
+	if f.FloorNumber > 0 {
+		return f.FloorNumber
+	}
+	return 1
 }
 
 func (d Dungeon) limitOf(f Floor) int {

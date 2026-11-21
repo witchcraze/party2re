@@ -121,7 +121,7 @@ func nativeMap9Events() map[byte]mapEvent {
 func nativeMap9() Dungeon {
 	pools := []EncounterPool{{Monsters: nm9Monsters, Boss: &nm9Boss}}
 	marks := map[byte]string{'2': "宝", '3': "宝", '4': "宝", 'A': "◎", 'B': "◎", 'C': "◎"}
-	variants := variantFloors(Floor{FloorNumber: 1, Pools: pools, Marks: marks, events: nativeMap9Events()}, nativeMap9Grids)
+	variants := variantFloors(Floor{Pools: pools, Marks: marks, events: nativeMap9Events()}, nativeMap9Grids)
 	return Dungeon{
 		ID:             NativeMap9ID,
 		Name:           "封魔の石窟",

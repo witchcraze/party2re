@@ -52,7 +52,7 @@ func (scatterEvent) landing(rng RandomSource) (x, y int) {
 // Each event loads one of stages 10–14 (int(rand(5) + 10)).
 func nativeMap8() Dungeon {
 	marks := map[byte]string{cellWall: "□"}
-	variants := variantFloors(Floor{FloorNumber: 1, Pools: stagePools(10, 14), Marks: marks, events: nativeMap8Events}, nativeMap8Grids)
+	variants := variantFloors(Floor{Pools: stagePools(10, 14), Marks: marks, events: nativeMap8Events}, nativeMap8Grids)
 	return Dungeon{
 		ID:             NativeMap8ID,
 		Name:           "惑わしの砂漠",

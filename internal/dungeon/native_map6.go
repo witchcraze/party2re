@@ -223,7 +223,7 @@ func nativeMap6() Dungeon {
 		case 3:
 			marks['C'] = "■"
 		}
-		variants[i] = gridFloor(Floor{FloorNumber: 1, Pools: pools, Marks: marks, Bosses: map[byte]DungeonMonster{'X': nm6Sages}, events: events}, rows)
+		variants[i] = gridFloor(Floor{Pools: pools, Marks: marks, Bosses: map[byte]DungeonMonster{'X': nm6Sages}, events: events}, rows)
 	}
 	return Dungeon{
 		ID:             nativeMap6ID,

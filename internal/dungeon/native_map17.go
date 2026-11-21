@@ -326,14 +326,16 @@ func nativeMap17() Dungeon {
 	// The three underground floors share their events, and their passages
 	// spawn nothing (event_0 is empty), as in the secret room.
 	under := Floor{
-		Exits:  map[byte]FloorExit{'u': {Variants: []int{1}}},
-		Marks:  map[byte]string{'u': "凸", 'V': "◇", 'Y': "○", 'h': "宝", 'i': "宝", 'j': "宝", 'k': "宝", 'n': "☆"},
-		events: nm17Underground,
+		FloorNumber: 2,
+		Exits:       map[byte]FloorExit{'u': {Variants: []int{1}}},
+		Marks:       map[byte]string{'u': "凸", 'V': "◇", 'Y': "○", 'h': "宝", 'i': "宝", 'j': "宝", 'k': "宝", 'n': "☆"},
+		events:      nm17Underground,
 	}
 	room := Floor{
-		Name:  "王墓の秘室",
-		Exits: map[byte]FloorExit{'U': {Variants: []int{1}}},
-		Marks: map[byte]string{'D': "宝", 'E': "宝", 'F': "宝", 'G': "宝", 'L': "宝", 'M': "宝", 'Q': "宝", 'O': "宝", 'N': "☆", 'U': "凹"},
+		FloorNumber: 2,
+		Name:        "王墓の秘室",
+		Exits:       map[byte]FloorExit{'U': {Variants: []int{1}}},
+		Marks:       map[byte]string{'D': "宝", 'E': "宝", 'F': "宝", 'G': "宝", 'L': "宝", 'M': "宝", 'Q': "宝", 'O': "宝", 'N': "☆", 'U': "凹"},
 		events: map[byte]mapEvent{
 			'0': passage, 'D': {action: fixedTreasureEvent{}, perSymbol: true},
 			'E': {action: treasure, perSymbol: true}, 'F': {action: treasure, perSymbol: true}, 'G': {action: treasure, perSymbol: true},
@@ -345,7 +347,6 @@ func nativeMap17() Dungeon {
 	tmpls := [5]Floor{main, under, under, under, room}
 	variants := make([]Floor, len(tmpls))
 	for i, f := range tmpls {
-		f.FloorNumber = 1
 		variants[i] = gridFloor(f, nativeMap17Floors[i])
 	}
 	return Dungeon{
