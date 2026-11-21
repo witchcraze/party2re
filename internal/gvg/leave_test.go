@@ -62,8 +62,8 @@ func newMockExitClaimRepo() *mockExitClaimRepo {
 	return &mockExitClaimRepo{claims: make(map[string]gvg.ExitClaimState)}
 }
 
-func (r *mockExitClaimRepo) ClaimRoomExitForUpdate(_ context.Context, roomID, charID string) (gvg.ExitClaimState, error) {
-	key := roomID + ":" + charID
+func (r *mockExitClaimRepo) ClaimRoomExitForUpdate(_ context.Context, roomID, charID, joinID string) (gvg.ExitClaimState, error) {
+	key := roomID + ":" + charID + ":" + joinID
 	if st, ok := r.claims[key]; ok {
 		st.AlreadyClaimed = true
 		return st, nil
@@ -72,8 +72,8 @@ func (r *mockExitClaimRepo) ClaimRoomExitForUpdate(_ context.Context, roomID, ch
 	return gvg.ExitClaimState{AlreadyClaimed: false, DeliveryDone: false}, nil
 }
 
-func (r *mockExitClaimRepo) MarkExitDeliveryDone(_ context.Context, roomID, charID string) error {
-	key := roomID + ":" + charID
+func (r *mockExitClaimRepo) MarkExitDeliveryDone(_ context.Context, roomID, charID, joinID string) error {
+	key := roomID + ":" + charID + ":" + joinID
 	st := r.claims[key]
 	st.DeliveryDone = true
 	r.claims[key] = st
@@ -393,5 +393,107 @@ func TestLeaveRoom_ConsumedItemsCarryAcrossRoundsAndRetryIdempotency(t *testing.
 	req := settler.reqs[0]
 	if req.ExitFatigue != 7 || req.ExitBonusRounds != 2 || req.BattleResult.RemainingHP["c1"] != 55 || req.BattleResult.RemainingMP["c1"] != 5 || len(req.BattleResult.ConsumedItems["c1"]) != 1 {
 		t.Fatalf("unexpected settler request: %+v", req)
+	}
+}
+
+func TestLeaveRoom_RejoinSameRoomAppliesNewExitSideEffectsAndRetryIdempotency(t *testing.T) {
+	ctx := context.Background()
+	settler := &stubPostBattleSettler{}
+	claims := newMockExitClaimRepo()
+	roomRepo := &failingDeleteCharRoomRepo{
+		RoomRepository: gvg.NewMemoryRoomRepository(),
+		err:            errors.New("valkey unavailable"),
+	}
+	var hookCalls int
+	hook := func(_ context.Context, _ string) (string, error) {
+		hookCalls++
+		return "ok", nil
+	}
+
+	standings := newMockStandingRepo()
+	guilds := newMockGuildRepo()
+	chars := newMockCharRepo()
+	chars.characters["c1"] = createTestCharacter("c1", "Leader", 80, 0)
+	chars.characters["c2"] = createTestCharacter("c2", "Enemy", 90, 0)
+	guilds.guilds["g1"] = guild.Guild{ID: "g1", Name: "Crimson", Color: "#FF3333"}
+	guilds.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
+	guilds.charGuilds["c1"], guilds.charGuilds["c2"] = "g1", "g2"
+
+	engine := &customGvGBattleEngine{
+		result: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"c1": 33, "c2": 0},
+			RemainingMP: map[string]int{"c1": 7, "c2": 0},
+		},
+	}
+	svc, err := gvg.NewService(
+		roomRepo, standings, guilds, chars, engine,
+		gvg.WithPostBattleSettler(settler),
+		gvg.WithExitClaimRepository(claims),
+		gvg.WithPostExitHook(hook),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Rejoin Test", MaxMembers: 4, TargetWins: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstJoinID := detail.Members[0].JoinID
+	if firstJoinID == "" {
+		t.Fatal("expected non-empty initial JoinID")
+	}
+	if _, err := svc.JoinRoom(ctx, "c2", detail.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1st exit (pre-start).
+	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
+		t.Fatalf("first leave failed: %v", err)
+	}
+
+	// Rejoin same room -> distinct JoinID.
+	rejoined, err := svc.JoinRoom(ctx, "c1", detail.Room.ID, "")
+	if err != nil {
+		t.Fatalf("rejoin failed: %v", err)
+	}
+	var secondJoinID string
+	for _, m := range rejoined.Members {
+		if m.CharacterID == "c1" {
+			secondJoinID = m.JoinID
+		}
+	}
+	if secondJoinID == "" || secondJoinID == firstJoinID {
+		t.Fatalf("expected fresh JoinID on rejoin, got %q (first %q)", secondJoinID, firstJoinID)
+	}
+
+	// Advance round 1 (new leader c2 starts and advances), then c1 leaves with transient Valkey failure + retry.
+	if _, err := svc.StartMatch(ctx, "c2", detail.Room.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AdvanceRound(ctx, "c2", detail.Room.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	roomRepo.failDeleteCharRoom.Store(true)
+	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
+		t.Fatal("expected transient Valkey DeleteCharacterRoom failure")
+	}
+	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
+		t.Fatalf("second leave retry failed: %v", err)
+	}
+
+	if settler.calls != 2 {
+		t.Fatalf("settler called %d times, want 2 (once per membership join)", settler.calls)
+	}
+	if hookCalls != 2 {
+		t.Fatalf("postExitHook called %d times, want 2", hookCalls)
+	}
+	if settler.reqs[0].ExitFatigue != 1 || settler.reqs[0].ExitBonusRounds != 0 {
+		t.Fatalf("1st exit request mismatch: %+v", settler.reqs[0])
+	}
+	if settler.reqs[1].ExitFatigue != 4 || settler.reqs[1].ExitBonusRounds != 1 || settler.reqs[1].BattleResult.RemainingHP["c1"] != 33 {
+		t.Fatalf("2nd exit request mismatch: %+v", settler.reqs[1])
 	}
 }

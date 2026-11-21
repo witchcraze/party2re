@@ -11,6 +11,7 @@ import (
 
 // LeaveRoom exits a GvG room (@にげる, _battle.cgi:1184-1247,1330-1375) across all phases,
 // transferring leadership to the first remaining member and disbanding only when empty.
+// SQL exit side-effects commit in applyExitSideEffects independently of Valkey cleanup and postExitHook.
 func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) error {
 	roomID = strings.TrimSpace(roomID)
 	if roomID == "" {
@@ -75,11 +76,12 @@ func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID strin
 		return nil
 	}
 
+	joinID := memberJoinKey(departing)
 	var claim ExitClaimState
 	if err := s.runInTx(ctx, func(txCtx context.Context) error {
 		if s.exitClaims != nil {
 			var err error
-			claim, err = s.exitClaims.ClaimRoomExitForUpdate(txCtx, roomID, charID)
+			claim, err = s.exitClaims.ClaimRoomExitForUpdate(txCtx, roomID, charID, joinID)
 			if err != nil {
 				return err
 			}
@@ -118,12 +120,22 @@ func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID strin
 			return err
 		}
 		if s.exitClaims != nil {
-			if err := s.exitClaims.MarkExitDeliveryDone(ctx, roomID, charID); err != nil {
+			if err := s.exitClaims.MarkExitDeliveryDone(ctx, roomID, charID, joinID); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func memberJoinKey(m GvGMember) string {
+	if m.JoinID != "" {
+		return m.JoinID
+	}
+	if !m.JoinedAt.IsZero() {
+		return m.JoinedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return "legacy"
 }
 
 func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {

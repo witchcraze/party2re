@@ -130,6 +130,7 @@ type GvGRoom struct {
 type GvGMember struct {
 	RoomID        string                    `json:"room_id"`
 	CharacterID   string                    `json:"character_id"`
+	JoinID        string                    `json:"join_id,omitempty"`
 	CharacterName string                    `json:"character_name"`
 	JobID         string                    `json:"job_id"`
 	Level         int                       `json:"level"`

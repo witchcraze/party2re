@@ -7,18 +7,18 @@ import (
 	"github.com/witchcraze/party2re/internal/gvg"
 )
 
-// ClaimRoomExitForUpdate locks and records a character's GvG exit claim within the active transaction.
+// ClaimRoomExitForUpdate locks and records a character's per-join GvG exit claim within the active transaction.
 // Transaction: joins ambient RunInTx
 // Lock Order: gvg_exit_claims(0)
-func (r *GvGRepository) ClaimRoomExitForUpdate(ctx context.Context, roomID, characterID string) (gvg.ExitClaimState, error) {
-	if roomID == "" || characterID == "" {
-		return gvg.ExitClaimState{}, errors.New("room_id and character_id are required")
+func (r *GvGRepository) ClaimRoomExitForUpdate(ctx context.Context, roomID, characterID, joinID string) (gvg.ExitClaimState, error) {
+	if roomID == "" || characterID == "" || joinID == "" {
+		return gvg.ExitClaimState{}, errors.New("room_id, character_id, and join_id are required")
 	}
 	executor := ExecutorFromContext(ctx, r.db)
 	res, err := executor.ExecContext(ctx, `
-		INSERT IGNORE INTO gvg_exit_claims (room_id, character_id, delivery_done)
-		VALUES (?, ?, FALSE)
-	`, roomID, characterID)
+		INSERT IGNORE INTO gvg_exit_claims (room_id, character_id, join_id, delivery_done)
+		VALUES (?, ?, ?, FALSE)
+	`, roomID, characterID, joinID)
 	if err != nil {
 		return gvg.ExitClaimState{}, err
 	}
@@ -29,8 +29,8 @@ func (r *GvGRepository) ClaimRoomExitForUpdate(ctx context.Context, roomID, char
 
 	var deliveryDone bool
 	if err := executor.QueryRowContext(ctx, `
-		SELECT delivery_done FROM gvg_exit_claims WHERE room_id = ? AND character_id = ? FOR UPDATE
-	`, roomID, characterID).Scan(&deliveryDone); err != nil {
+		SELECT delivery_done FROM gvg_exit_claims WHERE room_id = ? AND character_id = ? AND join_id = ? FOR UPDATE
+	`, roomID, characterID, joinID).Scan(&deliveryDone); err != nil {
 		return gvg.ExitClaimState{}, err
 	}
 
@@ -40,13 +40,13 @@ func (r *GvGRepository) ClaimRoomExitForUpdate(ctx context.Context, roomID, char
 	}, nil
 }
 
-// MarkExitDeliveryDone marks post-exit tavern delivery/fullness processing as completed.
-func (r *GvGRepository) MarkExitDeliveryDone(ctx context.Context, roomID, characterID string) error {
-	if roomID == "" || characterID == "" {
-		return errors.New("room_id and character_id are required")
+// MarkExitDeliveryDone marks post-exit tavern delivery/fullness processing as completed for this join.
+func (r *GvGRepository) MarkExitDeliveryDone(ctx context.Context, roomID, characterID, joinID string) error {
+	if roomID == "" || characterID == "" || joinID == "" {
+		return errors.New("room_id, character_id, and join_id are required")
 	}
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
-		UPDATE gvg_exit_claims SET delivery_done = TRUE WHERE room_id = ? AND character_id = ?
-	`, roomID, characterID)
+		UPDATE gvg_exit_claims SET delivery_done = TRUE WHERE room_id = ? AND character_id = ? AND join_id = ?
+	`, roomID, characterID, joinID)
 	return err
 }

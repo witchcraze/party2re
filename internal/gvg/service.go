@@ -61,10 +61,10 @@ type ExitClaimState struct {
 	DeliveryDone   bool
 }
 
-// ExitClaimRepository records durable per-character GvG exit claims for retry safety.
+// ExitClaimRepository records durable per-join GvG exit claims for retry safety.
 type ExitClaimRepository interface {
-	ClaimRoomExitForUpdate(ctx context.Context, roomID, characterID string) (ExitClaimState, error)
-	MarkExitDeliveryDone(ctx context.Context, roomID, characterID string) error
+	ClaimRoomExitForUpdate(ctx context.Context, roomID, characterID, joinID string) (ExitClaimState, error)
+	MarkExitDeliveryDone(ctx context.Context, roomID, characterID, joinID string) error
 }
 
 // PostExitHook resets meal fullness and delivers reserved tavern food upon room exit.
@@ -285,6 +285,7 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 	member := GvGMember{
 		RoomID:        roomID,
 		CharacterID:   char.ID,
+		JoinID:        id.New(),
 		CharacterName: char.Name,
 		JobID:         char.JobID,
 		Level:         char.Level,
@@ -389,6 +390,7 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 		newMember := GvGMember{
 			RoomID:        roomID,
 			CharacterID:   char.ID,
+			JoinID:        id.New(),
 			CharacterName: char.Name,
 			JobID:         char.JobID,
 			Level:         char.Level,

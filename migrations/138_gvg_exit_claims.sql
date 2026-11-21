@@ -1,10 +1,11 @@
--- Durable per-character exit claim for GvG rooms to keep departure side-effects idempotent across retries (#2533).
+-- Durable per-join exit claim for GvG rooms to keep departure side-effects idempotent across retries (#2533).
 CREATE TABLE IF NOT EXISTS gvg_exit_claims (
     room_id VARCHAR(36) NOT NULL,
     character_id CHAR(32) NOT NULL,
+    join_id VARCHAR(36) NOT NULL,
     delivery_done BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (room_id, character_id),
+    PRIMARY KEY (room_id, character_id, join_id),
     CONSTRAINT fk_gvg_exit_claims_character
         FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
