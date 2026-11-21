@@ -43,24 +43,35 @@ func (s *Service) isCharacterSleeping(ctx context.Context, characterID string) (
 	return s.timers.IsLocked(ctx, timer.CategorySleep, characterID)
 }
 
-func (s *Service) saveLiveRoom(ctx context.Context, detail RoomDetail) error {
-	ttl := DefaultLobbyTTL
-	if !detail.Room.LastActivityAt.IsZero() {
-		ttl = detail.Room.LastActivityAt.Add(DefaultLobbyTTL).Sub(s.now())
+func (s *Service) checkRecoveredInactive(lockedCtx context.Context, roomID string, last Transition) error {
+	now := s.now()
+	if !s.isInactive(last.LastActivityAt, now) {
+		return nil
 	}
-	if ttl <= 0 {
-		return ErrRoomInactive
+	if _, roomErr := s.repo.GetRoom(lockedCtx, roomID); roomErr != nil && !errors.Is(roomErr, ErrRoomNotFound) {
+		return roomErr
 	}
-	ttlCtx := withRemainingTTL(ctx, ttl)
-	if err := s.repo.SaveRoom(ttlCtx, detail.Room, detail.Members); err != nil {
-		return err
+	if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, last, now); cleanErr != nil {
+		return cleanErr
 	}
-	for _, m := range detail.Members {
-		if err := s.repo.SetCharacterRoom(ttlCtx, m.CharacterID, detail.Room.ID); err != nil {
-			return err
+	return ErrRoomNotFound
+}
+
+func (s *Service) commitActivityTransition(lockedCtx context.Context, last Transition, t Transition) error {
+	if s.isInactive(last.LastActivityAt, t.LastActivityAt) {
+		if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, last, t.LastActivityAt); cleanErr != nil {
+			return cleanErr
 		}
+		return ErrRoomNotFound
 	}
-	return nil
+	err := s.commitTransition(lockedCtx, t, nil)
+	if errors.Is(err, ErrRoomInactive) {
+		if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, last, t.LastActivityAt); cleanErr != nil {
+			return cleanErr
+		}
+		return ErrRoomNotFound
+	}
+	return err
 }
 
 // cleanupInactiveRoom executes legacy auto_delete_quest cleanup (quest.cgi:86-91,172-184):

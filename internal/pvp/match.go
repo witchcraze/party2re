@@ -2,7 +2,6 @@ package pvp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
@@ -14,6 +13,17 @@ import (
 func (s *Service) StartMatch(ctx context.Context, leaderID string, roomID string) (RoomDetail, error) {
 	var result RoomDetail
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		last := lastTransitionFromContext(lockedCtx)
+		if recoveredPendingFromContext(lockedCtx) && last.Kind == "start" && last.Detail.Room.Status != StatusDisbanded {
+			if err := s.checkRecoveredInactive(lockedCtx, roomID, last); err != nil {
+				return err
+			}
+			if last.Detail.Room.LeaderCharacterID != leaderID {
+				return ErrNotRoomLeader
+			}
+			result = last.Detail
+			return nil
+		}
 		detail, err := s.checkInactiveLocked(lockedCtx, roomID)
 		if err != nil {
 			return err
@@ -50,18 +60,15 @@ func (s *Service) StartMatch(ctx context.Context, leaderID string, roomID string
 		detail.Room.UpdatedAt = now
 		detail.Room.LastActivityAt = now
 
-		if err := s.transitions.TouchActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now); err != nil {
-			if errors.Is(err, ErrRoomInactive) {
-				if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, lastTransitionFromContext(lockedCtx), now); cleanErr != nil {
-					return cleanErr
-				}
-				return ErrRoomNotFound
-			}
+		if err := s.commitActivityTransition(lockedCtx, last, Transition{
+			Kind:           "start",
+			ActorID:        leaderID,
+			Detail:         detail,
+			LastActivityAt: now,
+		}); err != nil {
 			return err
 		}
-		if err := s.saveLiveRoom(lockedCtx, detail); err != nil {
-			return err
-		}
+		detail.Room.FinancialVersion++
 		result = detail
 		return nil
 	})
@@ -73,15 +80,9 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 	var result RoundResolution
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		last := lastTransitionFromContext(lockedCtx)
-		if last.Result != nil && last.Result.MatchCompleted && last.Detail.Room.Status != StatusDisbanded {
-			if s.isInactive(last.LastActivityAt, s.now()) {
-				if _, roomErr := s.repo.GetRoom(lockedCtx, roomID); roomErr != nil && !errors.Is(roomErr, ErrRoomNotFound) {
-					return roomErr
-				}
-				if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, last, s.now()); cleanErr != nil {
-					return cleanErr
-				}
-				return ErrRoomNotFound
+		if last.Result != nil && last.Detail.Room.Status != StatusDisbanded && (last.Result.MatchCompleted || (recoveredPendingFromContext(lockedCtx) && last.Kind == "advance")) {
+			if err := s.checkRecoveredInactive(lockedCtx, roomID, last); err != nil {
+				return err
 			}
 			if last.Detail.Room.LeaderCharacterID != leaderID {
 				return ErrNotRoomLeader
@@ -282,7 +283,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		now := s.now()
 		detail.Room.UpdatedAt = now
 		detail.Room.LastActivityAt = now
-		result = RoundResolution{
+		roundRes := RoundResolution{
 			Round:               detail.Room.Round,
 			Outcome:             roundOutcome,
 			WinnerTeam:          roundWinnerTeam,
@@ -298,25 +299,23 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		if matchCompleted {
 			pendingKills := cloneIntMap(detail.Room.PendingPvPKills)
 			detail.Room.PendingPvPKills = nil
-			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &result, ForfeitedPool: forfeitedPool, LastActivityAt: now}, func(txCtx context.Context) error {
+			if err := s.commitTransition(lockedCtx, Transition{Kind: "settle", ActorID: leaderID, Detail: detail, Result: &roundRes, ForfeitedPool: forfeitedPool, LastActivityAt: now}, func(txCtx context.Context) error {
 				return s.settleRewards(txCtx, awardedIDs, detail.Room.Name, prizePerMember, pendingKills)
 			}); err != nil {
 				return err
 			}
 		} else {
-			if err := s.transitions.TouchRoundActivity(lockedCtx, roomID, detail.Room.FinancialVersion, now, detail.Room.PendingPvPKills); err != nil {
-				if errors.Is(err, ErrRoomInactive) {
-					if _, cleanErr := s.cleanupInactiveRoom(lockedCtx, lastTransitionFromContext(lockedCtx), now); cleanErr != nil {
-						return cleanErr
-					}
-					return ErrRoomNotFound
-				}
-				return err
-			}
-			if err := s.saveLiveRoom(lockedCtx, detail); err != nil {
+			if err := s.commitActivityTransition(lockedCtx, last, Transition{
+				Kind:           "advance",
+				ActorID:        leaderID,
+				Detail:         detail,
+				Result:         &roundRes,
+				LastActivityAt: now,
+			}); err != nil {
 				return err
 			}
 		}
+		result = roundRes
 		return nil
 	})
 	return result, err
