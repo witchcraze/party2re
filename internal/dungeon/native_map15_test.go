@@ -528,3 +528,166 @@ func map15OutcomesOf(t *testing.T, exp dungeon.ActiveExpedition) []int {
 	}
 	return st.Outcomes
 }
+
+func TestNativeMap15_LegacyFlagSnapshots(t *testing.T) {
+	testMap14Stores(t, legacyFlagSnapshots)
+}
+
+func legacyFlagSnapshots(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
+	ctx := context.Background()
+	f := newMap15Fixture(t, store, id)
+	seed := func(variant, x, y, limit int, consumed []string, state string) dungeon.ActiveExpedition {
+		t.Helper()
+		exp := f.reload(t, id)
+		exp.MapVariant, exp.PosX, exp.PosY, exp.RoundLimit = variant, x, y, limit
+		exp.ConsumedEvents = slices.Clone(consumed)
+		exp.MapState = json.RawMessage(state)
+		exp.Encounter = nil
+		if err := store.SaveActiveExpedition(ctx, exp); err != nil {
+			t.Fatal(err)
+		}
+		f.setVitality(t, id, id, 1_000_000, 900)
+		f.rng.ints, f.rng.floats, f.rng.intCalls, f.rng.floatCalls = nil, nil, 0, 0
+		return f.reload(t, id)
+	}
+
+	// North floor _1: outcomes 2 and 5 carried over from flags; d is open, D stays consumed,
+	// E excludes 5 and writes typed JSON, and typed {"outcomes":[2,5]} passes the same gate.
+	northSeed := seed(2, 2, 3, 60, []string{"A", "D"}, `{"flags":"25"}`)
+	view, err := f.svc.ObserveExpedition(ctx, id)
+	if err != nil || view.Map.Tiles[2][1] != "□" {
+		t.Fatalf("open north gate view %+v err=%v", view, err)
+	}
+	if reloaded := f.reload(t, id); string(reloaded.MapState) != string(northSeed.MapState) || reloaded.Revision != northSeed.Revision {
+		t.Fatalf("observe mutated snapshot: %s rev %d", reloaded.MapState, reloaded.Revision)
+	}
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventMove {
+		t.Fatalf("north gate move %+v err=%v", res, err)
+	}
+	if got := f.reload(t, id); got.PosX != 2 || got.PosY != 4 || got.Round != northSeed.Round+1 {
+		t.Fatalf("north gate did not advance: %+v", got)
+	}
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove || f.rng.calls() != 0 {
+		t.Fatalf("consumed D re-triggered: %+v draws %d err=%v", res, f.rng.calls(), err)
+	}
+	f.setFloor(t, id, 2, 0, 2)
+	beforeNorthWrite := f.reload(t, id)
+	f.rng.ints = []int{1} // remaining _1 outcomes are [6, 7]; index 1 picks 7
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventMove {
+		t.Fatalf("E move %+v err=%v", res, err)
+	}
+	afterNorthWrite := f.reload(t, id)
+	if strings.Contains(string(afterNorthWrite.MapState), `"flags"`) || !slices.Equal(map15OutcomesOf(t, afterNorthWrite), []int{2, 5, 7}) {
+		t.Fatalf("E did not write migrated typed state: %s", afterNorthWrite.MapState)
+	}
+	f.rejectStaleMap14Step(t, id, beforeNorthWrite, afterNorthWrite)
+	f.setFloor(t, id, 2, 4, 2)
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventBoss {
+		t.Fatalf("F move %+v err=%v", res, err)
+	}
+	if got := f.reload(t, id); got.Encounter == nil || got.Encounter.Monster.ID != "nm15-shielded-bomb" || !slices.Equal(map15OutcomesOf(t, got), []int{2, 5, 7, 6}) {
+		t.Fatalf("F after migrated state: encounter %+v state %s", got.Encounter, got.MapState)
+	}
+
+	// Typed positive contrast on the same north gate.
+	typedSeed := seed(2, 2, 3, 60, []string{"A", "D"}, `{"outcomes":[2,5]}`)
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventMove {
+		t.Fatalf("typed north gate move %+v err=%v", res, err)
+	}
+	if got := f.reload(t, id); got.PosX != 2 || got.PosY != 4 || got.Round != typedSeed.Round+1 {
+		t.Fatalf("typed north gate did not advance: %+v", got)
+	}
+
+	// South floor _2: killed j, open wall 9, and non-ascending outcomes 4,2,7,5;
+	// j stays inert, d lets the party pass, Y writes field alongside migrated facts,
+	// and main floor C draws the only remaining outcome 3 while preserving order.
+	seed(3, 1, 6, 50, []string{"J"}, `{"flags":"4275j9"}`)
+	if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Map.Tiles[0][1] != "□" {
+		t.Fatalf("killed j view %+v err=%v", view, err)
+	}
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove {
+		t.Fatalf("killed j move %+v err=%v", res, err)
+	}
+	if got := f.reload(t, id); got.Encounter != nil || got.PosY != 5 {
+		t.Fatalf("killed j fired: %+v", got)
+	}
+	if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Map.Tiles[0][1] != "□" {
+		t.Fatalf("open south gate view %+v err=%v", view, err)
+	}
+	beforeGate := f.reload(t, id)
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove {
+		t.Fatalf("open south gate move %+v err=%v", res, err)
+	}
+	if got := f.reload(t, id); got.PosY != 4 || got.Round != beforeGate.Round+1 {
+		t.Fatalf("open south gate blocked: %+v", got)
+	}
+	f.setFloor(t, id, 3, 3, 3)
+	beforeY := f.reload(t, id)
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventBoss {
+		t.Fatalf("Y move %+v err=%v", res, err)
+	}
+	afterY := f.reload(t, id)
+	if strings.Contains(string(afterY.MapState), `"flags"`) ||
+		map15StateOf(t, afterY) != (map15TestState{Killed: "j", SouthOpen: true, Field: "fortress"}) ||
+		!slices.Equal(map15OutcomesOf(t, afterY), []int{4, 2, 7, 5}) {
+		t.Fatalf("Y state %s", afterY.MapState)
+	}
+	f.rejectStaleMap14Step(t, id, beforeY, afterY)
+	afterY.Encounter = nil
+	if err := store.SaveActiveExpedition(ctx, afterY); err != nil {
+		t.Fatal(err)
+	}
+	f.setFloor(t, id, 1, 4, 4)
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventBoss {
+		t.Fatalf("main C move %+v err=%v", res, err)
+	}
+	if got := f.reload(t, id); got.Encounter == nil || got.Encounter.Monster.ID != "nm15-bomb" || !slices.Equal(map15OutcomesOf(t, got), []int{4, 2, 7, 5, 3}) {
+		t.Fatalf("main C after migrated state: encounter %+v state %s", got.Encounter, got.MapState)
+	}
+
+	// South floor _2 alternate: killed k, closed wall (no 9), and saved field;
+	// k stays inert, d stays closed until K fires, then typed JSON opens d while preserving k and field.
+	seed(3, 3, 6, 50, []string{"J"}, `{"flags":"k","field":"fortress"}`)
+	if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Map.Tiles[0][1] != "□" {
+		t.Fatalf("killed k view %+v err=%v", view, err)
+	}
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove {
+		t.Fatalf("killed k move %+v err=%v", res, err)
+	}
+	beforeClosed := f.reload(t, id)
+	if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Map.Tiles[0][1] != "■" {
+		t.Fatalf("closed south gate view %+v err=%v", view, err)
+	}
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove {
+		t.Fatalf("closed south gate move %+v err=%v", res, err)
+	}
+	if got := f.reload(t, id); got.PosY != 5 || got.Round != beforeClosed.Round {
+		t.Fatalf("closed south gate let party through: %+v", got)
+	}
+	f.setFloor(t, id, 3, 3, 8)
+	beforeK := f.reload(t, id)
+	f.rng.floats = []float64{0.5, 0.5}
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventBoss {
+		t.Fatalf("K move %+v err=%v", res, err)
+	}
+	afterK := f.reload(t, id)
+	if strings.Contains(string(afterK.MapState), `"flags"`) ||
+		map15StateOf(t, afterK) != (map15TestState{Killed: "k", SouthOpen: true, Field: "fortress"}) {
+		t.Fatalf("K state %s", afterK.MapState)
+	}
+	f.rejectStaleMap14Step(t, id, beforeK, afterK)
+	afterK.Encounter = nil
+	if err := store.SaveActiveExpedition(ctx, afterK); err != nil {
+		t.Fatal(err)
+	}
+	f.setFloor(t, id, 3, 3, 5)
+	if view, err := f.svc.ObserveExpedition(ctx, id); err != nil || view.Map.Tiles[0][1] != "□" {
+		t.Fatalf("reloaded open south gate view %+v err=%v", view, err)
+	}
+	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventMove {
+		t.Fatalf("reloaded open south gate move %+v err=%v", res, err)
+	}
+	if got := f.reload(t, id); got.PosY != 4 || got.Round != afterK.Round+1 {
+		t.Fatalf("reloaded open south gate blocked: %+v", got)
+	}
+}
