@@ -958,14 +958,24 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 		target       string // "state" or "rewards"
 		field        string
 		corruptValue string
-		luaValidated bool
 	}{
-		{"corrupted consumed_events", "state", "consumed_events", "{bad-json", true},
-		{"corrupted members", "state", "members", "{bad-json", true},
-		{"corrupted round", "state", "round", "nan", true},
-		{"corrupted started_at", "state", "started_at", "not-a-timestamp", false},
-		{"corrupted rewards items", "rewards", "items", "{bad-json", true},
-		{"corrupted rewards exp", "rewards", "exp", "nan", true},
+		{"corrupted consumed_events", "state", "consumed_events", "{bad-json"},
+		{"object consumed_events", "state", "consumed_events", `{"bad":1}`},
+		{"empty object consumed_events", "state", "consumed_events", `{}`},
+		{"non-string element consumed_events", "state", "consumed_events", `[123]`},
+		{"corrupted members", "state", "members", "{bad-json"},
+		{"object members", "state", "members", `{"bad":1}`},
+		{"empty object members", "state", "members", `{}`},
+		{"non-object element members", "state", "members", `["bad"]`},
+		{"corrupted round", "state", "round", "nan"},
+		{"corrupted map_variant", "state", "map_variant", "nan"},
+		{"corrupted round_limit", "state", "round_limit", "nan"},
+		{"corrupted started_at", "state", "started_at", "not-a-timestamp"},
+		{"impossible calendar started_at", "state", "started_at", "2026-02-30T12:00:00Z"},
+		{"corrupted rewards items", "rewards", "items", "{bad-json"},
+		{"object rewards items", "rewards", "items", `{"bad":1}`},
+		{"non-string element rewards items", "rewards", "items", `[123]`},
+		{"corrupted rewards exp", "rewards", "exp", "nan"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			charID := "char-corrupt-" + strings.ReplaceAll(tc.name, " ", "-")
@@ -1021,9 +1031,6 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 			if !errors.Is(stepErr, dungeon.ErrExpeditionCorrupted) {
 				t.Fatalf("Step expected ErrExpeditionCorrupted, got %v", stepErr)
 			}
-			if !tc.luaValidated {
-				return
-			}
 
 			afterState, err := client.Do(ctx, client.B().Hgetall().Key(sKey).Build()).AsStrMap()
 			if err != nil {
@@ -1045,4 +1052,45 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("compatible empty and legacy null fields succeed", func(t *testing.T) {
+		charID := "char-corrupt-compat"
+		cleanupDungeonValkey(t, client, charID)
+		defer cleanupDungeonValkey(t, client, charID)
+
+		repo, err := dungeon.NewValkeyExpeditionRepository(client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exp := sampleExpedition("exp-compat", charID, dungeon.NativeMap0ID)
+		if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
+			t.Fatal(err)
+		}
+		sKey := fmt.Sprintf("party2:dungeon:{char:%s}:state", charID)
+		rKey := fmt.Sprintf("party2:dungeon:{char:%s}:rewards", charID)
+		if err := client.Do(ctx, client.B().Hset().Key(sKey).FieldValue().
+			FieldValue("consumed_events", "null").
+			FieldValue("map_variant", "").
+			FieldValue("round_limit", "").
+			FieldValue("started_at", "2026-11-21T16:00:00.123456+09:00").
+			Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Do(ctx, client.B().Hset().Key(rKey).FieldValue().FieldValue("items", "null").Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := repo.GetActiveExpedition(ctx, charID); err != nil || got == nil || len(got.ConsumedEvents) != 0 || len(got.AccumulatedItems) != 0 {
+			t.Fatalf("GetActiveExpedition compat failed: %+v err=%v", got, err)
+		}
+		out, err := repo.Step(ctx, charID, dungeon.StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewX:                 1,
+			NewY:                 0,
+			RoundDelta:           1,
+			Now:                  time.Now().UTC(),
+		})
+		if err != nil || out.Expedition.Round != 1 || len(out.Expedition.ConsumedEvents) != 0 {
+			t.Fatalf("Step compat failed: %+v err=%v", out, err)
+		}
+	})
 }

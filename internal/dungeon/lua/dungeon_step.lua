@@ -9,16 +9,68 @@ local function parse_int_field(hash_key, field)
     return tonumber(raw)
 end
 
-local function decode_array_field(hash_key, field)
+local function decode_array_field(hash_key, field, elem_type)
     local raw = redis.call('HGET', hash_key, field)
-    if not raw or raw == '' or raw == '[]' or raw == 'null' then
+    if not raw then
         return {}, false
     end
-    local ok, decoded = pcall(cjson.decode, raw)
+    local trimmed = string.match(raw, '^%s*(.-)%s*$')
+    if trimmed == '' or trimmed == '[]' or trimmed == 'null' then
+        return {}, false
+    end
+    if string.sub(trimmed, 1, 1) ~= '[' then
+        return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field .. ' json'
+    end
+    local ok, decoded = pcall(cjson.decode, trimmed)
     if not ok or type(decoded) ~= 'table' then
         return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field .. ' json'
     end
+    if elem_type then
+        for _, v in ipairs(decoded) do
+            if type(v) ~= elem_type then
+                return nil, false, 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field .. ' json'
+            end
+        end
+    end
     return decoded, true
+end
+
+local function validate_optional_timestamp(hash_key, field)
+    local raw = redis.call('HGET', hash_key, field)
+    if not raw or raw == '' then
+        return nil
+    end
+    local yr_s, mon_s, day_s, hr_s, min_s, sec_s, rest = string.match(raw, '^(%d%d%d%d)%-(%d%d)%-(%d%d)[Tt](%d%d):(%d%d):(%d%d)(.*)$')
+    if not yr_s then
+        return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    local yr, mon, day = tonumber(yr_s), tonumber(mon_s), tonumber(day_s)
+    local hr, min, sec = tonumber(hr_s), tonumber(min_s), tonumber(sec_s)
+    if mon < 1 or mon > 12 or hr > 23 or min > 59 or sec > 59 then
+        return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    local days_in_month = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+    if mon == 2 and yr % 4 == 0 and (yr % 100 ~= 0 or yr % 400 == 0) then
+        days_in_month[2] = 29
+    end
+    if day < 1 or day > days_in_month[mon] then
+        return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    if string.sub(rest, 1, 1) == '.' then
+        local frac
+        frac, rest = string.match(rest, '^(%.%d%d?%d?%d?%d?%d?%d?%d?%d?)(.*)$')
+        if not frac then
+            return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+        end
+    end
+    if rest == 'Z' or rest == 'z' then
+        return nil
+    end
+    local tz_h, tz_m = string.match(rest, '^[+-](%d%d):(%d%d)$')
+    if not tz_h or tonumber(tz_h) > 23 or tonumber(tz_m) > 59 then
+        return 'ERR_EXPEDITION_CORRUPTED: invalid ' .. field
+    end
+    return nil
 end
 
 local state_key = KEYS[1]
@@ -85,7 +137,20 @@ round = round + round_delta
 
 current_hp = current_hp + hp_delta
 
-local members, has_members, members_err = decode_array_field(state_key, 'members')
+local _, variant_err = parse_int_field(state_key, 'map_variant')
+if variant_err then
+    return redis.error_reply(variant_err)
+end
+local _, limit_err = parse_int_field(state_key, 'round_limit')
+if limit_err then
+    return redis.error_reply(limit_err)
+end
+local started_err = validate_optional_timestamp(state_key, 'started_at')
+if started_err then
+    return redis.error_reply(started_err)
+end
+
+local members, has_members, members_err = decode_array_field(state_key, 'members', 'table')
 if members_err then
     return redis.error_reply(members_err)
 end
@@ -178,7 +243,7 @@ if ARGV[20] and ARGV[20] ~= '' then
 end
 
 -- 5. Check and record event consumption
-local consumed_events, _, events_err = decode_array_field(state_key, 'consumed_events')
+local consumed_events, _, events_err = decode_array_field(state_key, 'consumed_events', 'string')
 if events_err then
     return redis.error_reply(events_err)
 end
@@ -192,7 +257,7 @@ local _, gold_err = parse_int_field(rewards_key, 'gold')
 if gold_err then
     return redis.error_reply(gold_err)
 end
-local items, _, items_err = decode_array_field(rewards_key, 'items')
+local items, _, items_err = decode_array_field(rewards_key, 'items', 'string')
 if items_err then
     return redis.error_reply(items_err)
 end
