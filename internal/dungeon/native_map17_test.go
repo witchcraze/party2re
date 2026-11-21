@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/dungeon"
 )
@@ -422,8 +423,16 @@ func TestNativeMap17_CorridorAmbush(t *testing.T) {
 		}
 		before := memberOf(t, f.reload(t, "lead"), "lead").CurrentHP
 		f.rng.floats = floats
-		if res, err := f.svc.Move(ctx, "lead", dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventBoss {
+		res, err := f.svc.Move(ctx, "lead", dungeon.DirectionSouth)
+		if err != nil || res.EventType != dungeon.EventBoss {
 			t.Fatalf("v: event %s err=%v", res.EventType, err)
+		}
+		if i == 0 {
+			if len(res.MemberDamages) != 2 || res.MemberDamages["lead"] != 90 || res.MemberDamages["ally"] != 90 {
+				t.Fatalf("v trap damages=%v, want lead:90 ally:90", res.MemberDamages)
+			}
+		} else if len(res.MemberDamages) != 0 {
+			t.Fatalf("v skipped trap damages=%v, want empty", res.MemberDamages)
 		}
 		after := f.reload(t, "lead")
 		if after.Encounter == nil || after.Encounter.Monster.ID != "nm17-mask" || slices.Contains(after.ConsumedEvents, "v") {
@@ -436,8 +445,12 @@ func TestNativeMap17_CorridorAmbush(t *testing.T) {
 		f.moveTo(t, "lead", 16, 6)
 		f.setVitality(t, "lead", "ally", 50, 0)
 		f.rng.floats = []float64{0.49, 0, 0}
-		if res, err := f.svc.Move(ctx, "lead", dungeon.DirectionSouth); err != nil || res.EventType != dungeon.EventBoss {
+		res, err = f.svc.Move(ctx, "lead", dungeon.DirectionSouth)
+		if err != nil || res.EventType != dungeon.EventBoss {
 			t.Fatalf("v again: event %s err=%v", res.EventType, err)
+		}
+		if len(res.MemberDamages) != 2 || res.MemberDamages["lead"] != 90 || res.MemberDamages["ally"] != 90 {
+			t.Fatalf("v again trap damages=%v, want lead:90 ally:90", res.MemberDamages)
 		}
 		if memberOf(t, f.reload(t, "lead"), "ally").CurrentHP != 0 {
 			t.Fatal("trap did not fell the ally")
@@ -454,8 +467,9 @@ func TestNativeMap17_KeyArmsCentre(t *testing.T) {
 	ctx := context.Background()
 	f := newMap17Fixture(t, dungeon.NewMemoryExpeditionRepository(), "x")
 	f.setFloor(t, "x", 2, 11, 13)
-	if res, err := f.svc.Move(ctx, "x", dungeon.DirectionEast); err != nil || res.EventType != dungeon.EventMove || f.rng.calls() != 0 {
-		t.Fatalf("x without key: event %s draws %d err=%v", res.EventType, f.rng.calls(), err)
+	res, err := f.svc.Move(ctx, "x", dungeon.DirectionEast)
+	if err != nil || res.EventType != dungeon.EventMove || f.rng.calls() != 0 || len(res.MemberDamages) != 0 {
+		t.Fatalf("x without key: event %s draws %d damages=%v err=%v", res.EventType, f.rng.calls(), res.MemberDamages, err)
 	}
 	var losses [2]int
 	for i, floats := range [][]float64{{0.24, 0}, {0.25}} {
@@ -463,17 +477,133 @@ func TestNativeMap17_KeyArmsCentre(t *testing.T) {
 		f.moveTo(t, "x", 11, 13)
 		before := f.reload(t, "x").CurrentHP
 		f.rng.floats = floats
-		if res, err := f.svc.Move(ctx, "x", dungeon.DirectionEast); err != nil || res.EventType != dungeon.EventBoss {
+		res, err := f.svc.Move(ctx, "x", dungeon.DirectionEast)
+		if err != nil || res.EventType != dungeon.EventBoss {
 			t.Fatalf("x with key: event %s err=%v", res.EventType, err)
+		}
+		if i == 0 {
+			if len(res.MemberDamages) != 1 || res.MemberDamages["x"] != 90 {
+				t.Fatalf("x trap damages=%v, want x:90", res.MemberDamages)
+			}
+		} else if len(res.MemberDamages) != 0 {
+			t.Fatalf("x skipped trap damages=%v, want empty", res.MemberDamages)
 		}
 		after := f.reload(t, "x")
 		if after.Encounter == nil || after.Encounter.Monster.ID != "nm17-great-mask" {
 			t.Fatalf("x encounter %+v", after.Encounter)
 		}
 		losses[i] = before - after.CurrentHP
+		if i == 0 {
+			fightRes, err := f.svc.Fight(ctx, "x")
+			if err != nil || len(fightRes.MemberDamages) != 0 {
+				t.Fatalf("fight after trap: damages=%v err=%v", fightRes.MemberDamages, err)
+			}
+		}
 	}
 	if losses[0]-losses[1] != 90 {
 		t.Fatalf("losses %v: trap should add int(100 × 0.9)", losses)
+	}
+
+	// Trap damage is also reported when the ambush battle ends in victory.
+	hero := map17Hero("win")
+	hero.Stats.Attack, hero.Stats.Agility = 10_000, 10_000
+	fw := newNativeFixtureOn(t, dungeon.NewMemoryExpeditionRepository(), hero)
+	if _, err := fw.svc.StartExpedition(ctx, "win", dungeon.NativeMap17ID); err != nil {
+		t.Fatal(err)
+	}
+	fw.consume(t, "win", "Y")
+	fw.setFloor(t, "win", 2, 11, 13)
+	fw.rng.floats = []float64{0.24, 0}
+	winRes, err := fw.svc.Move(ctx, "win", dungeon.DirectionEast)
+	if err != nil || winRes.CombatOutcome != corebattle.OutcomeWin || len(winRes.MemberDamages) != 1 || winRes.MemberDamages["win"] != 90 {
+		t.Fatalf("win ambush: outcome=%s damages=%v err=%v", winRes.CombatOutcome, winRes.MemberDamages, err)
+	}
+}
+
+// An exact-lethal ambush trap persists zero HP and the untouched boss so
+// Escape remains available, while a survivor enters combat at post-trap HP.
+func TestNativeMap17_AllFallenTrapPersistsAmbush(t *testing.T) {
+	testMap14Stores(t, allFallenTrapPersistsAmbush)
+
+	// Party v ambush where the last living member falls to the trap also stays exploring.
+	ctx := context.Background()
+	party := newMap17Party(t)
+	party.setFloor(t, "lead", 2, 16, 6)
+	party.setVitality(t, "lead", "lead", 90, 0)
+	party.setVitality(t, "lead", "ally", 0, 0)
+	party.rng.floats = []float64{0.49, 0, 0}
+	partyRes, err := party.svc.Move(ctx, "lead", dungeon.DirectionSouth)
+	if err != nil || partyRes.IsFinished || partyRes.CombatOutcome != corebattle.OutcomeDefeat ||
+		len(partyRes.MemberDamages) != 2 || partyRes.MemberDamages["lead"] != 90 || partyRes.MemberDamages["ally"] != 90 {
+		t.Fatalf("party v lethal trap: res=%+v err=%v", partyRes, err)
+	}
+	partyAfter := party.reload(t, "lead")
+	if partyAfter.Status != dungeon.StatusExploring || partyAfter.CurrentHP != 0 ||
+		partyAfter.Encounter == nil || partyAfter.Encounter.Monster.ID != "nm17-mask" || partyAfter.Encounter.Enemies[0].HP != 800 {
+		t.Fatalf("party v after: %+v", partyAfter)
+	}
+	if _, err := party.svc.Escape(ctx, "lead"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func allFallenTrapPersistsAmbush(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
+	ctx := context.Background()
+	f := newMap17Fixture(t, store, id)
+	f.consume(t, id, "Y")
+	f.setFloor(t, id, 2, 11, 13)
+	exp := f.reload(t, id)
+	exp.AccumulatedExp, exp.AccumulatedGold = 7, 9
+	if err := f.store.SaveActiveExpedition(ctx, exp); err != nil {
+		t.Fatal(err)
+	}
+	f.setVitality(t, id, id, 90, 0)
+	before := f.reload(t, id)
+
+	f.rng.floats = []float64{0.24, 0}
+	res, err := f.svc.Move(ctx, id, dungeon.DirectionEast)
+	if err != nil || res.IsFinished || res.EventType != dungeon.EventBoss || res.CombatOutcome != corebattle.OutcomeDefeat {
+		t.Fatalf("lethal ambush: res=%+v err=%v", res, err)
+	}
+	if len(res.MemberDamages) != 1 || res.MemberDamages[id] != 90 {
+		t.Fatalf("lethal ambush damages=%v, want %s:90", res.MemberDamages, id)
+	}
+
+	after := f.reload(t, id)
+	if after.Status != dungeon.StatusExploring || after.PosX != 12 || after.PosY != 13 || after.Round != before.Round+1 ||
+		after.CurrentHP != 0 || memberOf(t, after, id).CurrentHP != 0 ||
+		after.AccumulatedExp != 7 || after.AccumulatedGold != 9 || len(memberOf(t, after, id).ConsumedItems) != 0 {
+		t.Fatalf("after lethal ambush: %+v", after)
+	}
+	if after.Encounter == nil || after.Encounter.Monster.ID != "nm17-great-mask" ||
+		len(after.Encounter.Enemies) != 1 || after.Encounter.Enemies[0].HP != 1300 || after.Encounter.Enemies[0].MaxHP != 1300 {
+		t.Fatalf("after encounter: %+v", after.Encounter)
+	}
+	f.rejectStaleMap14Step(t, id, before, after)
+	if _, err := f.svc.Fight(ctx, id); !errors.Is(err, dungeon.ErrActorFallen) {
+		t.Fatalf("fight when all fallen: err=%v", err)
+	}
+	esc, err := f.svc.Escape(ctx, id)
+	h := f.repo.histories[id]
+	if err != nil || esc.Expedition.Status != dungeon.StatusEscaped || len(h) != 1 || h[0].ExpReward != 7 || h[0].GoldReward != 9 {
+		t.Fatalf("escape after lethal ambush: %+v err=%v history=%+v", esc, err, h)
+	}
+
+	// Surviving with 1 HP reaches the resolver at post-trap HP.
+	surv := newMap17Fixture(t, store, id)
+	surv.consume(t, id, "Y")
+	surv.setFloor(t, id, 2, 11, 13)
+	surv.setVitality(t, id, id, 91, 0)
+	surv.rng.floats = []float64{0.24, 0}
+	survRes, err := surv.svc.Move(ctx, id, dungeon.DirectionEast)
+	if err != nil || survRes.BattleResult == nil || survRes.BattleResult.Turns == 0 || len(survRes.MemberDamages) != 1 || survRes.MemberDamages[id] != 90 {
+		t.Fatalf("survivor ambush: res=%+v err=%v", survRes, err)
+	}
+	if got := surv.reload(t, id); got.PosX != 12 || got.PosY != 13 || got.Encounter == nil {
+		t.Fatalf("survivor after: %+v", got)
+	}
+	if _, err := surv.svc.Escape(ctx, id); err != nil {
+		t.Fatal(err)
 	}
 }
 

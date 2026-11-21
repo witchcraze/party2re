@@ -25,9 +25,12 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 	solo := corebattle.Result{Outcome: corebattle.OutcomeWin, Logs: logs}
 	group := corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, Logs: logs}
 	dungeonResult := dungeon.ExpeditionStepResult{EventType: dungeon.EventBattle, Monster: &dungeon.DungeonMonster{Name: "Slime", ExpReward: 2, GoldReward: 3}, CombatOutcome: corebattle.OutcomeWin, BattleResult: &solo}
+	moveResult := dungeonResult
+	moveResult.EventType = dungeon.EventBoss
+	moveResult.MemberDamages = map[string]int{"c1": 90}
 	ds := &stubDungeonService{
 		moveFn: func(context.Context, string, dungeon.Direction) (dungeon.ExpeditionStepResult, error) {
-			return dungeonResult, nil
+			return moveResult, nil
 		},
 		fightFn:  func(context.Context, string) (dungeon.ExpeditionStepResult, error) { return dungeonResult, nil },
 		escapeFn: func(context.Context, string) (dungeon.ExpeditionStepResult, error) { return dungeonResult, nil },
@@ -90,6 +93,17 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 			for _, key := range tc.keys[:len(tc.keys)-1] {
 				if err := json.Unmarshal(value[key], &value); err != nil {
 					t.Fatalf("%s: %v", rec.Body.String(), err)
+				}
+			}
+			switch tc.name {
+			case "dungeon move":
+				var damages map[string]int
+				if err := json.Unmarshal(value["member_damages"], &damages); err != nil || damages["c1"] != 90 {
+					t.Fatalf("missing member_damages: %s err=%v", rec.Body.String(), err)
+				}
+			case "dungeon fight":
+				if _, ok := value["member_damages"]; ok {
+					t.Fatalf("unexpected member_damages on fight: %s", rec.Body.String())
 				}
 			}
 			var got []struct {
