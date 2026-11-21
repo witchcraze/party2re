@@ -150,6 +150,15 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			return err
 		}
 
+		battleActor, err := s.buildBattleActor(txCtx, leaderChar.ID)
+		if err != nil {
+			return err
+		}
+		maxHP := leaderChar.Stats.MaxHP
+		if battleActor != nil {
+			maxHP = battleActor.MaxHP
+		}
+
 		createdMember = Member{
 			PartyID:       partyID,
 			CharacterID:   leaderChar.ID,
@@ -157,10 +166,11 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			JobID:         leaderChar.JobID,
 			Level:         leaderChar.Level,
 			HP:            leaderChar.Stats.HP,
-			MaxHP:         leaderChar.Stats.MaxHP,
+			MaxHP:         maxHP,
 			IsLeader:      true,
 			ReadyState:    true,
 			JoinedAt:      now,
+			BattleActor:   battleActor,
 		}
 		return s.repo.AddMember(txCtx, createdMember)
 	})

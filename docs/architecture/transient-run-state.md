@@ -603,7 +603,11 @@ The [Adventure contract](../design/adventure.md#combat-travel-and-encounter-repl
 owns the transition semantics; there is no separate travel/EX store.
 
 Party admission takes its existing lobby lock, then serializes roster validation
-and the SQL handoff on the admission's durable run identity. Roster writers and
+and the SQL handoff on the admission's durable run identity. Each member's
+private battle-row snapshot is captured in the Valkey lobby on create or join
+and handed off through the immutable admission record (pre-cutover lobbies
+without a captured snapshot fall back to building at enrollment), while
+remaining excluded from public lobby responses. Roster writers and
 the retained Party batch start use that same SQL boundary, including when the
 Valkey lease expires. Enrollment freezes floor 0 without combat. SQL ownership
 survives lobby cleanup failure, expiry and restart; retry finds the same admission

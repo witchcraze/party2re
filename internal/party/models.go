@@ -75,16 +75,17 @@ type Party struct {
 }
 
 type Member struct {
-	PartyID       string    `json:"party_id"`
-	CharacterID   string    `json:"character_id"`
-	CharacterName string    `json:"character_name"`
-	JobID         string    `json:"job_id"`
-	Level         int       `json:"level"`
-	HP            int       `json:"hp"`
-	MaxHP         int       `json:"max_hp"`
-	IsLeader      bool      `json:"is_leader"`
-	ReadyState    bool      `json:"ready_state"`
-	JoinedAt      time.Time `json:"joined_at"`
+	PartyID       string                `json:"party_id"`
+	CharacterID   string                `json:"character_id"`
+	CharacterName string                `json:"character_name"`
+	JobID         string                `json:"job_id"`
+	Level         int                   `json:"level"`
+	HP            int                   `json:"hp"`
+	MaxHP         int                   `json:"max_hp"`
+	IsLeader      bool                  `json:"is_leader"`
+	ReadyState    bool                  `json:"ready_state"`
+	JoinedAt      time.Time             `json:"joined_at"`
+	BattleActor   *battle.LifetimeActor `json:"-"`
 }
 
 type PartyDetail struct {

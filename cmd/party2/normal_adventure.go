@@ -27,8 +27,8 @@ func (a normalAdmissionAdapter) CheckSoloAdmission(ctx context.Context, actor st
 }
 
 func (a normalAdmissionAdapter) WithNormalRoster(ctx context.Context, actor, partyID string, start func(context.Context, adventure.NormalAdmission) error) error {
-	return a.service.WithNormalRoster(ctx, actor, partyID, func(ctx context.Context, p party.Party, ids []string) error {
-		return start(ctx, adventure.NormalAdmission{Generation: "party:" + p.ID, PartyID: p.ID, ActorID: actor, CharacterIDs: ids, StageID: p.StageID, Season: p.Season, Mode: p.Mode, Speed: p.Speed})
+	return a.service.WithNormalRoster(ctx, actor, partyID, func(ctx context.Context, p party.Party, members []party.Member) error {
+		return start(ctx, party.NormalAdmissionFromRoster(actor, p, members))
 	})
 }
 

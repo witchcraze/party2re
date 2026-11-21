@@ -3,6 +3,9 @@ package party
 import (
 	"context"
 	"errors"
+
+	"github.com/witchcraze/party2re/internal/adventure"
+	"github.com/witchcraze/party2re/internal/core/battle"
 )
 
 var ErrMemberBusy = errors.New("party member is busy")
@@ -16,6 +19,12 @@ func (s *Service) SetMemberActivityCheck(check func(context.Context, string) err
 // WithReadyRoster validates consent from the live lobby and serializes its handoff.
 // The callback receives the stored roster, with the leader first.
 func (s *Service) WithReadyRoster(ctx context.Context, actor, partyID string, claimed []string, start func(context.Context, string, []string) error) error {
+	return s.withReadyDetail(ctx, actor, partyID, claimed, func(ctx context.Context, detail PartyDetail, ids []string) error {
+		return start(ctx, detail.Party.ID, ids)
+	})
+}
+
+func (s *Service) withReadyDetail(ctx context.Context, actor, partyID string, claimed []string, start func(context.Context, PartyDetail, []string) error) error {
 	if partyID == "" {
 		p, _, err := s.GetActiveParty(ctx, actor)
 		if err != nil {
@@ -65,7 +74,7 @@ func (s *Service) WithReadyRoster(ctx context.Context, actor, partyID string, cl
 				delete(seen, id)
 			}
 		}
-		return start(ctx, partyID, ids)
+		return start(ctx, detail, ids)
 	})
 }
 
@@ -91,16 +100,53 @@ func (s *Service) withWaitingLobby(ctx context.Context, partyID string, fn func(
 }
 
 // WithNormalRoster validates the live roster inside the durable handoff lock.
-func (s *Service) WithNormalRoster(ctx context.Context, actor, partyID string, start func(context.Context, Party, []string) error) error {
+// The callback receives the party and members ordered with the leader first.
+func (s *Service) WithNormalRoster(ctx context.Context, actor, partyID string, start func(context.Context, Party, []Member) error) error {
 	return s.repo.WithPartyAdventureLock(ctx, partyID, func(ctx context.Context) error {
 		return s.withWaitingLobby(ctx, partyID, func(ctx context.Context) error {
-			return s.WithReadyRoster(ctx, actor, partyID, nil, func(ctx context.Context, id string, ids []string) error {
-				p, err := s.repo.GetParty(ctx, id)
-				if err != nil {
-					return err
+			return s.withReadyDetail(ctx, actor, partyID, nil, func(ctx context.Context, detail PartyDetail, ids []string) error {
+				byID := make(map[string]Member, len(detail.Members))
+				for _, m := range detail.Members {
+					byID[m.CharacterID] = m
 				}
-				return start(ctx, p, ids)
+				ordered := make([]Member, 0, len(ids))
+				for _, id := range ids {
+					ordered = append(ordered, byID[id])
+				}
+				return start(ctx, detail.Party, ordered)
 			})
 		})
 	})
+}
+
+// NormalAdmissionFromRoster builds a NormalRun admission from a locked lobby roster.
+func NormalAdmissionFromRoster(actor string, p Party, members []Member) adventure.NormalAdmission {
+	ids := make([]string, len(members))
+	hasCaptured := false
+	for i, m := range members {
+		ids[i] = m.CharacterID
+		if m.BattleActor != nil {
+			hasCaptured = true
+		}
+	}
+	var actors []battle.LifetimeActor
+	if hasCaptured {
+		actors = make([]battle.LifetimeActor, len(members))
+		for i, m := range members {
+			if m.BattleActor != nil {
+				actors[i] = m.BattleActor.Clone()
+			}
+		}
+	}
+	return adventure.NormalAdmission{
+		Generation:   "party:" + p.ID,
+		PartyID:      p.ID,
+		ActorID:      actor,
+		CharacterIDs: ids,
+		Actors:       actors,
+		StageID:      p.StageID,
+		Season:       p.Season,
+		Mode:         p.Mode,
+		Speed:        p.Speed,
+	}
 }

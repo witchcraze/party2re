@@ -200,6 +200,8 @@ type normalFixture struct {
 	db      *sql.DB
 	chars   *database.CharacterRepository
 	invs    *database.InventoryRepository
+	equips  *database.EquipmentRepository
+	jobs    *database.CharacterJobRepository
 	depots  *database.DepotRepository
 	history *normalHistory
 	store   *normalStore
@@ -244,7 +246,7 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &normalFixture{db: db, chars: chars, invs: invs, depots: depots, history: &normalHistory{Repository: history}, store: &normalStore{NormalRunStore: runRepo}, clock: &normalClock{}, penalty: &normalPenalty{}, combat: &normalCombat{}, rng: &normalRNG{}}
+	f := &normalFixture{db: db, chars: chars, invs: invs, equips: equipment, jobs: jobs, depots: depots, history: &normalHistory{Repository: history}, store: &normalStore{NormalRunStore: runRepo}, clock: &normalClock{}, penalty: &normalPenalty{}, combat: &normalCombat{}, rng: &normalRNG{}}
 	f.clock.nanos.Store(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for range count {
 		c, err := database.CreateTestCharacterWithFunds(context.Background(), db, id.New()[:8], 100)

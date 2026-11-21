@@ -46,10 +46,18 @@ type ParticipantBuilder interface {
 	BuildParticipant(ctx context.Context, characterID string) (battle.Participant, error)
 }
 
+// LifetimeActorBuilder constructs a battle LifetimeActor snapshot from a character ID.
+type LifetimeActorBuilder interface {
+	BuildLifetimeActor(ctx context.Context, characterID, icon string) (battle.LifetimeActor, error)
+}
+
 // WithParticipantBuilder configures the ParticipantBuilder.
 func WithParticipantBuilder(builder ParticipantBuilder) Option {
 	return func(s *Service) {
 		s.participantBuilder = builder
+		if lb, ok := builder.(LifetimeActorBuilder); ok {
+			s.lifetimeActorBuilder = lb
+		}
 	}
 }
 

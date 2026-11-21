@@ -1,7 +1,6 @@
 package party
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -41,37 +40,6 @@ var updateMemberReadyLua string
 
 //go:embed lua/update_party.lua
 var updatePartyLua string
-
-// LobbyState represents the ephemeral composite state stored in Valkey Master for a party.
-type LobbyState struct {
-	Party   Party    `json:"party"`
-	Members []Member `json:"members"`
-}
-
-// UnmarshalJSON implements json.Unmarshaler to handle cases where empty Lua cjson tables
-// are serialized as "{}" instead of "[]" for Members.
-func (s *LobbyState) UnmarshalJSON(data []byte) error {
-	type Alias LobbyState
-	aux := struct {
-		Members json.RawMessage `json:"members"`
-		*Alias
-	}{
-		Alias: (*Alias)(s),
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	if len(aux.Members) == 0 || string(aux.Members) == "null" {
-		s.Members = []Member{}
-		return nil
-	}
-	trimmed := bytes.TrimSpace(aux.Members)
-	if bytes.Equal(trimmed, []byte("{}")) {
-		s.Members = []Member{}
-		return nil
-	}
-	return json.Unmarshal(aux.Members, &s.Members)
-}
 
 func mapLuaError(err error) error {
 	if err == nil {
@@ -547,6 +515,7 @@ func (r *ValkeyRepository) AddMember(ctx context.Context, m Member) error {
 			return ErrPartyFull
 		}
 
+		m.BattleActor = cloneBattleActor(m.BattleActor)
 		r.memMembers[m.PartyID][m.CharacterID] = m
 		r.memCharParty[m.CharacterID] = m.PartyID
 		if m.ReadyState {
@@ -558,7 +527,7 @@ func (r *ValkeyRepository) AddMember(ctx context.Context, m Member) error {
 		return nil
 	}
 
-	memberJSON, err := json.Marshal(m)
+	memberJSON, err := marshalStoredMember(m)
 	if err != nil {
 		return err
 	}
@@ -594,6 +563,7 @@ func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Me
 		}
 		var list []Member
 		for _, m := range membersMap {
+			m.BattleActor = cloneBattleActor(m.BattleActor)
 			if readyExp, ok := r.memReadyExp[partyID][m.CharacterID]; ok && now.Before(readyExp) {
 				m.ReadyState = true
 			} else {
@@ -618,29 +588,33 @@ func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Me
 		return nil, err
 	}
 
-	var state LobbyState
+	var state storedLobbyState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, err
 	}
 
-	for i := range state.Members {
+	members, err := decodeStoredMembers(state.Members)
+	if err != nil {
+		return nil, err
+	}
+	for i := range members {
 		// Check ready countdown key in Valkey
-		exists, err := r.client.Do(ctx, r.client.B().Exists().Key(r.readyKey(partyID, state.Members[i].CharacterID)).Build()).AsInt64()
+		exists, err := r.client.Do(ctx, r.client.B().Exists().Key(r.readyKey(partyID, members[i].CharacterID)).Build()).AsInt64()
 		if err == nil && exists > 0 {
-			state.Members[i].ReadyState = true
+			members[i].ReadyState = true
 		} else {
-			state.Members[i].ReadyState = false
+			members[i].ReadyState = false
 		}
 	}
 
-	sort.Slice(state.Members, func(i, j int) bool {
-		if state.Members[i].IsLeader != state.Members[j].IsLeader {
-			return state.Members[i].IsLeader
+	sort.Slice(members, func(i, j int) bool {
+		if members[i].IsLeader != members[j].IsLeader {
+			return members[i].IsLeader
 		}
-		return state.Members[i].JoinedAt.Before(state.Members[j].JoinedAt)
+		return members[i].JoinedAt.Before(members[j].JoinedAt)
 	})
 
-	return state.Members, nil
+	return members, nil
 }
 
 // GetMember retrieves a single member and evaluates their 60-second ready check countdown.
@@ -678,6 +652,7 @@ func (r *ValkeyRepository) GetActivePartyByCharacter(ctx context.Context, charac
 		if !ok {
 			return Party{}, Member{}, ErrNotFound
 		}
+		m.BattleActor = cloneBattleActor(m.BattleActor)
 		if readyExp, ok := r.memReadyExp[partyID][characterID]; ok && time.Now().UTC().Before(readyExp) {
 			m.ReadyState = true
 		} else {

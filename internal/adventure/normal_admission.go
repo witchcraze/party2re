@@ -118,6 +118,9 @@ func (s *NormalRunService) enter(ctx context.Context, player string, a NormalAdm
 	if len(a.CharacterIDs) < 1 || len(a.CharacterIDs) > 4 || a.CharacterIDs[0] != a.ActorID {
 		return RunReceipt{}, ErrNoParticipants
 	}
+	if len(a.Actors) != 0 && len(a.Actors) != len(a.CharacterIDs) {
+		return RunReceipt{}, ErrRunConflict
+	}
 	// Admission must reject duplicate/empty participants rather than deduplicate them.
 	ids := slices.Clone(a.CharacterIDs)
 	slices.Sort(ids)
@@ -225,10 +228,19 @@ func (s *NormalRunService) enter(ctx context.Context, player string, a NormalAdm
 		r.RecordSeason = r.Stage.Season
 		// quest.cgi:596–600: one EX draw after season selection, never repeated by travel.
 		r.EXUnlocked = r.Stage.exMarker() == markerRoomCreation && s.cfg.RNG.Intn(3) == 0
-		for _, id := range a.CharacterIDs {
-			actor, err := s.cfg.Builder.BuildLifetimeActor(ctx, id, "")
-			if err != nil {
-				return err
+		for i, id := range a.CharacterIDs {
+			var actor corebattle.LifetimeActor
+			if i < len(a.Actors) && a.Actors[i].ID != "" {
+				if a.Actors[i].ID != id {
+					return ErrRunConflict
+				}
+				actor = a.Actors[i].Clone()
+			} else {
+				var err error
+				actor, err = s.cfg.Builder.BuildLifetimeActor(ctx, id, "")
+				if err != nil {
+					return err
+				}
 			}
 			actor.TeamID = "allies"
 			r.Battle.Actors = append(r.Battle.Actors, actor)

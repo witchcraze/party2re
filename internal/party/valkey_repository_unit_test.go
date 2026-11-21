@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/valkey-io/valkey-go"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
@@ -690,5 +691,73 @@ func TestLobbyState_UnmarshalJSON(t *testing.T) {
 	var sCorrupt party.LobbyState
 	if err := json.Unmarshal([]byte("bad json"), &sCorrupt); err == nil {
 		t.Errorf("expected error on bad JSON")
+	}
+}
+
+func TestValkeyRepository_BattleActorRoundTripAndPublicJSON(t *testing.T) {
+	ctx := context.Background()
+	repo := party.NewValkeyRepository(nil)
+	now := time.Now().UTC()
+	p := sampleTestParty("party-actor-1", "char-lead-1", "戦闘行テスト")
+	if err := repo.SaveParty(ctx, p); err != nil {
+		t.Fatalf("SaveParty failed: %v", err)
+	}
+
+	held := "item-113"
+	actor := &corebattle.LifetimeActor{
+		Participant: corebattle.Participant{
+			ID:                "char-lead-1",
+			Name:              "LeaderHero",
+			HP:                100,
+			MaxHP:             200,
+			MP:                20,
+			MaxMP:             120,
+			Attack:            55,
+			Defense:           33,
+			Agility:           22,
+			Gear:              &corebattle.BattleGearStats{WeaponID: "weapon-01", ArmorID: "armor-01"},
+			ItemDefinitionIDs: []string{"weapon-01", "armor-01"},
+		},
+		HeldToolID: &held,
+		Tension:    1,
+		Hit:        95,
+	}
+	m := party.Member{
+		PartyID:       p.ID,
+		CharacterID:   "char-lead-1",
+		CharacterName: "LeaderHero",
+		JobID:         "job-01",
+		Level:         10,
+		HP:            100,
+		MaxHP:         200,
+		IsLeader:      true,
+		ReadyState:    true,
+		JoinedAt:      now,
+		BattleActor:   actor,
+	}
+	if err := repo.AddMember(ctx, m); err != nil {
+		t.Fatalf("AddMember failed: %v", err)
+	}
+
+	// Mutating caller pointer must not mutate stored snapshot.
+	actor.MaxHP = 999
+	actor.Gear.WeaponID = "changed"
+
+	members, err := repo.GetMembers(ctx, p.ID)
+	if err != nil || len(members) != 1 || members[0].BattleActor == nil {
+		t.Fatalf("GetMembers failed: members=%+v err=%v", members, err)
+	}
+	got := members[0].BattleActor
+	if got.MaxHP != 200 || got.MaxMP != 120 || got.Gear == nil || got.Gear.WeaponID != "weapon-01" || got.HeldToolID == nil || *got.HeldToolID != "item-113" {
+		t.Fatalf("stored BattleActor mutated or lost fields: %+v", got)
+	}
+
+	// Public PartyDetail JSON must never expose BattleActor or internal battle_actor_json.
+	publicJSON, err := json.Marshal(party.PartyDetail{Party: p, Members: members})
+	if err != nil {
+		t.Fatalf("Marshal PartyDetail failed: %v", err)
+	}
+	if strings.Contains(string(publicJSON), "battle_actor") || strings.Contains(string(publicJSON), "held_tool_id") || strings.Contains(string(publicJSON), "weapon-01") {
+		t.Fatalf("public lobby JSON exposed private battle row fields: %s", string(publicJSON))
 	}
 }

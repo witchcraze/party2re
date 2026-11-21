@@ -57,14 +57,15 @@ type NormalRun struct {
 // NormalAdmission is frozen under Party's roster lock. Generation is the lobby
 // identity for Party admission and the owned request identity for solo admission.
 type NormalAdmission struct {
-	Generation   string   `json:"generation"`
-	PartyID      string   `json:"party_id"`
-	ActorID      string   `json:"actor_id"`
-	CharacterIDs []string `json:"character_ids"`
-	StageID      string   `json:"stage_id"`
-	Season       string   `json:"season"`
-	Mode         string   `json:"mode"`
-	Speed        int      `json:"speed"`
+	Generation   string                     `json:"generation"`
+	PartyID      string                     `json:"party_id"`
+	ActorID      string                     `json:"actor_id"`
+	CharacterIDs []string                   `json:"character_ids"`
+	Actors       []corebattle.LifetimeActor `json:"actors,omitempty"`
+	StageID      string                     `json:"stage_id"`
+	Season       string                     `json:"season"`
+	Mode         string                     `json:"mode"`
+	Speed        int                        `json:"speed"`
 }
 
 type RunEarnings struct {
