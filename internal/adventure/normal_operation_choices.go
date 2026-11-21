@@ -2,6 +2,7 @@ package adventure
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,6 +51,7 @@ type runOperationCandidate struct {
 
 type normalOperations struct {
 	run      *NormalRun
+	state    corebattle.LifetimeState
 	actor    *corebattle.LifetimeActor
 	ctx      NormalOperationContext
 	order    []string
@@ -104,26 +106,27 @@ func (r *NormalRun) normalOperations(actorID string, ctx NormalOperationContext)
 		return nil, ErrRunForbidden
 	}
 
-	frame := &ops.ctx.Callback.TargetContext
-	frame.ActorID = actorID
-	frame.PartyIDs, frame.EnemyIDs, frame.MemberOnlyIDs = nil, nil, nil
-	for _, id := range r.Enemies {
-		if enemy := r.actor(id); enemy != nil && enemy.HP > 0 {
-			frame.EnemyIDs = append(frame.EnemyIDs, id)
-		}
+	state, frame, inspection, err := r.ProjectCombat(actorID)
+	if err != nil {
+		return nil, err
 	}
-	for _, member := range r.Battle.Actors {
-		switch {
-		case member.TeamID == a.TeamID:
-			frame.PartyIDs = append(frame.PartyIDs, member.ID)
-		case !slices.Contains(frame.EnemyIDs, member.ID):
-			frame.MemberOnlyIDs = append(frame.MemberOnlyIDs, member.ID)
+	ops.state = state
+	ops.actor = findActor(ops.state.Actors, actorID)
+	a = ops.actor
+	ops.ctx.Callback.TargetContext = frame
+	if len(ops.ctx.Callback.Inspection) == 0 {
+		ops.ctx.Callback.Inspection = inspection
+	} else {
+		merged := maps.Clone(inspection)
+		for id, content := range ops.ctx.Callback.Inspection {
+			merged[id] = content
 		}
+		ops.ctx.Callback.Inspection = merged
 	}
 
 	cursed := slices.Contains(a.Abilities, "cursed")
-	ops.treasure = slices.ContainsFunc(r.Boxes, func(box TreasureBox) bool { return box.OpenedBy == "" })
-	enemies := len(frame.EnemyIDs) > 0 || ops.treasure
+	ops.treasure = slices.ContainsFunc(r.Boxes, TreasureBox.isUnopened)
+	enemies := len(frame.EnemyIDs) > 0
 	combat := r.Floor > 0 && enemies
 	jobs := a.Jobs
 	if combat {
@@ -203,7 +206,7 @@ func (o *normalOperations) addJob(id string, sp int, previous bool) {
 	if sp == 0 {
 		return
 	}
-	entries, err := o.ctx.Definitions.PlayerCallbackTable(&o.run.Battle, &o.ctx.Callback, id)
+	entries, err := o.ctx.Definitions.PlayerCallbackTable(&o.state, &o.ctx.Callback, id)
 	if err != nil {
 		// An unavailable table must be visible even while its metadata cannot
 		// be constructed. It is neither an executable choice nor a random pool.
@@ -346,7 +349,7 @@ func (o *normalOperations) addBetweenEncounter() {
 		if len(corebattle.RosterEntries(n)) == 0 {
 			continue
 		}
-		table, err := o.ctx.Definitions.PlayerCallbackTable(&o.run.Battle, &o.ctx.Callback, id)
+		table, err := o.ctx.Definitions.PlayerCallbackTable(&o.state, &o.ctx.Callback, id)
 		if err != nil || len(table) < 2 {
 			o.addBattle(id, id, id, id)
 			continue

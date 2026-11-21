@@ -165,3 +165,25 @@ func TestInspectionValuationThresholdsAndBranches(t *testing.T) {
 		t.Fatal(result)
 	}
 }
+
+func TestInspectionCallbackContextOverlayPreservesPortDefaults(t *testing.T) {
+	s, c, d := ordinaryToolFixture()
+	c.Inspection["enemy"] = corebattle.InspectionContent{Treasure: true, Empty: true}
+	f := corebattle.CallbackContext{
+		TargetContext: c.TargetContext,
+		Arguments:     []string{"enemy"},
+		Inspection: map[string]corebattle.InspectionContent{
+			"enemy": {Treasure: true, RewardKind: 3, DefinitionID: "item-200", Price: 15000},
+		},
+	}
+	ops, err := d.InvocationAction(&s, &f, []string{"job-78-entry-1"}, noArithmeticDraws{t})
+	if err != nil || !c.Inspection["enemy"].Empty {
+		t.Fatalf("overlay mutated port defaults during validation: ops=%+v err=%v c=%+v", ops, err, c.Inspection)
+	}
+	if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Results) != 1 || len(c.Results[0].Facts) != 1 || c.Results[0].Facts[0].Kind != "valuation" || c.Results[0].Facts[0].Band != 4 {
+		t.Fatalf("unexpected overlay inspection result: %+v", c.Results)
+	}
+}

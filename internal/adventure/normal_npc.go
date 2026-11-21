@@ -9,7 +9,11 @@ import (
 
 // NextNPC selects in semantic order, including skipped heads. It is a read:
 // rejected/ineligible operations and GET never change order or timestamps.
+// Treasure-room NPC response is disabled (vs_monster.cgi:38–41).
 func (r *NormalRun) NextNPC(now time.Time) string {
+	if isTreasureFloor(r.Floor) {
+		return ""
+	}
 	for _, id := range r.Enemies {
 		a := r.actor(id)
 		if a != nil && a.NPC && a.HP > 0 && now.Sub(r.LastActions[id]) >= time.Duration(r.Admission.Speed)*time.Second {

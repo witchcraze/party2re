@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
 )
@@ -133,15 +134,13 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 				return ParsedRunAction{}, ErrRunUnavailable
 			}
 		case "chest":
-			if !isTreasureFloor(o.run.Floor) || !slices.ContainsFunc(o.run.Boxes, func(box TreasureBox) bool {
-				return box.OpenedBy == "" && (target == "" || box.ID == target)
-			}) {
+			if !isTreasureFloor(o.run.Floor) || action.TargetID == "" {
 				return ParsedRunAction{}, ErrNoUnopenedTreasure
 			}
 		}
 		return action, nil
 	}
-	if o.banned(c) || o.treasure && !takesSelector(c) {
+	if o.banned(c) {
 		return ParsedRunAction{}, ErrRunUnavailable
 	}
 	if action.EntryID == stockLevelAction {
@@ -155,7 +154,7 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 		assets.StoredItem, assets.StoredTarget = action.TargetID, action.Input
 		frame.Assets = &assets
 	}
-	state := &o.run.Battle
+	state := &o.state
 	rng := random.Default()
 	switch {
 	case c.custom:
@@ -202,11 +201,17 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 	if entry == "job-50-entry-7" || entry == "job-86-entry-0" || entry == "job-86-entry-3" || takesSelector(c) {
 		scoped = false
 	}
-	if scoped && target != "" {
-		target = o.participantID(target, legacy)
-		if target == "" {
+	if c.Action == "chest" {
+		target = o.chestTargetID(target, legacy)
+	} else if scoped && target != "" {
+		resolved := o.participantID(target, legacy)
+		if resolved == "" && entry == "job-78-entry-1" {
+			resolved = o.catalogItemID(target, legacy)
+		}
+		if resolved == "" {
 			return ParsedRunAction{}, ErrRunConflict
 		}
+		target = resolved
 	}
 	if input != "" && (entry == "job-86-entry-5" || entry == "job-50-entry-7" && !toolSelector(target)) {
 		input = o.participantID(input, legacy)
@@ -239,17 +244,52 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 }
 
 func (o *normalOperations) participantID(target string, legacy bool) string {
-	if o.run.actor(target) != nil {
+	if findActor(o.state.Actors, target) != nil {
 		return target
 	}
 	if legacy {
-		for _, a := range o.run.Battle.Actors {
-			if a.Name == target {
+		for _, a := range o.state.Actors {
+			if a.Name == target || (a.NPC && "@"+a.Name == target) {
 				return a.ID
 			}
 		}
 	}
 	return ""
+}
+
+func (o *normalOperations) chestTargetID(target string, legacy bool) string {
+	if !isTreasureFloor(o.run.Floor) || target == "" {
+		return ""
+	}
+	for _, box := range o.run.Boxes {
+		if !box.isUnopened() {
+			continue
+		}
+		if box.ID == target {
+			return box.ID
+		}
+		if legacy && (box.Name == target || "@"+box.Name == target) {
+			return box.ID
+		}
+	}
+	return ""
+}
+
+func (o *normalOperations) catalogItemID(target string, legacy bool) string {
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		return ""
+	}
+	var def item.Definition
+	if legacy {
+		def, err = catalog.FindByName(target)
+	} else {
+		def, err = catalog.FindByID(target)
+	}
+	if err != nil {
+		return ""
+	}
+	return def.ID
 }
 
 func (o *normalOperations) registered(c runOperationCandidate) bool {

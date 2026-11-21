@@ -95,6 +95,28 @@ func TestJobEncounterTreasureRetrySPAndTargetResolution(t *testing.T) {
 			t.Fatal(tc, calls, s.Actors, f.Arguments)
 		}
 	}
+
+	// Already-projected chest actors (in EnemyIDs or MemberOnlyIDs) are accepted without duplication;
+	// a party ID collision still rejects.
+	s, c, f, d := jobEncounterFixture()
+	s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 240}
+	box := corebattle.LifetimeActor{Participant: corebattle.Participant{ID: "box-1", TeamID: "enemy", HP: 1000, MaxHP: 1000, Gear: &corebattle.BattleGearStats{}}, NPC: true}
+	s.Actors = append(s.Actors, box)
+	f.EnemyIDs = append(f.EnemyIDs, "box-1")
+	f.Arguments[0] = "box-1"
+	calls := 0
+	c.Room = &corebattle.JobRoomContext{NormalStage: true, Floor: 11, TreasureIDs: []string{"box-1"},
+		Validate: func(string) error { return nil },
+		Apply:    func(string) (corebattle.TargetContext, error) { calls++; return f.TargetContext, nil },
+	}
+	executeJobEncounter(t, &s, &f, d, "job-78-entry-6", 0)
+	if calls != 1 || s.Actors[0].Jobs.SP != 100 {
+		t.Fatalf("already-projected chest failed: calls=%d actor=%+v", calls, s.Actors[0])
+	}
+	c.Room.TreasureIDs = []string{"self"}
+	if _, err := d.InvocationAction(&s, &f, []string{"job-78-entry-6"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatalf("party ID collision in TreasureIDs accepted: %v", err)
+	}
 }
 
 func TestJobEncounterOrderingCursorAndTailGuards(t *testing.T) {
