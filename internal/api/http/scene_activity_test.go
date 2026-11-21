@@ -17,7 +17,18 @@ import (
 )
 
 func TestActiveScenesOverrideSelectionAndNeverMutate(t *testing.T) {
-	for _, kind := range []string{"party", "adventure", "pvp", "gvg", "dungeon", "challenge", "casino"} {
+	for _, tc := range []struct {
+		kind, title string
+	}{
+		{"party", "パーティー"},
+		{"adventure", "冒険"},
+		{"pvp", "対戦部屋"},
+		{"gvg", "ギルド戦"},
+		{"dungeon", "ダンジョン探索"},
+		{"challenge", "試練"},
+		{"casino", "カジノ"},
+	} {
+		kind := tc.kind
 		t.Run(kind, func(t *testing.T) {
 			f := newGatewayFixture(t)
 			store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "bank"}, loadErr: errors.New("selection unavailable")}
@@ -44,7 +55,7 @@ func TestActiveScenesOverrideSelectionAndNeverMutate(t *testing.T) {
 			}
 			router := f.router("rescue_request", timer.NewService(nil), opts...)
 			status, observed := navigationGET(t, router)
-			if status != 200 || observed.Scene.Kind != "activity" || observed.Scene.LocationID != kind || observed.Scene.Subject != nil || observed.Scene.Speaker != nil || observed.Scene.Opponent != nil || observed.Scene.BgimgURL != "" || observed.AvailableActions == nil || observed.OngoingActions == nil || store.writes != 0 || f.executions != 0 {
+			if status != 200 || observed.Scene.Kind != "activity" || observed.Scene.LocationID != kind || observed.Scene.Title != tc.title || observed.Scene.Subject != nil || observed.Scene.Speaker != nil || observed.Scene.Opponent != nil || observed.Scene.BgimgURL != "" || observed.AvailableActions == nil || observed.OngoingActions == nil || store.writes != 0 || f.executions != 0 {
 				t.Fatalf("active GET: %d %+v", status, observed)
 			}
 			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"rescue_request","params":{"reason":"stuck"}}`, nil)
