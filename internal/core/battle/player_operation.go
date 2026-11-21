@@ -19,6 +19,9 @@ type PlayerAction struct {
 	FallenSelf  bool // the only entry a fallen actor may execute
 	// A custom entry's listed cost is 0 and it is never whitelisted, so its
 	// bound ApplyPlayerCustomAction charges CMP in the source position.
+	// Certify verifies static registration for potentially reachable callbacks
+	// at admission without state-dependent validation.
+	Certify  func(*LifetimeState) error
 	Validate func(*LifetimeState) error
 	Execute  func(*LifetimeState, random.Generator) (PlayerActionFacts, error)
 }
@@ -65,7 +68,7 @@ type PlayerOperationResult struct {
 // (_battle.cgi:action). Unaccepted submissions, including a callback `$mes`,
 // leave the state unchanged; any error restores the state before returning.
 func (s *LifetimeState) ApplyPlayerOperation(op *PlayerOperation, rng random.Generator) (PlayerOperationResult, error) {
-	if s == nil || op == nil || op.First.Validate == nil || op.First.Execute == nil || (op.Second != nil && (op.Second.Validate == nil || op.Second.Execute == nil)) {
+	if s == nil || op == nil || op.First.Validate == nil || op.First.Execute == nil {
 		return PlayerOperationResult{}, ErrInvalidRequest
 	}
 	if err := s.validateTargetContext(op.Tail.TargetContext, rng); err != nil {
@@ -75,14 +78,24 @@ func (s *LifetimeState) ApplyPlayerOperation(op *PlayerOperation, rng random.Gen
 	if a.NPC || op.Tail.RequesterLevel == nil || op.Tail.DefeatContext == nil {
 		return PlayerOperationResult{}, ErrInvalidRequest
 	}
+	secondReachable := op.Second != nil && a.Extended == ExtendedAdditional && op.First.Whitelisted && op.Second.Whitelisted
+	if op.Second != nil && (op.Second.Validate == nil || op.Second.Execute == nil) &&
+		(secondReachable || op.Second.EntryID != "" || op.Second.Validate != nil || op.Second.Execute != nil || op.Second.Certify != nil) {
+		return PlayerOperationResult{}, ErrInvalidRequest
+	}
 	if (a.HP <= 0 && !op.First.FallenSelf) || s.SkillBans[op.First.EntryID] > 0 {
 		return PlayerOperationResult{}, nil
 	}
-	for _, action := range []*PlayerAction{&op.First, op.Second} {
-		if action == nil {
-			continue
+	if op.First.Certify != nil {
+		if err := op.First.Certify(s); err != nil {
+			return PlayerOperationResult{}, err
 		}
-		if err := action.Validate(s); err != nil {
+	}
+	if err := op.First.Validate(s); err != nil {
+		return PlayerOperationResult{}, err
+	}
+	if secondReachable && op.Second.Certify != nil {
+		if err := op.Second.Certify(s); err != nil {
 			return PlayerOperationResult{}, err
 		}
 	}
@@ -159,6 +172,9 @@ func (s *LifetimeState) applyPlayerNormalAction(op *PlayerOperation, defeat func
 	if err := a.BeginNormalAction(false, op.First.MirrorShare, hasItem(a.ItemDefinitionIDs, "item-163"), rng); err != nil {
 		return false, err
 	}
+	if err := op.First.Validate(s); err != nil {
+		return false, err
+	}
 	facts, err := op.First.Execute(s, rng)
 	if err != nil || facts.Inert {
 		return facts.Inert, err
@@ -171,6 +187,9 @@ func (s *LifetimeState) applyPlayerNormalAction(op *PlayerOperation, defeat func
 	}
 	charge(op.First.Cost)
 	if second := op.Second; second != nil && CanExecuteSecond(additional, op.First.Whitelisted, second.Whitelisted, s.actor(c.ActorID).MP, second.Cost) {
+		if err := second.Validate(s); err != nil {
+			return false, err
+		}
 		// The source ignores a second callback's `$mes`.
 		facts, err := second.Execute(s, rng)
 		if err != nil {

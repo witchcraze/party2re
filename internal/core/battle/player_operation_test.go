@@ -126,6 +126,277 @@ func TestPlayerOperationSecondSubmission(t *testing.T) {
 	}
 }
 
+func TestPlayerOperationSecondValidationAvoidedPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		setup        func(*LifetimeState, *PlayerOperation, *int)
+		wantAccepted bool
+		wantMP       int
+		wantCalls    int
+		wantExtTurns int
+	}{
+		{
+			name: "strict_mp_boundary",
+			setup: func(s *LifetimeState, op *PlayerOperation, _ *int) {
+				s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 9, ExtendedAdditional, 2
+				op.First.Cost, op.First.Whitelisted = 3, true
+				op.Second.Cost, op.Second.Whitelisted = 6, true
+			},
+			wantAccepted: true, wantMP: 6, wantCalls: 1, wantExtTurns: 1,
+		},
+		{
+			name: "missing_extended_additional",
+			setup: func(s *LifetimeState, op *PlayerOperation, _ *int) {
+				s.Actors[0].MP = 10
+				op.First.Cost, op.First.Whitelisted = 3, true
+				op.Second.Cost, op.Second.Whitelisted = 6, true
+			},
+			wantAccepted: true, wantMP: 7, wantCalls: 1, wantExtTurns: 0,
+		},
+		{
+			name: "unlisted_second_entry",
+			setup: func(s *LifetimeState, op *PlayerOperation, _ *int) {
+				s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 10, ExtendedAdditional, 2
+				op.First.Cost, op.First.Whitelisted = 3, true
+				op.Second.Cost, op.Second.Whitelisted = 6, false
+			},
+			wantAccepted: true, wantMP: 7, wantCalls: 1, wantExtTurns: 2,
+		},
+		{
+			name: "unlisted_first_with_counter_only_second",
+			setup: func(s *LifetimeState, op *PlayerOperation, _ *int) {
+				s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 10, ExtendedAdditional, 2
+				op.First.Cost, op.First.Whitelisted = 3, false
+				op.Second = &PlayerAction{Whitelisted: true}
+			},
+			wantAccepted: true, wantMP: 7, wantCalls: 1, wantExtTurns: 1,
+		},
+		{
+			name: "skipped_normal_action_paralyze",
+			setup: func(s *LifetimeState, op *PlayerOperation, _ *int) {
+				s.Actors[0].MP, s.Actors[0].Status, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 10, StatusParalyze, ExtendedAdditional, 2
+				op.First.Cost, op.First.Whitelisted = 3, true
+				op.Second.Cost, op.Second.Whitelisted = 6, true
+			},
+			wantAccepted: true, wantMP: 10, wantCalls: 0, wantExtTurns: 1,
+		},
+		{
+			name: "inert_first_message",
+			setup: func(s *LifetimeState, op *PlayerOperation, _ *int) {
+				s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 10, ExtendedAdditional, 2
+				op.First.Cost, op.First.Whitelisted = 3, true
+				op.First.Execute = func(s *LifetimeState, _ random.Generator) (PlayerActionFacts, error) {
+					s.actor("e").HP = 0
+					return PlayerActionFacts{Inert: true}, nil
+				}
+				op.Second.Cost, op.Second.Whitelisted = 6, true
+			},
+			wantAccepted: false, wantMP: 10, wantCalls: 0, wantExtTurns: 2,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, op, calls := playerOperationFixture()
+			secondValCalls := 0
+			second := op.First
+			second.Validate = func(*LifetimeState) error {
+				secondValCalls++
+				return ErrUnsupportedEffect
+			}
+			op.Second = &second
+			tc.setup(&s, op, &secondValCalls)
+			result, err := s.ApplyPlayerOperation(op, &playerOperationRNG{values: []float64{.9}})
+			if err != nil || result.Accepted != tc.wantAccepted || secondValCalls != 0 ||
+				s.Actors[0].MP != tc.wantMP || *calls != tc.wantCalls || s.Actors[0].ExtendedTurns != tc.wantExtTurns {
+				t.Fatalf("result=%+v err=%v secondValCalls=%d mp=%d calls=%d extTurns=%d",
+					result, err, secondValCalls, s.Actors[0].MP, *calls, s.Actors[0].ExtendedTurns)
+			}
+		})
+	}
+}
+
+func TestPlayerOperationSecondValidationPostFirstState(t *testing.T) {
+	t.Run("newly_supported", func(t *testing.T) {
+		for _, tc := range []struct {
+			mp, wantMP, wantCalls, wantSecondVal int
+		}{{9, 6, 1, 0}, {10, 1, 2, 1}} {
+			s, op, calls := playerOperationFixture()
+			s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = tc.mp, ExtendedAdditional, 2
+			op.First.Cost, op.First.Whitelisted = 3, true
+			secondValCalls := 0
+			second := op.First
+			second.Cost = 6
+			second.Validate = func(s *LifetimeState) error {
+				secondValCalls++
+				if s.actor("e").HP != 90 || s.actor("a").MP != 7 {
+					return ErrUnsupportedEffect
+				}
+				return nil
+			}
+			op.Second = &second
+			result, err := s.ApplyPlayerOperation(op, &playerOperationRNG{})
+			if err != nil || !result.Accepted || s.Actors[0].MP != tc.wantMP || *calls != tc.wantCalls ||
+				secondValCalls != tc.wantSecondVal || s.Actors[0].ExtendedTurns != 1 {
+				t.Fatal(tc, result, err, s.Actors[0], *calls, secondValCalls)
+			}
+		}
+	})
+
+	t.Run("newly_unsupported_restores_first", func(t *testing.T) {
+		s, op, calls := playerOperationFixture()
+		s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 10, ExtendedAdditional, 2
+		op.First.Cost, op.First.Whitelisted = 3, true
+		second := op.First
+		second.Cost = 6
+		second.Validate = func(s *LifetimeState) error {
+			if s.actor("e").HP != 100 {
+				return ErrUnsupportedEffect
+			}
+			return nil
+		}
+		op.Second = &second
+		before := reloadLifetime(t, s)
+		result, err := s.ApplyPlayerOperation(op, &playerOperationRNG{})
+		if !errors.Is(err, ErrUnsupportedEffect) || result.Accepted || *calls != 1 || !reflect.DeepEqual(before, s) {
+			t.Fatal(result, err, *calls, s)
+		}
+
+		// At the strict MP boundary, second validation is avoided and first completes.
+		s.Actors[0].MP = 9
+		*calls = 0
+		result, err = s.ApplyPlayerOperation(op, &playerOperationRNG{})
+		if err != nil || !result.Accepted || *calls != 1 || s.Actors[0].MP != 6 || s.actor("e").HP != 90 || s.Actors[0].ExtendedTurns != 1 {
+			t.Fatal(result, err, *calls, s)
+		}
+	})
+}
+
+func TestPlayerOperationCertifiesReachableSecondAndRestoresExecutionRejection(t *testing.T) {
+	newCatalog := func(includeChild bool) CallbackCatalog {
+		d := CallbackCatalog{Entries: map[string]CallbackDefinition{
+			"wrapper": {
+				Children: []CallbackInvocation{{Kind: "entry", EntryID: "child"}},
+				Validate: func(*LifetimeState, *CallbackContext) error { return nil },
+				Execute: func(_ *LifetimeState, c *CallbackContext, _ random.Generator) error {
+					return c.Invoke(CallbackInvocation{Kind: "entry", EntryID: "child"})
+				},
+			},
+		}}
+		if includeChild {
+			d.Entries["child"] = CallbackDefinition{
+				Validate: func(s *LifetimeState, _ *CallbackContext) error {
+					if s.actor("e").HP != 100 {
+						return ErrUnsupportedEffect
+					}
+					return nil
+				},
+				Execute: func(s *LifetimeState, _ *CallbackContext, _ random.Generator) error {
+					s.actor("e").HP -= 20
+					return nil
+				},
+			}
+		}
+		return d
+	}
+
+	// Unregistered reachable descendant rejects at admission even at MP=9 or paralysis.
+	for _, tc := range []struct {
+		name   string
+		mp     int
+		status string
+	}{{"strict_mp_boundary", 9, ""}, {"paralyzed", 10, StatusParalyze}} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, op, calls := playerOperationFixture()
+			s.Actors[0].MP, s.Actors[0].Status, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = tc.mp, tc.status, ExtendedAdditional, 2
+			op.First.Cost, op.First.Whitelisted = 3, true
+			d := newCatalog(false)
+			f := CallbackContext{TargetContext: op.Tail.TargetContext}
+			inv := []CallbackInvocation{{Kind: "entry", EntryID: "wrapper"}}
+			op.Second = &PlayerAction{
+				EntryID: "wrapper", Cost: 6, Whitelisted: true,
+				Certify:  func(s *LifetimeState) error { return s.CertifyInvocations(&f, d, inv, &playerOperationRNG{}) },
+				Validate: func(s *LifetimeState) error { return s.ValidateInvocations(&f, d, inv, &playerOperationRNG{}) },
+				Execute: func(s *LifetimeState, rng random.Generator) (PlayerActionFacts, error) {
+					return PlayerActionFacts{}, s.ApplyInvocations(&f, d, inv, rng)
+				},
+			}
+			before := reloadLifetime(t, s)
+			rng := &playerOperationRNG{values: []float64{.9}}
+			if _, err := s.ApplyPlayerOperation(op, rng); !errors.Is(err, ErrUnsupportedEffect) || *calls != 0 || rng.draws != 0 || !reflect.DeepEqual(before, s) {
+				t.Fatalf("calls=%d draws=%d err=%v state=%+v", *calls, rng.draws, err, s)
+			}
+		})
+	}
+
+	t.Run("certified_second_skips_at_mp9_and_restores_on_post_first_reject", func(t *testing.T) {
+		d := newCatalog(true)
+		inv := []CallbackInvocation{{Kind: "entry", EntryID: "wrapper"}}
+		bindSecond := func(op *PlayerOperation) {
+			f := CallbackContext{TargetContext: op.Tail.TargetContext}
+			op.Second = &PlayerAction{
+				EntryID: "wrapper", Cost: 6, Whitelisted: true,
+				Certify:  func(s *LifetimeState) error { return s.CertifyInvocations(&f, d, inv, &playerOperationRNG{}) },
+				Validate: func(s *LifetimeState) error { return s.ValidateInvocations(&f, d, inv, &playerOperationRNG{}) },
+				Execute: func(s *LifetimeState, rng random.Generator) (PlayerActionFacts, error) {
+					return PlayerActionFacts{}, s.ApplyInvocations(&f, d, inv, rng)
+				},
+			}
+		}
+
+		// MP 9: certification passes without entry state validation; first runs and second is skipped.
+		s, op, calls := playerOperationFixture()
+		s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 9, ExtendedAdditional, 2
+		op.First.Cost, op.First.Whitelisted = 3, true
+		bindSecond(op)
+		if res, err := s.ApplyPlayerOperation(op, &playerOperationRNG{}); err != nil || !res.Accepted || *calls != 1 || s.Actors[0].MP != 6 || s.actor("e").HP != 90 || s.Actors[0].ExtendedTurns != 1 {
+			t.Fatal(res, err, *calls, s)
+		}
+
+		// MP 10: certification passes, first reduces HP to 90, second rejects post-first state and restores all effects.
+		s, op, calls = playerOperationFixture()
+		s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 10, ExtendedAdditional, 2
+		op.First.Cost, op.First.Whitelisted = 3, true
+		bindSecond(op)
+		before := reloadLifetime(t, s)
+		if _, err := s.ApplyPlayerOperation(op, &playerOperationRNG{}); !errors.Is(err, ErrUnsupportedEffect) || *calls != 1 || !reflect.DeepEqual(before, s) {
+			t.Fatal(err, *calls, s)
+		}
+	})
+
+	t.Run("second_execute_error_restores_first", func(t *testing.T) {
+		s, op, calls := playerOperationFixture()
+		s.Actors[0].MP, s.Actors[0].Extended, s.Actors[0].ExtendedTurns = 10, ExtendedAdditional, 2
+		op.First.Cost, op.First.Whitelisted = 3, true
+		op.Second = &PlayerAction{
+			EntryID: "second", Cost: 6, Whitelisted: true,
+			Validate: func(*LifetimeState) error { return nil },
+			Execute: func(s *LifetimeState, _ random.Generator) (PlayerActionFacts, error) {
+				s.actor("e").HP = 1
+				return PlayerActionFacts{}, ErrUnsupportedEffect
+			},
+		}
+		before := reloadLifetime(t, s)
+		if _, err := s.ApplyPlayerOperation(op, &playerOperationRNG{}); !errors.Is(err, ErrUnsupportedEffect) || *calls != 1 || !reflect.DeepEqual(before, s) {
+			t.Fatal(err, *calls, s)
+		}
+	})
+
+	t.Run("first_post_cure_validation_restores_state", func(t *testing.T) {
+		s, op, calls := playerOperationFixture()
+		s.Actors[0].Status = StatusConfusion
+		op.First.Validate = func(s *LifetimeState) error {
+			if s.actor("a").Status == "" {
+				return ErrUnsupportedEffect
+			}
+			return nil
+		}
+		before := reloadLifetime(t, s)
+		// Draw 0.1 cures confusion in CheckIncapacitation; post-cure validation rejects and restores state.
+		if _, err := s.ApplyPlayerOperation(op, &playerOperationRNG{values: []float64{.1}}); !errors.Is(err, ErrUnsupportedEffect) || *calls != 0 || !reflect.DeepEqual(before, s) {
+			t.Fatal(err, *calls, s)
+		}
+	})
+}
+
 // _battle.cgi:792–857: other allies' virulent poison precedes the actor's own.
 func TestPlayerOperationPartyPoisonPrecedesActorPoison(t *testing.T) {
 	s, op, _ := playerOperationFixture()

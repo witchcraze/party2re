@@ -1,6 +1,8 @@
 package skill
 
 import (
+	"errors"
+	"reflect"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -45,5 +47,88 @@ func TestPlayerOperationChargesCustomCMPAndOrdinaryMP(t *testing.T) {
 		if err != nil || !result.Accepted || s.Actors[0].CMP != wantCMP || s.Actors[0].MP != wantMP {
 			t.Fatal(custom, result, err, s.Actors[0].CMP, s.Actors[0].MP)
 		}
+	}
+}
+
+func TestPlayerOperationCertifiedConcreteSecondPair(t *testing.T) {
+	newState := func(mp int) (corebattle.LifetimeState, corebattle.TargetContext, BattleDefinitions, corebattle.CallbackContext) {
+		level := 50
+		c := corebattle.TargetContext{ActorID: "a", PartyIDs: []string{"a", "b"}, EnemyIDs: []string{"e"}}
+		s := corebattle.LifetimeState{
+			Actors: []corebattle.LifetimeActor{
+				{Participant: corebattle.Participant{ID: "a", TeamID: "party", HP: 100, MaxHP: 100, MP: mp, MaxMP: 50, CMP: 1, MaxCMP: 10}, CMPNeedCharge: 3, Tension: 1, Hit: 95, Extended: corebattle.ExtendedAdditional, ExtendedTurns: 2},
+				{Participant: corebattle.Participant{ID: "b", TeamID: "party", HP: 100, MaxHP: 100}, Tension: 1, Hit: 95},
+				{Participant: corebattle.Participant{ID: "e", TeamID: "enemy", HP: 100, MaxHP: 100}, NPC: true, Tension: 1, Hit: 95},
+			},
+		}
+		for i := range s.Actors {
+			s.Actors[i].Gear = &corebattle.BattleGearStats{}
+		}
+		damage := corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: c, RequesterLevel: &level}}
+		var d BattleDefinitions
+		d.RegisterPlayerCallbacks(PlayerCallbackContexts{
+			ProtectiveMagic: &corebattle.ProtectiveMagicContext{DamageContext: damage},
+		}, len(c.PartyIDs))
+		frame := corebattle.CallbackContext{TargetContext: c, Damage: &damage}
+		return s, c, d, frame
+	}
+	bind := func(d BattleDefinitions, frame corebattle.CallbackContext, id string, cost int) corebattle.PlayerAction {
+		inv := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: id}}
+		return corebattle.PlayerAction{
+			EntryID: id, Cost: cost, Whitelisted: true,
+			Certify: func(s *corebattle.LifetimeState) error {
+				return s.CertifyInvocations(&frame, d.Invocations, inv, zeroDraws{})
+			},
+			Validate: func(s *corebattle.LifetimeState) error {
+				return s.ValidateInvocations(&frame, d.Invocations, inv, zeroDraws{})
+			},
+			Execute: func(s *corebattle.LifetimeState, rng random.Generator) (corebattle.PlayerActionFacts, error) {
+				work := frame
+				return corebattle.PlayerActionFacts{}, s.ApplyInvocations(&work, d.Invocations, inv, rng)
+			},
+		}
+	}
+	level := 50
+	for _, tc := range []struct {
+		mp, wantMP int
+		wantTemp   corebattle.TemporaryEffect
+	}{
+		{13, 7, corebattle.TemporaryReduceMagic},  // 13-6=7 == 7: strict boundary skips second
+		{14, 1, corebattle.TemporaryReduceBreath}, // 14-6=8 > 7: second executes after first
+	} {
+		s, c, d, frame := newState(tc.mp)
+		second := bind(d, frame, "job-33-entry-2", 7)
+		op := &corebattle.PlayerOperation{
+			First:  bind(d, frame, "job-33-entry-0", 6),
+			Second: &second,
+			Tail: corebattle.PlayerTailContext{
+				DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: c, RequesterLevel: &level}},
+				DefeatContext: &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: c, RequesterLevel: &level}},
+			},
+		}
+		res, err := s.ApplyPlayerOperation(op, zeroDraws{})
+		if err != nil || !res.Accepted || s.Actors[0].MP != tc.wantMP || s.Actors[0].Temporary != tc.wantTemp || s.Actors[0].ExtendedTurns != 1 {
+			t.Fatalf("mp=%d res=%+v err=%v actor=%+v", tc.mp, res, err, s.Actors[0])
+		}
+	}
+
+	// Unregistered reachable descendant on the concrete pair rejects at admission even at MP=13.
+	s, c, d, frame := newState(13)
+	def := d.Invocations.Entries["job-33-entry-2"]
+	def.Children = []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "unregistered-child"}}
+	d.Invocations.Entries["job-33-entry-2"] = def
+	second := bind(d, frame, "job-33-entry-2", 7)
+	op := &corebattle.PlayerOperation{
+		First:  bind(d, frame, "job-33-entry-0", 6),
+		Second: &second,
+		Tail: corebattle.PlayerTailContext{
+			DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: c, RequesterLevel: &level}},
+			DefeatContext: &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: c, RequesterLevel: &level}},
+		},
+	}
+	before := s
+	before.Actors = append([]corebattle.LifetimeActor(nil), s.Actors...)
+	if _, err := s.ApplyPlayerOperation(op, zeroDraws{}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) {
+		t.Fatal(err, s)
 	}
 }

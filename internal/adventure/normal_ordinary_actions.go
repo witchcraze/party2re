@@ -9,6 +9,9 @@ import (
 
 func bindOrdinaryPlayerAction(action *ParsedRunAction, frame corebattle.CallbackContext, catalog corebattle.CallbackCatalog) {
 	invocations := []corebattle.CallbackInvocation{action.Invocation}
+	action.Certify = func(state *corebattle.LifetimeState) error {
+		return state.CertifyInvocations(&frame, catalog, invocations, random.Default())
+	}
 	action.Validate = func(state *corebattle.LifetimeState) error {
 		return state.ValidateInvocations(&frame, catalog, invocations, random.Default())
 	}
