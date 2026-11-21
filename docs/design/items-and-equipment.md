@@ -28,7 +28,7 @@ Derived from the authentic Party2 Perl CGI `@ites` table (`$ites[no][3]`), every
 
 ### Usage Location Validation Rules
 - **Combat Action Command (`＠どうぐ`)**: Active item execution in combat (`ActionItem`) is strictly restricted to `UsageCategoryCombatOnly` (`1`). Non-combat items (seeds, medals, materials, passives; categories `0`, `2`, `3`, `4`) are rejected with `ErrCannotUseInCombat` (`item cannot be used in combat`) and are never consumed in battle.
-- **Home Command (`＠ほーむ`)**: Categories `2` and `4` are eligible for dispatch; Go currently implements only a whitelist. [Home](home.md#legacy-dispatch-and-consumption-contract) owns the complete reconciliation, including missing callbacks and intentional no-stat consumption. Combat items (`1`) return `ErrCannotUseHere` (`%sは戦闘中でしか使えません`), and non-usable items (`0`, `3`) return `%sはここでは使えません`.
+- **Home Command (`＠ほーむ`)**: Categories `2` and `4` are eligible for dispatch; [Home](home.md#legacy-dispatch-and-consumption-contract) owns the complete reconciliation, including missing callbacks and intentional no-stat consumption. Combat items (`1`) return `ErrCannotUseHere` (`%sは戦闘中でしか使えません`), and non-usable items (`0`, `3`) return `%sはここでは使えません`.
 
 ### Pricing Rules
 - **Purchase Price**: Defined in the item catalog (`Price`).

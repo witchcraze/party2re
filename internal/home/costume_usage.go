@@ -42,11 +42,7 @@ func isCostumeItem(name string) bool {
 	}
 }
 
-func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacter.Character, itemName string) (string, bool, error) {
-	if !isCostumeItem(itemName) {
-		return "", false, nil
-	}
-
+func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacter.Character, itemName string) (string, error) {
 	var itemNo int
 	var icon string
 	var msg string
@@ -142,9 +138,9 @@ func (s *Service) applyCostumeConsumable(ctx context.Context, char *corecharacte
 	}
 
 	if err := s.wearAppearance(ctx, char.ID, itemNo, itemName, icon); err != nil {
-		return "", true, err
+		return "", err
 	}
-	return msg, true, nil
+	return msg, nil
 }
 
 func (s *Service) wearAppearance(ctx context.Context, characterID string, itemNo int, itemName, icon string) error {

@@ -28,13 +28,6 @@ func (m *mockInventoryManager) FindByCharacterID(ctx context.Context, characterI
 	return inv, nil
 }
 
-func (m *mockInventoryManager) Consume(ctx context.Context, characterID, instanceID string, quantity int) (coreinventory.Inventory, error) {
-	inv, _ := m.FindByCharacterID(ctx, characterID)
-	_ = inv.Consume(instanceID, quantity)
-	m.invs[characterID] = inv
-	return inv, nil
-}
-
 type mockDepotManager struct {
 	depots map[string]depot.Depot
 }
@@ -197,6 +190,7 @@ func TestItemUsage(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: charReader.chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(catalog),
@@ -513,6 +507,7 @@ func TestUseHomeItem_AuthenticCatalogMatrix(t *testing.T) {
 						repo,
 						charReader,
 						WithCharacterUpdater(charUpdater),
+						WithTransactionRunner(&mockTransactionRunner{chars: charReader.chars, invs: invMgr.invs}),
 						WithInventoryManager(invMgr),
 						WithDepotManager(depotMgr),
 						WithItemCatalog(cat),
@@ -550,6 +545,7 @@ func TestUseHomeItem_AuthenticCatalogMatrix(t *testing.T) {
 						repo,
 						charReader,
 						WithCharacterUpdater(charUpdater),
+						WithTransactionRunner(&mockTransactionRunner{chars: charReader.chars, invs: invMgr.invs}),
 						WithInventoryManager(invMgr),
 						WithDepotManager(depotMgr),
 						WithItemCatalog(cat),
@@ -1042,6 +1038,7 @@ func TestUseHomeItem_CrystalOre(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: charReader.chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithItemCatalog(catalog),
 	)
@@ -1147,6 +1144,7 @@ func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
 		repo,
 		charReader,
 		WithCharacterUpdater(charUpdater),
+		WithTransactionRunner(&mockTransactionRunner{chars: charReader.chars, invs: invMgr.invs}),
 		WithInventoryManager(invMgr),
 		WithDepotManager(depotMgr),
 		WithItemCatalog(cat),
@@ -1516,5 +1514,39 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Item use needs the transaction runner, and unsupported items are rejected
+// before any transaction starts.
+func TestUseHomeItem_RejectsWithoutRunnerOrDispatch(t *testing.T) {
+	chars := map[string]corecharacter.Character{"c": {ID: "c", Name: "c"}}
+	inv, _ := coreinventory.New("c")
+	_ = inv.Add(coreitem.Instance{ID: "seed", DefinitionID: "item-seed6", Quantity: 1})
+	_ = inv.Add(coreitem.Instance{ID: "x", DefinitionID: "item-x", Quantity: 1})
+	invs := map[string]coreinventory.Inventory{"c": inv}
+	catalog := &mockCatalog{defs: map[string]coreitem.Definition{
+		"item-seed6": {ID: "item-seed6", Name: "スキルの種", UsageCategory: coreitem.UsageCategoryAnytime},
+		"item-x":     {ID: "item-x", Name: "未対応の品", UsageCategory: coreitem.UsageCategoryAnytime},
+	}}
+	newSvc := func(opts ...ServiceOption) *Service {
+		opts = append(opts, WithInventoryManager(&mockInventoryManager{invs: invs}), WithItemCatalog(catalog))
+		svc, err := NewService(newMockHomeRepo(chars), &mockCharReader{chars: chars}, opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc
+	}
+
+	if _, err := newSvc().UseHomeItem(context.Background(), "c", "seed", "inventory"); !errors.Is(err, ErrTransactionRunnerRequired) {
+		t.Fatalf("want ErrTransactionRunnerRequired, got %v", err)
+	}
+	if got := invs["c"]; len(got.Items) != 2 || chars["c"].SP != 0 {
+		t.Fatalf("state changed without a runner: %+v SP=%d", got.Items, chars["c"].SP)
+	}
+
+	runner := &mockTransactionRunner{chars: chars, invs: invs}
+	if _, err := newSvc(WithTransactionRunner(runner)).UseHomeItem(context.Background(), "c", "x", "inventory"); !errors.Is(err, ErrCannotUseHere) || runner.calls != 0 {
+		t.Fatalf("want rejection before the runner, got %v (calls=%d)", err, runner.calls)
 	}
 }

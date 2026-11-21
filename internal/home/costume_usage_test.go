@@ -163,6 +163,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 				homeRepo,
 				charReader,
 				WithCharacterUpdater(charUpdater),
+				WithTransactionRunner(&mockTransactionRunner{chars: charReader.chars, invs: invMgr.invs}),
 				WithInventoryManager(invMgr),
 				WithItemCatalog(catalog),
 				WithCostumeApplier(applier),
