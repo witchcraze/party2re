@@ -56,8 +56,6 @@ Callers that pin a different representation keep their own owner:
 and the
 [Home bag/treasure/key contract](home.md#legacy-dispatch-and-consumption-contract)
 append separate instances without stacking (`AppendDelivery`).
-Still open: Auction gold
-destination ([#1815](https://github.com/witchcraze/party2re/issues/1815)).
 
 ## Operations & Invariants
 
@@ -124,7 +122,7 @@ Stored items sell at floor(base price × 0.5) per unit without withdrawal. Legac
 
 ### 5. Mailing Items and Money (`おくる`)
 
-Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Sent gold leaves the sender's wallet and is [held](#6-held-gold) for the recipient.
+Sending gold or an item rejects a full recipient Depot before any change, even when a matching stack exists ([delivery capacity](#delivery-capacity-by-caller)). Legacy `okuru` (`depot.cgi:17–21,371–405`) has configurable forbidden-item lists, all empty in the reference checkout; Go has no such configuration. Sent gold leaves the sender's wallet and is [held](#6-held-gold) for the recipient. Auction `okuru` (`auction.cgi`) is the same routine with the same empty lists and differs only in prompt text, so the `auction` scene offers the same `depot_send_item` and `depot_send_money` commands ([#1815](https://github.com/witchcraze/party2re/issues/1815)).
 
 ### 6. Held Gold
 

@@ -94,11 +94,10 @@ graph TD
 - [`replay.md`](replay.md) — Original adventure scenes, personal archive ownership, public-read boundary, and current turn-log gaps.
 
 ### 4. Commerce, Storage & Economy
-- [`depot.md`](depot.md) — Central storage hub (up to 500 slots), tiered expansion, direct item delivery, and dual-source consumption.
+- [`depot.md`](depot.md) — Central storage hub (up to 500 slots), tiered expansion, direct item delivery, dual-source consumption, and player `おくる` (also offered at the Auction venue).
 - [`shops.md`](shops.md) — Standard NPC shops (Weapon, Armor, Item) at 2x price / 50% resale, and Secret Underground Shop (@ヒミツジ, JobLv 7 gate, 3x price, puff-puff).
 - [`store.md`](store.md) — Player boutique real-estate (50,000G in towns 1–4, 90-day cycle), 50 wallpapers, 15 furnitures, and depot barter/gold sales.
 - [`fleamarket.md`](fleamarket.md) — Player-to-player free market stalls (server-wide 120 listing ceiling, direct depot transfer).
-- [`auction.md`](auction.md) — Live P2P trade hall (`@おくる`/`@しらべる`) with uninitialized recipient depot auto-provisioning.
 - [`bank.md`](bank.md) — Gold savings deposits and withdrawals with 999,999G wallet clamp.
 - [`black-market.md`](black-market.md) — Rare item sacrifice for Rare/U-Rare points and Depot-delivered prizes.
 - [`gemstore.md`](gemstore.md) — Dedicated gem box storage, 55+ synthesis formulas, and Depot orb appraisal.

@@ -12,7 +12,6 @@
     "internal/fleamarket/fleamarket.go#CharacterRepository",
     "internal/gemstore/types.go#CharacterRepository",
     "internal/bank/bank.go#Repository",
-    "internal/auction/types.go#CharacterRepository",
     "internal/pvp/service.go#CharacterRepository",
     "internal/dungeon/dungeon.go#CharacterRepository",
     "internal/adventure/normal_run.go#RunCharacters",
@@ -54,13 +53,6 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock character to deduct crystal fee and apply weapon seal"
-    },
-    {
-      "module": "auction",
-      "caller_method": "internal/auction/auction.go#Service.Send",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate, ascending ID order)",
-      "lock_order": 2,
-      "purpose": "Lock sender and target characters ascending by ID for P2P trading and gold transfer"
     },
     {
       "module": "guild",

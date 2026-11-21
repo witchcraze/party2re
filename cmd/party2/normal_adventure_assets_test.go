@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
-	"github.com/witchcraze/party2re/internal/auction"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
@@ -170,10 +169,6 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 				{"bank-withdraw", func() error { _, err := econ.bank.Withdraw(ctx, actor.ID, 1); return err }},
 				{"depot", func() error { _, err := econ.depot.DepositItem(ctx, actor.ID, inv.Items[0].ID); return err }},
 				{"depot-send", func() error { _, err := econ.depot.SendMoney(ctx, actor.ID, peer.ID, 1); return err }},
-				{"auction-send", func() error {
-					_, err := econ.auction.Send(ctx, auction.SendRequest{SenderCharacterID: actor.ID, TargetCharacterID: peer.ID, Gold: 1})
-					return err
-				}},
 				{"economy-send", func() error { _, _, err := core.economy.TransferGold(ctx, actor.ID, peer.ID, 1); return err }},
 				{"fleamarket-buy", func() error {
 					_, err := econ.fleamarket.PurchaseListing(ctx, actor.ID, listing.ID, time.Now())
@@ -240,9 +235,6 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 			if _, err := econ.depot.SendMoney(ctx, peer.ID, actor.ID, 5); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := econ.auction.Send(ctx, auction.SendRequest{SenderCharacterID: peer.ID, TargetCharacterID: actor.ID, Gold: 7}); err != nil {
-				t.Fatal(err)
-			}
 			if _, err := econ.fleamarket.PurchaseListing(ctx, peer.ID, ownListing.ID, time.Now()); err != nil {
 				t.Fatal("passive seller proceeds rejected", err)
 			}
@@ -263,7 +255,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 			}
 			after, err = core.charRepo.FindByID(ctx, actor.ID)
 			// Depot sends and Flea Market sales are held for collection rather than credited to wallet.
-			if err != nil || after.Money != before.Money+10 || heldGold(t, econ.depot, actor.ID) != 15 {
+			if err != nil || after.Money != before.Money+3 || heldGold(t, econ.depot, actor.ID) != 15 {
 				t.Fatal("exit lost incoming credits", after, err)
 			}
 			creditedDepot, err := econ.depotRepo.FindByCharacterID(ctx, actor.ID)

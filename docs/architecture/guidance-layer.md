@@ -30,7 +30,7 @@ The versioned client context/action Gateway is registered; its contract is defin
 The mandatory [guidance rules](../../.agents/rules/07-guidance-layer.md) select
 modules by transaction depth, deterministic locks, shared/P2P state, and
 scheduling. A dedicated module index requires at least two qualifying criteria;
-Tier 1 modules (`tavern`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`,
+Tier 1 modules (`tavern`, `guild`, `shop`, `blacksmith`, `adventure`,
 `store`) are investigated first for transactions; other qualifying modules
 (Tier 2) get an index on demand when modified. Neither tier waives that
 selection rule. These tiers are documentation priorities, not SQL lock ranks.
@@ -39,7 +39,6 @@ selection rule. These tiers are documentation priorities, not SQL lock ranks.
 |---|---|
 | [adventure](../../.arch/modules/adventure.json) | Crawl reward settlement and history persistence in a single transaction boundary |
 | [alchemy](../../.arch/modules/alchemy.json) | Synthesis and item storage |
-| [auction](../../.arch/modules/auction.json) | Direct transfer, ascending character locks; no bidding |
 | [blackmarket](../../.arch/modules/blackmarket.json) | Dual-source consumption and rare points |
 | [blacksmith](../../.arch/modules/blacksmith.json) | Crystal seals and weapon storage |
 | [casino](../../.arch/modules/casino.json) | SQL wagers/wins and staged Valkey room publication under room coordination |

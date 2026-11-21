@@ -8,7 +8,6 @@
     "internal/blacksmith/blacksmith.go#InventoryRepository",
     "internal/adventure/adventure.go#InventoryRepository",
     "internal/blackmarket/blackmarket.go#InventoryRepository",
-    "internal/auction/types.go#InventoryRepository",
     "internal/dungeon/dungeon.go#InventoryProvider"
   ],
   "callers": [
@@ -32,13 +31,6 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
       "purpose": "Lock inventory to remove deposited weapon"
-    },
-    {
-      "module": "auction",
-      "caller_method": "internal/auction/auction.go#Service.Send",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
-      "lock_order": 3,
-      "purpose": "Lock sender inventory and consume transferred item instance"
     },
     {
       "module": "blackmarket",

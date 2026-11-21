@@ -33,22 +33,6 @@
       "name": "Adventure"
     },
     {
-      "description": "Item purchasing and inventory resale transactions",
-      "name": "Shop"
-    },
-    {
-      "description": "Small medal collection and rare reward exchange",
-      "name": "Medals"
-    },
-    {
-      "description": "Community delivery helper quests and rewards",
-      "name": "Helpers"
-    },
-    {
-      "description": "Emergency rescues and penalty cooldowns",
-      "name": "Rescues"
-    },
-    {
       "description": "Game announcements and administrative news publishing",
       "name": "News"
     },
@@ -65,20 +49,8 @@
       "name": "Rankings"
     },
     {
-      "description": "Agricultural plantation and crop cultivation",
-      "name": "Farm"
-    },
-    {
-      "description": "Raffle drawings and periodic lottery tickets",
-      "name": "Lottery"
-    },
-    {
       "description": "Endurance challenges, World Boss encounters, Dungeons, and PvP Arena",
       "name": "Combat"
-    },
-    {
-      "description": "Free marketplace item listings, bidding, and buyouts",
-      "name": "Auctions"
     },
     {
       "description": "Town event plaza and traveling merchant bazaar",
@@ -132,79 +104,6 @@
         "required": [
           "character_id",
           "message"
-        ],
-        "type": "object"
-      },
-      "AuctionListing": {
-        "properties": {
-          "buyout_price": {
-            "type": "integer"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "current_bid": {
-            "type": "integer"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "highest_bidder_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "highest_bidder_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "string"
-          },
-          "item_category": {
-            "type": "string"
-          },
-          "item_id": {
-            "type": "string"
-          },
-          "item_name": {
-            "type": "string"
-          },
-          "min_bid_increment": {
-            "type": "integer"
-          },
-          "quantity": {
-            "type": "integer"
-          },
-          "seller_character_id": {
-            "type": "string"
-          },
-          "seller_character_name": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "seller_character_id",
-          "seller_character_name",
-          "item_id",
-          "item_name",
-          "item_category",
-          "quantity",
-          "current_bid",
-          "buyout_price",
-          "min_bid_increment",
-          "expires_at",
-          "status",
-          "created_at"
         ],
         "type": "object"
       },
@@ -1082,35 +981,6 @@
           "items": {
             "items": {
               "$ref": "#/components/schemas/AdventureHistoryEntry"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "Offset from beginning of result set",
-            "type": "integer"
-          },
-          "total": {
-            "description": "Total number of records matching the query",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
-      "PageAuctionListing": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/AuctionListing"
             },
             "type": "array"
           },
@@ -5964,50 +5834,6 @@
               "required": [
                 "params"
               ]
-            }
-          },
-          {
-            "if": {
-              "type": "object",
-              "properties": {
-                "action": {
-                  "const": "auction_send"
-                }
-              },
-              "required": [
-                "action"
-              ]
-            },
-            "then": {
-              "type": "object",
-              "properties": {
-                "params": {
-                  "type": "object",
-                  "properties": {
-                    "target_character_id": {
-                      "type": "string"
-                    },
-                    "target_character_name": {
-                      "type": "string"
-                    },
-                    "slot": {
-                      "type": "string"
-                    },
-                    "instance_id": {
-                      "type": "string"
-                    },
-                    "gold": {
-                      "type": "integer",
-                      "format": "int64",
-                      "minimum": -9223372036854775808,
-                      "maximum": 9223372036854775807
-                    }
-                  },
-                  "required": [],
-                  "additionalProperties": false,
-                  "description": "Explicit recipient ID or name and gold, equipped slot or owned instance ID. Omitted values retain service validation. Recipient ID takes precedence over name; positive gold takes precedence over items, then slot over instance ID. All supplied fields must be non-null. The authenticated path supplies the sender."
-                }
-              }
             }
           },
           {
@@ -11591,67 +11417,6 @@
           "items",
           "limit",
           "has_more"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AuctionSendResult": {
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "sender_character_id": {
-            "type": "string"
-          },
-          "target_character_id": {
-            "type": "string"
-          },
-          "target_character_name": {
-            "type": "string"
-          },
-          "transferred_gold": {
-            "type": "integer"
-          },
-          "transferred_item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AuctionTransferredItemInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "sender_character_id",
-          "target_character_id",
-          "target_character_name",
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AuctionTransferredItemInfo": {
-        "properties": {
-          "definition_id": {
-            "type": "string"
-          },
-          "enhancement_level": {
-            "type": "integer"
-          },
-          "instance_id": {
-            "type": "string"
-          },
-          "item_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance_id",
-          "definition_id",
-          "item_name",
-          "enhancement_level"
         ],
         "type": "object",
         "additionalProperties": false
