@@ -102,7 +102,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 		if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
 			return err
 		}
-		if stage.ID == "stage-26" && s.timer != nil {
+		if stage.DailyOnce && s.timer != nil {
 			lockToken = id.New()
 			acquired, err := s.timer.TryLockWithToken(txCtx, timer.CategoryDungeonOnce, leaderChar.ID, lockToken, 0)
 			if err != nil {

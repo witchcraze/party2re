@@ -31,7 +31,15 @@ func (c normalDefeatCombat) ExecuteRunAction(ctx context.Context, r *adventure.N
 		NPC:         true, EncounterIdentity: "monster-002",
 	}
 	if cmd.Action == "bee" {
-		r.Stage.ID = cmd.TargetID
+		stages, err := adventure.InitialStageCatalog()
+		if err != nil {
+			return adventure.RunActionEffects{}, err
+		}
+		stage, err := stages.FindByID(cmd.TargetID)
+		if err != nil {
+			return adventure.RunActionEffects{}, err
+		}
+		r.Stage.ID, r.Stage.StageTraits = stage.ID, stage.StageTraits
 		target.EncounterIdentity, target.Icon, target.CrystalReward = "ordinary-22-monster-175B", "upload/test", 1
 	}
 	r.Battle.Actors = append(r.Battle.Actors, target)

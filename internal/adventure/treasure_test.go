@@ -165,24 +165,12 @@ func TestGenerateTreasureBoxes(t *testing.T) {
 }
 
 func TestCalculateTreasureCount_StageMultiplier(t *testing.T) {
-	for _, stageID := range []string{"stage-17", "stage-20", "stage-21"} {
-		got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-			AliveMembers: 2,
-			StageID:      stageID,
-		})
-		// Legacy vs_monster.cgi:92 ($#partys+1)*3 = 2*3 = 6. Inclusive 0..6 produces 7 boxes.
-		if got != 7 {
-			t.Errorf("CalculateTreasureCount for %s: got %d, want 7 (2 * 3 + 1)", stageID, got)
-		}
+	// Legacy vs_monster.cgi:92 ($#partys+1)*3 = 2*3 = 6. Inclusive 0..6 produces 7 boxes.
+	if got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{AliveMembers: 2, TripleTreasure: true}); got != 7 {
+		t.Errorf("triple treasure: got %d, want 7", got)
 	}
-
-	// Normal stage should not have 3x multiplier
-	gotNormal := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers: 2,
-		StageID:      "stage-00",
-	})
-	if gotNormal != 2 {
-		t.Errorf("CalculateTreasureCount for stage-00: got %d, want 2", gotNormal)
+	if got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{AliveMembers: 2}); got != 2 {
+		t.Errorf("ordinary stage: got %d, want 2", got)
 	}
 }
 
@@ -386,53 +374,15 @@ func TestInitialStageCatalog_EmptyTreasureEntries(t *testing.T) {
 }
 
 func TestCalculateTreasureCount_PartySizeAndSpecialStages(t *testing.T) {
-	specialStages := []string{"stage-17", "17", "stage-20", "20", "stage-21", "21"}
-	normalStages := []string{"stage-01", "stage-10", "stage-00", ""}
-
-	for _, stage := range specialStages {
-		// In special stages (17, 20, 21), initial count = 3 * N.
-		// Inclusive loop 0..count yields 3*N + 1 boxes when 0 dead.
-		tests := []struct {
-			partySize int
-			wantBoxes int
-		}{
-			{partySize: 1, wantBoxes: 4},  // 1*3 + 1 = 4
-			{partySize: 2, wantBoxes: 7},  // 2*3 + 1 = 7
-			{partySize: 3, wantBoxes: 10}, // 3*3 + 1 = 10
-			{partySize: 4, wantBoxes: 13}, // 4*3 + 1 = 13
-		}
-		for _, tc := range tests {
-			got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-				StageID:      stage,
-				AliveMembers: tc.partySize,
-				TotalMembers: tc.partySize,
-			})
-			if got != tc.wantBoxes {
-				t.Errorf("stage %s, partySize %d: got %d, want %d", stage, tc.partySize, got, tc.wantBoxes)
+	// Triple stages start at 3N, others at N-1; the inclusive loop adds one box.
+	for n := 1; n <= 4; n++ {
+		for _, triple := range []bool{true, false} {
+			want := n
+			if triple {
+				want = 3*n + 1
 			}
-		}
-	}
-
-	for _, stage := range normalStages {
-		// In normal stages, initial count = N - 1.
-		// Inclusive loop 0..count yields N boxes when 0 dead.
-		tests := []struct {
-			partySize int
-			wantBoxes int
-		}{
-			{partySize: 1, wantBoxes: 1}, // 0 + 1 = 1
-			{partySize: 2, wantBoxes: 2}, // 1 + 1 = 2
-			{partySize: 3, wantBoxes: 3}, // 2 + 1 = 3
-			{partySize: 4, wantBoxes: 4}, // 3 + 1 = 4
-		}
-		for _, tc := range tests {
-			got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-				StageID:      stage,
-				AliveMembers: tc.partySize,
-				TotalMembers: tc.partySize,
-			})
-			if got != tc.wantBoxes {
-				t.Errorf("normal stage %s, partySize %d: got %d, want %d", stage, tc.partySize, got, tc.wantBoxes)
+			if got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{TripleTreasure: triple, AliveMembers: n, TotalMembers: n}); got != want {
+				t.Errorf("triple=%v partySize=%d: got %d, want %d", triple, n, got, want)
 			}
 		}
 	}
@@ -452,7 +402,6 @@ func TestCalculateTreasureCount_DeadMembersPenalty(t *testing.T) {
 	}
 	for _, tc := range testsNormal {
 		got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-			StageID:      "stage-01",
 			AliveMembers: tc.alive,
 			DeadMembers:  tc.dead,
 			TotalMembers: tc.total,
@@ -475,10 +424,10 @@ func TestCalculateTreasureCount_DeadMembersPenalty(t *testing.T) {
 	}
 	for _, tc := range testsSpecial {
 		got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-			StageID:      "stage-17",
-			AliveMembers: tc.alive,
-			DeadMembers:  tc.dead,
-			TotalMembers: tc.total,
+			TripleTreasure: true,
+			AliveMembers:   tc.alive,
+			DeadMembers:    tc.dead,
+			TotalMembers:   tc.total,
 		})
 		if got != tc.want {
 			t.Errorf("special stage 17 total=%d, alive=%d, dead=%d: got %d, want %d", tc.total, tc.alive, tc.dead, got, tc.want)
@@ -510,7 +459,6 @@ func TestCalculateTreasureCount_GamblerPendantProtection(t *testing.T) {
 	}
 
 	gotWithoutPendant := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		StageID:         "stage-01",
 		AliveMembers:    4,
 		TotalMembers:    4,
 		HasGambler:      true,
@@ -539,7 +487,6 @@ func TestCalculateTreasureCount_GamblerPendantProtection(t *testing.T) {
 		}
 	}
 	gotGuarded := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		StageID:         "stage-01",
 		AliveMembers:    4,
 		TotalMembers:    4,
 		HasGambler:      true,
@@ -595,7 +542,6 @@ func TestCalculateTreasureCount_LegacyFalsyFallback(t *testing.T) {
 
 	// 2 alive, 0 dead: fallback resets count to 1 -> 2 boxes
 	got2Alive := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		StageID:         "stage-01",
 		AliveMembers:    2,
 		TotalMembers:    2,
 		HasGambler:      true,
@@ -608,7 +554,6 @@ func TestCalculateTreasureCount_LegacyFalsyFallback(t *testing.T) {
 
 	// 1 alive, 1 dead: fallback resets count to 1, dead penalty subtracts 1 -> count = 0 -> 1 box
 	got1Alive1Dead := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		StageID:         "stage-01",
 		AliveMembers:    1,
 		DeadMembers:     1,
 		TotalMembers:    2,

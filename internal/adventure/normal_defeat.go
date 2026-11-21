@@ -98,7 +98,7 @@ func NewRunDefeatRewards(r *NormalRun, requester corecharacter.Character, blessi
 			}
 			effects.CreditedDefeats = append(effects.CreditedDefeats, identity)
 			effects.Defeats = append(effects.Defeats, runDefeatFact(r, actor, target, c.DefeatedStatus, identity, strength, strong, pvp, wish, rng))
-			effects.EXUnlocked = rollStage22EX(r.Stage.ID, identity, rng) || effects.EXUnlocked
+			effects.EXUnlocked = rollRoyalBeeEX(r.Stage, identity, rng) || effects.EXUnlocked
 			return nil
 		},
 	}

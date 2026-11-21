@@ -32,7 +32,26 @@ type SeasonalStageData struct {
 	TreasureWeapons []string       `json:"treasure_weapons"`
 	TreasureArmors  []string       `json:"treasure_armors"`
 	TreasureItems   []string       `json:"treasure_items"`
+	EXTreasureItems []string       `json:"ex_treasure_items,omitempty"`
 	Ordinary        *OrdinaryStage `json:"ordinary,omitempty"`
+}
+
+// StageTraits are the legacy per-stage rules that code applies by flag rather
+// than by stage ID. Each rule's behavior stays in code.
+type StageTraits struct {
+	TripleTreasure    bool     `json:"triple_treasure,omitempty"`     // floor-11 base count is 3× party size
+	UnsealsOnTreasure bool     `json:"unseals_on_treasure,omitempty"` // treasure creation unseals the sealing room
+	DailyOnce         bool     `json:"daily_once,omitempty"`          // creator/leader once-daily entry lock
+	SpecialBossFloors []int    `json:"special_boss_floors,omitempty"` // createExBossField floors
+	EX                *EXStage `json:"ex,omitempty"`
+}
+
+// EXStage holds EX-floor data; Marker names the room-marker producer from
+// docs/design/adventure.md#ex-unlock-and-continuation.
+type EXStage struct {
+	Marker        string   `json:"marker"`
+	TreasureItems []string `json:"treasure_items,omitempty"`
+	FixedTreasure string   `json:"fixed_treasure,omitempty"`
 }
 
 // Stage defines an adventure destination with required levels, normal monsters, boss encounters, and treasure pools.
@@ -48,8 +67,7 @@ type Stage struct {
 	Seasons         []SeasonalStageData `json:"seasons,omitempty"`
 	Season          string              `json:"season,omitempty"`
 	Ordinary        *OrdinaryStage      `json:"ordinary,omitempty"`
-	EXTreasureItems []string            `json:"ex_treasure_items,omitempty"`
-	FixedTreasure   string              `json:"fixed_treasure,omitempty"`
+	StageTraits
 }
 
 // ForSeason returns a copy of the Stage configured for the given seasonal variant.
@@ -64,6 +82,11 @@ func (s Stage) ForSeason(season string) Stage {
 			cp.TreasureArmors = sd.TreasureArmors
 			cp.TreasureItems = sd.TreasureItems
 			cp.Ordinary = sd.Ordinary
+			if s.EX != nil && sd.EXTreasureItems != nil {
+				ex := *s.EX
+				ex.TreasureItems = sd.EXTreasureItems
+				cp.EX = &ex
+			}
 			return cp
 		}
 	}
@@ -125,8 +148,7 @@ type stageJSON struct {
 	TreasureArmors  []string            `json:"treasure_armors,omitempty"`
 	TreasureItems   []string            `json:"treasure_items,omitempty"`
 	Seasons         []SeasonalStageData `json:"seasons,omitempty"`
-	EXTreasureItems []string            `json:"ex_treasure_items,omitempty"`
-	FixedTreasure   string              `json:"fixed_treasure,omitempty"`
+	StageTraits
 }
 
 // NewStage creates a Stage definition without duration (purging the fictional timer).
@@ -387,7 +409,7 @@ func InitialStageCatalog() (*StageCatalog, error) {
 		stage.TreasureArmors = raw.TreasureArmors
 		stage.TreasureItems = raw.TreasureItems
 		stage.Seasons = raw.Seasons
-		stage.EXTreasureItems, stage.FixedTreasure = raw.EXTreasureItems, raw.FixedTreasure
+		stage.StageTraits = raw.StageTraits
 		if encounter, ok := encounters[stage.ID]; ok {
 			stage.Ordinary = &encounter
 		}

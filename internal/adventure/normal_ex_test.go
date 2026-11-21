@@ -123,10 +123,10 @@ func TestEXEntryGatesPreserveStateAndDraws(t *testing.T) {
 		want  error
 	}{
 		{"ordinary end without marker", func(r *NormalRun) { r.EXUnlocked = false }, ErrInvalidFloorAction},
-		{"marker on non-EX destination", func(r *NormalRun) { r.Stage.ID = "stage-15" }, ErrInvalidFloorAction},
+		{"marker on non-EX destination", func(r *NormalRun) { r.Stage.ID, r.Stage.EX = "stage-15", nil }, ErrInvalidFloorAction},
 		{"unopened chest", func(r *NormalRun) { r.Boxes = []TreasureBox{{ID: "box"}} }, ErrInvalidFloorAction},
 		{"missing roster", func(r *NormalRun) { cp := *r.Stage.Ordinary; cp.EXRoster = nil; r.Stage.Ordinary = &cp }, corebattle.ErrUnsupportedEffect},
-		{"missing EX pool", func(r *NormalRun) { r.Floor, r.Stage.EXTreasureItems = EXBossFloor, nil }, corebattle.ErrUnsupportedEffect},
+		{"missing EX pool", func(r *NormalRun) { ex := *r.Stage.EX; ex.TreasureItems, r.Floor, r.Stage.EX = nil, EXBossFloor, &ex }, corebattle.ErrUnsupportedEffect},
 		{"living EX enemy", func(r *NormalRun) {
 			r.Floor = EXBossFloor
 			e := r.Battle.Actors[0].Clone()
@@ -194,10 +194,18 @@ func TestRoyalBeeCreditedDefeatDraws(t *testing.T) {
 		{"prefix is not identity", "stage-22", false, []string{bee + "0", "x" + bee}, nil, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := &NormalRun{Stage: Stage{ID: tc.stage}, EXUnlocked: tc.marker}
+			stages, err := InitialStageCatalog()
+			if err != nil {
+				t.Fatal(err)
+			}
+			stage, err := stages.FindByID(tc.stage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := &NormalRun{Stage: stage, EXUnlocked: tc.marker}
 			d := &exDraws{values: slices.Clone(tc.draws)}
 			for _, identity := range tc.ids {
-				r.EXUnlocked = rollStage22EX(r.Stage.ID, identity, d) || r.EXUnlocked
+				r.EXUnlocked = rollRoyalBeeEX(r.Stage, identity, d) || r.EXUnlocked
 			}
 			if r.EXUnlocked != tc.want || len(d.calls) != len(tc.draws) || slices.ContainsFunc(d.calls, func(n int) bool { return n != 3 }) {
 				t.Fatal(r.EXUnlocked, d.calls)
@@ -244,8 +252,8 @@ func TestEXTreasureCreationPoolsCountsAndAllowanceReset(t *testing.T) {
 			s, r, _ := exFixture(t, key)
 			r.Floor, r.StageCleared = EXBossFloor, false
 			r.Recipients = map[string]RunRecipient{"a": {Inspected: 1, Conditional: RunEarnings{Gold: 7}}, "b": {Inspected: 2}}
-			if !slices.Equal(r.Stage.exTreasureItems(), want.pool) || r.Stage.FixedTreasure != want.fixed {
-				t.Fatalf("pool %v fixed %q", r.Stage.exTreasureItems(), r.Stage.FixedTreasure)
+			if !slices.Equal(r.Stage.exTreasureItems(), want.pool) || r.Stage.EX.FixedTreasure != want.fixed {
+				t.Fatalf("pool %v fixed %q", r.Stage.exTreasureItems(), r.Stage.EX.FixedTreasure)
 			}
 			n := len(want.pool)
 			// Roster a (alive) and b (fallen) plus a living helper: $#partys=2, minus one fallen,
@@ -333,5 +341,46 @@ func TestEXFixedChestsBypassOrdinaryAllowance(t *testing.T) {
 	}
 	if _, _, err := s.claimChest(context.Background(), r, "b", ordinary[1]); !errors.Is(err, ErrUnconsciousCharacter) {
 		t.Fatal("fallen member claimed", err)
+	}
+}
+
+// Stage sets are read from ff97fc5: vs_monster.cgi:92 (triple), 108 (unseal),
+// 143–150 (special boss field), quest.cgi:594–600 (once-daily) and the EX producers.
+func TestStageTraitsPinLegacyStageSets(t *testing.T) {
+	stages, err := InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]StageTraits{
+		"stage-17": {TripleTreasure: true},
+		"stage-19": {UnsealsOnTreasure: true},
+		"stage-20": {TripleTreasure: true},
+		"stage-21": {TripleTreasure: true},
+		"stage-22": {EX: &EXStage{Marker: markerRoyalBeeDefeat}},
+		"stage-23": {EX: &EXStage{Marker: markerAdvanceTwoAllies}},
+		"stage-24": {SpecialBossFloors: []int{BossFloor, EXBossFloor}, EX: &EXStage{Marker: markerBossEncounter, FixedTreasure: "item-267"}},
+		"stage-25": {SpecialBossFloors: []int{EXBossFloor}, EX: &EXStage{Marker: markerAdvance, FixedTreasure: "item-265"}},
+		"stage-26": {DailyOnce: true, EX: &EXStage{Marker: markerRoomCreation, FixedTreasure: "item-263"}},
+	}
+	for _, st := range stages.Stages() {
+		got := st.StageTraits
+		if got.EX != nil {
+			ex := *got.EX
+			ex.TreasureItems = nil // pools are pinned by exPools
+			got.EX = &ex
+		}
+		if !reflect.DeepEqual(got, want[st.ID]) {
+			t.Errorf("%s traits %+v, want %+v", st.ID, got, want[st.ID])
+		}
+	}
+	// Each season's EX pool aliases its own @treasures (stage/26.cgi:38).
+	st, err := stages.FindByID("stage-26")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, season := range []string{"spring", "summer", "autumn", "winter"} {
+		if s := st.ForSeason(season); !slices.Equal(s.exTreasureItems(), s.TreasureItems) || s.EX.Marker != markerRoomCreation {
+			t.Errorf("%s EX pool %v", season, s.exTreasureItems())
+		}
 	}
 }

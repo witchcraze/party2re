@@ -30,7 +30,7 @@ func (s Stage) OrdinarySeason(markers ...string) Stage {
 			}
 		}
 	}
-	if s.ID == "stage-26" {
+	if len(s.Seasons) > 0 {
 		return s.ForSeason("spring")
 	}
 	return s

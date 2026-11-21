@@ -80,7 +80,7 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 			r.prepareEXAllies(actorID)
 		}
 		// Restoration precedes the cap, which leaves current HP/MP untouched (_battle.cgi:1485–1530).
-		if r.Stage.ID == "stage-24" && (r.Floor == BossFloor || r.Floor == EXBossFloor) || r.Stage.ID == "stage-25" && r.Floor == EXBossFloor {
+		if slices.Contains(r.Stage.SpecialBossFloors, r.Floor) {
 			if s.cfg.Combat == nil {
 				return ErrRunUnavailable
 			}

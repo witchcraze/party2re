@@ -329,7 +329,7 @@ func TestNormalOperationSourceKeysCoverRegisteredTablePositions(t *testing.T) {
 
 func TestNormalOperationsEXTreasureFloors(t *testing.T) {
 	r, ctx := operationFixture()
-	r.Stage, r.EXUnlocked, r.Enemies = Stage{ID: "stage-24", EXTreasureItems: []string{"item-104"}}, true, nil
+	r.Stage, r.EXUnlocked, r.Enemies = Stage{ID: "stage-24", StageTraits: StageTraits{EX: &EXStage{Marker: markerBossEncounter, TreasureItems: []string{"item-104"}}}}, true, nil
 	r.Floor = EXBossFloor
 	if got, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Action: "advance"}, ctx); err != nil || got.First.Action != "advance" {
 		t.Fatalf("12→13 advance: %+v %v", got, err)
