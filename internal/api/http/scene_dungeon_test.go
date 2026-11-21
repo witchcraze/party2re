@@ -28,20 +28,23 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 	for _, tc := range []struct {
 		name, role string
 		status     dungeon.ExpeditionStatus
+		floorName  string
+		wantTitle  string
 		controls   dungeon.ContinuationControls
 		actions    []string
 	}{
-		{"exploring", "actor", dungeon.StatusExploring, dungeon.ContinuationControls{CanMove: true, CanEscape: true}, []string{"dungeon_move", "dungeon_escape"}},
-		{"encounter", "actor", dungeon.StatusExploring, dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
-		{"member", "member", dungeon.StatusExploring, dungeon.ContinuationControls{}, []string{}},
-		{"escaped", "actor", dungeon.StatusEscaped, dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
-		{"wiped_out", "actor", dungeon.StatusWipedOut, dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
+		{"exploring", "actor", dungeon.StatusExploring, "落穴の塔１階", "落穴の塔１階", dungeon.ContinuationControls{CanMove: true, CanEscape: true}, []string{"dungeon_move", "dungeon_escape"}},
+		{"encounter", "actor", dungeon.StatusExploring, "落穴の塔２階", "落穴の塔２階", dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
+		{"member", "member", dungeon.StatusExploring, "落穴の塔１階", "落穴の塔１階", dungeon.ContinuationControls{}, []string{}},
+		{"empty_floor_name", "actor", dungeon.StatusExploring, "", "ダンジョン探索", dungeon.ContinuationControls{CanMove: true, CanEscape: true}, []string{"dungeon_move", "dungeon_escape"}},
+		{"escaped", "actor", dungeon.StatusEscaped, "", "ダンジョン探索", dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
+		{"wiped_out", "actor", dungeon.StatusWipedOut, "", "ダンジョン探索", dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newGatewayFixture(t)
 			selection := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "bank"}, loadErr: errors.New("lost selector")}
 			fact := playercontext.Activity{Kind: "dungeon", ID: "run", Revision: 7, PartyID: "party", Role: tc.role, Phase: string(tc.status), Actions: tc.actions}
-			view := dungeon.ExpeditionObservation{ID: "run", LeaderID: "hero", PartyID: "party", DungeonID: "dungeon-01", Revision: 7, Status: tc.status, Round: 3, RoundLimit: 15, Directions: []dungeon.Direction{}, Controls: tc.controls}
+			view := dungeon.ExpeditionObservation{ID: "run", LeaderID: "hero", PartyID: "party", DungeonID: "dungeon-01", Revision: 7, Status: tc.status, Round: 3, RoundLimit: 15, FloorName: tc.floorName, Directions: []dungeon.Direction{}, Controls: tc.controls}
 			if tc.role == "member" {
 				view.LeaderID = "leader"
 			}
@@ -71,7 +74,7 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 				t.Fatalf("GET: %d %+v", status, obs)
 			}
 			data := decodeShopScene[ActivitySceneData](t, obs)
-			if data.Dungeon == nil || !reflect.DeepEqual(*data.Dungeon, view) || !slices.Equal(data.Activities[0].Actions, tc.actions) || obs.Scene.LocationID != "dungeon" || selection.writes != 0 || f.executions != 0 {
+			if data.Dungeon == nil || !reflect.DeepEqual(*data.Dungeon, view) || !slices.Equal(data.Activities[0].Actions, tc.actions) || obs.Scene.LocationID != "dungeon" || obs.Scene.Title != tc.wantTitle || selection.writes != 0 || f.executions != 0 {
 				t.Fatalf("observation: %+v", obs)
 			}
 			for _, support := range obs.Scene.Support.Actions {
@@ -192,5 +195,33 @@ func TestDungeonMapRetirementPreservesRemainingRoutes(t *testing.T) {
 		if len(spec.Paths[route.path][route.method]) == 0 {
 			t.Errorf("retained route missing: %s %s", route.method, route.path)
 		}
+	}
+}
+
+func TestDungeonActivityConflictKeepsConflictTitle(t *testing.T) {
+	f := newGatewayFixture(t)
+	facts := []playercontext.Activity{
+		{Kind: "dungeon", ID: "run", Revision: 7, Role: "actor", Phase: string(dungeon.StatusExploring), Actions: []string{"dungeon_escape"}},
+		{Kind: "pvp", ID: "room", Role: "member", Phase: "recruiting", Actions: []string{}},
+	}
+	view := dungeon.ExpeditionObservation{
+		ID: "run", LeaderID: "hero", DungeonID: "dungeon-01", Revision: 7, Status: dungeon.StatusExploring,
+		Round: 1, RoundLimit: 15, Floor: 1, FloorName: "落穴の塔１階",
+		Map:        &dungeon.MapView{Radius: 1, Tiles: [][]string{{"■", "□", "■"}, {"□", "●", "□"}, {"■", "■", "■"}}},
+		Directions: []dungeon.Direction{},
+		Controls:   dungeon.ContinuationControls{CanEscape: true},
+	}
+	pc := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithActivities(func(context.Context, string, string) ([]playercontext.Activity, error) {
+		return facts, nil
+	}))
+	svc := &dungeonSceneFixture{observeExpeditionFn: func(context.Context, string) (*dungeon.ExpeditionObservation, error) {
+		cp := view
+		return &cp, nil
+	}}
+	router := f.router("rescue_request", timer.NewService(nil), WithPlayerContext(pc), WithDungeon(svc))
+	status, obs := navigationGET(t, router)
+	data := decodeShopScene[ActivitySceneData](t, obs)
+	if status != 200 || obs.Scene.Kind != "activity_conflict" || obs.Scene.LocationID != "activity_conflict" || obs.Scene.Title != "活動の状態を確認してください" || data.Dungeon == nil || data.Dungeon.FloorName != "落穴の塔１階" {
+		t.Fatalf("conflict observation: %d %+v", status, obs)
 	}
 }

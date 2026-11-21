@@ -16,6 +16,26 @@ type ActivitySceneData struct {
 	Dungeon    *dungeon.ExpeditionObservation `json:"dungeon,omitempty"`
 }
 
+var activitySceneTitles = map[string]string{
+	"sleep":             "休息中",
+	"scheduled":         "実行待ち",
+	"party":             "パーティー",
+	"adventure":         "冒険",
+	"pvp":               "対戦部屋",
+	"gvg":               "ギルド戦",
+	"dungeon":           "ダンジョン探索",
+	"challenge":         "試練",
+	"casino":            "カジノ",
+	"activity_conflict": "活動の状態を確認してください",
+}
+
+func activitySceneTitle(kind string, data ActivitySceneData) string {
+	if kind == "dungeon" && data.Dungeon != nil && data.Dungeon.FloorName != "" {
+		return data.Dungeon.FloorName
+	}
+	return activitySceneTitles[kind]
+}
+
 func (h *Handler) composeActivityScene(ctx context.Context, result playercontext.Result, response *PlayerContextResponse) (bool, error) {
 	facts := result.Snapshot.ActiveActivities()
 	if len(facts) == 0 {
@@ -23,25 +43,20 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 	}
 	data := ActivitySceneData{Activities: facts}
 	for i := range facts {
-		if facts[i].Kind == "casino" {
-			var err error
+		var err error
+		switch facts[i].Kind {
+		case "casino":
 			data.Casino, err = h.casinoActivityData(ctx, result, facts[i])
-			if err != nil {
-				return true, err
-			}
-		}
-		if facts[i].Kind == "dungeon" {
-			var err error
+		case "dungeon":
 			data.Dungeon, err = h.dungeonActivityData(ctx, result, facts[i])
-			if err != nil {
-				return true, err
-			}
+		}
+		if err != nil {
+			return true, err
 		}
 		facts[i].Actions = slices.DeleteFunc(facts[i].Actions, func(id string) bool { return !slices.Contains(result.AvailableActions, id) })
 	}
-	titles := map[string]string{"sleep": "休息中", "scheduled": "実行待ち", "party": "パーティー", "adventure": "冒険", "pvp": "対戦部屋", "gvg": "ギルド戦", "dungeon": "ダンジョン探索", "challenge": "試練", "casino": "カジノ", "activity_conflict": "活動の状態を確認してください"}
 	kind := result.Snapshot.LocationID
-	scene := SceneSnapshot{Kind: "activity", LocationID: kind, Title: titles[kind], Dialogue: "現在の活動を確認してください。", Data: data, Support: SceneSupport{Observation: "details", Actions: []SceneActionSupport{}}, PlaceLog: []PlaceLogEntry{}, Members: []PlaceMember{}}
+	scene := SceneSnapshot{Kind: "activity", LocationID: kind, Title: activitySceneTitle(kind, data), Dialogue: "現在の活動を確認してください。", Data: data, Support: SceneSupport{Observation: "details", Actions: []SceneActionSupport{}}, PlaceLog: []PlaceLogEntry{}, Members: []PlaceMember{}}
 	if kind == "activity_conflict" {
 		scene.Kind = "activity_conflict"
 	}
