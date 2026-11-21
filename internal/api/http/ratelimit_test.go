@@ -777,4 +777,26 @@ func TestRateLimitMiddleware_GeneralEndpointFailOpenOnError(t *testing.T) {
 	if rec2.Header().Get("X-RateLimit-Limit") != "" {
 		t.Errorf("expected no rate limit headers on target limiter failure, got %s", rec2.Header().Get("X-RateLimit-Limit"))
 	}
+
+	// 3. Whitespace-only Bearer token falls back to general IP bucket, not http:auth:
+	var seenKeys []string
+	keyCaptureLimiter := &stubRateLimiter{
+		allowFn: func(ctx context.Context, key string, limit int64, window time.Duration) (ratelimit.Result, error) {
+			seenKeys = append(seenKeys, key)
+			return ratelimit.Result{Allowed: true, Limit: limit, Remaining: limit - 1, ResetAfter: window}, nil
+		},
+	}
+	handler3 := newTestHandler(t, playerSvc, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithRateLimiter(keyCaptureLimiter, cfg),
+	)
+	req3 := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req3.Header.Set("Authorization", "Bearer   ")
+	req3.RemoteAddr = "192.168.1.100:12345"
+	rec3 := httptest.NewRecorder()
+	handler3.Router().ServeHTTP(rec3, req3)
+	for _, k := range seenKeys {
+		if strings.HasPrefix(k, "http:auth:") {
+			t.Fatalf("whitespace-only Bearer created auth rate-limit key %q", k)
+		}
+	}
 }

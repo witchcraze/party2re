@@ -22,13 +22,7 @@ func (h *Handler) authenticateAdmin(w http.ResponseWriter, r *http.Request) bool
 		return false
 	}
 
-	providedKey := r.Header.Get("X-Admin-Key")
-	if providedKey == "" {
-		if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
-			providedKey = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-	}
-	providedKey = strings.TrimSpace(providedKey)
+	providedKey := adminAPIKeyFromRequest(r)
 	if providedKey == "" {
 		writeError(w, http.StatusUnauthorized, errors.New("missing admin authorization credentials"))
 		return false
@@ -40,6 +34,13 @@ func (h *Handler) authenticateAdmin(w http.ResponseWriter, r *http.Request) bool
 	}
 
 	return true
+}
+
+func adminAPIKeyFromRequest(r *http.Request) string {
+	if key := strings.TrimSpace(r.Header.Get("X-Admin-Key")); key != "" {
+		return key
+	}
+	return sessionIDFromRequest(r)
 }
 
 // authenticatePlayer extracts the session from the request and authenticates the player.

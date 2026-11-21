@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/witchcraze/party2re/internal/ratelimit"
 )
@@ -102,15 +101,9 @@ func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		var targetKey string
-		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-			token := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
-			if token != "" {
-				targetKey = "http:auth:" + token
-			}
-		}
-		if targetKey == "" {
-			targetKey = "http:general:" + ip
+		targetKey := "http:general:" + ip
+		if token := sessionIDFromRequest(r); token != "" {
+			targetKey = "http:auth:" + token
 		}
 
 		targetRes, targetErr := h.limiter.Allow(r.Context(), targetKey, tokenLimit, tokenWindow)
