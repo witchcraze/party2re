@@ -141,10 +141,13 @@ rejected room write may leave the index ahead, while the room remains available
 for replay from SQL. Listing loads the authoritative room and prunes index entries
 by age; it does not erase a missing body that may still be publishing.
 
-`LeaveRoom` publishes the updated or deleted room under the room lock before
-conditionally deleting `party2:gvg:character:<id>`. Failed room writes keep the
-mapping to block new admission, while failed mapping deletion remains retryable
-via `LeaveRoom` without removing a newer room's mapping.
+`LeaveRoom` commits the per-join `gvg_exit_claims` guard, post-battle settlement,
+Tavern fullness reset and standing-delivery settlement, and delivery completion
+flag in one SQL transaction before publishing the updated or deleted room under
+the room lock and conditionally deleting `party2:gvg:character:<id>`. SQL
+failures roll back exit and delivery effects together; failed Valkey writes
+keep the mapping to block new admission, while retries remain idempotent without
+repeating SQL or Tavern settlement or removing a newer room's mapping.
 
 Every advance supplies the expected round under the
 [retry identity contract below](#gvg-round-retry-identity-target). A lost publication

@@ -725,3 +725,390 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 		t.Fatalf("c2 room2 mapping corrupted: got=%q err=%v want=%q", mapped, err, room2.Room.ID)
 	}
 }
+
+type faultExitClaimRepo struct {
+	gvg.ExitClaimRepository
+	failMarkDone atomic.Bool
+	markDoneErr  error
+}
+
+func (r *faultExitClaimRepo) MarkExitDeliveryDone(ctx context.Context, roomID, characterID, joinID string) error {
+	if r.failMarkDone.CompareAndSwap(true, false) {
+		return r.markDoneErr
+	}
+	return r.ExitClaimRepository.MarkExitDeliveryDone(ctx, roomID, characterID, joinID)
+}
+
+func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_DB_DSN and PARTY2_VALKEY_ADDR are required")
+	}
+	ctx := context.Background()
+	db := database.OpenTestDB(t)
+	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{os.Getenv("PARTY2_VALKEY_ADDR")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+
+	baseRooms, err := gvg.NewValkeyRoomRepository(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomRepo := &faultIntegrationRoomRepo{
+		RoomRepository:    baseRooms,
+		deleteCharRoomErr: errors.New("valkey delete character room failure"),
+	}
+	gvgRepo, err := database.NewGvGRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimRepo := &faultExitClaimRepo{
+		ExitClaimRepository: gvgRepo,
+		markDoneErr:         errors.New("mark exit delivery done failure"),
+	}
+	guildRepo, err := database.NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equipRepo, err := database.NewEquipmentRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tavernRepo, err := database.NewTavernRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProv := database.NewTransactionProvider(db)
+	econSvc, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	battleSvc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithTransactionRunner(econSvc),
+		battle.WithTransactionProvider(txProv),
+		battle.WithRandomSource(testDetRNG{gen: random.NewDeterministic(1)}),
+	)
+	tavernCatalog, err := tavern.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tavernSvc, err := tavern.NewService(tavernCatalog, tavernRepo, charRepo, txProv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g1, c1, err := database.CreateTestGuildWithLeader(ctx, db, fmt.Sprintf("GvGAtomic1_%s", id.New()[:8]), 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g2, c2, err := database.CreateTestGuildWithLeader(ctx, db, fmt.Sprintf("GvGAtomic2_%s", id.New()[:8]), 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g3, c3, err := database.CreateTestGuildWithLeader(ctx, db, fmt.Sprintf("GvGAtomic3_%s", id.New()[:8]), 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		for _, gid := range []string{g1.ID, g2.ID, g3.ID} {
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid); err != nil {
+				t.Error(err)
+			}
+		}
+		for _, ch := range []struct{ id, playerID string }{
+			{c1.ID, c1.PlayerID},
+			{c2.ID, c2.PlayerID},
+			{c3.ID, c3.PlayerID},
+		} {
+			if err := charRepo.Delete(cleanupCtx, ch.id); err != nil {
+				t.Error(err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", ch.playerID); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	for _, gid := range []string{g1.ID, g3.ID} {
+		if _, err := db.ExecContext(ctx, "UPDATE guilds SET color = '#FF3333' WHERE id = ?", gid); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE guilds SET color = '#33CCFF' WHERE id = ?", g2.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, cid := range []string{c1.ID, c2.ID, c3.ID} {
+		if _, err := db.ExecContext(ctx, "UPDATE characters SET max_hp = 100, hp = 100 WHERE id = ?", cid); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// c1 has standing delivery (20G, +40 HP) and fullness, with enough gold for multiple charges.
+	if _, err := tavernSvc.OrderMeal(ctx, c1.ID, "tavern_water"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tavernSvc.ReserveDelivery(ctx, c1.ID, "tavern_water"); err != nil {
+		t.Fatal(err)
+	}
+	c1Before, err := charRepo.FindByID(ctx, c1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c1StatusBefore, err := tavernRepo.GetCharacterStatus(ctx, c1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// c2 has an unaffordable standing delivery (400G meal, wallet 10G) and fullness.
+	if _, err := tavernSvc.OrderMeal(ctx, c2.ID, "tavern_water"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tavernSvc.ReserveDelivery(ctx, c2.ID, "tavern_curry"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 10 WHERE id = ?", c2.ID); err != nil {
+		t.Fatal(err)
+	}
+	c2StatusBefore, err := tavernRepo.GetCharacterStatus(ctx, c2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// c3 has fullness and NO delivery reservation.
+	if _, err := tavernSvc.OrderMeal(ctx, c3.ID, "tavern_water"); err != nil {
+		t.Fatal(err)
+	}
+
+	engine := &scriptedMPBattleEngine{
+		results: []corebattle.PartyBattleResult{
+			{
+				Outcome:     corebattle.OutcomeWin,
+				RemainingHP: map[string]int{c1.ID: 20, c2.ID: 0, c3.ID: 0},
+				RemainingMP: map[string]int{c1.ID: 4, c2.ID: 5, c3.ID: 6},
+			},
+			{
+				Outcome:     corebattle.OutcomeWin,
+				RemainingHP: map[string]int{c1.ID: 15, c2.ID: 0},
+				RemainingMP: map[string]int{c1.ID: 3, c2.ID: 5},
+			},
+		},
+	}
+
+	svc, err := gvg.NewService(
+		roomRepo, gvgRepo, guildRepo, charRepo, engine,
+		gvg.WithParticipantBuilder(battleSvc),
+		gvg.WithPostBattleSettler(battleSvc),
+		gvg.WithTransactionProvider(txProv),
+		gvg.WithExitClaimRepository(claimRepo),
+		gvg.WithPostExitHook(func(ctx context.Context, characterID string) (string, error) {
+			if err := tavernSvc.ResetFullness(ctx, characterID); err != nil {
+				return "", err
+			}
+			res, err := tavernSvc.ClaimDelivery(ctx, characterID)
+			if errors.Is(err, tavern.ErrNoActiveDelivery) {
+				return "", nil
+			}
+			if unpaid, ok := errors.AsType[tavern.UnaffordableDeliveryError](err); ok {
+				return unpaid.ItemName, nil
+			}
+			return res.Item.Name, err
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Atomic Delivery", MaxMembers: 4, TargetWins: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		if err := baseRooms.DeleteRoom(cleanupCtx, detail.Room.ID); err != nil {
+			t.Error(err)
+		}
+		for _, cid := range []string{c1.ID, c2.ID, c3.ID} {
+			if err := baseRooms.DeleteCharacterRoom(cleanupCtx, cid, detail.Room.ID); err != nil {
+				t.Error(err)
+			}
+		}
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_match_transitions WHERE room_id = ?", detail.Room.ID); err != nil {
+			t.Error(err)
+		}
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_exit_claims WHERE room_id = ?", detail.Room.ID); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := svc.JoinRoom(ctx, c2.ID, detail.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.JoinRoom(ctx, c3.ID, detail.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartMatch(ctx, c1.ID, detail.Room.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Fail MarkExitDeliveryDone for c1 -> whole SQL exit + delivery must roll back.
+	claimRepo.failMarkDone.Store(true)
+	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); !errors.Is(err, claimRepo.markDoneErr) {
+		t.Fatalf("c1 LeaveRoom expected MarkExitDeliveryDone error, got %v", err)
+	}
+	c1AfterFail, err := charRepo.FindByID(ctx, c1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c1AfterFail.Money != c1Before.Money || c1AfterFail.Stats.HP != c1Before.Stats.HP || c1AfterFail.Tired != c1Before.Tired {
+		t.Fatalf("c1 character mutated on MarkExitDeliveryDone failure: got=%+v before=%+v", c1AfterFail, c1Before)
+	}
+	c1StatusAfterFail, err := tavernRepo.GetCharacterStatus(ctx, c1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c1StatusAfterFail.IsFull || c1StatusAfterFail.TotalMealsEaten != c1StatusBefore.TotalMealsEaten || c1StatusAfterFail.TotalGoldSpent != c1StatusBefore.TotalGoldSpent {
+		t.Fatalf("c1 tavern status mutated on MarkExitDeliveryDone failure: got=%+v before=%+v", c1StatusAfterFail, c1StatusBefore)
+	}
+	var claimCount int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM gvg_exit_claims WHERE room_id = ? AND character_id = ?`, detail.Room.ID, c1.ID).Scan(&claimCount); err != nil {
+		t.Fatal(err)
+	}
+	if claimCount != 0 {
+		t.Fatalf("expected 0 exit claims after rollback, got %d", claimCount)
+	}
+
+	// Retry c1 with Valkey DeleteCharacterRoom failure, then final retry -> single charge, heal, and meal increment.
+	roomRepo.failDeleteChar.Store(true)
+	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
+		t.Fatalf("c1 LeaveRoom expected Valkey failure, got %v", err)
+	}
+	roomRepo.failDeleteChar.Store(false)
+	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
+		t.Fatalf("c1 LeaveRoom retry failed: %v", err)
+	}
+	c1AfterRetry, err := charRepo.FindByID(ctx, c1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantC1HP := 20 + 40
+	if c1AfterRetry.Money != c1Before.Money-20 || c1AfterRetry.Stats.HP != wantC1HP || c1AfterRetry.Stats.MP != 4 || c1AfterRetry.Tired != 4 {
+		t.Fatalf("c1 state after retry = %+v (want Money=%d HP=%d MP=4 Tired=4)", c1AfterRetry, c1Before.Money-20, wantC1HP)
+	}
+	c1StatusAfterRetry, err := tavernRepo.GetCharacterStatus(ctx, c1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c1StatusAfterRetry.IsFull || c1StatusAfterRetry.TotalMealsEaten != c1StatusBefore.TotalMealsEaten+1 || c1StatusAfterRetry.TotalGoldSpent != c1StatusBefore.TotalGoldSpent+20 {
+		t.Fatalf("c1 tavern status after retry = %+v (before=%+v)", c1StatusAfterRetry, c1StatusBefore)
+	}
+	var c1DeliveryDone bool
+	if err := db.QueryRowContext(ctx, `SELECT delivery_done FROM gvg_exit_claims WHERE room_id = ? AND character_id = ? AND join_id = ?`, detail.Room.ID, c1.ID, detail.Members[0].JoinID).Scan(&c1DeliveryDone); err != nil {
+		t.Fatal(err)
+	}
+	if !c1DeliveryDone {
+		t.Fatal("expected c1 delivery_done = true")
+	}
+
+	// 2. Unaffordable delivery for c2 + Valkey failure -> marks delivery_done=true, so funding before retry does NOT charge.
+	roomRepo.failDeleteChar.Store(true)
+	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
+		t.Fatalf("c2 LeaveRoom expected Valkey failure, got %v", err)
+	}
+	roomRepo.failDeleteChar.Store(false)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 1000 WHERE id = ?", c2.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
+		t.Fatalf("c2 LeaveRoom retry failed: %v", err)
+	}
+	c2After, err := charRepo.FindByID(ctx, c2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2After.Money != 1000 || c2After.Stats.HP != 1 || c2After.Stats.MP != 5 || c2After.Tired != 4 {
+		t.Fatalf("c2 state after unaffordable retry = %+v", c2After)
+	}
+	c2StatusAfter, err := tavernRepo.GetCharacterStatus(ctx, c2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2StatusAfter.IsFull || c2StatusAfter.TotalMealsEaten != c2StatusBefore.TotalMealsEaten || c2StatusAfter.TotalGoldSpent != c2StatusBefore.TotalGoldSpent {
+		t.Fatalf("c2 tavern status changed on unaffordable order: %+v", c2StatusAfter)
+	}
+	if _, err := tavernSvc.GetDelivery(ctx, c2.ID); err != nil {
+		t.Fatalf("expected c2 standing delivery preserved, got %v", err)
+	}
+
+	// 3. No active delivery for c3 + Valkey failure -> marks delivery_done=true and resets fullness.
+	roomRepo.failDeleteChar.Store(true)
+	if err := svc.LeaveRoom(ctx, c3.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
+		t.Fatalf("c3 LeaveRoom expected Valkey failure, got %v", err)
+	}
+	roomRepo.failDeleteChar.Store(false)
+	if err := svc.LeaveRoom(ctx, c3.ID, detail.Room.ID); err != nil {
+		t.Fatalf("c3 LeaveRoom retry failed: %v", err)
+	}
+	c3StatusAfter, err := tavernRepo.GetCharacterStatus(ctx, c3.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c3StatusAfter.IsFull {
+		t.Fatalf("expected c3 fullness reset: %+v", c3StatusAfter)
+	}
+
+	// 4. Subsequent rejoin and departure settles standing order again for the new join.
+	room2, err := svc.CreateRoom(ctx, c2.ID, gvg.CreateRoomRequest{Name: "Atomic Rejoin", MaxMembers: 2, TargetWins: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		if err := baseRooms.DeleteRoom(cleanupCtx, room2.Room.ID); err != nil {
+			t.Error(err)
+		}
+		for _, cid := range []string{c1.ID, c2.ID} {
+			if err := baseRooms.DeleteCharacterRoom(cleanupCtx, cid, room2.Room.ID); err != nil {
+				t.Error(err)
+			}
+		}
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_match_transitions WHERE room_id = ?", room2.Room.ID); err != nil {
+			t.Error(err)
+		}
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_exit_claims WHERE room_id = ?", room2.Room.ID); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := svc.JoinRoom(ctx, c1.ID, room2.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartMatch(ctx, c2.ID, room2.Room.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AdvanceRound(ctx, c2.ID, room2.Room.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.LeaveRoom(ctx, c1.ID, room2.Room.ID); err != nil {
+		t.Fatalf("c1 second room LeaveRoom failed: %v", err)
+	}
+	c1AfterSecond, err := charRepo.FindByID(ctx, c1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c1AfterSecond.Money != c1Before.Money-40 {
+		t.Fatalf("expected standing order to settle once per room departure: Money=%d want=%d", c1AfterSecond.Money, c1Before.Money-40)
+	}
+}
