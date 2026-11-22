@@ -67,57 +67,42 @@ transaction boundary; cleanup must not run inside a caller-owned transaction.
 
 ### PvP financial publication
 
-PvP keeps live teams and rounds in Valkey. The SQL `pvp_room_transitions` record
-retains each room's latest financial version, resulting room, final outcome, and
-durable room-log activity timestamp (`last_activity_at`); `pvp_character_claims`
-reserves each character's participation, including unleft `completed` rooms until
-each member leaves or times out. The PvP transition port commits bets, refunds or
-prizes, victory counters, and timeout `PendingWake` flags with this recovery state
-in one SQL transaction. It locks the room claim (Rank 0), affected characters in
-ascending ID order (Rank 2), then participation claims (Rank 8). A unique character
-claim rolls back a competing admission, including its debit. Terminal `disbanded`
-claims reject further transitions, while `completed` rooms permit only departure,
-abandonment, or inactivity cleanup. Pre-start departure refunds only the departing
-participant; post-start departure preserves remaining escrow for active teams or
-records forfeited escrow (`ForfeitedPool`) on last-member forfeit, undecided
-max-round draw, settlement remainder, lost-room abandonment, and inactivity
-timeout. Financial versions also reject stale cached rosters, and team
-selection, match start, and non-final rounds commit `last_activity_at`, the
-resulting room, non-final `PendingPvPKills` and round outcome through the same
-versioned transition and pending-publication boundary.
+PvP keeps live teams and rounds in Valkey. SQL (`pvp_room_transitions` and
+`pvp_character_claims`) is the durable boundary for financial mutations, versioned
+room-activity transitions (`last_activity_at`), final match/forfeiture outcomes,
+active participation claims (including unleft `completed` rooms until departure or
+timeout), and timeout sleep obligations. A unique character claim rolls back
+competing admission in one transaction, `disbanded` rooms reject further
+transitions, and financial versions reject stale cached snapshots.
 
-Valkey publication happens after commit. Before subsequent room mutations, pending
-publication is retried under the room lock without repeating financial effects,
-combat, or activity extension (retrying with the remaining activity TTL rather than
-extending it, and never resurrecting an already-expired room). Creation discovers
-unpublished or overdue rooms through the character's SQL claim. Removed claims
-remain reserved until room, reverse-mapping, and any timeout sleep-timer writes
-all succeed; mapping deletion compares the room ID so it cannot erase newer
-membership. Retrying a pending team selection, match start, or non-final round
-completes publication and returns its stored result without advancing another
-round; once acknowledged, non-final rounds advance normally while final round
-retries return the stored result until the room times out.
-Password hashes, activity timestamps, and financial versions use private
-persistence fields and remain absent from public room responses.
+Valkey publication runs after SQL commit. Admission (`CreateRoom`/`JoinRoom`)
+discovers unpublished or overdue rooms through the character's SQL claim, and
+subsequent room mutations retry pending publication under the room lock without
+repeating financial effects, combat, or activity extension. Live publication uses
+the remaining activity TTL (floored at 1s through the inclusive 1800s boundary)
+and never resurrects an expired room. When publication or recovery observes
+`now > last_activity_at + 1800s` on a non-disbanded room, it does not acknowledge
+that transition as live; instead it releases any already-departed claims and
+commits/publishes inactivity timeout cleanup for the remaining roster. Removed
+claims remain reserved until room, reverse-mapping, and any timeout sleep-timer
+writes succeed, with room-ID-checked mapping deletion. Retrying a pending team
+selection, match start, or non-final round completes publication and returns its
+stored result without advancing again; final round retries return the stored
+result until timeout.
 
-These records have no automatic expiry. Pending financial publication is recovered
-before interpreting a missing live room as loss, and Valkey connectivity failures
-always propagate without settling or penalizing. For a published room missing
-before 1800 seconds of inactivity, PvP leave verifies the requesting participant
-against SQL and closes the room without refunding bets or adding sleep. When
-`now > last_activity_at + 1800s`, mutating PvP accesses run inactivity cleanup:
-closing remaining escrow without refund, setting `PendingWake` in SQL and recording
-the fixed `PenaltyUntil = now + 3600s` before deleting Valkey keys and publishing
-`ExtendLockUntil` sleep locks (preserving longer sleep). Home's sleep penalty reader
-observes unacknowledged PvP timeout penalties so failed timer publication cannot
-permit premature wake or re-extend the deadline on retry. The character context
-exposes `pvp_leave` for a claim without a live room as `recovery_pending` (blocking
-wake while a timeout penalty is pending); rescue still requires the PvP owner to
-finish recovery. Retry after a new join/leave cycle is a new operation; the API has
-no client request identity to distinguish a delayed request across cycles. SQL
-versions protect the financial claim; live combat and publication still use the
-existing room lease, whose wider multi-instance guarantees are unresolved in
-[#1574](https://github.com/witchcraze/party2re/issues/1574).
+These SQL records have no automatic expiry. Valkey connectivity failures always
+propagate without settling or penalizing. For a published room missing before
+1800 seconds of inactivity, PvP leave settles as missing-room abandonment without
+refunding bets or adding sleep. When `now > last_activity_at + 1800s`, mutating
+PvP accesses commit timeout forfeiture, the SQL wake obligation, and the fixed
+`now + 3600s` sleep deadline before deleting Valkey keys and extending sleep
+locks (preserving longer sleep). Home's sleep reader observes unacknowledged PvP
+timeout penalties so failed timer publication blocks premature wake without
+extending the deadline on retry. The character context exposes `pvp_leave` as
+`recovery_pending` for a claim without a live room, and rescue defers to PvP to
+finish recovery. Retry after a new join/leave cycle is a new operation because
+the API carries no cross-cycle request ID. Multi-instance room-lease guarantees
+remain unresolved in [#1574](https://github.com/witchcraze/party2re/issues/1574).
 
 ### GvG reward publication
 

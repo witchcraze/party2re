@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sync"
 	"time"
 
@@ -81,67 +82,95 @@ func (s *Service) commitTransition(ctx context.Context, t Transition, mutate fun
 	}); err != nil {
 		return err
 	}
-	return s.publishTransition(ctx, t)
+	published, err := s.publishTransition(ctx, t)
+	if err != nil {
+		return err
+	}
+	if t.Kind != "timeout" && published.Kind == "timeout" {
+		if t.Kind == "leave" && slices.Contains(published.RemovedIDs, t.ActorID) {
+			return nil
+		}
+		return ErrRoomNotFound
+	}
+	return nil
 }
 
-func (s *Service) publishTransition(ctx context.Context, t Transition) error {
+func (s *Service) publishTransition(ctx context.Context, t Transition) (Transition, error) {
 	t.Detail.Room.PasswordHash = t.PasswordHash
 	t.Detail.Room.PendingPvPKills = cloneIntMap(t.PendingPvPKills)
 	t.Detail.Room.FinancialVersion = t.Version
 	t.Detail.Room.LastActivityAt = t.LastActivityAt
 	if t.Detail.Room.Status == StatusDisbanded {
 		if err := s.repo.DeleteRoom(ctx, t.Detail.Room.ID); err != nil {
-			return err
+			return Transition{}, err
 		}
 		for _, characterID := range t.RemovedIDs {
 			if err := s.repo.DeleteCharacterRoom(ctx, characterID, t.Detail.Room.ID); err != nil {
-				return err
+				return Transition{}, err
 			}
 		}
 		if t.Kind == "timeout" {
 			if s.timers == nil {
-				return ErrInvalidDependencies
+				return Transition{}, ErrInvalidDependencies
 			}
 			for _, characterID := range t.RemovedIDs {
 				if err := s.timers.ExtendLockUntil(ctx, timer.CategorySleep, characterID, t.PenaltyUntil); err != nil {
-					return err
+					return Transition{}, err
 				}
 			}
 		}
-		return s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version)
+		if err := s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version); err != nil {
+			return Transition{}, err
+		}
+		return t, nil
+	}
+
+	now := s.now()
+	if s.isInactive(t.LastActivityAt, now) {
+		if _, roomErr := s.repo.GetRoom(ctx, t.Detail.Room.ID); roomErr != nil && !errors.Is(roomErr, ErrRoomNotFound) {
+			return Transition{}, roomErr
+		}
+		if s.timers == nil {
+			return Transition{}, ErrInvalidDependencies
+		}
+		for _, characterID := range t.RemovedIDs {
+			if err := s.repo.DeleteCharacterRoom(ctx, characterID, t.Detail.Room.ID); err != nil {
+				return Transition{}, err
+			}
+		}
+		if err := s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version); err != nil {
+			return Transition{}, err
+		}
+		timeoutCtx := context.WithValue(ctx, transitionVersionKey{}, t.Version)
+		return s.cleanupInactiveRoom(timeoutCtx, t, now)
 	}
 
 	ttl := DefaultLobbyTTL
 	if !t.LastActivityAt.IsZero() {
-		ttl = t.LastActivityAt.Add(DefaultLobbyTTL).Sub(s.now())
+		ttl = t.LastActivityAt.Add(InactivityTimeout).Sub(now)
 	}
-	if ttl <= 0 {
-		if err := s.repo.DeleteRoom(ctx, t.Detail.Room.ID); err != nil {
-			return err
-		}
-		for _, characterID := range t.RemovedIDs {
-			if err := s.repo.DeleteCharacterRoom(ctx, characterID, t.Detail.Room.ID); err != nil {
-				return err
-			}
-		}
-		return s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version)
+	if ttl < time.Second {
+		ttl = time.Second
 	}
 
 	ttlCtx := withRemainingTTL(ctx, ttl)
 	if err := s.repo.SaveRoom(ttlCtx, t.Detail.Room, t.Detail.Members); err != nil {
-		return err
+		return Transition{}, err
 	}
 	for _, m := range t.Detail.Members {
 		if err := s.repo.SetCharacterRoom(ttlCtx, m.CharacterID, t.Detail.Room.ID); err != nil {
-			return err
+			return Transition{}, err
 		}
 	}
 	for _, characterID := range t.RemovedIDs {
 		if err := s.repo.DeleteCharacterRoom(ctx, characterID, t.Detail.Room.ID); err != nil {
-			return err
+			return Transition{}, err
 		}
 	}
-	return s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version)
+	if err := s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version); err != nil {
+		return Transition{}, err
+	}
+	return t, nil
 }
 
 // recoverCharacter also finds creation that failed before publishing a reverse mapping,
@@ -158,9 +187,11 @@ func (s *Service) recoverCharacter(ctx context.Context, characterID string) (Tra
 			return err
 		}
 		if t.Pending {
-			if err := s.publishTransition(lockedCtx, t); err != nil {
+			published, err := s.publishTransition(lockedCtx, t)
+			if err != nil {
 				return err
 			}
+			t = published
 			t.Pending = false
 			recovered = t
 		}
