@@ -215,6 +215,7 @@ func (r *normalStore) WithRunForUpdate(ctx context.Context, id string, create bo
 
 type normalFixture struct {
 	db      *sql.DB
+	customs *database.CustomSkillRepository
 	chars   *database.CharacterRepository
 	invs    *database.InventoryRepository
 	equips  *database.EquipmentRepository
@@ -259,7 +260,11 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter := battle.NewService(battle.WithCharacterRepository(chars), battle.WithInventoryRepository(invs), battle.WithDepotRepository(depots), battle.WithEquipmentRepository(equipment), battle.WithJobHistoryRepository(jobs), battle.WithTransactionProvider(database.NewTransactionProvider(db)), battle.WithTransactionRunner(runner), battle.WithMaxInventoryCapacity(30))
+	customs, err := database.NewCustomSkillRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := battle.NewService(battle.WithCharacterRepository(chars), battle.WithCustomSkillRepository(customs), battle.WithInventoryRepository(invs), battle.WithDepotRepository(depots), battle.WithEquipmentRepository(equipment), battle.WithJobHistoryRepository(jobs), battle.WithTransactionProvider(database.NewTransactionProvider(db)), battle.WithTransactionRunner(runner), battle.WithMaxInventoryCapacity(30))
 	stages, err := adventure.InitialStageCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -268,7 +273,7 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &normalFixture{db: db, chars: chars, invs: invs, equips: equipment, jobs: jobs, depots: depots, history: &normalHistory{Repository: history}, store: &normalStore{NormalRunStore: runRepo}, clock: &normalClock{}, penalty: &normalPenalty{}, combat: &normalCombat{}, rng: &normalRNG{}}
+	f := &normalFixture{db: db, customs: customs, chars: chars, invs: invs, equips: equipment, jobs: jobs, depots: depots, history: &normalHistory{Repository: history}, store: &normalStore{NormalRunStore: runRepo}, clock: &normalClock{}, penalty: &normalPenalty{}, combat: &normalCombat{}, rng: &normalRNG{}}
 	f.clock.nanos.Store(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for range count {
 		c, err := database.CreateTestCharacterWithFunds(context.Background(), db, id.New()[:8], 100)

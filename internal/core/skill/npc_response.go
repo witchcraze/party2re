@@ -25,8 +25,14 @@ func (d *BattleDefinitions) RegisterNPCCallbacks(shared PlayerCallbackContexts, 
 	d.RegisterNPCJob98(&corebattle.NPCJob98Context{DamageContext: damage, EquipmentReset: reset})
 	d.RegisterNPCJob402(&corebattle.NPCJob402Context{DamageContext: damage, Death: death})
 	d.RegisterNPCOrderedReset(&corebattle.NPCOrderedResetContext{DamageContext: damage, EquipmentReset: reset})
-	d.RegisterDamageGems(frame.Damage)
-	d.RegisterRecoveryStatGems(&frame.Damage.EffectContext)
+	d.RegisterGemCallbacks(shared, frame.Damage)
+}
+
+// RegisterGemCallbacks binds the gem bodies and non-job wrappers that custom
+// slots and delegation dispatch to; player and NPC compositions share them.
+func (d *BattleDefinitions) RegisterGemCallbacks(shared PlayerCallbackContexts, damage *corebattle.DamageContext) {
+	d.RegisterDamageGems(damage)
+	d.RegisterRecoveryStatGems(&damage.EffectContext)
 	d.RegisterDefenseGems()
 	d.RegisterSummonAppearanceGems(shared.Roster, shared.Transformations)
 	d.RegisterNonJobInvocations()

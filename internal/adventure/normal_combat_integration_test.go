@@ -210,6 +210,32 @@ func TestRunCombatSecondSubmissionUsesPostFirstMP(t *testing.T) {
 	}
 }
 
+// #2356: the second whitelisted callback is validated after the first one
+// defeated its target; it still reaches the survivor (_battle.cgi:761–785).
+func TestRunCombatSecondSubmissionAfterFirstDefeat(t *testing.T) {
+	survivor := map[int]int{}
+	for _, tc := range []struct{ mp, wantMP int }{{46, 12}, {47, 1}} {
+		f := combatFixture(t, 1)
+		cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+			r.LastActions["foe-b"] = f.clock.Now().Add(time.Hour)
+			a := runActorByID(r, f.actors[0].ID)
+			a.Jobs = corebattle.BattleJobs{JobID: "job-33", SP: 160}
+			a.MP, a.MaxMP, a.Extended, a.ExtendedTurns = tc.mp, 50, corebattle.ExtendedAdditional, 2
+		}, runEnemy("foe-a", 5), runEnemy("foe-b", 900))
+		if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "pair", "", "", "＠イオナズン　＠イオラ")); err != nil {
+			t.Fatal(tc.mp, err)
+		}
+		r := readStockRoom(t, f, cmd.RunID)
+		if a := runActorByID(r, cmd.ActorID); a.MP != tc.wantMP || !reflect.DeepEqual(r.Enemies, []string{"foe-b"}) {
+			t.Fatalf("mp=%d: got mp=%d enemies=%v", tc.mp, a.MP, r.Enemies)
+		}
+		survivor[tc.mp] = runActorByID(r, "foe-b").HP
+	}
+	if survivor[47] >= survivor[46] || survivor[46] >= 900 {
+		t.Fatalf("survivor hp: first only %d, both %d", survivor[46], survivor[47])
+	}
+}
+
 // _battle.cgi:935–937: one level per operation from saved, released and
 // direct EXP; the settler credits EXP without further growth.
 func TestRunCombatLevelsOnceInTheTail(t *testing.T) {

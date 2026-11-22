@@ -343,6 +343,6 @@ Order and lifetime traps:
 ## Open gaps
 
 - Multi-row inventories leave the durable hand unknown, so player held-tool use and job50/78/86 stay gated: #2558.
-- Job-table variants, custom gems, admission corrections and the still-unbound arithmetic, control MP-drain and transformation area-damage ports: #2552.
+- Run combat leaves the arithmetic, control MP-drain and transformation area-damage ports unbound, so job72/job31 arithmetic, job58.3 and job79 breath reject: #2610.
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
 - NPC-only jobs 405, 406 and 407 tables: #1914, #1915, #1916.
