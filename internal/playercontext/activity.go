@@ -78,3 +78,12 @@ func continuationAllowed(action ActionDefinition, s *Snapshot, location string) 
 		return a.Kind == action.ActivityKind && slices.Contains(a.Actions, action.ID)
 	})
 }
+
+func activityAllowsInspect(s *Snapshot, location string) bool {
+	if s.Sleeping {
+		return false
+	}
+	return slices.ContainsFunc(s.Activities, func(a Activity) bool {
+		return a.Kind == location && slices.Contains(a.Actions, "player_inspect")
+	})
+}

@@ -42,7 +42,7 @@ type TransitionRepository interface {
 
 // IsActivityTransitionKind reports whether kind is a room-activity writer subject to inactivity guards.
 func IsActivityTransitionKind(kind string) bool {
-	return kind == "select" || kind == "start" || kind == "advance"
+	return kind == "select" || kind == "start" || kind == "advance" || kind == "kick"
 }
 
 func WithTransitionRepository(repo TransitionRepository) Option {
@@ -167,10 +167,51 @@ func (s *Service) publishTransition(ctx context.Context, t Transition) (Transiti
 			return Transition{}, err
 		}
 	}
+	if t.Kind == "kick" && !t.PenaltyUntil.IsZero() && s.actionWait != nil {
+		for _, characterID := range t.RemovedIDs {
+			if err := s.actionWait.ImposeActionWaitUntil(ctx, characterID, t.PenaltyUntil); err != nil {
+				return Transition{}, err
+			}
+		}
+	}
 	if err := s.transitions.AcknowledgeTransition(ctx, t.Detail.Room.ID, t.Version); err != nil {
 		return Transition{}, err
 	}
 	return t, nil
+}
+
+// RecoverCharacterDeparture completes a pending kick publication and wait deadline
+// when the character has an unacknowledged kick transition.
+func (s *Service) RecoverCharacterDeparture(ctx context.Context, characterID string) error {
+	roomID, err := s.transitions.FindCharacterClaim(ctx, characterID)
+	if err != nil || roomID == "" {
+		return err
+	}
+	t, err := s.transitions.FindTransition(ctx, roomID)
+	if err != nil || !t.Pending || t.Kind != "kick" || !slices.Contains(t.RemovedIDs, characterID) {
+		return err
+	}
+	return s.repo.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		latest, err := s.transitions.FindTransition(lockedCtx, roomID)
+		if err != nil || !latest.Pending {
+			return err
+		}
+		_, err = s.publishTransition(lockedCtx, latest)
+		return err
+	})
+}
+
+// HasPendingKickWait reports whether characterID has an unacknowledged kick wait.
+func (s *Service) HasPendingKickWait(ctx context.Context, characterID string) (bool, error) {
+	roomID, err := s.transitions.FindCharacterClaim(ctx, characterID)
+	if err != nil || roomID == "" {
+		return false, err
+	}
+	t, err := s.transitions.FindTransition(ctx, roomID)
+	if err != nil {
+		return false, err
+	}
+	return t.Pending && t.Kind == "kick" && slices.Contains(t.RemovedIDs, characterID), nil
 }
 
 // recoverCharacter also finds creation that failed before publishing a reverse mapping,

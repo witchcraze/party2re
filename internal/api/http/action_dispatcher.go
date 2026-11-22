@@ -93,6 +93,11 @@ func writeActionFailure(w http.ResponseWriter, status int, code, message string)
 	writeJSON(w, status, actionFailureResponse{Error: ErrorDetail{Code: code, Message: message}})
 }
 
+type pvpDepartureRecoverer interface {
+	RecoverCharacterDeparture(ctx context.Context, characterID string) error
+	HasPendingKickWait(ctx context.Context, characterID string) (bool, error)
+}
+
 func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) {
 	h.withAuthenticatedCharacter(w, r, r.PathValue("id"), func(player coreplayer.Player, char corecharacter.Character) {
 		var req *actionRequest
@@ -123,12 +128,30 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
+		if rec, ok := h.pvp.(pvpDepartureRecoverer); ok {
+			if err := rec.RecoverCharacterDeparture(r.Context(), char.ID); err != nil {
+				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
+				return
+			}
+		}
 		current, err := h.playerContext.Query(r.Context(), char.ID, player.ID)
 		if errors.Is(err, casino.ErrDepartureRecovery) && h.casino != nil {
 			// A concurrent kick can claim this character's departure after the
 			// recovery above; commands recover it, observations never do.
 			if err = h.casino.RecoverCharacterDeparture(r.Context(), char.ID); err == nil {
 				current, err = h.playerContext.Query(r.Context(), char.ID, player.ID)
+			}
+		}
+		if err == nil {
+			if rec, ok := h.pvp.(pvpDepartureRecoverer); ok {
+				if pendingKick, penErr := rec.HasPendingKickWait(r.Context(), char.ID); penErr != nil {
+					writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
+					return
+				} else if pendingKick {
+					if err = rec.RecoverCharacterDeparture(r.Context(), char.ID); err == nil {
+						current, err = h.playerContext.Query(r.Context(), char.ID, player.ID)
+					}
+				}
 			}
 		}
 		if err != nil {

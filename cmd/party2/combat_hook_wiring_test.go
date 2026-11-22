@@ -7,11 +7,15 @@ import (
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/pvp"
 )
 
 type tameWiringRandom struct{}
@@ -191,5 +195,58 @@ func TestGvGExitTavernProductionHook(t *testing.T) {
 				t.Fatal("expected delivery_done = true")
 			}
 		})
+	}
+}
+
+func TestPvPExitTavernProductionHook(t *testing.T) {
+	f := newHookWiringFixture(t, nil)
+	ctx := context.Background()
+
+	f.char.Money = 500
+	f.char.Stats.HP, f.char.Stats.MaxHP = 20, 100
+	if err := f.core.charRepo.Update(ctx, f.char); err != nil {
+		t.Fatal(err)
+	}
+	shoes, err := coreitem.NewInstance("item-105", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.core.invRepo.Save(ctx, coreinventory.Inventory{CharacterID: f.char.ID, Items: []coreitem.Instance{shoes}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.econ.equipRepo.Save(ctx, coreequipment.Equipment{CharacterID: f.char.ID, Slots: map[coreitem.Slot]string{coreitem.SlotAccessory: shoes.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.misc.tavern.OrderMeal(ctx, f.char.ID, "tavern_water"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.misc.tavern.ReserveDelivery(ctx, f.char.ID, "tavern_water"); err != nil {
+		t.Fatal(err)
+	}
+
+	room, err := f.cmbt.pvp.CreateRoom(ctx, f.char.ID, pvp.CreateRoomRequest{Name: "PvPHook", Bet: 50, MaxMembers: 2, TargetWins: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		_, _ = f.db.ExecContext(cleanupCtx, "DELETE FROM pvp_character_claims WHERE room_id = ?", room.Room.ID)
+		_, _ = f.db.ExecContext(cleanupCtx, "DELETE FROM pvp_room_transitions WHERE room_id = ?", room.Room.ID)
+	})
+	if err := f.cmbt.pvp.LeaveRoom(ctx, f.char.ID, room.Room.ID); err != nil {
+		t.Fatalf("LeaveRoom: %v", err)
+	}
+	gotChar, err := f.core.charRepo.FindByID(ctx, f.char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// OrderMeal spent 20G and healed +40 HP (480G, 60 HP); LeaveRoom refunds bet (50G),
+	// claims delivery (-20G -> 460G, +40 HP -> 100 HP), and adds pre-start fatigue +1.
+	if gotChar.Money != 460 || gotChar.Stats.HP != 100 || gotChar.Tired != 1 {
+		t.Fatalf("unexpected char after PvP exit: Money=%d HP=%d Tired=%d", gotChar.Money, gotChar.Stats.HP, gotChar.Tired)
+	}
+	tStatus, err := f.misc.tavern.GetStatus(ctx, f.char.ID)
+	if err != nil || tStatus.IsFull || tStatus.DeliveryReservation == nil {
+		t.Fatalf("unexpected tavern status: %+v err=%v", tStatus, err)
 	}
 }

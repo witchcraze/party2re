@@ -122,6 +122,7 @@ func newCmbtServices(
 		normalWriter(core),
 		battleEngine,
 		pvp.WithParticipantBuilder(battleAdapter),
+		pvp.WithPostBattleSettler(battleAdapter),
 		pvp.WithTransactionProvider(core.txProvider),
 		pvp.WithTransitionRepository(pvpTransitions),
 		pvp.WithPrizeRemitter(pvpPrizeRemitter{remittances: econ.depotRepo, notifier: soc.home}),

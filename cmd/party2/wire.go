@@ -159,6 +159,9 @@ func wireHooks(
 		if cmbt.gvg != nil {
 			cmbt.gvg.SetPostExitHook(postAdventureHook)
 		}
+		if cmbt.pvp != nil {
+			cmbt.pvp.SetPostExitHook(postAdventureHook)
+		}
 	}
 	if misc.monsterRepo != nil || misc.homeMemberRepo != nil {
 		soc.home.SetHomePetReader(&homePetAdapter{
@@ -298,6 +301,9 @@ func newHTTPHandler(
 	pc := newPlayerContext(core, soc, econ, cmbt, misc, playercontext.WithActionWait(soc.timer, cfg.ActionWait))
 	if misc.casino != nil {
 		misc.casino.SetActionWait(pc)
+	}
+	if cmbt.pvp != nil {
+		cmbt.pvp.SetActionWait(pc)
 	}
 	if soc.schedRepo != nil {
 		opts = append(opts, http.WithPlayerContext(pc))

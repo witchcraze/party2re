@@ -127,7 +127,13 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		var allies, enemies []corebattle.Participant
 		for _, m := range detail.Members {
 			var p corebattle.Participant
-			if s.participantBuilder != nil {
+			if sb, ok := s.participantBuilder.(StatefulParticipantBuilder); ok {
+				var err error
+				p, err = sb.BuildParticipantWithState(lockedCtx, m.CharacterID, m.HP, m.MP, m.ConsumedItems)
+				if err != nil {
+					return err
+				}
+			} else if s.participantBuilder != nil {
 				var err error
 				p, err = s.participantBuilder.BuildParticipantWithCurrentHP(lockedCtx, m.CharacterID, m.HP)
 				if err != nil {
@@ -216,12 +222,16 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			}
 
 			for i := range detail.Members {
-				if remMP, ok := res.RemainingMP[detail.Members[i].CharacterID]; ok {
+				cID := detail.Members[i].CharacterID
+				if remMP, ok := res.RemainingMP[cID]; ok {
 					mp := max(0, remMP)
 					if maxMP := detail.Members[i].MaxMP; maxMP != nil && *maxMP > 0 {
 						mp = min(mp, *maxMP)
 					}
 					detail.Members[i].MP = &mp
+				}
+				if consumed := res.ConsumedItems[cID]; len(consumed) > 0 {
+					detail.Members[i].ConsumedItems = append(slices.Clone(detail.Members[i].ConsumedItems), consumed...)
 				}
 			}
 		}
@@ -272,11 +282,17 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			detail.Room.PrizePool = 0
 		}
 
-		// Advance to next round if match not completed
+		// Advance to next round if match not completed; otherwise retain final HP for exit copyback.
 		if !matchCompleted {
 			detail.Room.Round++
 			for i := range detail.Members {
 				detail.Members[i].HP = detail.Members[i].MaxHP
+			}
+		} else {
+			for i := range detail.Members {
+				if remHP, ok := res.RemainingHP[detail.Members[i].CharacterID]; ok {
+					detail.Members[i].HP = max(0, remHP)
+				}
 			}
 		}
 

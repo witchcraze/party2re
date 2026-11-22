@@ -1,82 +1,20 @@
 # Colosseum PvP (Real-time 8-Player Bet & Split Color Battles)
 
-## Overview
+The Colosseum PvP module (`internal/pvp`) reconstructs `party2/lib/vs_player.cgi` and `party2/lib/quest.cgi:type=4` (asynchronous snapshot Elo ratings have been removed). Room parameters, the 9 team colors, battle resolution, and transport schemas live in code, [OpenAPI](../api/openapi.json), and [PvP financial publication](../architecture/transient-run-state.md#pvp-financial-publication).
 
-The Colosseum PvP Module (`internal/pvp`) reconstructs the original Party2 real-time multiplayer arena specification (`party2/lib/vs_player.cgi` and `party2/lib/quest.cgi:type=4`).
+## Rules, Departures, and Open Gaps
 
-Unlike modern asynchronous snapshot Elo ladders, authentic Party2 PvP features real-time 2-to-8 player lobby rooms where participants wager gold, divide into up to 9 distinct color teams, battle across multi-round party combats using the shared Core Battle engine (`internal/core/battle`), and split the aggregated prize pool among the winning team members.
-
----
-
-## Architectural Policy & Boundaries
-
-- **Purge of Fictional Elo Arena**: Asynchronous Elo rating calculation, defense logs, and rating tables (`arena_ratings`, `arena_matches`) have been completely purged.
-- **Relational vs Ephemeral Authority**:
-  - Room state, participant roster, team assignments, and round scores are stored ephemerally in Valkey Master (`party2:pvp:room:<id>`, `party2:pvp:character:<id>`, `party2:pvp:rooms:active`) with a 30-minute inactivity TTL.
-  - Canonical player wealth (`characters.money`) and stronger-opponent combat defeats (`characters.pvp_wins`, legacy `$m{kill_p}`) are durably persisted in MariaDB Master. See [financial publication](../architecture/transient-run-state.md#pvp-financial-publication) for the SQL/Valkey recovery boundary.
-- **Core Battle Engine Integration**: Round combat utilizes `corebattle.Engine.ResolvePartyBattle`, treating teammates as allies and opposing color participants as enemies.
-
----
-
-## Domain Rules & Mechanics
-
-### 1. Room Creation & Parameters (`quest.cgi:type=4`)
-
-A character can host a Colosseum room with configurable parameters:
-- **Room Name**: 1 to 50 characters.
-- **Password**: Optional password for private / clan matches.
-- **Max Participants**: 2 to 8 players.
-- **Target Wins**: 1 to 3 wins required for match victory.
-- **Bet**: Minimum 10 gold. The leader deposits the bet immediately upon creation, seeding the room's `prize_pool`.
-- **Speed & Stage**: Display and animation configuration (default speed 18).
-
-### 2. Room Recruitment & Team Color Assignment (`@ぱーてぃー`)
-
-1. **Joining**:
-   - Participants pay the room `bet` into the `prize_pool` upon entry.
-   - Characters cannot join if they are already in an active room, lack the required funds, or fail the room's [`need_join` condition](party-system.md).
-2. **Team Colors**:
-   - Participants choose one of the 9 authentic legacy team colors:
-     - `#FF3333` (レッド / Red)
-     - `#FF33CC` (ピンク / Pink)
-     - `#FF9933` (オレンジ / Orange)
-     - `#FFFF33` (イエロー / Yellow)
-     - `#33FF33` (グリーン / Green)
-     - `#33CCFF` (アクア / Aqua)
-     - `#6666FF` (ブルー / Blue)
-     - `#CC66FF` (パープル / Purple)
-     - `#CCCCCC` (グレイ / Gray)
-3. **Live-room departure (`@にげる`)**:
-   - Before match start (`recruiting`, round 0), departure refunds only the departing participant's bet, promotes the next remaining member to leader when the leader leaves, and disbands the room only when the last member departs.
-   - During (`in_progress`) and after (`completed`) a match, participants can leave (`pvp_leave`) without refunding bets or duplicating awarded prizes; leader exit promotes the next remaining member. In `in_progress`, remaining bets stay in `prize_pool` for surviving participants until settlement, or close as forfeited escrow when the last participant departs.
-   - Unverified legacy escape side-effects (vitality copyback, fatigue increment, items `105`/`106`, consumed `ite` clearing, bar food delivery) and lobby actions (`@さそう`, `@きっく`, `@しらべる`) remain tracked in [#2287](https://github.com/witchcraze/party2re/issues/2287).
-
-**Recovery and inactivity rules:** arbitrary live-room loss uses the legacy missing-member-file path (`_battle.cgi:453-461`), clearing membership without refunding bets or inferring an inactivity penalty. Genuine inactivity (`now > last_activity + 1800s`) closes remaining escrow without refund and applies a 3600-second sleep to remaining participants while preserving longer existing sleep. **Non-obvious legacy behavior:** `quest.cgi:928-1079` (`add_member`) writes join messages to `$logdir/quest.cgi` rather than the room's `log.cgi`, so joining does not refresh the inactivity clock; only room creation, team selection, match start, round advance, and non-final departures refresh it. Unleft `completed` rooms remain subject to the 1800-second inactivity timeout. Because GET observations remain read-only, cleanup currently runs lazily on mutating PvP accesses; periodic background cleanup independent of user actions is tracked in [#2343](https://github.com/witchcraze/party2re/issues/2343).
-
-### 3. Match Progression & Start Invariants (`@かいし`)
-
-1. **Start Conditions**:
-   - At least 2 participants.
-   - Every participant MUST have chosen a team color.
-   - At least 2 distinct team colors must be represented.
-2. **Health Restoration**:
-   - Before Round 1 commences, all participants have their HP restored to `MaxHP`.
-
-### 4. Round Combat Resolution (`_battle.cgi:486`, `vs_player.cgi:106-122`)
-
-- If mid-match departures leave only one team in the room, that surviving team is awarded the round win without invoking `ResolvePartyBattle`.
-- Otherwise, each round resolves a party battle between opposing teams using `ResolvePartyBattle`.
-- The round winner is determined from the unique surviving team among participants (`res.RemainingHP`):
-  - If exactly 1 team has surviving members (`alive_team_c == 1`), that team receives 1 round win point (`round_win`).
-  - If 0 teams survive (mutual wipeout) or multiple teams remain (turn limit reached), the round is scored as a draw (`draw`).
-- Round turns, combat logs, and HP changes are tracked per round.
-
-### 5. Match Settlement & Prize Pool Split
-
-- When a team reaches `target_wins`, `prize_pool` is split evenly among its members (`prize_per_member = prize_pool / winners`), retaining any integer-division remainder as closed forfeited escrow.
-- Match victory (`give_bet`, `vs_player.cgi:186–216`) awards prize gold only; `characters.pvp_wins` (`kill_p`) is credited per surviving character who inflicts a non-revived stronger-opponent combat defeat (`party2/lib/_battle.cgi:231–232`, `battle.IsStrongEnemy`) across rounds and flushed atomically on match settlement or closure (including inactivity timeout).
-- If no team reaches `target_wins` by round 10 (`MaxRounds`), the match finishes as a draw (`match_draw`) without refunding bets, closing the remaining `prize_pool` as forfeited escrow.
-
----
-
-Transport schemas: [OpenAPI](../api/openapi.json). Storage key lifetimes: [Valkey keyspace](../architecture/valkey-keyspace.md).
+- **Live-room departure (`@にげる`, `_battle.cgi:1184–1248,1330–1375`):**
+  - Pre-start (`recruiting`, round 0) refunds only the departing participant's bet and promotes leadership if members remain; once started (`in_progress` or `completed`), bets are never refunded (`prize_pool` closes as forfeited escrow when the last participant exits).
+  - **Intentional departure:** Fallen participants (`0` HP) receive the codebase's `1` HP survival floor on exit copyback rather than legacy raw `0` HP (`_battle.cgi:1215`).
+- **Lobby preparation actions (`vs_player.cgi:33–38`, `_skill.cgi:161–164,769–837`):**
+  - `@きっく` (`pvp_kick`, leader-only before match start) removes the target and imposes a 60-second `ActionWait` without bet refund or `@にげる` exit side-effects (fatigue, vitality copyback, item bonuses, or bar delivery); the kicked member's bet remains in `prize_pool` as in `_skill.cgi:796–837` (revisiting bet refund is tracked in [#2586](https://github.com/witchcraze/party2re/issues/2586)).
+  - `@しらべる` (`vs_player.cgi:34,36` → `system.cgi:322`) maps to `player_inspect` during pre-start `recruiting` (`round == 0`).
+  - `@さそう` (`_skill.cgi:769–791`, quest-lobby whisper) awaits the quest-lobby place log ([#2585](https://github.com/witchcraze/party2re/issues/2585)).
+- **Recovery and inactivity (`quest.cgi:86–91,172–184`, `_battle.cgi:453–461`):**
+  - Missing live state clears membership without refunding bets or inferring an inactivity penalty.
+  - Genuine inactivity (`now > last_activity + 1800s`) forfeits remaining escrow without refund and sets a 3600-second sleep penalty while preserving longer sleep. **Non-obvious legacy behavior:** `quest.cgi:928–1079` (`add_member`) writes join messages to `$logdir/quest.cgi` rather than the room's `log.cgi`, so joining does not refresh the inactivity clock (only creation, team selection, kick, start, round advance, and non-final departures refresh it). Because GET stays read-only, cleanup runs lazily on mutating PvP accesses; periodic background cleanup is tracked in [#2343](https://github.com/witchcraze/party2re/issues/2343).
+- **Settlement and combat parity:**
+  - Mid-match departures leaving one team award the round win without combat; integer-division remainders and 10-round undecided draws (`vs_player.cgi:101–104,148–151,208`) close remaining `prize_pool` as forfeited escrow without refund.
+  - Match victory (`give_bet`, `vs_player.cgi:186–216`) awards prize gold only; `characters.pvp_wins` (`kill_p`) is credited per surviving character who inflicts a non-revived stronger-opponent combat defeat (`_battle.cgi:231–232`, `battle.IsStrongEnemy`) and flushed atomically at settlement or inactivity closure.
+  - Open: restoring per-actor player-command combat instead of single-request round resolution is tracked in [#1867](https://github.com/witchcraze/party2re/issues/1867), and non-final round retry identity in [#2532](https://github.com/witchcraze/party2re/issues/2532).

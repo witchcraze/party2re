@@ -8,6 +8,7 @@ var continuationCatalog = []ActionDefinition{
 	{ID: "party_leave", Label: "パーティーを離れる", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"party_id"}, ActivityKind: "party", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "pvp_team", Label: "チームを選ぶ", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "team_color"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_start", Label: "対戦を始める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
+	{ID: "pvp_kick", Label: "部屋のメンバーを外す", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "target_character_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_advance", Label: "対戦を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_leave", Label: "対戦部屋を離れる", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "gvg_start", Label: "ギルド戦を始める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "gvg", WaitExempt: WaitActivityPacing},

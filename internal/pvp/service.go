@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
@@ -33,6 +34,24 @@ type ParticipantBuilder interface {
 	BuildBattleMaxima(ctx context.Context, char corecharacter.Character) (hp, mp int, err error)
 }
 
+// StatefulParticipantBuilder builds a combat participant with current vitality and buffered item consumption.
+type StatefulParticipantBuilder interface {
+	BuildParticipantWithState(ctx context.Context, characterID string, hp int, mp *int, consumed []corebattle.ConsumedItem) (corebattle.Participant, error)
+}
+
+// PostBattleSettler persists post-exit character vitality, fatigue, item consumption, and accessory bonuses.
+type PostBattleSettler interface {
+	ApplyPostBattleResult(ctx context.Context, req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error)
+}
+
+// PostExitHook resets meal fullness and delivers reserved tavern food upon room exit.
+type PostExitHook func(ctx context.Context, characterID string) (string, error)
+
+// ActionWaitWriter extends a kicked member's action wait until an absolute deadline.
+type ActionWaitWriter interface {
+	ImposeActionWaitUntil(ctx context.Context, characterID string, until time.Time) error
+}
+
 // Option configures Service dependencies.
 type Option func(*Service)
 
@@ -43,16 +62,50 @@ func WithParticipantBuilder(builder ParticipantBuilder) Option {
 	}
 }
 
+// WithPostBattleSettler configures the PostBattleSettler for PvP exit side-effects.
+func WithPostBattleSettler(settler PostBattleSettler) Option {
+	return func(s *Service) {
+		s.settler = settler
+	}
+}
+
+// WithPostExitHook configures the post-exit hook (e.g., tavern fullness reset and delivery claim).
+func WithPostExitHook(hook PostExitHook) Option {
+	return func(s *Service) {
+		s.postExitHook = hook
+	}
+}
+
+// WithActionWait configures the kick wait writer.
+func WithActionWait(writer ActionWaitWriter) Option {
+	return func(s *Service) {
+		s.actionWait = writer
+	}
+}
+
 type Service struct {
 	repo               RoomRepository
 	characters         CharacterRepository
 	battleEngine       BattleEngine
 	participantBuilder ParticipantBuilder
+	settler            PostBattleSettler
+	postExitHook       PostExitHook
 	txProvider         TransactionProvider
 	transitions        TransitionRepository
 	prizes             PrizeRemitter
 	timers             TimerService
+	actionWait         ActionWaitWriter
 	clock              func() time.Time
+}
+
+// SetPostExitHook configures the post-exit hook after service construction.
+func (s *Service) SetPostExitHook(hook PostExitHook) {
+	s.postExitHook = hook
+}
+
+// SetActionWait configures the kick wait writer after service construction.
+func (s *Service) SetActionWait(writer ActionWaitWriter) {
+	s.actionWait = writer
 }
 
 func NewService(
@@ -405,7 +458,7 @@ func (s *Service) GetCharacterRoom(ctx context.Context, characterID string) (Roo
 	if err != nil {
 		return RoomDetail{}, err
 	}
-	if detail.Room.Status == StatusCompleted && !hasRoomMember(detail.Members, characterID) {
+	if !hasRoomMember(detail.Members, characterID) {
 		return RoomDetail{}, ErrRoomNotFound
 	}
 	return detail, nil

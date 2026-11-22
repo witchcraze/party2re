@@ -129,9 +129,9 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 			a.Role = "leader"
 		}
 		if pv.Room.Status == pvp.StatusRecruiting && pv.Room.Round == 0 {
-			a.Actions = append(a.Actions, "pvp_team")
+			a.Actions = append(a.Actions, "pvp_team", "player_inspect")
 			if a.Role == "leader" {
-				a.Actions = append(a.Actions, "pvp_start")
+				a.Actions = append(a.Actions, "pvp_start", "pvp_kick")
 			}
 		}
 		if a.Role == "leader" && pv.Room.Status == pvp.StatusInProgress {

@@ -65,6 +65,7 @@ const (
 	DefaultLobbyTTL         = 30 * time.Minute
 	InactivityTimeout       = 1800 * time.Second
 	InactivitySleepDuration = 3600 * time.Second
+	KickActionWait          = 60 * time.Second
 )
 
 // Domain Errors.
@@ -75,6 +76,7 @@ var (
 	ErrAlreadyInRoom          = errors.New("character is already in an active colosseum room")
 	ErrCharacterNotInRoom     = errors.New("character is not in this colosseum room")
 	ErrNotRoomLeader          = errors.New("only room leader can perform this action")
+	ErrCannotKickSelf         = errors.New("leader cannot kick self")
 	ErrInsufficientBetFunds   = errors.New("insufficient money to pay colosseum bet")
 	ErrInvalidBet             = errors.New("bet must be at least 10 gold")
 	ErrInvalidMaxMembers      = errors.New("max members must be between 2 and 8")
@@ -125,19 +127,20 @@ type ColosseumRoom struct {
 
 // RoomMember represents a participant in a colosseum room.
 type RoomMember struct {
-	RoomID        string    `json:"room_id"`
-	CharacterID   string    `json:"character_id"`
-	CharacterName string    `json:"character_name"`
-	JobID         string    `json:"job_id"`
-	Level         int       `json:"level"`
-	HP            int       `json:"hp"`
-	MaxHP         int       `json:"max_hp"`
-	MP            *int      `json:"mp,omitempty"`
-	MaxMP         *int      `json:"max_mp,omitempty"`
-	TeamColor     string    `json:"team_color"`
-	IsLeader      bool      `json:"is_leader"`
-	ReadyState    bool      `json:"ready_state"`
-	JoinedAt      time.Time `json:"joined_at"`
+	RoomID        string                    `json:"room_id"`
+	CharacterID   string                    `json:"character_id"`
+	CharacterName string                    `json:"character_name"`
+	JobID         string                    `json:"job_id"`
+	Level         int                       `json:"level"`
+	HP            int                       `json:"hp"`
+	MaxHP         int                       `json:"max_hp"`
+	MP            *int                      `json:"mp,omitempty"`
+	MaxMP         *int                      `json:"max_mp,omitempty"`
+	ConsumedItems []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	TeamColor     string                    `json:"team_color"`
+	IsLeader      bool                      `json:"is_leader"`
+	ReadyState    bool                      `json:"ready_state"`
+	JoinedAt      time.Time                 `json:"joined_at"`
 }
 
 // RoomDetail contains composite room data and members.

@@ -17,6 +17,7 @@ type PvPService interface {
 	ListRooms(ctx context.Context) ([]pvp.RoomSummary, error)
 	JoinRoom(ctx context.Context, characterID string, roomID string, password string) (pvp.RoomDetail, error)
 	LeaveRoom(ctx context.Context, characterID string, roomID string) error
+	KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error
 	SelectTeam(ctx context.Context, characterID string, roomID string, teamColor string) (pvp.RoomDetail, error)
 	StartMatch(ctx context.Context, leaderID string, roomID string) (pvp.RoomDetail, error)
 	AdvanceRound(ctx context.Context, leaderID string, roomID string) (pvp.RoundResolution, error)
@@ -27,6 +28,7 @@ func WithPvP(p PvPService) Option {
 	return func(h *Handler) {
 		h.pvp = p
 		pvpLeaveCommand(p)(h)
+		pvpKickCommand(p)(h)
 	}
 }
 
