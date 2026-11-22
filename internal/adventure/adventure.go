@@ -336,20 +336,8 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}
 	session.nowFunc = s.now
 
-	if s.blessingProvider != nil {
-		actorID := session.LeaderID
-		if actorID == "" && len(characters) > 0 {
-			actorID = characters[0].ID
-		}
-		if actorID != "" {
-			b, err := s.blessingProvider.GetActiveBlessing(ctx, actorID)
-			if err != nil {
-				return DungeonCrawlResult{}, fmt.Errorf("get active blessing: %w", err)
-			}
-			if IsTreasureBlessing(b) {
-				session.HasTreasureBlessing = true
-			}
-		}
+	if err := session.LoadBlessings(ctx, s.blessingProvider); err != nil {
+		return DungeonCrawlResult{}, err
 	}
 
 	// Advance through all 10 floors

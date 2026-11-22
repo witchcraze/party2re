@@ -2,9 +2,26 @@ package adventure
 
 import (
 	"slices"
+	"strings"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/economy"
 )
+
+func chapelDefeatBonus(e RunEarnings, blessing string, rollIntn func(int) int) RunEarnings {
+	wish := strings.ToLower(strings.TrimSpace(blessing))
+	switch {
+	case battle.IsGoldBlessing(wish):
+		if rollIntn(4) == 0 {
+			return RunEarnings{Gold: e.Gold / 2}
+		}
+	case battle.IsExpBlessing(wish):
+		if rollIntn(4) == 0 {
+			return RunEarnings{EXP: e.EXP / 2}
+		}
+	}
+	return RunEarnings{}
+}
 
 func addRunEarnings(a, b RunEarnings) (RunEarnings, error) {
 	if b.EXP < 0 || b.Gold < 0 || b.Crystals < 0 {

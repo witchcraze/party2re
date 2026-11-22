@@ -49,3 +49,75 @@ func TestCrawlEarnings_OverflowKeepsPriorEarnings(t *testing.T) {
 		}
 	}
 }
+
+func TestCrawlEarnings_ChapelBlessings(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		rngVal    int
+		blessings map[string]string
+		defeats   []corebattle.DefeatEarnings
+		wantA     corebattle.Reward
+		wantB     corebattle.Reward
+	}{
+		{
+			name:      "acting player GOLD lucky shared by living recipients only",
+			rngVal:    0,
+			blessings: map[string]string{"a": "GOLD", "b": "EXP"},
+			defeats: []corebattle.DefeatEarnings{
+				{ActorID: "a", Reward: corebattle.Reward{Experience: 100, Currency: 50, Crystals: 1}, RecipientIDs: []string{"a", "b"}},
+				{ActorID: "a", Reward: corebattle.Reward{Experience: 100, Currency: 50}, RecipientIDs: []string{"a"}},
+			},
+			// Floor 1: defeat 1 -> EXP 100, Gold 75; defeat 2 -> EXP 100, Gold 75.
+			// a: (200, 150) * 1.1 = (220, 165); b: (100, 75) * 1.1 = (110, 82)
+			wantA: corebattle.Reward{Experience: 220, Currency: 165, Crystals: 1},
+			wantB: corebattle.Reward{Experience: 110, Currency: 82, Crystals: 1},
+		},
+		{
+			name:      "non-leader actor EXP lucky",
+			rngVal:    0,
+			blessings: map[string]string{"a": "GOLD", "b": "EXP"},
+			defeats: []corebattle.DefeatEarnings{
+				{ActorID: "b", Reward: corebattle.Reward{Experience: 100, Currency: 50}, RecipientIDs: []string{"a", "b"}},
+			},
+			wantA: corebattle.Reward{Experience: 165, Currency: 55},
+			wantB: corebattle.Reward{Experience: 165, Currency: 55},
+		},
+		{
+			name:      "unlucky roll grants base cooperative reward",
+			rngVal:    1,
+			blessings: map[string]string{"a": "GOLD"},
+			defeats: []corebattle.DefeatEarnings{
+				{ActorID: "a", Reward: corebattle.Reward{Experience: 100, Currency: 50}, RecipientIDs: []string{"a", "b"}},
+			},
+			wantA: corebattle.Reward{Experience: 110, Currency: 55},
+			wantB: corebattle.Reward{Experience: 110, Currency: 55},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := CrawlSession{
+				CharacterIDs: []string{"a", "b"},
+				Blessings:    tc.blessings,
+				Rng:          func(int) int { return tc.rngVal },
+			}
+			data, err := json.Marshal(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reloaded CrawlSession
+			if err := json.Unmarshal(data, &reloaded); err != nil {
+				t.Fatal(err)
+			}
+			reloaded.Rng = s.Rng
+			if err := reloaded.recordDefeatEarnings(corebattle.PartyBattleResult{
+				BonusPercent:   10,
+				DefeatEarnings: tc.defeats,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			res := reloaded.Result()
+			if res.RewardForCharacter("a") != tc.wantA || res.RewardForCharacter("b") != tc.wantB {
+				t.Fatalf("got a=%+v b=%+v, want a=%+v b=%+v", res.RewardForCharacter("a"), res.RewardForCharacter("b"), tc.wantA, tc.wantB)
+			}
+		})
+	}
+}
