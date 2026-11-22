@@ -8,6 +8,9 @@ import (
 
 // NamedFieldContext holds submitted, frozen command facts and the existing
 // operation owners. Catalog is rebuilt after reload, never serialized.
+// SubmittedCommand is the raw `>` text and SubmittedTarget the parsed
+// continuation target. NameKey and EntryKey map a submitted name and a native
+// entry ID into Discovered's name space; nil compares native names directly.
 type NamedFieldContext struct {
 	DamageContext
 	Arguments                                     []string
@@ -15,6 +18,7 @@ type NamedFieldContext struct {
 	Roster                                        *RosterContext
 	Catalog                                       CallbackCatalog
 	Discovered                                    []CallbackEntry
+	NameKey, EntryKey                             func(string) string
 	SubmittedCommand, SubmittedTarget, CustomName string
 	RequesterGender, RequesterIcon                string
 	ResponseSuppressed                            bool
@@ -61,32 +65,40 @@ func (c *NamedFieldContext) shift() string {
 	return id
 }
 
-// Last discovered name wins, just as the submitted actions map does. A name
-// whitelisted by this producer never supplies a substitute callback identity.
+// Only an exact `＠` + job22 command name continues (_skill.cgi:2208–2222).
+// The last discovered name wins, just as the submitted actions map does; a
+// listed name missing from it (unaffordable) aborts the original request.
 func (c *NamedFieldContext) darknessContinuation() (string, string, error) {
-	name := strings.TrimLeft(c.SubmittedCommand, "＠")
-	if c.SubmittedCommand == c.CustomName {
+	name, ok := strings.CutPrefix(c.SubmittedCommand, "＠")
+	// Perl's list-operator precedence feeds the custom-name filtered list into
+	// the outer grep, excluding a matching custom command before map lookup.
+	if !ok || c.SubmittedCommand == c.CustomName {
 		return "", "", nil
+	}
+	if c.NameKey != nil {
+		name = c.NameKey(name)
 	}
 	allowed := false
 	for _, entry := range RecoilDarkStateEntries(22)[:5] {
-		allowed = allowed || name == entry.Name
+		key := entry.Name
+		if c.EntryKey != nil {
+			key = c.EntryKey(entry.ID)
+		}
+		allowed = allowed || name == key
 	}
 	if !allowed {
 		return "", "", nil
 	}
 	id := ""
 	for _, entry := range c.Discovered {
-		if strings.TrimLeft(entry.Name, "＠") == name {
+		if entry.Name == name {
 			id = entry.ID
 		}
 	}
-	// Perl's list-operator precedence feeds the custom-name filtered list into
-	// the outer grep, excluding a matching custom command before map lookup.
 	if id == "" {
 		return "", "", ErrUnsupportedEffect
 	}
-	return id, strings.TrimPrefix(strings.TrimSpace(c.SubmittedTarget), "&gt;"), nil
+	return id, c.SubmittedTarget, nil
 }
 
 func (s *LifetimeState) createDarkness(c *NamedFieldContext) {

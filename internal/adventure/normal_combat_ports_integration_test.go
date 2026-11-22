@@ -189,3 +189,47 @@ func TestRunCombatArithmeticDivisorReachesSameCommandResponse(t *testing.T) {
 		t.Fatalf("next command: actor hp=%d foe acted=%v", a.HP, r.LastActions["foe"])
 	}
 }
+
+// _skill.cgi:2189–2230: the extended darkness entry creates the field, then
+// runs the job22 command its `>` text names on `$3` as a guaranteed hit,
+// without charging that command, and halves HP. Other `>` text creates the
+// field only; a listed command missing from the actions map (unaffordable)
+// aborts the request.
+func TestRunCombatDarknessContinuation(t *testing.T) {
+	room := func(t *testing.T, f *normalFixture) adventure.RunCommand {
+		return customRoom(t, f, 0, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
+			a.Jobs = corebattle.BattleJobs{JobID: "job-22", SP: 140}
+			a.MP, a.MaxMP, a.ItemDefinitionIDs = 39, 39, []string{"item-240"}
+		}, runEnemy("foe", 900), runEnemy("other", 900))
+	}
+	for _, tc := range []struct {
+		name, input, custom string
+		strike              bool
+	}{
+		{"continues", "＠インヴァイトダーク&gt;＠あんこく foe", "", true},
+		{"other text", "＠インヴァイトダーク&gt;foe", "", false},
+		{"custom name", "＠インヴァイトダーク&gt;＠あんこく foe", "＠あんこく", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := combatFixture(t, 1)
+			if tc.custom != "" {
+				saveCustom(t, f, tc.custom, [3]string{"gem_atk_1", "", ""}, 6)
+			}
+			cmd := room(t, f)
+			hp := runActorByID(readStockRoom(t, f, cmd.RunID), cmd.ActorID).HP
+			r := accepted(t, f, combatCommand(cmd, "dark", "", "", tc.input))
+			a, foe, other := runActorByID(r, cmd.ActorID), runActorByID(r, "foe"), runActorByID(r, "other")
+			wantHP := hp
+			if tc.strike {
+				wantHP -= hp / 2
+			}
+			if r.Battle.Fields.Current() != "darkness" || (foe.HP < 900) != tc.strike || other.HP != 900 || a.MP != 32 || a.HP != wantHP {
+				t.Fatalf("field=%q foe=%d other=%d actor hp=%d/%d mp=%d", r.Battle.Fields.Current(), foe.HP, other.HP, a.HP, hp, a.MP)
+			}
+		})
+	}
+	t.Run("unaffordable", func(t *testing.T) {
+		f := combatFixture(t, 1)
+		rejected(t, f, combatCommand(room(t, f), "dark", "", "", "＠インヴァイトダーク&gt;＠あんこくけん foe"))
+	})
+}

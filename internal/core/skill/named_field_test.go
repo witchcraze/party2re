@@ -48,16 +48,19 @@ func TestNamedFieldRegistrationKeepsTablesAndWholeEntryGates(t *testing.T) {
 
 func TestNamedFieldDarknessUsesSubmittedDiscoveredBindingAndSharesFacts(t *testing.T) {
 	for _, row := range []struct {
-		selected         string
-		excluded, reject bool
+		selected, command string
+		excluded, reject  bool
 	}{
-		{"job-22-entry-0", false, false}, {"job-22-entry-0", true, false}, {"missing", false, true},
+		{"job-22-entry-0", "＠dark-strike", false, false}, {"job-22-entry-0", "＠dark-strike", true, false},
+		{"missing", "＠dark-strike", false, true},
+		// Only the exact `＠`-prefixed name is listed.
+		{"job-22-entry-0", "dark-strike", true, false}, {"job-22-entry-0", "＠＠dark-strike", true, false},
 	} {
 		s, base, _ := dualAgilityFixture()
 		s.Actors[1].HP = 10000
 		s.Actors[0].HP, s.Actors[0].BaseStats.Attack = 500, 100
-		c := &corebattle.NamedFieldContext{DamageContext: base.DamageContext, SubmittedCommand: "＠dark-strike", SubmittedTarget: " &gt;enemy ", Discovered: []corebattle.CallbackEntry{{ID: "missing", Name: "dark-strike"}, {ID: row.selected, Name: "dark-strike"}}}
-		if row.excluded {
+		c := &corebattle.NamedFieldContext{DamageContext: base.DamageContext, SubmittedCommand: row.command, SubmittedTarget: "enemy", Discovered: []corebattle.CallbackEntry{{ID: "missing", Name: "dark-strike"}, {ID: row.selected, Name: "dark-strike"}}}
+		if row.excluded && row.command == "＠dark-strike" {
 			c.CustomName = c.SubmittedCommand
 		}
 		dark := &corebattle.RecoilDarkStateContext{DamageContext: base.DamageContext}

@@ -3,6 +3,7 @@ package adventure
 import (
 	"regexp"
 	"slices"
+	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -29,7 +30,8 @@ type ParsedRunAction struct {
 const legacyOperationPattern = "＠(.+?)(?:(?:[ 　])?(?:&gt;|>)(.+?)[ 　]|[ 　])"
 
 var (
-	legacyOperation       = regexp.MustCompile(legacyOperationPattern)
+	// The trailing group is `$3` (_battle.cgi:563), the darkness continuation target.
+	legacyOperation       = regexp.MustCompile(legacyOperationPattern + "(.*)")
 	legacyDoubleOperation = regexp.MustCompile(legacyOperationPattern + legacyOperationPattern)
 )
 
@@ -76,6 +78,9 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 	c, ok := ops.byKey[skill.OperationNameKey(matches[1])]
 	if !ok || ops.banned(c) {
 		return comment, nil
+	}
+	if f := ops.ctx.Fields; f != nil {
+		f.SubmittedCommand, f.SubmittedTarget = matches[2], ops.continuationTarget(matches[3])
 	}
 	first, err := ops.bind(c, matches[2], "", true)
 	if err != nil {
@@ -206,7 +211,8 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 		entry = "custom"
 	}
 	scoped := c.Kind == RunOperationBattle || c.Action == "kick"
-	if entry == "job-50-entry-7" || entry == "job-86-entry-0" || entry == "job-86-entry-3" || takesSelector(c) {
+	// job22's darkness keeps its raw `>` text as the continuation command.
+	if entry == "job-50-entry-7" || entry == "job-86-entry-0" || entry == "job-86-entry-3" || entry == "job-22-entry-5" || takesSelector(c) {
 		scoped = false
 	}
 	if c.Action == "chest" {
@@ -263,6 +269,23 @@ func (o *normalOperations) participantID(target string, legacy bool) string {
 		}
 	}
 	return ""
+}
+
+// continuationTarget trims Perl `\s` and one leading `>` from `$3`
+// (_skill.cgi:2217–2218); a name naming no participant stays for the
+// callback's random fallback.
+func (o *normalOperations) continuationTarget(rest string) string {
+	rest = strings.Trim(rest, " \t\n\v\f\r")
+	for _, gt := range []string{"&gt;", ">"} {
+		if t, ok := strings.CutPrefix(rest, gt); ok && t != "" {
+			rest = t
+			break
+		}
+	}
+	if id := o.participantID(rest, true); id != "" {
+		return id
+	}
+	return rest
 }
 
 func (o *normalOperations) chestTargetID(target string, legacy bool) string {

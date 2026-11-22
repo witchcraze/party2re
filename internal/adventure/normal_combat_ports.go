@@ -113,9 +113,12 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 		Revival:             &corebattle.RevivalContext{TargetContext: d.TargetContext, NativeDefeat: p.defeat},
 		Status:              p.status,
 		Reset:               reset,
-		Fields:              &corebattle.NamedFieldContext{DamageContext: d, Death: p.defeat, Roster: roster, RequesterGender: gender, RequesterIcon: icon},
-		Books:               &corebattle.BookContext{DamageContext: d},
-		Tools:               &corebattle.OrdinaryToolContext{DamageContext: d, OrdinaryToolInput: corebattle.OrdinaryToolInput{Inspection: inspection}, EquipmentReset: reset, Death: p.defeat},
+		Fields: &corebattle.NamedFieldContext{
+			DamageContext: d, Death: p.defeat, Roster: roster, RequesterGender: gender, RequesterIcon: icon,
+			NameKey: skill.OperationNameKey, EntryKey: func(id string) string { return skill.EntrySourceKey(id, false) },
+		},
+		Books: &corebattle.BookContext{DamageContext: d},
+		Tools: &corebattle.OrdinaryToolContext{DamageContext: d, OrdinaryToolInput: corebattle.OrdinaryToolInput{Inspection: inspection}, EquipmentReset: reset, Death: p.defeat},
 	}
 }
 

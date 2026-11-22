@@ -143,7 +143,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 	base.RegisterGemCallbacks(contexts, &ports.damage)
 	defs := c.withHeldTravel(ctx, r, cmd.ActorID, &state, base, &reset, rooms)
 	callback := corebattle.CallbackContext{TargetContext: frame, Damage: &ports.damage, Status: ports.status, Defeat: ports.defeat, Inspection: inspection, Assets: assets}
-	parsed, err := r.ParseNormalOperation(cmd, NormalOperationContext{Definitions: defs, Callback: callback, Requester: requester, Arithmetic: contexts.Arithmetic})
+	parsed, err := r.ParseNormalOperation(cmd, NormalOperationContext{Definitions: defs, Callback: callback, Requester: requester, Arithmetic: contexts.Arithmetic, Fields: contexts.Fields})
 	if err != nil {
 		return fx, err
 	}
@@ -177,7 +177,6 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 		Tail:  corebattle.PlayerTailContext{DamageContext: ports.damage, DefeatContext: ports.defeat},
 		Field: corebattle.NamedFieldContext{
 			DamageContext: ports.damage, Death: ports.defeat, Roster: contexts.Roster, Catalog: defs.Invocations,
-			SubmittedCommand: parsed.First.EntryID, SubmittedTarget: parsed.First.TargetID,
 			RequesterGender: contexts.Fields.RequesterGender, RequesterIcon: contexts.Fields.RequesterIcon,
 		},
 		// Treasure rooms disable the NPC response (vs_monster.cgi:38–41).
