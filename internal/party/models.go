@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -200,36 +199,8 @@ func ValidatePartyMode(mode string) (string, error) {
 // ValidateNeedJoin validates participation condition constraints (quest.cgi).
 // Formats: "joblv_{val}_{u|o}", "hp_{val}_{u|o}".
 func ValidateNeedJoin(needJoin string, char corecharacter.Character) error {
-	needJoin = strings.TrimSpace(needJoin)
-	if needJoin == "" || needJoin == "0" {
-		return nil
-	}
-	parts := strings.Split(needJoin, "_")
-	if len(parts) != 3 {
-		return nil
-	}
-	key := parts[0]
-	val, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return nil
-	}
-	uo := parts[2] // "u" (< val) or "o" (>= val)
-
-	switch key {
-	case "hp":
-		if uo == "u" && char.Stats.MaxHP >= val {
-			return fmt.Errorf("%w: HP must be under %d", ErrNeedJoinNotMet, val)
-		}
-		if uo == "o" && char.Stats.MaxHP < val {
-			return fmt.Errorf("%w: HP must be at least %d", ErrNeedJoinNotMet, val)
-		}
-	case "joblv":
-		if uo == "u" && char.JobLevel >= val {
-			return fmt.Errorf("%w: Job level must be under %d", ErrNeedJoinNotMet, val)
-		}
-		if uo == "o" && char.JobLevel < val {
-			return fmt.Errorf("%w: Job level must be at least %d", ErrNeedJoinNotMet, val)
-		}
+	if err := corecharacter.ValidateNeedJoin(strings.TrimSpace(needJoin), char); err != nil {
+		return fmt.Errorf("%w: %v", ErrNeedJoinNotMet, err)
 	}
 	return nil
 }
