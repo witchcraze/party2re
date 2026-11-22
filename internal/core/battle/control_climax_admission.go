@@ -181,11 +181,7 @@ func (s *LifetimeState) validateControlStatuses(c *ControlClimaxContext, statuse
 }
 
 func (s *LifetimeState) validateControlDown(c *ControlClimaxContext, e TargetEffect, rng random.Generator) error {
-	if err := s.validateRecovery(&c.EffectContext, e, rng); err != nil {
-		return err
-	}
-	_, _, err := s.actor(c.ActorID).ConvertEnemyCategory(c.TargetContext, e)
-	return err
+	return s.ValidateStatDown(&c.EffectContext, e, StatHP, rng)
 }
 
 // The source's unguarded arrow/halo writes cannot address an empty record.

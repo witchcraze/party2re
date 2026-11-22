@@ -15,7 +15,7 @@ import (
 const stockLevelAction = "stock-level"
 
 func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd RunCommand, requester corecharacter.Character, now time.Time) error {
-	ops, err := r.normalOperations(cmd.ActorID, NormalOperationContext{Requester: &requester})
+	ops, err := r.normalOperations(cmd, NormalOperationContext{Requester: &requester})
 	if err != nil {
 		return err
 	}

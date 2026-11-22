@@ -11,10 +11,13 @@ import (
 // Defeat must already admit the complete ordered defeat/drop/reset closure;
 // nil leaves reachable defeats unsupported. It shares the damage owner's hook.
 // Divisor survives nested callbacks within an operation, never a saved turn.
+// NameKey maps a submitted child name into Discovered's name space; nil
+// compares the names directly.
 type ArithmeticContext struct {
 	TargetContext
 	SubmittedText string
 	Discovered    []ArithmeticEntry
+	NameKey       func(string) string
 	Divisor       int
 	Defeat        func(string) error
 }
@@ -64,10 +67,14 @@ func (c *ArithmeticContext) ArithmeticSelection(id string) (string, int, error) 
 		if len(match) == 0 || match[2] == "" {
 			return "", divisor, nil
 		}
+		name := match[2]
+		if c.NameKey != nil {
+			name = c.NameKey(name)
+		}
 		selected := ""
 		found := false
 		for _, entry := range c.Discovered {
-			if entry.Name == match[2] {
+			if entry.Name == name {
 				selected = entry.ID
 				found = true
 			}

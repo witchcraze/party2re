@@ -13,7 +13,7 @@ import (
 
 func ordinaryTestOperation(t *testing.T, r *NormalRun, ctx NormalOperationContext, cmd RunCommand) (*corebattle.PlayerOperation, error) {
 	t.Helper()
-	ops, err := r.normalOperations(cmd.ActorID, ctx)
+	ops, err := r.normalOperations(cmd, ctx)
 	if err != nil {
 		return nil, err
 	}

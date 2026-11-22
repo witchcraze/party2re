@@ -37,7 +37,7 @@ var (
 // same ordered choices. It preserves omitted and wrong-side targets for the
 // callback helpers. Neither parsing nor admission executes a callback.
 func (r *NormalRun) ParseNormalOperation(cmd RunCommand, ctx NormalOperationContext) (ParsedRunOperation, error) {
-	ops, err := r.normalOperations(cmd.ActorID, ctx)
+	ops, err := r.normalOperations(cmd, ctx)
 	if err != nil {
 		return ParsedRunOperation{}, err
 	}

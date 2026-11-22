@@ -143,7 +143,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 	base.RegisterGemCallbacks(contexts, &ports.damage)
 	defs := c.withHeldTravel(ctx, r, cmd.ActorID, &state, base, &reset, rooms)
 	callback := corebattle.CallbackContext{TargetContext: frame, Damage: &ports.damage, Status: ports.status, Defeat: ports.defeat, Inspection: inspection, Assets: assets}
-	parsed, err := r.ParseNormalOperation(cmd, NormalOperationContext{Definitions: defs, Callback: callback, Requester: requester})
+	parsed, err := r.ParseNormalOperation(cmd, NormalOperationContext{Definitions: defs, Callback: callback, Requester: requester, Arithmetic: contexts.Arithmetic})
 	if err != nil {
 		return fx, err
 	}

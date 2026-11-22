@@ -230,6 +230,18 @@ func (s *LifetimeState) statTensionAfterBinding(c *EffectContext, t *LifetimeAct
 	return nil
 }
 
+// ValidateStatDown is ApplyStatDown's pure admission.
+func (s *LifetimeState) ValidateStatDown(c *EffectContext, e TargetEffect, stat BattleStat, rng random.Generator) error {
+	if err := s.validateRecovery(c, e, rng); err != nil {
+		return err
+	}
+	if !stat.canRaise() && stat != StatHP && stat != StatMP && stat != StatCMP && stat != StatHit {
+		return ErrUnsupportedEffect
+	}
+	_, _, err := s.actor(c.ActorID).ConvertEnemyCategory(c.TargetContext, e)
+	return err
+}
+
 // ApplyStatDown returns the requested debit, which can exceed the clamped loss.
 func (s *LifetimeState) ApplyStatDown(c *EffectContext, e TargetEffect, stat BattleStat, rng random.Generator) (EffectApplication, error) {
 	r := EffectApplication{}
