@@ -50,7 +50,7 @@ func (s *Service) RestoreJobMemory(ctx context.Context, characterID string) (cor
 	var restored corecharacter.Character
 	var restoredState corejob.CharacterJob
 	_, err = s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-		if tc.Character.JobMemory == nil || tc.Character.JobMemory.IsTemporary() {
+		if tc.Character.OverLevel || tc.Character.JobMemory == nil || tc.Character.JobMemory.IsTemporary() {
 			return corejob.ErrJobUnavailable
 		}
 		memory := *tc.Character.JobMemory

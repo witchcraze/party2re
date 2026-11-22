@@ -419,3 +419,52 @@ func TestChangeJob_ReadErrorsPropagateWithoutPartialSaves(t *testing.T) {
 		}
 	})
 }
+
+func TestRestoreJobMemory_StalePreflight_OverLevelRejectedUnderLock(t *testing.T) {
+	ctx := context.Background()
+	preflight := corecharacter.Character{
+		ID: "char-stale-restore-over", JobID: "job-03", OldJobID: "job-04",
+		Level: 99, Gender: "male", SP: 80, OldSP: 100,
+		JobMemory: &corecharacter.JobMemory{
+			Kind:     corecharacter.JobMemoryKindPersistent,
+			JobID:    "job-01",
+			SP:       50,
+			OldJobID: "job-02",
+			OldSP:    40,
+		},
+	}
+	locked := preflight
+	locked.OverLevel = true
+
+	charRepo := &stalePreflightCharRepoStub{preflightChar: preflight, lockedChar: locked}
+	inv, _ := coreinventory.New(preflight.ID)
+	invRepo := &errInventoryRepoStub{inv: inv}
+	jobRepo := &trackingJobRepoStub{state: corejob.CharacterJob{CharacterID: preflight.ID, CurrentJobID: preflight.JobID}}
+	ecoSvc, err := economy.NewService(charRepo, invRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var memories int
+	svc, err := NewService(
+		jobRepo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(invRepo),
+		WithEconomy(ecoSvc),
+		WithMemoryRecorder(func(_ context.Context, _ string, _ corecharacter.MemoryKind, _ string) error {
+			memories++
+			return nil
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.RestoreJobMemory(ctx, preflight.ID)
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable, got %v", err)
+	}
+	if charRepo.updateCount != 0 || jobRepo.saveCount != 0 || memories != 0 {
+		t.Fatalf("expected zero mutations on rejection, got updates=%d saves=%d memories=%d",
+			charRepo.updateCount, jobRepo.saveCount, memories)
+	}
+}

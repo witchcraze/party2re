@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records legacy rules, decisions and pitfalls for job changes, mastery and job memory, audited against `party2/lib/job_change.cgi`, `job_master.cgi`, `_data.cgi` and `_skill.cgi`. Job and skill definitions, requirement lists, growth and combat formulas are owned by `internal/core/job`, `internal/core/skill` and their data; combat skill behavior is owned by [Battle](battle.md).
+This document records legacy rules, decisions and pitfalls for job changes and mastery, audited against `party2/lib/job_change.cgi`, `job_master.cgi`, `_data.cgi` and `_skill.cgi`. Job and skill definitions, requirement lists, growth and combat formulas are owned by `internal/core/job`, `internal/core/skill` and their data; combat skill behavior is owned by [Battle](battle.md).
 
 ## Job changes
 
@@ -15,12 +15,6 @@ This document records legacy rules, decisions and pitfalls for job changes, mast
 - Leaving any job, including re-selecting the current one (`job_change.cgi:207–212,243–305`), records its latest SP, including decreases and zero. Falling below the threshold after mastery does not revoke mastery.
 - **Decision:** entering a job alone creates no record; a record needs a departure, a mastery or an explicit recorded flag. Migrated history never invents a zero SP for unknown past transitions, and an unknown historical SP makes recall unavailable instead of guessing.
 - The mastery percentage is `min(100, int((mastered + 0.5 × learning) / 86 × 100))` (`job_master.cgi:26`); **pitfall:** 86 comes from `$#jobs − 1` for the 87-job catalog. Mastering the 72 completion jobs unlocks job73 and publishes news.
-
-## Job memory (`おもいだす`) and future memory (`よびおこす`)
-
-- Item168 starts a persistent memory that survives sleep and is reverted manually. Item243 starts a temporary memory that sleep reverts and that cannot be reverted manually (`job_change.cgi:121`). Neither halves stats or counts as a job change.
-- While either memory is active, job change (`job_change.cgi:151`), future-memory save/recall (`_data.cgi:1843`, `job_change.cgi:564`) and another memory are blocked. **Pitfall:** the Wishing Well SP exchange is blocked only during a persistent memory (`sp_change.cgi:74`); the god Lv99 limit break only during a temporary one (`god.cgi:121`).
-- Saving a future memory (item207) refreshes retained SP only for jobs that already have a record (`_data.cgi:1843–1867`). Recall restores the snapshot and, for each job without a record, leaves that SP position unchanged (`job_change.cgi:648–663`). Depot capacity is not a save condition.
 
 ## Clean-room naming
 

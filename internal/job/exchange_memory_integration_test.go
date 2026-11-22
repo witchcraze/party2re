@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/job"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func TestExchangeJobTrajectoryDatabaseSnapshotsAndRollback(t *testing.T) {
@@ -221,4 +223,146 @@ func TestExchangeJobTrajectoryDatabaseSnapshotsAndRollback(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestRestoreJobMemory_Integration_RevalidatesOverLevelUnderLock(t *testing.T) {
+	db := database.OpenTestDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	chars, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := database.NewCharacterJobRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventories, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	memories, err := database.NewCharacterMemoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := database.CreateTestCharacter(ctx, db, "RestoreOverLevelLock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	database.RegisterCharacterCleanup(t, db, char)
+
+	char.Level = 99
+	char.JobID = "job-03"
+	char.SP = 80
+	char.OldJobID = "job-04"
+	char.OldSP = 100
+	char.OverLevel = false
+	char.JobMemory = &corecharacter.JobMemory{
+		Kind:     corecharacter.JobMemoryKindPersistent,
+		JobID:    "job-01",
+		SP:       50,
+		OldJobID: "job-02",
+		OldSP:    40,
+	}
+	if err := chars.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := corejob.NewCharacterJob(char.ID, char.JobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := jobs.Save(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+
+	txProvider := database.NewTransactionProvider(db)
+	ecoSvc, err := economy.NewService(chars, inventories, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	preflightDone := make(chan struct{})
+	overLevelCommitted := make(chan struct{})
+	var once sync.Once
+	interceptingChar := &interceptorCharRepo{
+		inner: chars,
+		onFindByID: func() {
+			once.Do(func() {
+				close(preflightDone)
+				select {
+				case <-overLevelCommitted:
+				case <-ctx.Done():
+				}
+			})
+		},
+	}
+
+	svc, err := job.NewService(
+		jobs,
+		job.WithCharacterRepository(interceptingChar),
+		job.WithInventoryRepository(inventories),
+		job.WithEconomy(ecoSvc),
+		job.WithMemoryRecorder(memories.AppendMemory),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restoreErr, limitBreakErr := testutil.RunRace2(
+		func() error {
+			_, _, err := svc.RestoreJobMemory(ctx, char.ID)
+			return err
+		},
+		func() error {
+			defer close(overLevelCommitted)
+			select {
+			case <-preflightDone:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			_, err := ecoSvc.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: char.ID}, func(tc *economy.TxContext) error {
+				tc.Character.OverLevel = true
+				return nil
+			})
+			return err
+		},
+	)
+
+	if limitBreakErr != nil {
+		t.Fatalf("concurrent OverLevel update failed: %v", limitBreakErr)
+	}
+	if !errors.Is(restoreErr, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected RestoreJobMemory to fail with ErrJobUnavailable, got %v", restoreErr)
+	}
+
+	persisted, err := chars.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !persisted.OverLevel || persisted.JobID != "job-03" || persisted.SP != 80 ||
+		persisted.OldJobID != "job-04" || persisted.OldSP != 100 {
+		t.Fatalf("unexpected persisted character state: %+v", persisted)
+	}
+	if !reflect.DeepEqual(persisted.JobMemory, char.JobMemory) {
+		t.Fatalf("JobMemory modified on rejection: got %+v, want %+v", persisted.JobMemory, char.JobMemory)
+	}
+
+	persistedJob, err := jobs.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persistedJob.CurrentJobID != "job-03" {
+		t.Fatalf("CurrentJobID = %s, want job-03", persistedJob.CurrentJobID)
+	}
+
+	entries, err := memories.ListMemories(ctx, char.ID, 999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected no trajectory entries on rejection, got %+v", entries)
+	}
 }
