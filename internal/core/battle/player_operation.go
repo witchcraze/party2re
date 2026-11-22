@@ -35,6 +35,8 @@ type PlayerActionFacts struct {
 	// Target is the context after the callback; the zero value keeps the
 	// operation's own. Roster callbacks can rebuild the ordered side arrays.
 	Target TargetContext
+	// ArithmeticDivisor is the callback frame's final job72 divisor.
+	ArithmeticDivisor int
 }
 
 // PlayerOperation is rebuilt per request. Tail carries the actor's target
@@ -61,6 +63,9 @@ type PlayerOperation struct {
 type PlayerOperationResult struct {
 	Accepted, NormalAction, Suppressed, ResponseReached bool
 	Target                                              TargetContext // Final operation-local side order.
+	// ArithmeticDivisor is request-global in the source (`$_mp_num`), so the
+	// same command's NPC response continues from it.
+	ArithmeticDivisor int
 	LifetimeResult
 }
 
@@ -129,7 +134,7 @@ func (s *LifetimeState) ApplyPlayerOperation(op *PlayerOperation, rng random.Gen
 	if outerRollbacks != nil {
 		*outerRollbacks = append(*outerRollbacks, opRollbacks...)
 	}
-	result.Target = work.Tail.TargetContext
+	result.Target, result.ArithmeticDivisor = work.Tail.TargetContext, work.Tail.ArithmeticDivisor
 	return result, nil
 }
 
@@ -272,6 +277,9 @@ func (s *LifetimeState) recordPlayerFacts(c *PlayerTailContext, f PlayerActionFa
 	}
 	c.End.ImmediateRiskCalls += f.End.ImmediateRiskCalls
 	c.End.SkipPrefilter = c.End.SkipPrefilter || f.End.SkipPrefilter
+	if f.ArithmeticDivisor != 0 {
+		c.ArithmeticDivisor = f.ArithmeticDivisor
+	}
 }
 
 // finishPlayerOperation is _battle.cgi:861–1172, reached by every accepted

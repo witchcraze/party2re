@@ -10,7 +10,7 @@ import (
 // ordered admitted name list, including unsupported descendants for gating.
 // Defeat must already admit the complete ordered defeat/drop/reset closure;
 // nil leaves reachable defeats unsupported. It shares the damage owner's hook.
-// Divisor survives nested callbacks within an operation, never a saved turn.
+// Divisor lasts for one command, never a saved turn.
 // NameKey maps a submitted child name into Discovered's name space; nil
 // compares the names directly.
 type ArithmeticContext struct {

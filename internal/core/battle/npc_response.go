@@ -14,6 +14,8 @@ type NPCOperation struct {
 	Defeat *DefeatContext
 	Field  NamedFieldContext
 	Assets *JobAssets
+	// ArithmeticDivisor continues from the same command's player operation.
+	ArithmeticDivisor int
 }
 
 // NPCActionPlan freezes the weighted pool and its definitions before cures.
@@ -84,7 +86,7 @@ func (s *LifetimeState) ApplyNPCOperation(op NPCOperation, seed []CallbackBindin
 	op.Damage.HealCalls, op.Damage.PartyHealCalls, op.Damage.TensionCalls = 0, 0, 0
 	op.Damage.End = EndProcessing{}
 	op.Damage.Reset, op.Damage.Defeat = nil, nil
-	frame := cloneCallbackContext(CallbackContext{TargetContext: op.Damage.TargetContext, Damage: &op.Damage, Defeat: op.Defeat, Assets: op.Assets})
+	frame := cloneCallbackContext(CallbackContext{TargetContext: op.Damage.TargetContext, Damage: &op.Damage, Defeat: op.Defeat, Assets: op.Assets, ArithmeticDivisor: op.ArithmeticDivisor})
 	if len(frame.EnemyIDs) == 0 {
 		return NPCOperationResult{Target: frame.TargetContext, NextSeed: slices.Clone(seed)}, nil
 	}
