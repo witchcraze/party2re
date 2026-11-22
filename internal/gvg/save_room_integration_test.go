@@ -84,9 +84,11 @@ func TestGvGPasswordVerifierRoundTripIntegration(t *testing.T) {
 				t.Errorf("cleanup DeleteRoom(%s): %v", rid, err)
 			}
 		}
-		for _, cid := range allCharIDs {
-			if err := repo1.DeleteCharacterRoom(cleanCtx, cid); err != nil {
-				t.Errorf("cleanup DeleteCharacterRoom(%s): %v", cid, err)
+		for _, rid := range ownedRoomIDs {
+			for _, cid := range allCharIDs {
+				if err := repo1.DeleteCharacterRoom(cleanCtx, cid, rid); err != nil {
+					t.Errorf("cleanup DeleteCharacterRoom(%s, %s): %v", cid, rid, err)
+				}
 			}
 		}
 	})

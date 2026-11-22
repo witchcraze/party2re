@@ -218,7 +218,20 @@ func TestValkeyRoomRepository_DeleteRoom(t *testing.T) {
 		t.Errorf("unexpected ZREM command: %v", cmds[1])
 	}
 
-	// 2. Error on ZREM
+	// 2. Error on DEL
+	errDelRoom := errors.New("del room error")
+	clientDelRoomErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		if cmd.Commands()[0] == "DEL" {
+			return valkeytest.MakeErrorResult(errDelRoom)
+		}
+		return valkeytest.MakeOKResult()
+	}))
+	repoDelRoomErr, _ := gvg.NewValkeyRoomRepository(clientDelRoomErr)
+	if err := repoDelRoomErr.DeleteRoom(ctx, "del-gvg-1"); !errors.Is(err, errDelRoom) {
+		t.Fatalf("expected errDelRoom, got %v", err)
+	}
+
+	// 3. Error on ZREM
 	errZrem := errors.New("zrem error")
 	clientErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		if cmd.Commands()[0] == "ZREM" {
@@ -421,11 +434,11 @@ func TestValkeyRoomRepository_CharacterRoom(t *testing.T) {
 	}))
 	repoDel, _ := gvg.NewValkeyRoomRepository(clientDel)
 
-	if err := repoDel.DeleteCharacterRoom(ctx, "char-1"); err != nil {
+	if err := repoDel.DeleteCharacterRoom(ctx, "char-1", "room-gvg-1"); err != nil {
 		t.Fatalf("unexpected DeleteCharacterRoom error: %v", err)
 	}
 	delCmds := clientDel.RecordedCommandStrings()
-	if len(delCmds) != 1 || delCmds[0][0] != "DEL" || !strings.Contains(delCmds[0][1], "char-1") {
+	if len(delCmds) != 1 || delCmds[0][0] != "EVALSHA" || !strings.Contains(delCmds[0][3], "char-1") || delCmds[0][4] != "room-gvg-1" {
 		t.Errorf("unexpected DeleteCharacterRoom command: %v", delCmds)
 	}
 
@@ -434,7 +447,7 @@ func TestValkeyRoomRepository_CharacterRoom(t *testing.T) {
 		return valkeytest.MakeErrorResult(errDel)
 	}))
 	repoDelErr, _ := gvg.NewValkeyRoomRepository(clientDelErr)
-	if err := repoDelErr.DeleteCharacterRoom(ctx, "char-1"); !errors.Is(err, errDel) {
+	if err := repoDelErr.DeleteCharacterRoom(ctx, "char-1", "room-gvg-1"); !errors.Is(err, errDel) {
 		t.Fatalf("expected errDel, got %v", err)
 	}
 }

@@ -2,6 +2,7 @@ package gvg
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"sort"
 	"strconv"
@@ -70,7 +71,7 @@ type RoomRepository interface {
 	ListRooms(ctx context.Context) ([]RoomSummary, error)
 	GetCharacterRoom(ctx context.Context, characterID string) (string, error)
 	SetCharacterRoom(ctx context.Context, characterID string, roomID string) error
-	DeleteCharacterRoom(ctx context.Context, characterID string) error
+	DeleteCharacterRoom(ctx context.Context, characterID string, roomID string) error
 	RoomLockRepository
 }
 
@@ -140,11 +141,6 @@ func (m *MemoryRoomRepository) DeleteRoom(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if detail, ok := m.rooms[id]; ok {
-		for _, mem := range detail.Members {
-			delete(m.charRooms, mem.CharacterID)
-		}
-	}
 	delete(m.rooms, id)
 	return nil
 }
@@ -188,7 +184,7 @@ func (m *MemoryRoomRepository) GetCharacterRoom(_ context.Context, characterID s
 	defer m.mu.RUnlock()
 
 	roomID, ok := m.charRooms[characterID]
-	if !ok {
+	if !ok || roomID == "" {
 		return "", ErrRoomNotFound
 	}
 	return roomID, nil
@@ -202,11 +198,13 @@ func (m *MemoryRoomRepository) SetCharacterRoom(_ context.Context, characterID s
 	return nil
 }
 
-func (m *MemoryRoomRepository) DeleteCharacterRoom(_ context.Context, characterID string) error {
+func (m *MemoryRoomRepository) DeleteCharacterRoom(_ context.Context, characterID string, roomID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.charRooms, characterID)
+	if m.charRooms[characterID] == roomID {
+		delete(m.charRooms, characterID)
+	}
 	return nil
 }
 
@@ -310,7 +308,9 @@ func (v *ValkeyRoomRepository) GetRoom(ctx context.Context, id string) (RoomDeta
 func (v *ValkeyRoomRepository) DeleteRoom(ctx context.Context, id string) error {
 	key := DefaultRoomKeyPrefix + id
 	delCmd := v.client.B().Del().Key(key).Build()
-	_ = v.client.Do(ctx, delCmd)
+	if err := v.client.Do(ctx, delCmd).Error(); err != nil {
+		return err
+	}
 
 	zremCmd := v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(id).Build()
 	return v.client.Do(ctx, zremCmd).Error()
@@ -382,8 +382,12 @@ func (v *ValkeyRoomRepository) SetCharacterRoom(ctx context.Context, characterID
 	return v.client.Do(ctx, cmd).Error()
 }
 
-func (v *ValkeyRoomRepository) DeleteCharacterRoom(ctx context.Context, characterID string) error {
+//go:embed lua/delete_character_room.lua
+var deleteCharacterRoomLua string
+
+var deleteCharacterRoomScript = valkey.NewLuaScript(deleteCharacterRoomLua)
+
+func (v *ValkeyRoomRepository) DeleteCharacterRoom(ctx context.Context, characterID string, roomID string) error {
 	key := DefaultCharacterKeyPrefix + characterID
-	cmd := v.client.B().Del().Key(key).Build()
-	return v.client.Do(ctx, cmd).Error()
+	return deleteCharacterRoomScript.Exec(ctx, v.client, []string{key}, []string{roomID}).Error()
 }

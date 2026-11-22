@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -188,6 +189,8 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 
 	if _, err := s.repo.GetCharacterRoom(ctx, creatorCharID); err == nil {
 		return RoomDetail{}, ErrAlreadyInRoom
+	} else if !errors.Is(err, ErrRoomNotFound) {
+		return RoomDetail{}, err
 	}
 
 	nameLen := utf8.RuneCountInString(strings.TrimSpace(req.Name))
@@ -313,6 +316,8 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 
 		if _, err := s.repo.GetCharacterRoom(lockedCtx, charID); err == nil {
 			return ErrAlreadyInRoom
+		} else if !errors.Is(err, ErrRoomNotFound) {
+			return err
 		}
 
 		detail, err := s.repo.GetRoom(lockedCtx, roomID)
