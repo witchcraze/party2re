@@ -16,11 +16,12 @@ import (
 )
 
 // combatParty starts a normal party run served by the production RunCombat
-// and places enemies on its encounter floor 1. Enemy responses wait an hour so
-// race outcomes depend only on the submitted commands.
+// with its asset session, so party operations take every member's inventory
+// lock and the requester's economy/depot session as cmd/party2 does. Enemies
+// wait on floor 1 for an hour so race outcomes depend only on the commands.
 func combatParty(t *testing.T, count int, enemies ...corebattle.LifetimeActor) (*normalFixture, adventure.RunCommand) {
 	t.Helper()
-	f := combatFixture(t, count)
+	f, _ := assetRunCombat(t, count)
 	for i := range f.actors {
 		f.actors[i].JobID = "job-01"
 		if err := f.chars.Update(t.Context(), f.actors[i]); err != nil {
