@@ -26,6 +26,10 @@ func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) e
 			}
 			return err
 		}
+		detail, err = s.recoverPendingRoundTransition(lockedCtx, roomID, detail)
+		if err != nil {
+			return err
+		}
 
 		departing, found := findMember(detail.Members, charID)
 		if !found {
@@ -71,6 +75,20 @@ func (s *Service) cleanupPendingCharacterRoom(ctx context.Context, charID, roomI
 		return notPendingErr
 	}
 	return s.repo.DeleteCharacterRoom(ctx, charID, roomID)
+}
+
+func (s *Service) recoverPendingRoundTransition(ctx context.Context, roomID string, detail RoomDetail) (RoomDetail, error) {
+	committed, found, err := s.standings.FindRoundTransition(ctx, roomID)
+	if err != nil {
+		return RoomDetail{}, err
+	}
+	if !found || !hasPendingRoundPublication(detail, committed) {
+		return detail, nil
+	}
+	if err := s.repo.SaveRoom(ctx, committed.Detail.Room, committed.Detail.Members); err != nil {
+		return RoomDetail{}, err
+	}
+	return committed.Detail, nil
 }
 
 func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID string, round int, departing GvGMember) error {

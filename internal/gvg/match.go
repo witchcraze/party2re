@@ -77,8 +77,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			if expectedRound < committed.ResolvedRound {
 				return ErrRoundMismatch
 			}
-			pending := detail.Room.Round < committed.Detail.Room.Round ||
-				(detail.Room.Status == StatusInProgress && committed.Result.MatchCompleted)
+			pending := hasPendingRoundPublication(detail, committed)
 			if pending {
 				if expectedRound != committed.ResolvedRound &&
 					(committed.Result.MatchCompleted || expectedRound != committed.Detail.Room.Round) {
@@ -352,4 +351,9 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		return nil
 	})
 	return result, err
+}
+
+func hasPendingRoundPublication(detail RoomDetail, committed RoundTransition) bool {
+	return detail.Room.Round < committed.Detail.Room.Round ||
+		(detail.Room.Status == StatusInProgress && committed.Result.MatchCompleted)
 }

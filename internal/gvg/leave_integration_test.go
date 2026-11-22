@@ -2,15 +2,18 @@ package gvg_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
 	"github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -1110,5 +1113,464 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 	}
 	if c1AfterSecond.Money != c1Before.Money-40 {
 		t.Fatalf("expected standing order to settle once per room departure: Money=%d want=%d", c1AfterSecond.Money, c1Before.Money-40)
+	}
+}
+
+func TestGvG_LeaveRoom_RecoverCommittedRoundBeforeDeparture_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_DB_DSN and PARTY2_VALKEY_ADDR are required")
+	}
+
+	type scenario struct {
+		name              string
+		targetWins        int
+		departLeader      bool
+		retryFailedSave   bool
+		round1RemainingHP map[string]int
+		round1RemainingMP map[string]int
+		round1Consumed    map[string][]corebattle.ConsumedItem
+		wantDepartedHP    int
+		wantDepartedMP    int
+		wantDepartedTired int
+		wantDepartedEXP   int64
+	}
+
+	type runOutcome struct {
+		room             gvg.RoomDetail
+		departedChar     corecharacter.Character
+		departedInvCount int
+		departedEquipped bool
+		departedClaimed  bool
+		departedDone     bool
+		departedMapped   bool
+		remainingMapped  string
+		replayResult     gvg.RoundResolution
+		winnerStanding   gvg.GvGStanding
+		loserStanding    gvg.GvGStanding
+		winnerGuildGP    int64
+		loserGuildGP     int64
+		tavernMeals      int
+		tavernSpent      int64
+		tavernIsFull     bool
+	}
+
+	runScenario := func(t *testing.T, sc scenario, injectPublishFailure bool) runOutcome {
+		t.Helper()
+		ctx := context.Background()
+		db := database.OpenTestDB(t)
+		client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{os.Getenv("PARTY2_VALKEY_ADDR")}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(client.Close)
+
+		baseRooms, err := gvg.NewValkeyRoomRepository(client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		roomRepo := &faultIntegrationRoomRepo{
+			RoomRepository: baseRooms,
+			saveErr:        errors.New("valkey save failure"),
+		}
+		gvgRepo, err := database.NewGvGRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		guildRepo, err := database.NewGuildRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		charRepo, err := database.NewCharacterRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		invRepo, err := database.NewInventoryRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		equipRepo, err := database.NewEquipmentRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tavernRepo, err := database.NewTavernRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		txProv := database.NewTransactionProvider(db)
+		econSvc, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+		if err != nil {
+			t.Fatal(err)
+		}
+		battleSvc := battle.NewService(
+			battle.WithCharacterRepository(charRepo),
+			battle.WithInventoryRepository(invRepo),
+			battle.WithEquipmentRepository(equipRepo),
+			battle.WithTransactionRunner(econSvc),
+			battle.WithTransactionProvider(txProv),
+			battle.WithRandomSource(testDetRNG{gen: random.NewDeterministic(1)}),
+		)
+		tavernCatalog, err := tavern.LoadDefaultCatalog()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tavernSvc, err := tavern.NewService(tavernCatalog, tavernRepo, charRepo, txProv)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		g1, c1, err := database.CreateTestGuildWithLeader(ctx, db, fmt.Sprintf("GvGCR1_%s", id.New()[:8]), 500)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g2, c2, err := database.CreateTestGuildWithLeader(ctx, db, fmt.Sprintf("GvGCR2_%s", id.New()[:8]), 500)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			cleanupCtx := context.Background()
+			for _, gid := range []string{g1.ID, g2.ID} {
+				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid)
+			}
+			for _, ch := range []struct{ id, playerID string }{{c1.ID, c1.PlayerID}, {c2.ID, c2.PlayerID}} {
+				_ = charRepo.Delete(cleanupCtx, ch.id)
+				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", ch.playerID)
+			}
+		})
+		if _, err := db.ExecContext(ctx, "UPDATE guilds SET color = '#FF3333' WHERE id = ?", g1.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, "UPDATE guilds SET color = '#33CCFF' WHERE id = ?", g2.ID); err != nil {
+			t.Fatal(err)
+		}
+		// Start both members below MaxHP and with distinct MP so round boundary changes are observable.
+		if _, err := db.ExecContext(ctx, "UPDATE characters SET max_hp = 100, hp = 80, max_mp = 40, mp = 30, experience = 0 WHERE id IN (?, ?)", c1.ID, c2.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		departID, stayID := c2.ID, c1.ID
+		if sc.departLeader {
+			departID, stayID = c1.ID, c2.ID
+		}
+
+		// Departing member equips item-193 (consumed in round 1) and reserves a tavern meal/delivery.
+		amulet, err := coreitem.NewInstance("item-193", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.CreateTestInventoryWithItems(ctx, db, departID, []coreitem.Instance{amulet}); err != nil {
+			t.Fatal(err)
+		}
+		if err := equipRepo.Save(ctx, coreequipment.Equipment{CharacterID: departID, Slots: map[coreitem.Slot]string{coreitem.SlotAccessory: amulet.ID}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tavernSvc.OrderMeal(ctx, departID, "tavern_water"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tavernSvc.ReserveDelivery(ctx, departID, "tavern_water"); err != nil {
+			t.Fatal(err)
+		}
+
+		remHP := map[string]int{c1.ID: sc.round1RemainingHP["c1"], c2.ID: sc.round1RemainingHP["c2"]}
+		remMP := map[string]int{c1.ID: sc.round1RemainingMP["c1"], c2.ID: sc.round1RemainingMP["c2"]}
+		consumed := make(map[string][]corebattle.ConsumedItem)
+		if items, ok := sc.round1Consumed["c1"]; ok {
+			consumed[c1.ID] = items
+		}
+		if items, ok := sc.round1Consumed["c2"]; ok {
+			consumed[c2.ID] = items
+		}
+		engine := &scriptedMPBattleEngine{
+			results: []corebattle.PartyBattleResult{
+				{
+					Outcome:       corebattle.OutcomeWin,
+					RemainingHP:   remHP,
+					RemainingMP:   remMP,
+					ConsumedItems: consumed,
+				},
+			},
+		}
+
+		svc, err := gvg.NewService(
+			roomRepo, gvgRepo, guildRepo, charRepo, engine,
+			gvg.WithParticipantBuilder(battleSvc),
+			gvg.WithPostBattleSettler(battleSvc),
+			gvg.WithTransactionProvider(txProv),
+			gvg.WithExitClaimRepository(gvgRepo),
+			gvg.WithPostExitHook(func(ctx context.Context, characterID string) (string, error) {
+				if err := tavernSvc.ResetFullness(ctx, characterID); err != nil {
+					return "", err
+				}
+				res, err := tavernSvc.ClaimDelivery(ctx, characterID)
+				if errors.Is(err, tavern.ErrNoActiveDelivery) {
+					return "", nil
+				}
+				return res.Item.Name, err
+			}),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{
+			Name:       "RoundRecovery_" + sc.name,
+			MaxMembers: 2,
+			TargetWins: sc.targetWins,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			cleanupCtx := context.Background()
+			_ = baseRooms.DeleteRoom(cleanupCtx, detail.Room.ID)
+			_ = baseRooms.DeleteCharacterRoom(cleanupCtx, c1.ID, detail.Room.ID)
+			_ = baseRooms.DeleteCharacterRoom(cleanupCtx, c2.ID, detail.Room.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM gvg_match_transitions WHERE room_id = ?", detail.Room.ID)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM gvg_exit_claims WHERE room_id = ?", detail.Room.ID)
+		})
+		if _, err := svc.JoinRoom(ctx, c2.ID, detail.Room.ID, ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.StartMatch(ctx, c1.ID, detail.Room.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		if injectPublishFailure {
+			roomRepo.failSave.Store(true)
+			if _, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID, 1); !errors.Is(err, roomRepo.saveErr) {
+				t.Fatalf("expected SaveRoom failure on AdvanceRound, got %v", err)
+			}
+			if sc.retryFailedSave {
+				beforeDepart, err := charRepo.FindByID(ctx, departID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				beforeTavern, err := tavernRepo.GetCharacterStatus(ctx, departID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Round publication fails again -> LeaveRoom must abort before exit claim, copy-back, fatigue or delivery.
+				if err := svc.LeaveRoom(ctx, departID, detail.Room.ID); !errors.Is(err, roomRepo.saveErr) {
+					t.Fatalf("LeaveRoom with failing SaveRoom = %v, want %v", err, roomRepo.saveErr)
+				}
+				var claimCount int
+				if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM gvg_exit_claims WHERE room_id = ? AND character_id = ?", detail.Room.ID, departID).Scan(&claimCount); err != nil {
+					t.Fatal(err)
+				}
+				if claimCount != 0 {
+					t.Fatalf("expected 0 exit claims on failed publication recovery, got %d", claimCount)
+				}
+				afterAbort, err := charRepo.FindByID(ctx, departID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if afterAbort.Stats.HP != beforeDepart.Stats.HP || afterAbort.Stats.MP != beforeDepart.Stats.MP || afterAbort.Tired != beforeDepart.Tired || afterAbort.Money != beforeDepart.Money {
+					t.Fatalf("character mutated on failed publication recovery: before=%+v after=%+v", beforeDepart, afterAbort)
+				}
+				afterTavern, err := tavernRepo.GetCharacterStatus(ctx, departID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if afterTavern.IsFull != beforeTavern.IsFull || afterTavern.TotalMealsEaten != beforeTavern.TotalMealsEaten || afterTavern.TotalGoldSpent != beforeTavern.TotalGoldSpent {
+					t.Fatalf("tavern status mutated on failed publication recovery: before=%+v after=%+v", beforeTavern, afterTavern)
+				}
+				invAfterAbort, err := invRepo.FindByCharacterID(ctx, departID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(invAfterAbort.Items) != 1 {
+					t.Fatalf("inventory mutated on failed publication recovery: %+v", invAfterAbort.Items)
+				}
+			}
+			roomRepo.failSave.Store(false)
+		} else {
+			if _, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID, 1); err != nil {
+				t.Fatalf("healthy AdvanceRound failed: %v", err)
+			}
+		}
+
+		if err := svc.LeaveRoom(ctx, departID, detail.Room.ID); err != nil {
+			t.Fatalf("LeaveRoom(%s) failed: %v", departID, err)
+		}
+
+		if sc.departLeader {
+			// Old departed leader cannot replay AdvanceRound.
+			if _, err := svc.AdvanceRound(ctx, departID, detail.Room.ID, 1); !errors.Is(err, gvg.ErrNotRoomLeader) {
+				t.Fatalf("departed leader replay = %v, want ErrNotRoomLeader", err)
+			}
+		}
+		replayRes, err := svc.AdvanceRound(ctx, stayID, detail.Room.ID, 1)
+		if err != nil {
+			t.Fatalf("staying leader AdvanceRound(1) replay failed: %v", err)
+		}
+		if engine.calls.Load() != 1 {
+			t.Fatalf("battle engine calls = %d, want 1", engine.calls.Load())
+		}
+
+		roomAfter, err := svc.GetRoom(ctx, detail.Room.ID)
+		if err != nil {
+			t.Fatalf("GetRoom after departure+replay failed: %v", err)
+		}
+		departedChar, err := charRepo.FindByID(ctx, departID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		departedInv, err := invRepo.FindByCharacterID(ctx, departID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		departedEquip, err := equipRepo.FindByCharacterID(ctx, departID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, equippedAcc := departedEquip.Equipped(coreitem.SlotAccessory)
+		var deliveryDone bool
+		claimErr := db.QueryRowContext(ctx, "SELECT delivery_done FROM gvg_exit_claims WHERE room_id = ? AND character_id = ?", detail.Room.ID, departID).Scan(&deliveryDone)
+		if claimErr != nil && !errors.Is(claimErr, sql.ErrNoRows) {
+			t.Fatal(claimErr)
+		}
+		_, mapErr := baseRooms.GetCharacterRoom(ctx, departID)
+		stayMapped, err := baseRooms.GetCharacterRoom(ctx, stayID)
+		if err != nil {
+			t.Fatalf("staying member mapping missing: %v", err)
+		}
+		stayMappedLabel := "other"
+		if stayMapped == detail.Room.ID {
+			stayMappedLabel = "current_room"
+		}
+		st1, err := gvgRepo.GetOrCreateStanding(ctx, g1.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st2, err := gvgRepo.GetOrCreateStanding(ctx, g2.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g1After, _, err := guildRepo.GetGuild(ctx, g1.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g2After, _, err := guildRepo.GetGuild(ctx, g2.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tavernAfter, err := tavernRepo.GetCharacterStatus(ctx, departID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return runOutcome{
+			room:             roomAfter,
+			departedChar:     departedChar,
+			departedInvCount: len(departedInv.Items),
+			departedEquipped: equippedAcc,
+			departedClaimed:  claimErr == nil,
+			departedDone:     deliveryDone,
+			departedMapped:   !errors.Is(mapErr, gvg.ErrRoomNotFound),
+			remainingMapped:  stayMappedLabel,
+			replayResult:     replayRes,
+			winnerStanding:   st1,
+			loserStanding:    st2,
+			winnerGuildGP:    g1After.Points,
+			loserGuildGP:     g2After.Points,
+			tavernMeals:      tavernAfter.TotalMealsEaten,
+			tavernSpent:      tavernAfter.TotalGoldSpent,
+			tavernIsFull:     tavernAfter.IsFull,
+		}
+	}
+
+	cases := []scenario{
+		{
+			name:              "non_final_nonleader_departure",
+			targetWins:        2,
+			departLeader:      false,
+			retryFailedSave:   true,
+			round1RemainingHP: map[string]int{"c1": 55, "c2": 35},
+			round1RemainingMP: map[string]int{"c1": 12, "c2": 7},
+			round1Consumed:    map[string][]corebattle.ConsumedItem{"c2": {{ID: "item-193", Quantity: 1}}},
+			// Delivery (+40 HP) applied to round 2 restored HP (100), clamped to MaxHP 100.
+			wantDepartedHP:    100,
+			wantDepartedMP:    7,
+			wantDepartedTired: 7,
+		},
+		{
+			name:              "non_final_leader_departure",
+			targetWins:        2,
+			departLeader:      true,
+			retryFailedSave:   false,
+			round1RemainingHP: map[string]int{"c1": 45, "c2": 60},
+			round1RemainingMP: map[string]int{"c1": 9, "c2": 14},
+			round1Consumed:    map[string][]corebattle.ConsumedItem{"c1": {{ID: "item-193", Quantity: 1}}},
+			wantDepartedHP:    100,
+			wantDepartedMP:    9,
+			wantDepartedTired: 7,
+		},
+		{
+			name:              "final_round_nonleader_departure",
+			targetWins:        1,
+			departLeader:      false,
+			retryFailedSave:   true,
+			round1RemainingHP: map[string]int{"c1": 0, "c2": 22},
+			round1RemainingMP: map[string]int{"c1": 11, "c2": 5},
+			round1Consumed:    map[string][]corebattle.ConsumedItem{"c2": {{ID: "item-193", Quantity: 1}}},
+			// Final round preserves RemainingHP (22) + delivery (+40 HP) = 62, MP = 5, Tired = 4.
+			wantDepartedHP:    62,
+			wantDepartedMP:    5,
+			wantDepartedTired: 4,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			control := runScenario(t, tc, false)
+			recovered := runScenario(t, tc, true)
+
+			if len(recovered.room.Members) != 1 || len(control.room.Members) != 1 {
+				t.Fatalf("member count mismatch: recovered=%d control=%d", len(recovered.room.Members), len(control.room.Members))
+			}
+			if recovered.room.Room.Round != control.room.Room.Round ||
+				recovered.room.Room.Status != control.room.Room.Status ||
+				recovered.room.Room.LeaderCharacterID == "" ||
+				(recovered.room.Room.LeaderCharacterID == recovered.departedChar.ID) ||
+				!recovered.room.Members[0].IsLeader ||
+				recovered.room.Members[0].HP != control.room.Members[0].HP ||
+				!reflect.DeepEqual(recovered.room.Members[0].MP, control.room.Members[0].MP) {
+				t.Fatalf("persisted room mismatch:\nrecovered=%+v\ncontrol=%+v", recovered.room, control.room)
+			}
+			if recovered.departedMapped || recovered.remainingMapped != "current_room" {
+				t.Fatalf("reverse mapping mismatch: departedMapped=%v remainingMapped=%q", recovered.departedMapped, recovered.remainingMapped)
+			}
+			if recovered.departedChar.Stats.HP != tc.wantDepartedHP ||
+				recovered.departedChar.Stats.MP != tc.wantDepartedMP ||
+				recovered.departedChar.Tired != tc.wantDepartedTired ||
+				recovered.departedChar.Money != control.departedChar.Money ||
+				recovered.departedInvCount != 0 ||
+				recovered.departedEquipped ||
+				!recovered.departedClaimed ||
+				!recovered.departedDone ||
+				recovered.tavernIsFull ||
+				recovered.tavernMeals != control.tavernMeals ||
+				recovered.tavernSpent != control.tavernSpent {
+				t.Fatalf("departed character/claim/tavern mismatch:\nrecoveredChar=%+v inv=%d equipped=%v claimed=%v done=%v meals=%d spent=%d\ncontrolChar=%+v",
+					recovered.departedChar, recovered.departedInvCount, recovered.departedEquipped, recovered.departedClaimed, recovered.departedDone, recovered.tavernMeals, recovered.tavernSpent, control.departedChar)
+			}
+			if recovered.replayResult.Round != control.replayResult.Round ||
+				recovered.replayResult.Outcome != control.replayResult.Outcome ||
+				recovered.replayResult.MatchCompleted != control.replayResult.MatchCompleted ||
+				recovered.replayResult.MatchCompleted != (tc.targetWins == 1) ||
+				recovered.replayResult.PrizeGP != control.replayResult.PrizeGP {
+				t.Fatalf("replay result mismatch:\nrecovered=%+v\ncontrol=%+v", recovered.replayResult, control.replayResult)
+			}
+			if recovered.winnerGuildGP != control.winnerGuildGP ||
+				recovered.loserGuildGP != control.loserGuildGP ||
+				recovered.winnerStanding.VictoryPoints != control.winnerStanding.VictoryPoints ||
+				recovered.winnerStanding.Wins != control.winnerStanding.Wins ||
+				recovered.winnerStanding.BronzeMedals != control.winnerStanding.BronzeMedals ||
+				recovered.loserStanding.VictoryPoints != control.loserStanding.VictoryPoints ||
+				recovered.loserStanding.Losses != control.loserStanding.Losses {
+				t.Fatalf("guild/standing mismatch: recovered=(%d,%d,%+v,%+v) control=(%d,%d,%+v,%+v)",
+					recovered.winnerGuildGP, recovered.loserGuildGP, recovered.winnerStanding, recovered.loserStanding,
+					control.winnerGuildGP, control.loserGuildGP, control.winnerStanding, control.loserStanding)
+			}
+		})
 	}
 }

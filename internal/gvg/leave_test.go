@@ -794,3 +794,63 @@ func TestLeaveRoom_DeleteFailureAndMappingRetrySafety(t *testing.T) {
 		t.Fatalf("settler calls = %d, want 3", settler.calls)
 	}
 }
+
+type failingFindTransitionStandingRepo struct {
+	gvg.StandingRepository
+	findErr error
+}
+
+func (r *failingFindTransitionStandingRepo) FindRoundTransition(ctx context.Context, roomID string) (gvg.RoundTransition, bool, error) {
+	if r.findErr != nil {
+		return gvg.RoundTransition{}, false, r.findErr
+	}
+	return r.StandingRepository.FindRoundTransition(ctx, roomID)
+}
+
+func TestLeaveRoom_AbortsWhenTransitionLookupFails(t *testing.T) {
+	ctx := context.Background()
+	baseRooms := gvg.NewMemoryRoomRepository()
+	standings := &failingFindTransitionStandingRepo{StandingRepository: newMockStandingRepo()}
+	guilds := newMockGuildRepo()
+	chars := newMockCharRepo()
+	settler := &stubPostBattleSettler{}
+	claims := newMockExitClaimRepo()
+
+	chars.characters["c1"] = createTestCharacter("c1", "Leader", 80, 0)
+	chars.characters["c2"] = createTestCharacter("c2", "Enemy", 90, 0)
+	guilds.guilds["g1"] = guild.Guild{ID: "g1", Name: "Crimson", Color: "#FF3333"}
+	guilds.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
+	guilds.charGuilds["c1"], guilds.charGuilds["c2"] = "g1", "g2"
+
+	svc, err := gvg.NewService(
+		baseRooms, standings, guilds, chars, &mockBattleEngine{outcome: corebattle.OutcomeWin},
+		gvg.WithPostBattleSettler(settler),
+		gvg.WithExitClaimRepository(claims),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "LookupFail", MaxMembers: 2, TargetWins: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.JoinRoom(ctx, "c2", detail.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartMatch(ctx, "c1", detail.Room.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	lookupErr := errors.New("sql transition read failure")
+	standings.findErr = lookupErr
+	if err := svc.LeaveRoom(ctx, "c2", detail.Room.ID); !errors.Is(err, lookupErr) {
+		t.Fatalf("LeaveRoom error = %v, want %v", err, lookupErr)
+	}
+	if settler.calls != 0 || len(claims.claims) != 0 {
+		t.Fatalf("LeaveRoom settled despite transition lookup error: settler=%d claims=%d", settler.calls, len(claims.claims))
+	}
+	got, err := svc.GetRoom(ctx, detail.Room.ID)
+	if err != nil || len(got.Members) != 2 {
+		t.Fatalf("room mutated on transition lookup error: %+v err=%v", got, err)
+	}
+}
