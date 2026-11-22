@@ -19,9 +19,8 @@ During Version 1.0 reconstruction, the original Party2 project defines game beha
 
 `api/openapi.json` and `internal/api/http/openapi.json` are generated bundles. Keep both because one is distributed as documentation and the other is embedded in the server; edit their modular sources.
 
-Authentication and logging contracts live in [architecture/interfaces.md](architecture/interfaces.md),
-scheduling lifecycles in [architecture/valkey-keyspace.md](architecture/valkey-keyspace.md#scheduled-work-lifecycle),
-and maintenance controls in [design/admin.md](design/admin.md#system-maintenance-mode).
+Authentication and logging contracts live in [architecture/interfaces.md](architecture/interfaces.md)
+and scheduling lifecycles in [architecture/valkey-keyspace.md](architecture/valkey-keyspace.md#scheduled-work-lifecycle).
 [development/testing.md](development/testing.md) owns local/CI verification and benchmarking;
 [development/environment-variables.md](development/environment-variables.md) owns runtime settings;
 [assets/required-images.md](assets/required-images.md) owns asset-type guidance and placeholder provenance.

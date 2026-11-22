@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -51,7 +52,7 @@ func (s *Service) GetStatus(ctx context.Context) (Status, error) {
 // SetMaintenance updates the maintenance mode state.
 func (s *Service) SetMaintenance(ctx context.Context, enabled bool, message string, estimatedEndTime *time.Time) (Status, error) {
 	message = strings.TrimSpace(message)
-	if len(message) > 500 {
+	if utf8.RuneCountInString(message) > 500 {
 		return Status{}, ErrInvalidMessage
 	}
 	if message == "" {
