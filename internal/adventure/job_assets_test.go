@@ -97,7 +97,7 @@ func TestWithJobAssetsPreservesKnownAndUnknownHands(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), normalMutationContext{}, runID)
 			var captured *corebattle.JobAssets
-			err = svc.WithJobAssets(ctx, r, cmd, func(assets *corebattle.JobAssets) error {
+			err = svc.WithJobAssets(ctx, r, cmd, func(assets *corebattle.JobAssets, _ *corecharacter.Character) error {
 				captured = assets
 				return nil
 			})

@@ -9,6 +9,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
@@ -158,13 +159,11 @@ func TestBookSQLWithdrawalRejectionRestoresCallerReferentsAndStorage(t *testing.
 	owner := f.actors[0].ID
 	rows := seedDepot(t, depots, owner, "item-001", "item-170")
 	held := heldItems(t, f, 0)
-	beforeRun, err := f.store.FindRun(context.Background(), run)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	var retainedAssets *corebattle.JobAssets
 	var retainedAssetsHeld, retainedActorHeld *string
+	// A synthetic rejecting slot: no reachable production pair rejects after a withdrawal.
+	f.routed, f.decorate = false, nil
 	f.cfg.Combat = &bookRejectCombat{normalCombat: f.combat, f: f, onCapture: func(assets *corebattle.JobAssets, actorHeld *string) {
 		retainedAssets, retainedAssetsHeld, retainedActorHeld = assets, assets.HeldToolID, actorHeld
 	}}
@@ -172,6 +171,10 @@ func TestBookSQLWithdrawalRejectionRestoresCallerReferentsAndStorage(t *testing.
 
 	cmd := assetCommand(t, f, run, 0, "job-86-entry-0", "book-withdraw-reject")
 	cmd.TargetID = "item-170"
+	beforeRun, err := f.store.FindRun(context.Background(), run)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatalf("err = %v, want ErrUnsupportedEffect", err)
 	}
@@ -197,7 +200,7 @@ func (c *bookRejectCombat) ExecuteRunAction(ctx context.Context, r *adventure.No
 	if cmd.Action != "job-86-entry-0" {
 		return c.normalCombat.ExecuteRunAction(ctx, r, cmd)
 	}
-	err := c.f.svc.WithJobAssets(ctx, r, cmd, func(assets *corebattle.JobAssets) error {
+	err := c.f.svc.WithJobAssets(ctx, r, cmd, func(assets *corebattle.JobAssets, _ *corecharacter.Character) error {
 		c.onCapture(assets, r.Battle.Actors[0].HeldToolID)
 		frame := corebattle.CallbackContext{
 			TargetContext: corebattle.TargetContext{ActorID: cmd.ActorID, PartyIDs: slices.Clone(r.Roster), EnemyIDs: slices.Clone(r.Enemies)},

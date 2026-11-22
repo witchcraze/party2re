@@ -153,14 +153,14 @@
         {
           "table": "inventory_items / equipment_slots",
           "tier": 3,
-          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
-          "note": "Concrete command consumption and personal chest delivery."
+          "mode": "SELECT ... FOR UPDATE (ExecuteRunAction, economy runner, PostBattleSettler)",
+          "note": "Combat prelocks party inventories in ascending character order before the asset session. Settlement reuses those locks and applies concrete consumption and chest delivery. Equipment reads are ordinary reads."
         },
         {
           "table": "character_depots / depot_items",
           "tier": 5,
-          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
-          "note": "Conditional overflow delivery."
+          "mode": "SELECT ... FOR UPDATE (WithJobAssets, PostBattleSettler)",
+          "note": "Requester depot for combat assets and conditional overflow delivery."
         },
         {
           "table": "adventures / normal_adventure_recipients / normal_adventure_enrollments / normal_adventure_receipts",
@@ -175,8 +175,11 @@
       "method": "ExecuteRunAction",
       "source_ref": "internal/adventure/normal_combat.go#runCombat.ExecuteRunAction",
       "transaction_type": "Delegated",
-      "lock_sequence": [],
-      "note": "Runs inside Command after its run and sorted character locks; acquires none of its own. Reads retained earnings without row locks, writes a tail level-up to the already-locked requester (Rank 2) and returns earnings/consumption for Command's settler. Any error discards the whole operation."
+      "lock_sequence": [
+        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Prelock all party inventories in character ID order before WithJobAssets. In a solo run WithJobAssets acquires the inventory lock." },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE (via WithJobAssets)", "note": "Requester depot only." }
+      ],
+      "note": "Runs inside Command after its run and sorted character locks. The configured economy runner saves tail growth and wallet changes on the same requester. Reads retained earnings without row locks and returns consumption and earnings for Command's settler. Travel and job-encounter ports mutate the locked run copy."
     },
     {
       "method": "WithJobAssets",
@@ -187,7 +190,7 @@
         { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Requester wallet and held instance commit with Command state/receipt in the ambient SQL transaction." },
         { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE (via JobAssetDepots)", "note": "Requester depot for job50 stored tools and job86 books; consumption, exchange and return save only when no selection error occurred." }
       ],
-      "note": "Requires Command's run authority; supplies operation-local facts through the injected economy runner, with no independent commit or production combat fallback."
+      "note": "Requires Command's run authority. The economy runner saves the requester after applying tail growth and asset changes, with no independent commit. Helper request reads do not lock rows."
     },
     {
       "method": "ApplyCombatTravel",

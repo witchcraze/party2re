@@ -311,8 +311,7 @@ func TestNormalRunTimeoutPendingRecoveryAndRetention(t *testing.T) {
 func TestNormalRunExitExcludesDepartedActorFromEncounterAndEXMarker(t *testing.T) {
 	f := newNormalFixture(t, 2)
 	installTravel(t, f)
-	tool184 := addTravelTool(t, f, 1, "item-184")
-	tool107 := addTravelTool(t, f, 1, "item-107")
+	addTravelTool(t, f, 1, "item-184")
 
 	// 1. Enroll A and B in a normal Party at floor 0.
 	_, lobby := f.waitingParty(t, "normal")
@@ -333,11 +332,12 @@ func TestNormalRunExitExcludesDepartedActorFromEncounterAndEXMarker(t *testing.T
 	}
 
 	// 2. B uses owned item184 with {"destination_stage_id":"stage-23"}, then item107 with {}, then explicitly advances from floor10.
-	cmd184 := travelCommand(t, f, runID, 1, tool184, `{"destination_stage_id":"stage-23"}`)
+	cmd184 := travelCommand(t, f, runID, 1, `{"destination_stage_id":"stage-23"}`)
 	if _, err := f.svc.Command(context.Background(), cmd184); err != nil {
 		t.Fatal(err)
 	}
-	cmd107 := travelCommand(t, f, runID, 1, tool107, `{}`)
+	addTravelTool(t, f, 1, "item-107")
+	cmd107 := travelCommand(t, f, runID, 1, `{}`)
 	if _, err := f.svc.Command(context.Background(), cmd107); err != nil {
 		t.Fatal(err)
 	}
@@ -361,19 +361,19 @@ func TestNormalRunExitExcludesDepartedActorFromEncounterAndEXMarker(t *testing.T
 	// 4. Healthy contrast: in a run where two active participants reach stage-23 floor 10, EX unlocks.
 	f2 := newNormalFixture(t, 2)
 	installTravel(t, f2)
-	tool184_2 := addTravelTool(t, f2, 0, "item-184")
-	tool107_2 := addTravelTool(t, f2, 0, "item-107")
+	addTravelTool(t, f2, 0, "item-184")
 	_, lobby2 := f2.waitingParty(t, "normal")
 	entry2, err := f2.svc.EnterParty(context.Background(), f2.actors[0].PlayerID, f2.actors[0].ID, lobby2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	runID2 := entry2.Command.RunID
-	cmd184_2 := travelCommand(t, f2, runID2, 0, tool184_2, `{"destination_stage_id":"stage-23"}`)
+	cmd184_2 := travelCommand(t, f2, runID2, 0, `{"destination_stage_id":"stage-23"}`)
 	if _, err := f2.svc.Command(context.Background(), cmd184_2); err != nil {
 		t.Fatal(err)
 	}
-	cmd107_2 := travelCommand(t, f2, runID2, 0, tool107_2, `{}`)
+	addTravelTool(t, f2, 0, "item-107")
+	cmd107_2 := travelCommand(t, f2, runID2, 0, `{}`)
 	if _, err := f2.svc.Command(context.Background(), cmd107_2); err != nil {
 		t.Fatal(err)
 	}

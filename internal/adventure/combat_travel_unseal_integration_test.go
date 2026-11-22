@@ -10,7 +10,6 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -34,14 +33,14 @@ func TestCombatTravelUnsealNotOnAssignmentOrExit(t *testing.T) {
 	spy := &unsealSettlement{PostBattleSettler: f.cfg.Settler}
 	f.cfg.Settler = spy
 	f.restart(t)
-	book := addTravelTool(t, f, 0, "item-150")
-	orb := addTravelTool(t, f, 0, "item-070")
+	addTravelTool(t, f, 0, "item-150")
 	run := f.enter(t, "normal").Command.RunID
-	if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, book, `{"floor":10}`)); err != nil {
+	if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, `{"floor":10}`)); err != nil {
 		t.Fatal(err)
 	}
 	f.send(t, run, 0, "kill", "")
-	if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, orb, `{}`)); err != nil {
+	addTravelTool(t, f, 0, "item-070")
+	if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, `{}`)); err != nil {
 		t.Fatal(err)
 	}
 	r, err := f.store.FindRun(context.Background(), run)
@@ -63,8 +62,6 @@ func TestCombatTravelUnsealTreasureReceiptSQL(t *testing.T) {
 			spy := &unsealSettlement{PostBattleSettler: f.cfg.Settler}
 			f.cfg.Settler = spy
 			f.restart(t)
-			orb := addTravelTool(t, f, 0, "item-070")
-			key := addTravelTool(t, f, 0, "item-107")
 			run := ""
 			if count == 1 {
 				run = f.enter(t, "normal").Command.RunID
@@ -78,8 +75,9 @@ func TestCombatTravelUnsealTreasureReceiptSQL(t *testing.T) {
 				run = entry.Command.RunID
 				f.send(t, run, 1, "fall", "") // Fallen enrolled players also receive the source event.
 			}
-			for _, instance := range []coreitem.Instance{orb, key} {
-				if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, instance, `{}`)); err != nil {
+			for _, definition := range []string{"item-070", "item-107"} {
+				addTravelTool(t, f, 0, definition)
+				if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, `{}`)); err != nil {
 					t.Fatal(err)
 				}
 				if spy.last.Load() {

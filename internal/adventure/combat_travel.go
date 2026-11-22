@@ -129,7 +129,7 @@ func (s *NormalRunService) ValidateCombatTravel(r *NormalRun, actor, tool string
 			return corebattle.ErrUnsupportedEffect
 		}
 		for _, a := range r.Battle.Actors {
-			// shortcut: detached-member side projection needs an original-side projection (#2551).
+			// shortcut: a member dismissed earlier in the operation stays a gate; upgrade with an original-side projection.
 			if a.RosterDetached {
 				return corebattle.ErrUnsupportedEffect
 			}
@@ -297,15 +297,7 @@ func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *Normal
 // Transaction: enclosing Command; no independent commit.
 func (s *NormalRunService) PrepareStoredToolTravel(ctx context.Context, r *NormalRun, actor string, reset *corebattle.EquipmentResetContext) (*corebattle.StoredToolTravel, *CombatTravelTransition) {
 	transition := &CombatTravelTransition{}
-	input := func(tool, target string) (CombatTravelInput, error) {
-		if !slices.Contains([]string{"item-066", "item-067", "item-068", "item-069", "item-070", "item-071", "item-083", "item-104", "item-107", "item-150", "item-184"}, tool) {
-			return CombatTravelInput{}, corebattle.ErrUnsupportedEffect
-		}
-		if !strings.HasPrefix(target, "{") {
-			return CombatTravelInput{}, nil // Coordinate tools ignore the remaining text.
-		}
-		return ParseCombatTravelInput(target)
-	}
+	input := travelInput
 	return &corebattle.StoredToolTravel{
 		Validate: func(tool, target string) error {
 			value, err := input(tool, target)
@@ -332,4 +324,17 @@ func (s *NormalRunService) PrepareStoredToolTravel(ctx context.Context, r *Norma
 			return frame, nil
 		},
 	}, transition
+}
+
+// travelTools are the finite travel callbacks, held or stored.
+var travelTools = []string{"item-066", "item-067", "item-068", "item-069", "item-070", "item-071", "item-083", "item-104", "item-107", "item-150", "item-184"}
+
+func travelInput(tool, target string) (CombatTravelInput, error) {
+	if !slices.Contains(travelTools, tool) {
+		return CombatTravelInput{}, corebattle.ErrUnsupportedEffect
+	}
+	if !strings.HasPrefix(target, "{") {
+		return CombatTravelInput{}, nil // Coordinate tools ignore the remaining text.
+	}
+	return ParseCombatTravelInput(target)
 }

@@ -149,6 +149,22 @@ func (e *normalCombat) ExecuteRunAction(_ context.Context, r *adventure.NormalRu
 	return fx, nil
 }
 
+// setupActions stay on the scripted fake so tests can stage rooms; every other
+// command reaches the production RunCombat.
+var setupActions = []string{"earn", "kill", "fall", "travel10", "buff", "stage23-helper", "spent", "merchant", "ex11"}
+
+type routedCombat struct {
+	setup *normalCombat
+	adventure.RunCombat
+}
+
+func (c routedCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
+	if slices.Contains(setupActions, cmd.Action) {
+		return c.setup.ExecuteRunAction(ctx, r, cmd)
+	}
+	return c.RunCombat.ExecuteRunAction(ctx, r, cmd)
+}
+
 type normalHistory struct {
 	adventure.Repository
 	fail atomic.Bool
@@ -213,8 +229,11 @@ type normalFixture struct {
 	cfg     adventure.NormalRunConfig
 	svc     *adventure.NormalRunService
 	actors  []corecharacter.Character
-	// explicit serves Command with the production RunCombat across restarts.
-	explicit bool
+	// explicit serves Command with the production RunCombat across restarts;
+	// routed keeps setupActions on the scripted fake.
+	explicit, routed bool
+	// decorate wraps the production RunCombat (counters, injected failures).
+	decorate func(adventure.RunCombat) adventure.RunCombat
 }
 
 func newNormalFixture(t *testing.T, count int) *normalFixture {
@@ -274,9 +293,19 @@ func (f *normalFixture) restart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.explicit {
-		f.svc.SetCombat(adventure.NewRunCombat(f.svc))
+	var combat adventure.RunCombat
+	switch {
+	case f.routed:
+		combat = routedCombat{f.combat, adventure.NewRunCombat(f.svc)}
+	case f.explicit:
+		combat = adventure.NewRunCombat(f.svc)
+	default:
+		return
 	}
+	if f.decorate != nil {
+		combat = f.decorate(combat)
+	}
+	f.svc.SetCombat(combat)
 }
 
 func (f *normalFixture) enter(t *testing.T, mode string) adventure.RunReceipt {
