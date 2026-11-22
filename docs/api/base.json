@@ -13843,6 +13843,19 @@
           },
           "item_name": {
             "type": "string"
+          },
+          "power": {
+            "type": "integer",
+            "description": "Nominal strength for a known weapon or armor."
+          },
+          "weight": {
+            "type": "integer",
+            "description": "Nominal weight for a known weapon or armor."
+          },
+          "price": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Catalog base price in gold for a known weapon, armor or item."
           }
         },
         "required": [
@@ -18070,6 +18083,7 @@
         "properties": {
           "entries": {
             "type": "array",
+            "description": "Discovered entries in ascending catalog-number order. Entries without a catalog number appear last. Entries missing from the catalog omit its fields.",
             "items": {
               "$ref": "#/components/schemas/CollectionItemCollectionEntry"
             }

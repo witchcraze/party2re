@@ -79,7 +79,7 @@ func TestCharacterTrajectory(t *testing.T) {
 		},
 	}
 	h, err := apihttp.NewHandler(&stubPlayerService{}, characters, &stubAdventureService{}, &stubShopService{},
-		apihttp.WithCollection(collections), apihttp.WithAlchemy(trajectoryAlchemy{percent: 120}))
+		apihttp.WithCollection(collections, nil), apihttp.WithAlchemy(trajectoryAlchemy{percent: 120}))
 	if err != nil {
 		t.Fatal(err)
 	}

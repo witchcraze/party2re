@@ -310,7 +310,7 @@ func newHTTPHandler(
 		http.WithRanking(soc.ranking),
 		http.WithJob(misc.job),
 		http.WithChapel(misc.chapel),
-		http.WithCollection(misc.collection),
+		http.WithCollection(misc.collection, core.itemCatalog),
 		http.WithDepot(econ.depot),
 		http.WithBank(econ.bank),
 		http.WithLottery(misc.lottery),
