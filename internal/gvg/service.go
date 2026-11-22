@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -160,40 +159,6 @@ func hashPassword(pw string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func checkNeedJoin(char corecharacter.Character, needJoin string) error {
-	if needJoin == "" {
-		return nil
-	}
-	parts := strings.Split(needJoin, "_")
-	if len(parts) != 3 {
-		return nil
-	}
-	key, valStr, op := parts[0], parts[1], parts[2]
-	val, err := strconv.Atoi(valStr)
-	if err != nil {
-		return nil
-	}
-
-	switch key {
-	case "hp":
-		if op == "o" && char.Stats.MaxHP < val {
-			return ErrNeedJoinNotMet
-		}
-		if op == "u" && char.Stats.MaxHP >= val {
-			return ErrNeedJoinNotMet
-		}
-	case "joblv":
-		jobLv := char.JobLevel
-		if op == "o" && jobLv < val {
-			return ErrNeedJoinNotMet
-		}
-		if op == "u" && jobLv >= val {
-			return ErrNeedJoinNotMet
-		}
-	}
-	return nil
-}
-
 // CreateRoom creates a new live GvG room (quest.cgi:839 girudobatoru).
 func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req CreateRoomRequest) (RoomDetail, error) {
 	creatorCharID = strings.TrimSpace(creatorCharID)
@@ -251,8 +216,8 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 		speed = DefaultSpeed
 	}
 
-	if err := checkNeedJoin(char, req.NeedJoin); err != nil {
-		return RoomDetail{}, err
+	if corecharacter.ValidateNeedJoin(req.NeedJoin, char) != nil {
+		return RoomDetail{}, ErrNeedJoinNotMet
 	}
 
 	roomID := id.New()
@@ -364,8 +329,8 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 		if detail.Room.PasswordHash != "" && detail.Room.PasswordHash != hashPassword(strings.TrimSpace(password)) {
 			return ErrInvalidPassword
 		}
-		if err := checkNeedJoin(char, detail.Room.NeedJoin); err != nil {
-			return err
+		if corecharacter.ValidateNeedJoin(detail.Room.NeedJoin, char) != nil {
+			return ErrNeedJoinNotMet
 		}
 
 		guildMembers := 0

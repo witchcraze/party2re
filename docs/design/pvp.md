@@ -29,14 +29,13 @@ A character can host a Colosseum room with configurable parameters:
 - **Max Participants**: 2 to 8 players.
 - **Target Wins**: 1 to 3 wins required for match victory.
 - **Bet**: Minimum 10 gold. The leader deposits the bet immediately upon creation, seeding the room's `prize_pool`.
-- **Join Requirement (`need_join`)**: Optional level requirement (e.g. `lv_10_o`, `lv_30_u`, `god_1_o`, etc.).
 - **Speed & Stage**: Display and animation configuration (default speed 18).
 
 ### 2. Room Recruitment & Team Color Assignment (`@ぱーてぃー`)
 
 1. **Joining**:
    - Participants pay the room `bet` into the `prize_pool` upon entry.
-   - Characters cannot join if they are already in an active room, do not meet join conditions, or have insufficient funds.
+   - Characters cannot join if they are already in an active room, lack the required funds, or fail the room's [`need_join` condition](party-system.md).
 2. **Team Colors**:
    - Participants choose one of the 9 authentic legacy team colors:
      - `#FF3333` (レッド / Red)

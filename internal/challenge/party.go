@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -125,10 +124,8 @@ func (s *Service) startRoster(
 			}
 		}
 
-		if tier.NeedJoin != "" {
-			if err := validateNeedJoin(tier.NeedJoin, char); err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrNeedJoinNotMet, err)
-			}
+		if err := corecharacter.ValidateNeedJoin(strings.TrimSpace(tier.NeedJoin), char); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrNeedJoinNotMet, err)
 		}
 
 		if tier.NeedOverLv {
@@ -227,39 +224,4 @@ func (s *Service) startRoster(
 		return nil, err
 	}
 	return &session, nil
-}
-
-func validateNeedJoin(needJoin string, char corecharacter.Character) error {
-	needJoin = strings.TrimSpace(needJoin)
-	if needJoin == "" || needJoin == "0" {
-		return nil
-	}
-	parts := strings.Split(needJoin, "_")
-	if len(parts) != 3 {
-		return nil
-	}
-	key := parts[0]
-	val, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return nil
-	}
-	uo := parts[2] // "u" (< val) or "o" (>= val)
-
-	switch key {
-	case "hp":
-		if uo == "u" && char.Stats.MaxHP >= val {
-			return fmt.Errorf("HP must be under %d", val)
-		}
-		if uo == "o" && char.Stats.MaxHP < val {
-			return fmt.Errorf("HP must be at least %d", val)
-		}
-	case "joblv":
-		if uo == "u" && char.JobLevel >= val {
-			return fmt.Errorf("Job level must be under %d", val)
-		}
-		if uo == "o" && char.JobLevel < val {
-			return fmt.Errorf("Job level must be at least %d", val)
-		}
-	}
-	return nil
 }
