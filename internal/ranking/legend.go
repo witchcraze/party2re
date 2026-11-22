@@ -38,7 +38,7 @@ type LegendEntry struct {
 	GuildName     string         `json:"guild_name,omitempty"`
 	Color         string         `json:"color,omitempty"`
 	Icon          string         `json:"icon,omitempty"`
-	//lint:ignore presentation persisted player-authored profile comment captured at induction
+	//lint:ignore presentation persisted player-authored login message captured at induction
 	Message    string    `json:"message,omitempty"`
 	InductedAt time.Time `json:"inducted_at"`
 }

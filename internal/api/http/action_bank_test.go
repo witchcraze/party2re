@@ -519,7 +519,6 @@ func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
 				CharacterID: "hero",
 				AvatarURL:   "https://i.imgur.com/AvBTest.gif",
 				BioData:     map[string]string{"key": "saved bio"},
-				Comment:     "initial comment",
 				UpdatedAt:   time.Now().UTC(),
 			},
 		},

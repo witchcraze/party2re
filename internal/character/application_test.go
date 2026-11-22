@@ -561,13 +561,13 @@ func TestService_ChangeGender(t *testing.T) {
 }
 
 // UpdateProfile replaces the legacy profile fields as the legacy form does,
-// keeping avatar, aura and comment written elsewhere.
+// keeping avatar and aura written elsewhere.
 func TestService_ProfileOperations(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockRepository()
 	service, _ := NewService(repo)
 	char, _ := service.CreateWithOptions(ctx, "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
-	repo.profiles[char.ID] = Profile{CharacterID: char.ID, Comment: "c", AvatarURL: "https://i.imgur.com/abc12.gif", AuraEffect: 3, BioData: map[string]string{"hobby": "Fishing", "goal": "old"}}
+	repo.profiles[char.ID] = Profile{CharacterID: char.ID, AvatarURL: "https://i.imgur.com/abc12.gif", AuraEffect: 3, BioData: map[string]string{"hobby": "Fishing", "goal": "old"}}
 
 	updated, err := service.UpdateProfile(ctx, char.ID, map[string]string{"hobby": "Reading", "like_food": "Apple"})
 	if err != nil {
@@ -575,7 +575,7 @@ func TestService_ProfileOperations(t *testing.T) {
 	}
 	want := map[string]string{"hobby": "Reading", "like_food": "Apple"}
 	stored := repo.profiles[char.ID]
-	if !maps.Equal(updated.BioData, want) || !maps.Equal(stored.BioData, want) || stored.Comment != "c" || stored.AvatarURL != "https://i.imgur.com/abc12.gif" || stored.AuraEffect != 3 {
+	if !maps.Equal(updated.BioData, want) || !maps.Equal(stored.BioData, want) || stored.AvatarURL != "https://i.imgur.com/abc12.gif" || stored.AuraEffect != 3 {
 		t.Fatalf("returned %+v stored %+v", updated, stored)
 	}
 	view, err := service.GetProfile(ctx, char.ID)

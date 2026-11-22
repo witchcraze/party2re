@@ -355,7 +355,7 @@ func TestPersonalityBook_BothSourcesAndProfiles(t *testing.T) {
 	}{{"inventory", "m", true}, {"depot", "f", false}} {
 		c := f.character(t, tc.gender)
 		if tc.profile {
-			if err := f.charRepo.SaveProfile(ctx, character.Profile{CharacterID: c.ID, Comment: "hi", AvatarURL: "https://i.imgur.com/abc12.gif", AuraEffect: 2, BioData: map[string]string{"hobby": "fishing", "character": "calm"}}); err != nil {
+			if err := f.charRepo.SaveProfile(ctx, character.Profile{CharacterID: c.ID, AvatarURL: "https://i.imgur.com/abc12.gif", AuraEffect: 2, BioData: map[string]string{"hobby": "fishing", "character": "calm"}}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -371,7 +371,7 @@ func TestPersonalityBook_BothSourcesAndProfiles(t *testing.T) {
 		if err != nil || p.BioData["character"] != "ムッツリスケベ" {
 			t.Fatalf("%s: personality not saved: %+v %v", tc.source, p, err)
 		}
-		if tc.profile && (p.Comment != "hi" || p.AvatarURL != "https://i.imgur.com/abc12.gif" || p.AuraEffect != 2 || p.BioData["hobby"] != "fishing") {
+		if tc.profile && (p.AvatarURL != "https://i.imgur.com/abc12.gif" || p.AuraEffect != 2 || p.BioData["hobby"] != "fishing") {
 			t.Fatalf("other profile fields changed: %+v", p)
 		}
 		st, err := f.presence.State(ctx, c.ID)

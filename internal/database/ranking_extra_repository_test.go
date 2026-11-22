@@ -320,6 +320,16 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	}
 
 	// 5. Test auto-enrichment when profile fields are omitted in LegendEntry
+	if _, err := db.ExecContext(ctx, `UPDATE characters SET job_id = 'job-12', gender = 'f', login_message = 'Hello Hall!' WHERE id = ?`, charID); err != nil {
+		t.Fatalf("update character login_message failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO character_profiles (character_id, avatar_url, aura_effect)
+		VALUES (?, 'https://i.imgur.com/abc12.gif', 2)
+		ON DUPLICATE KEY UPDATE avatar_url = VALUES(avatar_url)
+	`, charID); err != nil {
+		t.Fatalf("insert character_profiles failed: %v", err)
+	}
 	minimalEntry := ranking.LegendEntry{
 		Category:    ranking.LegendCategoryMonsterMastery,
 		CharacterID: charID,
@@ -339,8 +349,9 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	for _, ind := range monInductees {
 		if ind.CharacterID == charID {
 			foundMon = true
-			if ind.CharacterName != c.Name || ind.Color != c.Color {
-				t.Fatalf("expected auto-enriched name/color %s/%s, got %s/%s", c.Name, c.Color, ind.CharacterName, ind.Color)
+			if ind.CharacterName != c.Name || ind.Color != c.Color || ind.Icon != "job/12_f.gif" || ind.Message != "Hello Hall!" {
+				t.Fatalf("expected auto-enriched name/color/icon/message %s/%s/job/12_f.gif/Hello Hall!, got %s/%s/%s/%s",
+					c.Name, c.Color, ind.CharacterName, ind.Color, ind.Icon, ind.Message)
 			}
 			break
 		}

@@ -36,7 +36,7 @@ func TestCharacterProfilePublicProjection(t *testing.T) {
 				},
 				Profile: character.Profile{
 					CharacterID: "private-character-id", UpdatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
-					Comment: "Mighty adventurer", AvatarURL: "https://i.imgur.com/AvATest.gif", AuraEffect: 3, BioData: tc.bio,
+					AvatarURL: "https://i.imgur.com/AvATest.gif", AuraEffect: 3, BioData: tc.bio,
 				},
 			}
 			service := &stubCharacterServiceExtended{getProfileFn: func(ctx context.Context, id string) (character.ProfileView, error) {
@@ -60,7 +60,7 @@ func TestCharacterProfilePublicProjection(t *testing.T) {
 			if err := decoder.Decode(&got); err != nil {
 				t.Fatal(err)
 			}
-			profile := map[string]any{"comment": "Mighty adventurer", "avatar_url": "https://i.imgur.com/AvATest.gif", "aura_effect": json.Number("3")}
+			profile := map[string]any{"avatar_url": "https://i.imgur.com/AvATest.gif", "aura_effect": json.Number("3")}
 			if len(tc.bio) != 0 {
 				profile["bio_data"] = map[string]any{"job": "Writer", "sex": "Self-described", "hobby": "Fishing"}
 			}
@@ -93,6 +93,11 @@ func TestCharacterProfilePublicProjection(t *testing.T) {
 				}
 				delete(want[object].(map[string]any), "Money")
 			}
+			want["profile"].(map[string]any)["comment"] = "unexpected"
+			if checkOpenAPIPayload(schemas, schema, want) == nil {
+				t.Errorf("OpenAPI accepted removed profile.comment field")
+			}
+			delete(want["profile"].(map[string]any), "comment")
 		})
 	}
 }

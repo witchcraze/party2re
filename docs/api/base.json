@@ -13595,9 +13595,6 @@
           "profile": {
             "type": "object",
             "properties": {
-              "comment": {
-                "type": "string"
-              },
               "avatar_url": {
                 "type": "string"
               },
@@ -13613,7 +13610,6 @@
               }
             },
             "required": [
-              "comment",
               "avatar_url",
               "aura_effect"
             ],
@@ -13648,9 +13644,6 @@
           "character_id": {
             "type": "string"
           },
-          "comment": {
-            "type": "string"
-          },
           "updated_at": {
             "format": "date-time",
             "type": "string"
@@ -13658,7 +13651,6 @@
         },
         "required": [
           "character_id",
-          "comment",
           "avatar_url",
           "aura_effect",
           "updated_at"
