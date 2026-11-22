@@ -122,23 +122,24 @@ func TestFaithGatewayForwardsExplicitInputs(t *testing.T) {
 
 func TestFaithGatewayErrors(t *testing.T) {
 	for _, tc := range []struct {
-		action string
-		err    error
-		code   string
-		status int
+		action  string
+		err     error
+		code    string
+		status  int
+		message string
 	}{
-		{"altar_pray", altar.ErrInsufficientOrbs, "ALTAR_INSUFFICIENT_ORBS", 400},
-		{"altar_pray", altar.ErrRamiaAwakened, "ALTAR_RAMIA_AWAKENED", 409},
-		{"altar_wish", altar.ErrRamiaNotAwakened, "ALTAR_RAMIA_NOT_AWAKENED", 409},
-		{"altar_wish", altar.ErrInvalidWishItem, "ALTAR_INVALID_WISH_ITEM", 400},
-		{"altar_wish", corecharacter.ErrNotFound, "CHARACTER_NOT_FOUND", 404},
-		{"altar_pray", errors.New("private storage failure"), "EXECUTION_FAILED", 500},
-		{"wishingwell_exchange", wishingwell.ErrInvalidTargetStat, "WISHINGWELL_INVALID_STAT", 400},
-		{"wishingwell_exchange", wishingwell.ErrInvalidSPAmount, "WISHINGWELL_INVALID_SP", 400},
-		{"wishingwell_exchange", wishingwell.ErrInsufficientSP, "WISHINGWELL_INSUFFICIENT_SP", 400},
-		{"wishingwell_exchange", wishingwell.ErrJobMemoryActive, "WISHINGWELL_JOB_MEMORY", 409},
-		{"wishingwell_exchange", wishingwell.ErrOverLevelRestricted, "WISHINGWELL_OVER_LEVEL", 409},
-		{"wishingwell_exchange", corecharacter.ErrNotFound, "CHARACTER_NOT_FOUND", 404},
+		{"altar_pray", altar.ErrInsufficientOrbs, "ALTAR_INSUFFICIENT_ORBS", 400, ""},
+		{"altar_pray", altar.ErrRamiaAwakened, "ALTAR_RAMIA_AWAKENED", 409, "The phoenix is already awakened."},
+		{"altar_wish", altar.ErrRamiaNotAwakened, "ALTAR_RAMIA_NOT_AWAKENED", 409, "The phoenix is not awakened."},
+		{"altar_wish", altar.ErrInvalidWishItem, "ALTAR_INVALID_WISH_ITEM", 400, ""},
+		{"altar_wish", corecharacter.ErrNotFound, "CHARACTER_NOT_FOUND", 404, ""},
+		{"altar_pray", errors.New("private storage failure"), "EXECUTION_FAILED", 500, ""},
+		{"wishingwell_exchange", wishingwell.ErrInvalidTargetStat, "WISHINGWELL_INVALID_STAT", 400, ""},
+		{"wishingwell_exchange", wishingwell.ErrInvalidSPAmount, "WISHINGWELL_INVALID_SP", 400, ""},
+		{"wishingwell_exchange", wishingwell.ErrInsufficientSP, "WISHINGWELL_INSUFFICIENT_SP", 400, ""},
+		{"wishingwell_exchange", wishingwell.ErrJobMemoryActive, "WISHINGWELL_JOB_MEMORY", 409, ""},
+		{"wishingwell_exchange", wishingwell.ErrOverLevelRestricted, "WISHINGWELL_OVER_LEVEL", 409, ""},
+		{"wishingwell_exchange", corecharacter.ErrNotFound, "CHARACTER_NOT_FOUND", 404, ""},
 	} {
 		t.Run(tc.action+tc.code, func(t *testing.T) {
 			input := faithInputs[slices.IndexFunc(faithInputs, func(i struct{ scene, action, params string }) bool { return i.action == tc.action })]
@@ -147,6 +148,16 @@ func TestFaithGatewayErrors(t *testing.T) {
 			_, router := f.router(t, input.scene)
 			status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody(tc.action, input.params), nil)
 			assertGatewayError(t, got, tc.code)
+			var detail ErrorDetail
+			if err := json.Unmarshal(got["error"], &detail); err != nil {
+				t.Fatal(err)
+			}
+			if tc.message != "" && detail.Message != tc.message {
+				t.Fatalf("error message %q, want %q", detail.Message, tc.message)
+			}
+			if strings.Contains(detail.Message, "Ramia") {
+				t.Fatalf("legacy phoenix name remained in error message: %q", detail.Message)
+			}
 			if status != tc.status || f.executions != 1 || strings.Contains(fmt.Sprint(got), "private") {
 				t.Fatalf("error mapping: %d %s", status, got)
 			}
@@ -192,8 +203,8 @@ func TestFaithScenesObserveWithoutWrites(t *testing.T) {
 		data.Parent != "town" || !data.RamiaAwakened || data.AwakenedBy != "Friend" || len(data.AvailableItems) != 1 {
 		t.Fatalf("altar projection: %d %+v", status, observation)
 	}
-	if want := []PlaceMember{{Kind: "npc", Name: altar.NPCName, Color: npcColor}, {Kind: "npc", Name: altar.RamiaMemberName, Color: npcColor}}; !slices.Equal(observation.Scene.Members, want) {
-		t.Fatalf("members %+v, want the shrine maiden and Ramia", observation.Scene.Members)
+	if want := []PlaceMember{{Kind: "npc", Name: altar.NPCName, Color: npcColor}, {Kind: "npc", Name: "不死鳥@", Color: npcColor}}; !slices.Equal(observation.Scene.Members, want) {
+		t.Fatalf("members %+v, want %+v", observation.Scene.Members, want)
 	}
 	for _, action := range []string{"altar_pray", "altar_wish", "npc_talk", "npc_inspect", "place_say", "scene_back"} {
 		if !slices.ContainsFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == action }) {
@@ -272,6 +283,14 @@ func TestMikoWordsFollowOrbState(t *testing.T) {
 	}{{"", mikoGuardingWords}, {"srbgyp", mikoReadyWords}, {"G", mikoAwakenedWords}} {
 		if got := mikoWords(corecharacter.Character{Orb: tc.orb}); !slices.Equal(got, tc.want) {
 			t.Errorf("orb %q: got %q", tc.orb, got)
+		}
+	}
+	if !slices.Contains(mikoGuardingWords, "伝説の不死鳥はよみがえりましょう") {
+		t.Fatalf("expected clean-room phoenix line in %v", mikoGuardingWords)
+	}
+	for _, line := range slices.Concat([]string{altar.RamiaMemberName, altar.MsgRamiaAwakening}, mikoGuardingWords, mikoReadyWords, mikoAwakenedWords) {
+		if strings.Contains(line, "ラーミァ") || strings.Contains(line, "ラーミア") {
+			t.Fatalf("legacy phoenix name remained in altar text: %q", line)
 		}
 	}
 }

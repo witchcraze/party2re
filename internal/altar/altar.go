@@ -58,8 +58,8 @@ func IsValidWishItem(itemID string) bool {
 // NPCName is the altar's shrine maiden (reborn.cgi $npc_name).
 const NPCName = "@巫女"
 
-// RamiaMemberName is Ramia's place-member name while she is present.
-const RamiaMemberName = "ラーミァ@"
+// RamiaMemberName is the phoenix's place-member name while present.
+const RamiaMemberName = "不死鳥@"
 
 // RamiaAwakening represents a persistent record of Ramia being awakened at the altar.
 type RamiaAwakening struct {

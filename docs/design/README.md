@@ -110,7 +110,7 @@ graph TD
 - [`plantation.md`](plantation.md) — Seed garden plot, fertilizer and harvest rules.
 - [`oracle-shop.md`](oracle-shop.md) — Oracle shop costume and wallpaper rules and the hidden way into the black market.
 - [`chapel.md`](chapel.md) — 5 town church blessings with single-active prayer constraint and daily reset.
-- [`altar-of-rebirth.md`](altar-of-rebirth.md) — Orb offering source, Ramia awakening and otherworld travel item wishes.
+- [`altar-of-rebirth.md`](altar-of-rebirth.md) — Orb offering source, phoenix awakening and otherworld travel item wishes.
 
 ### 6. Social, Community & Gambling
 - [`guild.md`](guild.md) — Guild founding, dynamic GP, custom roles, hex colors, broadcast callouts, and 20-day inactivity auto-disbandment.

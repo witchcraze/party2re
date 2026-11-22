@@ -98,9 +98,9 @@ func altarActionRejection(err error) (int, ErrorDetail) {
 	case errors.Is(err, altar.ErrInsufficientOrbs):
 		return http.StatusBadRequest, ErrorDetail{Code: "ALTAR_INSUFFICIENT_ORBS", Message: altar.MsgOrbsInsufficient}
 	case errors.Is(err, altar.ErrRamiaAwakened):
-		return http.StatusConflict, ErrorDetail{Code: "ALTAR_RAMIA_AWAKENED", Message: "Ramia is already awakened."}
+		return http.StatusConflict, ErrorDetail{Code: "ALTAR_RAMIA_AWAKENED", Message: "The phoenix is already awakened."}
 	case errors.Is(err, altar.ErrRamiaNotAwakened):
-		return http.StatusConflict, ErrorDetail{Code: "ALTAR_RAMIA_NOT_AWAKENED", Message: "Ramia is not awakened."}
+		return http.StatusConflict, ErrorDetail{Code: "ALTAR_RAMIA_NOT_AWAKENED", Message: "The phoenix is not awakened."}
 	case errors.Is(err, altar.ErrInvalidWishItem):
 		return http.StatusBadRequest, ErrorDetail{Code: "ALTAR_INVALID_WISH_ITEM", Message: "Choose one of the observed wish items."}
 	default:
@@ -148,7 +148,7 @@ var wishingWellFacility = facility{
 var (
 	mikoGuardingWords = []string{
 		"私達は。私達は。卵を守っています。卵を守っています", "世界中にちらばる６つのオーブをささげたとき....",
-		"伝説の不死鳥ラーミァはよみがえりましょう", "手に入れられるオーブは曜日によって変わるようです",
+		"伝説の不死鳥はよみがえりましょう", "手に入れられるオーブは曜日によって変わるようです",
 	}
 	mikoReadyWords    = []string{"私達。私達。この日をどんなに。この日をどんなに。待ちわびたことでしょう", "さぁ、祈りましょう。さぁ、祈りましょう"}
 	mikoAwakenedWords = []string{
