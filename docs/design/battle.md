@@ -124,11 +124,11 @@ Active weapon seals are player-only: discovery and submission require an equippe
 
 #### Combat books, stored tools and purchases
 
-The requesting player, temporary combat actor, durable held-tool projection and combat held tool are separate identities/state. NPC dispatch changes the actor and sides but does not replace the requesting player's wallet or user ID (`party.cgi:8–31`; `_npc_action.cgi:89–145`). Jobs7/8 read that wallet, job7/81 credit it, job28 debits it and job78 purchases debit it even when the actor is an NPC. A commanded or random child does not acquire its actor's own wallet. Reject the whole invoking entry before mutation when the native context cannot express this ownership; never infer the payer from an actor's name.
+NPC dispatch switches the combat actor and sides while retaining the requesting player's wallet and user ID (`party.cgi:8–31`; `_npc_action.cgi:89–145`). Job78 can buy a tool for the NPC's combat hand using that wallet (`_skill.cgi:10284–10305`).
 
 `send_item` silently skips delivery if the actor-named depot file is absent, even when the caller clears the hand (`system.cgi:818–837`). Native return and exchange follow the [delivery capacity contract](depot.md#delivery-capacity-by-caller). Double use requires two scoped participant IDs in place of the source's member scan (`_skill.cgi:10538–10557`).
 
-Intermediate wallet credits are uncapped until the final durable balance is written (`system.cgi:71`). NPC actors have no access to the durable hand. The [Adventure command boundary](../architecture/transient-run-state.md#one-command-one-bounded-sql-transaction) owns asset and receipt atomicity.
+Intermediate wallet credits are uncapped until the final durable balance is written (`system.cgi:71`). See the [Adventure command boundary](../architecture/transient-run-state.md#one-command-one-bounded-sql-transaction).
 
 #### Random and delegated job closure
 
@@ -348,7 +348,7 @@ Order and lifetime traps:
 
 ## Open gaps
 
-- NPC responses that draw an asset entry reject the player's whole command: #2557. Multi-row inventories leave the durable hand unknown, so held tools and job50/78/86 stay gated: #2558.
+- Multi-row inventories leave the durable hand unknown, so player held-tool use and job50/78/86 stay gated: #2558.
 - Job-table variants, custom gems, admission corrections and the still-unbound arithmetic, control MP-drain and transformation area-damage ports: #2552.
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
 - NPC-only jobs 405, 406 and 407 tables: #1914, #1915, #1916.

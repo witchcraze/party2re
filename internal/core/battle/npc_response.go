@@ -8,11 +8,12 @@ import (
 
 // NPCOperation receives the selected actor and ordered sides from the consumer.
 // Damage.ActorID is the NPC. EnemyIDs contains the living opponents at entry;
-// fallen opponents are in MemberOnlyIDs. Ports are local to this response.
+// fallen opponents are in MemberOnlyIDs. Assets belong to the requester.
 type NPCOperation struct {
 	Damage DamageContext
 	Defeat *DefeatContext
 	Field  NamedFieldContext
+	Assets *JobAssets
 }
 
 // NPCActionPlan freezes the weighted pool and its definitions before cures.
@@ -83,7 +84,7 @@ func (s *LifetimeState) ApplyNPCOperation(op NPCOperation, seed []CallbackBindin
 	op.Damage.HealCalls, op.Damage.PartyHealCalls, op.Damage.TensionCalls = 0, 0, 0
 	op.Damage.End = EndProcessing{}
 	op.Damage.Reset, op.Damage.Defeat = nil, nil
-	frame := cloneCallbackContext(CallbackContext{TargetContext: op.Damage.TargetContext, Damage: &op.Damage, Defeat: op.Defeat})
+	frame := cloneCallbackContext(CallbackContext{TargetContext: op.Damage.TargetContext, Damage: &op.Damage, Defeat: op.Defeat, Assets: op.Assets})
 	if len(frame.EnemyIDs) == 0 {
 		return NPCOperationResult{Target: frame.TargetContext, NextSeed: slices.Clone(seed)}, nil
 	}
@@ -110,6 +111,9 @@ func (s *LifetimeState) ApplyNPCOperation(op NPCOperation, seed []CallbackBindin
 	}
 	work.npcResponse = nil
 	*s = work
+	if op.Assets != nil {
+		*op.Assets = *frame.Assets
+	}
 	return result, nil
 }
 
