@@ -2,6 +2,7 @@ package progression
 
 import (
 	"errors"
+	"math"
 
 	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/job"
@@ -171,6 +172,40 @@ func ApplyStockLevels(value *character.Character, definition job.Definition, rng
 		*value = next
 	}
 	return stock.growth, nil
+}
+
+// ApplyTailLevel is the explicit player tail's single level-up
+// (_battle.cgi:935–937). pending is EXP earned or released in the operation
+// but credited separately; it counts toward the threshold only.
+func ApplyTailLevel(value *character.Character, definition job.Definition, rng random.Generator, held string, pending int) ([]character.Stats, error) {
+	if value == nil {
+		return nil, ErrNilCharacter
+	}
+	if pending < 0 || pending > math.MaxInt-value.Experience {
+		return nil, ErrInvalidExperience
+	}
+	next := *value
+	next.Experience += pending
+	growth, err := ApplyStockLevels(&next, definition, rng, held, true)
+	if err != nil || len(growth) == 0 {
+		return growth, err
+	}
+	next.Experience = value.Experience
+	*value = next
+	return growth, nil
+}
+
+// AccrueExperience credits EXP without levelling, as get_stock does
+// (_battle.cgi:1459–1473); the explicit tail owns any level-up.
+func AccrueExperience(value *character.Character, amount int) error {
+	if value == nil {
+		return ErrNilCharacter
+	}
+	if amount < 0 || amount > math.MaxInt-value.Experience {
+		return ErrInvalidExperience
+	}
+	value.Experience += amount
+	return nil
 }
 
 type growthRoll func(bound float64) (int, error)

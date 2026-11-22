@@ -130,6 +130,8 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			request.UnsealDemonKing = effects.UnsealDemonKing
 			r.EXUnlocked = r.EXUnlocked || effects.EXUnlocked
 			request.RecipientCharacterID, request.ExplicitDefeats = cmd.ActorID, effects.Defeats
+			// The player step owns this operation's single level-up.
+			request.DeferGrowth = true
 			for _, id := range effects.MemberOnlyIDs {
 				if r.hasBox(id) {
 					continue

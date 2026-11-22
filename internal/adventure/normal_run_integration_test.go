@@ -48,8 +48,8 @@ func (p *normalPenalty) ProjectRunPenalty(_ context.Context, _ string, until tim
 	return nil
 }
 
-// The explicit combat consumer remains #1329. This test port supplies bounded
-// effects, so these tests verify lifecycle persistence rather than skill parity.
+// This test port supplies bounded effects, so these tests verify lifecycle
+// persistence rather than skill parity (NewRunCombat has its own tests).
 type normalCombat struct{ calls atomic.Int64 }
 
 func (*normalCombat) PrepareAdvance(context.Context, *adventure.NormalRun, string) error { return nil }
@@ -212,6 +212,8 @@ type normalFixture struct {
 	cfg     adventure.NormalRunConfig
 	svc     *adventure.NormalRunService
 	actors  []corecharacter.Character
+	// explicit serves Command with the production RunCombat across restarts.
+	explicit bool
 }
 
 func newNormalFixture(t *testing.T, count int) *normalFixture {
@@ -266,6 +268,9 @@ func (f *normalFixture) restart(t *testing.T) {
 	f.svc, err = adventure.NewNormalRunService(f.cfg)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if f.explicit {
+		f.svc.SetCombat(adventure.NewRunCombat(f.svc))
 	}
 }
 

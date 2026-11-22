@@ -90,6 +90,7 @@ func (s *Service) applyRewardsForCharacter(
 	reward corebattle.Reward,
 	drops []dropItem,
 	finalized bool,
+	deferGrowth bool,
 ) (int, int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
 	blessing := ""
 	if !finalized {
@@ -113,7 +114,11 @@ func (s *Service) applyRewardsForCharacter(
 
 	gainedEXP := reward.Experience
 	var lvlRes progression.LevelUpResult
-	if gainedEXP > 0 {
+	if gainedEXP > 0 && deferGrowth {
+		if err := progression.AccrueExperience(char, gainedEXP); err != nil {
+			return 0, 0, 0, progression.LevelUpResult{}, nil, nil, err
+		}
+	} else if gainedEXP > 0 {
 		// Chapel Blessing 2 ("強くなりたい"): 25% chance of 1.5x EXP (party2/lib/_battle.cgi:190-193, rand(4) < 1)
 		if IsExpBlessing(blessing) && s.rollIntn(4) == 0 {
 			gainedEXP = int(float64(gainedEXP) * 1.5)

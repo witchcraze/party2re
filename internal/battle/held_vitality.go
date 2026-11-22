@@ -30,7 +30,7 @@ func HeldVitalityMaxima(inv coreinventory.Inventory, hp, mp int) (int, int) {
 		if inst.Quantity <= 0 || item.LegacyHandKindByID(inst.DefinitionID) != 3 {
 			continue
 		}
-		// shortcut: multiple tool rows leave the held item unknown, until #1329 binds the instance.
+		// shortcut: multiple tool rows leave the held item unknown, until the run binds the instance (#2551).
 		if held != "" {
 			return hp, mp
 		}

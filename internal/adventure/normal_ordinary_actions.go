@@ -16,21 +16,9 @@ func bindOrdinaryPlayerAction(action *ParsedRunAction, frame corebattle.Callback
 		return state.ValidateInvocations(&frame, catalog, invocations, random.Default())
 	}
 	action.Execute = func(state *corebattle.LifetimeState, rng random.Generator) (corebattle.PlayerActionFacts, error) {
-		work := frame
-		var damage corebattle.DamageContext
-		if frame.Damage != nil {
-			damage = *frame.Damage
-		}
-		healsBefore := damage.HealCalls
-		work.Damage = &damage
-		if err := state.ApplyInvocations(&work, catalog, invocations, rng); err != nil {
-			return corebattle.PlayerActionFacts{}, err
-		}
-		facts := corebattle.PlayerActionFacts{HealCalls: work.Damage.HealCalls - healsBefore}
-		if invocations[0].EntryID == "front" || invocations[0].EntryID == "back" {
-			facts.Target = work.TargetContext
-		}
-		return facts, nil
+		return runFacts(frame, func(work *corebattle.CallbackContext) error {
+			return state.ApplyInvocations(work, catalog, invocations, rng)
+		})
 	}
 }
 
@@ -41,12 +29,18 @@ func (r *NormalRun) applyPlayerOperation(op *corebattle.PlayerOperation, rng ran
 	if err != nil || !result.NormalAction || op.First.EntryID != "front" && op.First.EntryID != "back" {
 		return result, err
 	}
+	r.Enemies = slices.Clone(result.Target.EnemyIDs)
+	r.syncFormation()
+	return result, nil
+}
+
+// syncFormation reorders the roster from the member order a formation wrote.
+func (r *NormalRun) syncFormation() {
 	roster := make([]string, 0, len(r.Roster))
 	for _, a := range r.Battle.Actors {
 		if slices.Contains(r.Roster, a.ID) {
 			roster = append(roster, a.ID)
 		}
 	}
-	r.Roster, r.Enemies = roster, slices.Clone(result.Target.EnemyIDs)
-	return result, nil
+	r.Roster = roster
 }

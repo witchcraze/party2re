@@ -169,7 +169,7 @@ type RunAdmission interface {
 	CheckSoloAdmission(context.Context, string) error
 }
 
-// RunCombat is the explicit command seam owned by #1329. It must admit the
+// RunCombat is the explicit command seam (NewRunCombat). It must admit the
 // action before effects, use the ambient transaction, and return only new
 // earnings/consumption. It must return an execution-time rejection or failure
 // rather than absorb it: core restores only the battle state, so Command then
