@@ -306,6 +306,7 @@ func TestNPCOperationLateRejectionRestoresStateAndPorts(t *testing.T) {
 	s.Actors[0].Status = battle.StatusConfusion
 	level := 20
 	op.Damage.RequesterLevel, op.Defeat.RequesterLevel = &level, &level
+	op.Assets = &battle.JobAssets{RequesterID: "enemy", Wallet: 100}
 	before, err := json.Marshal(s)
 	if err != nil {
 		t.Fatal(err)
@@ -316,6 +317,13 @@ func TestNPCOperationLateRejectionRestoresStateAndPorts(t *testing.T) {
 		registerNPCFixture(d, f)
 		d.Invocations.Entries["first"] = responseCallback(func(s *battle.LifetimeState, c *battle.CallbackContext, _ random.Generator) error {
 			executed = true
+			if c.Assets == nil || c.Assets.Wallet != 100 {
+				t.Fatalf("missing requester assets: %+v", c.Assets)
+			}
+			c.Assets.Wallet -= 25
+			if op.Assets.Wallet != 100 {
+				t.Fatal("in-flight NPC callback mutated requester assets")
+			}
 			s.Actors[0].Gear.AccessoryID = "changed"
 			s.Actors[0].NPCLoadout.CustomCost = 30
 			*c.Damage.RequesterLevel = 99
@@ -326,6 +334,9 @@ func TestNPCOperationLateRejectionRestoresStateAndPorts(t *testing.T) {
 		d.Invocations.Entries["later"] = battle.CallbackDefinition{
 			Validate: func(s *battle.LifetimeState, c *battle.CallbackContext) error {
 				if s.Actors[0].Gear.AccessoryID != "" {
+					if c.Assets.Wallet != 75 {
+						t.Fatalf("later callback did not see the wallet debit: %+v", c.Assets)
+					}
 					return battle.ErrUnsupportedEffect
 				}
 				return nil
@@ -339,8 +350,8 @@ func TestNPCOperationLateRejectionRestoresStateAndPorts(t *testing.T) {
 	after, marshalErr := json.Marshal(s)
 	if !errors.Is(err, battle.ErrUnsupportedEffect) || !executed || marshalErr != nil || string(before) != string(after) ||
 		level != 20 || loadout.CustomCost != 5 || op.Damage.PartyIDs[0] != "self" || len(rng.draws) != 0 ||
-		!reflect.DeepEqual(res, battle.NPCOperationResult{}) {
-		t.Fatalf("result %+v executed %t level %d state changed %t error %v", res, executed, level, string(before) != string(after), err)
+		op.Assets.Wallet != 100 || !reflect.DeepEqual(res, battle.NPCOperationResult{}) {
+		t.Fatalf("result %+v executed %t level %d wallet %d state changed %t error %v", res, executed, level, op.Assets.Wallet, string(before) != string(after), err)
 	}
 }
 

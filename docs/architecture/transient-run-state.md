@@ -637,9 +637,9 @@ receipt before requiring current membership/version. Under the run lock (Rank 0)
 recheck the receipt, then lock the complete affected character set in ascending
 ID order (Rank 2). Inventory/equipment, jobs, depots and secondary records follow
 ranks 3/4/5/8; adapters must not settle A through Rank 8 before acquiring B.
-Player combat runs in the requester's economy transaction inside that boundary,
-sharing one character update for wallet changes and action-tail growth. In a
-party, acquire all inventory locks in character ID order before the requester
+Player actions and NPC responses share the requester's economy transaction
+and one character update for wallet changes and action-tail growth. In a party,
+acquire all inventory locks in character ID order before the requester
 depot. The ambient transaction commits run state, assets, finalized recipient
 earnings, chest delivery, history and the receipt together. Rejected commands
 change none of them or their clocks. A stored-tool selection message can still

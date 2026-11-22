@@ -241,7 +241,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 	if result.ResponseReached && !result.Suppressed {
 		// A replaced encounter answers with its old responders, never new members.
 		if npc := travel.BeginNPCResponse(r, now); npc != "" {
-			if err := c.respond(r, npc, &level, &seals, rewards, &fx); err != nil {
+			if err := c.respond(r, npc, &level, &seals, rewards, assets, &fx); err != nil {
 				return fx, err
 			}
 			if err := r.RecordNPCResponse(npc, now); err != nil {
@@ -256,7 +256,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 
 // respond runs the selected NPC's response on the saved state. Its opponents
 // are the living members of other teams in member order.
-func (c runCombat) respond(r *NormalRun, npc string, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, fx *RunActionEffects) error {
+func (c runCombat) respond(r *NormalRun, npc string, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, fx *RunActionEffects) error {
 	team := r.actor(npc).TeamID
 	frame := corebattle.TargetContext{ActorID: npc}
 	before := make(map[string]bool, len(r.Battle.Actors))
@@ -272,16 +272,26 @@ func (c runCombat) respond(r *NormalRun, npc string, level *int, seals *corebatt
 		}
 	}
 	ports := newRunPorts(frame, level, seals, r.Battle.Fields.Current(), rewards, true)
-	op := corebattle.NPCOperation{Damage: ports.damage, Defeat: ports.defeat, Field: corebattle.NamedFieldContext{DamageContext: ports.damage, Death: ports.defeat}}
+	op := corebattle.NPCOperation{Damage: ports.damage, Defeat: ports.defeat, Field: corebattle.NamedFieldContext{DamageContext: ports.damage, Death: ports.defeat}, Assets: assets}
 	saved := cloneLifetimeState(r.Battle)
+	actor := findActor(saved.Actors, npc)
+	if assets != nil && actor.HeldToolID == nil && actor.Gear != nil {
+		// Encounter payloads store the NPC's hand as its accessory, including an empty slot.
+		actor.HeldToolID = new(actor.Gear.AccessoryID)
+	}
 	register := func(d *skill.BattleDefinitions, f *corebattle.CallbackContext) {
 		p := runPorts{damage: *f.Damage, defeat: f.Defeat, status: &corebattle.StatusContext{EffectContext: f.Damage.EffectContext, Defeat: f.Defeat}}
-		d.RegisterNPCCallbacks(p.callbacks(r, &saved, nil, nil), f)
+		callbacks := p.callbacks(r, &saved, nil, nil)
+		if f.Assets != nil {
+			callbacks.JobAssets = &corebattle.JobAssetContext{DamageContext: p.damage, DefeatContext: p.defeat, Roster: callbacks.Roster}
+		}
+		d.RegisterNPCCallbacks(callbacks, f)
 	}
-	res, err := skill.ApplyNPCOperation(&r.Battle, op, skill.NPCDefaultSeed(), register, c.s.cfg.RNG)
+	res, err := skill.ApplyNPCOperation(&saved, op, skill.NPCDefaultSeed(), register, c.s.cfg.RNG)
 	if err != nil {
 		return err
 	}
+	r.Battle = saved
 	for id, items := range res.Consumed {
 		if fx.Consumed == nil {
 			fx.Consumed = make(map[string][]corebattle.ConsumedItem)

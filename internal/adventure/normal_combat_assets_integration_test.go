@@ -110,6 +110,91 @@ func TestRunCombatAssetSessionPersistsTailGrowth(t *testing.T) {
 	}
 }
 
+func TestRunCombatNPCPurchaseUsesRequesterAssets(t *testing.T) {
+	f, depots := assetRunCombat(t, 1)
+	rng := f.cfg.RNG.(*midRNG)
+	grantHeldTo(t, f, 0, "item-001")
+	requester := f.actors[0]
+	requester.Money = 300
+	npc := runEnemy("shopper", 900)
+	npc.Jobs.JobID, npc.Jobs.SP = "job-78", 1
+	// A .5 draw selects job78's only eligible entry after the normal attack,
+	// then item14 (price 100, enhanced purchase cost 250).
+	cmd := combatCommand(combatRoom(t, f, requester, nil, npc), "npc-purchase", "defend", "", "")
+	before := readStockRoom(t, f, cmd.RunID)
+	held := heldItems(t, f, 0)
+
+	f.store.failWrite.Store(true)
+	if _, err := f.svc.Command(t.Context(), cmd); err == nil || err.Error() != "receipt write failure" {
+		t.Fatalf("expected failure after the NPC response at receipt write, got %v", err)
+	}
+	assertUnchanged(t, f, depots, cmd, before, held, nil)
+	assertAssets(t, f, cmd.ActorID, 300, 1)
+
+	f.store.failWrite.Store(false)
+	receipt, err := f.svc.Command(t.Context(), cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := readStockRoom(t, f, cmd.RunID)
+	if buyer := runActorByID(after, npc.ID); buyer == nil || buyer.HeldToolID == nil || *buyer.HeldToolID != "item-014" {
+		t.Fatalf("NPC did not buy the tool: %+v", buyer)
+	}
+	assertAssets(t, f, cmd.ActorID, 50, 1)
+	if got := heldItems(t, f, 0); !reflect.DeepEqual(got, held) {
+		t.Fatalf("NPC purchase changed the requester's hand: %+v", got)
+	}
+
+	f.restart(t)
+	draws := rng.calls.Load()
+	if again, err := f.svc.Command(t.Context(), cmd); err != nil || !reflect.DeepEqual(again, receipt) || rng.calls.Load() != draws {
+		t.Fatalf("NPC purchase replay: receipt=%+v draws=%d err=%v", again, rng.calls.Load()-draws, err)
+	}
+	assertAssets(t, f, cmd.ActorID, 50, 1)
+}
+
+func TestRunCombatNPCBookSearchInLibrary(t *testing.T) {
+	f, depots := assetRunCombat(t, 1)
+	f.cfg.RNG = &stockRunRNG{}
+	f.restart(t)
+	requester := f.actors[0]
+	npc := runEnemy("librarian", 900)
+	npc.Jobs.JobID, npc.Jobs.SP = "job-86", 5
+	npc.MP, npc.MaxMP = 20, 20
+	cmd := combatRoom(t, f, requester, nil, npc)
+	rows := seedDepot(t, depots, requester.ID, "item-169")
+
+	// From [attack, book search, library], the first draw selects library.
+	first := combatCommand(cmd, "create-library", "defend", "", "")
+	created, err := f.svc.Command(t.Context(), first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := readStockRoom(t, f, cmd.RunID)
+	if foe := runActorByID(r, npc.ID); foe == nil || r.Battle.Fields.Current() != "library" || foe.MP != 10 {
+		t.Fatalf("NPC did not create the library: field=%s NPC=%+v", r.Battle.Fields.Current(), foe)
+	}
+
+	f.cfg.RNG = &midRNG{}
+	f.restart(t)
+	f.clock.add(time.Duration(r.Admission.Speed) * time.Second)
+	cmd.Version = created.Version
+	// The middle draw selects book search. The response has no book selector.
+	second := combatCommand(cmd, "npc-book-search", "attack", npc.ID, "")
+	receipt, err := f.svc.Command(t.Context(), second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = readStockRoom(t, f, cmd.RunID)
+	foe := runActorByID(r, npc.ID)
+	if foe == nil || receipt.Version != cmd.Version+1 || foe.HP >= npc.HP || foe.MP != 7 || foe.HeldToolID == nil || *foe.HeldToolID != "" {
+		t.Fatalf("expected a committed attack and a 3 MP response with no withdrawal: receipt=%+v NPC=%+v", receipt, foe)
+	}
+	if got := depotItems(t, depots, requester.ID); !reflect.DeepEqual(got, rows) || len(heldItems(t, f, 0)) != 0 {
+		t.Fatalf("NPC search moved a durable item: depot=%+v hand=%+v", got, heldItems(t, f, 0))
+	}
+}
+
 // Job86.3 (_skill.cgi:6842–6856) withdraws a book, writes the default ban of 2
 // (10831–10839) and sets `$npc_turn_skip`, so the eligible tail that would tick
 // the ban and the NPC response are both skipped (_battle.cgi:938,1137–1150).

@@ -153,6 +153,23 @@ func TestBookAssetsRejectUnrepresentedIdentities(t *testing.T) {
 	executeJobAsset(t, &s, &f, d, "job-86-entry-2")
 }
 
+func TestNPCBookWithdrawalWithoutSelector(t *testing.T) {
+	for _, id := range []string{"job-86-entry-0", "job-86-entry-3"} {
+		t.Run(id, func(t *testing.T) {
+			row := stored("book", "item-170")
+			s, f, d := heldBookFixture("item-169", row)
+			s.Actors[0].NPC = true
+			f.Arguments, f.Assets.RequesterID = nil, "enemy"
+			executeJobAsset(t, &s, &f, d, id)
+			a := s.Actors[0]
+			if *a.HeldToolID != "item-169" || *f.Assets.HeldToolID != "item-169" || a.HP != 500 || len(s.SkillBans) != 0 ||
+				f.Assets.SelectionError || len(f.Assets.StoredOutcomes) != 0 || !reflect.DeepEqual(f.Assets.StoredTools, []corebattle.StoredTool{row}) {
+				t.Fatalf("NPC lookup changed state: actor=%+v assets=%+v bans=%v", a, f.Assets, s.SkillBans)
+			}
+		})
+	}
+}
+
 // doubleChild is a synthetic projected child: 300 damage to its target and a
 // 5-MP actor cost, with an optional hand change on "fallen".
 func doubleChild(calls *[]string) corebattle.CallbackDefinition {
