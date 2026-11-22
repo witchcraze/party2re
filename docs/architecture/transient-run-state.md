@@ -121,147 +121,67 @@ existing room lease, whose wider multi-instance guarantees are unresolved in
 
 ### GvG reward publication
 
-`StandingRepository.CommitRoundTransition` delegates to the GvG SQL repository.
-One transaction locks the room's `gvg_match_transitions` record, then all affected
-`guilds` rows in ascending ID order (Rank 7), including zero-reward draws so that
-standing creation cannot take a guild foreign-key lock after a standing lock.
-It awards GP through `GuildRepository.AddPoints`, then locks `gvg_standings` rows
-in ascending guild ID order (Rank 8). It commits
-spendable GP, cumulative GvG reward counters, any final settlement and the resulting
-room/outcome together. The room ID and resolved round identify
-the claim; a completed match rejects further reward claims at any round.
-The record retains only the latest committed transition for each room.
+`StandingRepository.CommitRoundTransition` commits spendable GP, cumulative
+`gvg_standings`, `characters.pvp_wins`, final settlement, and the latest room
+snapshot/outcome in one SQL transaction (locking per
+[`.arch/modules/gvg.json`](../../.arch/modules/gvg.json)), rejecting further
+claims after match completion. `gvg_match_transitions` retains only the latest
+committed transition per room with no automatic expiry; it cannot retroactively
+identify rewards from before this guard, and reward rules live in
+[the GvG design](../design/gvg.md).
 
-`AdvanceRound` checks this record before combat. When a cached room is behind,
-it republishes the committed room and returns the saved outcome without rerunning
-combat or awarding rewards again. Valkey publication is outside the SQL transaction.
-`ValkeyRoomRepository.SaveRoom` updates the candidate index before writing the room
-with its 30-minute TTL. An index-command rejection cannot advance the room; a
-rejected room write may leave the index ahead, while the room remains available
-for replay from SQL. Listing loads the authoritative room and prunes index entries
-by age; it does not erase a missing body that may still be publishing.
+Valkey publication runs after SQL commit. `ValkeyRoomRepository.SaveRoom` updates
+the active index before writing the 30-minute room key so index rejection cannot
+advance the room and listing prunes by age rather than erasing a missing body
+still being published.
 
-`LeaveRoom` commits the per-join `gvg_exit_claims` guard, post-battle settlement,
-Tavern fullness reset and standing-delivery settlement, and delivery completion
-flag in one SQL transaction before publishing the updated or deleted room under
-the room lock and conditionally deleting `party2:gvg:character:<id>`. SQL
-failures roll back exit and delivery effects together; failed Valkey writes
-keep the mapping to block new admission, while retries remain idempotent without
-repeating SQL or Tavern settlement or removing a newer room's mapping.
-
-Every advance supplies the expected round under the
-[retry identity contract below](#gvg-round-retry-identity-target). A lost publication
-acknowledgement or HTTP response can be retried with the original number without
-executing the next round. Lobby deletion or expiration does not delete the durable
-guard. These records have no automatic expiry, and a missing Valkey room is not
-reconstructed by this operation.
-
-This guarantee applies to transitions committed through the guard. It cannot
-retroactively identify rewards committed by an older deployment. Reward amounts
-and recipients remain a separate [GvG domain contract](../design/gvg.md).
+Under the room lock, both `AdvanceRound` and `LeaveRoom` check
+`gvg_match_transitions` before mutating state. When Valkey is behind (older
+`Round`, or `in_progress` against a completed transition), they publish the
+committed room snapshot first; if publication recovery fails, they abort before
+combat or any SQL exit claim/settlement against stale state. Once `LeaveRoom`
+commits its per-join `gvg_exit_claims` transaction (post-battle settlement,
+Tavern fullness/delivery, and delivery completion) and updates or deletes the
+Valkey room, a later `AdvanceRound` replay sees Valkey is current and returns
+the saved `RoundResolution` without restoring departed members or prior
+leadership. Failed Valkey cleanup keeps `party2:gvg:character:<id>` to block new
+admission while SQL exit retries stay idempotent, and `DeleteCharacterRoom`
+removes the mapping only if it still names that room. Neither operation
+reconstructs a missing/expired Valkey room from `gvg_match_transitions`.
 
 <a id="gvg-round-retry-identity-target"></a>
 
 #### GvG round retry identity
 
-**Decision: expected round, selected in [#1573](https://github.com/witchcraze/party2re/issues/1573)
-on 2026-10-22 to preserve gameplay results.** No reward, combat, round-limit or
-participation rule changes as part of this decision.
+**Decision: `expected_round`, selected in
+[#1573](https://github.com/witchcraze/party2re/issues/1573) (2026-10-22) to
+preserve gameplay results.** No combat, reward, or participation rule changes.
+Legacy `vs_guild.cgi:31–38,44–154` and `system.cgi:456–469` have no request ID or
+`expected_round`; `expected_round` is a transport safeguard, and the Go
+`StartMatch`/`AdvanceRound` split stays.
 
-The legacy dispatch adds `かいし` and pre-start `しらべる`
-(`party2/lib/vs_guild.cgi:31–38`). `かいし` initializes the match or evaluates the
-finished round and starts the next one (`44–154`); `しらべる` is observation.
-`party2/lib/system.cgi:456–469` reloads without an action, so observing the result
-does not issue another `かいし`. Neither path provides a request ID or an expected
-round. Expected-round validation is a transport safeguard, not a claimed legacy
-parameter. The existing Go split into `StartMatch` and `AdvanceRound` and retained
-inspection reads stays in place; restoring per-turn combat or reconciling other
-legacy actions remains outside this decision.
+- **Contract:** Both the advance route and `gvg_advance` require an explicit
+  `expected_round` (never defaulting to the current round) and enforce ownership
+  and current room leadership on every call including replays (403 on mismatch).
+  `RoundResolution.round` is the resulting room round, not an operation ID.
+- **Outcomes (authorized live room):**
 
-**Identity and compatibility.** The retained
-`POST /characters/{id}/gvg/rooms/{room_id}/advance` requires JSON
-`{"expected_round": 1}`. Identity is the immutable room ID and the round to resolve;
-the actor must own the authenticated character and be the current room leader on
-every call, including replay. Knowing a room ID or a previously valid request
-does not confer authorization. Missing, null, non-integer or out-of-range values
-(valid range: 1 through `MaxRounds`) return 400 before combat or writes. Do not
-default a missing value to the current round. Existing callers must update at the
-same cutover; there is no identity-free compatibility mode. Preserve the existing
-`RoundResolution` response: its `round` is the resulting room round, not necessarily
-the round just resolved. Future Gateway migration must carry the same explicit
-input through the shared service, including its strict continuation schema.
-
-**Execution and replay.** Under the existing room mutation lock, authorize before
-returning any saved result. Compare the requested number with SQL's resolved
-`round_number`, not merely with the resulting room or an `>=` lookup match:
-
-| Authorized request with a live room | Outcome |
+| Request vs. latest committed SQL round | Outcome |
 | --- | --- |
-| Exactly the latest committed round | 200 with that stored `RoundResolution`, including final settlement; never rerun combat or rewards |
-| Older than the latest committed round | 409; never substitute a newer result or publish an older snapshot |
-| Uncommitted request in recruiting/completed phase | Existing phase rejection (422); exact final-result replay takes precedence |
-| Uncommitted current round of an in-progress room | Resolve that round once and return 200 after publication |
-| Next round while preceding publication is pending | Recover publication and return 409 without executing this request |
+| Exact match | 200 with stored `RoundResolution`; never rerun combat or rewards |
+| Older than committed | 409; never substitute a newer result or republish an older snapshot |
+| Uncommitted, `recruiting`/`completed` | 422 phase rejection |
+| Uncommitted, matches current `in_progress` round | Execute once and return 200 after publication |
+| Next round while preceding publication is pending | Publish preceding transition and return 409 without advancing |
 | Other uncommitted number | 409 without combat, rewards or room changes |
 
-After SQL commit but before successful Valkey publication, retrying that exact
-round republishes the saved room before returning its result. Resolve pending
-publication before accepting a new round. If a next-round request encounters
-pending publication, publish the preceding transition and return 409; this does
-not execute the requested round or return the preceding result. Older or future
-requests do not repair the room. If publication still fails, propagate the failure
-and retry with the same number. Once already published, replay returns the result
-without rewriting the room or renewing its TTL. A lost SQL commit acknowledgement
-is likewise an unknown outcome: retry the original identity and consult durable
-evidence, never infer from the error that rewards rolled back. Preserve the
-existing reward transaction and lock order described above. These guarantees use
-the current single-process room coordination boundary; they do not certify the
-multi-instance lease behavior tracked in #1574.
-
-**Retention and client recovery.** Keep the latest SQL transition per room, with
-its existing indefinite retention; no request-ID table, historical round results
-or new expiry policy is required. A later commit replaces replay availability
-for the previous round, which then returns 409. A missing/expired/deleted Valkey
-room returns 404 even if SQL retains a result; do not resurrect it. Live room TTL
-remains 30 minutes after its last write, and reads do not renew it. Storage errors
-remain errors, not absence. Authentication/ownership failures retain their common
-HTTP handling and a nonleader receives 403 before result disclosure.
-
-Capture `room.round` before an intentional advance and retain that number with
-the request. On timeout or lost response, resend the same room/number; do not
-replace it with an observed newer round. After 409, read
-the room and require a separate intentional next-round action; after 404, stop.
-Observation alone cannot prove which older request completed and cannot recover
-an overwritten battle log. Request IDs and historical replay would add storage
-and lifecycle policy without being needed to prevent unintended next-round
-execution. Observation alone was rejected as the sole safeguard because it leaves
-delayed or concurrent resends indistinguishable from a new action.
-
-**Verification.** The service/HTTP tests and
-[SQL/Valkey integration tests](../../internal/gvg/expected_round_integration_test.go)
-cover the following contract, observing combat calls and durable GP, standings
-and medals as well as responses:
-
-- Consecutive rounds: resolving 1 and replaying 1 leaves round 2 untouched; an
-  explicit request for 2 alone advances it. A delayed 1 after committing 2 returns
-  409 with no changes. Future and invalid inputs do not execute.
-- Intermediate and final results: discard a successful HTTP response after the
-  room write, then resend the identical body. Return the saved result, including
-  after `completed`; award intermediate GP, final prizes and medals only once.
-  Include a final draw, which grants no final GP or medal.
-- Partial publication/commit uncertainty: inject failure before the room write
-  and after a successful write/SQL commit whose acknowledgement is discarded.
-  Same-identity recovery must preserve the original result and assets. A next-round
-  request must not receive the preceding result or bypass pending publication.
-- Concurrent identical requests: use the shared concurrency harness; only one
-  combat result commits, successful replies agree and assets are conserved. Race
-  an old retry against an explicit next-round request: replay or 409 is allowed
-  according to lock order, but the retry never executes the next round.
-- Lifetime and access: replay does not renew an already published room; GET does
-  not renew or repair it. Expiry/leave deletion returns 404 without reconstruction.
-  Ownership/nonleader rejection applies equally to fresh, replay and final calls.
-  Verify legacy rows need no migration and a retained newer SQL round is never
-  treated as an exact older receipt.
+- **Recovery & rationale:** Clients capture `room.round` before advancing and
+  resend the same `expected_round` on lost responses or SQL acknowledgements; 409
+  requires re-reading the room before a separate advance, and 404 ends recovery.
+  Observation-only detection and historical request-ID tables were rejected as
+  ambiguous or unnecessary. Missing/expired rooms return 404, storage errors
+  propagate, and multi-instance lease behavior remains tracked in
+  [#1574](https://github.com/witchcraze/party2re/issues/1574).
 
 ## Candidate D: In-Progress Run Buffers
 
