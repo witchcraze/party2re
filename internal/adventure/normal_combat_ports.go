@@ -143,6 +143,20 @@ func bindRunAction(action *ParsedRunAction, frame corebattle.CallbackContext, de
 	}
 }
 
+// reportFieldSuppression returns the field port's `$npc_turn_skip` (cosmic
+// first use) as the submission's fact; the port itself is not the tail input.
+func reportFieldSuppression(action *corebattle.PlayerAction, field *corebattle.NamedFieldContext) {
+	execute := action.Execute
+	if execute == nil {
+		return
+	}
+	action.Execute = func(s *corebattle.LifetimeState, rng random.Generator) (corebattle.PlayerActionFacts, error) {
+		facts, err := execute(s, rng)
+		facts.Suppressed = facts.Suppressed || field.ResponseSuppressed
+		return facts, err
+	}
+}
+
 // runFacts executes on a fresh damage copy and reports its counters and any
 // side arrays a roster callback rebuilt.
 func runFacts(frame corebattle.CallbackContext, apply func(*corebattle.CallbackContext) error) (corebattle.PlayerActionFacts, error) {

@@ -412,3 +412,29 @@ func TestNormalRunStockReleaseLevelsOnlyInTheTail(t *testing.T) {
 		})
 	}
 }
+
+// The team's first cosmic field suppresses the NPC response; a later use
+// lets the ready NPC answer (named_field.go cosmic, _battle.cgi:1169–1171).
+func TestRunCombatCosmicFieldFirstUseSuppressesResponse(t *testing.T) {
+	f := combatFixture(t, 1)
+	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+		a := runActorByID(r, f.actors[0].ID)
+		a.Jobs = corebattle.BattleJobs{JobID: "job-29", SP: 150}
+		a.MP, a.MaxMP, a.ItemDefinitionIDs = 40, 40, []string{"item-158"} // lists the extended entry
+	}, runEnemy("foe", 900))
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "first", "job-29-entry-7", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	r := readStockRoom(t, f, cmd.RunID)
+	if !r.LastActions["foe"].IsZero() {
+		t.Fatal("first cosmic field did not suppress the NPC response")
+	}
+	f.clock.add(3 * time.Second)
+	cmd.Version = r.Version
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "again", "job-29-entry-7", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	if r := readStockRoom(t, f, cmd.RunID); !r.LastActions["foe"].Equal(f.clock.Now()) {
+		t.Fatal("a later cosmic field still suppressed the NPC response")
+	}
+}

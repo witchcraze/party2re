@@ -120,6 +120,7 @@ func (c runCombat) ExecuteRunAction(ctx context.Context, r *NormalRun, cmd RunCo
 		return fx, ErrRunCooldown
 	}
 	bindRunAction(&parsed.First, callback, defs)
+	reportFieldSuppression(&parsed.First.PlayerAction, contexts.Fields)
 	op := corebattle.PlayerOperation{
 		First: parsed.First.PlayerAction,
 		Tail:  corebattle.PlayerTailContext{DamageContext: ports.damage, DefeatContext: ports.defeat},
@@ -134,6 +135,7 @@ func (c runCombat) ExecuteRunAction(ctx context.Context, r *NormalRun, cmd RunCo
 	if second := parsed.Second; second != nil {
 		if second.EntryID != "" {
 			bindRunAction(second, callback, defs)
+			reportFieldSuppression(&second.PlayerAction, contexts.Fields)
 		}
 		op.Second = &second.PlayerAction
 	}
