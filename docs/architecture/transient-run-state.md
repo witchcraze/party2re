@@ -141,6 +141,11 @@ rejected room write may leave the index ahead, while the room remains available
 for replay from SQL. Listing loads the authoritative room and prunes index entries
 by age; it does not erase a missing body that may still be publishing.
 
+`LeaveRoom` publishes the updated or deleted room under the room lock before
+conditionally deleting `party2:gvg:character:<id>`. Failed room writes keep the
+mapping to block new admission, while failed mapping deletion remains retryable
+via `LeaveRoom` without removing a newer room's mapping.
+
 Every advance supplies the expected round under the
 [retry identity contract below](#gvg-round-retry-identity-target). A lost publication
 acknowledgement or HTTP response can be retried with the original number without

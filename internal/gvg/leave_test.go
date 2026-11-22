@@ -101,11 +101,11 @@ type failingDeleteCharRoomRepo struct {
 	err                error
 }
 
-func (r *failingDeleteCharRoomRepo) DeleteCharacterRoom(ctx context.Context, characterID string) error {
+func (r *failingDeleteCharRoomRepo) DeleteCharacterRoom(ctx context.Context, characterID, roomID string) error {
 	if r.failDeleteCharRoom.CompareAndSwap(true, false) {
 		return r.err
 	}
-	return r.RoomRepository.DeleteCharacterRoom(ctx, characterID)
+	return r.RoomRepository.DeleteCharacterRoom(ctx, characterID, roomID)
 }
 
 func setupTwoGuildRoom(t *testing.T, targetWins int, engine gvg.BattleEngine, opts ...gvg.Option) (*gvg.Service, gvg.RoomRepository, *mockCharRepo, *mockStandingRepo, string) {
@@ -495,5 +495,243 @@ func TestLeaveRoom_RejoinSameRoomAppliesNewExitSideEffectsAndRetryIdempotency(t 
 	}
 	if settler.reqs[1].ExitFatigue != 4 || settler.reqs[1].ExitBonusRounds != 1 || settler.reqs[1].BattleResult.RemainingHP["c1"] != 33 {
 		t.Fatalf("2nd exit request mismatch: %+v", settler.reqs[1])
+	}
+}
+
+type faultRoomRepo struct {
+	gvg.RoomRepository
+	getCharErr   error
+	saveErr      error
+	deleteErr    error
+	saveCalls    int
+	setCharCalls int
+}
+
+func (r *faultRoomRepo) GetCharacterRoom(ctx context.Context, characterID string) (string, error) {
+	if r.getCharErr != nil {
+		return "", r.getCharErr
+	}
+	return r.RoomRepository.GetCharacterRoom(ctx, characterID)
+}
+
+func (r *faultRoomRepo) SaveRoom(ctx context.Context, room gvg.GvGRoom, members []gvg.GvGMember) error {
+	if r.saveErr != nil {
+		return r.saveErr
+	}
+	r.saveCalls++
+	return r.RoomRepository.SaveRoom(ctx, room, members)
+}
+
+func (r *faultRoomRepo) SetCharacterRoom(ctx context.Context, characterID string, roomID string) error {
+	r.setCharCalls++
+	return r.RoomRepository.SetCharacterRoom(ctx, characterID, roomID)
+}
+
+func (r *faultRoomRepo) DeleteRoom(ctx context.Context, id string) error {
+	if r.deleteErr != nil {
+		return r.deleteErr
+	}
+	return r.RoomRepository.DeleteRoom(ctx, id)
+}
+
+func TestAdmissionAbortsOnGetCharacterRoomError(t *testing.T) {
+	ctx := context.Background()
+	lookupErr := errors.New("valkey lookup timeout")
+	base := gvg.NewMemoryRoomRepository()
+	repo := &faultRoomRepo{RoomRepository: base, getCharErr: lookupErr}
+	standings := newMockStandingRepo()
+	guilds := newMockGuildRepo()
+	chars := newMockCharRepo()
+	chars.characters["c1"] = createTestCharacter("c1", "Leader", 100, 0)
+	chars.characters["c2"] = createTestCharacter("c2", "Joiner", 100, 0)
+	guilds.guilds["g1"] = guild.Guild{ID: "g1", Name: "Crimson", Color: "#FF3333"}
+	guilds.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
+	guilds.charGuilds["c1"], guilds.charGuilds["c2"] = "g1", "g2"
+
+	svc, err := gvg.NewService(repo, standings, guilds, chars, &mockBattleEngine{outcome: corebattle.OutcomeWin})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Should Abort"}); !errors.Is(err, lookupErr) {
+		t.Fatalf("CreateRoom error = %v, want %v", err, lookupErr)
+	}
+	if repo.saveCalls != 0 || repo.setCharCalls != 0 {
+		t.Fatalf("CreateRoom wrote room/mapping on lookup failure: save=%d setChar=%d", repo.saveCalls, repo.setCharCalls)
+	}
+
+	// Valid room creation succeeds when GetCharacterRoom returns ErrRoomNotFound.
+	repo.getCharErr = nil
+	room, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Valid Room", MaxMembers: 4, TargetWins: 1})
+	if err != nil {
+		t.Fatalf("CreateRoom after recovery: %v", err)
+	}
+	beforeSaves := repo.saveCalls
+	beforeSets := repo.setCharCalls
+
+	repo.getCharErr = lookupErr
+	if _, err := svc.JoinRoom(ctx, "c2", room.Room.ID, ""); !errors.Is(err, lookupErr) {
+		t.Fatalf("JoinRoom error = %v, want %v", err, lookupErr)
+	}
+	if repo.saveCalls != beforeSaves || repo.setCharCalls != beforeSets {
+		t.Fatalf("JoinRoom wrote room/mapping on lookup failure: save=%d->%d setChar=%d->%d", beforeSaves, repo.saveCalls, beforeSets, repo.setCharCalls)
+	}
+}
+
+func TestLeaveRoom_SaveFailurePreservesMappingAndBlocksSecondRoom(t *testing.T) {
+	ctx := context.Background()
+	base := gvg.NewMemoryRoomRepository()
+	repo := &faultRoomRepo{RoomRepository: base}
+	standings := newMockStandingRepo()
+	guilds := newMockGuildRepo()
+	chars := newMockCharRepo()
+	settler := &stubPostBattleSettler{}
+	claims := newMockExitClaimRepo()
+
+	chars.characters["c1"] = createTestCharacter("c1", "Leader", 100, 0)
+	chars.characters["c2"] = createTestCharacter("c2", "Member", 100, 0)
+	guilds.guilds["g1"] = guild.Guild{ID: "g1", Name: "Crimson", Color: "#FF3333"}
+	guilds.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
+	guilds.charGuilds["c1"], guilds.charGuilds["c2"] = "g1", "g2"
+
+	svc, err := gvg.NewService(
+		repo, standings, guilds, chars, &mockBattleEngine{outcome: corebattle.OutcomeWin},
+		gvg.WithPostBattleSettler(settler),
+		gvg.WithExitClaimRepository(claims),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	room1, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room 1", MaxMembers: 4, TargetWins: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.JoinRoom(ctx, "c2", room1.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	repo.saveErr = errors.New("valkey save failure")
+	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err == nil {
+		t.Fatal("expected SaveRoom failure on LeaveRoom")
+	}
+	repo.saveErr = nil
+
+	// Mapping must remain intact so c1 cannot enter a second room while still in room1.
+	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room 2"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
+		t.Fatalf("CreateRoom while partial leave pending = %v, want ErrAlreadyInRoom", err)
+	}
+
+	// Retry LeaveRoom finishes room publication and mapping removal without repeating exit effects.
+	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err != nil {
+		t.Fatalf("LeaveRoom retry failed: %v", err)
+	}
+	if settler.calls != 1 {
+		t.Fatalf("settler calls = %d, want 1", settler.calls)
+	}
+	detail, err := svc.GetRoom(ctx, room1.Room.ID)
+	if err != nil {
+		t.Fatalf("GetRoom failed: %v", err)
+	}
+	if detail.Room.LeaderCharacterID != "c2" || len(detail.Members) != 1 {
+		t.Fatalf("unexpected room1 state after retry: %+v", detail)
+	}
+	if _, err := svc.GetCharacterRoom(ctx, "c1"); !errors.Is(err, gvg.ErrRoomNotFound) {
+		t.Fatalf("expected c1 unmapped after retry, got %v", err)
+	}
+}
+
+func TestLeaveRoom_DeleteFailureAndMappingRetrySafety(t *testing.T) {
+	ctx := context.Background()
+	base := gvg.NewMemoryRoomRepository()
+	delCharErr := errors.New("valkey delete char room failure")
+	delCharWrap := &failingDeleteCharRoomRepo{RoomRepository: base, err: delCharErr}
+	repo := &faultRoomRepo{RoomRepository: delCharWrap}
+	standings := newMockStandingRepo()
+	guilds := newMockGuildRepo()
+	chars := newMockCharRepo()
+	settler := &stubPostBattleSettler{}
+	claims := newMockExitClaimRepo()
+
+	chars.characters["c1"] = createTestCharacter("c1", "Leader", 100, 0)
+	chars.characters["c2"] = createTestCharacter("c2", "Member", 100, 0)
+	guilds.guilds["g1"] = guild.Guild{ID: "g1", Name: "Crimson", Color: "#FF3333"}
+	guilds.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
+	guilds.charGuilds["c1"], guilds.charGuilds["c2"] = "g1", "g2"
+
+	svc, err := gvg.NewService(
+		repo, standings, guilds, chars, &mockBattleEngine{outcome: corebattle.OutcomeWin},
+		gvg.WithPostBattleSettler(settler),
+		gvg.WithExitClaimRepository(claims),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	room1, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room 1", MaxMembers: 4, TargetWins: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.JoinRoom(ctx, "c2", room1.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. DeleteCharacterRoom fails after SaveRoom removes c1; c2 also leaves (disbanding room1) before c1 retries.
+	delCharWrap.failDeleteCharRoom.Store(true)
+	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); !errors.Is(err, delCharErr) {
+		t.Fatalf("c1 LeaveRoom = %v, want %v", err, delCharErr)
+	}
+	// DeleteRoom fails for last member c2 -> mapping preserved -> retry succeeds.
+	repo.deleteErr = errors.New("valkey delete room failure")
+	if err := svc.LeaveRoom(ctx, "c2", room1.Room.ID); err == nil {
+		t.Fatal("expected DeleteRoom failure")
+	}
+	repo.deleteErr = nil
+	if _, err := svc.CreateRoom(ctx, "c2", gvg.CreateRoomRequest{Name: "Blocked"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
+		t.Fatalf("c2 CreateRoom while DeleteRoom pending = %v, want ErrAlreadyInRoom", err)
+	}
+	if err := svc.LeaveRoom(ctx, "c2", room1.Room.ID); err != nil {
+		t.Fatalf("c2 LeaveRoom retry failed: %v", err)
+	}
+
+	// Room1 is gone, c1 mapping still points to room1 -> c1 retry cleans mapping without ErrRoomNotFound.
+	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err != nil {
+		t.Fatalf("c1 LeaveRoom mapping retry after disband failed: %v", err)
+	}
+	if settler.calls != 2 {
+		t.Fatalf("settler calls = %d, want 2 (once each)", settler.calls)
+	}
+
+	// 2. c1 creates room2; stale DeleteCharacterRoom or LeaveRoom for room1 cannot delete room2's mapping.
+	room2, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room 2", MaxMembers: 4, TargetWins: 1})
+	if err != nil {
+		t.Fatalf("c1 CreateRoom(room2) failed: %v", err)
+	}
+	if err := base.DeleteCharacterRoom(ctx, "c1", room1.Room.ID); err != nil {
+		t.Fatalf("stale DeleteCharacterRoom(room1): %v", err)
+	}
+	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); !errors.Is(err, gvg.ErrRoomNotFound) {
+		t.Fatalf("stale LeaveRoom(room1) = %v, want ErrRoomNotFound", err)
+	}
+	if got, err := base.GetCharacterRoom(ctx, "c1"); err != nil || got != room2.Room.ID {
+		t.Fatalf("room2 mapping corrupted: got=%q err=%v want=%q", got, err, room2.Room.ID)
+	}
+
+	// 3. Last member DeleteCharacterRoom failure after DeleteRoom -> retry succeeds cleanly.
+	delCharWrap.failDeleteCharRoom.Store(true)
+	if err := svc.LeaveRoom(ctx, "c1", room2.Room.ID); !errors.Is(err, delCharErr) {
+		t.Fatalf("c1 LeaveRoom(room2) = %v, want %v", err, delCharErr)
+	}
+	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Blocked 3"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
+		t.Fatalf("c1 CreateRoom while mapping cleanup pending = %v, want ErrAlreadyInRoom", err)
+	}
+	if err := svc.LeaveRoom(ctx, "c1", room2.Room.ID); err != nil {
+		t.Fatalf("c1 LeaveRoom(room2) mapping retry failed: %v", err)
+	}
+	if _, err := svc.GetCharacterRoom(ctx, "c1"); !errors.Is(err, gvg.ErrRoomNotFound) {
+		t.Fatalf("expected c1 unmapped, got %v", err)
+	}
+	if settler.calls != 3 {
+		t.Fatalf("settler calls = %d, want 3", settler.calls)
 	}
 }

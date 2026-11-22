@@ -2,6 +2,7 @@ package gvg
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 // LeaveRoom exits a GvG room (@にげる, _battle.cgi:1184-1247,1330-1375) across all phases,
 // transferring leadership to the first remaining member and disbanding only when empty.
-// SQL exit side-effects commit in applyExitSideEffects independently of Valkey cleanup and postExitHook.
+// SQL exit side-effects commit in applyExitSideEffects independently of Valkey room publication and mapping cleanup.
 func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) error {
 	roomID = strings.TrimSpace(roomID)
 	if roomID == "" {
@@ -20,12 +21,15 @@ func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) e
 	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		detail, err := s.repo.GetRoom(lockedCtx, roomID)
 		if err != nil {
+			if errors.Is(err, ErrRoomNotFound) {
+				return s.cleanupPendingCharacterRoom(lockedCtx, charID, roomID, ErrRoomNotFound)
+			}
 			return err
 		}
 
 		departing, found := findMember(detail.Members, charID)
 		if !found {
-			return ErrCharacterNotInRoom
+			return s.cleanupPendingCharacterRoom(lockedCtx, charID, roomID, ErrCharacterNotInRoom)
 		}
 
 		round := detail.Room.Round
@@ -42,14 +46,31 @@ func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) e
 			return err
 		}
 
-		if err := s.repo.DeleteCharacterRoom(lockedCtx, charID); err != nil {
-			return err
-		}
 		if !hasRemaining {
-			return s.repo.DeleteRoom(lockedCtx, roomID)
+			if err := s.repo.DeleteRoom(lockedCtx, roomID); err != nil {
+				return err
+			}
+		} else {
+			if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+				return err
+			}
 		}
-		return s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members)
+		return s.repo.DeleteCharacterRoom(lockedCtx, charID, roomID)
 	})
+}
+
+func (s *Service) cleanupPendingCharacterRoom(ctx context.Context, charID, roomID string, notPendingErr error) error {
+	mappedRoomID, err := s.repo.GetCharacterRoom(ctx, charID)
+	if err != nil {
+		if errors.Is(err, ErrRoomNotFound) {
+			return notPendingErr
+		}
+		return err
+	}
+	if mappedRoomID != roomID {
+		return notPendingErr
+	}
+	return s.repo.DeleteCharacterRoom(ctx, charID, roomID)
 }
 
 func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID string, round int, departing GvGMember) error {
