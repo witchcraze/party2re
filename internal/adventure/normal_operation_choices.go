@@ -39,6 +39,9 @@ type NormalOperationContext struct {
 	Definitions skill.BattleDefinitions
 	Callback    corebattle.CallbackContext
 	Requester   *corecharacter.Character
+	// Arithmetic receives the submitted text and the discovered names that
+	// job72 selectors look up (_skill.cgi:35–104,260–309).
+	Arithmetic *corebattle.ArithmeticContext
 }
 
 type runOperationCandidate struct {
@@ -64,7 +67,7 @@ var separatorKey = skill.OperationNameKey("br")
 // DiscoverNormalOperations uses saved encounter membership and the same
 // argument-dependent admission as parsing. Authorization belongs to the caller.
 func (r *NormalRun) DiscoverNormalOperations(cmd RunCommand, ctx NormalOperationContext) ([]RunOperationChoice, error) {
-	ops, err := r.normalOperations(cmd.ActorID, ctx)
+	ops, err := r.normalOperations(cmd, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +90,8 @@ func (r *NormalRun) DiscoverNormalOperations(cmd RunCommand, ctx NormalOperation
 	return choices, nil
 }
 
-func (r *NormalRun) normalOperations(actorID string, ctx NormalOperationContext) (*normalOperations, error) {
+func (r *NormalRun) normalOperations(cmd RunCommand, ctx NormalOperationContext) (*normalOperations, error) {
+	actorID := cmd.ActorID
 	if r == nil || actorID == "" || r.TimedOut {
 		return nil, ErrRunConflict
 	}
@@ -180,6 +184,13 @@ func (r *NormalRun) normalOperations(actorID string, ctx NormalOperationContext)
 	if p := ctx.Requester; p != nil && !enemies {
 		if exp, err := progression.ExperienceForNextLevelWithMax(p.Level, progression.MaxLevelForCharacter(p)); err == nil && p.Experience >= exp {
 			ops.addBattle(stockLevelAction, stockLevelAction, "すとっく", stockLevelAction)
+		}
+	}
+	if c := ctx.Arithmetic; c != nil {
+		// Names are source keys; a repeated key resolves to its last candidate.
+		c.SubmittedText, c.Discovered = cmd.Input+" ", make([]corebattle.ArithmeticEntry, 0, len(ops.order))
+		for _, key := range ops.order {
+			c.Discovered = append(c.Discovered, corebattle.ArithmeticEntry{ID: ops.byKey[key].binding.ID, Name: key})
 		}
 	}
 	return ops, nil

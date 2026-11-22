@@ -10,9 +10,6 @@ import (
 )
 
 // runPorts are rebuilt for every operation from the saved run and requester.
-// A nil port keeps its entries as whole-action gates: arithmetic discovery,
-// control MP drain and transformation area damage have no production owner in
-// this composition yet.
 type runPorts struct {
 	damage corebattle.DamageContext
 	defeat *corebattle.DefeatContext
@@ -66,7 +63,26 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 		Hard: r.Mode == CrawlModeHard, Death: p.defeat,
 	}
 	resources := d
+	transform := &corebattle.TransformationContext{EffectContext: d.EffectContext, RequesterIcon: icon, RequesterGender: gender}
+	// The area hit continues from the transformation's bound call counts.
+	transform.AreaDamage = func(target corebattle.TargetContext, power float64, category corebattle.CallbackCategory, direct bool, rng random.Generator) error {
+		area := d
+		area.EffectContext, area.TargetContext = transform.EffectContext, target
+		_, err := state.ApplyAreaDamage(&area, power, category, direct, rng)
+		transform.EffectContext = area.EffectContext
+		return err
+	}
+	mpDrain := &corebattle.ControlMPDrain{
+		Validate: func(s *corebattle.LifetimeState, c *corebattle.EffectContext, e corebattle.TargetEffect) error {
+			return s.ValidateStatDown(c, e, corebattle.StatMP, random.Default())
+		},
+		Apply: func(s *corebattle.LifetimeState, c *corebattle.EffectContext, e corebattle.TargetEffect, rng random.Generator) (corebattle.EffectApplication, error) {
+			return s.ApplyStatDown(c, e, corebattle.StatMP, rng)
+		},
+	}
 	return skill.PlayerCallbackContexts{
+		// Operation discovery fills the submitted text and names (normalOperations).
+		Arithmetic:          &corebattle.ArithmeticContext{NameKey: skill.OperationNameKey, Defeat: d.Defeat},
 		BaseGuard:           &corebattle.BaseGuardContext{DamageContext: d, Status: p.status},
 		Martial:             &corebattle.MartialContext{DamageContext: d, Status: p.status},
 		BasicMagic:          &corebattle.BasicMagicContext{DamageContext: d},
@@ -85,12 +101,12 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 		TreatmentChance:     &corebattle.TreatmentChanceContext{DamageContext: d, Status: *p.status},
 		HighPower:           &corebattle.HighPowerContext{DamageContext: d, EquipmentReset: reset},
 		TreatmentMischief:   &corebattle.TreatmentMischiefContext{DamageContext: d, Status: *p.status},
-		ControlClimax:       &corebattle.ControlClimaxContext{DamageContext: d, PriorTemporary: prior},
+		ControlClimax:       &corebattle.ControlClimaxContext{DamageContext: d, PriorTemporary: prior, MPDrain: mpDrain},
 		Roster:              roster,
 		DuelCrown:           &corebattle.DuelCrownContext{DamageContext: d},
 		RitualDance:         &corebattle.RitualDanceContext{DamageContext: d},
 		DualAgility:         &corebattle.DualAgilityContext{DamageContext: d, Status: p.status},
-		Transformations:     &corebattle.TransformationContext{EffectContext: d.EffectContext, RequesterIcon: icon, RequesterGender: gender},
+		Transformations:     transform,
 		MachineFamiliar:     &corebattle.MachineFamiliarContext{DamageContext: d, RequesterGender: gender},
 		LateBreathSong:      &corebattle.LateBreathSongContext{DamageContext: d, BurnStrike: burn, Death: p.status},
 		Resources:           &resources,
