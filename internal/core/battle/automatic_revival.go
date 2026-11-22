@@ -105,10 +105,14 @@ func (s *LifetimeState) ApplyAutomaticRevival(c *AutomaticRevivalContext, target
 		// Reset sees the accessory; consumption and immobilization follow it.
 		a.ItemDefinitionIDs = slices.DeleteFunc(slices.Clone(a.ItemDefinitionIDs), func(id string) bool { return id == "item-193" })
 		a.Abilities = slices.DeleteFunc(slices.Clone(a.Abilities), func(id string) bool { return id == "dokuro_amulet" })
-		if a.Gear != nil {
+		if a.Gear != nil && a.Gear.AccessoryID == "item-193" {
 			gear := *a.Gear
 			gear.AccessoryID = ""
 			a.Gear = &gear
+		}
+		if a.HeldToolID != nil && *a.HeldToolID == "item-193" {
+			held := ""
+			a.HeldToolID = &held
 		}
 		a.ConsumedItems = append(a.ConsumedItems, ConsumedItem{ID: "item-193", Quantity: 1})
 		a.Status = StatusDofuu
