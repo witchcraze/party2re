@@ -185,31 +185,18 @@ func (s *Service) settleFallback(
 			}
 		}
 
-		// Apply HP changes
-		if remHP, ok := crawlResult.ParticipantHPs[cID]; ok {
-			if remHP <= 0 {
-				c.Stats.HP = 1 // Fallen members survive with 1 HP
-			} else {
-				c.Stats.HP = remHP
-				if c.Stats.MaxHP > 0 && c.Stats.HP > c.Stats.MaxHP {
-					c.Stats.HP = c.Stats.MaxHP
-				}
-			}
-		} else {
-			for _, fallenID := range lastBattleRes.AlliesFallen {
-				if fallenID == cID {
-					c.Stats.HP = 1
-					break
-				}
-			}
+		// Apply HP and MP changes through the shared post-combat copyback primitive.
+		remMP := -1
+		if mp, ok := crawlResult.ParticipantMPs[cID]; ok && mp >= 0 {
+			remMP = mp
 		}
-
-		// Apply MP changes
-		if remMP, ok := crawlResult.ParticipantMPs[cID]; ok && remMP >= 0 {
+		remHP, hasHP := crawlResult.ParticipantHPs[cID]
+		isFallen := slices.Contains(lastBattleRes.AlliesFallen, cID)
+		if hasHP || isFallen {
+			c.ApplyCombatSurvival(remHP, remMP, isFallen || remHP <= 0)
+		} else if remMP >= 0 {
 			c.Stats.MP = remMP
-			if c.Stats.MaxMP > 0 && c.Stats.MP > c.Stats.MaxMP {
-				c.Stats.MP = c.Stats.MaxMP
-			}
+			c.Stats.ClampVitality()
 		}
 
 		if lastBattleRes.BanishedIDs != nil && lastBattleRes.BanishedIDs[cID] {

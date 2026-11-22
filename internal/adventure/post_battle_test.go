@@ -272,7 +272,7 @@ func TestAdventure_Floor11Treasure_LostDropsWhenDepotFull(t *testing.T) {
 	}
 }
 
-func TestAdventure_Defeat_HPSetToOneAndPersisted(t *testing.T) {
+func TestAdventure_Defeat_ZeroHPPersisted(t *testing.T) {
 	// Weak character that will be defeated
 	char, err := corecharacter.New("Weakling")
 	if err != nil {

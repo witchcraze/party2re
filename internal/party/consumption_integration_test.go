@@ -260,7 +260,7 @@ func TestAdventureConsumptionSQLIntegration(t *testing.T) {
 						}
 						hp := 50
 						if tc.defeat {
-							hp = 1
+							hp = 0
 						}
 						if after.Money != before.Money+2*wins || after.Experience != before.Experience+wins || after.Crystal != before.Crystal+wins || after.Stats.HP != hp || after.Stats.MP != 10 || after.Tired == before.Tired {
 							t.Fatalf("owner %s settlement: %+v (credited floors=%d)", before.ID, after, wins)

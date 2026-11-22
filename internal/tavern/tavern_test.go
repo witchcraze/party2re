@@ -989,3 +989,30 @@ func TestTavern_ReserveDelivery_ValidationAndErrors(t *testing.T) {
 		t.Errorf("expected storageErr, got %v", err)
 	}
 }
+
+func TestTavern_ClaimDelivery_RecoversZeroHPSurvivor(t *testing.T) {
+	svc, charRepo, _, _ := setupTestService(t)
+	ctx := context.Background()
+
+	charID := "fallen-survivor"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:    charID,
+		Name:  "Fallen",
+		Money: 200,
+		Stats: corecharacter.Stats{HP: 0, MaxHP: 100, MP: 0, MaxMP: 50},
+	}
+
+	if _, err := svc.ReserveDelivery(ctx, charID, "tavern_water"); err != nil {
+		t.Fatalf("ReserveDelivery failed: %v", err)
+	}
+	res, err := svc.ClaimDelivery(ctx, charID)
+	if err != nil {
+		t.Fatalf("ClaimDelivery failed: %v", err)
+	}
+	if res.HPHealed != 40 || res.CurrentHP != 40 {
+		t.Errorf("got HPHealed=%d CurrentHP=%d, want 40/40", res.HPHealed, res.CurrentHP)
+	}
+	if got := charRepo.chars[charID]; got.Stats.HP != 40 {
+		t.Errorf("persisted HP = %d, want 40", got.Stats.HP)
+	}
+}

@@ -213,7 +213,7 @@ func TestGvG_LeaveRoom_SideEffectsAndRetryIdempotency_Integration(t *testing.T) 
 		t.Fatalf("c1 fullness should be reset: %+v err=%v", tStatus, err)
 	}
 
-	// c2 leaves -> consumed item-193 must be unequipped and removed from inventory, HP floored to 1, Tired = 4.
+	// c2 leaves -> consumed item-193 must be unequipped and removed from inventory, HP stays 0, Tired = 4.
 	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
 		t.Fatalf("c2 LeaveRoom failed: %v", err)
 	}
@@ -221,8 +221,8 @@ func TestGvG_LeaveRoom_SideEffectsAndRetryIdempotency_Integration(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updatedC2.Stats.HP != 1 || updatedC2.Stats.MP != 0 || updatedC2.Tired != 4 {
-		t.Fatalf("c2 state after exit = %+v, want HP=1 MP=0 Tired=4", updatedC2)
+	if updatedC2.Stats.HP != 0 || updatedC2.Stats.MP != 0 || updatedC2.Tired != 4 {
+		t.Fatalf("c2 state after exit = %+v, want HP=0 MP=0 Tired=4", updatedC2)
 	}
 	c2Inv, err := invRepo.FindByCharacterID(ctx, c2.ID)
 	if err != nil {
@@ -1042,7 +1042,7 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c2After.Money != 1000 || c2After.Stats.HP != 1 || c2After.Stats.MP != 5 || c2After.Tired != 4 {
+	if c2After.Money != 1000 || c2After.Stats.HP != 0 || c2After.Stats.MP != 5 || c2After.Tired != 4 {
 		t.Fatalf("c2 state after unaffordable retry = %+v", c2After)
 	}
 	c2StatusAfter, err := tavernRepo.GetCharacterStatus(ctx, c2.ID)
@@ -1073,7 +1073,13 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 		t.Fatalf("expected c3 fullness reset: %+v", c3StatusAfter)
 	}
 
-	// 4. Subsequent rejoin and departure settles standing order again for the new join.
+	// 4. Unconscious 0 HP survivor cannot re-enter until recovered; once healed, rejoin and departure settles standing order again.
+	if _, err := svc.CreateRoom(ctx, c2.ID, gvg.CreateRoomRequest{Name: "Atomic Rejoin", MaxMembers: 2, TargetWins: 1}); !errors.Is(err, gvg.ErrCharacterUnconscious) {
+		t.Fatalf("expected ErrCharacterUnconscious for 0 HP survivor c2, got %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET hp = 100 WHERE id = ?", c2.ID); err != nil {
+		t.Fatal(err)
+	}
 	room2, err := svc.CreateRoom(ctx, c2.ID, gvg.CreateRoomRequest{Name: "Atomic Rejoin", MaxMembers: 2, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)

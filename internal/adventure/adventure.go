@@ -409,15 +409,15 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 
 			// Apply fallback experience, gold, crystal, fatigue, and surviving HP/MP if battleSettler is not configured
 			if s.battleSettler == nil {
-				if hp, ok := result.ParticipantHPs[c.ID]; ok {
-					if hp <= 0 {
-						c.Stats.HP = 1
-					} else {
-						c.Stats.HP = hp
-					}
+				remMP := -1
+				if mp, ok := result.ParticipantMPs[c.ID]; ok && mp >= 0 {
+					remMP = mp
 				}
-				if mp, ok := result.ParticipantMPs[c.ID]; ok {
-					c.Stats.MP = mp
+				if hp, ok := result.ParticipantHPs[c.ID]; ok {
+					c.ApplyCombatSurvival(hp, remMP, hp <= 0)
+				} else if remMP >= 0 {
+					c.Stats.MP = remMP
+					c.Stats.ClampVitality()
 				}
 				c.AddTired(result.EffectiveExitFatigue(req.Mode))
 

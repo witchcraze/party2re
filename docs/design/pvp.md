@@ -6,7 +6,6 @@ The Colosseum PvP module (`internal/pvp`) reconstructs `party2/lib/vs_player.cgi
 
 - **Live-room departure (`@にげる`, `_battle.cgi:1184–1248,1330–1375`):**
   - Pre-start (`recruiting`, round 0) refunds only the departing participant's bet and promotes leadership if members remain; once started (`in_progress` or `completed`), bets are never refunded (`prize_pool` closes as forfeited escrow when the last participant exits).
-  - **Intentional departure:** Fallen participants (`0` HP) receive the codebase's `1` HP survival floor on exit copyback rather than legacy raw `0` HP (`_battle.cgi:1215`).
 - **Lobby preparation actions (`vs_player.cgi:33–38`, `_skill.cgi:161–164,769–837`):**
   - `@きっく` (`pvp_kick`, leader-only before match start) removes the target and imposes a 60-second `ActionWait` without bet refund or `@にげる` exit side-effects (fatigue, vitality copyback, item bonuses, or bar delivery); the kicked member's bet remains in `prize_pool` as in `_skill.cgi:796–837` (revisiting bet refund is tracked in [#2586](https://github.com/witchcraze/party2re/issues/2586)).
   - `@しらべる` (`vs_player.cgi:34,36` → `system.cgi:322`) maps to `player_inspect` during pre-start `recruiting` (`round == 0`).

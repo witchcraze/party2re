@@ -604,7 +604,7 @@ func TestApplyPostBattleResult_MultiCharacterPartyWithProvider(t *testing.T) {
 		WinnerSide: "allies",
 		RemainingHP: map[string]int{
 			"char-alpha": 80,
-			"char-beta":  0, // Fallen member -> survives with HP 1
+			"char-beta":  0, // Fallen member -> persists HP 0
 			"char-gamma": 45,
 		},
 		RemainingMP: map[string]int{
@@ -647,10 +647,10 @@ func TestApplyPostBattleResult_MultiCharacterPartyWithProvider(t *testing.T) {
 		}
 	}
 
-	// 2. Verify fallen member (char-beta) survives with HP = 1
+	// 2. Verify fallen member (char-beta) persists with HP = 0
 	cBeta, _ := charRepo.FindByID(ctx, "char-beta")
-	if cBeta.Stats.HP != 1 {
-		t.Errorf("cBeta HP = %d, want 1", cBeta.Stats.HP)
+	if cBeta.Stats.HP != 0 {
+		t.Errorf("cBeta HP = %d, want 0", cBeta.Stats.HP)
 	}
 	if cBeta.Money != 1100 { // 500 + 600
 		t.Errorf("cBeta Money = %d, want 1100", cBeta.Money)

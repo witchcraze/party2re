@@ -946,9 +946,9 @@ func TestPartyService_StartPartyAdventure_SurvivingDamagePersisted(t *testing.T)
 		t.Errorf("expected leader HP=80, got %d", updatedLeader.Stats.HP)
 	}
 
-	// Member with low HP either survived with damage or fell with HP = 1
-	if updatedMember.Stats.HP != 1 {
-		t.Errorf("expected member HP=1, got %d", updatedMember.Stats.HP)
+	// Fallen member persists with HP = 0
+	if updatedMember.Stats.HP != 0 {
+		t.Errorf("expected member HP=0, got %d", updatedMember.Stats.HP)
 	}
 	t.Logf("Battle result outcome=%s, leader HP: %d/%d, member HP: %d/%d", res.Outcome, updatedLeader.Stats.HP, updatedLeader.Stats.MaxHP, updatedMember.Stats.HP, updatedMember.Stats.MaxHP)
 }

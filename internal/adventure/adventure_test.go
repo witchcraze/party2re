@@ -277,6 +277,34 @@ func TestExecuteCrawl_ParticipantsValidation(t *testing.T) {
 	}
 }
 
+func TestExecuteCrawl_FallbackDefeatPersistsZeroHPAndDeadGate(t *testing.T) {
+	service, _, _, characters := newTestService(t)
+	characters.value.Stats.HP = 5
+	characters.value.Stats.MaxHP = 5
+	characters.value.Stats.Attack = 1
+	characters.value.Stats.Defense = 1
+
+	res, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{characters.value.ID},
+		StageID:      StarterAdventure,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl failed: %v", err)
+	}
+	if res.Outcome != corebattle.OutcomeDefeat {
+		t.Fatalf("expected defeat outcome, got %v", res.Outcome)
+	}
+	if characters.value.Stats.HP != 0 {
+		t.Fatalf("persisted fallback HP = %d, want 0", characters.value.Stats.HP)
+	}
+	if _, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{characters.value.ID},
+		StageID:      StarterAdventure,
+	}); !errors.Is(err, ErrCharacterUnconscious) {
+		t.Fatalf("re-entry after defeat error = %v, want ErrCharacterUnconscious", err)
+	}
+}
+
 func TestAdventure_PostAdventureHook(t *testing.T) {
 	service, _, _, characters := newTestService(t)
 
@@ -907,6 +935,8 @@ func TestSoloAdmission_MatchesStageCatalogAndAvailableStages(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			characters.value.Level = tc.level
 			characters.value.JobLevel = tc.jobLevel
+			characters.value.Stats.HP = characters.value.Stats.MaxHP
+			characters.value.Tired = 0
 			clock.now = tc.time
 
 			available := cat.AvailableStagesAt(characters.value, tc.time)

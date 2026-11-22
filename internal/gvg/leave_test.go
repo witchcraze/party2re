@@ -278,11 +278,11 @@ func TestLeaveRoom_PostMatchIndividualExitAndFinalRoundHP(t *testing.T) {
 		t.Fatalf("c1 exit vitality/fatigue mismatch: %+v", got)
 	}
 
-	// c3 leaves defeated (0 HP -> 1 HP survival floor, 0 MP, tired = 4).
+	// c3 leaves defeated (0 HP -> 0 HP copyback, 0 MP, tired = 4).
 	if err := svc.LeaveRoom(ctx, "c3", roomID); err != nil {
 		t.Fatalf("c3 post-match leave failed: %v", err)
 	}
-	if got := chars.characters["c3"]; got.Stats.HP != 1 || got.Stats.MP != 0 || got.Tired != 4 {
+	if got := chars.characters["c3"]; got.Stats.HP != 0 || got.Stats.MP != 0 || got.Tired != 4 {
 		t.Fatalf("c3 exit vitality/fatigue mismatch: %+v", got)
 	}
 

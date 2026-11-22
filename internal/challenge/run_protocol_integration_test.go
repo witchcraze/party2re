@@ -184,7 +184,7 @@ func (f *protocolFixture) assertSettled(t *testing.T, actor int, rounds, attempt
 	hp := 200 - 10*rounds
 	mp := 40 - 2*rounds
 	if attempted > rounds {
-		hp = 1
+		hp = 0
 		mp -= 2
 	}
 	exp, gold := 20*rounds, 5*rounds
@@ -339,7 +339,7 @@ func TestRunProtocolConcurrentCommandsIntegration(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if got.Money != original.Money+receipt.AccumulatedGold+receipt.ExitBonusGold || got.Experience != original.Experience+receipt.AccumulatedExp+receipt.ExitBonusExp || got.Stats.HP != max(1, receipt.CharacterCurrentHP) || got.Stats.MP != *receipt.CharacterCurrentMP {
+				if got.Money != original.Money+receipt.AccumulatedGold+receipt.ExitBonusGold || got.Experience != original.Experience+receipt.AccumulatedExp+receipt.ExitBonusExp || got.Stats.HP != max(0, receipt.CharacterCurrentHP) || got.Stats.MP != *receipt.CharacterCurrentMP {
 					t.Fatalf("asset conservation failed: receipt=%+v character=%+v", receipt, got)
 				}
 			}

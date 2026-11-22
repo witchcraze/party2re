@@ -388,7 +388,7 @@ func TestPartyAdventure_SurvivingMPAndFallenHP(t *testing.T) {
 	ctx := context.Background()
 	engine := fixedBattleEngine{
 		remainingHP: map[string]int{
-			"leader":  0,  // fallen ally survives with 1 HP
+			"leader":  0,  // fallen ally persists with 0 HP
 			"member2": 45, // normal survival
 		},
 		remainingMP: map[string]int{
@@ -431,10 +431,10 @@ func TestPartyAdventure_SurvivingMPAndFallenHP(t *testing.T) {
 		t.Fatalf("StartPartyAdventure failed: %v", err)
 	}
 
-	// Leader was fallen (HP=0) -> survives with HP=1, MP=15
+	// Leader was fallen (HP=0) -> persists with HP=0, MP=15
 	updatedLeader, _ := charRepo.FindByID(ctx, leader.ID)
-	if updatedLeader.Stats.HP != 1 {
-		t.Errorf("expected fallen leader HP=1, got %d", updatedLeader.Stats.HP)
+	if updatedLeader.Stats.HP != 0 {
+		t.Errorf("expected fallen leader HP=0, got %d", updatedLeader.Stats.HP)
 	}
 	if updatedLeader.Stats.MP != 15 {
 		t.Errorf("expected leader MP=15, got %d", updatedLeader.Stats.MP)
@@ -1692,13 +1692,13 @@ func TestPartyAdventure_MidCrawlFallenAlly(t *testing.T) {
 		t.Errorf("expected TotalGold=%d, got %d", expectedGold, res.TotalGold)
 	}
 
-	// Verify fallen member survives with 1 HP
+	// Verify fallen member persists with 0 HP
 	updatedMem3, err := charRepo.FindByID(ctx, mem3.ID)
 	if err != nil {
 		t.Fatalf("FindByID for fallen member failed: %v", err)
 	}
-	if updatedMem3.Stats.HP != 1 {
-		t.Errorf("expected fallen member HP=1, got %d", updatedMem3.Stats.HP)
+	if updatedMem3.Stats.HP != 0 {
+		t.Errorf("expected fallen member HP=0, got %d", updatedMem3.Stats.HP)
 	}
 }
 

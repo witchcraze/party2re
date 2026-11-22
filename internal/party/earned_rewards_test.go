@@ -69,7 +69,7 @@ func TestPartyAdventure_EarnedRewards(t *testing.T) {
 				}
 				outcome, hp := string(corebattle.OutcomeWin), 80
 				if tc.defeatFloor != 0 {
-					outcome, hp = string(corebattle.OutcomeDefeat), 1
+					outcome, hp = string(corebattle.OutcomeDefeat), 0
 				}
 				exp, gold, crystals := tc.cleared*7, tc.cleared*11, tc.cleared*3
 				if result.Outcome != outcome || result.TotalEXP != exp || result.TotalGold != gold || result.TotalCrystals != crystals {
