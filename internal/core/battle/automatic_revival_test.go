@@ -123,3 +123,90 @@ func TestAutomaticRevivalDeathTransferIncludesFallenAndHostileHolders(t *testing
 		t.Fatal(s, r, err)
 	}
 }
+
+func TestAutomaticRevivalAmuletClearsCombatHandWithoutTouchingUnknownsOrOthers(t *testing.T) {
+	t.Run("known hand and gear", func(t *testing.T) {
+		s, c := automaticFixture()
+		self := s.actor("self")
+		self.HeldToolID = new("item-193")
+		self.Gear = &BattleGearStats{WeaponID: "weapon-01", ArmorID: "armor-01", AccessoryID: "item-193"}
+		self.ItemDefinitionIDs = []string{"weapon-01", "armor-01", "item-193"}
+		self.Abilities = []string{"dokuro_amulet"}
+
+		ally := s.actor("ally")
+		ally.HeldToolID = new("item-169")
+		ally.Gear = &BattleGearStats{WeaponID: "weapon-02", ArmorID: "armor-02", AccessoryID: "item-169"}
+		ally.ItemDefinitionIDs = []string{"weapon-02", "armor-02", "item-169"}
+
+		resetSawPreConsumption := false
+		c.Reset = func(id string) error {
+			a := s.actor(id)
+			resetSawPreConsumption = hasItem(a.ItemDefinitionIDs, "item-193") &&
+				a.Gear != nil && a.Gear.AccessoryID == "item-193" &&
+				a.HeldToolID != nil && *a.HeldToolID == "item-193"
+			a.ResetEffects(LifetimeReset{Attack: 10, Defense: 20, Agility: 30})
+			return nil
+		}
+
+		r, err := s.ApplyAutomaticRevival(&c, "self", &targetRNG{t: t})
+		if err != nil || !r.Prevented || !resetSawPreConsumption {
+			t.Fatal(s, r, err, resetSawPreConsumption)
+		}
+		for _, state := range []LifetimeState{s, reloadLifetime(t, s)} {
+			got := state.actor("self")
+			if got.HP != 50 || got.Status != StatusDofuu ||
+				got.HeldToolID == nil || *got.HeldToolID != "" ||
+				got.Gear == nil || got.Gear.AccessoryID != "" ||
+				got.Gear.WeaponID != "weapon-01" || got.Gear.ArmorID != "armor-01" ||
+				!reflect.DeepEqual(got.ItemDefinitionIDs, []string{"weapon-01", "armor-01"}) ||
+				hasAbility(got.Abilities, "dokuro_amulet") ||
+				!reflect.DeepEqual(got.ConsumedItems, []ConsumedItem{{ID: "item-193", Quantity: 1}}) {
+				t.Fatalf("amulet revival left stale hand or mutated gear: %+v gear=%+v", got, got.Gear)
+			}
+			other := state.actor("ally")
+			if other.HeldToolID == nil || *other.HeldToolID != "item-169" ||
+				other.Gear == nil || other.Gear.AccessoryID != "item-169" ||
+				!reflect.DeepEqual(other.ItemDefinitionIDs, []string{"weapon-02", "armor-02", "item-169"}) {
+				t.Fatalf("unrelated actor mutated: %+v gear=%+v", other, other.Gear)
+			}
+		}
+	})
+
+	t.Run("unknown hand and gear stay unknown", func(t *testing.T) {
+		s, c := automaticFixture()
+		self := s.actor("self")
+		self.HeldToolID = nil
+		self.Gear = nil
+		self.ItemDefinitionIDs = []string{"weapon-01", "item-193"}
+		self.Abilities = []string{"dokuro_amulet"}
+
+		r, err := s.ApplyAutomaticRevival(&c, "self", &targetRNG{t: t})
+		if err != nil || !r.Prevented {
+			t.Fatal(s, r, err)
+		}
+		if self.HeldToolID != nil || self.Gear != nil ||
+			!reflect.DeepEqual(self.ItemDefinitionIDs, []string{"weapon-01"}) ||
+			hasAbility(self.Abilities, "dokuro_amulet") ||
+			!reflect.DeepEqual(self.ConsumedItems, []ConsumedItem{{ID: "item-193", Quantity: 1}}) {
+			t.Fatalf("fabricated unknown hand/gear: %+v", self)
+		}
+	})
+
+	t.Run("unrelated held hand preserved", func(t *testing.T) {
+		s, c := automaticFixture()
+		self := s.actor("self")
+		self.HeldToolID = new("item-169")
+		self.Gear = &BattleGearStats{AccessoryID: "item-169"}
+		self.ItemDefinitionIDs = []string{"item-169", "item-193"}
+
+		r, err := s.ApplyAutomaticRevival(&c, "self", &targetRNG{t: t})
+		if err != nil || !r.Prevented {
+			t.Fatal(s, r, err)
+		}
+		if self.HeldToolID == nil || *self.HeldToolID != "item-169" ||
+			self.Gear.AccessoryID != "item-169" ||
+			!reflect.DeepEqual(self.ItemDefinitionIDs, []string{"item-169"}) {
+			t.Fatalf("cleared unrelated hand: %+v gear=%+v", self, self.Gear)
+		}
+	})
+}

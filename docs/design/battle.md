@@ -255,15 +255,7 @@ Revival requires its own callback predicate. Tool6 restores full MaxHP; book173 
 
 The dispatcher permits a fallen actor to submit 66.6. A missing or fallen designated helper returns normally without revival or a ban (`_battle.cgi:654`, `_skill.cgi:4910–4930`). Indirect callbacks keep the source's absence of ordinary action guards. Direct revival preserves recipient status, temporary effects and tension except for the callback's explicit writes; it has no healing modifiers, counters or universal minimum-1HP/MaxHP clamp. Party loops and sacrifices have no caster seal/living checks; single magic callbacks use the symbolic revival target helper, including confusion, reflection and cover.
 
-Automatic revival is the **prefix** of shared defeat (`_battle.cgi:28–87`), before final-defeat/reward handling:
-
-1. Temporary revival clears that temporary, restores floor(MaxHP×(0.1+rand0.1)), resets and returns, even when rounded HP is 0.
-2. Pharaoh requires MP strictly greater than 25%MaxMP; restore full HP, debit floor 50% current MP, reset and return. The ability remains available.
-3. Every other member with weapon37+armor38 receives floor 50% of the fallen member's current AT, capped 999, with no living/team filter. This precedes later item revivals.
-4. Item161 at tension≥8, or item193, restores floor 50%MaxHP and resets. Item193 is checked/removed **after** reset and immobilizes its holder. Item161 stays equipped; reset can lower its tension eligibility.
-5. Noncursed item260 restores floor 30%MaxHP, resets, then adds 300 AT/DF/AG without a 999 cap and adds curse. Already cursed holders skip this branch.
-
-A prevented defeat returns before rewards, independently of positive HP. Otherwise defeat continues with final reset, final strike, inheritance and rewards. Sacrifices call the same defeat closure with the actor's current HP intact and overwrite MP0/1 **after** it returns; the area-death sacrifice still invokes it again if the area operation already defeated the actor. No revival awards rewards or repeats settlement. Saved facts include consumed equipment, curse, resources, helper HP and bans; reload never replays a revival roll.
+Automatic revival precedes final defeat, final strike, inheritance and rewards: a prevented defeat returns before rewards, independently of positive HP. Otherwise defeat continues with final reset, final strike, inheritance and rewards. Sacrifices call the same defeat closure with the actor's current HP intact and overwrite MP0/1 **after** it returns; the area-death sacrifice still invokes it again if the area operation already defeated the actor. No revival awards rewards or repeats settlement. Saved facts include consumed equipment, curse, resources, helper HP and bans; reload never replays a revival roll.
 
 ##### Summoned roster and helper commands
 

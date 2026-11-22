@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -140,5 +141,74 @@ func TestJobAssetHandChangesKeepEquippedIdentity(t *testing.T) {
 				t.Fatal("durable hand", *f.Assets.HeldToolID, durable)
 			}
 		})
+	}
+}
+
+func TestAutomaticRevivalAmuletClearsHandForSubsequentJobAssets(t *testing.T) {
+	for _, entry := range []string{"job-78-entry-5", enhancedEntry} {
+		for _, npc := range []bool{false, true} {
+			t.Run(entry+"/npc="+map[bool]string{false: "false", true: "true"}[npc], func(t *testing.T) {
+				s, _, f, d := enhancedFixture("item-193")
+				a := &s.Actors[0]
+				a.NPC = npc
+				a.Gear.WeaponID, a.Gear.ArmorID, a.Gear.AccessoryID = "weapon-01", "armor-01", "item-193"
+				a.Gear.WeaponAttack = new(12)
+				a.ItemDefinitionIDs = []string{"weapon-01", "armor-01", "item-193"}
+				a.Abilities = []string{"dokuro_amulet"}
+
+				resetCtx := corebattle.EquipmentResetContext{TargetContext: f.TargetContext}
+				auto := corebattle.AutomaticRevivalContext{
+					TargetContext: f.TargetContext,
+					Reset:         func(id string) error { return s.ApplyEquipmentReset(&resetCtx, id, noArithmeticDraws{t}) },
+				}
+				res, err := s.ApplyAutomaticRevival(&auto, "self", noArithmeticDraws{t})
+				if err != nil || !res.Prevented {
+					t.Fatal(s, res, err)
+				}
+				raw, err := json.Marshal(s)
+				if err != nil {
+					t.Fatal(err)
+				}
+				s = corebattle.LifetimeState{}
+				if err := json.Unmarshal(raw, &s); err != nil {
+					t.Fatal(err)
+				}
+				reloaded := &s.Actors[0]
+				if reloaded.HeldToolID == nil || *reloaded.HeldToolID != "" ||
+					reloaded.Gear.AccessoryID != "" ||
+					!reflect.DeepEqual(reloaded.ItemDefinitionIDs, []string{"weapon-01", "armor-01"}) ||
+					slices.Contains(reloaded.Abilities, "dokuro_amulet") ||
+					!reflect.DeepEqual(reloaded.ConsumedItems, []corebattle.ConsumedItem{{ID: "item-193", Quantity: 1}}) {
+					t.Fatalf("post-revival reloaded state inconsistent: %+v gear=%+v", reloaded, reloaded.Gear)
+				}
+				// ApplyAutomaticRevival must not mutate the requester's durable projection.
+				if *f.Assets.HeldToolID != "item-193" {
+					t.Fatalf("durable hand mutated by revival: %q", *f.Assets.HeldToolID)
+				}
+				if !npc {
+					if _, err := d.InvocationAction(&s, &f, []string{entry}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+						t.Fatalf("expected mismatch before durable sync, got %v", err)
+					}
+					*f.Assets.HeldToolID = ""
+				}
+				if entry == "job-78-entry-5" {
+					executeJobAsset(t, &s, &f, d, entry, 0, 0, 0)
+				} else {
+					runEnhanced(t, &s, &f, d, 0)
+				}
+				want := []string{"weapon-01", "armor-01", "item-001"}
+				if *s.Actors[0].HeldToolID != "item-001" || s.Actors[0].Gear.AccessoryID != "item-001" ||
+					!reflect.DeepEqual(s.Actors[0].ItemDefinitionIDs, want) {
+					t.Fatalf("subsequent %s did not see empty hand: %+v gear=%+v", entry, s.Actors[0], s.Actors[0].Gear)
+				}
+				durable := "item-001"
+				if npc {
+					durable = "item-193"
+				}
+				if *f.Assets.HeldToolID != durable {
+					t.Fatalf("durable hand = %q, want %q", *f.Assets.HeldToolID, durable)
+				}
+			})
+		}
 	}
 }
