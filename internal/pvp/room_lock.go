@@ -37,9 +37,11 @@ func (s *Service) withRoomLock(ctx context.Context, roomID string, fn func(ctx c
 		}
 		recoveredPending := false
 		if t.Pending {
-			if err := s.publishTransition(lockedCtx, t); err != nil {
+			published, err := s.publishTransition(lockedCtx, t)
+			if err != nil {
 				return err
 			}
+			t = published
 			t.Pending = false
 			recoveredPending = true
 		}

@@ -78,8 +78,8 @@ func TestValkeyRoomRepository_SaveRoom(t *testing.T) {
 		t.Fatalf("expected 2 commands, got %d: %v", len(cmds), cmds)
 	}
 
-	// First command: SET room key with TTL
-	if cmds[0][0] != "SET" || cmds[0][1] != pvp.DefaultRoomKeyPrefix+room.ID {
+	// First command: SET room key with PX TTL
+	if cmds[0][0] != "SET" || cmds[0][1] != pvp.DefaultRoomKeyPrefix+room.ID || len(cmds[0]) < 5 || cmds[0][3] != "PX" || cmds[0][4] != "1800000" {
 		t.Errorf("unexpected SET command: %v", cmds[0])
 	}
 	var savedDetail pvp.RoomDetail
@@ -300,16 +300,16 @@ func TestValkeyRoomRepository_ListRooms(t *testing.T) {
 		t.Errorf("unexpected summaries order or IDs: %+v", summaries)
 	}
 
-	// Verify lazy pruning was executed via ZREMRANGEBYSCORE
+	// Verify lazy pruning was executed via ZREMRANGEBYSCORE with strict exclusive cutoff
 	pruned := false
 	for _, recorded := range client.RecordedCommandStrings() {
-		if recorded[0] == "ZREMRANGEBYSCORE" && recorded[1] == pvp.DefaultRoomsActiveIndexKey && recorded[2] == "-inf" {
+		if recorded[0] == "ZREMRANGEBYSCORE" && recorded[1] == pvp.DefaultRoomsActiveIndexKey && recorded[2] == "-inf" && strings.HasPrefix(recorded[3], "(") {
 			pruned = true
 			break
 		}
 	}
 	if !pruned {
-		t.Error("expected lazy pruning via ZREMRANGEBYSCORE on DefaultRoomsActiveIndexKey")
+		t.Error("expected lazy pruning via ZREMRANGEBYSCORE on DefaultRoomsActiveIndexKey with exclusive '(' cutoff")
 	}
 
 	// Verify that room-expired was purged via ZREM
@@ -373,6 +373,9 @@ func TestValkeyRoomRepository_CharacterRoom(t *testing.T) {
 	cmds := client.RecordedCommandStrings()
 	if len(cmds) != 1 || cmds[0][0] != "SET" || !strings.Contains(cmds[0][1], "char-1") || cmds[0][2] != "room-1" {
 		t.Errorf("unexpected SetCharacterRoom command: %v", cmds)
+	}
+	if len(cmds[0]) < 5 || cmds[0][3] != "PX" || cmds[0][4] != "1800000" {
+		t.Errorf("expected PX 1800000 TTL on SetCharacterRoom, got %v", cmds[0])
 	}
 
 	errSet := errors.New("set char error")

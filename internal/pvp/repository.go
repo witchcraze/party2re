@@ -27,6 +27,9 @@ func withRemainingTTL(ctx context.Context, ttl time.Duration) context.Context {
 
 func ttlFromContext(ctx context.Context) time.Duration {
 	if ttl, ok := ctx.Value(roomTTLContextKey{}).(time.Duration); ok && ttl > 0 {
+		if ttl < time.Millisecond {
+			return time.Millisecond
+		}
 		return ttl
 	}
 	return DefaultLobbyTTL
@@ -247,7 +250,7 @@ func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room ColosseumRoom,
 	}
 
 	key := DefaultRoomKeyPrefix + room.ID
-	cmd := v.client.B().Set().Key(key).Value(string(data)).Ex(ttlFromContext(ctx)).Build()
+	cmd := v.client.B().Set().Key(key).Value(string(data)).Px(ttlFromContext(ctx)).Build()
 	if err := v.client.Do(ctx, cmd).Error(); err != nil {
 		return err
 	}
@@ -308,7 +311,7 @@ func (v *ValkeyRoomRepository) DeleteRoom(ctx context.Context, id string) error 
 func (v *ValkeyRoomRepository) ListRooms(ctx context.Context) ([]RoomSummary, error) {
 	now := time.Now().UTC()
 	cutoff := float64(now.Add(-DefaultLobbyTTL).Unix())
-	remCmd := v.client.B().Zremrangebyscore().Key(DefaultRoomsActiveIndexKey).Min("-inf").Max(strconv.FormatFloat(cutoff, 'f', 0, 64)).Build()
+	remCmd := v.client.B().Zremrangebyscore().Key(DefaultRoomsActiveIndexKey).Min("-inf").Max("(" + strconv.FormatFloat(cutoff, 'f', 0, 64)).Build()
 	_ = v.client.Do(ctx, remCmd)
 
 	cmd := v.client.B().Zrevrange().Key(DefaultRoomsActiveIndexKey).Start(0).Stop(50).Build()
@@ -371,7 +374,7 @@ func (v *ValkeyRoomRepository) GetCharacterRoom(ctx context.Context, characterID
 
 func (v *ValkeyRoomRepository) SetCharacterRoom(ctx context.Context, characterID string, roomID string) error {
 	key := DefaultCharacterKeyPrefix + characterID
-	cmd := v.client.B().Set().Key(key).Value(roomID).Ex(ttlFromContext(ctx)).Build()
+	cmd := v.client.B().Set().Key(key).Value(roomID).Px(ttlFromContext(ctx)).Build()
 	return v.client.Do(ctx, cmd).Error()
 }
 
