@@ -242,7 +242,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 	if result.ResponseReached && !result.Suppressed {
 		// A replaced encounter answers with its old responders, never new members.
 		if npc := travel.BeginNPCResponse(r, now); npc != "" {
-			if err := c.respond(r, npc, &level, &seals, rewards, assets, &fx); err != nil {
+			if err := c.respond(r, npc, &level, &seals, rewards, assets, result.ArithmeticDivisor, &fx); err != nil {
 				return fx, err
 			}
 			if err := r.RecordNPCResponse(npc, now); err != nil {
@@ -257,7 +257,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 
 // respond runs the selected NPC's response on the saved state. Its opponents
 // are the living members of other teams in member order.
-func (c runCombat) respond(r *NormalRun, npc string, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, fx *RunActionEffects) error {
+func (c runCombat) respond(r *NormalRun, npc string, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, divisor int, fx *RunActionEffects) error {
 	team := r.actor(npc).TeamID
 	frame := corebattle.TargetContext{ActorID: npc}
 	before := make(map[string]bool, len(r.Battle.Actors))
@@ -273,7 +273,7 @@ func (c runCombat) respond(r *NormalRun, npc string, level *int, seals *corebatt
 		}
 	}
 	ports := newRunPorts(frame, level, seals, r.Battle.Fields.Current(), rewards, true)
-	op := corebattle.NPCOperation{Damage: ports.damage, Defeat: ports.defeat, Field: corebattle.NamedFieldContext{DamageContext: ports.damage, Death: ports.defeat}, Assets: assets}
+	op := corebattle.NPCOperation{Damage: ports.damage, Defeat: ports.defeat, Field: corebattle.NamedFieldContext{DamageContext: ports.damage, Death: ports.defeat}, Assets: assets, ArithmeticDivisor: divisor}
 	saved := cloneLifetimeState(r.Battle)
 	actor := findActor(saved.Actors, npc)
 	if assets != nil && actor.HeldToolID == nil && actor.Gear != nil {

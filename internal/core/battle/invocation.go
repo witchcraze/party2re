@@ -25,7 +25,8 @@ type CallbackContext struct {
 	Status *StatusContext
 	Defeat *DefeatContext
 	Assets *JobAssets
-	// ArithmeticDivisor is shared by nested callbacks in this operation only.
+	// ArithmeticDivisor is shared by nested callbacks and the same command's
+	// NPC response; it is never saved.
 	ArithmeticDivisor int
 	// Invoke executes a declared child in the current argument/actor frame. It
 	// is supplied only during Execute, after the enclosing closure was admitted.

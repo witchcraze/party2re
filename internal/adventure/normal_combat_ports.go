@@ -196,6 +196,8 @@ func runFacts(frame corebattle.CallbackContext, apply func(*corebattle.CallbackC
 		DamageCalls: damage.DamageCalls - base.DamageCalls,
 		HealCalls:   damage.HealCalls - base.HealCalls,
 		End:         damage.End,
+		// Execute-time divisor only; nested callbacks already wrote it back.
+		ArithmeticDivisor: work.ArithmeticDivisor,
 	}
 	if !slices.Equal(work.EnemyIDs, frame.EnemyIDs) || !slices.Equal(work.PartyIDs, frame.PartyIDs) || !slices.Equal(work.MemberOnlyIDs, frame.MemberOnlyIDs) {
 		facts.Target = work.TargetContext

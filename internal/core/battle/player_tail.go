@@ -16,6 +16,8 @@ type PlayerTailContext struct {
 	NormalAction  bool
 	Item210Fallen []string
 	DefeatContext *DefeatContext
+	// ArithmeticDivisor is the latest divisor a submission's callbacks set.
+	ArithmeticDivisor int
 }
 
 // PlayerTailEntries are passive producer identities, never submitted commands,

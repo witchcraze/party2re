@@ -3,6 +3,7 @@ package adventure_test
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -159,5 +160,32 @@ func TestRunCombatArithmeticDigitReversal(t *testing.T) {
 	r := accepted(t, f, combatCommand(cmd, "reverse", "job-31-reverse", "foe", ""))
 	if foe := runActorByID(r, "foe"); foe.HP != 321 {
 		t.Fatalf("foe hp=%d", foe.HP)
+	}
+}
+
+// _skill.cgi:5459–5571: `$_mp_num` is a request global, so the NPC answering
+// the same command (_battle.cgi:1170) runs a direct job72 effect with the
+// player's divisor; the next command starts without one.
+func TestRunCombatArithmeticDivisorReachesSameCommandResponse(t *testing.T) {
+	f := combatFixture(t, 1)
+	foe := mpEnemy("foe", 900, 8)
+	// Pool [normal attack, ×フレア, ×フレア]: midRNG draws position 1.
+	foe.Jobs = corebattle.BattleJobs{JobID: "job-72", SP: 20, OldJobID: "job-72", OldSP: 20}
+	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+		a := runActorByID(r, f.actors[0].ID)
+		a.Jobs = corebattle.BattleJobs{JobID: "job-72", SP: 150}
+		a.MP, a.MaxMP = 50, 50
+	}, foe)
+	// 273 = int(260×(0.9+0.3×.5)) on every member with MP%4 == 0: the actor
+	// after its 14 MP cost (36) and the foe (8).
+	r := accepted(t, f, combatCommand(cmd, "reflect", "", "", "＠ＭＰ４ ＠×リフレク"))
+	if a, foe := runActorByID(r, cmd.ActorID), runActorByID(r, "foe"); a.MP != 36 || a.HP != 227 || foe.HP != 627 {
+		t.Fatalf("carried: actor hp=%d mp=%d foe hp=%d", a.HP, a.MP, foe.HP)
+	}
+	f.clock.add(time.Hour)
+	cmd.Version = r.Version
+	r = accepted(t, f, combatCommand(cmd, "strike", "attack", "foe", ""))
+	if a := runActorByID(r, cmd.ActorID); a.HP != 227 || !r.LastActions["foe"].Equal(f.clock.Now()) {
+		t.Fatalf("next command: actor hp=%d foe acted=%v", a.HP, r.LastActions["foe"])
 	}
 }
