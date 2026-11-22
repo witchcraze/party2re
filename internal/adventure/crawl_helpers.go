@@ -6,6 +6,16 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
+func (s *CrawlSession) rngIntn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	if s.Rng != nil {
+		return s.Rng(n)
+	}
+	return random.Intn(n)
+}
+
 func (s *CrawlSession) rngFloat() float64 {
 	if s.RngFloat != nil {
 		return s.RngFloat()

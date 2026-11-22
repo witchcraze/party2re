@@ -23,8 +23,8 @@ func TestPartyBattle_DefeatEarningsCaptureLivingRecipients(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []DefeatEarnings{
-		{Reward: Reward{Experience: 7, Currency: 11, Crystals: 1}, RecipientIDs: []string{"a", "b"}},
-		{Reward: Reward{Experience: 13, Currency: 19, Crystals: 1}, RecipientIDs: []string{"a"}},
+		{ActorID: "a", Reward: Reward{Experience: 7, Currency: 11, Crystals: 1}, RecipientIDs: []string{"a", "b"}},
+		{ActorID: "a", Reward: Reward{Experience: 13, Currency: 19, Crystals: 1}, RecipientIDs: []string{"a"}},
 	}
 	if r.Outcome != OutcomeWin || r.RemainingHP["b"] != 0 || !reflect.DeepEqual(r.DefeatEarnings, want) {
 		t.Fatalf("outcome=%s HP=%v earnings=%+v, want %+v", r.Outcome, r.RemainingHP, r.DefeatEarnings, want)
@@ -158,5 +158,25 @@ func TestDefeatEarnings_EnemyRevivedAfterDefeatEarnsAgain(t *testing.T) {
 		if earnings.Reward.Experience != 7 || earnings.Reward.Currency != 11 || !reflect.DeepEqual(earnings.RecipientIDs, []string{"a"}) {
 			t.Fatal("legitimate re-defeat lost earnings", c.defeatEarnings)
 		}
+	}
+}
+
+func TestPartyBattle_DefeatEarningsCaptureActingPlayer(t *testing.T) {
+	a := MustNewParticipant("a", 100, 1, 0)
+	a.Agility = 100
+	b := MustNewParticipant("b", 100, 100, 0)
+	b.Agility = 50
+	e := MustNewParticipant("e", 10, 0, 0)
+	e.ExperienceReward, e.GoldReward = 100, 50
+	r, err := (Engine{}).ResolvePartyBattle(PartyBattleRequest{
+		Allies: []Participant{a, b}, Enemies: []Participant{e},
+		VictoryReward: Reward{Experience: 100, Currency: 50}, RNG: fixedFloatRNG{val: 0},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []DefeatEarnings{{ActorID: "b", Reward: Reward{Experience: 100, Currency: 50, Crystals: 1}, RecipientIDs: []string{"a", "b"}}}
+	if !reflect.DeepEqual(r.DefeatEarnings, want) {
+		t.Fatalf("got %+v, want %+v", r.DefeatEarnings, want)
 	}
 }

@@ -1,10 +1,36 @@
 package adventure
 
 import (
+	"context"
+	"fmt"
 	"maps"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
+
+// LoadBlessings queries active chapel blessings for all participants and records treasure eligibility.
+func (s *CrawlSession) LoadBlessings(ctx context.Context, provider BlessingProvider) error {
+	if provider == nil {
+		return nil
+	}
+	blessings := make(map[string]string, len(s.CharacterIDs))
+	for _, cID := range s.CharacterIDs {
+		b, err := provider.GetActiveBlessing(ctx, cID)
+		if err != nil {
+			return fmt.Errorf("get active blessing: %w", err)
+		}
+		blessings[cID] = b
+	}
+	s.Blessings = blessings
+	actorID := s.LeaderID
+	if actorID == "" && len(s.CharacterIDs) > 0 {
+		actorID = s.CharacterIDs[0]
+	}
+	if actorID != "" && IsTreasureBlessing(blessings[actorID]) {
+		s.HasTreasureBlessing = true
+	}
+	return nil
+}
 
 func (r DungeonCrawlResult) RewardForCharacter(id string) corebattle.Reward {
 	if r.RecipientRewards != nil {
@@ -17,8 +43,16 @@ func (s *CrawlSession) recordDefeatEarnings(result corebattle.PartyBattleResult)
 	floor := make(map[string]RunEarnings)
 	for _, defeat := range result.DefeatEarnings {
 		r := defeat.Reward
+		base, err := addRunEarnings(RunEarnings{}, RunEarnings{EXP: r.Experience, Gold: r.Currency, Crystals: r.Crystals})
+		if err != nil {
+			return err
+		}
+		base, err = addRunEarnings(base, chapelDefeatBonus(base, s.Blessings[defeat.ActorID], s.rngIntn))
+		if err != nil {
+			return err
+		}
 		for _, id := range defeat.RecipientIDs {
-			e, err := addRunEarnings(floor[id], RunEarnings{EXP: r.Experience, Gold: r.Currency, Crystals: r.Crystals})
+			e, err := addRunEarnings(floor[id], base)
 			if err != nil {
 				return err
 			}

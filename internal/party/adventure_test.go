@@ -101,7 +101,11 @@ func (e fixedBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest)
 	}
 	var earnings []corebattle.DefeatEarnings
 	if outcome == corebattle.OutcomeWin {
-		earnings = []corebattle.DefeatEarnings{{Reward: baseReward, RecipientIDs: recipients}}
+		actorID := ""
+		if len(recipients) > 0 {
+			actorID = recipients[0]
+		}
+		earnings = []corebattle.DefeatEarnings{{ActorID: actorID, Reward: baseReward, RecipientIDs: recipients}}
 	}
 
 	return corebattle.PartyBattleResult{

@@ -176,7 +176,10 @@ func (ctx *battleContext) recordDefeatEarnings(actor, target Participant, crysta
 	if ctx.teamMap[actor.ID] != ctx.allyTeamID || actor.ID == target.ID {
 		return
 	}
-	e := DefeatEarnings{Reward: Reward{Experience: target.ExperienceReward, Currency: target.GoldReward, Crystals: crystals}}
+	e := DefeatEarnings{
+		ActorID: actor.ID,
+		Reward:  Reward{Experience: target.ExperienceReward, Currency: target.GoldReward, Crystals: crystals},
+	}
 	for _, ally := range ctx.req.Allies {
 		if ctx.hpMap[ally.ID] > 0 {
 			e.RecipientIDs = append(e.RecipientIDs, ally.ID)

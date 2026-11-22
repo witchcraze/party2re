@@ -110,6 +110,7 @@ type CrawlSession struct {
 	InspectedBoxes      map[string]int                       `json:"inspected_boxes,omitempty"`
 	Participants        []corebattle.Participant             `json:"participants"`
 	ConsumedItems       map[string][]corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	Blessings           map[string]string                    `json:"blessings,omitempty"`
 	HasTreasureBlessing bool                                 `json:"has_treasure_blessing,omitempty"`
 	UnsealDemonKing     bool                                 `json:"unseal_demon_king,omitempty"`
 	Rng                 func(n int) int                      `json:"-"`

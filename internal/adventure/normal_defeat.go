@@ -115,17 +115,7 @@ func modifyRunDefeatEarnings(e RunEarnings, gear *corebattle.BattleGearStats, mo
 	if mode == CrawlModeCalm {
 		e.EXP, e.Gold, e.Crystals = e.EXP/2, e.Gold/2, e.Crystals/2
 	}
-	bonus := RunEarnings{}
-	switch {
-	case battle.IsGoldBlessing(wish):
-		if rng.Intn(4) == 0 {
-			bonus.Gold = e.Gold / 2
-		}
-	case battle.IsExpBlessing(wish):
-		if rng.Intn(4) == 0 {
-			bonus.EXP = e.EXP / 2
-		}
-	}
+	bonus := chapelDefeatBonus(e, wish, rng.Intn)
 	if gear != nil && gear.WeaponID == "weapon-01" && gear.ArmorID == "armor-01" && rng.Intn(4) == 0 {
 		bonus.EXP += 5
 	}
