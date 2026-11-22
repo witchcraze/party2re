@@ -821,6 +821,26 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		for _, gid := range []string{g1.ID, g2.ID, g3.ID} {
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid); err != nil {
+				t.Error(err)
+			}
+		}
+		for _, ch := range []struct{ id, playerID string }{
+			{c1.ID, c1.PlayerID},
+			{c2.ID, c2.PlayerID},
+			{c3.ID, c3.PlayerID},
+		} {
+			if err := charRepo.Delete(cleanupCtx, ch.id); err != nil {
+				t.Error(err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", ch.playerID); err != nil {
+				t.Error(err)
+			}
+		}
+	})
 	for _, gid := range []string{g1.ID, g3.ID} {
 		if _, err := db.ExecContext(ctx, "UPDATE guilds SET color = '#FF3333' WHERE id = ?", gid); err != nil {
 			t.Fatal(err)
@@ -915,9 +935,20 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = baseRooms.DeleteRoom(ctx, detail.Room.ID)
+		cleanupCtx := context.Background()
+		if err := baseRooms.DeleteRoom(cleanupCtx, detail.Room.ID); err != nil {
+			t.Error(err)
+		}
 		for _, cid := range []string{c1.ID, c2.ID, c3.ID} {
-			_ = baseRooms.DeleteCharacterRoom(ctx, cid, detail.Room.ID)
+			if err := baseRooms.DeleteCharacterRoom(cleanupCtx, cid, detail.Room.ID); err != nil {
+				t.Error(err)
+			}
+		}
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_match_transitions WHERE room_id = ?", detail.Room.ID); err != nil {
+			t.Error(err)
+		}
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_exit_claims WHERE room_id = ?", detail.Room.ID); err != nil {
+			t.Error(err)
 		}
 	})
 	if _, err := svc.JoinRoom(ctx, c2.ID, detail.Room.ID, ""); err != nil {
@@ -1045,9 +1076,21 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = baseRooms.DeleteRoom(ctx, room2.Room.ID)
-		_ = baseRooms.DeleteCharacterRoom(ctx, c1.ID, room2.Room.ID)
-		_ = baseRooms.DeleteCharacterRoom(ctx, c2.ID, room2.Room.ID)
+		cleanupCtx := context.Background()
+		if err := baseRooms.DeleteRoom(cleanupCtx, room2.Room.ID); err != nil {
+			t.Error(err)
+		}
+		for _, cid := range []string{c1.ID, c2.ID} {
+			if err := baseRooms.DeleteCharacterRoom(cleanupCtx, cid, room2.Room.ID); err != nil {
+				t.Error(err)
+			}
+		}
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_match_transitions WHERE room_id = ?", room2.Room.ID); err != nil {
+			t.Error(err)
+		}
+		if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_exit_claims WHERE room_id = ?", room2.Room.ID); err != nil {
+			t.Error(err)
+		}
 	})
 	if _, err := svc.JoinRoom(ctx, c1.ID, room2.Room.ID, ""); err != nil {
 		t.Fatal(err)
