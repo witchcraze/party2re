@@ -604,8 +604,6 @@ A lost commit acknowledgement is resolved by reading the owned receipt under the
 same serialization boundary, never by rerolling. SQL-commit-before-cleanup failure
 retries only matching cleanup; mandatory penalties remain durable pending work.
 Unsupported encodings and store errors fail closed, without memory fallback.
-Replay/scene publication is optional and must not repeat committed effects.
-The [Replay source/copy contract](../design/replay.md#command-commit-and-publication-failure)
-requires frozen scene and exit-prefix facts to survive command commit and live-state
-disposal before optional publication; this seam is not yet implemented.
+Replay/scene publication is optional, must not repeat committed effects and follows
+the [Replay source/copy contract](../design/replay.md#command-commit-and-publication-failure).
 Clients retain GET-only recovery and do not automatically replay POST requests.
