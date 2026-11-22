@@ -2,86 +2,27 @@
 
 ## Purpose
 
-This document defines the 5-category item classification, pricing and inventory ownership models, and the current Go equipment representation. Legacy equipment uses weapon, armor, and held-item fields; additional slot categories are implementation metadata whose gameplay equivalence must be checked.
+This document records cross-module item usage categories, legacy hand-field mappings, and non-legacy equipment metadata boundaries (`internal/core/item`, `internal/core/inventory`). Catalog definitions, stackability/consumption invariants, and pricing live in code and [Shops](shops.md).
 
-## Item System
+## Usage Location Categories
 
-### Separation of Definition and Instance
-- **`ItemDefinition`**: Static catalog definition defining what an item is, its base price, and its equipment slot.
-- **`ItemInstance`**: Concrete owned item entity possessing a unique ID, item definition ID, stack quantity, and an enhancement metadata field (+0 to +10 in current Go). The metadata does not establish a legacy gold/material enhancement mechanic; authentic weapon seals are documented in [blacksmith.md](blacksmith.md).
+Derived from legacy `@ites` (`$ites[no][3]`, `party2/lib/_data.cgi:617`), item usage is partitioned into categories `0`–`4`:
 
-### 5-Category Item Catalog
-Definitions are organized into five JSON data catalogs:
-1. `weapons.json`: Main-hand weapons (swords, staves, axes, bows).
-2. `armors.json`: Body armor (plate, robes, leather).
-3. `shields.json`: Off-hand shields and defensive off-hand gear.
-4. `accessories.json`: Rings, amulets, and trinkets.
-5. `consumables.json`: Potions, herbs, craft materials, and quest items.
-
-### Usage Location Categories (`UsageCategory`)
-Derived from the authentic Party2 Perl CGI `@ites` table (`$ites[no][3]`), every item definition specifies its authorized usage context:
-- **`UsageCategoryNone` (`0`)**: Not actively usable via menus (materials, coins, job emblems, auto-consumed quest items).
-- **`UsageCategoryCombatOnly` (`1`)**: Usable strictly during active battle commands (`＠どうぐ`).
-- **`UsageCategoryAnytime` (`2`)**: Usable anytime / at Home (`＠ほーむ`) (seeds, medals, fight elixir, recipes).
-- **`UsageCategoryCombatPassive` (`3`)**: Automatically triggers or provides passive protection in combat (charms, talismans, elemental orbs).
-- **`UsageCategoryDepotAfterAction` (`4`)**: Quest equipment callbacks or deferred Home Depot callbacks (`item-113`, `item-114`, `item-259`). The [Home consumption contract](home.md#legacy-dispatch-and-consumption-contract) distinguishes held and Depot behavior.
-
-### Usage Location Validation Rules
-- **Combat Action Command (`＠どうぐ`)**: Active item execution in combat (`ActionItem`) is strictly restricted to `UsageCategoryCombatOnly` (`1`). Non-combat items (seeds, medals, materials, passives; categories `0`, `2`, `3`, `4`) are rejected with `ErrCannotUseInCombat` (`item cannot be used in combat`) and are never consumed in battle.
-- **Home Command (`＠ほーむ`)**: Categories `2` and `4` are eligible for dispatch; [Home](home.md#legacy-dispatch-and-consumption-contract) owns the complete reconciliation, including missing callbacks and intentional no-stat consumption. Combat items (`1`) return `ErrCannotUseHere` (`%sは戦闘中でしか使えません`), and non-usable items (`0`, `3`) return `%sはここでは使えません`.
-
-### Pricing Rules
-- **Purchase Price**: Defined in the item catalog (`Price`).
-- **Resale Price**: Exactly 50% of the base purchase price ($\lfloor\text{Price} / 2\rfloor$).
-
----
+- **`0` (None):** Not actively usable via menus (materials, coins, job emblems, auto-consumed items).
+- **`1` (Combat only):** Usable only via combat `＠どうぐ`.
+- **`2` (Anytime / Home):** Usable at Home (`＠ほーむ`); see [Home consumption contract](home.md#legacy-dispatch-and-consumption-contract).
+- **`3` (Combat passive):** Passive or automatic in-battle triggers.
+- **`4` (Quest entry / Home Depot-after-action):**
+  - At Home (`＠つかう`), category `4` shares the [Home consumption contract](home.md#legacy-dispatch-and-consumption-contract) (`113`/`114` no-stat consumption; `259` opens `258`).
+  - At quest entry (`party2/lib/quest.cgi:1188–1189`), `item-113` and `item-114` add +100 battle MaxHP/MaxMP capped at 999 (`party2/lib/_data.cgi:1408–1429`).
+  - **Decision (#2369, 2026-11-22) — `item-259` (`異封の鍵`) at quest entry:** Intentionally treated as a **no-op** (characters enter combat normally with no Depot box lookup/opening, reward delivery, or room corruption). Legacy `quest.cgi:1188` invokes `259`'s Home-oriented callback (`_data.cgi:2024–2068`) while expecting a `%p` hash return; its scalar/empty return wipes `%p` and triggers `_battle.cgi:478` room deletion (`"データが壊れています。クエストを強制終了します"`). `home.cgi:329–372` (`$is_after`) indicates category `4` was reused on `259` to defer Depot writes rather than for quest entry.
 
 ## Equipment System
 
-### Current Go equipment slots
-The exported slot enum has four equipment categories; no `SlotAccessory1` or `SlotAccessory2` exists:
-- `SlotMainHand` (`main-hand`): Main-hand weapon.
-- `SlotOffHand` (`off-hand`): Off-hand shield or secondary weapon.
-- `SlotBody` (`body`): Body armor.
-- `SlotAccessory` (`accessory`): One accessory category. Do not invent a second accessory slot from this enum.
-
-### Invariants & Rules
-1. **Ownership Requirement**: Only items currently in the character's active inventory can be equipped.
-2. **Slot Compatibility**: An item definition's `Slot` must match the target equipment slot (`SlotNone` items like potions/materials cannot be equipped).
-3. **Equip Operation**: Equipping an item into an occupied slot returns the previously equipped instance ID so it can be returned/swapped in inventory.
-4. **Unequip Operation**: Removing equipment unlinks the instance from the slot and requires the slot to currently hold an item.
-   Depot deposit/send removes links to the moved instance before deleting its
-   inventory row, within the same transaction as ownership and character
-   customization changes. See [Depot movement invariants](depot.md#1-item-deposit--withdrawal)
-   for metadata clearing and failure rollback; withdrawal swaps follow the
-   [Depot withdrawal contract](depot.md#1-item-deposit--withdrawal).
-5. **Stackability Domain Invariants**:
-   - **Stackable Definitions (`Definition.IsStackable() == true`)**: Items with `Slot == SlotNone` (consumables, craft materials) are stackable (`Quantity >= 1`).
-   - **Non-Stackable Definitions (`Definition.IsStackable() == false`)**: Equipment items (`Slot != SlotNone`: weapons, armor, shields, accessories) represent discrete gear. Each equipment piece must have `Quantity == 1` and occupy its own distinct storage slot.
-   - **Enhancement Level Invariant**: Any item with `EnhancementLevel > 0` must strictly have `Quantity == 1` and cannot stack with any other item instance (`CanStackWith == false`).
-   - **Instance Creation & Validation Guards**: `NewInstanceWithEnhancement`, `Definition.NewInstance`, and `Definition.NewInstanceWithEnhancement` reject `Quantity > 1` for equipment or enhanced items with `ErrInvalidInstance`.
+- **Non-legacy metadata:** `ItemInstance` enhancement metadata (`+0` to `+10` in Go) does not establish a legacy gold/material enhancement mechanic; authentic weapon seals belong to [Blacksmith](blacksmith.md).
+- **Single accessory slot:** Go exposes one accessory slot category (`SlotAccessory`); do not invent a second accessory slot.
 
 ### Legacy hand fields
-Legacy characters hold one weapon (`$m{wea}`), one armor (`$m{arm}`) and one
-held item (`$m{ite}`); entering a field is equipping it. Go represents them as
-inventory rows classified by `Definition.LegacyStorageKey` kind: kind 1 weapons
-(main-hand), kind 2 armor (body) and kind 3 every `item-NNN` entry, so shields
-(off-hand), accessories and consumables share the single held field. This kind
-differs from `Slot.Kind()`, which groups shields and accessories with armor.
-[Depot withdrawal](depot.md#1-item-deposit--withdrawal) and [Shop single purchase](shops.md#5-purchase-routing-and-depot-auto-transfer)
-apply this mapping, equipping gear into `equipment_slots` atomically on acquisition
-when the target hand field is empty, and routing overflow or occupied hands to Depot.
-Empty hand fields accept grants independently without being blocked by occupied
-fields in other hand kinds (`Inventory.IsFull(definitionID)`).
 
----
-
-## Storage & Item Consumption
-
-Inventory storage (`internal/core/inventory`) encapsulates item mutations and validates quantities:
-- **`Consume(instanceID, quantity) error`**: Decrements item quantity by `quantity` or removes the slot when quantity reaches 0. Rejects `quantity <= 0` or insufficient stack with `ErrInvalidQuantity`.
-- **`ConsumeItem(instanceID, quantity) (item.Instance, error)`**: Decrements item quantity and returns a copy of the consumed item instance with `Quantity = quantity`.
-- **`ConsumeOne(instanceID) error`**: Convenience helper delegating directly to `Consume(instanceID, 1)`.
-- **`ConsumeOneItem(instanceID) (item.Instance, error)`**: Convenience helper delegating directly to `ConsumeItem(instanceID, 1)`.
-- **Interface Symmetry**: Symmetrically mirrors Depot storage consumption (`depot.Consume`, `depot.ConsumeOne`, `depot.PurgeSlot`) across storage aggregates.
+Legacy characters hold one weapon (`$m{wea}`), one armor (`$m{arm}`) and one held item (`$m{ite}`); entering a field is equipping it. Go represents them as inventory rows classified by `Definition.LegacyStorageKey` kind: kind 1 weapons (main-hand), kind 2 armor (body) and kind 3 every `item-NNN` entry, so shields (off-hand), accessories and consumables share the single held field. This kind differs from `Slot.Kind()`, which groups shields and accessories with armor. [Depot withdrawal](depot.md#1-item-deposit--withdrawal) and [Shop single purchase](shops.md#5-purchase-routing-and-depot-auto-transfer) apply this mapping, equipping gear into `equipment_slots` atomically on acquisition when the target hand field is empty, and routing overflow or occupied hands to Depot. Empty hand fields accept grants independently without being blocked by occupied fields in other hand kinds (`Inventory.IsFull(definitionID)`).
 

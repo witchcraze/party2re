@@ -143,7 +143,7 @@ The target is the game's meaningful behavior and design, not its historical impl
 - [`battle.md`](battle.md) — combat formulas and deterministic resolution
 - [`progression.md`](progression.md) — experience thresholds, level growth, and celestial OverLevel
 - [`jobs-and-skills.md`](jobs-and-skills.md) — jobs, mastery, and skill execution
-- [`items-and-equipment.md`](items-and-equipment.md) — 5-category item catalog and equipment rules
+- [`items-and-equipment.md`](items-and-equipment.md) — usage categories, legacy hand fields, and equipment rules
 - [`activities.md`](activities.md) — delayed training activities
 - [`stages-and-monsters.md`](stages-and-monsters.md) — stage exploration and monster catalog
 - [`shops.md`](shops.md) — item purchase and 50% resale

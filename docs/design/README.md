@@ -75,7 +75,7 @@ graph TD
 ### 2. Character Progression, Jobs & Skills
 - [`progression.md`](progression.md) — Cumulative experience thresholds ($10 \times \text{Level}^2$), Level 99 baseline, stats, and celestial OverLevel (Lv 150).
 - [`jobs-and-skills.md`](jobs-and-skills.md) — Job catalog, Level 20 job changes, job mastery, and skill activation mechanics.
-- [`items-and-equipment.md`](items-and-equipment.md) — 5-category item catalog, equipment invariants, and consumption helpers.
+- [`items-and-equipment.md`](items-and-equipment.md) — Legacy usage categories, hand-field mapping, and non-legacy equipment metadata.
 - [`custom_skill.md`](custom_skill.md) — Custom skill synthesis using 3-gem formulas and trigger phrase matching.
 - [`god.md`](god.md) — Heaven and Underworld wish decisions and legacy pitfalls.
 
