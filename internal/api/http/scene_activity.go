@@ -62,7 +62,7 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 	}
 	for _, def := range playercontext.DefaultCatalog {
 		eligible := slices.Contains(result.AvailableActions, def.ID)
-		if def.ActivityKind == "" && !def.ActivityExempt {
+		if def.ActivityKind == "" && !def.ActivityExempt && !(def.ID == "player_inspect" && eligible) {
 			continue
 		}
 		if !eligible {

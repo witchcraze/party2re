@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"slices"
+
+	"github.com/witchcraze/party2re/internal/battle"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
 // LeaveRoom departs a live PvP room (@にげる) across recruiting, in-progress, and completed phases.
@@ -46,15 +49,7 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 			return err
 		}
 
-		found := false
-		isLeader := false
-		for _, m := range detail.Members {
-			if m.CharacterID == characterID {
-				found = true
-				isLeader = m.IsLeader
-				break
-			}
-		}
+		departing, found := findMember(detail.Members, characterID)
 		if !found {
 			if last.Kind == "leave" && last.ActorID == characterID {
 				return nil
@@ -67,7 +62,7 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 			_, cleanErr := s.cleanupInactiveRoom(lockedCtx, last, now)
 			return cleanErr
 		}
-		hasRemaining := removeMemberAndTransferLeader(&detail, characterID, isLeader)
+		hasRemaining := removeMemberAndTransferLeader(&detail, characterID, departing.IsLeader)
 
 		switch detail.Room.Status {
 		case StatusRecruiting:
@@ -95,7 +90,10 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				RemovedIDs:     []string{char.ID},
 				LastActivityAt: now,
 			}, func(txCtx context.Context) error {
-				return s.refundMembers(txCtx, []string{char.ID}, refundAmount)
+				if err := s.refundMembers(txCtx, []string{char.ID}, refundAmount); err != nil {
+					return err
+				}
+				return s.applyExitSideEffects(txCtx, char.ID, detail.Room.Round, departing)
 			})
 
 		case StatusInProgress:
@@ -121,7 +119,13 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				ForfeitedPool:  forfeitedPool,
 				LastActivityAt: now,
 			}, func(txCtx context.Context) error {
-				return s.settleRewards(txCtx, nil, "", 0, pendingKills)
+				if err := s.lockExitCharacters(txCtx, char.ID, pendingKills); err != nil {
+					return err
+				}
+				if err := s.settleRewards(txCtx, nil, "", 0, pendingKills); err != nil {
+					return err
+				}
+				return s.applyExitSideEffects(txCtx, char.ID, detail.Room.Round, departing)
 			})
 
 		case StatusCompleted:
@@ -143,12 +147,140 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 				Result:         preservedResult,
 				ForfeitedPool:  last.ForfeitedPool,
 				LastActivityAt: now,
-			}, func(context.Context) error { return nil })
+			}, func(txCtx context.Context) error {
+				return s.applyExitSideEffects(txCtx, char.ID, detail.Room.Round, departing)
+			})
 
 		default:
 			return s.repo.DeleteCharacterRoom(lockedCtx, char.ID, roomID)
 		}
 	})
+}
+
+// KickMember removes a participant before match start (@きっく, _skill.cgi:796-837),
+// applying the 60s ActionWait without bet refund or @にげる exit side-effects.
+func (s *Service) KickMember(ctx context.Context, roomID, leaderID, targetID string) error {
+	if roomID == "" {
+		return ErrRoomNotFound
+	}
+	if leaderID == "" || targetID == "" {
+		return ErrCharacterNotInRoom
+	}
+	if leaderID == targetID {
+		return ErrCannotKickSelf
+	}
+	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		last := lastTransitionFromContext(lockedCtx)
+		if recoveredPendingFromContext(lockedCtx) && last.Kind == "kick" && last.ActorID == leaderID && slices.Contains(last.RemovedIDs, targetID) {
+			return nil
+		}
+		detail, err := s.checkInactiveLocked(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
+		if detail.Room.LeaderCharacterID != leaderID {
+			return ErrNotRoomLeader
+		}
+		if detail.Room.Status != StatusRecruiting || detail.Room.Round > 0 {
+			return ErrMatchAlreadyStarted
+		}
+		if !hasRoomMember(detail.Members, targetID) {
+			return ErrCharacterNotInRoom
+		}
+
+		removeMemberAndTransferLeader(&detail, targetID, false)
+		now := s.now()
+		detail.Room.UpdatedAt = now
+		detail.Room.LastActivityAt = now
+		return s.commitActivityTransition(lockedCtx, last, Transition{
+			Kind:           "kick",
+			ActorID:        leaderID,
+			Detail:         detail,
+			RemovedIDs:     []string{targetID},
+			LastActivityAt: now,
+			PenaltyUntil:   now.Add(KickActionWait),
+		})
+	})
+}
+
+func (s *Service) lockExitCharacters(ctx context.Context, charID string, pendingKills map[string]int) error {
+	if len(pendingKills) == 0 {
+		return nil
+	}
+	ids := []string{charID}
+	for id, count := range pendingKills {
+		if id != "" && count > 0 {
+			ids = append(ids, id)
+		}
+	}
+	sortedIDs := sortCharacterIDs(ids)
+	if len(sortedIDs) <= 1 {
+		return nil
+	}
+	for _, id := range sortedIDs {
+		if _, err := s.characters.FindByIDForUpdate(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) applyExitSideEffects(ctx context.Context, charID string, round int, departing RoomMember) error {
+	exitFatigue := round*3 + 1
+	if s.settler == nil {
+		char, err := s.characters.FindByIDForUpdate(ctx, charID)
+		if err != nil {
+			return err
+		}
+		remMP := -1
+		if departing.MP != nil {
+			remMP = *departing.MP
+		}
+		char.ApplyCombatSurvival(departing.HP, remMP, departing.HP <= 0)
+		char.AddTired(exitFatigue)
+		if err := s.characters.Update(ctx, char); err != nil {
+			return err
+		}
+	} else {
+		var remMP map[string]int
+		if departing.MP != nil {
+			remMP = map[string]int{charID: *departing.MP}
+		}
+		var consumed map[string][]corebattle.ConsumedItem
+		if len(departing.ConsumedItems) > 0 {
+			consumed = map[string][]corebattle.ConsumedItem{charID: departing.ConsumedItems}
+		}
+		req := battle.ApplyPostBattleRequest{
+			CharacterIDs:          []string{charID},
+			PreserveEarnedRewards: true,
+			RecipientRewards:      map[string]corebattle.Reward{charID: {}},
+			ExitFatigue:           exitFatigue,
+			ExitBonusRounds:       round,
+			BattleResult: corebattle.PartyBattleResult{
+				RemainingHP:   map[string]int{charID: departing.HP},
+				RemainingMP:   remMP,
+				ConsumedItems: consumed,
+			},
+		}
+		if _, err := s.settler.ApplyPostBattleResult(ctx, req); err != nil {
+			return err
+		}
+	}
+	if s.postExitHook != nil {
+		if _, err := s.postExitHook(ctx, charID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func findMember(members []RoomMember, characterID string) (RoomMember, bool) {
+	for _, m := range members {
+		if m.CharacterID == characterID {
+			return m, true
+		}
+	}
+	return RoomMember{}, false
 }
 
 func removeMemberAndTransferLeader(detail *RoomDetail, characterID string, isLeader bool) bool {

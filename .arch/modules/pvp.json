@@ -6,7 +6,9 @@
   "dependencies": [
     {"name": "transitions", "target_module": "database", "relation_type": "contract_interface", "source_ref": "internal/pvp/transition.go#TransitionRepository"},
     {"name": "characters", "target_module": "character", "relation_type": "contract_interface", "source_ref": "internal/pvp/service.go#CharacterRepository"},
-    {"name": "rooms", "target_module": "pvp", "relation_type": "contract_interface", "source_ref": "internal/pvp/repository.go#RoomRepository"}
+    {"name": "rooms", "target_module": "pvp", "relation_type": "contract_interface", "source_ref": "internal/pvp/repository.go#RoomRepository"},
+    {"name": "battle_settler", "target_module": "battle", "relation_type": "contract_interface", "source_ref": "internal/pvp/service.go#PostBattleSettler"},
+    {"name": "post_exit_hook", "target_module": "tavern", "relation_type": "contract_interface", "source_ref": "internal/pvp/service.go#PostExitHook"}
   ],
   "transaction_boundaries": [
     {
@@ -15,7 +17,7 @@
       "transaction_type": "RunInTx",
       "lock_sequence": [
         {"table": "pvp_room_transitions", "tier": 0, "mode": "INSERT / SELECT ... FOR UPDATE", "note": "Unique financial version; reject pending or terminal transitions."},
-        {"table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE (ascending ID)", "note": "Callback updates wallets and PvP wins through CharacterRepository; shares the ambient SQL transaction."},
+        {"table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE (ascending ID)", "note": "Callback updates wallets and PvP wins through CharacterRepository, and on LeaveRoom delegates exit settlement via PostBattleSettler.ApplyPostBattleResult (tier 2 character -> tier 3 inventory/equipment -> tier 5 depot) and postExitHook (tier 2 character -> tier 8 tavern_character_status) inside the ambient SQL transaction."},
         {"table": "pvp_character_claims", "tier": 8, "mode": "INSERT unique character ID", "note": "Admission conflict rolls back the debit and room claim."}
       ]
     },

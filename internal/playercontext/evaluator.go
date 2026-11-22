@@ -55,7 +55,7 @@ func evaluate(catalog []ActionDefinition, snapshot *Snapshot, evaluators []Evalu
 			}
 			continue
 		}
-		if location != "" && !action.ActivityExempt {
+		if location != "" && !action.ActivityExempt && !(action.ID == "player_inspect" && activityAllowsInspect(snapshot, location)) {
 			continue
 		}
 		allowed := true

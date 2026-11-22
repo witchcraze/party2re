@@ -4710,6 +4710,45 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "pvp_kick"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                      "type": "string"
+                    },
+                    "target_character_id": {
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id",
+                    "target_character_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "pvp_advance"
                 }
               },

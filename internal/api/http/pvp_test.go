@@ -19,6 +19,7 @@ type stubColosseumPvPService struct {
 	listRoomsFn    func(ctx context.Context) ([]pvp.RoomSummary, error)
 	joinRoomFn     func(ctx context.Context, characterID string, roomID string, password string) (pvp.RoomDetail, error)
 	leaveRoomFn    func(ctx context.Context, characterID string, roomID string) error
+	kickMemberFn   func(ctx context.Context, roomID string, leaderID string, targetID string) error
 	selectTeamFn   func(ctx context.Context, characterID string, roomID string, teamColor string) (pvp.RoomDetail, error)
 	startMatchFn   func(ctx context.Context, leaderID string, roomID string) (pvp.RoomDetail, error)
 	advanceRoundFn func(ctx context.Context, leaderID string, roomID string) (pvp.RoundResolution, error)
@@ -101,6 +102,16 @@ func (s *stubColosseumPvPService) JoinRoom(ctx context.Context, characterID stri
 func (s *stubColosseumPvPService) LeaveRoom(ctx context.Context, characterID string, roomID string) error {
 	if s.leaveRoomFn != nil {
 		return s.leaveRoomFn(ctx, characterID, roomID)
+	}
+	if roomID != "room-1" {
+		return pvp.ErrRoomNotFound
+	}
+	return nil
+}
+
+func (s *stubColosseumPvPService) KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error {
+	if s.kickMemberFn != nil {
+		return s.kickMemberFn(ctx, roomID, leaderID, targetID)
 	}
 	if roomID != "room-1" {
 		return pvp.ErrRoomNotFound
