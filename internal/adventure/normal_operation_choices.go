@@ -39,9 +39,11 @@ type NormalOperationContext struct {
 	Definitions skill.BattleDefinitions
 	Callback    corebattle.CallbackContext
 	Requester   *corecharacter.Character
-	// Arithmetic receives the submitted text and the discovered names that
-	// job72 selectors look up (_skill.cgi:35–104,260–309).
+	// Arithmetic and Fields receive the submitted text and the discovered
+	// names that job72 selectors and the darkness continuation look up
+	// (_skill.cgi:35–104,260–309).
 	Arithmetic *corebattle.ArithmeticContext
+	Fields     *corebattle.NamedFieldContext
 }
 
 type runOperationCandidate struct {
@@ -186,11 +188,21 @@ func (r *NormalRun) normalOperations(cmd RunCommand, ctx NormalOperationContext)
 			ops.addBattle(stockLevelAction, stockLevelAction, "すとっく", stockLevelAction)
 		}
 	}
+	// Names are source keys; a repeated key resolves to its last candidate.
+	discovered := make([]corebattle.CallbackEntry, 0, len(ops.order))
+	for _, key := range ops.order {
+		discovered = append(discovered, corebattle.CallbackEntry{ID: ops.byKey[key].binding.ID, Name: key})
+	}
 	if c := ctx.Arithmetic; c != nil {
-		// Names are source keys; a repeated key resolves to its last candidate.
-		c.SubmittedText, c.Discovered = cmd.Input+" ", make([]corebattle.ArithmeticEntry, 0, len(ops.order))
-		for _, key := range ops.order {
-			c.Discovered = append(c.Discovered, corebattle.ArithmeticEntry{ID: ops.byKey[key].binding.ID, Name: key})
+		c.SubmittedText, c.Discovered = cmd.Input+" ", make([]corebattle.ArithmeticEntry, len(discovered))
+		for i, entry := range discovered {
+			c.Discovered[i] = corebattle.ArithmeticEntry(entry)
+		}
+	}
+	if c := ctx.Fields; c != nil {
+		c.Discovered, c.CustomName = discovered, ""
+		if a.Custom != nil {
+			c.CustomName = a.Custom.Name
 		}
 	}
 	return ops, nil

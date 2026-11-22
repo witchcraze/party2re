@@ -523,3 +523,28 @@ func TestNormalOperationsEXTreasureFloors(t *testing.T) {
 		t.Fatalf("floor-13 discovery: %+v %v", choices, err)
 	}
 }
+
+// _battle.cgi:563,596–598: job22's darkness keeps its raw `>` text and `$3`
+// as continuation facts instead of resolving the `>` text as a participant.
+func TestParseNormalOperationKeepsDarknessContinuationText(t *testing.T) {
+	r, ctx := operationFixture()
+	a := r.actor("a")
+	a.Jobs, a.ItemDefinitionIDs = corebattle.BattleJobs{JobID: "job-22", SP: 140}, []string{"item-240"}
+	fields := &corebattle.NamedFieldContext{DamageContext: *ctx.Callback.Damage, NameKey: skill.OperationNameKey, EntryKey: func(id string) string { return skill.EntrySourceKey(id, false) }}
+	ctx.Definitions.RegisterRecoilDarkState(&corebattle.RecoilDarkStateContext{DamageContext: *ctx.Callback.Damage})
+	ctx.Definitions.RegisterNamedFields(fields)
+	ctx.Fields = fields
+	for _, tc := range []struct{ input, command, target string }{
+		{"＠インヴァイトダーク&gt;＠あんこく \t&gt;Enemy ", "＠あんこく", "c"},
+		{"＠インヴァイトダーク　>＠あんこく nobody", "＠あんこく", "nobody"},
+		{"＠インヴァイトダーク Enemy", "", "c"},
+	} {
+		got, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Input: tc.input}, ctx)
+		if err != nil || got.First.EntryID != "job-22-entry-5" || got.First.TargetID != tc.command || fields.SubmittedCommand != tc.command || fields.SubmittedTarget != tc.target {
+			t.Fatalf("%q: %+v %+v %v", tc.input, got.First, fields, err)
+		}
+	}
+	if !slices.Contains(fields.Discovered, corebattle.CallbackEntry{ID: "job-22-entry-0", Name: skill.OperationNameKey("あんこく")}) {
+		t.Fatalf("discovered %+v", fields.Discovered)
+	}
+}
