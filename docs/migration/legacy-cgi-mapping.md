@@ -40,7 +40,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 | `profile.cgi`, `lib/profile.cgi` | 公開プロフィール表示・編集 | `internal/character/` | [design/player-and-character.md](../design/player-and-character.md#216-profile-avatar--image-departures)<br/>[design/home.md](../design/home.md)<br/>[api/paths/character.json](../api/paths/character.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `delete.cgi` | キャラクター/アカウント削除 | `internal/player/`<br/>`internal/character/` | [design/player-and-character.md](../design/player-and-character.md)<br/>[design/player-deletion.md](../design/player-deletion.md)<br/>[api/paths/player.json](../api/paths/player.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `rescue.cgi` | 救済・スタック復帰 | `internal/rescue/` | [Rescue契約](../design/rescue-and-helper.md#emergency-rescue) | Partial; recovery gaps remain | `run`の認証分岐 → owned Gateway認可、`refresh_player` → `rescue_request` / `EmergencyRescue`。旧request POST・penalty GETは廃止。reasonは既存Go入力。非scheduled活動とsleep/途中失敗の未解決差分は設計ownerを参照。 |
-| `admin.cgi`, `maintenance.cgi` | 管理者操作・メンテナンス制御 | `internal/maintenance/` | [Maintenance](../design/admin.md#system-maintenance-mode)<br/>[api/paths/admin.json](../api/paths/admin.json) | Reconciling | メンテナンスモード切り替え、BAN、管理者による無ペナルティ強制復帰(`admin_refresh`)の追加 |
+| `admin.cgi`, `maintenance.cgi` | 管理者操作・メンテナンス制御 | `internal/maintenance/` | [design/admin.md](../design/admin.md)<br/>[api/paths/admin.json](../api/paths/admin.json)<br/>[api/paths/system.json](../api/paths/system.json) | Reconciling | メンテナンスモード切り替え、BAN、管理者による無ペナルティ強制復帰(`admin_refresh`)の追加 |
 | `link.cgi` | 外部リンク・コミュニティ | Client Presentation | N/A | Planned | 静的ナビゲーション・ワンクッション画面 |
 
 #### Registration dispatch and referral reconciliation

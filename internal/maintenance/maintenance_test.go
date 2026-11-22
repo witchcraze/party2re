@@ -96,14 +96,86 @@ func TestMaintenanceService(t *testing.T) {
 		}
 	})
 
-	t.Run("reject message exceeding 500 characters", func(t *testing.T) {
-		longMsg := strings.Repeat("A", 501)
-		_, err := svc.SetMaintenance(ctx, true, longMsg, nil)
-		if err == nil {
-			t.Fatalf("expected error for overly long message, got nil")
+	t.Run("accept multibyte and mixed-width messages up to 500 characters after trim", func(t *testing.T) {
+		mixed500 := strings.Repeat("A", 200) + strings.Repeat("あ", 250) + strings.Repeat("🎉", 50)
+		cases := []struct {
+			name    string
+			input   string
+			wantMsg string
+		}{
+			{
+				name:    "167 Japanese characters (501 UTF-8 bytes)",
+				input:   strings.Repeat("あ", 167),
+				wantMsg: strings.Repeat("あ", 167),
+			},
+			{
+				name:    "500 ASCII characters with surrounding whitespace",
+				input:   "  " + strings.Repeat("A", 500) + "\n\t",
+				wantMsg: strings.Repeat("A", 500),
+			},
+			{
+				name:    "500 Japanese characters",
+				input:   strings.Repeat("あ", 500),
+				wantMsg: strings.Repeat("あ", 500),
+			},
+			{
+				name:    "500 mixed-width characters with surrounding whitespace",
+				input:   "  " + mixed500 + "  ",
+				wantMsg: mixed500,
+			},
 		}
-		if err != maintenance.ErrInvalidMessage {
-			t.Errorf("expected ErrInvalidMessage, got: %v", err)
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				status, err := svc.SetMaintenance(ctx, true, tc.input, nil)
+				if err != nil {
+					t.Fatalf("SetMaintenance failed: %v", err)
+				}
+				if status.Message != tc.wantMsg {
+					t.Errorf("message mismatch: got len=%d, want len=%d", len(status.Message), len(tc.wantMsg))
+				}
+			})
+		}
+	})
+
+	t.Run("reject message exceeding 500 characters without updating repository", func(t *testing.T) {
+		sentinel := "persisted sentinel message"
+		if _, err := svc.SetMaintenance(ctx, false, sentinel, nil); err != nil {
+			t.Fatalf("setup SetMaintenance failed: %v", err)
+		}
+
+		cases := []struct {
+			name  string
+			input string
+		}{
+			{
+				name:  "501 ASCII characters",
+				input: strings.Repeat("A", 501),
+			},
+			{
+				name:  "501 Japanese characters",
+				input: strings.Repeat("あ", 501),
+			},
+			{
+				name:  "501 mixed-width characters",
+				input: strings.Repeat("A", 200) + strings.Repeat("あ", 250) + strings.Repeat("🎉", 51),
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := svc.SetMaintenance(ctx, true, tc.input, nil)
+				if err != maintenance.ErrInvalidMessage {
+					t.Fatalf("expected ErrInvalidMessage, got: %v", err)
+				}
+				got, err := repo.GetStatus(ctx)
+				if err != nil {
+					t.Fatalf("GetStatus failed: %v", err)
+				}
+				if got.Enabled || got.Message != sentinel {
+					t.Errorf("repository mutated on validation failure: got=%+v", got)
+				}
+			})
 		}
 	})
 
