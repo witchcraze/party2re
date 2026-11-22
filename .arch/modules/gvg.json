@@ -73,10 +73,10 @@
           "note": "Claim per-join exit (room_id, character_id, join_id) before applying departure settlement."
         },
         {
-          "table": "characters / inventory_items / equipment_slots / character_depots / depot_items",
+          "table": "characters / inventory_items / equipment_slots / character_depots / depot_items / tavern_character_status",
           "tier": 2,
-          "mode": "delegated via PostBattleSettler.ApplyPostBattleResult",
-          "note": "Battle settlement reuses the ambient RunInTx transaction (tier 2 character -> tier 3 inventory/equipment -> conditional tier 5 depot); postExitHook, MarkExitDeliveryDone, and LeaveRoom Valkey cleanup run separately after commit."
+          "mode": "delegated via PostBattleSettler.ApplyPostBattleResult and postExitHook",
+          "note": "Battle settlement reuses the ambient RunInTx transaction (tier 2 character -> tier 3 inventory/equipment -> conditional tier 5 depot); postExitHook (ResetFullness and ClaimDelivery, locking tier 2 character before tier 8 tavern_character_status) and MarkExitDeliveryDone commit in the same RunInTx transaction before LeaveRoom Valkey cleanup."
         }
       ]
     }

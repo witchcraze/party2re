@@ -485,6 +485,10 @@ func (r gvgHTTPCharRepo) FindByID(_ context.Context, id string) (corecharacter.C
 	return c, nil
 }
 
+func (r gvgHTTPCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r gvgHTTPCharRepo) Update(_ context.Context, c corecharacter.Character) error {
 	r.chars[c.ID] = c
 	return nil

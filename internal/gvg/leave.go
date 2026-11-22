@@ -98,8 +98,8 @@ func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID strin
 	}
 
 	joinID := memberJoinKey(departing)
-	var claim ExitClaimState
 	if err := s.runInTx(ctx, func(txCtx context.Context) error {
+		var claim ExitClaimState
 		if s.exitClaims != nil {
 			var err error
 			claim, err = s.exitClaims.ClaimRoomExitForUpdate(txCtx, roomID, charID, joinID)
@@ -107,44 +107,51 @@ func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID strin
 				return err
 			}
 		}
-		if claim.AlreadyClaimed {
-			return nil
-		}
-		var remMP map[string]int
-		if departing.MP != nil {
-			remMP = map[string]int{charID: *departing.MP}
-		}
-		var consumed map[string][]corebattle.ConsumedItem
-		if len(departing.ConsumedItems) > 0 {
-			consumed = map[string][]corebattle.ConsumedItem{charID: departing.ConsumedItems}
-		}
-		req := battle.ApplyPostBattleRequest{
-			CharacterIDs:          []string{charID},
-			PreserveEarnedRewards: true,
-			RecipientRewards:      map[string]corebattle.Reward{charID: {}},
-			ExitFatigue:           exitFatigue,
-			ExitBonusRounds:       round,
-			BattleResult: corebattle.PartyBattleResult{
-				RemainingHP:   map[string]int{charID: departing.HP},
-				RemainingMP:   remMP,
-				ConsumedItems: consumed,
-			},
-		}
-		_, err := s.settler.ApplyPostBattleResult(txCtx, req)
-		return err
-	}); err != nil {
-		return err
-	}
-
-	if s.postExitHook != nil && !claim.DeliveryDone {
-		if _, err := s.postExitHook(ctx, charID); err != nil {
-			return err
-		}
-		if s.exitClaims != nil {
-			if err := s.exitClaims.MarkExitDeliveryDone(ctx, roomID, charID, joinID); err != nil {
+		if !claim.AlreadyClaimed {
+			var remMP map[string]int
+			if departing.MP != nil {
+				remMP = map[string]int{charID: *departing.MP}
+			}
+			var consumed map[string][]corebattle.ConsumedItem
+			if len(departing.ConsumedItems) > 0 {
+				consumed = map[string][]corebattle.ConsumedItem{charID: departing.ConsumedItems}
+			}
+			req := battle.ApplyPostBattleRequest{
+				CharacterIDs:          []string{charID},
+				PreserveEarnedRewards: true,
+				RecipientRewards:      map[string]corebattle.Reward{charID: {}},
+				ExitFatigue:           exitFatigue,
+				ExitBonusRounds:       round,
+				BattleResult: corebattle.PartyBattleResult{
+					RemainingHP:   map[string]int{charID: departing.HP},
+					RemainingMP:   remMP,
+					ConsumedItems: consumed,
+				},
+			}
+			if _, err := s.settler.ApplyPostBattleResult(txCtx, req); err != nil {
 				return err
 			}
 		}
+		if s.postExitHook != nil && !claim.DeliveryDone {
+			// Acquire the Rank 2 character lock before ResetFullness writes Rank 8 tavern_character_status
+			// when post-battle settlement was already claimed in an earlier transaction.
+			if claim.AlreadyClaimed {
+				if _, err := s.characters.FindByIDForUpdate(txCtx, charID); err != nil {
+					return err
+				}
+			}
+			if _, err := s.postExitHook(txCtx, charID); err != nil {
+				return err
+			}
+			if s.exitClaims != nil {
+				if err := s.exitClaims.MarkExitDeliveryDone(txCtx, roomID, charID, joinID); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 	return nil
 }

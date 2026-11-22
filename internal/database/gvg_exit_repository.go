@@ -41,6 +41,7 @@ func (r *GvGRepository) ClaimRoomExitForUpdate(ctx context.Context, roomID, char
 }
 
 // MarkExitDeliveryDone marks post-exit tavern delivery/fullness processing as completed for this join.
+// Transaction: joins ambient RunInTx (expects the gvg_exit_claims row locked by ClaimRoomExitForUpdate).
 func (r *GvGRepository) MarkExitDeliveryDone(ctx context.Context, roomID, characterID, joinID string) error {
 	if roomID == "" || characterID == "" || joinID == "" {
 		return errors.New("room_id, character_id, and join_id are required")

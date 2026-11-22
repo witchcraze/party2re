@@ -396,6 +396,65 @@ func TestLeaveRoom_ConsumedItemsCarryAcrossRoundsAndRetryIdempotency(t *testing.
 	}
 }
 
+func TestLeaveRoom_PendingDeliveryLocksCharacterBeforeHook(t *testing.T) {
+	ctx := context.Background()
+	settler := &stubPostBattleSettler{}
+	claims := newMockExitClaimRepo()
+	roomRepo := gvg.NewMemoryRoomRepository()
+	standings := newMockStandingRepo()
+	guilds := newMockGuildRepo()
+	chars := newMockCharRepo()
+
+	var events []string
+	chars.findForUpdateHook = func() {
+		events = append(events, "lock_character")
+	}
+	chars.characters["c1"] = createTestCharacter("c1", "Leader", 80, 0)
+	chars.characters["c2"] = createTestCharacter("c2", "Enemy", 90, 0)
+	guilds.guilds["g1"] = guild.Guild{ID: "g1", Name: "Crimson", Color: "#FF3333"}
+	guilds.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
+	guilds.charGuilds["c1"], guilds.charGuilds["c2"] = "g1", "g2"
+
+	var failHook atomic.Bool
+	failHook.Store(true)
+	hook := func(_ context.Context, _ string) (string, error) {
+		events = append(events, "post_exit_hook")
+		if failHook.CompareAndSwap(true, false) {
+			return "", errors.New("temporary tavern failure")
+		}
+		return "ok", nil
+	}
+
+	svc, err := gvg.NewService(
+		roomRepo, standings, guilds, chars, &mockBattleEngine{outcome: corebattle.OutcomeWin},
+		gvg.WithPostBattleSettler(settler),
+		gvg.WithExitClaimRepository(claims),
+		gvg.WithPostExitHook(hook),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "LockOrder", MaxMembers: 2, TargetWins: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.JoinRoom(ctx, "c2", detail.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate an already-claimed exit whose delivery_done is still false before retry.
+	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
+		t.Fatal("expected first hook attempt to fail")
+	}
+	events = nil
+	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
+		t.Fatalf("retry LeaveRoom failed: %v", err)
+	}
+	if len(events) != 2 || events[0] != "lock_character" || events[1] != "post_exit_hook" {
+		t.Fatalf("expected Rank 2 character lock before postExitHook on pending delivery retry, got %v", events)
+	}
+}
+
 func TestLeaveRoom_RejoinSameRoomAppliesNewExitSideEffectsAndRetryIdempotency(t *testing.T) {
 	ctx := context.Background()
 	settler := &stubPostBattleSettler{}

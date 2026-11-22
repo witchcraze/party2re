@@ -171,7 +171,8 @@ func (m *mockGuildRepo) GetGuildByCharacter(_ context.Context, characterID strin
 
 // mockCharRepo implements gvg.CharacterRepository for tests.
 type mockCharRepo struct {
-	characters map[string]corecharacter.Character
+	characters        map[string]corecharacter.Character
+	findForUpdateHook func()
 }
 
 func newMockCharRepo() *mockCharRepo {
@@ -184,6 +185,13 @@ func (m *mockCharRepo) FindByID(_ context.Context, id string) (corecharacter.Cha
 		return corecharacter.Character{}, gvg.ErrCharacterNotFound
 	}
 	return c, nil
+}
+
+func (m *mockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	if m.findForUpdateHook != nil {
+		m.findForUpdateHook()
+	}
+	return m.FindByID(ctx, id)
 }
 
 func (m *mockCharRepo) Update(_ context.Context, character corecharacter.Character) error {
