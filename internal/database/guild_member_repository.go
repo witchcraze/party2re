@@ -41,6 +41,9 @@ func (r *GuildRepository) AddMember(ctx context.Context, m guild.Member) (guild.
 	if m.Title == "" && m.IsPending {
 		m.Title = guild.DefaultTitlePending
 	}
+	if m.JoinedAt.IsZero() {
+		m.JoinedAt = time.Now().UTC()
+	}
 	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 
