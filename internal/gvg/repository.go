@@ -241,6 +241,11 @@ type ValkeyRoomRepository struct {
 	client valkey.Client
 }
 
+type storedRoomDetail struct {
+	RoomDetail
+	PasswordHash string `json:"password_hash,omitempty"`
+}
+
 // NewValkeyRoomRepository creates a new Valkey-backed room repository.
 func NewValkeyRoomRepository(client valkey.Client) (*ValkeyRoomRepository, error) {
 	if client == nil {
@@ -258,8 +263,10 @@ func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room GvGRoom, membe
 		room.UpdatedAt = now
 	}
 
-	detail := RoomDetail{Room: room, Members: members}
-	data, err := json.Marshal(detail)
+	data, err := json.Marshal(storedRoomDetail{
+		RoomDetail:   RoomDetail{Room: room, Members: members},
+		PasswordHash: room.PasswordHash,
+	})
 	if err != nil {
 		return err
 	}
@@ -292,11 +299,12 @@ func (v *ValkeyRoomRepository) GetRoom(ctx context.Context, id string) (RoomDeta
 		return RoomDetail{}, err
 	}
 
-	var detail RoomDetail
+	var detail storedRoomDetail
 	if err := json.Unmarshal([]byte(str), &detail); err != nil {
 		return RoomDetail{}, err
 	}
-	return detail, nil
+	detail.Room.PasswordHash = detail.PasswordHash
+	return detail.RoomDetail, nil
 }
 
 func (v *ValkeyRoomRepository) DeleteRoom(ctx context.Context, id string) error {
