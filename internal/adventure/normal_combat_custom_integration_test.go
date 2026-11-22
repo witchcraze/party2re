@@ -82,18 +82,39 @@ func TestRunCombatCustomGemsFreezeAtEntry(t *testing.T) {
 
 // _battle.cgi:1090–1094: crown loses a turn only when the action counted
 // damage; a custom attack gem's hit must reach the tail like a normal attack.
+// A preceding status slot replaces the frame's damage context; the attack
+// slot after it still counts.
 func TestRunCombatCustomGemDamageReachesCrownTail(t *testing.T) {
+	for _, gems := range [][3]string{{"gem_atk_1", "", ""}, {"gem_cure_poison", "gem_atk_1", ""}} {
+		f := combatFixture(t, 1)
+		saveCustom(t, f, "うつ", gems, 6)
+		cmd := customRoom(t, f, 30, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
+			a.Extended, a.ExtendedTurns = corebattle.ExtendedCrown, 2
+		}, runEnemy("foe", 900))
+		if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "custom", "うつ", "foe", "")); err != nil {
+			t.Fatal(gems, err)
+		}
+		r := readStockRoom(t, f, cmd.RunID)
+		if a := runActorByID(r, cmd.ActorID); runActorByID(r, "foe").HP >= 900 || a.Extended != corebattle.ExtendedCrown || a.ExtendedTurns != 1 {
+			t.Fatalf("%v: foe=%d extended=%q turns=%d", gems, runActorByID(r, "foe").HP, a.Extended, a.ExtendedTurns)
+		}
+	}
+}
+
+// #2613: a damaging job callback counts its hits for the tail too (here
+// job-33-entry-1's area magic, submitted by its source name).
+func TestRunCombatJobCallbackDamageReachesCrownTail(t *testing.T) {
 	f := combatFixture(t, 1)
-	saveCustom(t, f, "うつ", [3]string{"gem_atk_1", "", ""}, 6)
-	cmd := customRoom(t, f, 30, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
-		a.Extended, a.ExtendedTurns = corebattle.ExtendedCrown, 2
+	cmd := customRoom(t, f, 0, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
+		a.Jobs = corebattle.BattleJobs{JobID: "job-33", SP: 160}
+		a.MP, a.MaxMP, a.Extended, a.ExtendedTurns = 50, 50, corebattle.ExtendedCrown, 2
 	}, runEnemy("foe", 900))
-	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "custom", "うつ", "foe", "")); err != nil {
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "wave", "", "", "＠イオラ")); err != nil {
 		t.Fatal(err)
 	}
 	r := readStockRoom(t, f, cmd.RunID)
-	if a := runActorByID(r, cmd.ActorID); runActorByID(r, "foe").HP >= 900 || a.Extended != corebattle.ExtendedCrown || a.ExtendedTurns != 1 {
-		t.Fatalf("foe=%d extended=%q turns=%d", runActorByID(r, "foe").HP, a.Extended, a.ExtendedTurns)
+	if a := runActorByID(r, cmd.ActorID); runActorByID(r, "foe").HP >= 900 || a.ExtendedTurns != 1 {
+		t.Fatalf("foe=%d turns=%d", runActorByID(r, "foe").HP, a.ExtendedTurns)
 	}
 }
 

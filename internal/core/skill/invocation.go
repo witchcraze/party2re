@@ -25,4 +25,5 @@ func rollbackContext[T any](f *corebattle.CallbackContext, c *T) {
 	}
 	saved := *c
 	f.OnRollback(func() { *c = saved })
+	f.BindCounters(c)
 }

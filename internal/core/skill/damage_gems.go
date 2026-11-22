@@ -46,9 +46,6 @@ func (d BattleDefinitions) DamageGemInvocation(c *corebattle.DamageContext, id s
 				return corebattle.ErrUnsupportedEffect
 			}
 			child := *c
-			if frame.Damage != nil {
-				child = *frame.Damage
-			}
 			child.TargetContext = frame.TargetContext
 			target := ""
 			if len(frame.Arguments) > 0 {
@@ -62,10 +59,6 @@ func (d BattleDefinitions) DamageGemInvocation(c *corebattle.DamageContext, id s
 				return corebattle.ErrUnsupportedEffect
 			}
 			rollbackContext(frame, c)
-			// The consumer reads counters from the frame's damage (runFacts).
-			if frame.Damage != nil {
-				*c = *frame.Damage
-			}
 			c.TargetContext = frame.TargetContext
 			target := ""
 			if len(frame.Arguments) > 0 {
@@ -80,9 +73,6 @@ func (d BattleDefinitions) DamageGemInvocation(c *corebattle.DamageContext, id s
 				frame.Arguments = frame.Arguments[1:]
 			}
 			frame.TargetContext = c.TargetContext
-			if frame.Damage != nil {
-				*frame.Damage = *c
-			}
 			return err
 		},
 	}

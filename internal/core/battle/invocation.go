@@ -31,6 +31,33 @@ type CallbackContext struct {
 	// is supplied only during Execute, after the enclosing closure was admitted.
 	Invoke    func(CallbackInvocation) error
 	rollbacks *[]func()
+	// counters is the executing callback's bound effect context; its call
+	// counts belong to the whole operation ($actionCount in _skill.cgi).
+	counters *EffectContext
+}
+
+func (e *EffectContext) effectCounters() *EffectContext { return e }
+
+// BindCounters makes a callback's primary context (the first bound) continue
+// from the operation's call counts in Damage; executeCallback writes them back.
+func (c *CallbackContext) BindCounters(owner any) {
+	o, ok := owner.(interface{ effectCounters() *EffectContext })
+	if c == nil || c.Damage == nil || c.counters != nil || !ok {
+		return
+	}
+	c.counters = o.effectCounters()
+	copyCounters(c.counters, &c.Damage.EffectContext)
+}
+
+func (c *CallbackContext) flushCounters() {
+	if c.counters != nil && c.Damage != nil {
+		copyCounters(&c.Damage.EffectContext, c.counters)
+	}
+}
+
+func copyCounters(dst, src *EffectContext) {
+	dst.DamageCalls, dst.AreaDamageCalls = src.DamageCalls, src.AreaDamageCalls
+	dst.HealCalls, dst.PartyHealCalls, dst.TensionCalls = src.HealCalls, src.PartyHealCalls, src.TensionCalls
 }
 
 // OnRollback registers fn to restore a caller-bound context if the enclosing
@@ -356,7 +383,18 @@ func (s *LifetimeState) executeCallback(c *CallbackContext, d CallbackCatalog, e
 		return s.invokeCallback(c, d, op, rng)
 	}
 	defer func() { c.Invoke = invoke }()
-	return def.Execute(s, c, rng)
+	// A nested callback starts from the enclosing callback's counts, and the
+	// enclosing one resumes from the totals.
+	enclosing := c.counters
+	c.flushCounters()
+	c.counters = nil
+	err := def.Execute(s, c, rng)
+	c.flushCounters()
+	c.counters = enclosing
+	if enclosing != nil && c.Damage != nil {
+		copyCounters(enclosing, &c.Damage.EffectContext)
+	}
+	return err
 }
 
 func explicitCallbackTarget(c *CallbackContext) CallbackContext {
