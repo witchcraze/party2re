@@ -192,8 +192,8 @@ func TestFaithScenesObserveWithoutWrites(t *testing.T) {
 		data.Parent != "town" || !data.RamiaAwakened || data.AwakenedBy != "Friend" || len(data.AvailableItems) != 1 {
 		t.Fatalf("altar projection: %d %+v", status, observation)
 	}
-	if want := []PlaceMember{{Kind: "npc", Name: altar.NPCName, Color: npcColor}, {Kind: "npc", Name: altar.RamiaMemberName, Color: npcColor}}; !slices.Equal(observation.Scene.Members, want) {
-		t.Fatalf("members %+v, want the shrine maiden and Ramia", observation.Scene.Members)
+	if want := []PlaceMember{{Kind: "npc", Name: altar.NPCName, Color: npcColor}, {Kind: "npc", Name: "不死鳥@", Color: npcColor}}; !slices.Equal(observation.Scene.Members, want) {
+		t.Fatalf("members %+v, want %+v", observation.Scene.Members, want)
 	}
 	for _, action := range []string{"altar_pray", "altar_wish", "npc_talk", "npc_inspect", "place_say", "scene_back"} {
 		if !slices.ContainsFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == action }) {
@@ -272,6 +272,14 @@ func TestMikoWordsFollowOrbState(t *testing.T) {
 	}{{"", mikoGuardingWords}, {"srbgyp", mikoReadyWords}, {"G", mikoAwakenedWords}} {
 		if got := mikoWords(corecharacter.Character{Orb: tc.orb}); !slices.Equal(got, tc.want) {
 			t.Errorf("orb %q: got %q", tc.orb, got)
+		}
+	}
+	if !slices.Contains(mikoGuardingWords, "伝説の不死鳥はよみがえりましょう") {
+		t.Fatalf("expected clean-room phoenix line in %v", mikoGuardingWords)
+	}
+	for _, line := range slices.Concat([]string{altar.RamiaMemberName, altar.MsgRamiaAwakening}, mikoGuardingWords, mikoReadyWords, mikoAwakenedWords) {
+		if strings.Contains(line, "ラーミァ") || strings.Contains(line, "ラーミア") {
+			t.Fatalf("legacy phoenix name remained in altar text: %q", line)
 		}
 	}
 }

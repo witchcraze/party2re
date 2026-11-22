@@ -14,7 +14,7 @@ const (
 	OrbGreen  = 'g' // 木曜日 / グリーンオーブ
 	OrbYellow = 'y' // 金曜日 / イエローオーブ
 	OrbPurple = 'p' // 土曜日 / パープルオーブ
-	OrbGold   = 'G' // 不死鳥ラーミァ復活完了状態
+	OrbGold   = 'G' // 不死鳥復活完了状態
 )
 
 var (
