@@ -11,10 +11,14 @@ import (
 const BookReturned StoredToolResult = "returned"
 
 // bookAssets reports whether job86's held-item branch runs. A player branch
-// needs the requester as actor, matching hands and the depot; an NPC actor
-// would reach another identity's durable hand or a missing depot.
+// needs the requester as actor, matching hands and the depot.
 func (s *LifetimeState) bookAssets(c *JobAssetContext, id string) (bool, error) {
 	a := s.actor(c.ActorID)
+	if a != nil && a.NPC && (id == "job-86-entry-0" || id == "job-86-entry-3") &&
+		(len(c.Arguments) == 0 || c.Arguments[0] == "") {
+		// Direct NPC dispatch omits the selector. A failed lookup still pays listed MP.
+		return false, nil
+	}
 	if a == nil || a.HeldToolID == nil {
 		return false, ErrUnsupportedEffect
 	}

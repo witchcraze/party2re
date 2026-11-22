@@ -153,6 +153,48 @@ func TestRunCombatNPCPurchaseUsesRequesterAssets(t *testing.T) {
 	assertAssets(t, f, cmd.ActorID, 50, 1)
 }
 
+func TestRunCombatNPCBookSearchInLibrary(t *testing.T) {
+	f, depots := assetRunCombat(t, 1)
+	f.cfg.RNG = &stockRunRNG{}
+	f.restart(t)
+	requester := f.actors[0]
+	npc := runEnemy("librarian", 900)
+	npc.Jobs.JobID, npc.Jobs.SP = "job-86", 5
+	npc.MP, npc.MaxMP = 20, 20
+	cmd := combatRoom(t, f, requester, nil, npc)
+	rows := seedDepot(t, depots, requester.ID, "item-169")
+
+	// From [attack, book search, library], the first draw selects library.
+	first := combatCommand(cmd, "create-library", "defend", "", "")
+	created, err := f.svc.Command(t.Context(), first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := readStockRoom(t, f, cmd.RunID)
+	if foe := runActorByID(r, npc.ID); foe == nil || r.Battle.Fields.Current() != "library" || foe.MP != 10 {
+		t.Fatalf("NPC did not create the library: field=%s NPC=%+v", r.Battle.Fields.Current(), foe)
+	}
+
+	f.cfg.RNG = &midRNG{}
+	f.restart(t)
+	f.clock.add(time.Duration(r.Admission.Speed) * time.Second)
+	cmd.Version = created.Version
+	// The middle draw selects book search. The response has no book selector.
+	second := combatCommand(cmd, "npc-book-search", "attack", npc.ID, "")
+	receipt, err := f.svc.Command(t.Context(), second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = readStockRoom(t, f, cmd.RunID)
+	foe := runActorByID(r, npc.ID)
+	if foe == nil || receipt.Version != cmd.Version+1 || foe.HP >= npc.HP || foe.MP != 7 || foe.HeldToolID == nil || *foe.HeldToolID != "" {
+		t.Fatalf("expected a committed attack and a 3 MP response with no withdrawal: receipt=%+v NPC=%+v", receipt, foe)
+	}
+	if got := depotItems(t, depots, requester.ID); !reflect.DeepEqual(got, rows) || len(heldItems(t, f, 0)) != 0 {
+		t.Fatalf("NPC search moved a durable item: depot=%+v hand=%+v", got, heldItems(t, f, 0))
+	}
+}
+
 // Job86.3 (_skill.cgi:6842–6856) withdraws a book, writes the default ban of 2
 // (10831–10839) and sets `$npc_turn_skip`, so the eligible tail that would tick
 // the ban and the NPC response are both skipped (_battle.cgi:938,1137–1150).

@@ -126,6 +126,8 @@ Active weapon seals are player-only: discovery and submission require an equippe
 
 NPC dispatch switches the combat actor and sides while retaining the requesting player's wallet and user ID (`party.cgi:8–31`; `_npc_action.cgi:89–145`). Job78 can buy a tool for the NPC's combat hand using that wallet (`_skill.cgi:10284–10305`).
 
+Direct NPC book withdrawal receives no selector. The depot lookup's selection message leaves the NPC's MP charge and command save in place (`_skill.cgi:6805–6815,6843–6853,10489–10535`; `_npc_action.cgi:313–318`; `_battle.cgi:1169–1178`).
+
 `send_item` silently skips delivery if the actor-named depot file is absent, even when the caller clears the hand (`system.cgi:818–837`). Native return and exchange follow the [delivery capacity contract](depot.md#delivery-capacity-by-caller). Double use requires two scoped participant IDs in place of the source's member scan (`_skill.cgi:10538–10557`).
 
 Intermediate wallet credits are uncapped until the final durable balance is written (`system.cgi:71`). See the [Adventure command boundary](../architecture/transient-run-state.md#one-command-one-bounded-sql-transaction).
