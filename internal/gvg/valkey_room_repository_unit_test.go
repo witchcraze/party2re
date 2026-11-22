@@ -438,3 +438,152 @@ func TestValkeyRoomRepository_CharacterRoom(t *testing.T) {
 		t.Fatalf("expected errDel, got %v", err)
 	}
 }
+
+func TestValkeyRoomRepository_PasswordHashRoundTripAndPublicJSON(t *testing.T) {
+	ctx := context.Background()
+	const wantHash = "deadbeef1234567890abcdef"
+	now := time.Now().UTC()
+
+	protectedRoom := gvg.GvGRoom{
+		ID:                "gvg-pw-1",
+		Name:              "Protected GvG",
+		LeaderCharacterID: "c1",
+		LeaderName:        "Leader1",
+		Speed:             18,
+		Stage:             1,
+		MaxMembers:        4,
+		TargetWins:        2,
+		PrizePool:         2,
+		PasswordHash:      wantHash,
+		Status:            gvg.StatusRecruiting,
+		GuildScores:       map[string]int{},
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	protectedMembers := []gvg.GvGMember{
+		{RoomID: protectedRoom.ID, CharacterID: "c1", CharacterName: "Leader1", GuildID: "g1", GuildColor: "#FF3333", IsLeader: true, JoinedAt: now},
+	}
+
+	unprotectedRoom := protectedRoom
+	unprotectedRoom.ID = "gvg-open-1"
+	unprotectedRoom.Name = "Open GvG"
+	unprotectedRoom.PasswordHash = ""
+	unprotectedMembers := []gvg.GvGMember{
+		{RoomID: unprotectedRoom.ID, CharacterID: "c2", CharacterName: "Leader2", GuildID: "g2", GuildColor: "#33CCFF", IsLeader: true, JoinedAt: now},
+	}
+
+	legacyRoom := protectedRoom
+	legacyRoom.ID = "gvg-legacy-1"
+	legacyRoom.Name = "Legacy Pre-Update GvG"
+	legacyRoom.PasswordHash = ""
+	legacyPayloadBytes, err := json.Marshal(gvg.RoomDetail{
+		Room:    legacyRoom,
+		Members: []gvg.GvGMember{{RoomID: legacyRoom.ID, CharacterID: "c3", CharacterName: "LegacyLeader", GuildID: "g3", GuildColor: "#33FF33", IsLeader: true, JoinedAt: now}},
+	})
+	if err != nil {
+		t.Fatalf("marshal legacy payload: %v", err)
+	}
+
+	stored := map[string]string{
+		gvg.DefaultRoomKeyPrefix + legacyRoom.ID: string(legacyPayloadBytes),
+	}
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		c := cmd.Commands()
+		switch c[0] {
+		case "SET":
+			stored[c[1]] = c[2]
+			return valkeytest.MakeOKResult()
+		case "GET":
+			if val, ok := stored[c[1]]; ok {
+				return valkeytest.MakeStringResult(val)
+			}
+			return valkeytest.MakeNilResult()
+		case "ZREVRANGE":
+			return valkeytest.MakeStringSliceResult([]string{protectedRoom.ID, unprotectedRoom.ID, legacyRoom.ID})
+		default:
+			return valkeytest.MakeOKResult()
+		}
+	}))
+	repo, err := gvg.NewValkeyRoomRepository(client)
+	if err != nil {
+		t.Fatalf("NewValkeyRoomRepository: %v", err)
+	}
+
+	if err := repo.SaveRoom(ctx, protectedRoom, protectedMembers); err != nil {
+		t.Fatalf("SaveRoom(protected): %v", err)
+	}
+	protectedPayload := stored[gvg.DefaultRoomKeyPrefix+protectedRoom.ID]
+	if !strings.Contains(protectedPayload, `"password_hash":"`+wantHash+`"`) {
+		t.Fatalf("expected stored payload to contain password_hash, got: %s", protectedPayload)
+	}
+
+	if err := repo.SaveRoom(ctx, unprotectedRoom, unprotectedMembers); err != nil {
+		t.Fatalf("SaveRoom(unprotected): %v", err)
+	}
+	unprotectedPayload := stored[gvg.DefaultRoomKeyPrefix+unprotectedRoom.ID]
+	if strings.Contains(unprotectedPayload, "password_hash") {
+		t.Fatalf("expected unprotected stored payload to omit password_hash, got: %s", unprotectedPayload)
+	}
+
+	gotProtected, err := repo.GetRoom(ctx, protectedRoom.ID)
+	if err != nil {
+		t.Fatalf("GetRoom(protected): %v", err)
+	}
+	if gotProtected.Room.PasswordHash != wantHash {
+		t.Fatalf("GetRoom(protected) PasswordHash = %q, want %q", gotProtected.Room.PasswordHash, wantHash)
+	}
+
+	gotUnprotected, err := repo.GetRoom(ctx, unprotectedRoom.ID)
+	if err != nil {
+		t.Fatalf("GetRoom(unprotected): %v", err)
+	}
+	if gotUnprotected.Room.PasswordHash != "" {
+		t.Fatalf("GetRoom(unprotected) PasswordHash = %q, want empty", gotUnprotected.Room.PasswordHash)
+	}
+
+	gotLegacy, err := repo.GetRoom(ctx, legacyRoom.ID)
+	if err != nil {
+		t.Fatalf("GetRoom(legacy): %v", err)
+	}
+	if gotLegacy.Room.PasswordHash != "" {
+		t.Fatalf("GetRoom(legacy) PasswordHash = %q, want empty", gotLegacy.Room.PasswordHash)
+	}
+
+	summaries, err := repo.ListRooms(ctx)
+	if err != nil {
+		t.Fatalf("ListRooms: %v", err)
+	}
+	if len(summaries) != 3 {
+		t.Fatalf("expected 3 rooms, got %d", len(summaries))
+	}
+	byID := make(map[string]gvg.RoomSummary, len(summaries))
+	for _, s := range summaries {
+		byID[s.ID] = s
+	}
+	if !byID[protectedRoom.ID].HasPassword {
+		t.Fatalf("expected protected room HasPassword=true, got %+v", byID[protectedRoom.ID])
+	}
+	if byID[unprotectedRoom.ID].HasPassword {
+		t.Fatalf("expected unprotected room HasPassword=false, got %+v", byID[unprotectedRoom.ID])
+	}
+	if byID[legacyRoom.ID].HasPassword {
+		t.Fatalf("expected legacy room HasPassword=false, got %+v", byID[legacyRoom.ID])
+	}
+
+	publicDetailJSON, err := json.Marshal(gotProtected)
+	if err != nil {
+		t.Fatalf("Marshal RoomDetail: %v", err)
+	}
+	if strings.Contains(string(publicDetailJSON), "password_hash") || strings.Contains(string(publicDetailJSON), wantHash) {
+		t.Fatalf("public RoomDetail JSON exposed password hash: %s", string(publicDetailJSON))
+	}
+
+	publicListJSON, err := json.Marshal(summaries)
+	if err != nil {
+		t.Fatalf("Marshal RoomSummary slice: %v", err)
+	}
+	if strings.Contains(string(publicListJSON), "password_hash") || strings.Contains(string(publicListJSON), wantHash) {
+		t.Fatalf("public RoomSummary JSON exposed password hash: %s", string(publicListJSON))
+	}
+}

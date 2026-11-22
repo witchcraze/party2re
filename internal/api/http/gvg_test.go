@@ -12,8 +12,10 @@ import (
 	"time"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -429,4 +431,167 @@ func TestOpenAPIGvGExpectedRoundInput(t *testing.T) {
 			}
 		}
 	}
+}
+
+type gvgHTTPStandingRepo struct{}
+
+func (gvgHTTPStandingRepo) GetOrCreateStanding(context.Context, string) (gvg.GvGStanding, error) {
+	return gvg.GvGStanding{}, nil
+}
+func (gvgHTTPStandingRepo) GetLeaderboard(context.Context, int) ([]gvg.GvGStanding, error) {
+	return nil, nil
+}
+func (gvgHTTPStandingRepo) FindRoundTransition(context.Context, string) (gvg.RoundTransition, bool, error) {
+	return gvg.RoundTransition{}, false, nil
+}
+func (gvgHTTPStandingRepo) CommitRoundTransition(_ context.Context, _ string, _ int, tr gvg.RoundTransition) (gvg.RoundTransition, error) {
+	return tr, nil
+}
+
+type gvgHTTPGuildRepo struct {
+	guilds     map[string]guild.Guild
+	charGuilds map[string]string
+}
+
+func (r gvgHTTPGuildRepo) GetGuild(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+	g, ok := r.guilds[guildID]
+	if !ok {
+		return guild.Guild{}, nil, guild.ErrGuildNotFound
+	}
+	return g, nil, nil
+}
+
+func (r gvgHTTPGuildRepo) GetGuildByCharacter(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
+	gid, ok := r.charGuilds[charID]
+	if !ok {
+		return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
+	}
+	g, ok := r.guilds[gid]
+	if !ok {
+		return guild.Guild{}, guild.Member{}, guild.ErrGuildNotFound
+	}
+	return g, guild.Member{GuildID: gid, CharacterID: charID}, nil
+}
+
+type gvgHTTPCharRepo struct {
+	chars map[string]corecharacter.Character
+}
+
+func (r gvgHTTPCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	c, ok := r.chars[id]
+	if !ok {
+		return corecharacter.Character{}, corecharacter.ErrNotFound
+	}
+	return c, nil
+}
+
+func (r gvgHTTPCharRepo) Update(_ context.Context, c corecharacter.Character) error {
+	r.chars[c.ID] = c
+	return nil
+}
+
+type gvgHTTPBattleEngine struct{}
+
+func (gvgHTTPBattleEngine) ResolvePartyBattle(corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	return corebattle.PartyBattleResult{}, nil
+}
+
+func TestGvGHTTPPasswordPolicyAndNoVerifierLeak(t *testing.T) {
+	player := coreplayer.Player{ID: "p1", Username: "hero"}
+	chars := map[string]corecharacter.Character{
+		"c1": {ID: "c1", PlayerID: "p1", Name: "Leader", JobID: "warrior", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+		"c2": {ID: "c2", PlayerID: "p1", Name: "Joiner", JobID: "mage", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+	}
+	pService := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cService := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
+			c, ok := chars[id]
+			if !ok {
+				return corecharacter.Character{}, corecharacter.ErrNotFound
+			}
+			return c, nil
+		},
+	}
+	guildRepo := gvgHTTPGuildRepo{
+		guilds: map[string]guild.Guild{
+			"g1": {ID: "g1", Name: "Crimson", Color: "#FF3333"},
+			"g2": {ID: "g2", Name: "Azure", Color: "#33CCFF"},
+		},
+		charGuilds: map[string]string{"c1": "g1", "c2": "g2"},
+	}
+	svc, err := gvg.NewService(
+		gvg.NewMemoryRoomRepository(),
+		gvgHTTPStandingRepo{},
+		guildRepo,
+		gvgHTTPCharRepo{chars: chars},
+		gvgHTTPBattleEngine{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := newTestHandler(t, pService, cService, &stubAdventureService{}, &stubShopService{}, apihttp.WithGvG(svc)).Router()
+
+	assertNoSecret := func(label, body, hash string) {
+		t.Helper()
+		if strings.Contains(body, "password_hash") || strings.Contains(body, `"secret"`) || (hash != "" && strings.Contains(body, hash)) {
+			t.Fatalf("%s exposed secret verifier in HTTP JSON: %s", label, body)
+		}
+	}
+
+	createReq := jsonRequest(t, http.MethodPost, "/characters/c1/gvg/rooms", `{"name":"Secret War","password":"secret"}`)
+	createReq.Header.Set("Authorization", "Bearer valid-token")
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", createRec.Code, createRec.Body.String())
+	}
+	var created gvg.RoomDetail
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	gotRoom, err := svc.GetRoom(context.Background(), created.Room.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoSecret("create", createRec.Body.String(), gotRoom.Room.PasswordHash)
+
+	listRec := httptest.NewRecorder()
+	router.ServeHTTP(listRec, httptest.NewRequest(http.MethodGet, "/gvg/rooms", nil))
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list status=%d body=%s", listRec.Code, listRec.Body.String())
+	}
+	var listResp struct {
+		Rooms []gvg.RoomSummary `json:"rooms"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
+		t.Fatal(err)
+	}
+	if len(listResp.Rooms) != 1 || !listResp.Rooms[0].HasPassword {
+		t.Fatalf("expected HasPassword=true in listing, got %+v", listResp.Rooms)
+	}
+	assertNoSecret("list", listRec.Body.String(), gotRoom.Room.PasswordHash)
+
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, httptest.NewRequest(http.MethodGet, "/gvg/rooms/"+created.Room.ID, nil))
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", getRec.Code, getRec.Body.String())
+	}
+	assertNoSecret("get", getRec.Body.String(), gotRoom.Room.PasswordHash)
+
+	wrongReq := jsonRequest(t, http.MethodPost, "/characters/c2/gvg/rooms/"+created.Room.ID+"/join", `{"password":"wrong"}`)
+	wrongReq.Header.Set("Authorization", "Bearer valid-token")
+	wrongRec := httptest.NewRecorder()
+	router.ServeHTTP(wrongRec, wrongReq)
+	if wrongRec.Code != http.StatusForbidden {
+		t.Fatalf("wrong password status=%d body=%s", wrongRec.Code, wrongRec.Body.String())
+	}
+
+	okReq := jsonRequest(t, http.MethodPost, "/characters/c2/gvg/rooms/"+created.Room.ID+"/join", `{"password":"secret"}`)
+	okReq.Header.Set("Authorization", "Bearer valid-token")
+	okRec := httptest.NewRecorder()
+	router.ServeHTTP(okRec, okReq)
+	if okRec.Code != http.StatusOK {
+		t.Fatalf("valid password status=%d body=%s", okRec.Code, okRec.Body.String())
+	}
+	assertNoSecret("join", okRec.Body.String(), gotRoom.Room.PasswordHash)
 }
