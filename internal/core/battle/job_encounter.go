@@ -213,7 +213,7 @@ func (s *LifetimeState) ApplyJobEncounter(c *JobEncounterContext, id string, rng
 		if s.SkillBans == nil {
 			s.SkillBans = map[string]int{}
 		}
-		s.SkillBans[id] = 4 // The reached ordinary tail immediately ticks to three.
+		s.SkillBans[id] = 4 // `$npc_turn_skip` skips the tail tick (_battle.cgi:938,1137–1150).
 	}
 	return nil
 }

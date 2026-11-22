@@ -7,9 +7,7 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/adventure"
-	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
@@ -38,9 +36,6 @@ func installStored(t *testing.T, f *normalFixture) (*assetCombat, *storedDepots)
 		t.Fatal(err)
 	}
 	depots := &storedDepots{DepotRepository: repo}
-	c.extra = func(d *skill.BattleDefinitions, op *corebattle.JobAssetContext) {
-		d.RegisterOrdinaryTools(&corebattle.OrdinaryToolContext{DamageContext: op.DamageContext})
-	}
 	f.cfg.JobAssetDepots = depots
 	f.restart(t)
 	return c, depots
@@ -69,7 +64,7 @@ func depotItems(t *testing.T, depots *storedDepots, owner string) []item.Instanc
 
 func storedCommand(t *testing.T, f *normalFixture, run string, actor int, selector, key string) adventure.RunCommand {
 	cmd := assetCommand(t, f, run, actor, storedAction, key)
-	cmd.TargetID, cmd.Input = selector, " >"+cmd.ActorID+" "
+	cmd.TargetID, cmd.Input = selector, cmd.ActorID
 	return cmd
 }
 

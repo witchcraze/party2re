@@ -8,6 +8,7 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -205,10 +206,15 @@ type RunPenalty interface {
 	ProjectRunPenalty(context.Context, string, time.Time) error
 }
 
+type RunInventories interface {
+	InventoryRepository
+	FindByCharacterIDForUpdate(context.Context, string) (coreinventory.Inventory, error)
+}
+
 type NormalRunConfig struct {
 	Store       NormalRunStore
 	Characters  RunCharacters
-	Inventories InventoryRepository
+	Inventories RunInventories
 	Builder     RunActorBuilder
 	Settler     PostBattleSettler
 	History     Repository

@@ -600,12 +600,9 @@ actor-owned receipts. See the [schema](../../migrations/111_normal_adventure_run
 and [adapter](../../internal/database/adventure_run_repository.go). These records
 do not resurrect SQL waiting lobbies or establish a second Valkey authority.
 
-Travel uses this same snapshot: assigned coordinates remain separate from
-encounter provenance, pending clear credit and the room-wide EX marker.
-Operation-local old-enemy response context is resolved before saving members;
-only the final roster, generated summon table and result facts survive reload.
-The [Adventure contract](../design/adventure.md#combat-travel-and-encounter-replacement)
-owns the transition semantics; there is no separate travel/EX store.
+The run snapshot stores assigned coordinates separately from encounter provenance,
+pending clear credit and the room-wide EX marker. Save the final roster after
+resolving the [old-enemy response](../design/adventure.md#combat-travel-and-encounter-replacement).
 
 Party admission takes its existing lobby lock, then serializes roster validation
 and the SQL handoff on the admission's durable run identity. Each member's
@@ -640,9 +637,13 @@ receipt before requiring current membership/version. Under the run lock (Rank 0)
 recheck the receipt, then lock the complete affected character set in ascending
 ID order (Rank 2). Inventory/equipment, jobs, depots and secondary records follow
 ranks 3/4/5/8; adapters must not settle A through Rank 8 before acquiring B.
-The ambient transaction contains state, concrete-instance consumption, finalized
-recipient earnings, chest delivery, history and the receipt. Rejected commands
-change none of them or their clocks. No transaction waits for a future request.
+Player combat runs in the requester's economy transaction inside that boundary,
+sharing one character update for wallet changes and action-tail growth. In a
+party, acquire all inventory locks in character ID order before the requester
+depot. The ambient transaction commits run state, assets, finalized recipient
+earnings, chest delivery, history and the receipt together. Rejected commands
+change none of them or their clocks. A stored-tool selection message can still
+record tool history and a receipt without spending assets or renewing activity.
 
 The injected combat port supplies bounded explicit effects and activity/stock
 release facts; no batch resolver is its fallback. It must finish action/effect

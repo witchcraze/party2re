@@ -41,6 +41,7 @@ type PlayerCallbackContexts struct {
 	Reset               *corebattle.EquipmentResetContext
 	Fields              *corebattle.NamedFieldContext
 	Tools               *corebattle.OrdinaryToolContext
+	Books               *corebattle.BookContext
 	JobAssets           *corebattle.JobAssetContext
 	JobEncounters       *corebattle.JobEncounterContext
 }
@@ -86,8 +87,17 @@ func (d *BattleDefinitions) RegisterPlayerCallbacks(c PlayerCallbackContexts, pa
 	d.RegisterNamedFields(c.Fields)
 	d.RegisterJobAssets(c.JobAssets)
 	d.RegisterJobEncounters(c.JobEncounters)
-	for _, entry := range corebattle.InspectionEntries() {
-		d.Invocations.Entries[entry.ID] = ordinaryToolInvocation(c.Tools, entry.ID, false)
+	d.RegisterOrdinaryTools(c.Tools)
+	d.RegisterBooks(c.Books)
+	// Roster and transformation tools reuse their owners' bodies under the
+	// held/stored tool identity.
+	for _, id := range []string{"tool-72", "tool-73", "tool-74", "tool-78", "tool-216"} {
+		d.RosterSkills[id] = true
+		d.Invocations.Entries[id] = d.RosterInvocation(c.Roster, id)
+	}
+	for id, body := range map[string]string{"tool-168": "tool-168-memory", "tool-214": "tool-214-copy"} {
+		d.TransformationSkills[body] = true
+		d.Invocations.Entries[id] = d.TransformationInvocation(c.Transformations, body)
 	}
 	for _, id := range []string{"job-55-entry-6", "job-56-entry-5"} {
 		d.Invocations.Entries[id] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: "random"}}

@@ -129,7 +129,7 @@ func (s *LifetimeState) applyBookAssets(c *JobAssetContext, id string, rng rando
 		if s.SkillBans == nil {
 			s.SkillBans = make(map[string]int)
 		}
-		s.SkillBans[id] = 2 // The same action's tail ticks it to one.
+		s.SkillBans[id] = 2 // `$npc_turn_skip` skips the tail tick (_battle.cgi:938,1137–1150).
 		return nil
 	case "job-86-entry-2":
 		if _, err := s.ApplyMPHealing(&c.EffectContext, controlEffect(c.ActorID, float64(a.MaxMP)*.15, CategoryMagic), rng); err != nil {

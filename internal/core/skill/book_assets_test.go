@@ -95,7 +95,7 @@ func TestBookReleaseRecoilBanLifetimeAndReload(t *testing.T) {
 	if !c.ResponseSuppressed || s.Actors[0].HP != 349 || s.SkillBans["job-86-entry-3"] != 2 || *s.Actors[0].HeldToolID != "item-224" {
 		t.Fatal(c.ResponseSuppressed, s)
 	}
-	s.TickSkillBans() // The same action's tail.
+	s.TickSkillBans() // A later eligible tail; the suppressed same-action tail does not tick.
 	raw, err := json.Marshal(s)
 	if err != nil {
 		t.Fatal(err)

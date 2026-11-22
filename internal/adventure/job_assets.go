@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
@@ -12,12 +13,13 @@ import (
 
 // WithJobAssets supplies requester facts to the enclosing, fully admitted combat
 // operation. Call once inside Command, including NPC/delegated effects; the run
-// lock/receipt and economy runner share the ambient SQL transaction. The
+// lock/receipt and economy runner share the ambient SQL transaction. Tail growth
+// updates the same locked requester that the runner uses to settle assets. The
 // command's TargetID and Input are job50's outer stored-tool selector and target.
 // Job86 withdrawals swap in place; returns deliver even over capacity.
 // A selection error commits no assets; stored-tool history stays in the run.
 // Transaction: ExecuteTransaction within Command. Lock Order: prelocked run(0) -> prelocked sorted characters(2) -> requester inventory(3) -> requester depot(5).
-func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd RunCommand, apply func(*corebattle.JobAssets) error) error {
+func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd RunCommand, apply func(*corebattle.JobAssets, *corecharacter.Character) error) error {
 	if r == nil || ctx.Value(normalMutationContext{}) != r.ID || cmd.RunID != r.ID ||
 		!slices.Contains(r.Roster, cmd.ActorID) || r.Recipients[cmd.ActorID].PlayerID != cmd.PlayerID {
 		return ErrRunForbidden
@@ -51,7 +53,7 @@ func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd 
 		if assets.HeldToolID != nil {
 			previousHeld = *assets.HeldToolID
 		}
-		if err := apply(&assets); err != nil {
+		if err := apply(&assets, &tc.Character); err != nil {
 			return err
 		}
 		if assets.RequesterID != cmd.ActorID || assets.Wallet < 0 {

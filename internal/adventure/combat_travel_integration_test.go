@@ -6,99 +6,23 @@ import (
 	"errors"
 	"reflect"
 	"slices"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
-	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// This bounded consumer verifies travel/SQL composition until the production
-// run combat binds travel (#2551).
-type travelCombat struct {
-	f         *normalFixture
-	skip      bool
-	responses atomic.Int64
-}
-
-func travelFrame(r *adventure.NormalRun, actor string) corebattle.EquipmentResetContext {
-	frame := corebattle.EquipmentResetContext{TargetContext: corebattle.TargetContext{ActorID: actor, EnemyIDs: slices.Clone(r.Enemies)}}
-	for _, a := range r.Battle.Actors {
-		if !slices.Contains(r.Enemies, a.ID) {
-			frame.PartyIDs = append(frame.PartyIDs, a.ID)
-		}
-	}
-	return frame
-}
-
-func (c *travelCombat) PrepareAdvance(_ context.Context, r *adventure.NormalRun, actor string) error {
-	frame := travelFrame(r, actor)
-	if err := battle.ResetAll(&r.Battle, &frame, c.f.rng); err != nil {
-		return err
-	}
-	r.Battle.Fields.ResetFloor()
-	return nil
-}
-
-func (c *travelCombat) PrepareBossField(_ context.Context, r *adventure.NormalRun, actor string) error {
-	frame := travelFrame(r, actor)
-	return r.Battle.ApplySpecialBossField(&frame, c.f.rng)
-}
-
-func (c *travelCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
-	if cmd.Action != "travel" {
-		return c.f.combat.ExecuteRunAction(ctx, r, cmd)
-	}
-	fx := adventure.RunActionEffects{RoomActivity: true, ActorActivity: true, ReleaseStock: true}
-	if c.f.clock.Now().Before(r.LastActions[cmd.ActorID].Add(time.Duration(r.Admission.Speed) * time.Second)) {
-		return fx, adventure.ErrRunCooldown
-	}
-	input, err := adventure.ParseCombatTravelInput(cmd.Input)
-	if err != nil {
-		return fx, err
-	}
-	inv, err := c.f.invs.FindByCharacterID(ctx, cmd.ActorID)
-	if err != nil {
-		return fx, err
-	}
-	tool, ok := inv.Find(cmd.TargetID)
-	if !ok || tool.Quantity < 1 {
-		return fx, adventure.ErrRunConflict
-	}
-	frame := travelFrame(r, cmd.ActorID)
-	if err := c.f.svc.ValidateCombatTravel(r, cmd.ActorID, tool.DefinitionID, input, &frame); err != nil {
-		return fx, err
-	}
-	if c.skip {
-		return fx, nil
-	}
-	transition, err := c.f.svc.ApplyCombatTravel(ctx, r, cmd.ActorID, tool.DefinitionID, input, &frame)
-	if err != nil {
-		return fx, err
-	}
-	if transition.Consume {
-		fx.Consumed = map[string][]corebattle.ConsumedItem{cmd.ActorID: {{ID: tool.DefinitionID, InstanceID: tool.ID, Quantity: 1}}}
-	}
-	if npc := transition.BeginNPCResponse(r, c.f.clock.Now()); npc != "" {
-		c.responses.Add(1)
-		if err := r.RecordNPCResponse(npc, c.f.clock.Now()); err != nil {
-			return fx, err
-		}
-	}
-	return fx, nil
-}
-
-func installTravel(t *testing.T, f *normalFixture) *travelCombat {
+// installTravel serves held travel tools through the production RunCombat;
+// setupActions stage rooms.
+func installTravel(t *testing.T, f *normalFixture) {
 	t.Helper()
-	c := &travelCombat{f: f}
-	f.cfg.Combat = c
+	withAssetSession(t, f)
+	f.cfg.Combat, f.routed = nil, true
 	f.restart(t)
-	return c
 }
 
 func addTravelTool(t *testing.T, f *normalFixture, actor int, definition string) coreitem.Instance {
@@ -120,7 +44,8 @@ func addTravelTool(t *testing.T, f *normalFixture, actor int, definition string)
 	return tool
 }
 
-func travelCommand(t *testing.T, f *normalFixture, run string, actor int, tool coreitem.Instance, input string) adventure.RunCommand {
+// travelCommand uses the actor's single held tool (どうぐ) with a destination.
+func travelCommand(t *testing.T, f *normalFixture, run string, actor int, input string) adventure.RunCommand {
 	t.Helper()
 	r, err := f.store.FindRun(context.Background(), run)
 	if err != nil || r == nil {
@@ -128,7 +53,7 @@ func travelCommand(t *testing.T, f *normalFixture, run string, actor int, tool c
 	}
 	f.clock.add(3 * time.Second)
 	a := f.actors[actor]
-	return adventure.RunCommand{RunID: run, ID: id.New(), PlayerID: a.PlayerID, ActorID: a.ID, Version: r.Version, Action: "travel", TargetID: tool.ID, Input: input}
+	return adventure.RunCommand{RunID: run, ID: id.New(), PlayerID: a.PlayerID, ActorID: a.ID, Version: r.Version, Action: "tool", Input: input}
 }
 
 func TestCombatTravelSQLReceiptRollbackAndTryConversion(t *testing.T) {
@@ -142,7 +67,7 @@ func TestCombatTravelSQLReceiptRollbackAndTryConversion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := travelCommand(t, f, run, 0, tool, `{}`)
+	cmd := travelCommand(t, f, run, 0, `{}`)
 	f.store.failWrite.Store(true)
 	if _, err := f.svc.Command(context.Background(), cmd); err == nil {
 		t.Fatal("SQL failure accepted")
@@ -197,8 +122,8 @@ func TestCombatTravelSQL150GeneratedAndOldResponse(t *testing.T) {
 	for _, ready := range []bool{false, true} {
 		t.Run(map[bool]string{false: "generated", true: "old-response"}[ready], func(t *testing.T) {
 			f := newNormalFixture(t, 1)
-			port := installTravel(t, f)
-			tool := addTravelTool(t, f, 0, "item-150")
+			installTravel(t, f)
+			addTravelTool(t, f, 0, "item-150")
 			run := f.enter(t, "normal").Command.RunID
 			f.send(t, run, 0, "advance", "")
 			before, err := f.store.FindRun(context.Background(), run)
@@ -220,7 +145,7 @@ func TestCombatTravelSQL150GeneratedAndOldResponse(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			cmd := travelCommand(t, f, run, 0, tool, `{"floor":10}`)
+			cmd := travelCommand(t, f, run, 0, `{"floor":10}`)
 			f.store.failWrite.Store(true)
 			if _, err := f.svc.Command(context.Background(), cmd); err == nil {
 				t.Fatal("failed SQL accepted")
@@ -237,9 +162,12 @@ func TestCombatTravelSQL150GeneratedAndOldResponse(t *testing.T) {
 			if (r.Enemies[0] == before.Enemies[0]) != ready || !r.ClearPending || r.Floor != 10 || len(r.EncounterPool) == 0 {
 				t.Fatal("wrong persisted roster/generation flags", r)
 			}
+			// Generated members are fresh but never answer the same operation.
+			if hp := runActorByID(r, cmd.ActorID).HP; !ready && hp != runActorByID(before, cmd.ActorID).HP {
+				t.Fatal("a generated member answered", hp)
+			}
 			data, _ := json.Marshal(r)
 			calls := f.rng.calls.Load()
-			responses := port.responses.Load()
 			f.restart(t)
 			if _, err := f.svc.Command(context.Background(), cmd); err != nil {
 				t.Fatal(err)
@@ -249,7 +177,7 @@ func TestCombatTravelSQL150GeneratedAndOldResponse(t *testing.T) {
 				t.Fatal(err)
 			}
 			again, _ := json.Marshal(loaded)
-			if string(data) != string(again) || calls != f.rng.calls.Load() || responses != port.responses.Load() {
+			if string(data) != string(again) || calls != f.rng.calls.Load() {
 				t.Fatal("replay repeated generation/response")
 			}
 		})
@@ -260,7 +188,7 @@ func TestCombatTravelSQLNoEffectSkipAndRejection(t *testing.T) {
 	for _, scenario := range []string{"no-effect", "skip", "invalid"} {
 		t.Run(scenario, func(t *testing.T) {
 			f := newNormalFixture(t, 1)
-			port := installTravel(t, f)
+			installTravel(t, f)
 			definition := "item-083"
 			if scenario == "invalid" {
 				definition = "item-150"
@@ -268,12 +196,15 @@ func TestCombatTravelSQLNoEffectSkipAndRejection(t *testing.T) {
 			tool := addTravelTool(t, f, 0, definition)
 			run := f.enter(t, "normal").Command.RunID
 			f.send(t, run, 0, "travel10", "")
-			port.skip = scenario == "skip"
+			if scenario == "skip" {
+				// Dofuu always skips the callback (and its consumption) but completes the tail.
+				skipNextCallback(t, f, run, f.actors[0].ID)
+			}
 			before, err := f.store.FindRun(context.Background(), run)
 			if err != nil {
 				t.Fatal(err)
 			}
-			cmd := travelCommand(t, f, run, 0, tool, `{}`)
+			cmd := travelCommand(t, f, run, 0, `{}`)
 			_, err = f.svc.Command(context.Background(), cmd)
 			if (err != nil) != (scenario == "invalid") {
 				t.Fatal(err)
@@ -308,7 +239,7 @@ func TestCombatTravelSQLPairedTravelAndExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	run := entry.Command.RunID
-	commands := []adventure.RunCommand{travelCommand(t, f, run, 0, tools[0], `{}`), travelCommand(t, f, run, 1, tools[1], `{}`)}
+	commands := []adventure.RunCommand{travelCommand(t, f, run, 0, `{}`), travelCommand(t, f, run, 1, `{}`)}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		_, err := f.svc.Command(context.Background(), commands[(worker+op)%2])
 		if errors.Is(err, adventure.ErrRunConflict) {
@@ -345,7 +276,7 @@ func TestCombatTravelSQLPairedTravelAndExit(t *testing.T) {
 	if _, ok := inv.Find(tools[0].ID); !ok {
 		owner = 1
 	}
-	travel := travelCommand(t, f, run, owner, tools[owner], `{}`)
+	travel := travelCommand(t, f, run, owner, `{}`)
 	other := f.actors[1-owner]
 	exit := adventure.RunCommand{RunID: run, ID: "racing-exit", PlayerID: other.PlayerID, ActorID: other.ID, Version: r.Version, Action: "exit"}
 	stats = testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
@@ -381,9 +312,8 @@ func TestCombatTravelSQLPairedTravelAndExit(t *testing.T) {
 
 func TestCombatTravelSQLTreasureEncounterSurvivesCoordinates(t *testing.T) {
 	f := newNormalFixture(t, 1)
-	port := installTravel(t, f)
-	key := addTravelTool(t, f, 0, "item-107")
-	book := addTravelTool(t, f, 0, "item-150")
+	installTravel(t, f)
+	addTravelTool(t, f, 0, "item-107")
 	run := f.enter(t, "normal").Command.RunID
 	f.send(t, run, 0, "travel10", "")
 	f.send(t, run, 0, "advance", "")
@@ -391,12 +321,12 @@ func TestCombatTravelSQLTreasureEncounterSurvivesCoordinates(t *testing.T) {
 	if err != nil || len(before.Boxes) == 0 {
 		t.Fatal(before, err)
 	}
-	cmd := travelCommand(t, f, run, 0, key, `{}`)
+	cmd := travelCommand(t, f, run, 0, `{}`)
 	if _, err := f.svc.Command(context.Background(), cmd); err != nil {
 		t.Fatal(err)
 	}
 	after, err := f.store.FindRun(context.Background(), run)
-	if err != nil || after.Floor != 10 || !reflect.DeepEqual(before.Boxes, after.Boxes) || port.responses.Load() != 0 {
+	if err != nil || after.Floor != 10 || !reflect.DeepEqual(before.Boxes, after.Boxes) {
 		t.Fatal("treasure encounter lost", after, err)
 	}
 	f.clock.add(3 * time.Second)
@@ -405,11 +335,27 @@ func TestCombatTravelSQLTreasureEncounterSurvivesCoordinates(t *testing.T) {
 	if _, err := f.svc.Command(context.Background(), advance); !errors.Is(err, adventure.ErrInvalidFloorAction) {
 		t.Fatal("unopened treasure was treated as no enemies", err)
 	}
-	if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, book, `{"floor":1}`)); err != nil {
+	addTravelTool(t, f, 0, "item-150")
+	if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, `{"floor":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	after, err = f.store.FindRun(context.Background(), run)
 	if err != nil || len(after.Boxes) != 0 || len(after.Enemies) == 0 {
 		t.Fatal("tool150 retained replaced chests", after, err)
+	}
+}
+
+func skipNextCallback(t *testing.T, f *normalFixture, run, actor string) {
+	t.Helper()
+	if err := f.store.WithRunForUpdate(context.Background(), run, false, func(ctx context.Context) error {
+		r, err := f.store.FindRun(ctx, run)
+		if err != nil {
+			return err
+		}
+		runActorByID(r, actor).Status = corebattle.StatusDofuu
+		r.Version++
+		return f.store.SaveRun(ctx, *r, r.Version-1)
+	}); err != nil {
+		t.Fatal(err)
 	}
 }

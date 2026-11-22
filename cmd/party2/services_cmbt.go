@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
@@ -19,6 +21,7 @@ import (
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/gemstore"
 	"github.com/witchcraze/party2re/internal/gvg"
+	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/replay"
@@ -350,12 +353,17 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
+	helperRepo, err := database.NewHelperRepository(db)
+	if err != nil {
+		return nil, err
+	}
 	normalService, err := adventure.NewNormalRunService(adventure.NormalRunConfig{
 		Store: normalRepo, Characters: core.charRepo, Inventories: core.invRepo, Builder: battleAdapter, Settler: battleAdapter, History: adventureRepo,
 		Stages: adventureStages, Monsters: adventureMonsters, Admission: normalAdmissionAdapter{service: partyService, store: partyRepo},
 		Jobs:    core.jobCatalog,
 		Penalty: normalPenaltyAdapter{timers: soc.timer}, Clock: adventure.RealClock{}, CheckEntry: admission.busy,
-		EntryLocks: soc.timer,
+		EntryLocks:     soc.timer,
+		JobAssetRunner: core.economy, JobAssetHelpers: helperToolNumbers(helperRepo), JobAssetDepots: econ.depotRepo,
 	})
 	if err != nil {
 		return nil, err
@@ -437,4 +445,27 @@ func newCmbtServices(
 		normal:      normalService,
 		battle:      battleAdapter,
 	}, nil
+}
+
+// helperToolNumbers lists the open item requests' numbers (system.cgi:1424–1438,
+// get_helper_item(3)) for job78's scavenging exclusion.
+func helperToolNumbers(repo *database.HelperRepository) func(context.Context) ([]int, error) {
+	return func(ctx context.Context) ([]int, error) {
+		quests, err := repo.ListUncompleted(ctx)
+		if err != nil {
+			return nil, err
+		}
+		numbers := []int{}
+		for _, q := range quests {
+			if q.Kind != helperquest.KindItem {
+				continue
+			}
+			n, err := strconv.Atoi(strings.TrimPrefix(q.TargetID, "item-"))
+			if err != nil {
+				return nil, err
+			}
+			numbers = append(numbers, n)
+		}
+		return numbers, nil
+	}
 }

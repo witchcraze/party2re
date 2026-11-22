@@ -11,8 +11,8 @@ import (
 
 // runPorts are rebuilt for every operation from the saved run and requester.
 // A nil port keeps its entries as whole-action gates: arithmetic discovery,
-// control MP drain, transformation area damage, job assets and job encounters
-// have no production owner in this composition yet.
+// control MP drain and transformation area damage have no production owner in
+// this composition yet.
 type runPorts struct {
 	damage corebattle.DamageContext
 	defeat *corebattle.DefeatContext
@@ -98,6 +98,7 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 		Status:              p.status,
 		Reset:               reset,
 		Fields:              &corebattle.NamedFieldContext{DamageContext: d, Death: p.defeat, Roster: roster, RequesterGender: gender, RequesterIcon: icon},
+		Books:               &corebattle.BookContext{DamageContext: d},
 		Tools:               &corebattle.OrdinaryToolContext{DamageContext: d, OrdinaryToolInput: corebattle.OrdinaryToolInput{Inspection: inspection}, EquipmentReset: reset, Death: p.defeat},
 	}
 }
@@ -143,16 +144,17 @@ func bindRunAction(action *ParsedRunAction, frame corebattle.CallbackContext, de
 	}
 }
 
-// reportFieldSuppression returns the field port's `$npc_turn_skip` (cosmic
-// first use) as the submission's fact; the port itself is not the tail input.
-func reportFieldSuppression(action *corebattle.PlayerAction, field *corebattle.NamedFieldContext) {
+// reportFieldSuppression returns the ports' `$npc_turn_skip` (cosmic first
+// use, job86.3 withdrawal, job encounters) as the submission's fact; the ports
+// themselves are not the tail input.
+func reportFieldSuppression(action *corebattle.PlayerAction, field *corebattle.NamedFieldContext, rooms *roomPorts) {
 	execute := action.Execute
 	if execute == nil {
 		return
 	}
 	action.Execute = func(s *corebattle.LifetimeState, rng random.Generator) (corebattle.PlayerActionFacts, error) {
 		facts, err := execute(s, rng)
-		facts.Suppressed = facts.Suppressed || field.ResponseSuppressed
+		facts.Suppressed = facts.Suppressed || field.ResponseSuppressed || rooms.suppressed()
 		return facts, err
 	}
 }
