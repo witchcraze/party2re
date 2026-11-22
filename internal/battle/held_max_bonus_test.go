@@ -3,6 +3,7 @@ package battle_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -33,6 +34,7 @@ func TestBuildParticipant_HeldStatReturnItemRaisesBattleMaximum(t *testing.T) {
 		{"bracelet over-level", "item-113", 1500, 200, 999, 200},
 		{"ring normal", "item-114", 300, 200, 300, 300},
 		{"ring near cap", "item-114", 300, 950, 300, 999},
+		{"sealed key no-op", "item-259", 300, 200, 300, 200},
 		{"other tool", "item-018", 300, 200, 300, 200},
 		{"empty hand", "", 300, 200, 300, 200},
 	}
@@ -124,5 +126,61 @@ func TestHeldVitalitySurvivesResetAndStaysInBattle(t *testing.T) {
 	saved, err := chars.FindByID(ctx, char.ID)
 	if err != nil || saved.Stats.HP != 300 || saved.Stats.MaxHP != 300 || saved.Stats.MP != 195 || saved.Stats.MaxMP != 200 {
 		t.Fatalf("settled stats = %+v, error = %v", saved.Stats, err)
+	}
+}
+
+// Approved departure (#2369): holding item-259 (category 4) at quest entry
+// enters combat normally without Depot box lookup/delivery or corrupting the row.
+func TestHeldSealedKeyIsNoOpAtQuestEntry(t *testing.T) {
+	ctx := context.Background()
+	for _, withDepotBox := range []bool{false, true} {
+		chars, inventory, depots := newMockCharRepo(), newMockInvRepo(), newMockDepotRepo()
+		char := corecharacter.Character{
+			ID: "hero", Name: "Hero", JobID: "job-01", Level: 1,
+			Stats: corecharacter.Stats{HP: 250, MaxHP: 300, MP: 150, MaxMP: 200, Attack: 10, Defense: 10, Agility: 10},
+		}
+		chars.characters[char.ID] = char
+		key := coreitem.Instance{ID: "key", DefinitionID: "item-259", Quantity: 1}
+		if err := inventory.Save(ctx, coreinventory.Inventory{CharacterID: char.ID, Items: []coreitem.Instance{key}}); err != nil {
+			t.Fatal(err)
+		}
+		if withDepotBox {
+			box := coreitem.Instance{ID: "box", DefinitionID: "item-258", Quantity: 1}
+			if err := depots.Save(ctx, depot.Depot{CharacterID: char.ID, Items: []coreitem.Instance{box}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		svc := battle.NewService(
+			battle.WithCharacterRepository(chars),
+			battle.WithInventoryRepository(inventory),
+			battle.WithDepotRepository(depots),
+			battle.WithJobHistoryRepository(&historyReadStub{err: corejob.ErrCharacterJobNotFound}),
+		)
+
+		p, err := svc.BuildParticipant(ctx, char.ID)
+		if err != nil || p.Name != "Hero" || p.HP != 250 || p.MaxHP != 300 || p.MP != 150 || p.MaxMP != 200 {
+			t.Fatalf("withBox=%v BuildParticipant = %+v, err = %v", withDepotBox, p, err)
+		}
+		actor, err := svc.BuildLifetimeActor(ctx, char.ID, "")
+		if err != nil || actor.Name != "Hero" || actor.HP != 250 || actor.MaxHP != 300 || actor.MP != 150 || actor.MaxMP != 200 {
+			t.Fatalf("withBox=%v BuildLifetimeActor = %+v, err = %v", withDepotBox, actor, err)
+		}
+		hp, mp, err := svc.BuildBattleMaxima(ctx, char)
+		if err != nil || hp != 300 || mp != 200 {
+			t.Fatalf("withBox=%v BuildBattleMaxima = (%d, %d), err = %v", withDepotBox, hp, mp, err)
+		}
+
+		savedInv, err := inventory.FindByCharacterID(ctx, char.ID)
+		if err != nil || len(savedInv.Items) != 1 || savedInv.Items[0].ID != "key" || savedInv.Items[0].DefinitionID != "item-259" || savedInv.Items[0].Quantity != 1 {
+			t.Fatalf("withBox=%v inventory mutated = %+v, err = %v", withDepotBox, savedInv, err)
+		}
+		savedDepot, err := depots.FindByCharacterID(ctx, char.ID)
+		if withDepotBox {
+			if err != nil || len(savedDepot.Items) != 1 || savedDepot.Items[0].ID != "box" || savedDepot.Items[0].DefinitionID != "item-258" || savedDepot.Items[0].Quantity != 1 {
+				t.Fatalf("withBox=%v depot mutated = %+v, err = %v", withDepotBox, savedDepot, err)
+			}
+		} else if !errors.Is(err, depot.ErrNotFound) {
+			t.Fatalf("withBox=%v depot = %+v, err = %v, want %v", withDepotBox, savedDepot, err, depot.ErrNotFound)
+		}
 	}
 }
