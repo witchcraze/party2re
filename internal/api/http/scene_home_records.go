@@ -3,9 +3,11 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/witchcraze/party2re/internal/collection"
+	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/gemstore"
 	jobapp "github.com/witchcraze/party2re/internal/job"
@@ -14,7 +16,7 @@ import (
 
 // Home record views (home.cgi aitemuzukan/monster_book/job_master) show the
 // observed home owner's records to owner and visitors alike; ＠かすたむすきる
-// is offered only in one's own home. Every list is bounded by its catalog.
+// is offered only in one's own home.
 var (
 	homeRecordScenes        = []string{"home_collection", "home_monster_book", "home_job_master", "home_profile", "home_adventure_record"}
 	homeCollectionFacility  = facility{title: "アイテム図鑑", read: (*Handler).homeCollectionSceneData}
@@ -25,8 +27,15 @@ var (
 
 // CollectionSection is one completion-tracked list of the item collection.
 type CollectionSection struct {
-	Entries  []collection.ItemCollectionEntry `json:"entries"`
-	Progress collection.CompletionProgress    `json:"progress"`
+	Entries  []HomeCollectionEntry         `json:"entries"`
+	Progress collection.CompletionProgress `json:"progress"`
+}
+
+type HomeCollectionEntry struct {
+	collection.ItemCollectionEntry
+	Power  *int `json:"power,omitempty"`
+	Weight *int `json:"weight,omitempty"`
+	Price  *int `json:"price,omitempty"`
 }
 
 type HomeCollectionSceneData struct {
@@ -56,26 +65,42 @@ type HomeCustomSkillSceneData struct {
 }
 
 func (h *Handler) homeCollectionSceneData(ctx context.Context, r playercontext.Result) (any, error) {
-	if h.collections == nil {
+	if h.collections == nil || h.collections.catalog == nil {
 		return nil, errSceneNotConfigured
 	}
 	owner := homeOwner(r.Navigation, r.Snapshot.Character.ID)
 	data := HomeCollectionSceneData{Parent: "home", OwnerID: owner}
 	for _, section := range []struct {
-		into *CollectionSection
-		read func(context.Context, string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+		into  *CollectionSection
+		read  func(context.Context, string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+		stats func(string) (int, int)
 	}{
-		{&data.Weapons, h.collections.GetWeaponCollection},
-		{&data.Armors, h.collections.GetArmorCollection},
+		{&data.Weapons, h.collections.GetWeaponCollection, item.NominalWeaponStats},
+		{&data.Armors, h.collections.GetArmorCollection, item.NominalArmorStats},
 		{&data.Items, func(ctx context.Context, id string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
 			return h.collections.GetItemCollection(ctx, id, "item")
-		}},
+		}, nil},
 	} {
 		entries, progress, err := section.read(ctx, owner)
 		if err != nil {
 			return nil, err
 		}
-		*section.into = CollectionSection{Entries: append([]collection.ItemCollectionEntry{}, entries...), Progress: progress}
+		section.into.Progress = progress
+		section.into.Entries = make([]HomeCollectionEntry, 0, len(entries))
+		for _, entry := range entries {
+			row := HomeCollectionEntry{ItemCollectionEntry: entry}
+			def, err := h.collections.catalog.FindByID(entry.ItemID)
+			if err == nil {
+				row.Price = &def.Price
+				if section.stats != nil {
+					power, weight := section.stats(def.ID)
+					row.Power, row.Weight = &power, &weight
+				}
+			} else if !errors.Is(err, item.ErrDefinitionNotFound) {
+				return nil, fmt.Errorf("read collection catalog item %s: %w", entry.ItemID, err)
+			}
+			section.into.Entries = append(section.into.Entries, row)
+		}
 	}
 	return data, nil
 }
@@ -168,7 +193,17 @@ type CollectionService interface {
 	GetArmorCollection(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
 }
 
+type collectionReader struct {
+	CollectionService
+	catalog item.DefinitionProvider
+}
+
 // WithCollection configures the collection reads of the Home record views and trajectory.
-func WithCollection(c CollectionService) Option {
-	return func(h *Handler) { h.collections = c }
+func WithCollection(c CollectionService, catalog item.DefinitionProvider) Option {
+	return func(h *Handler) {
+		h.collections = nil
+		if c != nil {
+			h.collections = &collectionReader{CollectionService: c, catalog: catalog}
+		}
+	}
 }

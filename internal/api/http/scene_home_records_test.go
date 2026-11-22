@@ -6,8 +6,10 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/collection"
+	"github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/customskill"
 	jobapp "github.com/witchcraze/party2re/internal/job"
@@ -56,7 +58,11 @@ func (s *homeRecordStub) SetCustomSkill(_ context.Context, id, name, comment str
 
 func homeRecordRouter(t *testing.T) (*homeRecordStub, *gatewayNavigationStore, func(string, string) (int, map[string]json.RawMessage), func() (int, PlayerContextResponse)) {
 	stub := &homeRecordStub{}
-	_, store, router := homeSceneRouter(t, WithCollection(stub), WithJob(stub), WithCustomSkill(stub))
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, store, router := homeSceneRouter(t, WithCollection(stub, catalog), WithJob(stub), WithCustomSkill(stub))
 	act := func(action, params string) (int, map[string]json.RawMessage) {
 		return gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"`+action+`","params":`+params+`}`, nil)
 	}
@@ -126,6 +132,84 @@ func TestHomeRecordRequiredReadFailures(t *testing.T) {
 		if status, _ := get(); status != 500 {
 			t.Fatalf("%s hid a required read failure: %d", scene, status)
 		}
+	}
+}
+
+type homeCollectionRepo struct {
+	collection.Repository
+}
+
+type homeCollectionCatalogFunc func(string) (item.Definition, error)
+
+func (f homeCollectionCatalogFunc) FindByID(id string) (item.Definition, error) {
+	return f(id)
+}
+
+func (homeCollectionRepo) GetItemCollection(_ context.Context, id, category string) ([]collection.ItemCollectionEntry, error) {
+	ids := map[string][]string{
+		"weapon": {"weapon-08", "weapon-02", "retired-weapon"},
+		"armor":  {"armor-04", "armor-01"},
+		"item":   {"item-142", "item-071", "item-001"},
+	}
+	var entries []collection.ItemCollectionEntry
+	for i, itemID := range ids[category] {
+		entries = append(entries, collection.ItemCollectionEntry{
+			CharacterID: id, ItemID: itemID, ItemName: itemID, Category: category,
+			DiscoveredAt: time.Unix(int64(i), 0).UTC(),
+		})
+	}
+	return entries, nil
+}
+
+func TestHomeCollectionShowsCatalogColumnsInNumberOrder(t *testing.T) {
+	service, err := collection.NewService(homeCollectionRepo{}, collection.DefaultTotalMonsters, collection.DefaultTotalItems)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lookupErr error
+	lookup := homeCollectionCatalogFunc(func(id string) (item.Definition, error) {
+		if lookupErr != nil {
+			return item.Definition{}, lookupErr
+		}
+		return catalog.FindByID(id)
+	})
+	_, store, router := homeSceneRouter(t, WithCollection(service, lookup))
+	store.selection = playercontext.Selection{Destination: "home_collection"}
+	status, response := navigationGET(t, router)
+	if status != 200 || response.Scene.Kind != "facility" {
+		t.Fatalf("observation: %d %+v", status, response.Scene)
+	}
+	type section struct {
+		Entries []map[string]json.RawMessage `json:"entries"`
+	}
+	data := decodeSceneData[struct {
+		Weapons section `json:"weapons"`
+		Armors  section `json:"armors"`
+		Items   section `json:"items"`
+	}](t, response)
+	for _, tc := range []struct {
+		entries []map[string]json.RawMessage
+		want    [][4]string
+	}{
+		{data.Weapons.Entries, [][4]string{{`"weapon-02"`, "4", "2", "30"}, {`"weapon-08"`, "14", "9", "400"}, {`"retired-weapon"`, "", "", ""}}},
+		{data.Armors.Entries, [][4]string{{`"armor-01"`, "3", "0", "20"}, {`"armor-04"`, "12", "4", "150"}}},
+		{data.Items.Entries, [][4]string{{`"item-001"`, "", "", "30"}, {`"item-071"`, "", "", "5000"}, {`"item-142"`, "", "", "150"}}},
+	} {
+		var got [][4]string
+		for _, entry := range tc.entries {
+			got = append(got, [4]string{string(entry["item_id"]), string(entry["power"]), string(entry["weight"]), string(entry["price"])})
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("catalog columns (id, power, weight, price) = %v, want %v", got, tc.want)
+		}
+	}
+	lookupErr = errors.New("catalog read failed")
+	if status, _ := navigationGET(t, router); status != 500 {
+		t.Fatalf("observation hid a required catalog read failure: %d", status)
 	}
 }
 

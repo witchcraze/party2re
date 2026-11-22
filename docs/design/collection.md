@@ -1,13 +1,9 @@
 # Monster Book & Collection Design
 
-## Overview
-
-Collections (`internal/collection`; legacy `lib/_add_monster_book.cgi`, `lib/collection.cgi`, `legend.cgi`) track defeated monsters and discovered weapons, armor and items, with completion news and hall-of-fame induction. Fields, totals and transport are owned by code and [OpenAPI](../api/openapi.json).
-
 ## Rules
 
-- Completion targets: 180 monsters, 71 weapons (`$#weas`), 55 armors (`$#arms`) and 141 items (`$default_ites`).
-- **Pitfall:** only basic items up to No. 141 count toward item completion; higher-numbered items (synthesis or expansion items such as item142, item154, item257) stay visible in the list but never count or compensate for missing basic items (`lib/collection.cgi:45–49,81–87`). Weapons and armor in the shared table never count toward the item compendium.
+- **Pitfall:** only items up to No. 141 count toward completion. Higher-numbered items stay visible without counting (`lib/collection.cgi:45–49,81–87`).
+- Legacy equipment columns use values calculated when the tables load, including random rolls and some strengths based on the viewer's stats (`lib/_data.cgi:399–407,440–452,511–516`). The Home view uses the same nominal values as the shops so repeated observations show stable values.
 - A monster's first-defeat stats and rewards are an immutable snapshot; later defeats only increment the count. **Decision:** records predating the snapshot stay empty instead of fabricating stats.
 - PvP opponents never enter the monster book. Sealing battles record their bosses (king99 clones as one shadow entry) with habitat 「封印戦」.
 

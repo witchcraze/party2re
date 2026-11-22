@@ -1,15 +1,18 @@
 package collection
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/item"
 )
 
 const (
@@ -333,6 +336,20 @@ func IsBasicItem(itemID string, maxBasicItemNo int) bool {
 	return n >= 1 && n <= maxBasicItemNo
 }
 
+func sortByCatalogNumber(entries []ItemCollectionEntry) {
+	slices.SortStableFunc(entries, func(a, b ItemCollectionEntry) int {
+		_, aNumber, aErr := (item.Definition{ID: a.ItemID}).LegacyStorageKey()
+		_, bNumber, bErr := (item.Definition{ID: b.ItemID}).LegacyStorageKey()
+		if aErr != nil && bErr == nil {
+			return 1
+		}
+		if aErr == nil && bErr != nil {
+			return -1
+		}
+		return cmp.Compare(aNumber, bNumber)
+	})
+}
+
 func (s *Service) GetItemCollection(ctx context.Context, characterID, category string) ([]ItemCollectionEntry, CompletionProgress, error) {
 	if characterID == "" {
 		return nil, CompletionProgress{}, ErrInvalidCharacterID
@@ -375,6 +392,7 @@ func (s *Service) GetItemCollection(ctx context.Context, characterID, category s
 		CompletionPercentage: percentage,
 		IsCompleted:          s.totalItems > 0 && discoveredCount >= s.totalItems,
 	}
+	sortByCatalogNumber(entries)
 	return entries, progress, nil
 }
 
@@ -401,6 +419,7 @@ func (s *Service) GetWeaponCollection(ctx context.Context, characterID string) (
 		CompletionPercentage: percentage,
 		IsCompleted:          s.totalWeapons > 0 && discovered >= s.totalWeapons,
 	}
+	sortByCatalogNumber(entries)
 	return entries, progress, nil
 }
 
@@ -427,6 +446,7 @@ func (s *Service) GetArmorCollection(ctx context.Context, characterID string) ([
 		CompletionPercentage: percentage,
 		IsCompleted:          s.totalArmors > 0 && discovered >= s.totalArmors,
 	}
+	sortByCatalogNumber(entries)
 	return entries, progress, nil
 }
 

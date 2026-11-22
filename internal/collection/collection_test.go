@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -22,6 +23,30 @@ type mockCollectionRepo struct {
 	getItemCollectionErr error
 	markCompletedErr     error
 	isCompletedErr       error
+}
+
+type discoveryOrderRepo struct{ collection.Repository }
+
+func (discoveryOrderRepo) GetItemCollection(context.Context, string, string) ([]collection.ItemCollectionEntry, error) {
+	return []collection.ItemCollectionEntry{{ItemID: "item-10"}, {ItemID: "retired-item"}, {ItemID: "item-2"}}, nil
+}
+
+func TestItemCollectionOrdersByCatalogNumber(t *testing.T) {
+	svc, err := collection.NewService(discoveryOrderRepo{}, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _, err := svc.GetItemCollection(context.Background(), "hero", "item")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, entry := range entries {
+		ids = append(ids, entry.ItemID)
+	}
+	if want := []string{"item-2", "item-10", "retired-item"}; !slices.Equal(ids, want) {
+		t.Fatalf("catalog order = %v, want %v", ids, want)
+	}
 }
 
 func (m *mockCollectionRepo) RecordMonsterDefeat(_ context.Context, charID string, record collection.DefeatedMonsterRecord) error {

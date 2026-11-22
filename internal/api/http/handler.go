@@ -136,7 +136,7 @@ type Handler struct {
 	customSkills   CustomSkillService
 	chapel         ChapelService
 	exile          ExileService
-	collections    CollectionService
+	collections    *collectionReader
 	depot          DepotService
 	lottery        LotteryService
 	casino         CasinoService
