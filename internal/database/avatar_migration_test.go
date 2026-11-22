@@ -30,7 +30,7 @@ func TestAvatarImgurOnlyMigrationClearsOnlyNonCanonical(t *testing.T) {
 			t.Fatal(err)
 		}
 		ids[in] = c.ID
-		if _, err := db.Exec(`INSERT INTO character_profiles (character_id, comment, avatar_url, aura_effect) VALUES (?, 'keep', ?, 4)`, c.ID, in); err != nil {
+		if _, err := db.Exec(`INSERT INTO character_profiles (character_id, avatar_url, aura_effect) VALUES (?, ?, 4)`, c.ID, in); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Exec(`INSERT INTO character_presence_snapshots (character_id, kind, recorded_at, name, color, icon_url) VALUES (?, 'entry', 1, ?, '#ffffff', ?)`, c.ID, c.Name, in); err != nil {
@@ -49,9 +49,9 @@ func TestAvatarImgurOnlyMigrationClearsOnlyNonCanonical(t *testing.T) {
 		}
 	}
 	for in, want := range values {
-		var avatar, comment, icon string
+		var avatar, icon string
 		var aura int
-		if err := db.QueryRow(`SELECT avatar_url, comment, aura_effect FROM character_profiles WHERE character_id = ?`, ids[in]).Scan(&avatar, &comment, &aura); err != nil {
+		if err := db.QueryRow(`SELECT avatar_url, aura_effect FROM character_profiles WHERE character_id = ?`, ids[in]).Scan(&avatar, &aura); err != nil {
 			t.Fatal(err)
 		}
 		if err := db.QueryRow(`SELECT icon_url FROM character_presence_snapshots WHERE character_id = ?`, ids[in]).Scan(&icon); err != nil {
@@ -61,8 +61,8 @@ func TestAvatarImgurOnlyMigrationClearsOnlyNonCanonical(t *testing.T) {
 		if character.ValidateAvatarURL(want) != nil {
 			wantIcon = "" // public snapshots only ever carry the avatar contract
 		}
-		if avatar != want || icon != wantIcon || comment != "keep" || aura != 4 {
-			t.Errorf("%q: avatar=%q icon=%q comment=%q aura=%d", in, avatar, icon, comment, aura)
+		if avatar != want || icon != wantIcon || aura != 4 {
+			t.Errorf("%q: avatar=%q icon=%q aura=%d", in, avatar, icon, aura)
 		}
 		if avatar != "chr/052.gif" && character.ValidateAvatarURL(avatar) != nil {
 			t.Errorf("%q: migrated value %q violates the Go contract", in, avatar)

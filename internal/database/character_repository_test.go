@@ -105,7 +105,6 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	}
 
 	profToSave := defaultProf
-	profToSave.Comment = "Testing bio"
 	profToSave.AvatarURL = "https://i.imgur.com/AvATest.gif"
 	profToSave.AuraEffect = 5
 	profToSave.BioData = map[string]string{
@@ -119,7 +118,7 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProfile() after save error = %v", err)
 	}
-	if loadedProf.Comment != "Testing bio" || loadedProf.AvatarURL != "https://i.imgur.com/AvATest.gif" || loadedProf.AuraEffect != 5 || loadedProf.BioData["hobby"] != "Coding" {
+	if loadedProf.AvatarURL != "https://i.imgur.com/AvATest.gif" || loadedProf.AuraEffect != 5 || loadedProf.BioData["hobby"] != "Coding" {
 		t.Fatalf("unexpected loaded profile: %+v", loadedProf)
 	}
 

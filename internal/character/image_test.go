@@ -13,7 +13,7 @@ func (u *fixedImageUnlocks) ImageUnlocks(context.Context, string) (ImageUnlocks,
 }
 
 // custom_image.cgi write_exe: aura always, avatar only after its unlock, and
-// the bio and comment written elsewhere are kept.
+// the bio written elsewhere is kept.
 func TestService_UpdateImage(t *testing.T) {
 	ctx := context.Background()
 	const oldAvatar = "https://i.imgur.com/old12.gif"
@@ -40,7 +40,7 @@ func TestService_UpdateImage(t *testing.T) {
 			unlocks := fixedImageUnlocks(tc.unlocks)
 			service, _ := NewService(repo, WithImageUnlocks(&unlocks))
 			char, _ := service.Create(ctx, "player-1", "Hero")
-			repo.profiles[char.ID] = Profile{CharacterID: char.ID, Comment: "c", AvatarURL: oldAvatar, AuraEffect: 3, BioData: map[string]string{"hobby": "h"}}
+			repo.profiles[char.ID] = Profile{CharacterID: char.ID, AvatarURL: oldAvatar, AuraEffect: 3, BioData: map[string]string{"hobby": "h"}}
 
 			_, err := service.UpdateImage(ctx, char.ID, tc.aura, tc.avatarID)
 			if !errors.Is(err, tc.wantErr) {
@@ -51,7 +51,7 @@ func TestService_UpdateImage(t *testing.T) {
 			if tc.wantErr == nil {
 				wantAura = tc.aura
 			}
-			if stored.AvatarURL != tc.wantAvatar || stored.AuraEffect != wantAura || stored.Comment != "c" || stored.BioData["hobby"] != "h" {
+			if stored.AvatarURL != tc.wantAvatar || stored.AuraEffect != wantAura || stored.BioData["hobby"] != "h" {
 				t.Fatalf("stored %+v", stored)
 			}
 			view, err := service.GetImage(ctx, char.ID)

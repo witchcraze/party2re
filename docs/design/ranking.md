@@ -23,6 +23,8 @@ Each job change credits floor(previous level × 0.5) points to the **previous** 
 
 Completion of all jobs, the monster book, the weapon, armor and item encyclopedias, or all alchemy recipes inducts a character permanently and once per category, in induction order.
 
+- **Icon fallback:** When an induction caller omits `icon`, `RecordLegend` derives `job/<n>_<sex>.gif` from the character's current job and gender (matching the default legacy `$m{icon}`); temporary costume and God-wish overrides ([#1837](https://github.com/witchcraze/party2re/issues/1837), [#1924](https://github.com/witchcraze/party2re/issues/1924)) are not applied until appearance persistence is unified.
+
 ## `kill_p` (王者) Counter Rule
 
 - Ranking category `pvp_victory` orders `characters.pvp_wins` (`kill_p`), credited per stronger-opponent combat defeat rather than Colosseum match wins as specified in [PvP](pvp.md) and [GvG](gvg.md).

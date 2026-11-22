@@ -185,7 +185,7 @@ content. Never interpolate user text into executable markup or SQL.
 **Persistence and delivery.** MariaDB owns the character's message and sampling
 clock (`characters`) and at most one entry and one sample snapshot per character
 (`character_presence_snapshots`); Valkey is unnecessary. A gameplay save, its retention event and any due sample commit together, as do entry message changes and entry publication. Publication copies
-display fields; an avatar outside the [profile avatar contract](character-customization.md#51-profile-attributes-character_profiles)
+display fields; an avatar outside the [profile avatar contract](#216-profile-avatar--image-departures)
 is published as an empty icon rather than blocking presence. Observation rechecks
 each stored public field and fails as a whole on unsafe data. Initial deployment
 publishes no fabricated activity; restart preserves eligible records. Character
@@ -259,3 +259,10 @@ Legacy `player.cgi` publicly shows a character's milestone log (`write_memory`) 
 
 - **Finding:** legacy never shows another player's money, so the "落札金" that the Auction venue words say can be checked cannot be.
 - **Decision:** legacy prints armor only `if $p{wea}` (`system.cgi:373,402`), a copy of the weapon condition; armor is shown whenever equipped.
+
+### 2.16 Profile, Avatar & Image Departures
+
+- **Avatar URL (`lib/custom_image.cgi:65–70`):** Empty or `https://i.imgur.com/<5–10 ASCII alphanumerics>.gif`; other external services are deferred to [#1923](https://github.com/witchcraze/party2re/issues/1923). Known gap: the God new-world wish still writes `chr/052.gif` here although legacy changes `$m{icon}`, not `$m{avatar}` ([#1924](https://github.com/witchcraze/party2re/issues/1924)).
+- **Aura Effect (`lib/custom_image.cgi:71`):** Approved departure — Go validates `0`–`8`, whereas legacy stores the submitted `effect1` value unchecked.
+- **Pre-unlock avatar retention (`lib/custom_image.cgi:54,68–70`):** Approved departure — before the avatar unlock, own-Home `いめーじ` keeps an already-stored avatar instead of overwriting `$m{avatar}` with empty.
+- **Public bio entries (`lib/profile.cgi:58–78`):** Non-obvious finding — editable `job` and `sex` profile entries are player-written text, not the character's actual job or gender.

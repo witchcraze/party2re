@@ -300,8 +300,8 @@ func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T)
 	}
 
 	// 1. Initial valid profile
-	initialComment := "Before corruption"
-	if err := charRepo.SaveProfile(ctx, character.Profile{CharacterID: char.ID, Comment: initialComment, UpdatedAt: time.Now().UTC()}); err != nil {
+	initialAvatar := "https://i.imgur.com/AbCd1.gif"
+	if err := charRepo.SaveProfile(ctx, character.Profile{CharacterID: char.ID, AvatarURL: initialAvatar, UpdatedAt: time.Now().UTC()}); err != nil {
 		t.Fatalf("initial SaveProfile failed: %v", err)
 	}
 
@@ -320,14 +320,14 @@ func TestCharacterService_ProfileUpdate_StorageErrorAndCorruptJSON(t *testing.T)
 	}
 
 	// Verify the database row was NOT overwritten
-	var savedComment, savedBioData string
-	err = db.QueryRowContext(ctx, "SELECT comment, bio_data FROM character_profiles WHERE character_id = ?", char.ID).Scan(&savedComment, &savedBioData)
+	var savedAvatar, savedBioData string
+	err = db.QueryRowContext(ctx, "SELECT avatar_url, bio_data FROM character_profiles WHERE character_id = ?", char.ID).Scan(&savedAvatar, &savedBioData)
 	if err != nil {
 		t.Fatalf("reading back profile row failed: %v", err)
 	}
 
-	if savedComment != initialComment {
-		t.Errorf("comment was overwritten on error: got %q, want %q", savedComment, initialComment)
+	if savedAvatar != initialAvatar {
+		t.Errorf("avatar_url was overwritten on error: got %q, want %q", savedAvatar, initialAvatar)
 	}
 	if !strings.Contains(savedBioData, "12345") {
 		t.Errorf("incompatible bio_data was lost or reset: got %q", savedBioData)
@@ -352,7 +352,7 @@ func TestCharacterProfileFixtureCleanup(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	if err := obsRepo.SaveProfile(ctx, character.Profile{
 		CharacterID: unrelated.ID,
-		Comment:     "unrelated profile",
+		AvatarURL:   "https://i.imgur.com/UnRel1.gif",
 		UpdatedAt:   now,
 	}); err != nil {
 		t.Fatalf("SaveProfile unrelated: %v", err)
@@ -366,7 +366,7 @@ func TestCharacterProfileFixtureCleanup(t *testing.T) {
 		}
 		if err := repo.SaveProfile(ctx, character.Profile{
 			CharacterID: charID,
-			Comment:     "owned profile",
+			AvatarURL:   "https://i.imgur.com/OwnEd1.gif",
 			UpdatedAt:   now,
 		}); err != nil {
 			t.Fatalf("SaveProfile owned: %v", err)

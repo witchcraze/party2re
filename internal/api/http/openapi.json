@@ -8494,9 +8494,6 @@
           "character_id": {
             "type": "string"
           },
-          "comment": {
-            "type": "string"
-          },
           "updated_at": {
             "format": "date-time",
             "type": "string"
@@ -8504,7 +8501,6 @@
         },
         "required": [
           "character_id",
-          "comment",
           "avatar_url",
           "aura_effect",
           "updated_at"
@@ -8541,13 +8537,9 @@
                   "type": "string"
                 },
                 "type": "object"
-              },
-              "comment": {
-                "type": "string"
               }
             },
             "required": [
-              "comment",
               "avatar_url",
               "aura_effect"
             ],
@@ -23409,7 +23401,7 @@
     },
     "/characters/{id}/profile": {
       "get": {
-        "description": "Returns only the character name and player-written profile (comment, avatar URL, aura effect and optional bio data). Account/character IDs, balances, stats, actual job/gender and internal profile metadata are not exposed.",
+        "description": "Returns only the character name and player-written profile (avatar URL, aura effect and optional bio data). Account/character IDs, balances, stats, actual job/gender and internal profile metadata are not exposed.",
         "operationId": "getCharacterProfile",
         "parameters": [
           {

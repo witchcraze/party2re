@@ -42,7 +42,6 @@ var (
 // Profile represents player customization bio and avatar state.
 type Profile struct {
 	CharacterID string            `json:"character_id"`
-	Comment     string            `json:"comment"`
 	AvatarURL   string            `json:"avatar_url"`
 	AuraEffect  int               `json:"aura_effect"`
 	BioData     map[string]string `json:"bio_data,omitempty"`

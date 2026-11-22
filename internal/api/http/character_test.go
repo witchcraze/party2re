@@ -72,7 +72,6 @@ func (s *stubCharacterServiceExtended) GetProfile(ctx context.Context, character
 		Character: corecharacter.Character{ID: characterID, Name: "Hero"},
 		Profile: character.Profile{
 			CharacterID: characterID,
-			Comment:     "Mighty adventurer",
 			AvatarURL:   "https://i.imgur.com/AvATest.gif",
 			AuraEffect:  3,
 		},

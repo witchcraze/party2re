@@ -3,6 +3,9 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/ranking"
@@ -159,17 +162,16 @@ func (r *RankingRepository) RunInTx(ctx context.Context, fn func(ctx context.Con
 // RecordLegend records a character's completion in the permanent Hall of Fame.
 func (r *RankingRepository) RecordLegend(ctx context.Context, entry ranking.LegendEntry) (bool, error) {
 	if entry.CharacterName == "" || entry.Color == "" || entry.GuildName == "" || entry.Icon == "" || entry.Message == "" {
-		var name, color, guildName, avatarURL, comment sql.NullString
+		var name, color, guildName, jobID, gender, loginMessage sql.NullString
 		queryDetails := `
-			SELECT c.name, c.color, COALESCE(g.name, ''), COALESCE(cp.avatar_url, ''), COALESCE(cp.comment, '')
+			SELECT c.name, c.color, COALESCE(g.name, ''), c.job_id, c.gender, c.login_message
 			FROM characters c
-			LEFT JOIN character_profiles cp ON c.id = cp.character_id
 			LEFT JOIN guild_members gm ON c.id = gm.character_id AND gm.is_pending = FALSE
 			LEFT JOIN guilds g ON gm.guild_id = g.id
 			WHERE c.id = ?
 		`
 		err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, queryDetails, entry.CharacterID).Scan(
-			&name, &color, &guildName, &avatarURL, &comment,
+			&name, &color, &guildName, &jobID, &gender, &loginMessage,
 		)
 		if err == nil {
 			if entry.CharacterName == "" && name.Valid && name.String != "" {
@@ -181,11 +183,11 @@ func (r *RankingRepository) RecordLegend(ctx context.Context, entry ranking.Lege
 			if entry.GuildName == "" && guildName.Valid && guildName.String != "" {
 				entry.GuildName = guildName.String
 			}
-			if entry.Icon == "" && avatarURL.Valid && avatarURL.String != "" {
-				entry.Icon = avatarURL.String
+			if entry.Icon == "" {
+				entry.Icon = legacyJobIcon(jobID.String, gender.String)
 			}
-			if entry.Message == "" && comment.Valid && comment.String != "" {
-				entry.Message = comment.String
+			if entry.Message == "" && loginMessage.Valid && loginMessage.String != "" {
+				entry.Message = loginMessage.String
 			}
 		}
 	}
@@ -224,6 +226,25 @@ func (r *RankingRepository) RecordLegend(ctx context.Context, entry ranking.Lege
 		return false, err
 	}
 	return affected > 0, nil
+}
+
+// legacyJobIcon derives the default legacy character icon ("job/<n>_<sex>.gif") from job_id and gender.
+func legacyJobIcon(jobID, gender string) string {
+	trimmedJob := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(jobID)), "job-")
+	num, err := strconv.Atoi(trimmedJob)
+	if err != nil || num <= 0 {
+		return ""
+	}
+	var sex string
+	switch strings.ToLower(strings.TrimSpace(gender)) {
+	case "m", "male":
+		sex = "m"
+	case "f", "female":
+		sex = "f"
+	default:
+		return ""
+	}
+	return fmt.Sprintf("job/%d_%s.gif", num, sex)
 }
 
 // GetLegendInductees returns chronological inductees for a Hall of Fame category.
