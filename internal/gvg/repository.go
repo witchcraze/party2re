@@ -259,7 +259,10 @@ func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room GvGRoom, membe
 	}
 
 	detail := RoomDetail{Room: room, Members: members}
-	data, err := json.Marshal(detail)
+	data, err := json.Marshal(struct {
+		RoomDetail
+		PasswordHash string `json:"password_hash,omitempty"`
+	}{detail, room.PasswordHash})
 	if err != nil {
 		return err
 	}
@@ -292,11 +295,15 @@ func (v *ValkeyRoomRepository) GetRoom(ctx context.Context, id string) (RoomDeta
 		return RoomDetail{}, err
 	}
 
-	var detail RoomDetail
+	var detail struct {
+		RoomDetail
+		PasswordHash string `json:"password_hash,omitempty"`
+	}
 	if err := json.Unmarshal([]byte(str), &detail); err != nil {
 		return RoomDetail{}, err
 	}
-	return detail, nil
+	detail.Room.PasswordHash = detail.PasswordHash
+	return detail.RoomDetail, nil
 }
 
 func (v *ValkeyRoomRepository) DeleteRoom(ctx context.Context, id string) error {

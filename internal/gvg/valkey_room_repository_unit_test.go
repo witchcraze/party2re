@@ -438,3 +438,104 @@ func TestValkeyRoomRepository_CharacterRoom(t *testing.T) {
 		t.Fatalf("expected errDel, got %v", err)
 	}
 }
+
+func TestValkeyRoomRepository_PasswordHashRoundTripAndPublicJSON(t *testing.T) {
+	ctx := context.Background()
+	stored := map[string]string{}
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		args := cmd.Commands()
+		switch args[0] {
+		case "SET":
+			stored[args[1]] = args[2]
+			return valkeytest.MakeOKResult()
+		case "ZADD":
+			return valkeytest.MakeIntResult(1)
+		case "GET":
+			val, ok := stored[args[1]]
+			if !ok {
+				return valkeytest.MakeNilResult()
+			}
+			return valkeytest.MakeStringResult(val)
+		case "ZREVRANGE":
+			return valkeytest.MakeStringSliceResult([]string{"room-pw", "room-open"})
+		case "ZREMRANGEBYSCORE":
+			return valkeytest.MakeIntResult(0)
+		default:
+			return valkeytest.MakeOKResult()
+		}
+	}))
+
+	repo, err := gvg.NewValkeyRoomRepository(client)
+	if err != nil {
+		t.Fatalf("NewValkeyRoomRepository: %v", err)
+	}
+
+	now := time.Now().UTC()
+	pwRoom := gvg.GvGRoom{
+		ID:           "room-pw",
+		Name:         "Protected",
+		PasswordHash: "secret-hash-123",
+		Status:       gvg.StatusRecruiting,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	openRoom := gvg.GvGRoom{
+		ID:        "room-open",
+		Name:      "Open",
+		Status:    gvg.StatusRecruiting,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := repo.SaveRoom(ctx, pwRoom, nil); err != nil {
+		t.Fatalf("SaveRoom(pwRoom): %v", err)
+	}
+	if err := repo.SaveRoom(ctx, openRoom, nil); err != nil {
+		t.Fatalf("SaveRoom(openRoom): %v", err)
+	}
+
+	gotPW, err := repo.GetRoom(ctx, "room-pw")
+	if err != nil {
+		t.Fatalf("GetRoom(room-pw): %v", err)
+	}
+	if gotPW.Room.PasswordHash != "secret-hash-123" {
+		t.Fatalf("GetRoom(room-pw).Room.PasswordHash = %q, want %q", gotPW.Room.PasswordHash, "secret-hash-123")
+	}
+
+	gotOpen, err := repo.GetRoom(ctx, "room-open")
+	if err != nil {
+		t.Fatalf("GetRoom(room-open): %v", err)
+	}
+	if gotOpen.Room.PasswordHash != "" {
+		t.Fatalf("GetRoom(room-open).Room.PasswordHash = %q, want empty", gotOpen.Room.PasswordHash)
+	}
+
+	// Verify public JSON marshaling of RoomDetail exposes no password_hash.
+	pubDetailJSON, err := json.Marshal(gotPW)
+	if err != nil {
+		t.Fatalf("json.Marshal(gotPW): %v", err)
+	}
+	if strings.Contains(string(pubDetailJSON), "password_hash") || strings.Contains(string(pubDetailJSON), "secret-hash-123") {
+		t.Fatalf("public RoomDetail JSON leaked password hash: %s", pubDetailJSON)
+	}
+
+	// Verify ListRooms sets HasPassword accurately and public RoomSummary exposes no password_hash.
+	summaries, err := repo.ListRooms(ctx)
+	if err != nil {
+		t.Fatalf("ListRooms: %v", err)
+	}
+	if len(summaries) != 2 {
+		t.Fatalf("ListRooms len = %d, want 2", len(summaries))
+	}
+	if !summaries[0].HasPassword || summaries[1].HasPassword {
+		t.Fatalf("ListRooms HasPassword = [%v, %v], want [true, false]", summaries[0].HasPassword, summaries[1].HasPassword)
+	}
+	pubSummaryJSON, err := json.Marshal(summaries[0])
+	if err != nil {
+		t.Fatalf("json.Marshal(summaries[0]): %v", err)
+	}
+	if strings.Contains(string(pubSummaryJSON), "password_hash") || strings.Contains(string(pubSummaryJSON), "secret-hash-123") {
+		t.Fatalf("public RoomSummary JSON leaked password hash: %s", pubSummaryJSON)
+	}
+}
