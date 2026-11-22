@@ -246,3 +246,37 @@ func TestApplyInvocationsRestoresRetainedReferentsAndHealthyContrast(t *testing.
 		t.Fatalf("healthy contrast missing updates: %q %+v %+v %+v %+v", *actorHeld, origAssets, origDamage, origStatus, origDefeat)
 	}
 }
+
+// _skill.cgi $actionCount: every callback of one operation, including a nested
+// child, shares the call counts whatever context it executes on.
+func TestExecuteCallbackSharesOperationCounters(t *testing.T) {
+	s, c, d := invocationFixture()
+	c.Damage = &DamageContext{EffectContext: EffectContext{TargetContext: c.TargetContext, DamageCalls: 1}}
+	accept := func(*LifetimeState, *CallbackContext) error { return nil }
+	child := CallbackInvocation{Kind: "entry", EntryID: "inner"}
+	var outer, inner DamageContext
+	resumed := 0
+	d.Entries["inner"] = CallbackDefinition{Validate: accept, Execute: func(_ *LifetimeState, f *CallbackContext, _ random.Generator) error {
+		f.BindCounters(&inner)
+		inner.DamageCalls++
+		inner.HealCalls++
+		return nil
+	}}
+	d.Entries["outer"] = CallbackDefinition{Validate: accept, Children: []CallbackInvocation{child}, Execute: func(_ *LifetimeState, f *CallbackContext, _ random.Generator) error {
+		f.BindCounters(&outer)
+		f.BindCounters(&DamageContext{}) // a secondary context does not rebind
+		outer.DamageCalls++
+		if err := f.Invoke(child); err != nil {
+			return err
+		}
+		resumed = outer.DamageCalls
+		outer.DamageCalls++
+		return nil
+	}}
+	if err := s.ApplyInvocations(&c, d, []CallbackInvocation{{Kind: "entry", EntryID: "outer"}}, random.Default()); err != nil {
+		t.Fatal(err)
+	}
+	if c.Damage.DamageCalls != 4 || c.Damage.HealCalls != 1 || resumed != 3 {
+		t.Fatalf("damage=%d heal=%d resumed=%d", c.Damage.DamageCalls, c.Damage.HealCalls, resumed)
+	}
+}

@@ -97,6 +97,23 @@ func TestRunCombatCustomGemDamageReachesCrownTail(t *testing.T) {
 	}
 }
 
+// #2613: a damaging job callback counts its hits for the tail too (here
+// job-33-entry-1's area magic, submitted by its source name).
+func TestRunCombatJobCallbackDamageReachesCrownTail(t *testing.T) {
+	f := combatFixture(t, 1)
+	cmd := customRoom(t, f, 0, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
+		a.Jobs = corebattle.BattleJobs{JobID: "job-33", SP: 160}
+		a.MP, a.MaxMP, a.Extended, a.ExtendedTurns = 50, 50, corebattle.ExtendedCrown, 2
+	}, runEnemy("foe", 900))
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "wave", "", "", "＠イオラ")); err != nil {
+		t.Fatal(err)
+	}
+	r := readStockRoom(t, f, cmd.RunID)
+	if a := runActorByID(r, cmd.ActorID); runActorByID(r, "foe").HP >= 900 || a.ExtendedTurns != 1 {
+		t.Fatalf("foe=%d turns=%d", runActorByID(r, "foe").HP, a.ExtendedTurns)
+	}
+}
+
 // #1733: caster death stops later slots but keeps the late CMP charge; an
 // unregistered later slot rejects before any slot, cost or receipt.
 func TestRunCombatCustomLaterSlots(t *testing.T) {
