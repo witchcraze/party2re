@@ -3,6 +3,7 @@ package battle_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -170,16 +171,16 @@ func TestHeldSealedKeyIsNoOpAtQuestEntry(t *testing.T) {
 		}
 
 		savedInv, err := inventory.FindByCharacterID(ctx, char.ID)
-		if err != nil || len(savedInv.Items) != 1 || savedInv.Items[0].DefinitionID != "item-259" {
+		if err != nil || len(savedInv.Items) != 1 || savedInv.Items[0].ID != "key" || savedInv.Items[0].DefinitionID != "item-259" || savedInv.Items[0].Quantity != 1 {
 			t.Fatalf("withBox=%v inventory mutated = %+v, err = %v", withDepotBox, savedInv, err)
 		}
 		savedDepot, err := depots.FindByCharacterID(ctx, char.ID)
-		wantDepot := 0
 		if withDepotBox {
-			wantDepot = 1
-		}
-		if err == nil && len(savedDepot.Items) != wantDepot {
-			t.Fatalf("withBox=%v depot mutated = %+v", withDepotBox, savedDepot)
+			if err != nil || len(savedDepot.Items) != 1 || savedDepot.Items[0].ID != "box" || savedDepot.Items[0].DefinitionID != "item-258" || savedDepot.Items[0].Quantity != 1 {
+				t.Fatalf("withBox=%v depot mutated = %+v, err = %v", withDepotBox, savedDepot, err)
+			}
+		} else if !errors.Is(err, depot.ErrNotFound) {
+			t.Fatalf("withBox=%v depot = %+v, err = %v, want %v", withDepotBox, savedDepot, err, depot.ErrNotFound)
 		}
 	}
 }
