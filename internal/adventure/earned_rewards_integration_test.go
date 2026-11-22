@@ -151,7 +151,7 @@ func TestAdventure_EarnedRewardsAfterDefeatIntegration(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						if history.BattleResult.Outcome != corebattle.OutcomeDefeat || history.ExperienceReward != wins*10 {
+						if history.BattleResult.Outcome != corebattle.OutcomeDefeat || history.ExperienceReward != wins*10 || history.BattleResult.Reward.Crystals != wins*3 {
 							t.Fatalf("incorrect defeat history: %+v", history)
 						}
 						inv, err := invs.FindByCharacterID(ctx, before.ID)

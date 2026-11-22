@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -617,5 +620,251 @@ func TestAdventureRepository_AggregatedStatsDefeatOutcomes(t *testing.T) {
 	}
 	if stageAttempts["stage-03"] != 2 || stageClears["stage-03"] != 0 {
 		t.Errorf("stage-03 attempts=%d clears=%d, want 2 attempts 0 clear", stageAttempts["stage-03"], stageClears["stage-03"])
+	}
+}
+
+func TestAdventureRepository_CrystalRewardsRoundTripAndUpdate(t *testing.T) {
+	db := OpenTestDB(t)
+
+	ctx := context.Background()
+	character, err := CreateTestCharacter(ctx, db, "Crystal History")
+	if err != nil {
+		t.Fatal(err)
+	}
+	RegisterCharacterCleanup(t, db, character)
+
+	repo, err := NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	baseTime := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	advZero := adventure.Adventure{
+		ID:               "00000000000000000000000000000001",
+		CharacterID:      character.ID,
+		Type:             "stage-01",
+		StageID:          "stage-01",
+		StartedAt:        baseTime,
+		FloorsCleared:    5,
+		IsCleared:        false,
+		PartySize:        1,
+		ExperienceReward: 5,
+		BattleResult: corebattle.Result{
+			Outcome: corebattle.OutcomeDefeat,
+			Turns:   4,
+			Reward:  corebattle.Reward{Experience: 5, Currency: 8, Crystals: 0},
+		},
+		Resolved: true,
+	}
+	advCrystal := adventure.Adventure{
+		ID:               "00000000000000000000000000000002",
+		CharacterID:      character.ID,
+		Type:             "stage-02",
+		StageID:          "stage-02",
+		StartedAt:        baseTime.Add(time.Minute),
+		FloorsCleared:    10,
+		IsCleared:        true,
+		PartySize:        2,
+		ExperienceReward: 7,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			Turns:    6,
+			Reward: corebattle.Reward{
+				Experience:       7,
+				Currency:         12,
+				Crystals:         1,
+				ItemDefinitionID: "item-001",
+				ItemQuantity:     2,
+			},
+		},
+		Resolved: true,
+	}
+	advLater := adventure.Adventure{
+		ID:               "00000000000000000000000000000003",
+		CharacterID:      character.ID,
+		Type:             "stage-03",
+		StageID:          "stage-03",
+		StartedAt:        baseTime.Add(2 * time.Minute),
+		FloorsCleared:    10,
+		IsCleared:        true,
+		PartySize:        1,
+		ExperienceReward: 9,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			Turns:    7,
+			Reward: corebattle.Reward{
+				Experience: 9,
+				Currency:   14,
+				Crystals:   3,
+			},
+		},
+		Resolved: true,
+	}
+
+	for _, adv := range []adventure.Adventure{advZero, advCrystal, advLater} {
+		if err := repo.Save(ctx, adv); err != nil {
+			t.Fatalf("Save(%s): %v", adv.ID, err)
+		}
+	}
+
+	// Update an existing record's crystal reward and confirm other reward fields stay intact.
+	advCrystal.BattleResult.Reward.Crystals = 4
+	if err := repo.Save(ctx, advCrystal); err != nil {
+		t.Fatalf("Save(update %s): %v", advCrystal.ID, err)
+	}
+
+	wantByID := map[string]corebattle.Reward{
+		advZero.ID:    advZero.BattleResult.Reward,
+		advCrystal.ID: advCrystal.BattleResult.Reward,
+		advLater.ID:   advLater.BattleResult.Reward,
+	}
+
+	// 1. FindByID
+	for advID, wantReward := range wantByID {
+		got, err := repo.FindByID(ctx, advID)
+		if err != nil {
+			t.Fatalf("FindByID(%s): %v", advID, err)
+		}
+		if !reflect.DeepEqual(got.BattleResult.Reward, wantReward) {
+			t.Fatalf("FindByID(%s) reward = %+v, want %+v", advID, got.BattleResult.Reward, wantReward)
+		}
+	}
+
+	// 2. ListByCharacterID
+	listed, total, err := repo.ListByCharacterID(ctx, character.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListByCharacterID: %v", err)
+	}
+	if total != 3 || len(listed) != 3 {
+		t.Fatalf("ListByCharacterID count = %d/%d, want 3/3", len(listed), total)
+	}
+	for _, got := range listed {
+		if !reflect.DeepEqual(got.BattleResult.Reward, wantByID[got.ID]) {
+			t.Fatalf("ListByCharacterID(%s) reward = %+v, want %+v", got.ID, got.BattleResult.Reward, wantByID[got.ID])
+		}
+	}
+
+	// 3. ListByCharacterIDByCursor across all four cursor branches.
+	cursorCases := []struct {
+		name       string
+		beforeTime time.Time
+		beforeID   string
+		wantIDs    []string
+	}{
+		{"initial", time.Time{}, "", []string{advLater.ID, advCrystal.ID, advZero.ID}},
+		{"time_and_id", advLater.StartedAt, advLater.ID, []string{advCrystal.ID, advZero.ID}},
+		{"time_only", advLater.StartedAt, "", []string{advCrystal.ID, advZero.ID}},
+		{"id_only", time.Time{}, advLater.ID, []string{advCrystal.ID, advZero.ID}},
+	}
+	for _, tc := range cursorCases {
+		gotList, err := repo.ListByCharacterIDByCursor(ctx, character.ID, 10, tc.beforeTime, tc.beforeID)
+		if err != nil {
+			t.Fatalf("ListByCharacterIDByCursor(%s): %v", tc.name, err)
+		}
+		if len(gotList) != len(tc.wantIDs) {
+			t.Fatalf("ListByCharacterIDByCursor(%s) len = %d, want %d", tc.name, len(gotList), len(tc.wantIDs))
+		}
+		for i, got := range gotList {
+			if got.ID != tc.wantIDs[i] {
+				t.Fatalf("ListByCharacterIDByCursor(%s)[%d] id = %s, want %s", tc.name, i, got.ID, tc.wantIDs[i])
+			}
+			if !reflect.DeepEqual(got.BattleResult.Reward, wantByID[got.ID]) {
+				t.Fatalf("ListByCharacterIDByCursor(%s)[%s] reward = %+v, want %+v", tc.name, got.ID, got.BattleResult.Reward, wantByID[got.ID])
+			}
+		}
+	}
+}
+
+func TestAdventureRewardCrystalsMigration(t *testing.T) {
+	db := CreateTestDatabase(t, "players", "characters", "character_depots", "adventures", "schema_migrations")
+	ctx := context.Background()
+
+	// Ensure pre-141 state even when the cloned schema already applied migration 141.
+	if _, err := db.ExecContext(ctx, `ALTER TABLE adventures DROP COLUMN IF EXISTS reward_crystals`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM schema_migrations WHERE version = '141_adventure_reward_crystals'`); err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := CreateTestCharacter(ctx, db, "AdvMig")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE characters SET crystal = 42 WHERE id = ?`, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	advID := id.New()
+	startedAt := time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO adventures
+			(id, character_id, adventure_type, started_at, experience_reward,
+			 outcome, winner_id, battle_turns, floors_cleared, is_cleared,
+			 seasonal_sub_id, season, party_size,
+			 reward_experience, reward_currency, reward_item_definition_id, reward_item_quantity, resolved)
+		VALUES (?, ?, 'stage-01', ?, 10, 'win', ?, 3, 10, TRUE, 0, '', 1, 10, 20, 'item-001', 1, TRUE)
+	`, advID, char.ID, startedAt, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "141_adventure_reward_crystals.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	apply := func() {
+		t.Helper()
+		for _, stmt := range strings.Split(string(data), ";") {
+			if strings.TrimSpace(stmt) != "" {
+				if _, err := db.ExecContext(ctx, stmt); err != nil {
+					t.Fatalf("exec %q: %v", strings.TrimSpace(stmt), err)
+				}
+			}
+		}
+	}
+
+	// Apply twice to verify idempotency.
+	apply()
+	apply()
+
+	var colCount int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = DATABASE() AND table_name = 'adventures' AND column_name = 'reward_crystals'
+	`).Scan(&colCount); err != nil || colCount != 1 {
+		t.Fatalf("reward_crystals column count = %d, err = %v", colCount, err)
+	}
+
+	repo, err := NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.FindByID(ctx, advID)
+	if err != nil {
+		t.Fatalf("FindByID after migration: %v", err)
+	}
+	wantReward := corebattle.Reward{
+		Experience:       10,
+		Currency:         20,
+		Crystals:         0,
+		ItemDefinitionID: "item-001",
+		ItemQuantity:     1,
+	}
+	if !reflect.DeepEqual(got.BattleResult.Reward, wantReward) {
+		t.Fatalf("post-migration reward = %+v, want %+v", got.BattleResult.Reward, wantReward)
+	}
+
+	var crystalBalance int
+	if err := db.QueryRowContext(ctx, `SELECT crystal FROM characters WHERE id = ?`, char.ID).Scan(&crystalBalance); err != nil || crystalBalance != 42 {
+		t.Fatalf("character crystal balance = %d, err = %v, want 42", crystalBalance, err)
+	}
+
+	var migCount int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM schema_migrations WHERE version = '141_adventure_reward_crystals'
+	`).Scan(&migCount); err != nil || migCount != 1 {
+		t.Fatalf("migration record count = %d, err = %v", migCount, err)
 	}
 }
