@@ -81,6 +81,29 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 	return s.cfg.Characters.Update(ctx, requester)
 }
 
+// roomTailLevel is the action tail's lv_up reached by すすむ/しらべる: at most
+// one level from saved and released EXP (_battle.cgi:912,935–937).
+func (s *NormalRunService) roomTailLevel(ctx context.Context, r *NormalRun, requester corecharacter.Character, released int) error {
+	due, err := RunActionEffects{}.LevelUpEligible(&r.Battle, requester, r.Mode, released)
+	if err != nil || !due {
+		return err
+	}
+	if s.cfg.Jobs == nil {
+		return ErrRunUnavailable
+	}
+	def, err := s.cfg.Jobs.FindByID(requester.JobID)
+	if err != nil {
+		return err
+	}
+	grown, err := growRequester(&r.Battle, requester.ID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
+		return progression.ApplyTailLevel(c, def, s.cfg.RNG, held, released)
+	})
+	if err != nil || !grown {
+		return err
+	}
+	return s.cfg.Characters.Update(ctx, requester)
+}
+
 // growRequester applies saved-EXP stock levels to the requester and mirrors the
 // uncapped growth onto the battle actor (system.cgi:49–67).
 func growRequester(b *corebattle.LifetimeState, actorID string, requester *corecharacter.Character, apply func(*corecharacter.Character, string) ([]corecharacter.Stats, error)) (bool, error) {

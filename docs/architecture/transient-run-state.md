@@ -648,7 +648,7 @@ The injected combat port supplies bounded explicit effects and activity/stock
 release facts; no batch resolver is its fallback. It must finish action/effect
 validation and any ordered external transitions within this contract. Finalized
 recipient earnings bypass reward multipliers and level growth when released
-through the common settler; the player step owns the operation's level-up.
+through the common settler; only an action tail grows a level.
 The same settler consumes the defeat owner's capture decisions, so box
 delivery and the result in the command receipt share one commit. Applied assets
 and outstanding normal/Try entitlements remain distinct;

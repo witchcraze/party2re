@@ -10,7 +10,6 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/job"
 )
 
 // combatFixture serves Command with the production RunCombat.
@@ -24,11 +23,7 @@ func combatFixture(t *testing.T, count int) *normalFixture {
 
 func installRunCombat(t *testing.T, f *normalFixture) {
 	t.Helper()
-	jobs, err := job.InitialCatalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.cfg.Jobs, f.cfg.Combat, f.explicit = jobs, nil, true
+	f.cfg.Combat, f.explicit = nil, true
 	f.restart(t)
 }
 
@@ -375,5 +370,45 @@ func TestRunCombatExecutionFailureDiscardsOperation(t *testing.T) {
 	}
 	if got, err := f.chars.FindByID(t.Context(), c.ID); err != nil || got.Level != 2 || got.Experience != 10 {
 		t.Fatalf("retry: %+v %v", got, err)
+	}
+}
+
+// #2554: a stock release credits EXP without growth (get_stock); exit has no
+// tail, while advance reaches the tail's single lv_up (_battle.cgi:912,935–937,1208).
+func TestNormalRunStockReleaseLevelsOnlyInTheTail(t *testing.T) {
+	for _, tc := range []struct {
+		action    string
+		wantLevel int
+	}{{"exit", 1}, {"advance", 2}} {
+		t.Run(tc.action, func(t *testing.T) {
+			f := combatFixture(t, 1)
+			c := f.actors[0]
+			c.Level, c.Experience, c.JobID = 1, 0, "job-01"
+			if err := f.chars.Update(t.Context(), c); err != nil {
+				t.Fatal(err)
+			}
+			entry := f.enter(t, adventure.CrawlModeNormal)
+			cmd := adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: entry.Command.RunID, Version: entry.Version}
+			editStockRoom(t, f, &cmd, func(r *adventure.NormalRun) {
+				p := r.Recipients[c.ID]
+				p.Pending.EXP = 49
+				r.Recipients[c.ID] = p
+			})
+			f.clock.add(3 * time.Second)
+			release := combatCommand(cmd, "release", tc.action, "", "")
+			if _, err := f.svc.Command(t.Context(), release); err != nil {
+				t.Fatal(err)
+			}
+			got, err := f.chars.FindByID(t.Context(), c.ID)
+			if err != nil || got.Level != tc.wantLevel || got.Experience != 49 {
+				t.Fatalf("level=%d exp=%d err=%v", got.Level, got.Experience, err)
+			}
+			if _, err := f.svc.Command(t.Context(), release); err != nil {
+				t.Fatal(err)
+			}
+			if again, err := f.chars.FindByID(t.Context(), c.ID); err != nil || again.Level != got.Level || again.Experience != 49 {
+				t.Fatalf("replay changed progression: %+v %v", again, err)
+			}
+		})
 	}
 }

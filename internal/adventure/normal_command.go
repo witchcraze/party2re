@@ -78,7 +78,8 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 		now := s.cfg.Clock.Now()
 		releaseStock := r.Mode != CrawlModeTry || cmd.Action == "exit"
 		effects := RunActionEffects{}
-		request := battle.ApplyPostBattleRequest{CharacterIDs: ids, PreserveEarnedRewards: true, RecipientRewards: map[string]corebattle.Reward{}}
+		// Releases credit EXP without growth; only an action tail levels (get_stock).
+		request := battle.ApplyPostBattleRequest{CharacterIDs: ids, PreserveEarnedRewards: true, RecipientRewards: map[string]corebattle.Reward{}, DeferGrowth: true}
 		var box *TreasureBox
 		var tames []battle.MonsterTameResult
 		switch cmd.Action {
@@ -130,8 +131,6 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			request.UnsealDemonKing = effects.UnsealDemonKing
 			r.EXUnlocked = r.EXUnlocked || effects.EXUnlocked
 			request.RecipientCharacterID, request.ExplicitDefeats = cmd.ActorID, effects.Defeats
-			// The player step owns this operation's single level-up.
-			request.DeferGrowth = true
 			for _, id := range effects.MemberOnlyIDs {
 				if r.hasBox(id) {
 					continue
@@ -169,6 +168,11 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 					return err
 				}
 				request.RecipientRewards[cmd.ActorID] = runReward(due)
+			}
+			if cmd.Action == "advance" || cmd.Action == "chest" {
+				if err := s.roomTailLevel(ctx, r, requester, request.RecipientRewards[cmd.ActorID].Experience); err != nil {
+					return err
+				}
 			}
 			request.BattleResult.ConsumedItems = effects.Consumed
 			// Consume concrete owned instances in this transaction, never at exit again.
