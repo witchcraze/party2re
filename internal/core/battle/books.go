@@ -45,9 +45,9 @@ func bookEntry(item string) (string, int) {
 	return bookPositions[0].id, bookPositions[0].mp
 }
 
-// heldBookKind classifies a held item by the source's book name patterns:
+// HeldBookKind classifies a held item by the source's book name patterns:
 // forbidden books, other books (including the unlisted item92) or none.
-func heldBookKind(item string) string {
+func HeldBookKind(item string) string {
 	switch item {
 	case "item-196", "item-211", "item-250":
 		return "forbidden"

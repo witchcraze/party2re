@@ -23,7 +23,7 @@ func (s *LifetimeState) bookAssets(c *JobAssetContext, id string) (bool, error) 
 		return false, ErrUnsupportedEffect
 	}
 	held := *a.HeldToolID
-	run := heldBookKind(held) != "none"
+	run := HeldBookKind(held) != "none"
 	if id == "job-86-entry-0" && !run && s.Fields.Current() == "library" {
 		// The library exception reads the requester's durable hand.
 		if c.Assets.HeldToolID == nil {
@@ -110,7 +110,7 @@ func (s *LifetimeState) applyBookAssets(c *JobAssetContext, id string, rng rando
 	case "job-86-entry-0", "job-86-entry-3":
 		target := c.shift()
 		index := slices.IndexFunc(assets.StoredTools, func(row StoredTool) bool {
-			return row.DefinitionID == target && heldBookKind(row.DefinitionID) != "none"
+			return row.DefinitionID == target && HeldBookKind(row.DefinitionID) != "none"
 		})
 		if index < 0 {
 			assets.SelectionError = true
