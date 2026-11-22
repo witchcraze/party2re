@@ -169,7 +169,14 @@
           "note": "Recipient history, disposition and immutable command result commit with state and assets."
         }
       ],
-      "note": "One bounded SQL transaction via WithRunForUpdate; combat adapters can use Adventure-owned travel mutations under this authority. No automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
+      "note": "One bounded SQL transaction via WithRunForUpdate. The production RunCombat (NewRunCombat) runs the player step and at most one NPC response under this authority and can use Adventure-owned travel mutations. No automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
+    },
+    {
+      "method": "ExecuteRunAction",
+      "source_ref": "internal/adventure/normal_combat.go#runCombat.ExecuteRunAction",
+      "transaction_type": "Delegated",
+      "lock_sequence": [],
+      "note": "Runs inside Command after its run and sorted character locks; acquires none of its own. Reads retained earnings without row locks, writes a tail level-up to the already-locked requester (Rank 2) and returns earnings/consumption for Command's settler. Any error discards the whole operation."
     },
     {
       "method": "WithJobAssets",

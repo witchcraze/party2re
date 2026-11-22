@@ -31,6 +31,9 @@ type ApplyPostBattleRequest struct {
 	ExitFatigue           int              // Crawl exit fatigue added to each participant (lib/_battle.cgi:1187-1188, 1216)
 	ExitBonusRounds       int              // Equipped item-105/item-106 exit bonus rounds (lib/_battle.cgi:1219-1220)
 	UnsealDemonKing       bool             // Explicit stage19 treasure-creation event, independent of battle victory.
+	// DeferGrowth adds EXP without levelling: the explicit player step owns its
+	// single tail level-up (lib/_battle.cgi:935–937; get_stock 1459–1473).
+	DeferGrowth bool
 }
 
 // ApplyPostBattleResponse contains the committed state for each participating character.
@@ -129,6 +132,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 				reward,
 				charDrops,
 				req.RecipientRewards != nil,
+				req.DeferGrowth,
 			)
 			if err != nil {
 				return err
@@ -262,6 +266,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 					reward,
 					charDrops,
 					req.RecipientRewards != nil,
+					req.DeferGrowth,
 				)
 				if err != nil {
 					return err

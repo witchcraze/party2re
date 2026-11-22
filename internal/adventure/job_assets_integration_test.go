@@ -19,7 +19,7 @@ import (
 )
 
 // This bounded consumer tests real intrinsic effects plus SQL/receipt atomicity;
-// #1329 retains production action/tail composition and #1330 transport.
+// the production run combat binds these ports in #2551.
 type assetCombat struct {
 	*normalCombat
 	f     *normalFixture

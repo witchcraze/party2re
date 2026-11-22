@@ -585,9 +585,10 @@ when changing run transitions; `make check` remains the required repository gate
 The user approved SQL authority and the explicit idle-cleanup timing in #1325
 on 2026-10-11. Adventure owns enrolled runs; Party Valkey owns waiting lobbies.
 [NormalRunService](../../internal/adventure/normal_run.go) implements the lifecycle
-boundary. Production starts retain batch execution until the explicit combat
-consumer (#1329) and Gateway cutover (#1330) are verified. Neither this service
-nor Candidate D's loss limitations certify unimplemented combat effects.
+boundary, and its production combat port rebuilds every callback port per
+operation. Production starts retain batch execution until the Gateway cutover
+(#1330). Neither this service nor Candidate D's loss limitations certify
+combat effects whose ports remain whole-action gates.
 Gameplay evidence remains in [Adventure](../design/adventure.md#resumable-normal-run-transitions)
 and shared effect state in [Battle](../design/battle.md#explicit-action-resumption-requirements).
 
@@ -646,8 +647,9 @@ change none of them or their clocks. No transaction waits for a future request.
 The injected combat port supplies bounded explicit effects and activity/stock
 release facts; no batch resolver is its fallback. It must finish action/effect
 validation and any ordered external transitions within this contract. Finalized
-recipient earnings bypass reward multipliers when released through the common
-settler. The same settler consumes the defeat owner's capture decisions, so box
+recipient earnings bypass reward multipliers and level growth when released
+through the common settler; only an action tail grows a level.
+The same settler consumes the defeat owner's capture decisions, so box
 delivery and the result in the command receipt share one commit. Applied assets
 and outstanding normal/Try entitlements remain distinct;
 Try conversion occurs once at explicit ordinary treasure creation. Exit cannot

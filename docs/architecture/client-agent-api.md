@@ -644,8 +644,8 @@ The command requires explicit `item_id` and `quantity`; it does not inherit the 
 ### Planned normal-adventure commands and recovery
 
 Adventure's [durable run authority](transient-run-state.md#normal-adventure-durable-command-boundary-1325)
-provides service-level enrollment, owned facts and receipts. Its explicit combat
-consumer (#1329) and Gateway connection (#1330) remain pending under #1323;
+provides service-level enrollment, explicit combat, owned facts and receipts. Its
+Gateway connection (#1330) remains pending under #1323;
 #948 owns coordinated transport replacement. Keep the existing
 `adventure_start` and REST paths until their verified replacement is deployed.
 Do not document proposed ActionIDs or result fields in OpenAPI as if connected.

@@ -129,7 +129,7 @@ func (s *NormalRunService) ValidateCombatTravel(r *NormalRun, actor, tool string
 			return corebattle.ErrUnsupportedEffect
 		}
 		for _, a := range r.Battle.Actors {
-			// shortcut: detached-member side projection needs #1329's enclosing composition.
+			// shortcut: detached-member side projection needs an original-side projection (#2551).
 			if a.RosterDetached {
 				return corebattle.ErrUnsupportedEffect
 			}

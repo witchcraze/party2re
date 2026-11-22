@@ -99,7 +99,7 @@ func (s *Service) BuildLifetimeActor(ctx context.Context, characterID, icon stri
 		if err != nil {
 			return corebattle.LifetimeActor{}, err
 		}
-		// shortcut: multi-row inventories need #1329's explicit held-instance binding.
+		// shortcut: multi-row inventories need explicit held-instance binding (#2551).
 		a.HeldToolID = inv.HeldToolID()
 	}
 	a.JobHistory = make(map[string]*int)

@@ -4,7 +4,7 @@
 
 The Adventure system reconstructs the operation-driven stage adventure of legacy Party2 (`quest.cgi`, `vs_monster.cgi`, `_battle.cgi`). Evidence paths are under `party2/` at revision `ff97fc549932a146cc945d7edf71b44c868a840e`.
 
-Production starts still resolve all battles, floor advances and treasure inspections in one request (the batch crawl). This is an implementation gap, not the original game: the user directed restoration of player-command progression (#1323). Removing the invented one-hour expedition timer does not remove the original per-actor action interval. The native interactive run (`NormalRunService`) still lacks explicit combat (#1329) and its Gateway cutover (#1330).
+Production starts still resolve all battles, floor advances and treasure inspections in one request (the batch crawl). This is an implementation gap, not the original game: the user directed restoration of player-command progression (#1323). Removing the invented one-hour expedition timer does not remove the original per-actor action interval. The native interactive run (`NormalRunService`) is not yet reachable through the Gateway (#1330).
 
 ## Original interaction contract and reconstruction target
 
@@ -49,7 +49,7 @@ Whisper recipients can be outside the encounter, and an omitted recipient makes 
 
 ### Earnings and inactivity evidence
 
-`_battle.cgi:199–274` gives ordinary defeat earnings to living allies at the defeat operation: directly for the acting character and through per-user stock for others. `get_stock` (`1459–1473`) releases stock on applicable actions (`912`) and personal exit (`1208`). Ordinary earnings survive later defeat; defeat grants no new victory drops or clear credit.
+`_battle.cgi:199–274` gives ordinary defeat earnings to living allies at the defeat operation: directly for the acting character and through per-user stock for others. `get_stock` (`1459–1473`) releases stock on applicable actions (`912`) and personal exit (`1208`). Ordinary earnings survive later defeat; defeat grants no new victory drops or clear credit. A release only adds EXP: exit never levels, and an action tail, including `すすむ`/`しらべる`, grows at most one level (`935–937`).
 
 **Decision (#2347).** The acting character's direct earnings use the recipient ledger and settle with the same command. The player step sees their direct EXP as soon as it is earned, alongside saved EXP and stock released in that operation. This preserves the timing in `_battle.cgi:209–228,912,927` while letting the ledger, progression and receipt commit together. Try stock stays conditional and is excluded from that branch. A crystal drop is decided once per encounter identity, including a failed roll. The original guard at `_battle.cgi:145–150` remembers successful drops only.
 

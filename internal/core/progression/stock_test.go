@@ -37,3 +37,20 @@ func TestStockLevelsGrowthUsesRequestStartSPAndHeldOrb(t *testing.T) {
 		})
 	}
 }
+
+func TestTailLevelCountsPendingOnceAndAccrueNeverLevels(t *testing.T) {
+	def := job.Definition{ID: "job-01", HPGrowth: 2, MPGrowth: 2, AttackGrowth: 2, DefenseGrowth: 2, AgilityGrowth: 2}
+	c := character.Character{Level: 1, Experience: 9}
+	if gains, err := ApplyTailLevel(&c, def, stockGrowthRNG{value: .5}, "", 0); err != nil || len(gains) != 0 || c.Level != 1 {
+		t.Fatal(gains, err, c)
+	}
+	if gains, err := ApplyTailLevel(&c, def, stockGrowthRNG{value: .5}, "", 100); err != nil || len(gains) != 1 || c.Level != 2 || c.Experience != 9 {
+		t.Fatal(gains, err, c)
+	}
+	if err := AccrueExperience(&c, 100); err != nil || c.Level != 2 || c.Experience != 109 {
+		t.Fatal(err, c)
+	}
+	if err := AccrueExperience(&c, -1); err == nil {
+		t.Fatal("negative EXP accepted")
+	}
+}

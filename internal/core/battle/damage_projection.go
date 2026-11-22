@@ -279,6 +279,12 @@ func (s *LifetimeState) projectCallbackHit(defeat *DefeatContext, damage DamageC
 	return results, nil
 }
 
+// NativeDamageContext binds damage's Reset and Defeat hooks to s and defeat,
+// the owners native callback bodies use. Consumers bind once per operation.
+func (s *LifetimeState) NativeDamageContext(damage DamageContext, defeat *DefeatContext, rng random.Generator) DamageContext {
+	return s.nativeDamageContext(damage, defeat, rng)
+}
+
 func (s *LifetimeState) nativeDamageContext(damage DamageContext, defeat *DefeatContext, rng random.Generator) DamageContext {
 	damage.responseDefeat = nil
 	damage.Reset = func(target string) error {

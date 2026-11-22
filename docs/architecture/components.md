@@ -108,7 +108,7 @@ battle adapter supplies character binding and asset application, Home enforces
 durable sleep deadlines, and PlayerContext reads owned Adventure facts.
 
 Production starts still use the request-local `CrawlSession` batch path.
-The explicit combat consumer (#1329) and verified Gateway cutover (#1330) remain
+The verified Gateway cutover (#1330) remains
 required under [the interaction contract](../design/adventure.md#original-interaction-contract-and-reconstruction-target);
 the lifecycle service alone does not establish interactive gameplay parity.
 

@@ -62,7 +62,7 @@ This is family-level reconciliation, not certification of every callback. The us
 
 | Action/effect family | Dispatch and target/resource evidence | State/lifetime and open gate |
 | --- | --- | --- |
-| Normal attack | `_skill.cgi:106–113,863–884` → `kougeki` → `_damage` → `_check_enemy`. Missing/wrong-side target chooses a random enemy; seal 10 repeats the attack; equipment can add a strike | HP, MP for relevant seals, tension/hit, death/revival/drop facts. #1329 tests omitted/wrong-side targets and repeated hits |
+| Normal attack | `_skill.cgi:106–113,863–884` → `kougeki` → `_damage` → `_check_enemy`. Missing/wrong-side target chooses a random enemy; seal 10 repeats the attack; equipment can add a strike | HP, MP for relevant seals, tension/hit, death/revival/drop facts |
 | Defend and tension | `_skill.cgi:115–122,942–978`: self, zero listed MP; tension blocked by binding, follows staged values and level/equipment conditions | Defend uses temporary state; tension is consumed by helpers/reset, not a permanent attack buff |
 | Current/previous-job skills | `set_action:35–104,260–283` dynamically calls `skill_<job>` then its callback. SP, extended-skill/equipment, curse and MP gates; previous-job SP is independent; duplicate candidates are deduplicated | Item249 doubles listed MP for skills absent from the magician-name list and halves (truncated) for listed ones, e.g. heal30 3→6, magic20 2→1, wave25 5→2 |
 | Equipment extensions, books and weapon-seal commands | `_skill.cgi:124–145,219–224`, `@extend_skill_item:321`, `@booK_skill_item:479`; equipped-item/seal predicates add callbacks to the previous-job admission loop | Callbacks can change temporary effects, resources, roster or inventory. [Equipped extension](#equipped-extension-callbacks) and [book](#book-callbacks) discovery has neither SP nor curse gates |
@@ -71,7 +71,7 @@ This is family-level reconciliation, not certification of every callback. The us
 | Between-encounter recovery, transformation and calling | `set_action:166–217,226–258`: no enemies, job/SP/curse/equipment gates; survival recovery 10 MP, forward transformation 10 MP, reverse 0; calling takes job callbacks | HP, transformed current/previous job, helper membership and randomized stats survive requests. Generic reset does not undo transformation |
 | Revival and fallen self action | See the [revival contract](#resources-revival-and-roster-changes) for the designated-helper no-effect case and the fallen-actor exception | The ordinary selection gate and intrinsic callback have separate responsibilities |
 | Additional submission and random invocation | `_battle.cgi:565,574–575,780–785,1084–1088`; `_skill.cgi:_yubiwofuru:9773–9787` selects a non-extended job callback | The second action is not another player turn/NPC round. Random callback restores MP only when its effect lowered it |
-| Ordinary enemies and stage bosses | `_npc_action.cgi:89–155,158–495,600–681`: full supplied payloads, ordered eligible NPC and random current/previous-job/custom choice | Adventure freezes source templates and rolls. #1329 owns durable response execution and receipts |
+| Ordinary enemies and stage bosses | `_npc_action.cgi:89–155,158–495,600–681`: full supplied payloads, ordered eligible NPC and random current/previous-job/custom choice | Adventure freezes source templates and rolls |
 
 Player listed MP admission uses the item249 modifier; execution charges after the callback unless it reports `$mes` (`set_action:68–79,263–283`, `_battle.cgi:761–778`). Calling with item165 overrides the charged cost to zero. Callback-internal costs are separate. NPC cost handling (`_npc_action.cgi:177–224,313–322`) is its own path. A no-effect return alone is not a resource-validation failure.
 
@@ -83,7 +83,7 @@ Target rules are per helper, not one global living-target filter:
 | Enemy helper `_check_enemy:9654–9715` | No enemies reports failure; omitted/unknown name or same-side reference chooses a random enemy. Outside confusion, a fallen selected target returns without effect. Temporary defense/cover/reflection and special phantom fields may redirect |
 | Confusion | Helper-specific selection uses `@members`, not a living-opponents/lowest-HP filter; actor inclusion, repeated draws and fallen handling differ between helpers. Special-field variants need certification before being advertised |
 | Group/self/direct callback | Group helpers iterate preserved party/enemy order; e.g. `_damages:8807–8823` reduces successive power and stops on actor death. Self actions ignore enemy selection. Direct assignments and two-target books are traced individually |
-| Native ID boundary | Preserve original wrong-side fallback **within the current encounter**. Omission is an intentional input, never filled from UI navigation. A native ID outside the encounter or from an obsolete encounter is rejected before mutation as an invalid reference. A member becoming fallen uses the action's fallen-target rule, not a blanket stale-ID rejection. #1329/#1330 test these distinctions |
+| Native ID boundary | Preserve original wrong-side fallback **within the current encounter**. Omission is an intentional input, never filled from UI navigation. A native ID outside the encounter or from an obsolete encounter is rejected before mutation as an invalid reference. A member becoming fallen uses the action's fallen-target rule, not a blanket stale-ID rejection |
 
 ### Ordinary NPC and stage boss state
 
@@ -93,7 +93,7 @@ Adventure's ordinary tables retain all 315 source template sites (74 boss, 241 m
 
 Initialization rolls each current stat as floor(base×(0.9+rand(0.3)+(party size−2)×0.1)); supplied nonzero maxima win. Hard ordinary monsters scale SP, previous SP and rewards by 1.5 before stat rolls. Custom CMP cost uses occupied slots, including duplicates, with the 1/1.1/1.2 multiplier for one/two/three slots.
 
-Ordinary stage24 floor10 applies the special party caps (HP/MP maxima 999, base stats 255, doubled for over-level actors), then shared equipment reset; it does not install an EX default field. Adventure owns [travel and EX progression](adventure.md#combat-travel-and-encounter-replacement), including tool150's all-member reset. Curse/specter hooks require a reachable producer; numeric ordinary stages supply none, and unsupported specter payloads remain gated. Full callback composition and run integration remain cutover gates under #1436/#1329/#1330.
+Ordinary stage24 floor10 applies the special party caps (HP/MP maxima 999, base stats 255, doubled for over-level actors), then shared equipment reset; it does not install an EX default field. Adventure owns [travel and EX progression](adventure.md#combat-travel-and-encounter-replacement), including tool150's all-member reset. Curse/specter hooks require a reachable producer; numeric ordinary stages supply none, and unsupported specter payloads remain gated.
 
 ### Effect lifetime
 
@@ -160,8 +160,6 @@ The random wrapper restores only the invoking actor's MP decrease after a normal
 Job78.2/78.4/78.6/79.2 encounter callbacks: Adventure validates/recreates the room; battle owns breath damage, enemy reordering, matching job SP, player sleep and the ban. Time's removed enemy stays in ordered members, outside the current enemy pool. The ordinary tail ticks its stored ban 4 to 3 and still runs when only NPC response is suppressed. The NPC body makes two general random invocations with a death check between them.
 
 Selected bindings save their resolved identity with frozen command input: job82's child ID and listed MP, and variant IDs such as 77.4/79.3, survive later stat changes and reload. Admission traverses recursive random, generated, book/tool and helper edges, including cycles, and covers contexts reachable after earlier effects (copied jobs, job300). An unusable gem86 last entry and job73's MP0 case remain handled no-effect without requiring skipped callback context. Admission never samples a branch, accumulates alternative targets as simultaneous effects or substitutes a smaller random pool. Job81's song category always passes `is_bad_state`; the apparent rejection at 6525 is unreachable.
-
-Executor/consumer vectors (#1329, #1330) include an unlearned high-cost child, extended exclusion versus tool inclusion, an unusable-but-handled gem86 entry, old calling-job preference, MP decrease restoration versus increase retention, actor death before later gems, helper/held-item/room changes, and a hidden unsupported descendant after a supported custom slot, which rejects the **whole** outer action without spending MP/CMP/items, at admission or, after an unknown predecessor, at execution with state restored.
 
 #### Arithmetic selectors and digit reversal
 
@@ -351,6 +349,6 @@ Order and lifetime traps:
 
 ## Open gaps
 
-- Explicit combat through the run service, including serialize/reload comparison at each supported boundary: #1329.
+- Run-combat ports for job assets, combat travel and job encounters: #2551. Job-table variants, custom gems, admission corrections and the still-unbound arithmetic, control MP-drain and transformation area-damage ports: #2552.
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
 - NPC-only jobs 405, 406 and 407 tables: #1914, #1915, #1916.

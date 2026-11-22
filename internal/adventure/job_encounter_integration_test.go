@@ -17,7 +17,7 @@ import (
 )
 
 // This consumer exercises the real intrinsic registrations and SQL receipt
-// boundary. Full player/NPC tails and transport composition remain #1329/#1330.
+// boundary until the production run combat binds these ports (#2551).
 type jobEncounterCombat struct {
 	*travelCombat
 	tails atomic.Int64

@@ -16,6 +16,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
@@ -48,8 +49,8 @@ func (p *normalPenalty) ProjectRunPenalty(_ context.Context, _ string, until tim
 	return nil
 }
 
-// The explicit combat consumer remains #1329. This test port supplies bounded
-// effects, so these tests verify lifecycle persistence rather than skill parity.
+// This test port supplies bounded effects, so these tests verify lifecycle
+// persistence rather than skill parity (NewRunCombat has its own tests).
 type normalCombat struct{ calls atomic.Int64 }
 
 func (*normalCombat) PrepareAdvance(context.Context, *adventure.NormalRun, string) error { return nil }
@@ -212,6 +213,8 @@ type normalFixture struct {
 	cfg     adventure.NormalRunConfig
 	svc     *adventure.NormalRunService
 	actors  []corecharacter.Character
+	// explicit serves Command with the production RunCombat across restarts.
+	explicit bool
 }
 
 func newNormalFixture(t *testing.T, count int) *normalFixture {
@@ -255,7 +258,11 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 		}
 		f.actors = append(f.actors, c)
 	}
-	f.cfg = adventure.NormalRunConfig{Store: f.store, Characters: chars, Inventories: invs, Builder: adapter, Settler: adapter, History: f.history, Stages: stages, Monsters: monsters, Combat: f.combat, Penalty: f.penalty, Clock: f.clock, RNG: f.rng, ExitEffects: func(context.Context, string) error { return nil }}
+	jobCatalog, err := job.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.cfg = adventure.NormalRunConfig{Jobs: jobCatalog, Store: f.store, Characters: chars, Inventories: invs, Builder: adapter, Settler: adapter, History: f.history, Stages: stages, Monsters: monsters, Combat: f.combat, Penalty: f.penalty, Clock: f.clock, RNG: f.rng, ExitEffects: func(context.Context, string) error { return nil }}
 	f.restart(t)
 	return f
 }
@@ -266,6 +273,9 @@ func (f *normalFixture) restart(t *testing.T) {
 	f.svc, err = adventure.NewNormalRunService(f.cfg)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if f.explicit {
+		f.svc.SetCombat(adventure.NewRunCombat(f.svc))
 	}
 }
 

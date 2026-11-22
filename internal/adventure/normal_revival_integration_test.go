@@ -9,74 +9,8 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/id"
 )
-
-type revivalRunCombat struct {
-	*normalCombat
-	f *normalFixture
-}
-
-func (c *revivalRunCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
-	if cmd.Action != "job-66-revive" {
-		return c.normalCombat.ExecuteRunAction(ctx, r, cmd)
-	}
-	fx := adventure.RunActionEffects{RoomActivity: true, ActorActivity: true, ReleaseStock: true}
-	requester, err := c.f.chars.FindByID(ctx, cmd.ActorID)
-	if err != nil {
-		return fx, err
-	}
-	targets := corebattle.TargetContext{ActorID: cmd.ActorID}
-	var teamID string
-	for _, a := range r.Battle.Actors {
-		if a.ID == cmd.ActorID {
-			teamID = a.TeamID
-			break
-		}
-	}
-	for _, a := range r.Battle.Actors {
-		if a.TeamID == teamID {
-			targets.PartyIDs = append(targets.PartyIDs, a.ID)
-		} else if a.HP > 0 {
-			targets.EnemyIDs = append(targets.EnemyIDs, a.ID)
-		}
-	}
-	revival := &corebattle.RevivalContext{TargetContext: targets}
-	damage := corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: targets, RequesterLevel: &requester.Level}}
-	opCtx := adventure.NormalOperationContext{
-		Requester: &requester,
-		Callback:  corebattle.CallbackContext{TargetContext: targets, Damage: &damage},
-	}
-	opCtx.Definitions.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{Revival: revival}, len(targets.PartyIDs))
-	parsed, err := r.ParseNormalOperation(cmd, opCtx)
-	if err != nil {
-		return fx, err
-	}
-	if _, err := opCtx.Definitions.RevivalAction(&r.Battle, revival, parsed.First.EntryID, parsed.First.TargetID, c.f.rng); err != nil {
-		return fx, err
-	}
-	defeat := &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: targets, RequesterLevel: &requester.Level}}
-	result, err := r.Battle.ApplyPlayerOperation(&corebattle.PlayerOperation{
-		First:           parsed.First.PlayerAction,
-		Tail:            corebattle.PlayerTailContext{DamageContext: damage, DefeatContext: defeat},
-		ResponseEnabled: true,
-	}, c.f.rng)
-	if err != nil {
-		return fx, err
-	}
-	if !result.Accepted {
-		return fx, adventure.ErrRunUnavailable
-	}
-	if result.ResponseReached {
-		if npc := r.NextNPC(c.f.clock.Now()); npc != "" {
-			if err := r.RecordNPCResponse(npc, c.f.clock.Now()); err != nil {
-				return fx, err
-			}
-		}
-	}
-	return fx, nil
-}
 
 func runActorByID(r *adventure.NormalRun, id string) *corebattle.LifetimeActor {
 	for i := range r.Battle.Actors {
@@ -108,8 +42,7 @@ func TestNormalRunFallenSelfRevivalAndReceiptIntegration(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newNormalFixture(t, 2)
-			f.cfg.Combat = &revivalRunCombat{normalCombat: f.combat, f: f}
-			f.restart(t)
+			installRunCombat(t, f)
 			_, lobby := f.waitingParty(t, adventure.CrawlModeNormal)
 			leader, ally := f.actors[0], f.actors[1]
 			entry, err := f.svc.EnterParty(t.Context(), leader.PlayerID, leader.ID, lobby)
@@ -142,10 +75,7 @@ func TestNormalRunFallenSelfRevivalAndReceiptIntegration(t *testing.T) {
 					helper.ID, helper.NPC, helper.RosterIdentity, helper.HP = namedID, true, "calling-66", tc.namedHP
 					r.Battle.Actors = append(r.Battle.Actors, helper)
 				}
-				r.Battle.Actors = append(r.Battle.Actors, corebattle.LifetimeActor{
-					Participant: corebattle.Participant{ID: enemyID, TeamID: "enemies", HP: 100, MaxHP: 100},
-					NPC:         true,
-				})
+				r.Battle.Actors = append(r.Battle.Actors, runEnemy(enemyID, 100))
 				r.Version++
 				version = r.Version
 				return f.store.SaveRun(ctx, *r, version-1)

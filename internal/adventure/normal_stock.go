@@ -45,28 +45,9 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 	}
 	level := requester.Level
 	grow := func(b *corebattle.LifetimeState, rng random.Generator, single bool) (bool, error) {
-		i := slices.IndexFunc(b.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == cmd.ActorID })
-		if i < 0 {
-			return false, ErrRunConflict
-		}
-		a := &b.Actors[i]
-		held := ""
-		if a.HeldToolID != nil {
-			held = *a.HeldToolID
-		} else if a.Gear != nil {
-			held = a.Gear.AccessoryID
-		}
-		startingLevel, startingSP := requester.Level, requester.SP
-		growth, err := progression.ApplyStockLevels(&requester, def, rng, held, single)
-		if err != nil {
-			return false, err
-		}
-		cappedLevels := 0
-		if requester.OverLevel {
-			cappedLevels = max(0, progression.MaxLevel-startingLevel)
-		}
-		a.ApplyLevelGrowth(growth, requester.SP-startingSP, cappedLevels)
-		return len(growth) > 0, nil
+		return growRequester(b, cmd.ActorID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
+			return progression.ApplyStockLevels(c, def, rng, held, single)
+		})
 	}
 	first := parsed.First.PlayerAction
 	first.Validate = func(*corebattle.LifetimeState) error { return nil } // Parsed and admitted above.
@@ -98,4 +79,54 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 		return nil
 	}
 	return s.cfg.Characters.Update(ctx, requester)
+}
+
+// roomTailLevel is the action tail's lv_up reached by すすむ/しらべる: at most
+// one level from saved and released EXP (_battle.cgi:912,935–937).
+func (s *NormalRunService) roomTailLevel(ctx context.Context, r *NormalRun, requester corecharacter.Character, released int) error {
+	due, err := RunActionEffects{}.LevelUpEligible(&r.Battle, requester, r.Mode, released)
+	if err != nil || !due {
+		return err
+	}
+	if s.cfg.Jobs == nil {
+		return ErrRunUnavailable
+	}
+	def, err := s.cfg.Jobs.FindByID(requester.JobID)
+	if err != nil {
+		return err
+	}
+	grown, err := growRequester(&r.Battle, requester.ID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
+		return progression.ApplyTailLevel(c, def, s.cfg.RNG, held, released)
+	})
+	if err != nil || !grown {
+		return err
+	}
+	return s.cfg.Characters.Update(ctx, requester)
+}
+
+// growRequester applies saved-EXP stock levels to the requester and mirrors the
+// uncapped growth onto the battle actor (system.cgi:49–67).
+func growRequester(b *corebattle.LifetimeState, actorID string, requester *corecharacter.Character, apply func(*corecharacter.Character, string) ([]corecharacter.Stats, error)) (bool, error) {
+	i := slices.IndexFunc(b.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == actorID })
+	if i < 0 {
+		return false, ErrRunConflict
+	}
+	a := &b.Actors[i]
+	held := ""
+	if a.HeldToolID != nil {
+		held = *a.HeldToolID
+	} else if a.Gear != nil {
+		held = a.Gear.AccessoryID
+	}
+	startingLevel, startingSP := requester.Level, requester.SP
+	growth, err := apply(requester, held)
+	if err != nil {
+		return false, err
+	}
+	cappedLevels := 0
+	if requester.OverLevel {
+		cappedLevels = max(0, progression.MaxLevel-startingLevel)
+	}
+	a.ApplyLevelGrowth(growth, requester.SP-startingSP, cappedLevels)
+	return len(growth) > 0, nil
 }

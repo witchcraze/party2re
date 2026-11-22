@@ -18,8 +18,8 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// This bounded consumer verifies travel/SQL composition, not #1329's complete
-// player/NPC action tail or #1330's transport discovery and input contract.
+// This bounded consumer verifies travel/SQL composition until the production
+// run combat binds travel (#2551).
 type travelCombat struct {
 	f         *normalFixture
 	skip      bool
