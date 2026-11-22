@@ -628,8 +628,8 @@ func TestPvPJoinCrossingDeadlineAndRecoveryIntegration(t *testing.T) {
 		// Join admitted at T+1799s; clock crosses T+1801s right after SQL commit before publishTransition.
 		clock.Store(t0.Add(pvp.InactivityTimeout - time.Second).UnixNano())
 		armed.Store(true)
-		if _, err := svc.JoinRoom(ctx, f.member.ID, room.Room.ID, ""); !errors.Is(err, pvp.ErrRoomNotFound) {
-			t.Fatalf("expected ErrRoomNotFound when publication crosses deadline, got %v", err)
+		if _, err := svc.JoinRoom(ctx, f.member.ID, room.Room.ID, ""); !errors.Is(err, pvp.ErrRoomInactive) {
+			t.Fatalf("expected ErrRoomInactive when publication crosses deadline, got %v", err)
 		}
 
 		tr, err := f.store.FindTransition(ctx, room.Room.ID)

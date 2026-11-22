@@ -90,7 +90,7 @@ func (s *Service) commitTransition(ctx context.Context, t Transition, mutate fun
 		if t.Kind == "leave" && slices.Contains(published.RemovedIDs, t.ActorID) {
 			return nil
 		}
-		return ErrRoomNotFound
+		return ErrRoomInactive
 	}
 	return nil
 }

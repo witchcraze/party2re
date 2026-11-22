@@ -96,6 +96,10 @@ func (h *Handler) handleCreatePvPRoom(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
+			if errors.Is(err, pvp.ErrRoomInactive) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
 			if errors.Is(err, pvp.ErrInsufficientBetFunds) || errors.Is(err, pvp.ErrAlreadyInRoom) ||
 				errors.Is(err, pvp.ErrNeedJoinNotMet) || errors.Is(err, pvp.ErrCharacterUnconscious) ||
 				errors.Is(err, pvp.ErrCharacterExhausted) || errors.Is(err, pvp.ErrCharacterSleeping) {
@@ -175,6 +179,10 @@ func (h *Handler) handleJoinPvPRoom(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
+			if errors.Is(err, pvp.ErrRoomInactive) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
 			if errors.Is(err, pvp.ErrInvalidPassword) {
 				writeError(w, http.StatusForbidden, err)
 				return
@@ -249,6 +257,10 @@ func (h *Handler) handleSelectPvPTeam(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
+			if errors.Is(err, pvp.ErrRoomInactive) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
 			if errors.Is(err, pvp.ErrCharacterNotInRoom) || errors.Is(err, pvp.ErrMatchAlreadyStarted) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
@@ -274,6 +286,10 @@ func (h *Handler) handleStartPvPMatch(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if errors.Is(err, pvp.ErrRoomNotFound) {
 				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			if errors.Is(err, pvp.ErrRoomInactive) {
+				writeError(w, http.StatusConflict, err)
 				return
 			}
 			if errors.Is(err, pvp.ErrNotRoomLeader) {
@@ -306,6 +322,10 @@ func (h *Handler) handleAdvancePvPRound(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			if errors.Is(err, pvp.ErrRoomNotFound) {
 				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			if errors.Is(err, pvp.ErrRoomInactive) {
+				writeError(w, http.StatusConflict, err)
 				return
 			}
 			if errors.Is(err, pvp.ErrNotRoomLeader) {

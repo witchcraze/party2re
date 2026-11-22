@@ -286,6 +286,38 @@ func TestColosseumPvPEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/pvp/rooms/{room_id}/join - not found 404", func(t *testing.T) {
+		stubPvP.joinRoomFn = func(_ context.Context, _ string, _ string, _ string) (pvp.RoomDetail, error) {
+			return pvp.RoomDetail{}, pvp.ErrRoomNotFound
+		}
+		defer func() { stubPvP.joinRoomFn = nil }()
+
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/pvp/rooms/room-1/join", `{"password":""}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 NotFound, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/pvp/rooms/{room_id}/join - expired after commit 409", func(t *testing.T) {
+		stubPvP.joinRoomFn = func(_ context.Context, _ string, _ string, _ string) (pvp.RoomDetail, error) {
+			return pvp.RoomDetail{}, pvp.ErrRoomInactive
+		}
+		defer func() { stubPvP.joinRoomFn = nil }()
+
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/pvp/rooms/room-1/join", `{"password":""}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("POST /characters/{id}/pvp/rooms/{room_id}/join - wrong password 403", func(t *testing.T) {
 		stubPvP.joinRoomFn = func(_ context.Context, _ string, _ string, _ string) (pvp.RoomDetail, error) {
 			return pvp.RoomDetail{}, pvp.ErrInvalidPassword
