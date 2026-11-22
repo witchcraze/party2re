@@ -82,18 +82,22 @@ func TestRunCombatCustomGemsFreezeAtEntry(t *testing.T) {
 
 // _battle.cgi:1090–1094: crown loses a turn only when the action counted
 // damage; a custom attack gem's hit must reach the tail like a normal attack.
+// A preceding status slot replaces the frame's damage context; the attack
+// slot after it still counts.
 func TestRunCombatCustomGemDamageReachesCrownTail(t *testing.T) {
-	f := combatFixture(t, 1)
-	saveCustom(t, f, "うつ", [3]string{"gem_atk_1", "", ""}, 6)
-	cmd := customRoom(t, f, 30, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
-		a.Extended, a.ExtendedTurns = corebattle.ExtendedCrown, 2
-	}, runEnemy("foe", 900))
-	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "custom", "うつ", "foe", "")); err != nil {
-		t.Fatal(err)
-	}
-	r := readStockRoom(t, f, cmd.RunID)
-	if a := runActorByID(r, cmd.ActorID); runActorByID(r, "foe").HP >= 900 || a.Extended != corebattle.ExtendedCrown || a.ExtendedTurns != 1 {
-		t.Fatalf("foe=%d extended=%q turns=%d", runActorByID(r, "foe").HP, a.Extended, a.ExtendedTurns)
+	for _, gems := range [][3]string{{"gem_atk_1", "", ""}, {"gem_cure_poison", "gem_atk_1", ""}} {
+		f := combatFixture(t, 1)
+		saveCustom(t, f, "うつ", gems, 6)
+		cmd := customRoom(t, f, 30, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
+			a.Extended, a.ExtendedTurns = corebattle.ExtendedCrown, 2
+		}, runEnemy("foe", 900))
+		if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "custom", "うつ", "foe", "")); err != nil {
+			t.Fatal(gems, err)
+		}
+		r := readStockRoom(t, f, cmd.RunID)
+		if a := runActorByID(r, cmd.ActorID); runActorByID(r, "foe").HP >= 900 || a.Extended != corebattle.ExtendedCrown || a.ExtendedTurns != 1 {
+			t.Fatalf("%v: foe=%d extended=%q turns=%d", gems, runActorByID(r, "foe").HP, a.Extended, a.ExtendedTurns)
+		}
 	}
 }
 

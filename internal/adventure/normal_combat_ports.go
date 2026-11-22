@@ -159,8 +159,8 @@ func reportFieldSuppression(action *corebattle.PlayerAction, field *corebattle.N
 	}
 }
 
-// runFacts executes on a fresh damage copy and reports its counters and any
-// side arrays a roster callback rebuilt.
+// runFacts executes on a fresh damage copy and reports the frame's final
+// counters and any side arrays a roster callback rebuilt.
 func runFacts(frame corebattle.CallbackContext, apply func(*corebattle.CallbackContext) error) (corebattle.PlayerActionFacts, error) {
 	work := frame
 	var base corebattle.DamageContext
@@ -171,6 +171,10 @@ func runFacts(frame corebattle.CallbackContext, apply func(*corebattle.CallbackC
 	work.Damage = &damage
 	if err := apply(&work); err != nil {
 		return corebattle.PlayerActionFacts{}, err
+	}
+	// Status callbacks replace the frame's Damage; later callbacks count there.
+	if work.Damage != nil {
+		damage = *work.Damage
 	}
 	facts := corebattle.PlayerActionFacts{
 		DamageCalls: damage.DamageCalls - base.DamageCalls,
