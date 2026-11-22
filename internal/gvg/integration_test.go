@@ -13,7 +13,7 @@ import (
 )
 
 func TestGvGIntegrationMatchFlow(t *testing.T) {
-	db := database.OpenTestDB(t)
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "guilds", "guild_members", "gvg_standings", "gvg_match_transitions")
 
 	ctx := context.Background()
 
@@ -51,8 +51,9 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	guildAID := fmt.Sprintf("g_alpha_%012x", time.Now().UnixNano())
-	guildAName := fmt.Sprintf("Alpha_%d", time.Now().UnixNano()%1000000)
+	now := time.Now().UTC()
+	guildAID := fmt.Sprintf("g_alpha_%012x", now.UnixNano())
+	guildAName := fmt.Sprintf("Alpha_%d", now.UnixNano()%1000000)
 	gA := guild.Guild{
 		ID:                guildAID,
 		Name:              guildAName,
@@ -60,16 +61,20 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 		Points:            0,
 		Color:             "#FF3333", // Red
 		Notice:            "Alpha Guild Notice",
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		LastActiveAt:      now,
 	}
 	memA := guild.Member{
 		GuildID:     guildAID,
 		CharacterID: leaderA.ID,
 		Role:        guild.RoleLeader,
+		JoinedAt:    now,
 	}
 	if _, _, _, err := guildRepo.CreateGuild(ctx, gA, memA, 5000); err != nil {
 		t.Fatalf("create guild A: %v", err)
 	}
-	if _, err := guildRepo.AddMember(ctx, guild.Member{GuildID: guildAID, CharacterID: memA1.ID, Role: guild.RoleMember}); err != nil {
+	if _, err := guildRepo.AddMember(ctx, guild.Member{GuildID: guildAID, CharacterID: memA1.ID, Role: guild.RoleMember, JoinedAt: now}); err != nil {
 		t.Fatalf("add memA1: %v", err)
 	}
 
@@ -91,11 +96,15 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 		Points:            0,
 		Color:             "#6666FF", // Blue
 		Notice:            "Beta Guild Notice",
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		LastActiveAt:      now,
 	}
 	memB := guild.Member{
 		GuildID:     guildBID,
 		CharacterID: leaderB.ID,
 		Role:        guild.RoleLeader,
+		JoinedAt:    now,
 	}
 	if _, _, _, err := guildRepo.CreateGuild(ctx, gB, memB, 5000); err != nil {
 		t.Fatalf("create guild B: %v", err)

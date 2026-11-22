@@ -221,7 +221,7 @@ func TestGuildRepository_CustomizationMarkAndWallpaper(t *testing.T) {
 }
 
 func TestGuildRepository_InactivityScanAndDisband(t *testing.T) {
-	db := OpenTestDB(t)
+	db := CreateTestDatabase(t, "players", "characters", "character_depots", "guilds", "guild_members")
 
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
@@ -306,6 +306,101 @@ func TestGuildRepository_InactivityScanAndDisband(t *testing.T) {
 	_, _, err = guildRepo.GetGuild(ctx, g.ID)
 	if !errors.Is(err, guild.ErrGuildNotFound) {
 		t.Errorf("expected ErrGuildNotFound after DisbandGuild, got %v", err)
+	}
+}
+
+func TestGuildRepository_CreateGuild_DefaultsZeroTimestamps(t *testing.T) {
+	db := CreateTestDatabase(t, "players", "characters", "character_depots", "guilds", "guild_members")
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	leader1, err := CreateTestCharacter(ctx, db, "ZeroTSL1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	leader2, err := CreateTestCharacter(ctx, db, "ZeroTSL2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	member2, err := CreateTestCharacter(ctx, db, "ZeroTSM2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	before := time.Now().UTC().Truncate(time.Second)
+	g1ID := id.New()
+	g1, m1, _, err := guildRepo.CreateGuild(ctx, guild.Guild{
+		ID:                g1ID,
+		Name:              fmt.Sprintf("ZeroTS1_%s", g1ID[:8]),
+		LeaderCharacterID: leader1.ID,
+	}, guild.Member{
+		GuildID:     g1ID,
+		CharacterID: leader1.ID,
+		Role:        guild.RoleLeader,
+	}, 0)
+	if err != nil {
+		t.Fatalf("CreateGuild (zero timestamps) failed: %v", err)
+	}
+	if g1.CreatedAt.IsZero() || g1.UpdatedAt.IsZero() || g1.LastActiveAt.IsZero() || m1.JoinedAt.IsZero() {
+		t.Fatalf("expected CreateGuild to populate non-zero timestamps, got guild=%+v member=%+v", g1, m1)
+	}
+
+	persisted1, members1, err := guildRepo.GetGuild(ctx, g1.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if persisted1.CreatedAt.Before(before) || persisted1.UpdatedAt.Before(before) || persisted1.LastActiveAt.Before(before) {
+		t.Errorf("expected persisted timestamps >= %v, got created=%v updated=%v lastActive=%v",
+			before, persisted1.CreatedAt, persisted1.UpdatedAt, persisted1.LastActiveAt)
+	}
+	if len(members1) != 1 || members1[0].JoinedAt.Before(before) {
+		t.Errorf("expected persisted member joined_at >= %v, got %+v", before, members1)
+	}
+
+	// Explicit CreatedAt with zero LastActiveAt/UpdatedAt/JoinedAt falls back to CreatedAt.
+	explicitCreatedAt := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	g2ID := id.New()
+	g2, m2, _, err := guildRepo.CreateGuild(ctx, guild.Guild{
+		ID:                g2ID,
+		Name:              fmt.Sprintf("ZeroTS2_%s", g2ID[:8]),
+		LeaderCharacterID: leader2.ID,
+		CreatedAt:         explicitCreatedAt,
+	}, guild.Member{
+		GuildID:     g2ID,
+		CharacterID: leader2.ID,
+		Role:        guild.RoleLeader,
+	}, 0)
+	if err != nil {
+		t.Fatalf("CreateGuild (explicit CreatedAt) failed: %v", err)
+	}
+	if !g2.UpdatedAt.Equal(explicitCreatedAt) || !g2.LastActiveAt.Equal(explicitCreatedAt) || !m2.JoinedAt.Equal(explicitCreatedAt) {
+		t.Errorf("expected fallback to CreatedAt %v, got updated=%v lastActive=%v joined=%v",
+			explicitCreatedAt, g2.UpdatedAt, g2.LastActiveAt, m2.JoinedAt)
+	}
+
+	added, err := guildRepo.AddMember(ctx, guild.Member{
+		GuildID:     g2.ID,
+		CharacterID: member2.ID,
+		Role:        guild.RoleMember,
+	})
+	if err != nil {
+		t.Fatalf("AddMember (zero JoinedAt) failed: %v", err)
+	}
+	if added.JoinedAt.IsZero() {
+		t.Errorf("expected AddMember to populate non-zero JoinedAt")
+	}
+	_, members2, err := guildRepo.GetGuild(ctx, g2.ID)
+	if err != nil {
+		t.Fatalf("GetGuild 2 failed: %v", err)
+	}
+	for _, m := range members2 {
+		if m.CharacterID == member2.ID && m.JoinedAt.Before(before) {
+			t.Errorf("expected persisted added member joined_at >= %v, got %v", before, m.JoinedAt)
+		}
 	}
 }
 

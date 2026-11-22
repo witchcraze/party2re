@@ -72,6 +72,19 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		}
 
 		// 2. Insert guild record
+		now := time.Now().UTC()
+		createdAt := g.CreatedAt
+		if createdAt.IsZero() {
+			createdAt = now
+		}
+		updatedAt := g.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = createdAt
+		}
+		lastActive := g.LastActiveAt
+		if lastActive.IsZero() {
+			lastActive = createdAt
+		}
 		guildColor := g.Color
 		if guildColor == "" {
 			guildColor = guild.DefaultColor
@@ -80,14 +93,10 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		if mark == "" {
 			mark = guild.DefaultMark
 		}
-		lastActive := g.LastActiveAt
-		if lastActive.IsZero() {
-			lastActive = g.CreatedAt
-		}
 		_, err = executor.ExecContext(txCtx, `
 			INSERT INTO guilds (id, name, leader_character_id, points, notice, color, mark, bgimg, last_active_at, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, g.ID, g.Name, g.LeaderCharacterID, g.Points, g.Notice, guildColor, mark, g.Bgimg, lastActive, g.CreatedAt, g.UpdatedAt)
+		`, g.ID, g.Name, g.LeaderCharacterID, g.Points, g.Notice, guildColor, mark, g.Bgimg, lastActive, createdAt, updatedAt)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "duplicate") || strings.Contains(strings.ToLower(err.Error()), "unique") {
 				return guild.ErrGuildNameTaken
@@ -99,6 +108,9 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		creator.GuildID = g.ID
 		if creator.Title == "" {
 			creator.Title = guild.DefaultTitleLeader
+		}
+		if creator.JoinedAt.IsZero() {
+			creator.JoinedAt = createdAt
 		}
 		creator.IsPending = false
 		_, err = executor.ExecContext(txCtx, `
@@ -122,6 +134,8 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		createdGuild = g
 		createdGuild.Color = guildColor
 		createdGuild.Mark = mark
+		createdGuild.CreatedAt = createdAt
+		createdGuild.UpdatedAt = updatedAt
 		createdGuild.LastActiveAt = lastActive
 		createdMember = creator
 		updatedChar = char
@@ -180,18 +194,7 @@ func (r *GuildRepository) GetGuild(ctx context.Context, guildID string) (guild.G
 	return g, members, nil
 }
 
-func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]guild.Guild, error) {
-	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT id, name, leader_character_id, points, notice, color, mark, COALESCE(bgimg, ''), last_active_at, created_at, updated_at
-		FROM guilds
-		ORDER BY points DESC, created_at ASC
-		LIMIT ? OFFSET ?
-	`, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
+func scanGuilds(rows *sql.Rows) ([]guild.Guild, error) {
 	var guilds []guild.Guild
 	for rows.Next() {
 		var g guild.Guild
@@ -206,8 +209,21 @@ func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
 	return guilds, nil
+}
+
+func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]guild.Guild, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
+		SELECT id, name, leader_character_id, points, notice, color, mark, COALESCE(bgimg, ''), last_active_at, created_at, updated_at
+		FROM guilds
+		ORDER BY points DESC, created_at ASC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanGuilds(rows)
 }
 
 func (r *GuildRepository) ListInactiveGuilds(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error) {
@@ -225,22 +241,7 @@ func (r *GuildRepository) ListInactiveGuilds(ctx context.Context, cutoff time.Ti
 		return nil, err
 	}
 	defer rows.Close()
-
-	var guilds []guild.Guild
-	for rows.Next() {
-		var g guild.Guild
-		if err := rows.Scan(
-			&g.ID, &g.Name, &g.LeaderCharacterID, &g.Points,
-			&g.Notice, &g.Color, &g.Mark, &g.Bgimg, &g.LastActiveAt, &g.CreatedAt, &g.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		guilds = append(guilds, g)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return guilds, nil
+	return scanGuilds(rows)
 }
 
 func (r *GuildRepository) TouchActive(ctx context.Context, guildID string) error {
