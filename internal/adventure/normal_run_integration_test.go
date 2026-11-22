@@ -448,7 +448,7 @@ func TestNormalRunRollbackDefeatExitAndChronicle(t *testing.T) {
 		t.Fatal(stats, err)
 	}
 	after, err = f.chars.FindByID(context.Background(), c.ID)
-	if err != nil || after.Money != c.Money+5 || after.Tired != before.Tired+1 || after.Stats.HP != 1 {
+	if err != nil || after.Money != c.Money+5 || after.Tired != before.Tired+1 || after.Stats.HP != 0 {
 		t.Fatal(after, err)
 	}
 }

@@ -502,8 +502,15 @@ func TestAdventurePostAdventureHook_TavernDelivery_ZeroFundsLifecycle(t *testing
 		t.Errorf("expected delivery item tavern_omelet_rice, got %s", delivStillActive.ItemID)
 	}
 
-	// 6. Character earns sufficient funds (e.g. granted 2000G)
+	// 6. Character earns sufficient funds (e.g. granted 2000G); while still at 0 HP, adventure entry is blocked.
 	charAfterFirstAdv.Money += 2000
+	if err := charRepo.Update(ctx, charAfterFirstAdv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := advService.StartStage(ctx, char.ID, adventure.StarterAdventure); !errors.Is(err, adventure.ErrCharacterUnconscious) {
+		t.Fatalf("expected ErrCharacterUnconscious at 0 HP, got %v", err)
+	}
+	charAfterFirstAdv.Stats.HP = 20
 	if err := charRepo.Update(ctx, charAfterFirstAdv); err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +745,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 		t.Fatal("expected items in DB depot, got 0")
 	}
 
-	// 3. Defeat verification: A weak character defeated in crawl survives with 1 HP and exit fatigue in MariaDB
+	// 3. Defeat verification: A weak character defeated in crawl persists 0 HP and exit fatigue in MariaDB
 	weakling, err := characterService.Create(ctx, player.ID, id.New()[:8])
 	if err != nil {
 		t.Fatal(err)
@@ -767,8 +774,8 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByID for defeated hero failed: %v", err)
 	}
-	if savedWeakling.Stats.HP != 1 {
-		t.Errorf("expected defeated hero HP=1 in MariaDB, got %d", savedWeakling.Stats.HP)
+	if savedWeakling.Stats.HP != 0 {
+		t.Errorf("expected defeated hero HP=0 in MariaDB, got %d", savedWeakling.Stats.HP)
 	}
 	expectedDefeatTired := adventure.CalculateExitFatigue(crawlRes3.Round, crawlRes3.Mode)
 	if savedWeakling.Tired != expectedDefeatTired {

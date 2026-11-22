@@ -234,9 +234,9 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// c1 had 0 HP in final round -> 1 HP survival floor + 40 HP delivery = 41 HP (clamped to MaxHP),
+	// c1 had 0 HP in final round -> 0 HP copyback + 40 HP delivery = 40 HP (clamped to MaxHP),
 	// Tired = 4 (1*3+1), EXP = +20 (item-105), Money = -20 (tavern_water).
-	wantHP := min(gotC1.Stats.MaxHP, 1+40)
+	wantHP := min(gotC1.Stats.MaxHP, 40)
 	if gotC1.Stats.HP != wantHP || gotC1.Stats.MP != 3 || gotC1.Tired != 4 || gotC1.Experience != c1Before.Experience+20 || gotC1.Money != c1Before.Money-20 {
 		t.Fatalf("c1 after exit: HP=%d(want %d) MP=%d Tired=%d EXP=%d(before %d) Money=%d(before %d)",
 			gotC1.Stats.HP, wantHP, gotC1.Stats.MP, gotC1.Tired, gotC1.Experience, c1Before.Experience, gotC1.Money, c1Before.Money)

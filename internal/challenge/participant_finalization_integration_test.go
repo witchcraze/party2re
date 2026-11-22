@@ -101,7 +101,7 @@ func TestChallengeParticipantFinalizationIntegration(t *testing.T) {
 					if settled {
 						hp, mp, gold, exp = 30, 5, gold+23, exp+7
 						if scenario == "defeated" {
-							hp = 1
+							hp = 0
 						}
 					}
 					if got.Stats.HP != hp || got.Stats.MP != mp || got.Money != gold || got.Experience != exp {

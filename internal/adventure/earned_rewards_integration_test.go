@@ -144,7 +144,7 @@ func TestAdventure_EarnedRewardsAfterDefeatIntegration(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						if after.Money != before.Money+creditedWins*20 || after.Experience != before.Experience+creditedWins*10 || after.Crystal != before.Crystal+creditedWins*3 || after.Stats.HP != 1 {
+						if after.Money != before.Money+creditedWins*20 || after.Experience != before.Experience+creditedWins*10 || after.Crystal != before.Crystal+creditedWins*3 || after.Stats.HP != 0 {
 							t.Fatalf("incorrect persisted earnings: before=%+v after=%+v", before, after)
 						}
 						history, err := advs.FindByID(ctx, result.AdventureIDs[before.ID])

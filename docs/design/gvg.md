@@ -34,7 +34,6 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
 
 - **Room Departure (`@にげる`, `party2/lib/_battle.cgi:1184-1248,1330-1375`)**:
   - **Pre-Start GP Adjustment (non-obvious legacy behavior)**: Leaving while `recruiting` (`round == 0`) with remaining members subtracts **2 GP** from `prize_pool` without a lower floor (`_battle.cgi:1238`, `system.cgi:1357`), so repeated pre-start joins (`+1`) and leaves (`-2`) can drive `prize_pool` negative and offset final guild GP settlement; future balance adjustment is tracked in [#2534](https://github.com/witchcraze/party2re/issues/2534).
-  - **Survival Floor (intentional departure)**: Fallen participants (`0` HP) receive the codebase's `1` HP survival floor rather than legacy raw `0` HP copyback (`_battle.cgi:1215`).
 
 ---
 

@@ -139,6 +139,54 @@ func TestSettleFallback_CharacterUpdateError(t *testing.T) {
 	}
 }
 
+func TestSettleFallback_FallenMembersPersistZeroHP(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepository()
+	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
+	stageProv := &mockStageProvider{stages: make(map[string]adventure.Stage)}
+	monsterProv := &mockMonsterProvider{monsters: make(map[string]adventure.Monster)}
+
+	svc, err := NewService(newMockPartyRepository(), charRepo, invRepo, stageProv, monsterProv, nil)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	c1 := corecharacter.Character{ID: "c1", Name: "FallenByHP", Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	c2 := corecharacter.Character{ID: "c2", Name: "FallenByList", Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	c3 := corecharacter.Character{ID: "c3", Name: "Alive", Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	charRepo.chars[c1.ID] = c1
+	charRepo.chars[c2.ID] = c2
+	charRepo.chars[c3.ID] = c3
+
+	members := []Member{
+		{CharacterID: c1.ID, PartyID: "party-1"},
+		{CharacterID: c2.ID, PartyID: "party-1"},
+		{CharacterID: c3.ID, PartyID: "party-1"},
+	}
+	charMap := map[string]corecharacter.Character{c1.ID: c1, c2.ID: c2, c3.ID: c3}
+	crawlResult := &adventure.DungeonCrawlResult{
+		Outcome:        corebattle.OutcomeDefeat,
+		ParticipantHPs: map[string]int{c1.ID: 0, c3.ID: 250},
+		ParticipantMPs: map[string]int{c1.ID: 12, c2.ID: 999, c3.ID: 20},
+	}
+	lastBattleRes := corebattle.PartyBattleResult{
+		AlliesFallen: []string{c2.ID},
+	}
+
+	if _, _, err := svc.settleFallback(ctx, members, charMap, crawlResult, lastBattleRes); err != nil {
+		t.Fatalf("settleFallback failed: %v", err)
+	}
+	if got := charRepo.chars[c1.ID]; got.Stats.HP != 0 || got.Stats.MP != 12 {
+		t.Errorf("c1 = HP %d MP %d, want HP 0 MP 12", got.Stats.HP, got.Stats.MP)
+	}
+	if got := charRepo.chars[c2.ID]; got.Stats.HP != 0 || got.Stats.MP != 50 {
+		t.Errorf("c2 = HP %d MP %d, want HP 0 MP 50", got.Stats.HP, got.Stats.MP)
+	}
+	if got := charRepo.chars[c3.ID]; got.Stats.HP != 100 || got.Stats.MP != 20 {
+		t.Errorf("c3 = HP %d MP %d, want HP 100 MP 20", got.Stats.HP, got.Stats.MP)
+	}
+}
+
 func TestSettleWithBattleSettler_ErrorPropagation(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepository()

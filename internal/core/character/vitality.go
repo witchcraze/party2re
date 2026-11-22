@@ -27,15 +27,15 @@ func (c *Character) RecoverVitality() {
 	c.Stats.ClampVitality()
 }
 
-// ApplyCombatSurvival applies post-combat surviving HP and MP, enforcing the authentic
-// 1 HP survival floor for fallen combatants (HP <= 0 or fallen == true) and clamping within vitality bounds.
+// ApplyCombatSurvival applies post-combat surviving HP and MP, clamping within vitality bounds.
+// Fallen combatants (HP <= 0 or fallen == true) persist 0 HP, matching legacy post-combat copyback.
 // If survivingMP is negative, current MP is preserved and clamped.
 func (c *Character) ApplyCombatSurvival(survivingHP, survivingMP int, fallen bool) {
 	if c == nil {
 		return
 	}
 	if fallen || survivingHP <= 0 {
-		c.Stats.HP = 1
+		c.Stats.HP = 0
 	} else {
 		c.Stats.HP = survivingHP
 	}

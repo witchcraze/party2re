@@ -447,6 +447,9 @@ func TestChallengeBoss_Defeat(t *testing.T) {
 	if res.RewardExp != 0 || res.RewardGold != 0 {
 		t.Errorf("expected zero rewards on defeat, got EXP=%d Gold=%d", res.RewardExp, res.RewardGold)
 	}
+	if got := charRepo.chars["weakling"]; got.Stats.HP != 0 {
+		t.Errorf("expected defeated weakling HP=0, got %d", got.Stats.HP)
+	}
 }
 
 // TestService_GetCharacterRecord verifies empty-ID guard and record creation.
@@ -753,10 +756,13 @@ func TestStartSealingBattle_DejonBanishmentInParty(t *testing.T) {
 		t.Errorf("expected banished member 'victim', got %v", res.BanishedMemberIDs)
 	}
 
-	// victim: entry cost +20 + dejon banishment +30 = 50 Tired
+	// victim: entry cost +20 + dejon banishment +30 = 50 Tired, HP = 0
 	victim := charRepo.chars["victim"]
 	if victim.Tired != 50 {
 		t.Errorf("expected victim Tired=50 (20 entry + 30 dejon), got %d", victim.Tired)
+	}
+	if victim.Stats.HP != 0 {
+		t.Errorf("expected fallen victim HP=0, got %d", victim.Stats.HP)
 	}
 
 	// leader: entry cost only +20 Tired

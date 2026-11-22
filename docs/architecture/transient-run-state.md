@@ -257,8 +257,7 @@ active-state migrations are historical work, not a remaining rollout plan.
 by inserting `dungeon_expedition_history` keyed by the active expedition's run ID
 (`dungeon_expedition_history.id = exp.ID`). Inside `RunInTx`, it locks all participating
 expedition member characters in ascending ID order (`SELECT ... FOR UPDATE`, Rank 2),
-claims the history row, delegates surviving vitality persistence (HP/MP, 1 HP floor for
-fallen characters) and consumable inventory item deduction to shared post-battle settlement
+claims the history row, delegates surviving vitality persistence (HP/MP) and consumable inventory item deduction to shared post-battle settlement
 (`battle.ApplyPostBattleResult`), applies experience and gold rewards to each participating
 member, and delivers reward items to inventory/depot
 (Rank 3/5). Pre-cutover
@@ -312,8 +311,7 @@ participant exit and terminal defeat. Under the run coordination lock, it saves
 only unsettled admitted participants through the shared battle adapter and commits
 resources, cumulative consumption, individual earnings, designated treasure,
 records and required exit effects with the command receipt/publication intent.
-Fallen characters retain the shared survival floor of 1 HP. Equipment read errors
-and Tavern fullness failures roll back all coupled effects.
+Equipment read errors and Tavern fullness failures roll back all coupled effects.
 
 The SQL admission roster remains immutable authorization evidence; it is not the
 current leader or active roster. The legacy full-roster finalizer remains only for

@@ -67,6 +67,28 @@ func TestSleep_PendingWakePersistedAndSurvivesValkeyExpiry(t *testing.T) {
 	}
 }
 
+func TestSleepAndWake_RecoversZeroHPSurvivor(t *testing.T) {
+	ctx := context.Background()
+	mt := &mockTimer{}
+	svc, repo := newWakeTestService(t, mt, map[string]corecharacter.Character{
+		"c0": {ID: "c0", Name: "Fallen", Tired: 25, Stats: corecharacter.Stats{HP: 0, MaxHP: 120, MP: 0, MaxMP: 40}},
+	})
+
+	if _, err := svc.Sleep(ctx, "c0", "c0"); err != nil {
+		t.Fatalf("Sleep: %v", err)
+	}
+	delete(mt.locks, timer.CategorySleep+":c0")
+	delete(mt.locks, timer.CategoryAsleep+":c0")
+	res, err := svc.Wake(ctx, "c0")
+	if err != nil || !res.Success {
+		t.Fatalf("Wake = %+v, %v", res, err)
+	}
+	got := repo.chars["c0"]
+	if got.Stats.HP != 120 || got.Stats.MP != 40 || got.Tired != 0 {
+		t.Fatalf("vitality not recovered from 0 HP: %+v tired=%d", got.Stats, got.Tired)
+	}
+}
+
 type blockingCostume struct {
 	entered chan struct{}
 	release chan struct{}

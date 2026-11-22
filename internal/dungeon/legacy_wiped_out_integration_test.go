@@ -382,10 +382,10 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		if reloadedLead.Stats.HP != 1 || reloadedLead.Stats.MP != 12 || reloadedLead.Money != 500 || reloadedLead.Experience != 0 {
+		if reloadedLead.Stats.HP != 0 || reloadedLead.Stats.MP != 12 || reloadedLead.Money != 500 || reloadedLead.Experience != 0 {
 			t.Fatalf("unexpected leader after wipeout: %+v", reloadedLead)
 		}
-		if reloadedAlly.Stats.HP != 1 || reloadedAlly.Stats.MP != 40 || reloadedAlly.Money != 300 || reloadedAlly.Experience != 0 {
+		if reloadedAlly.Stats.HP != 0 || reloadedAlly.Stats.MP != 40 || reloadedAlly.Money != 300 || reloadedAlly.Experience != 0 {
 			t.Fatalf("unexpected ally after wipeout: %+v", reloadedAlly)
 		}
 		assertItemQty(t, ctx, lead.ID, leadItem.ID, 1)
@@ -608,7 +608,7 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		if reloaded.Stats.HP != 1 || reloaded.Money != 625 || reloaded.Experience != 40 {
+		if reloaded.Stats.HP != 0 || reloaded.Money != 625 || reloaded.Experience != 40 {
 			t.Fatalf("unexpected character after escaped all-fallen run: %+v", reloaded)
 		}
 	})

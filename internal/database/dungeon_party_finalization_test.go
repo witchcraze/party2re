@@ -129,9 +129,9 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	}
 
 	// Leader check:
-	// Fallen character MUST have 1 HP floor applied by shared combat settlement!
-	if reloadedLead.Stats.HP != 1 {
-		t.Errorf("expected fallen leader HP floor to be 1, got %d", reloadedLead.Stats.HP)
+	// Fallen character persists 0 HP via shared combat settlement.
+	if reloadedLead.Stats.HP != 0 {
+		t.Errorf("expected fallen leader HP to be 0, got %d", reloadedLead.Stats.HP)
 	}
 	if reloadedLead.Stats.MP != 15 {
 		t.Errorf("expected leader MP 15, got %d", reloadedLead.Stats.MP)
