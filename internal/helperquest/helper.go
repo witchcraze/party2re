@@ -135,7 +135,7 @@ func questTargets(kind QuestKind, rare bool) ([]TargetSpec, error) {
 var weaponTitles = []string{"店を始めたいので", "強くなりたくて", "戦い用に", "ライバルに勝ちたくて", "見てみたい", "趣味で", "家宝にしたい", "探しています"}
 var armorTitles = []string{"コンプリートのために", "カッコ良くなりたい", "オシャレになりたくて", "あこがれの服", "プレゼント用に", "着てみたい", "集めたい", "流行なので"}
 var itemTitles = []string{"コレクション用", "病気を治すために", "非常用に", "必要なんです", "大好物なので", "気になるので", "自分用に欲しい", "用途は秘密です"}
-var monsterTitles = []string{"かわいいので", "ペットほしい", "仲良くなりたい", "プニプニしたい", "いやされたい", "触ってみたい", "背中に乗ってみたい", "幸せになるために"}
+var monsterTitles = []string{"かわいいので", "ペットほしい", "仲良くなりたい", "プニプニしたい", "いやされたい", "触ってみたい", "背中に乗ってみたい", "幸せになるために", "王国を作るために"}
 
 func GenerateQuest(random RandomSource, now time.Time, lookupMonster func(string) (string, bool)) (Quest, error) {
 	if random == nil {

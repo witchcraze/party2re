@@ -67,14 +67,14 @@ func TestGenerateQuestTargetPools(t *testing.T) {
 				ids = append(ids, fmt.Sprintf("%s-%0*d", prefix, width, n))
 			}
 			for slot, want := range ids {
-				rareRoll, rewardSlots, countSlots := 1, 10, 3
+				rareRoll, rewardSlots, countSlots, titleSlots := 1, 10, 3, 8
 				if tc.rare {
 					rareRoll, rewardSlots = 0, 6
 				}
 				if tc.kind == KindMonster {
-					countSlots = 2
+					countSlots, titleSlots = 2, 9
 				}
-				rng := &questRandom{t: t, draws: []questDraw{{4, int(tc.kind) - 1}, {14, rareRoll}, {15, 1}, {countSlots, 0}, {len(ids), slot}, {8, 0}, {999, 0}, {rewardSlots, 0}}}
+				rng := &questRandom{t: t, draws: []questDraw{{4, int(tc.kind) - 1}, {14, rareRoll}, {15, 1}, {countSlots, 0}, {len(ids), slot}, {titleSlots, 0}, {999, 0}, {rewardSlots, 0}}}
 				q, err := GenerateQuest(rng, time.Time{}, func(id string) (string, bool) { return id, true })
 				if err != nil || q.TargetID != want || q.TargetName == "" {
 					t.Fatalf("slot %d: target=%+v, err=%v, want %s", slot, q, err, want)
@@ -110,7 +110,7 @@ func TestGenerateQuestMonsterFallback(t *testing.T) {
 					}
 					return native(id)
 				}
-				rng := &questRandom{t: t, draws: []questDraw{{4, 3}, {14, rareRoll}, {15, 1}, {2, 0}, {primarySlots, primary}, {fallbackSlots, fallback}, {8, 0}, {999, 0}, {rewardSlots, 0}}}
+				rng := &questRandom{t: t, draws: []questDraw{{4, 3}, {14, rareRoll}, {15, 1}, {2, 0}, {primarySlots, primary}, {fallbackSlots, fallback}, {9, 0}, {999, 0}, {rewardSlots, 0}}}
 				q, err := GenerateQuest(rng, time.Time{}, lookup)
 				want := fmt.Sprintf("monster-%03d", first+fallback)
 				name, ok := native(want)
@@ -207,6 +207,29 @@ func TestGenerateQuestRewardSlots(t *testing.T) {
 			if err != nil || q.RewardItemID != want {
 				t.Fatalf("rare=%d slot=%d: reward=%s, err=%v, want %s", tc.rareRoll, slot, q.RewardItemID, err, want)
 			}
+		}
+	}
+}
+
+func TestGenerateQuestMonsterTitleStems(t *testing.T) {
+	// Independently verified stems: lib/helper.cgi:198.
+	stems := []string{
+		"かわいいので",
+		"ペットほしい",
+		"仲良くなりたい",
+		"プニプニしたい",
+		"いやされたい",
+		"触ってみたい",
+		"背中に乗ってみたい",
+		"幸せになるために",
+		"王国を作るために",
+	}
+	for slot, stem := range stems {
+		rng := &questRandom{t: t, draws: []questDraw{{4, 3}, {14, 1}, {15, 1}, {2, 0}, {180, 0}, {len(stems), slot}, {999, 0}, {10, 0}}}
+		q, err := GenerateQuest(rng, time.Time{}, func(id string) (string, bool) { return id, true })
+		want := stem + "その1"
+		if err != nil || q.Title != want || len(rng.draws) != 0 {
+			t.Fatalf("slot %d: title=%q, draws=%v, err=%v, want %q", slot, q.Title, rng.draws, err, want)
 		}
 	}
 }
