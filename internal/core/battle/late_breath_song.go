@@ -6,15 +6,21 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-// LateBreathSongContext freezes BurnStrike at table construction. HeldBooks is
-// current operation input, keyed by actor: none, ordinary or forbidden. Missing
-// book facts reject book-power; asset classification remains the asset owner.
+// LateBreathSongContext freezes BurnStrike at table construction. Book power
+// classifies the actor's battle hand when it runs; an unknown hand rejects it.
 type LateBreathSongContext struct {
 	DamageContext
 	Arguments  []string
 	BurnStrike bool
-	HeldBooks  map[string]string
 	Death      *StatusContext
+}
+
+// heldBook is the actor's current book class; ok is false for an unknown hand.
+func (a *LifetimeActor) heldBook() (kind string, ok bool) {
+	if a == nil || a.HeldToolID == nil {
+		return "", false
+	}
+	return heldBookKind(*a.HeldToolID), true
 }
 
 // LateBreathSongBurn uses the requester's gender, independently of the actor's
@@ -84,7 +90,7 @@ func (s *LifetimeState) lateSongDamage(c *LateBreathSongContext, id, target stri
 		return dualAgilityEffect(target, power, CategorySong, true)
 	default:
 		coefficient := .2
-		switch c.HeldBooks[c.ActorID] {
+		switch book, _ := a.heldBook(); book {
 		case "ordinary":
 			coefficient = .4
 		case "forbidden":
@@ -141,9 +147,10 @@ func (s *LifetimeState) ApplyLateBreathSong(c *LateBreathSongContext, id string,
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-84-entry-1", "job-84-entry-2", "job-86-entry-4":
+		book, _ := a.heldBook()
 		e := s.lateSongDamage(c, id, c.shift())
 		_, err := s.ApplyDamage(&c.DamageContext, e, rng)
-		if err == nil && id == "job-86-entry-4" && c.HeldBooks[c.ActorID] == "forbidden" {
+		if err == nil && id == "job-86-entry-4" && book == "forbidden" {
 			_, err = s.ApplyRecoil(&c.EffectContext, &c.End, e.Payload.Number*.2, rng)
 		}
 		return err

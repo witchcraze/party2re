@@ -22,7 +22,7 @@ func TestLateSongReloadedContinuation(t *testing.T) {
 					s, c, d := lateSongFixture()
 					s.Actors[0].Icon = "assets/images/placeholders/battle/forms.svg#job-84-ex-m"
 					c.BurnStrike = s.Actors[0].LateBreathSongBurn("burn", "m")
-					c.HeldBooks["self"] = "forbidden"
+					*s.Actors[0].HeldToolID = "item-196"
 					// A completed ritual precedes the interruption. Replaying it
 					// would debit HP again; only the frozen next command runs.
 					executeLateSong(t, &s, c, d, "job-85-entry-0", nil, 0, 0)
@@ -44,9 +44,8 @@ func TestLateSongReloadedContinuation(t *testing.T) {
 						Entry     string
 						Arguments []string
 						Burn      bool
-						Books     map[string]string
 					}
-					input := checkpoint{s, c.TargetContext, entry.ID, args, c.BurnStrike, c.HeldBooks}
+					input := checkpoint{s, c.TargetContext, entry.ID, args, c.BurnStrike}
 					data, err := json.Marshal(input)
 					if err != nil {
 						t.Fatal(err)
@@ -56,7 +55,7 @@ func TestLateSongReloadedContinuation(t *testing.T) {
 						t.Fatal(err)
 					}
 					_, resumed, rebuilt := lateSongFixture()
-					resumed.TargetContext, resumed.BurnStrike, resumed.HeldBooks = loaded.Target, loaded.Burn, loaded.Books
+					resumed.TargetContext, resumed.BurnStrike = loaded.Target, loaded.Burn
 					rngs := []random.Generator{random.NewDeterministic(seed), random.NewDeterministic(seed)}
 					for i, run := range []struct {
 						s *corebattle.LifetimeState

@@ -513,7 +513,6 @@ func TestNPCContextDependentSourceNamesAndCustomCollision(t *testing.T) {
 			d.RegisterLateBreathSong(&corebattle.LateBreathSongContext{
 				DamageContext: c.DamageContext,
 				BurnStrike:    burn,
-				HeldBooks:     map[string]string{"self": "none"},
 			})
 			d.RegisterDefenseGems()
 			// Mutate state after freezing context to verify NPCChoices honors the frozen BurnStrike value.
@@ -586,7 +585,6 @@ func TestNPCLateCMPSourceIdentitySettlement(t *testing.T) {
 			d.RegisterLateBreathSong(&corebattle.LateBreathSongContext{
 				DamageContext: c.DamageContext,
 				BurnStrike:    tc.burn,
-				HeldBooks:     map[string]string{"self": "none"},
 			})
 			d.RegisterDefenseGems()
 			s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-84", SP: 50, OldJobID: "starter"}

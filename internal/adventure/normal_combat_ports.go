@@ -39,10 +39,8 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 	// shortcut: entry builds every player actor with the default icon, read the
 	// requester's avatar here once entry adopts it.
 	icon := battle.DefaultActorIcon
-	var books map[string]string // An unknown hand leaves job86.4 gated.
 	if actor != nil && actor.HeldToolID != nil {
 		held = *actor.HeldToolID
-		books = map[string]string{actor.ID: corebattle.HeldBookKind(held)}
 	}
 	gender := ""
 	if requester != nil {
@@ -112,7 +110,7 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 		DualAgility:         &corebattle.DualAgilityContext{DamageContext: d, Status: p.status},
 		Transformations:     transform,
 		MachineFamiliar:     &corebattle.MachineFamiliarContext{DamageContext: d, RequesterGender: gender},
-		LateBreathSong:      &corebattle.LateBreathSongContext{DamageContext: d, BurnStrike: burn, HeldBooks: books, Death: p.status},
+		LateBreathSong:      &corebattle.LateBreathSongContext{DamageContext: d, BurnStrike: burn, Death: p.status},
 		Resources:           &resources,
 		Revival: &corebattle.RevivalContext{
 			TargetContext: d.TargetContext, NativeDefeat: p.defeat, Defeat: d.Defeat,

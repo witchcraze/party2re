@@ -66,7 +66,7 @@ func TestLateSongMissingDescendantsAndOrderedProjection(t *testing.T) {
 				c.Death.Defeat = nil
 				ids = []string{"job-85-entry-1"}
 			case "book":
-				c.HeldBooks = nil
+				s.Actors[0].HeldToolID = nil
 				ids = []string{"job-86-entry-4"}
 			case "book-changed":
 				ids = []string{"job-86-entry-4"}
@@ -74,7 +74,7 @@ func TestLateSongMissingDescendantsAndOrderedProjection(t *testing.T) {
 				if _, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t}); err != nil {
 					t.Fatal(err)
 				}
-				c.HeldBooks["self"] = "unclassified"
+				s.Actors[0].HeldToolID = nil
 			case "tension-level":
 				s.Actors[0].Tension = 5
 				ids, args = []string{"job-84-entry-3"}, []string{"self"}

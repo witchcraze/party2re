@@ -9,8 +9,9 @@ import (
 
 func lateSongFixture() (corebattle.LifetimeState, *corebattle.LateBreathSongContext, BattleDefinitions) {
 	s, base, _ := dualAgilityFixture()
-	s.Actors[0].HP, s.Actors[0].MaxMP = 500, 1000
-	c := &corebattle.LateBreathSongContext{DamageContext: base.DamageContext, HeldBooks: map[string]string{"self": "none"}, Death: &corebattle.StatusContext{}}
+	empty := ""
+	s.Actors[0].HP, s.Actors[0].MaxMP, s.Actors[0].HeldToolID = 500, 1000, &empty
+	c := &corebattle.LateBreathSongContext{DamageContext: base.DamageContext, Death: &corebattle.StatusContext{}}
 	c.Death.Defeat = &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: c.TargetContext}, Rewards: &corebattle.DefeatRewards{
 		Validate: func(*corebattle.LifetimeState, corebattle.TargetContext, string) error { return nil },
 		Apply:    func(*corebattle.LifetimeState, corebattle.TargetContext, string) error { return nil },
@@ -138,14 +139,15 @@ func TestLateSongBurnCaptureAndBookPower(t *testing.T) {
 			t.Fatal(row, s.Actors[1])
 		}
 	}
-	for _, book := range []string{"none", "ordinary", "forbidden"} {
+	// The hand changes after admission: book power reads it when it runs.
+	for book, held := range map[string]string{"none": "", "ordinary": "item-092", "forbidden": "item-196"} {
 		s, c, d := lateSongFixture()
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
 		ops, err := d.InvocationAction(&s, &f, []string{"job-86-entry-4"}, noArithmeticDraws{t})
 		if err != nil {
 			t.Fatal(err)
 		}
-		c.HeldBooks["self"] = book
+		*s.Actors[0].HeldToolID = held
 		if err := s.ApplyInvocations(&f, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{0}}); err != nil {
 			t.Fatal(err)
 		}
