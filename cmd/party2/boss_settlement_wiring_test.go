@@ -45,7 +45,7 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	misc, err := newMiscServices(db, core, soc, econ, nil)
+	misc, err := newMiscServices(db, core, soc, econ, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +58,8 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
 		t.Fatal(err)
 	}
+	// The banquet writes to the shared Event Plaza and has separate coverage.
+	cmbt.boss.SetVictoryBanquetHook(nil)
 
 	char, err := database.CreateTestCharacter(ctx, db, "Seal_"+id.New()[:6])
 	if err != nil {

@@ -40,7 +40,7 @@ func newBlackMarketEquipmentFixture(t *testing.T, slot item.Slot, definitionID s
 	if err != nil {
 		t.Fatal(err)
 	}
-	misc, err := newMiscServices(db, core, soc, econ, nil)
+	misc, err := newMiscServices(db, core, soc, econ, client)
 	if err != nil {
 		t.Fatal(err)
 	}

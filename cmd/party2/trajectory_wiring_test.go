@@ -37,7 +37,7 @@ func TestTrajectoryProductionWiring(t *testing.T) {
 	if err := core.initPlayerAndChar(soc.guildRepo, soc.guild, econ.fleamarketRepo, soc.notification, soc.exileRepo, referrals.DeliverReferral, nil, 0, logging.Nop()); err != nil {
 		t.Fatal(err)
 	}
-	misc, err := newMiscServices(db, core, soc, econ, nil)
+	misc, err := newMiscServices(db, core, soc, econ, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestContestTrajectoryProductionWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	misc, err := newMiscServices(db, core, soc, econ, nil)
+	misc, err := newMiscServices(db, core, soc, econ, client)
 	if err != nil {
 		t.Fatal(err)
 	}

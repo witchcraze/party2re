@@ -103,15 +103,9 @@ func newCmbtServices(
 		battle.WithUnsealClockWriter(bossRepo),
 	)
 
-	var pvpRoomRepo pvp.RoomRepository
-	if valkeyClient != nil {
-		vr, err := pvp.NewValkeyRoomRepository(valkeyClient)
-		if err != nil {
-			return nil, err
-		}
-		pvpRoomRepo = vr
-	} else {
-		pvpRoomRepo = pvp.NewMemoryRoomRepository()
+	pvpRoomRepo, err := pvp.NewValkeyRoomRepository(valkeyClient)
+	if err != nil {
+		return nil, err
 	}
 	pvpTransitions, err := database.NewPvPTransitionRepository(db)
 	if err != nil {
@@ -132,15 +126,9 @@ func newCmbtServices(
 		return nil, err
 	}
 
-	var gvgRoomRepo gvg.RoomRepository
-	if valkeyClient != nil {
-		vr, err := gvg.NewValkeyRoomRepository(valkeyClient)
-		if err != nil {
-			return nil, err
-		}
-		gvgRoomRepo = vr
-	} else {
-		gvgRoomRepo = gvg.NewMemoryRoomRepository()
+	gvgRoomRepo, err := gvg.NewValkeyRoomRepository(valkeyClient)
+	if err != nil {
+		return nil, err
 	}
 
 	gvgRepo, err := database.NewGvGRepository(db)

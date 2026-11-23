@@ -496,11 +496,9 @@ func TestTransientRunStateDocCoversCandidateC(t *testing.T) {
 	requiredTerms := []string{
 		"Candidate C",
 		"Ephemeral Turn & Session Lobby",
-		"1800",
 		"Two-Phase Settlement",
-		"party2:" + "<domain>:room:<room_id>",
-		"party2:" + "<domain>:rooms:active",
-		"casino_rooms",
+		"valkey-keyspace.md#current-key-inventory",
+		"casino_accounts",
 	}
 
 	for _, term := range requiredTerms {
