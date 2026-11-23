@@ -6,9 +6,11 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
@@ -19,7 +21,7 @@ import (
 // command's TargetID and Input are job50's outer stored-tool selector and target.
 // Job86 withdrawals swap in place; returns deliver even over capacity.
 // A selection error commits no assets; stored-tool history stays in the run.
-// Transaction: ExecuteTransaction within Command. Lock Order: prelocked run(0) -> prelocked sorted characters(2) -> requester inventory(3) -> requester depot(5).
+// Transaction: ExecuteTransaction within Command. Lock Order: prelocked run(0) -> prelocked sorted characters(2) -> requester inventory(3) -> requester equipment(3) -> requester depot(5).
 func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd runhost.Command, apply func(*corebattle.JobAssets, *corecharacter.Character) error) error {
 	if r == nil || !runhost.InCommand(ctx, r.ID) || cmd.RunID != r.ID ||
 		!slices.Contains(r.Roster, cmd.ActorID) || r.Recipients[cmd.ActorID].PlayerID != cmd.PlayerID {
@@ -34,6 +36,7 @@ func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd 
 		}
 		assets := corebattle.JobAssets{RequesterID: cmd.ActorID, Wallet: tc.Character.Money, AddWallet: economy.SafeAdd}
 		assets.HeldToolID = tc.Inventory.HeldToolID()
+		heldBefore, _ := tc.Inventory.HeldTool()
 		if s.cfg.JobAssetHelpers != nil {
 			tools, err := s.cfg.JobAssetHelpers(ctx)
 			if err != nil {
@@ -42,6 +45,14 @@ func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd 
 			assets.HelperToolIDs = append([]int{}, tools...)
 		}
 		assets.StoredItem, assets.StoredTarget = cmd.TargetID, cmd.Input
+		var eq *coreequipment.Equipment
+		if s.cfg.JobAssetEquipment != nil {
+			value, err := s.cfg.JobAssetEquipment.FindByCharacterIDForUpdate(tc, cmd.ActorID)
+			if err != nil {
+				return err
+			}
+			eq = &value
+		}
 		var stored *depot.Depot
 		if s.cfg.JobAssetDepots != nil {
 			value, err := depot.FindOrCreate(tc, s.cfg.JobAssetDepots, tc.Character)
@@ -92,21 +103,75 @@ func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd 
 		} else {
 			tc.AddGrant(economy.ResourceGrant{Gold: assets.Wallet - tc.Character.Money})
 		}
-		if assets.HeldToolID == nil || *assets.HeldToolID == previousHeld {
-			return nil
+		if assets.HeldToolID != nil && *assets.HeldToolID != previousHeld {
+			switch {
+			case previousHeld == "":
+				inst, err := item.NewInstance(*assets.HeldToolID, 1)
+				if err != nil {
+					return err
+				}
+				if err := tc.Inventory.Add(inst); err != nil {
+					return err
+				}
+			case *assets.HeldToolID == "":
+				if _, err := takeHeld(tc); err != nil {
+					return err
+				}
+			default:
+				return corebattle.ErrUnsupportedEffect
+			}
 		}
-		switch {
-		case previousHeld == "":
-			tc.AddGrant(economy.ResourceGrant{ItemDefinitionID: *assets.HeldToolID, ItemQuantity: 1})
-		case *assets.HeldToolID == "":
-			// A known held hand is exactly one inventory row.
-			return tc.Inventory.ConsumeOne(tc.Inventory.Items[0].ID)
-		default:
-			return corebattle.ErrUnsupportedEffect
-		}
-		return nil
+		return s.saveHeldGear(tc, eq, heldBefore.ID)
 	})
 	return err
+}
+
+// takeHeld removes the durable held unit: the inventory's tool-hand row.
+func takeHeld(tc *economy.TxContext) (item.Instance, error) {
+	held, ok := tc.Inventory.HeldTool()
+	if !ok || held.ID == "" {
+		return item.Instance{}, runhost.ErrConflict
+	}
+	return tc.Inventory.ConsumeOneItem(held.ID)
+}
+
+// saveHeldGear keeps equipment_slots on the tool hand as Depot withdrawal does:
+// the leaving row is unlinked before the runner deletes it, and gear entering
+// the hand is equipped once its inventory row exists.
+func (s *NormalRunService) saveHeldGear(tc *economy.TxContext, eq *coreequipment.Equipment, before string) error {
+	held, _ := tc.Inventory.HeldTool()
+	if eq == nil || held.ID == before {
+		return nil
+	}
+	if before != "" {
+		unlinked, err := eq.Detach(&tc.Character, before)
+		if err != nil {
+			return err
+		}
+		if unlinked {
+			if err := s.cfg.JobAssetEquipment.Save(tc, *eq); err != nil {
+				return err
+			}
+		}
+	}
+	if held.ID == "" {
+		return nil
+	}
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		return err
+	}
+	def, err := catalog.FindByID(held.DefinitionID)
+	if err != nil || def.Slot == item.SlotNone {
+		return err
+	}
+	if err := s.cfg.Inventories.Save(tc, tc.Inventory); err != nil {
+		return err
+	}
+	if _, err := eq.Equip(&tc.Inventory, def, held.ID); err != nil {
+		return err
+	}
+	return s.cfg.JobAssetEquipment.Save(tc, *eq)
 }
 
 // storedTools lists depot tool rows in order with their usage category.
@@ -136,20 +201,17 @@ func exchangeStoredTool(tc *economy.TxContext, d *depot.Depot, instanceID, held 
 	if err != nil {
 		return held, err
 	}
-	whole := index >= len(d.Items) || d.Items[index].ID != instanceID
+	if index < len(d.Items) && d.Items[index].ID == instanceID {
+		taken.ID = id.New() // The remaining stack keeps its identity.
+	}
 	if held != "" {
-		previous, err := tc.Inventory.ConsumeOneItem(tc.Inventory.Items[0].ID)
+		previous, err := takeHeld(tc)
 		if err != nil {
 			return held, err
 		}
 		d.InsertDelivery(index, previous)
 	}
-	if whole {
-		err = tc.Inventory.Add(taken)
-	} else {
-		tc.AddGrant(economy.ResourceGrant{ItemDefinitionID: taken.DefinitionID, ItemQuantity: 1})
-	}
-	return taken.DefinitionID, err
+	return taken.DefinitionID, tc.Inventory.Add(taken)
 }
 
 // returnHeldTool delivers the durable held unit to the requester depot: it
@@ -158,7 +220,7 @@ func returnHeldTool(tc *economy.TxContext, d *depot.Depot, held string) (string,
 	if held == "" {
 		return held, runhost.ErrConflict
 	}
-	unit, err := tc.Inventory.ConsumeOneItem(tc.Inventory.Items[0].ID)
+	unit, err := takeHeld(tc)
 	if err != nil {
 		return held, err
 	}

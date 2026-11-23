@@ -165,11 +165,11 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd runhost.Comman
 		if err != nil {
 			return fx, err
 		}
-		held := inv.HeldToolID()
-		if held == nil || toolEntry(*held) != parsed.First.EntryID {
+		held, ok := inv.HeldTool()
+		if !ok || held.ID == "" || toolEntry(held.DefinitionID) != parsed.First.EntryID {
 			return fx, runhost.ErrConflict
 		}
-		consumeHeld(&parsed.First.PlayerAction, cmd.ActorID, *held, inv.Items[0].ID)
+		consumeHeld(&parsed.First.PlayerAction, cmd.ActorID, held.DefinitionID, held.ID)
 	}
 	rooms.reportSelection(&parsed.First.PlayerAction, assets)
 	reportFieldSuppression(&parsed.First.PlayerAction, contexts.Fields, rooms)

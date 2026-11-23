@@ -50,21 +50,6 @@ func (d Definition) IsTool() bool {
 	return false
 }
 
-// IsToolID reports whether the definition ID represents a legacy tool or accessory
-// (catalog kind 3 / @ites), rather than an equipped weapon or armor.
-func IsToolID(definitionID string) bool {
-	if strings.TrimSpace(definitionID) == "" {
-		return false
-	}
-	if cat, err := DefaultCatalog(); err == nil {
-		if def, err := cat.FindByID(definitionID); err == nil {
-			return def.IsTool()
-		}
-	}
-	kind, _, err := (Definition{ID: definitionID}).LegacyStorageKey()
-	return err == nil && kind == 3
-}
-
 // LegacyHandKind returns the legacy hand field kind (1 = weapon $m{wea}, 2 = armor $m{arm}, 3 = item/accessory/shield $m{ite})
 // for this definition. For synthetic IDs without standard prefixes, it falls back to Slot (SlotMainHand -> 1, SlotBody -> 2, otherwise 3).
 func (d Definition) LegacyHandKind() int {

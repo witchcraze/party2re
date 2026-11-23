@@ -364,7 +364,7 @@ func newCmbtServices(
 		Jobs:    core.jobCatalog,
 		Penalty: normalPenaltyAdapter{timers: soc.timer}, Clock: adventure.RealClock{}, CheckEntry: admission.busy,
 		EntryLocks:     soc.timer,
-		JobAssetRunner: core.economy, JobAssetHelpers: helperToolNumbers(helperRepo), JobAssetDepots: econ.depotRepo,
+		JobAssetRunner: core.economy, JobAssetHelpers: helperToolNumbers(helperRepo), JobAssetDepots: econ.depotRepo, JobAssetEquipment: econ.equipRepo,
 	})
 	if err != nil {
 		return nil, err

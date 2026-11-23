@@ -334,6 +334,5 @@ Order and lifetime traps:
 
 ## Open gaps
 
-- Multi-row inventories leave the durable hand unknown, so player held-tool use and job50/78/86 stay gated: #2558.
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
 - NPC-only jobs 406 and 407 (with `@exx_bosses`) have no table, so their choices stay whole-action gates: #1915, #1916.

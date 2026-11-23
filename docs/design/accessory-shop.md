@@ -45,8 +45,3 @@ Legacy fails when continuous `rand(100) > rate` and otherwise succeeds
 (`accessory.cgi:184`). Current Go uses integer `random.Intn(100) < rate`.
 For the catalog's integer rates, both produce the displayed success percentage;
 the different comparison operators alone do not establish a probability bug.
-
-**Elixir eligibility difference:** the legacy check requires item 180 in the
-held-item slot (`accessory.cgi:175`). Go scans all inventory items and consumes
-the first item-180 it finds, whether equipped or not. Preserve the held-item
-condition as the specification when reconciling inventory/equipment modeling.

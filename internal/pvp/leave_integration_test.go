@@ -107,9 +107,13 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	c3, err := database.CreateTestCharacterWithFunds(ctx, db, "T"+id.New()[:7], 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		cleanupCtx := context.Background()
-		for _, c := range []corecharacter.Character{c1, c2} {
+		for _, c := range []corecharacter.Character{c1, c2, c3} {
 			if rid, err := store.FindCharacterClaim(cleanupCtx, c.ID); err == nil && rid != "" {
 				_ = baseRooms.DeleteRoom(cleanupCtx, rid)
 				_ = baseRooms.DeleteCharacterRoom(cleanupCtx, c.ID, rid)
@@ -119,7 +123,7 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 		}
 	})
 
-	// c1 equips item-105 (幸せのくつ), c2 equips item-106 (金の鶏) and consumes a held tool.
+	// c1 holds the shoes, c2 holds the rooster, and c3 consumes a held tool.
 	shoes, err := coreitem.NewInstance("item-105", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -139,10 +143,13 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := invs.Save(ctx, coreinventory.Inventory{CharacterID: c2.ID, Items: []coreitem.Instance{rooster, herb}}); err != nil {
+	if err := invs.Save(ctx, coreinventory.Inventory{CharacterID: c2.ID, Items: []coreitem.Instance{rooster}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := equips.Save(ctx, coreequipment.Equipment{CharacterID: c2.ID, Slots: map[coreitem.Slot]string{coreitem.SlotAccessory: rooster.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := invs.Save(ctx, coreinventory.Inventory{CharacterID: c3.ID, Items: []coreitem.Instance{herb}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,10 +181,10 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	engine := scriptedIntegrationEngine{fn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 		return corebattle.PartyBattleResult{
 			Outcome:     corebattle.OutcomeWin,
-			RemainingHP: map[string]int{c1.ID: 0, c2.ID: 35},
-			RemainingMP: map[string]int{c1.ID: 3, c2.ID: 4},
+			RemainingHP: map[string]int{c1.ID: 0, c2.ID: 35, c3.ID: 35},
+			RemainingMP: map[string]int{c1.ID: 3, c2.ID: 4, c3.ID: 4},
 			ConsumedItems: map[string][]corebattle.ConsumedItem{
-				c2.ID: {{ID: "item-101", InstanceID: herb.ID, Quantity: 1}},
+				c3.ID: {{ID: "item-101", InstanceID: herb.ID, Quantity: 1}},
 			},
 		}, nil
 	}}
@@ -205,10 +212,16 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	if _, err := svc.JoinRoom(ctx, c2.ID, room.Room.ID, ""); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := svc.JoinRoom(ctx, c3.ID, room.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.SelectTeam(ctx, c1.ID, room.Room.ID, pvp.ColorRed); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.SelectTeam(ctx, c2.ID, room.Room.ID, pvp.ColorBlue); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SelectTeam(ctx, c3.ID, room.Room.ID, pvp.ColorBlue); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.StartMatch(ctx, c1.ID, room.Room.ID); err != nil {
@@ -246,7 +259,7 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 		t.Fatalf("unexpected tavern status after c1 exit: %+v err=%v", tStatus, err)
 	}
 
-	// c2 leaves: item-106 gold bonus int(1 * 0.5 * 77) = 38, herb consumed, Tired = 4, HP = 35, MP = 4.
+	// c2 leaves: item-106 gold bonus int(1 * 0.5 * 77) = 38, Tired = 4, HP = 35, MP = 4.
 	c2Before, _ := chars.FindByID(ctx, c2.ID)
 	if err := svc.LeaveRoom(ctx, c2.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom(c2): %v", err)
@@ -259,11 +272,14 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	if gotC2.Stats.HP != wantC2HP || gotC2.Stats.MP != 4 || gotC2.Tired != 4 || gotC2.Money != c2Before.Money+38 {
 		t.Fatalf("c2 after exit: HP=%d(want %d) MP=%d Tired=%d Money=%d(before %d)", gotC2.Stats.HP, wantC2HP, gotC2.Stats.MP, gotC2.Tired, gotC2.Money, c2Before.Money)
 	}
-	gotInv2, err := invs.FindByCharacterID(ctx, c2.ID)
+	if err := svc.LeaveRoom(ctx, c3.ID, room.Room.ID); err != nil {
+		t.Fatalf("LeaveRoom(c3): %v", err)
+	}
+	gotInv3, err := invs.FindByCharacterID(ctx, c3.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, found := gotInv2.Find(herb.ID); found {
+	if _, found := gotInv3.Find(herb.ID); found {
 		t.Fatalf("expected consumed herb %s cleared from inventory", herb.ID)
 	}
 }

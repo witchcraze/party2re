@@ -700,11 +700,11 @@ func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
 		"job-high": highHPJob,
 	}
 
-	t.Run("equipped stat orb applies with cap re-roll while bag orbs do not", func(t *testing.T) {
+	t.Run("held stat orb applies with cap re-roll", func(t *testing.T) {
 		for _, useRunner := range []bool{true, false} {
 			ctx := context.Background()
 			// HP (job-high, HPGrowth=9 + item-152 => bound 11): 0.95 -> 10 (>9) -> re-roll 0.4 -> int(0.4*9)+1 = 4 (+1 HP min = 5).
-			// Other stats (growth=2): int(0.99 * 3) = 2 (no bonus from bag item-154).
+			// Other stats (growth=2): int(0.99 * 3) = 2.
 			rng := &scriptedFloatRNG{values: []float64{0.95, 0.4, 0.99, 0.99, 0.99, 0.99}}
 			svc, charRepo, invRepo, equipRepo := setupOrbSettlementService(t, useRunner, rng, jobs)
 
@@ -719,11 +719,7 @@ func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
 
 			inv, _ := coreinventory.New(char.ID)
 			lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)
-			powerOrb, _ := coreitem.NewInstance(progression.ItemPowerStatOrb, 1)
-			skillOrb, _ := coreitem.NewInstance(battle.ItemSkillOrb, 1)
 			_ = inv.Add(lifeOrb)
-			_ = inv.Add(powerOrb)
-			_ = inv.Add(skillOrb)
 			_ = invRepo.Save(ctx, inv)
 
 			equip, _ := coreequipment.New(char.ID)
@@ -746,9 +742,9 @@ func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
 			}
 			updated, _ := charRepo.FindByID(ctx, char.ID)
 			if updated.SP != 1 {
-				t.Fatalf("SP = %d, want 1 (inactive bag skill orb must not grant bonus SP)", updated.SP)
+				t.Fatalf("SP = %d, want 1", updated.SP)
 			}
-			// MaxHP: 30 + (4 + 1) = 35; Attack: 6 + 2 = 8 (no bonus from bag power orb).
+			// MaxHP: 30 + (4 + 1) = 35; Attack: 6 + 2 = 8.
 			want := corecharacter.Stats{MaxHP: 35, HP: 30, MaxMP: 8, MP: 6, Attack: 8, Defense: 8, Agility: 8}
 			if updated.Stats != want {
 				t.Fatalf("stats (useRunner=%v) = %+v, want %+v", useRunner, updated.Stats, want)
@@ -794,8 +790,8 @@ func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
 		}
 	})
 
-	t.Run("active skill orb grants bonus SP without applying bag stat orbs", func(t *testing.T) {
-		for _, equipped := range []bool{true, false} {
+	t.Run("equipment link cannot resolve an ambiguous skill orb", func(t *testing.T) {
+		for _, ambiguous := range []bool{true, false} {
 			ctx := context.Background()
 			// Draw 0.0 for skill orb (triggers +1 SP), then 0.99 for all 5 stat rolls.
 			rng := &scriptedFloatRNG{values: []float64{0.0, 0.99}}
@@ -813,7 +809,7 @@ func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
 			inv, _ := coreinventory.New(char.ID)
 			skillOrb, _ := coreitem.NewInstance(battle.ItemSkillOrb, 1)
 			_ = inv.Add(skillOrb)
-			if equipped {
+			if ambiguous {
 				lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)
 				_ = inv.Add(lifeOrb)
 				equip, _ := coreequipment.New(char.ID)
@@ -834,13 +830,16 @@ func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
 				t.Fatalf("ApplyPostBattleResult failed: %v", err)
 			}
 			updated, _ := charRepo.FindByID(ctx, char.ID)
-			if updated.SP != 2 {
-				t.Fatalf("SP (equipped=%v) = %d, want 2", equipped, updated.SP)
+			wantSP, wantMaxHP := 2, 33
+			if ambiguous {
+				wantSP, wantMaxHP = 1, 31 // The first draw goes to HP when the orb is inactive.
 			}
-			// Even with life orb in bag (when equipped=true), MaxHP gets no stat orb bonus: 30 + (2+1) = 33.
-			want := corecharacter.Stats{MaxHP: 33, HP: 30, MaxMP: 8, MP: 6, Attack: 8, Defense: 8, Agility: 8}
+			if updated.SP != wantSP {
+				t.Fatalf("SP (ambiguous=%v) = %d, want %d", ambiguous, updated.SP, wantSP)
+			}
+			want := corecharacter.Stats{MaxHP: wantMaxHP, HP: 30, MaxMP: 8, MP: 6, Attack: 8, Defense: 8, Agility: 8}
 			if updated.Stats != want {
-				t.Fatalf("stats (equipped=%v) = %+v, want %+v", equipped, updated.Stats, want)
+				t.Fatalf("stats (ambiguous=%v) = %+v, want %+v", ambiguous, updated.Stats, want)
 			}
 		}
 	})

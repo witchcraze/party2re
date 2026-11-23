@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -316,6 +317,8 @@ func TestEnhancedToolSQLRollbackReceiptAndRestart(t *testing.T) {
 			t.Run(scenario.name+"/"+failure, func(t *testing.T) {
 				f := newNormalFixture(t, 1)
 				c := installAssets(t, f)
+				grantHeld(t, f, "weapon-01")
+				weapon := heldItems(t, f, 0)[0]
 				if scenario.held != "" {
 					grantHeld(t, f, scenario.held)
 				}
@@ -351,7 +354,7 @@ func TestEnhancedToolSQLRollbackReceiptAndRestart(t *testing.T) {
 					if e != nil || !reflect.DeepEqual(before, after) {
 						t.Fatal("run escaped rollback", after, e)
 					}
-					assertAssets(t, f, cmd.ActorID, scenario.money, scenario.items)
+					assertAssets(t, f, cmd.ActorID, scenario.money, scenario.items+1)
 					c.fail.Store(false)
 					f.store.failWrite.Store(false)
 					f.cfg.JobAssetRunner = originalRunner
@@ -367,7 +370,10 @@ func TestEnhancedToolSQLRollbackReceiptAndRestart(t *testing.T) {
 				if err != nil || !reflect.DeepEqual(first, again) || c.calls.Load() != calls || f.cfg.RNG.(*assetRNG).calls.Load() != draws {
 					t.Fatal("retry executed effects", first, again, err)
 				}
-				assertAssets(t, f, cmd.ActorID, scenario.wantMoney, scenario.wantN)
+				assertAssets(t, f, cmd.ActorID, scenario.wantMoney, scenario.wantN+1)
+				if got := heldItems(t, f, 0); !slices.Contains(got, weapon) {
+					t.Fatal("enhanced tool changed the weapon hand", got)
+				}
 				r, err := f.store.FindRun(context.Background(), run)
 				if err != nil || *r.Battle.Actors[0].HeldToolID != scenario.wantHeld {
 					t.Fatal(r, err)
@@ -377,14 +383,13 @@ func TestEnhancedToolSQLRollbackReceiptAndRestart(t *testing.T) {
 	}
 }
 
-// A weapon or stacked tool row cannot certify the hand, so nothing may be charged or consumed.
+// A stacked tool row leaves the hand unknown, so nothing may be charged or consumed.
 func TestEnhancedToolSQLUnknownHandRejectsBeforeAssets(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		id   string
 		qty  int
 	}{
-		{"weapon", "weapon-01", 1},
 		{"stacked-tool", "item-001", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

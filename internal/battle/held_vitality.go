@@ -5,7 +5,6 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
-	"github.com/witchcraze/party2re/internal/core/item"
 )
 
 // BuildBattleMaxima captures quest-entry maxima without rolling equipment stats.
@@ -25,16 +24,9 @@ func (s *Service) BuildBattleMaxima(ctx context.Context, char corecharacter.Char
 // HeldVitalityMaxima applies the category-4 return to the battle line
 // (quest.cgi:1187–1189). The flat cap also lowers a maximum above 999.
 func HeldVitalityMaxima(inv coreinventory.Inventory, hp, mp int) (int, int) {
-	var held string
-	for _, inst := range inv.Items {
-		if inst.Quantity <= 0 || item.LegacyHandKindByID(inst.DefinitionID) != 3 {
-			continue
-		}
-		// shortcut: multiple tool rows leave the held item unknown, until the hand is bound (#2558).
-		if held != "" {
-			return hp, mp
-		}
-		held = inst.DefinitionID
+	held := ""
+	if id := inv.HeldToolID(); id != nil {
+		held = *id
 	}
 	switch held {
 	case "item-113":

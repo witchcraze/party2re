@@ -39,24 +39,24 @@ func heldItems(t *testing.T, f *normalFixture, actor int) []item.Instance {
 func TestBookSQLWithdrawalSwapsInPlaceAtCapacity(t *testing.T) {
 	f := newNormalFixture(t, 1)
 	_, depots := installStored(t, f)
-	grantHeldTo(t, f, 0, "item-169")
+	gear := seedGear(t, f, f.actors[0].ID, "item-169")
 	entry := f.enter(t, "normal")
 	run := entry.Command.RunID
 	seedAssetEncounter(t, f, run)
 	owner := f.actors[0].ID
 	rows := seedDepot(t, depots, owner, "item-001", "item-170", "item-170", "item-002", "item-003")
-	held := heldItems(t, f, 0)
 	cmd := assetCommand(t, f, run, 0, "job-86-entry-0", "book-withdraw")
 	cmd.TargetID = "item-170"
 	if _, err := f.svc.Command(context.Background(), cmd); err != nil {
 		t.Fatal(err)
 	}
-	want := []item.Instance{rows[0], held[0], rows[2], rows[3], rows[4]}
+	want := []item.Instance{rows[0], gear["item-169"], rows[2], rows[3], rows[4]}
 	if got := depotItems(t, depots, owner); !reflect.DeepEqual(got, want) {
 		t.Fatal("held book not swapped into the first match", got, want)
 	}
 	r, err := f.store.FindRun(context.Background(), run)
-	if got := heldItems(t, f, 0); err != nil || len(got) != 1 || got[0] != rows[1] || *r.Battle.Actors[0].HeldToolID != "item-170" {
+	if got := heldItems(t, f, 0); err != nil || len(got) != 3 || !slices.Contains(got, rows[1]) ||
+		!slices.Contains(got, gear["weapon-01"]) || !slices.Contains(got, gear["armor-01"]) || *r.Battle.Actors[0].HeldToolID != "item-170" {
 		t.Fatal("withdrawn instance not held", got, err)
 	}
 }

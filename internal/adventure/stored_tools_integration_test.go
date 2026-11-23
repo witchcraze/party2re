@@ -36,7 +36,7 @@ func installStored(t *testing.T, f *normalFixture) (*assetCombat, *storedDepots)
 		t.Fatal(err)
 	}
 	depots := &storedDepots{DepotRepository: repo}
-	f.cfg.JobAssetDepots = depots
+	f.cfg.JobAssetDepots, f.cfg.JobAssetEquipment = depots, f.equips
 	f.restart(t)
 	return c, depots
 }
@@ -165,6 +165,97 @@ func TestStoredToolSQLExchangeKeepsInstances(t *testing.T) {
 			r, err := f.store.FindRun(context.Background(), run)
 			if err != nil || !reflect.DeepEqual(depotItems(t, depots, owner), want) || *r.Battle.Actors[0].HeldToolID != "item-018" {
 				t.Fatal("held tool not stored at the source row", depotItems(t, depots, owner), want, err)
+			}
+		})
+	}
+}
+
+// seedGear equips weapon, armor and the tool hand as acquisition does.
+func seedGear(t *testing.T, f *normalFixture, owner, held string) map[string]item.Instance {
+	t.Helper()
+	ctx := context.Background()
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv, err := f.invs.FindByCharacterID(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eq, err := f.equips.FindByCharacterID(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := map[string]item.Instance{}
+	for _, definition := range []string{"weapon-01", "armor-01", held} {
+		rows[definition] = item.Instance{ID: id.New(), DefinitionID: definition, Quantity: 1}
+		if err := inv.Add(rows[definition]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.invs.Save(ctx, inv); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		def, err := catalog.FindByID(row.DefinitionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if def.Slot != item.SlotNone {
+			if _, err := eq.Equip(&inv, def, row.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := f.equips.Save(ctx, eq); err != nil {
+		t.Fatal(err)
+	}
+	return rows
+}
+
+// Beside equipped weapon and armor, the tool hand is the only tool-hand row:
+// job50 exchange stores it at the source row, unlinking an equipped accessory,
+// and equips accessory gear entering the hand (_skill.cgi:6805–6853).
+func TestStoredToolSQLExchangeBindsHandBesideGear(t *testing.T) {
+	for _, tc := range []struct{ held, stored string }{{"item-110", "item-018"}, {"item-003", "item-110"}} {
+		t.Run(tc.held+"->"+tc.stored, func(t *testing.T) {
+			f := newNormalFixture(t, 1)
+			_, depots := installStored(t, f)
+			owner := f.actors[0].ID
+			gear := seedGear(t, f, owner, tc.held)
+			entry := f.enter(t, "normal")
+			run := entry.Command.RunID
+			seedAssetEncounter(t, f, run)
+			rows := seedDepot(t, depots, owner, "item-001", tc.stored, "item-002")
+			if _, err := f.svc.Command(context.Background(), storedCommand(t, f, run, 0, tc.stored, "stored-gear")); err != nil {
+				t.Fatal(err)
+			}
+
+			inv, err := f.invs.FindByCharacterID(context.Background(), owner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			held, ok := inv.HeldTool()
+			if !ok || held != rows[1] || len(inv.Items) != 3 {
+				t.Fatal("hand not exchanged beside gear", inv.Items)
+			}
+			if want := []item.Instance{rows[0], gear[tc.held], rows[2]}; !reflect.DeepEqual(depotItems(t, depots, owner), want) {
+				t.Fatal("held unit not stored at the source row", depotItems(t, depots, owner), want)
+			}
+			eq, err := f.equips.FindByCharacterID(context.Background(), owner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := map[item.Slot]string{item.SlotMainHand: gear["weapon-01"].ID, item.SlotBody: gear["armor-01"].ID}
+			if tc.stored == "item-110" {
+				want[item.SlotAccessory] = rows[1].ID
+			}
+			if !reflect.DeepEqual(eq.Slots, want) {
+				t.Fatal("equipment does not follow the hand", eq.Slots, want)
+			}
+			r, err := f.store.FindRun(context.Background(), run)
+			if err != nil || *r.Battle.Actors[0].HeldToolID != tc.stored {
+				t.Fatal("combat hand", err)
 			}
 		})
 	}

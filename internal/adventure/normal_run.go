@@ -93,6 +93,9 @@ type NormalRunConfig struct {
 	JobAssetRunner  economy.TransactionRunner
 	JobAssetHelpers func(context.Context) ([]int, error)
 	JobAssetDepots  JobAssetDepots
+	// JobAssetEquipment keeps equipment_slots on a changed tool hand; explicit
+	// test adapters may omit it.
+	JobAssetEquipment depot.EquipmentRepository
 }
 
 // JobAssetDepots locks and saves the requesting player's depot inside the
