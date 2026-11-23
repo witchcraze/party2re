@@ -166,20 +166,6 @@ func (i *Inventory) ConsumeOneItem(instanceID string) (item.Instance, error) {
 	return i.ConsumeItem(instanceID, 1)
 }
 
-// Update replaces an existing item instance in the inventory matching by ID.
-func (i *Inventory) Update(value item.Instance) error {
-	if i == nil || strings.TrimSpace(i.CharacterID) == "" || value.ID == "" {
-		return ErrInvalidInventory
-	}
-	for index, existing := range i.Items {
-		if existing.ID == value.ID {
-			i.Items[index] = value
-			return nil
-		}
-	}
-	return ErrItemNotFound
-}
-
 // HeldTool returns the legacy tool hand ($m{ite}): the only kind-3 row, or a
 // zero Instance when that hand is empty. Hand-field writers keep at most one
 // quantity-1 row per kind, so rows breaking that leave the hand unknown (!ok).

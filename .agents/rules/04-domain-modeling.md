@@ -22,7 +22,7 @@ Feature modules MUST NOT mutate core fields directly. Use:
 - experience/level: `progression.ApplyExperience*`; MUST NOT add a reincarnation/reset loop absent from the legacy specification;
 - money/medals: `char.AddMoney`, `DeductMoney`, `AddSmallMedals`, `DeductSmallMedals`, or `economy.TransactionRunner`;
 - job state: `CharacterJob.ChangeTo`, `CharacterJob.Master`;
-- inventory: `Inventory.Add`, `Consume`, `Update`;
+- inventory: `Inventory.Add`, `Consume`;
 - equipment: `Equipment.Equip`, `Unequip`.
 
 Enforced by `internal/core/core_lint_test.go`. Passing it is not proof of legacy parity.
