@@ -22,7 +22,7 @@ type SynthesisResult struct {
 }
 
 // Synthesize executes an accessory synthesis from materials in depot.
-// If the player holds item-180 (合成の秘薬) in inventory, it is consumed and guarantees 100% success.
+// If the player holds item-180 (合成の秘薬) in the tool hand, it is consumed and guarantees 100% success.
 // Otherwise, the recipe's success rate is rolled. Materials are consumed from depot on both success and failure.
 // Finished items are delivered directly to the depot.
 func (s *Service) Synthesize(ctx context.Context, characterID string, recipeTarget string) (SynthesisResult, error) {
@@ -56,16 +56,9 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeTarg
 			return err
 		}
 
-		// Check for Hiyaku (item-180) in character inventory
-		hasHiyaku := false
-		var hiyakuInstanceID string
-		for _, inst := range inv.Items {
-			if inst.DefinitionID == HiyakuItemDefinitionID {
-				hasHiyaku = true
-				hiyakuInstanceID = inst.ID
-				break
-			}
-		}
+		// Only the held item counts (accessory.cgi:175).
+		held, _ := inv.HeldTool()
+		hasHiyaku, hiyakuInstanceID := held.DefinitionID == HiyakuItemDefinitionID, held.ID
 
 		// 3. Lock Depot (Rank 5) using depot.FindOrCreate
 		dep, err := depot.FindOrCreate(txCtx, s.depots, char)

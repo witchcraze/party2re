@@ -54,7 +54,7 @@ func TestEveryDefaultCatalogDefinitionHasLegacyStorageKey(t *testing.T) {
 	}
 }
 
-func TestDefinitionIsToolAndIsToolID(t *testing.T) {
+func TestDefinitionIsTool(t *testing.T) {
 	tests := []struct {
 		id       string
 		wantTool bool
@@ -73,9 +73,6 @@ func TestDefinitionIsToolAndIsToolID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
-			if got := IsToolID(tt.id); got != tt.wantTool {
-				t.Errorf("IsToolID(%q) = %v, want %v", tt.id, got, tt.wantTool)
-			}
 			def := Definition{ID: tt.id}
 			if got := def.IsTool(); got != tt.wantTool {
 				t.Errorf("Definition{%q}.IsTool() = %v, want %v", tt.id, got, tt.wantTool)

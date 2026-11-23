@@ -183,8 +183,7 @@ func consumeHeld(action *corebattle.PlayerAction, actorID, definitionID, instanc
 			return facts, err
 		}
 		if a := runhost.FindActor(s.Actors, actorID); a != nil {
-			empty := ""
-			a.HeldToolID = &empty
+			a.ClearConsumedHeldTool(definitionID)
 			a.ConsumedItems = append(a.ConsumedItems, corebattle.ConsumedItem{ID: definitionID, InstanceID: instanceID, Quantity: 1})
 		}
 		return facts, nil

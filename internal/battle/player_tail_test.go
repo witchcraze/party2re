@@ -23,7 +23,6 @@ func TestPlayerTailEquipmentAdapterReloadAndNativeBindings(t *testing.T) {
 		{ID: "weapon", DefinitionID: "weapon-35", Quantity: 1},
 		{ID: "armor", DefinitionID: "armor-37", Quantity: 1},
 		{ID: "accessory", DefinitionID: "item-202", Quantity: 1},
-		{ID: "bag", DefinitionID: "item-189", Quantity: 1},
 	}
 	if err := inventory.Save(ctx, coreinventory.Inventory{CharacterID: char.ID, Items: items}); err != nil {
 		t.Fatal(err)

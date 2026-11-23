@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -36,6 +37,7 @@ func withAssetSession(t *testing.T, f *normalFixture) *storedDepots {
 	}
 	depots := &storedDepots{DepotRepository: f.depots}
 	f.cfg.JobAssetRunner, f.cfg.JobAssetDepots = runner, depots
+	f.cfg.JobAssetEquipment = f.equips
 	f.cfg.JobAssetHelpers = func(context.Context) ([]int, error) { return []int{}, nil }
 	return depots
 }
@@ -60,6 +62,9 @@ func assertUnchanged(t *testing.T, f *normalFixture, depots *storedDepots, cmd r
 
 func TestRunCombatHeldToolConsumesOnceAndRejectsAtomically(t *testing.T) {
 	f, depots := assetRunCombat(t, 1)
+	// Weapon and armor rows beside the hand do not hide it.
+	grantHeldTo(t, f, 0, "weapon-01")
+	grantHeldTo(t, f, 0, "armor-01")
 	grantHeldTo(t, f, 0, "item-001")
 	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
 		runActorByID(r, f.actors[0].ID).HP = 100
@@ -81,7 +86,8 @@ func TestRunCombatHeldToolConsumesOnceAndRejectsAtomically(t *testing.T) {
 	}
 	r := readStockRoom(t, f, cmd.RunID)
 	a := runActorByID(r, cmd.ActorID)
-	if a.HP <= 100 || a.HeldToolID == nil || *a.HeldToolID != "" || len(heldItems(t, f, 0)) != 0 {
+	gear := slices.DeleteFunc(slices.Clone(held), func(i item.Instance) bool { return i.DefinitionID == "item-001" })
+	if a.HP <= 100 || a.HeldToolID == nil || *a.HeldToolID != "" || !reflect.DeepEqual(heldItems(t, f, 0), gear) {
 		t.Fatalf("herb not applied and consumed: hp=%d held=%v items=%+v", a.HP, a.HeldToolID, heldItems(t, f, 0))
 	}
 	f.restart(t)
@@ -90,6 +96,35 @@ func TestRunCombatHeldToolConsumesOnceAndRejectsAtomically(t *testing.T) {
 	}
 	if !reflect.DeepEqual(readStockRoom(t, f, cmd.RunID), r) {
 		t.Fatal("replay re-executed the tool")
+	}
+}
+
+func TestRunCombatHeldAccessoryClearsCombatIdentity(t *testing.T) {
+	f, _ := assetRunCombat(t, 1)
+	rows := seedGear(t, f, f.actors[0].ID, "item-012")
+	cmd := combatRoom(t, f, f.actors[0], nil, runEnemy("foe", 900))
+	before := runActorByID(readStockRoom(t, f, cmd.RunID), cmd.ActorID)
+	if before.HeldToolID == nil || *before.HeldToolID != "item-012" ||
+		before.Gear == nil || before.Gear.AccessoryID != "item-012" ||
+		!slices.Contains(before.ItemDefinitionIDs, "item-012") {
+		t.Fatalf("equipped ring missing from run entry: %+v gear=%+v", before, before.Gear)
+	}
+
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "ring", "tool", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	f.restart(t)
+	a := runActorByID(readStockRoom(t, f, cmd.RunID), cmd.ActorID)
+	if a.HeldToolID == nil || *a.HeldToolID != "" || a.Gear == nil || a.Gear.AccessoryID != "" ||
+		slices.Contains(a.ItemDefinitionIDs, "item-012") {
+		t.Fatalf("consumed ring remains in combat identity: %+v gear=%+v", a, a.Gear)
+	}
+	if a.Gear.WeaponID != before.Gear.WeaponID || a.Gear.ArmorID != before.Gear.ArmorID ||
+		!slices.Contains(a.ItemDefinitionIDs, "weapon-01") || !slices.Contains(a.ItemDefinitionIDs, "armor-01") {
+		t.Fatalf("consumption changed weapon or armor: %+v gear=%+v", a, a.Gear)
+	}
+	if got := heldItems(t, f, 0); len(got) != 2 || !slices.Contains(got, rows["weapon-01"]) || !slices.Contains(got, rows["armor-01"]) {
+		t.Fatalf("consumption changed other inventory rows: %+v", got)
 	}
 }
 
@@ -312,11 +347,13 @@ func TestRunCombatStoredToolConsumesAndTravelSelectionKeepsHistory(t *testing.T)
 	}
 }
 
-// Equipment-only inventories are not held-tool evidence (#1830): job78's
-// enhanced tool stays gated before costs or draws.
+// An ambiguous hand gates job78's enhanced tool before costs or draws.
 func TestRunCombatUnknownHandGatesEnhancedTool(t *testing.T) {
 	f, depots := assetRunCombat(t, 1)
-	grantHeldTo(t, f, 0, "weapon-01")
+	// A stacked tool-hand row breaks the one-unit hand, so the hand is unknown.
+	if _, err := f.cfg.JobAssetRunner.ExecuteTransaction(t.Context(), economy.TransactionRequest{CharacterID: f.actors[0].ID, Grant: economy.ResourceGrant{ItemDefinitionID: "item-001", ItemQuantity: 2}}, nil); err != nil {
+		t.Fatal(err)
+	}
 	actor := f.actors[0].ID
 	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
 		a := runActorByID(r, actor)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -29,7 +30,7 @@ func TestLifetimeGearUsesEquippedIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"weapon-35", "item-143", "item-149"} {
+	for _, id := range []string{"weapon-35", "item-143"} {
 		instance, err := coreitem.NewInstance(id, 1)
 		if err != nil {
 			t.Fatal(err)
@@ -91,32 +92,49 @@ func TestLifetimeHeldToolPreservesKnownAndUnknownHands(t *testing.T) {
 			wantHeld:   ptr("item-012"),
 		},
 		{
-			name:         "single equipped weapon leaves tool hand unknown",
+			name:       "off-hand shield is a combat item",
+			items:      []string{"item-161"},
+			equipSlot:  coreitem.SlotOffHand,
+			equipIndex: 0,
+			wantHeld:   ptr("item-161"),
+		},
+		{
+			name:     "slotless halo is a combat item",
+			items:    []string{"item-188"},
+			wantHeld: ptr("item-188"),
+		},
+		{
+			name:     "slotless amulet is a combat item",
+			items:    []string{"item-193"},
+			wantHeld: ptr("item-193"),
+		},
+		{
+			name:         "single equipped weapon proves an empty tool hand",
 			items:        []string{"weapon-01"},
 			equipSlot:    coreitem.SlotMainHand,
 			equipIndex:   0,
-			wantHeld:     nil,
+			wantHeld:     ptr(""),
 			wantWeaponID: "weapon-01",
 		},
 		{
-			name:        "single equipped armor leaves tool hand unknown",
+			name:        "single equipped armor proves an empty tool hand",
 			items:       []string{"armor-01"},
 			equipSlot:   coreitem.SlotBody,
 			equipIndex:  0,
-			wantHeld:    nil,
+			wantHeld:    ptr(""),
 			wantArmorID: "armor-01",
 		},
 		{
-			name:     "multi-row inventory remains ambiguous unknown",
+			name:     "two tool-hand rows break the hand invariant and stay unknown",
 			items:    []string{"item-001", "item-002"},
 			wantHeld: nil,
 		},
 		{
-			name:         "equipped weapon plus tool remains ambiguous unknown",
+			name:         "equipped weapon beside a tool proves that tool",
 			items:        []string{"weapon-01", "item-001"},
 			equipSlot:    coreitem.SlotMainHand,
 			equipIndex:   0,
-			wantHeld:     nil,
+			wantHeld:     ptr("item-001"),
 			wantWeaponID: "weapon-01",
 		},
 	}
@@ -167,6 +185,14 @@ func TestLifetimeHeldToolPreservesKnownAndUnknownHands(t *testing.T) {
 			if tt.wantArmorID != "" && (actor.Gear == nil || actor.Gear.ArmorID != tt.wantArmorID) {
 				t.Fatalf("Gear.ArmorID = %v, want %v", actor.Gear, tt.wantArmorID)
 			}
+			wantAccessory := ""
+			if tt.wantHeld != nil {
+				wantAccessory = *tt.wantHeld
+			}
+			if actor.Gear == nil || actor.Gear.AccessoryID != wantAccessory ||
+				(wantAccessory != "" && !slices.Contains(actor.ItemDefinitionIDs, wantAccessory)) {
+				t.Fatalf("combat hand = %v, identities = %v, want %q", actor.Gear, actor.ItemDefinitionIDs, wantAccessory)
+			}
 			if tt.wantHeld == nil {
 				if actor.HeldToolID != nil {
 					t.Fatalf("HeldToolID = %v, want nil", *actor.HeldToolID)
@@ -192,75 +218,67 @@ func (d noDraws) IntN(int) int     { d.t.Fatal("unexpected RNG call"); return 0 
 func (d noDraws) Float64() float64 { d.t.Fatal("unexpected RNG call"); return 0 }
 
 func TestLifetimeUnknownHeldToolRejectsScavengingAdmission(t *testing.T) {
-	for _, equipDef := range []string{"weapon-01", "armor-01"} {
-		t.Run(equipDef, func(t *testing.T) {
-			chars, invs, equips := newMockCharRepo(), newMockInvRepo(), newMockEquipRepo()
-			char := corecharacter.Character{ID: "scavenger", JobID: "job-78", Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 10, Defense: 10, Agility: 10}}
-			chars.characters[char.ID] = char
-			inv, _ := coreinventory.New(char.ID)
-			equip, _ := coreequipment.New(char.ID)
-			itemInst, _ := coreitem.NewInstance(equipDef, 1)
-			_ = inv.Add(itemInst)
-			slot := coreitem.SlotMainHand
-			if equipDef == "armor-01" {
-				slot = coreitem.SlotBody
-			}
-			equip.Slots[slot] = itemInst.ID
-			_ = invs.Save(context.Background(), inv)
-			_ = equips.Save(context.Background(), equip)
+	// Two tool-hand rows break the hand-field invariant, so the hand is unknown.
+	chars, invs, equips := newMockCharRepo(), newMockInvRepo(), newMockEquipRepo()
+	char := corecharacter.Character{ID: "scavenger", JobID: "job-78", Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 10, Defense: 10, Agility: 10}}
+	chars.characters[char.ID] = char
+	inv, _ := coreinventory.New(char.ID)
+	for _, defID := range []string{"item-001", "item-002"} {
+		itemInst, _ := coreitem.NewInstance(defID, 1)
+		_ = inv.Add(itemInst)
+	}
+	_ = invs.Save(context.Background(), inv)
 
-			svc := battle.NewService(
-				battle.WithCharacterRepository(chars),
-				battle.WithInventoryRepository(invs),
-				battle.WithEquipmentRepository(equips),
-				battle.WithJobHistoryRepository(&historyReadStub{err: corejob.ErrCharacterJobNotFound}),
-			)
-			actor, err := svc.BuildLifetimeActor(context.Background(), char.ID, "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if actor.HeldToolID != nil {
-				t.Fatalf("expected nil HeldToolID, got %v", *actor.HeldToolID)
-			}
+	svc := battle.NewService(
+		battle.WithCharacterRepository(chars),
+		battle.WithInventoryRepository(invs),
+		battle.WithEquipmentRepository(equips),
+		battle.WithJobHistoryRepository(&historyReadStub{err: corejob.ErrCharacterJobNotFound}),
+	)
+	actor, err := svc.BuildLifetimeActor(context.Background(), char.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actor.HeldToolID != nil {
+		t.Fatalf("expected nil HeldToolID, got %v", *actor.HeldToolID)
+	}
 
-			target := actor.Clone()
-			target.ID = "enemy"
-			target.TeamID = "enemy"
-			state := corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{actor, target}}
+	target := actor.Clone()
+	target.ID = "enemy"
+	target.TeamID = "enemy"
+	state := corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{actor, target}}
 
-			assets := corebattle.JobAssets{
-				RequesterID:   char.ID,
-				Wallet:        100,
-				HeldToolID:    actor.HeldToolID, // nil!
-				HelperToolIDs: []int{},
-				AddWallet:     economy.SafeAdd,
-			}
-			ctx := corebattle.JobAssetContext{
-				DamageContext: corebattle.DamageContext{
-					EffectContext: corebattle.EffectContext{
-						TargetContext: corebattle.TargetContext{
-							ActorID:  char.ID,
-							PartyIDs: []string{char.ID},
-							EnemyIDs: []string{"enemy"},
-						},
-					},
-					GuaranteedHit: true,
+	assets := corebattle.JobAssets{
+		RequesterID:   char.ID,
+		Wallet:        100,
+		HeldToolID:    actor.HeldToolID, // nil!
+		HelperToolIDs: []int{},
+		AddWallet:     economy.SafeAdd,
+	}
+	ctx := corebattle.JobAssetContext{
+		DamageContext: corebattle.DamageContext{
+			EffectContext: corebattle.EffectContext{
+				TargetContext: corebattle.TargetContext{
+					ActorID:  char.ID,
+					PartyIDs: []string{char.ID},
+					EnemyIDs: []string{"enemy"},
 				},
-				Arguments: []string{"enemy"},
-				Assets:    &assets,
-			}
+			},
+			GuaranteedHit: true,
+		},
+		Arguments: []string{"enemy"},
+		Assets:    &assets,
+	}
 
-			err = state.ApplyJobAssets(&ctx, "job-78-entry-5", noDraws{t})
-			if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-				t.Fatalf("expected ErrUnsupportedEffect, got %v", err)
-			}
-			if assets.Wallet != 100 {
-				t.Fatalf("wallet modified on error: %d", assets.Wallet)
-			}
-			if state.Actors[0].HP != 100 {
-				t.Fatalf("HP modified on error: %d", state.Actors[0].HP)
-			}
-		})
+	err = state.ApplyJobAssets(&ctx, "job-78-entry-5", noDraws{t})
+	if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatalf("expected ErrUnsupportedEffect, got %v", err)
+	}
+	if assets.Wallet != 100 {
+		t.Fatalf("wallet modified on error: %d", assets.Wallet)
+	}
+	if state.Actors[0].HP != 100 {
+		t.Fatalf("HP modified on error: %d", state.Actors[0].HP)
 	}
 }
 

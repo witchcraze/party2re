@@ -2,6 +2,22 @@ package battle
 
 import "slices"
 
+// ClearConsumedHeldTool removes the consumed definition's combat identities.
+func (a *LifetimeActor) ClearConsumedHeldTool(definitionID string) {
+	a.ItemDefinitionIDs = slices.DeleteFunc(slices.Clone(a.ItemDefinitionIDs), func(id string) bool {
+		return id == definitionID
+	})
+	if a.Gear != nil && a.Gear.AccessoryID == definitionID {
+		gear := *a.Gear
+		gear.AccessoryID = ""
+		a.Gear = &gear
+	}
+	if a.HeldToolID != nil && *a.HeldToolID == definitionID {
+		empty := ""
+		a.HeldToolID = &empty
+	}
+}
+
 // setHeldTool updates hand identities without reapplying equipment or resetting
 // current resources/buffs. Missing reset facts remain unknown.
 func (a *LifetimeActor) setHeldTool(id string) {

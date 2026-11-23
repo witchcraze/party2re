@@ -31,7 +31,7 @@ func TestEquipmentTailAdapterEquipmentAndReload(t *testing.T) {
 			chars.characters[char.ID] = char
 			item := fmt.Sprintf("item-%d", n)
 			if err := inventory.Save(ctx, coreinventory.Inventory{CharacterID: char.ID, Items: []coreitem.Instance{
-				{ID: "held", DefinitionID: item, Quantity: 1}, {ID: "bag", DefinitionID: "item-164", Quantity: 1},
+				{ID: "held", DefinitionID: item, Quantity: 1},
 			}}); err != nil {
 				t.Fatal(err)
 			}

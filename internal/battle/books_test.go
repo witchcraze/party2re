@@ -2,7 +2,6 @@ package battle_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -17,6 +16,7 @@ import (
 
 // Discovery reads the equipped item slot through the adapter, never bag contents,
 // and the body uses the adapter's base stats.
+// The held book is the tool hand whether or not equipment links it.
 func TestBookAdapterEquippedItemAndBaseStats(t *testing.T) {
 	for _, equipped := range []bool{false, true} {
 		ctx := context.Background()
@@ -42,12 +42,6 @@ func TestBookAdapterEquippedItemAndBaseStats(t *testing.T) {
 		var d coreskill.BattleDefinitions
 		d.RegisterBooks(c)
 		entry, err := d.BookAction(&s, c, "book-179", &resetTableRNG{t: t})
-		if !equipped {
-			if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-				t.Fatal("bag-only book", err)
-			}
-			continue
-		}
 		if err != nil || entry.MPCost != 48 {
 			t.Fatal(entry, err)
 		}

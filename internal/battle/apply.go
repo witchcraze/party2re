@@ -97,9 +97,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		// 2. Apply HP, MP, fatigue
 		s.applyResourceUpdates(&tc.Character, charID, req.BattleResult, req.ExitFatigue)
 
-		// 3. Process item consumption (read held accessory before consumption for exit bonus parity)
-		heldInstID := activeHeldInstanceID(tc.Inventory, equip)
-		heldDefID := activeHeldDefinitionID(tc.Inventory, heldInstID)
+		// 3. Read the hand before consumption for exit bonus parity.
+		held, _ := tc.Inventory.HeldTool()
+		heldDefID := held.DefinitionID
 		slots := equip.Slots
 		if err := consumeBufferedItems(&tc.Inventory, &equip, req.BattleResult.ConsumedItems[charID]); err != nil {
 			return err
@@ -235,8 +235,8 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 
 			s.applyResourceUpdates(&char, id, req.BattleResult, req.ExitFatigue)
 
-			heldInstID := activeHeldInstanceID(inv, equip)
-			heldDefID := activeHeldDefinitionID(inv, heldInstID)
+			held, _ := inv.HeldTool()
+			heldDefID := held.DefinitionID
 			slots := equip.Slots
 			if err := consumeBufferedItems(&inv, &equip, req.BattleResult.ConsumedItems[id]); err != nil {
 				return err

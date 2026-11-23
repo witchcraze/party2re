@@ -173,18 +173,27 @@ func (i *Inventory) Update(value item.Instance) error {
 	return ErrItemNotFound
 }
 
-// HeldToolID projects the legacy single-hand tool definition from inventory evidence.
-// An empty inventory proves an empty tool hand (pointer to "").
-// A single-row inventory containing a quantity-1 tool or accessory proves that held item.
-// Inventories containing equipped weapons, armor, stacked rows, or ambiguous multiple rows remain unknown (nil).
+// HeldTool returns the legacy tool hand ($m{ite}): the only kind-3 row, or a
+// zero Instance when that hand is empty. Hand-field writers keep at most one
+// quantity-1 row per kind, so rows breaking that leave the hand unknown (!ok).
+func (i Inventory) HeldTool() (held item.Instance, ok bool) {
+	for _, inst := range i.Items {
+		if item.LegacyHandKindByID(inst.DefinitionID) != 3 {
+			continue
+		}
+		if held.ID != "" || inst.Quantity != 1 {
+			return item.Instance{}, false
+		}
+		held = inst
+	}
+	return held, true
+}
+
+// HeldToolID is HeldTool's definition ID: "" for an empty hand, nil when unknown.
 func (i Inventory) HeldToolID() *string {
-	if len(i.Items) == 0 {
-		held := ""
-		return &held
+	held, ok := i.HeldTool()
+	if !ok {
+		return nil
 	}
-	if len(i.Items) == 1 && i.Items[0].Quantity == 1 && item.IsToolID(i.Items[0].DefinitionID) {
-		held := i.Items[0].DefinitionID
-		return &held
-	}
-	return nil
+	return &held.DefinitionID
 }

@@ -29,14 +29,14 @@ func CalculateEquipmentStats(
 ) EquipmentStats {
 	var stats EquipmentStats
 
-	// Detect Ex Amulet (item-158) or Awakening gems (item-240..242) in accessory slot (_battle.cgi:1754)
+	// The combat hand is $ms{ite}, whatever kind-3 item it is (_battle.cgi:1401,1747–1760).
+	held, _ := inv.HeldTool()
+	// Detect Ex Amulet (item-158) or Awakening gems (item-240..242) in the hand (_battle.cgi:1754)
 	hasExAmuletOrAwakening := false
-	if instID, ok := equip.Equipped(coreitem.SlotAccessory); ok {
-		if inst, found := inv.Find(instID); found {
-			no := parseItemIndex(inst.DefinitionID, "item-")
-			if no == 158 || no == 240 || no == 241 || no == 242 {
-				hasExAmuletOrAwakening = true
-			}
+	if held.ID != "" {
+		no := parseItemIndex(held.DefinitionID, "item-")
+		if no == 158 || no == 240 || no == 241 || no == 242 {
+			hasExAmuletOrAwakening = true
 		}
 	}
 
@@ -67,15 +67,13 @@ func CalculateEquipmentStats(
 		}
 	}
 
-	// 3. Accessory (SlotAccessory -> @ites in _data.cgi:1440-1477)
-	if instID, ok := equip.Equipped(coreitem.SlotAccessory); ok {
-		if inst, found := inv.Find(instID); found {
-			atk, def, agi := calculateAccessoryStats(inst.DefinitionID)
-			stats.Gear.AccessoryID = inst.DefinitionID
-			stats.AttackBonus += atk
-			stats.DefenseBonus += def
-			stats.AgilityBonus += agi
-		}
+	// 3. Held item (@ites in _data.cgi:1440-1477)
+	if held.ID != "" {
+		atk, def, agi := calculateAccessoryStats(held.DefinitionID)
+		stats.Gear.AccessoryID = held.DefinitionID
+		stats.AttackBonus += atk
+		stats.DefenseBonus += def
+		stats.AgilityBonus += agi
 	}
 
 	// 4. Weapon Seal Stat Modifiers (party2/lib/_data.cgi:2209-2230, party2/lib/_battle.cgi:1405-1406)

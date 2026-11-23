@@ -401,3 +401,34 @@ func TestEquipmentStats_WeaponSeals(t *testing.T) {
 		}
 	})
 }
+
+// The combat hand is the held kind-3 row, slotless, shield or unlinked
+// accessory alike (_battle.cgi:1401,1747–1760).
+func TestEquipmentStats_HeldItemIsTheCombatHand(t *testing.T) {
+	char := corecharacter.Character{ID: "held", Level: 30, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 100, Defense: 100, Agility: 100}}
+	for _, tc := range []struct {
+		name, held string
+		slot       coreitem.Slot
+		wantDef    int
+	}{
+		{"slotless bracelet", "item-119", "", 50},
+		{"shield in off-hand", "item-161", coreitem.SlotOffHand, 0},
+		{"unlinked slot accessory", "item-117", "", 30},
+		{"empty hand", "", "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inv := coreinventory.Inventory{CharacterID: char.ID, Items: []coreitem.Instance{{ID: "weapon", DefinitionID: "weapon-01", Quantity: 1}}}
+			equip := coreequipment.Equipment{CharacterID: char.ID, Slots: map[coreitem.Slot]string{coreitem.SlotMainHand: "weapon"}}
+			if tc.held != "" {
+				inv.Items = append(inv.Items, coreitem.Instance{ID: "hand", DefinitionID: tc.held, Quantity: 1})
+			}
+			if tc.slot != "" {
+				equip.Slots[tc.slot] = "hand"
+			}
+			got := battle.CalculateEquipmentStats(char, inv, equip, nil)
+			if got.Gear.AccessoryID != tc.held || got.DefenseBonus != tc.wantDef || got.Gear.WeaponID != "weapon-01" {
+				t.Fatalf("got accessory %q defense %d weapon %q", got.Gear.AccessoryID, got.DefenseBonus, got.Gear.WeaponID)
+			}
+		})
+	}
+}

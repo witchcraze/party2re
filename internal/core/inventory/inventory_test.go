@@ -291,28 +291,24 @@ func TestInventoryHeldToolID(t *testing.T) {
 			wantHeld: nil,
 		},
 		{
-			name:     "single weapon does not prove held tool",
+			name:     "weapon-only inventory proves empty tool hand",
 			items:    []item.Instance{{ID: "a", DefinitionID: "weapon-01", Quantity: 1}},
-			wantHeld: nil,
+			wantHeld: ptr(""),
 		},
 		{
-			name:     "single armor does not prove held tool",
-			items:    []item.Instance{{ID: "a", DefinitionID: "armor-01", Quantity: 1}},
-			wantHeld: nil,
+			name: "weapon and armor beside a tool prove that tool",
+			items: []item.Instance{
+				{ID: "a", DefinitionID: "weapon-01", Quantity: 1},
+				{ID: "b", DefinitionID: "armor-01", Quantity: 1},
+				{ID: "c", DefinitionID: "item-001", Quantity: 1},
+			},
+			wantHeld: ptr("item-001"),
 		},
 		{
-			name: "multiple items remain ambiguous unknown",
+			name: "two tool-hand rows break the hand invariant and stay unknown",
 			items: []item.Instance{
 				{ID: "a", DefinitionID: "item-001", Quantity: 1},
 				{ID: "b", DefinitionID: "item-002", Quantity: 1},
-			},
-			wantHeld: nil,
-		},
-		{
-			name: "weapon plus tool remains ambiguous unknown",
-			items: []item.Instance{
-				{ID: "a", DefinitionID: "weapon-01", Quantity: 1},
-				{ID: "b", DefinitionID: "item-001", Quantity: 1},
 			},
 			wantHeld: nil,
 		},
