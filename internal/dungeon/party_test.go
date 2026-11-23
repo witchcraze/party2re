@@ -50,7 +50,7 @@ func setupPartyTestService() (*dungeon.Service, *mockDungeonRepo, *mockCharRepo)
 	c4.JobID = "78" // Treasure Hunter
 	charRepo.chars[c4.ID] = c4
 
-	svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithAdmission(approvedRoster{}), dungeon.WithInventoryProvider(&mockInventoryRepo{}))
+	svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithAdmission(approvedRoster{}), dungeon.WithInventoryProvider(&mockInventoryRepo{}), dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()))
 	if err != nil {
 		panic(err)
 	}
@@ -165,7 +165,7 @@ func TestPartyMapScouting(t *testing.T) {
 			"lead":   c1Lead(10),
 			cTest.ID: cTest,
 		}}
-		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{}, dungeon.WithAdmission(approvedRoster{}), dungeon.WithInventoryProvider(&mockInventoryRepo{}))
+		tSvc, _ := dungeon.NewService(newMockDungeonRepo(), testSvcCharRepo, &corebattle.Engine{}, dungeon.WithAdmission(approvedRoster{}), dungeon.WithInventoryProvider(&mockInventoryRepo{}), dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()))
 		_, err := tSvc.StartPartyExpedition(ctx, "lead", []string{"lead", cTest.ID}, dungeon.NativeMap0ID, "")
 		if err != nil {
 			t.Fatalf("failed to start for job %s: %v", jobID, err)
@@ -190,6 +190,7 @@ func TestPartyMapScouting(t *testing.T) {
 		&corebattle.Engine{},
 		dungeon.WithInventoryProvider(invRepo),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	// Give item 197 to scope-hero
 	inv, _ := coreinventory.New(cItem.ID)
@@ -226,6 +227,7 @@ func TestPartyMapScouting(t *testing.T) {
 		&corebattle.Engine{},
 		dungeon.WithInventoryProvider(stackInvRepo),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	_, err = stackSvc.StartPartyExpedition(ctx, cBoth.ID, []string{cBoth.ID}, dungeon.NativeMap0ID, "")
 	if err != nil {
@@ -265,6 +267,7 @@ func TestPartyMapScouting(t *testing.T) {
 		&corebattle.Engine{},
 		dungeon.WithInventoryProvider(multiInvRepo),
 		dungeon.WithAdmission(approvedRoster{}),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	_, err = multiSvc.StartPartyExpedition(ctx, cScout.ID, []string{cScout.ID, cGoggleUser.ID}, dungeon.NativeMap0ID, "")
 	if err != nil {
@@ -309,7 +312,7 @@ func (approvedRoster) AdmitSolo(ctx context.Context, actor string, start func(co
 }
 
 func TestPartyRequiresAdmission(t *testing.T) {
-	svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{}, &corebattle.Engine{})
+	svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{}, &corebattle.Engine{}, dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()))
 	if err != nil {
 		t.Fatal(err)
 	}

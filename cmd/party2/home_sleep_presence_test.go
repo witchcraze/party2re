@@ -7,6 +7,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 // TestHomeSleepUsesProductionPresenceCount drives Sleep through newSocServices with
@@ -15,7 +16,8 @@ func TestHomeSleepUsesProductionPresenceCount(t *testing.T) {
 	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "guilds", "guild_members",
 		"character_profiles", "character_presence_snapshots", "character_jobs", "character_job_masteries", "inventory_items", "equipment_slots")
 	ctx := context.Background()
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +25,7 @@ func TestHomeSleepUsesProductionPresenceCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

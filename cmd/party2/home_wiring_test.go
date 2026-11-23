@@ -93,7 +93,7 @@ func newHookWiringFixture(t *testing.T, client valkeygo.Client) hookWiringFixtur
 }
 
 func TestHomePetProductionWiring(t *testing.T) {
-	f := newHookWiringFixture(t, nil)
+	f := newHookWiringFixture(t, testutil.OpenValkey(t))
 	ctx := context.Background()
 	f.char.GodVisit = corecharacter.GodVisitHeaven
 	if err := f.core.charRepo.Update(ctx, f.char); err != nil {
@@ -234,7 +234,7 @@ func TestHomeWakeProductionHooks(t *testing.T) {
 }
 
 func TestHomeRecipeLearnerProductionWiring(t *testing.T) {
-	f := newHookWiringFixture(t, nil)
+	f := newHookWiringFixture(t, testutil.OpenValkey(t))
 	ctx := context.Background()
 	scroll, err := item.NewInstance("item-127", 1)
 	if err != nil {

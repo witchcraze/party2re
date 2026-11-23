@@ -131,31 +131,16 @@ func newSocServices(
 		return nil, err
 	}
 
-	var (
-		limiter        http.RateLimiter = ratelimit.NewMemoryLimiter()
-		schedService   *scheduling.Service
-		schedRepo      *scheduling.ValkeyRepository
-		worker         *scheduling.Worker
-		rankingService *ranking.Service
-	)
-
 	txProvider := database.NewTransactionProvider(db)
-	if valkeyClient == nil {
-		rankingService, _ = ranking.NewService(rankingRepo, ranking.WithTransactionProvider(txProvider))
-	} else {
-		limiter = ratelimit.NewValkeyLimiter(valkeyClient)
-		rankingCache := ranking.NewValkeySnapshotCache(valkeyClient)
-		schedRepo = scheduling.NewValkeyRepository(valkeyClient)
-		schedService = scheduling.NewService(schedRepo)
-		rankingService, _ = ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache), ranking.WithTransactionProvider(txProvider))
-		worker = scheduling.NewWorker(schedRepo, 5*time.Second, logger)
-		weekly := ranking.NewRotateWeeklyHandler(rankingService, schedService)
-
-		if err := weekly.Reconcile(context.Background()); err != nil {
-			return nil, err
-		}
-		worker.RegisterHandler(ranking.RankingActionTypeRotateWeekly, weekly)
+	limiter := ratelimit.NewValkeyLimiter(valkeyClient)
+	rankingCache := ranking.NewValkeySnapshotCache(valkeyClient)
+	schedRepo := scheduling.NewValkeyRepository(valkeyClient)
+	schedService := scheduling.NewService(schedRepo)
+	rankingService, err := ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache), ranking.WithTransactionProvider(txProvider))
+	if err != nil {
+		return nil, err
 	}
+	worker := scheduling.NewWorker(schedRepo, 5*time.Second, logger)
 
 	timerService := timer.NewService(valkeyClient)
 

@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/pvp"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type prizeBattle struct{}
@@ -59,7 +60,7 @@ func TestPvPPrizeRollbackAndRetryIntegration(t *testing.T) {
 		t.Run(fault, func(t *testing.T) {
 			f := newDepotEquipmentFixture(t, item.SlotNone, false)
 			ctx := context.Background()
-			soc, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop())
+			soc, err := newSocServices(f.db, f.core, f.econ, testutil.OpenValkey(t), logging.Nop())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -172,11 +173,12 @@ func preparePrizeMatch(t *testing.T, svc *pvp.Service, actors []string, arena st
 func TestPvPPrizeProductionWiringIntegration(t *testing.T) {
 	f := newDepotEquipmentFixture(t, item.SlotNone, false)
 	ctx := context.Background()
-	soc, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop())
+	client := testutil.OpenValkey(t)
+	soc, err := newSocServices(f.db, f.core, f.econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmbt, err := newCmbtServices(f.db, f.core, soc, f.econ, nil)
+	cmbt, err := newCmbtServices(f.db, f.core, soc, f.econ, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,11 +219,12 @@ func TestPvPPrizeProductionWiringIntegration(t *testing.T) {
 func TestPvPKillPProductionWiringIntegration(t *testing.T) {
 	f := newDepotEquipmentFixture(t, item.SlotNone, false)
 	ctx := context.Background()
-	soc, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop())
+	client := testutil.OpenValkey(t)
+	soc, err := newSocServices(f.db, f.core, f.econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmbt, err := newCmbtServices(f.db, f.core, soc, f.econ, nil)
+	cmbt, err := newCmbtServices(f.db, f.core, soc, f.econ, client)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -470,7 +470,6 @@ func TestTransientRunStateDocCoversLuaAndPersistenceBoundaries(t *testing.T) {
 		"ErrRecoveryRequired",
 		"Two-Phase Settlement",
 		"Crash Recovery",
-		"In-Memory Fallback Parity",
 	}
 
 	for _, term := range requiredTerms {

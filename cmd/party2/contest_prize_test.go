@@ -47,7 +47,8 @@ func newContestPrizeFixture(t *testing.T) contestPrizeFixture {
 	// Settlement selects rounds globally, so it needs a dedicated database.
 	db := database.CreateTestDatabase(t, contestPrizeTables...)
 	ctx := context.Background()
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +56,7 @@ func newContestPrizeFixture(t *testing.T) contestPrizeFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,9 +11,9 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func TestValkeySessionRepository_InMemoryFallback(t *testing.T) {
+func TestMemorySessionRepository_Lifecycle(t *testing.T) {
 	ctx := context.Background()
-	repo := player.NewValkeySessionRepository(nil)
+	repo := newMemorySessionRepository()
 
 	now := time.Now().UTC()
 	sess := coreplayer.Session{
@@ -60,9 +60,9 @@ func TestValkeySessionRepository_InMemoryFallback(t *testing.T) {
 	}
 }
 
-func TestValkeySessionRepository_DeleteByPlayerID_InMemory(t *testing.T) {
+func TestMemorySessionRepository_DeleteByPlayerID(t *testing.T) {
 	ctx := context.Background()
-	repo := player.NewValkeySessionRepository(nil)
+	repo := newMemorySessionRepository()
 
 	now := time.Now().UTC()
 	sess1 := coreplayer.Session{ID: "token-1", PlayerID: "target-player", CreatedAt: now, ExpiresAt: now.Add(player.SessionDuration)}
@@ -199,9 +199,9 @@ func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
 	}
 }
 
-func TestValkeySessionRepository_InMemory_Eviction(t *testing.T) {
+func TestMemorySessionRepository_Eviction(t *testing.T) {
 	ctx := context.Background()
-	repo := player.NewValkeySessionRepository(nil)
+	repo := newMemorySessionRepository()
 
 	now := time.Now().UTC()
 	activeSess := coreplayer.Session{
@@ -241,42 +241,9 @@ func TestValkeySessionRepository_InMemory_Eviction(t *testing.T) {
 		t.Fatalf("Save(newSess) failed: %v", err)
 	}
 
-	// MemorySessionCount should only have active sessions (activeSess and newSess = 2)
-	if count := repo.MemorySessionCount(); count != 2 {
+	// Only activeSess and newSess should remain.
+	if count := repo.sessionCount(); count != 2 {
 		t.Errorf("expected 2 active sessions in memory store, got %d", count)
-	}
-}
-
-func TestValkeySessionRepository_NoInMemoryCachingWhenClientAvailable(t *testing.T) {
-	client := testutil.OpenValkey(t)
-
-	ctx := context.Background()
-	testSessionPrefix := "party2:test:session:"
-	testPlayerPrefix := "party2:test:player:sessions:"
-
-	repo := player.NewValkeySessionRepository(client,
-		player.WithSessionKeyPrefix(testSessionPrefix),
-		player.WithPlayerSessionsKeyPrefix(testPlayerPrefix),
-	)
-
-	now := time.Now().UTC()
-	sess := coreplayer.Session{
-		ID:        "vk-no-mem-leak-token",
-		PlayerID:  "p-leak-test",
-		CreatedAt: now,
-		ExpiresAt: now.Add(1 * time.Hour),
-	}
-	defer func() {
-		_ = repo.DeleteByPlayerID(ctx, "p-leak-test")
-	}()
-
-	if err := repo.Save(ctx, sess); err != nil {
-		t.Fatalf("Save failed: %v", err)
-	}
-
-	// MemorySessionCount MUST remain 0 when Valkey client is available!
-	if count := repo.MemorySessionCount(); count != 0 {
-		t.Errorf("expected 0 memory sessions when client is connected, got %d (memory leak detected!)", count)
 	}
 }
 

@@ -389,7 +389,7 @@ func NewService(
 	}
 
 	if s.activeStore == nil {
-		s.activeStore = NewMemoryExpeditionRepository()
+		return nil, errors.New("active expedition store is required")
 	}
 	if s.rng == nil {
 		s.rng = defaultRandomSource{}

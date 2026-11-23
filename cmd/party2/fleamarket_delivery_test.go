@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/fleamarket"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type fleaDeliveryFixture struct {
@@ -26,7 +27,7 @@ func newFleaDeliveryFixture(t *testing.T) fleaDeliveryFixture {
 	t.Helper()
 	f := newDepotEquipmentFixture(t, item.SlotMainHand, false)
 	ctx := context.Background()
-	soc, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop())
+	soc, err := newSocServices(f.db, f.core, f.econ, testutil.OpenValkey(t), logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

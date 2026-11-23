@@ -11,9 +11,9 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func BenchmarkValkeySessionSave_InMemory(b *testing.B) {
+func BenchmarkMemorySessionSave(b *testing.B) {
 	ctx := context.Background()
-	repo := player.NewValkeySessionRepository(nil)
+	repo := newMemorySessionRepository()
 	now := time.Now().UTC()
 
 	b.ReportAllocs()
@@ -32,9 +32,9 @@ func BenchmarkValkeySessionSave_InMemory(b *testing.B) {
 	}
 }
 
-func BenchmarkValkeySessionFind_InMemory(b *testing.B) {
+func BenchmarkMemorySessionFind(b *testing.B) {
 	ctx := context.Background()
-	repo := player.NewValkeySessionRepository(nil)
+	repo := newMemorySessionRepository()
 	now := time.Now().UTC()
 	sess := coreplayer.Session{
 		ID:        "token-constant",

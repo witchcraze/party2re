@@ -269,7 +269,7 @@ func TestChallengeBoss_RequiredFailureRollsBackWholeSettlement(t *testing.T) {
 // room using the production party repository's lock/state claim.
 func TestStartSealingBattle_ConcurrentStartSettlesOnce(t *testing.T) {
 	f := newSealFixture("leader", "m1")
-	rooms := party.NewValkeyRepository(nil)
+	rooms := party.NewMemoryRepository()
 	ctx := context.Background()
 	if err := rooms.SaveParty(ctx, f.partyRepo.parties[f.pID]); err != nil {
 		t.Fatal(err)

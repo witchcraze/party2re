@@ -84,6 +84,7 @@ func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 		corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithRNG(&minimalRandomSource{}),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -199,6 +200,7 @@ func TestDungeonSolo_ParticipantWithSkillsUsesSkills(t *testing.T) {
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithParticipantBuilder(builder),
 		dungeon.WithRNG(&minimalRandomSource{}),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -304,6 +306,7 @@ func TestDungeonSolo_CustomRNGWithoutIntN(t *testing.T) {
 		corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithRNG(customRNG),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -406,6 +409,7 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 		corebattle.Engine{},
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithRNG(rng),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)

@@ -1381,7 +1381,7 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 	}
 
 	// Verify against ValkeyRepository (in-memory) that CreateParty failure leaves zero lobby or character keys.
-	valkeyRepo := NewValkeyRepository(nil)
+	valkeyRepo := NewMemoryRepository()
 	valkeySvc, err := NewService(valkeyRepo, charRepo, invRepo, stages, monsters, nil, WithParticipantBuilder(builder))
 	if err != nil {
 		t.Fatalf("NewService(ValkeyRepository) failed: %v", err)

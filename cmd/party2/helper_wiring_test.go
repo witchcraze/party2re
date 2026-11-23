@@ -35,7 +35,8 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	db := database.CreateTestDatabase(t, helperWiringRequiredTables...)
 	ctx := context.Background()
 
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +44,7 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +156,8 @@ func TestHelperProductionGuildWiring_GPUpdateErrorRollsBack(t *testing.T) {
 	db := database.CreateTestDatabase(t, helperWiringRequiredTables...)
 	ctx := context.Background()
 
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +165,7 @@ func TestHelperProductionGuildWiring_GPUpdateErrorRollsBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

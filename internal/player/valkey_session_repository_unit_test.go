@@ -13,6 +13,15 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
+func TestValkeySessionRepository_RequiresClient(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected nil Valkey client to be rejected")
+		}
+	}()
+	NewValkeySessionRepository(nil)
+}
+
 func TestValkeySessionRepository_Options(t *testing.T) {
 	client := valkeytest.NewMockClient()
 
@@ -38,7 +47,7 @@ func TestValkeySessionRepository_Options(t *testing.T) {
 }
 
 func TestValkeySessionRepository_KeyHelpers(t *testing.T) {
-	repo := NewValkeySessionRepository(nil)
+	repo := NewValkeySessionRepository(valkeytest.NewMockClient())
 	if got := repo.sessionKey("token123"); got != DefaultSessionKeyPrefix+"token123" {
 		t.Errorf("unexpected sessionKey: %q", got)
 	}
@@ -49,7 +58,7 @@ func TestValkeySessionRepository_KeyHelpers(t *testing.T) {
 
 func TestValkeySessionRepository_Save_Validations(t *testing.T) {
 	ctx := context.Background()
-	repo := NewValkeySessionRepository(nil)
+	repo := NewValkeySessionRepository(valkeytest.NewMockClient())
 	testCases := []coreplayer.Session{
 		{ID: "", PlayerID: "p1", ExpiresAt: time.Now().Add(time.Hour)},
 		{ID: "   \t", PlayerID: "p1", ExpiresAt: time.Now().Add(time.Hour)},
@@ -97,9 +106,6 @@ func TestValkeySessionRepository_Save_MockClient(t *testing.T) {
 	}
 	if cmds[3][0] != "EXPIRE" || cmds[3][1] != DefaultPlayerSessionsKeyPrefix+"player-success" {
 		t.Errorf("unexpected EXPIRE command: %v", cmds[3])
-	}
-	if repo.MemorySessionCount() != 0 {
-		t.Errorf("expected 0 sessions in memory store, got %d", repo.MemorySessionCount())
 	}
 }
 
@@ -176,7 +182,7 @@ func TestValkeySessionRepository_Save_ErrorsAndWrongTypeRecovery(t *testing.T) {
 
 func TestValkeySessionRepository_FindByID_Validations(t *testing.T) {
 	ctx := context.Background()
-	repo := NewValkeySessionRepository(nil)
+	repo := NewValkeySessionRepository(valkeytest.NewMockClient())
 	if _, err := repo.FindByID(ctx, ""); !errors.Is(err, coreplayer.ErrInvalidSession) {
 		t.Errorf("expected ErrInvalidSession for empty id, got %v", err)
 	}
@@ -240,19 +246,12 @@ func TestValkeySessionRepository_FindByID_MockClient(t *testing.T) {
 		t.Errorf("expected ErrInvalidSession on expired session, got %v", err)
 	}
 
-	// 6. Transient network error with in-memory store fallback populated
+	// 6. Transient network error rejects the session
 	clTrans := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, _ valkey.Completed) valkey.ValkeyResult {
 		return valkeytest.MakeErrorResult(errors.New("valkey cluster down"))
 	}))
-	repoTrans := NewValkeySessionRepository(clTrans)
-	memSess := coreplayer.Session{ID: "tok-mem", PlayerID: "p-mem", ExpiresAt: now.Add(time.Hour)}
-	repoTrans.memorySessions[memSess.ID] = memSess
-
-	if gotMem, err := repoTrans.FindByID(ctx, memSess.ID); err != nil || gotMem.PlayerID != "p-mem" {
-		t.Fatalf("expected in-memory fallback, got %+v, err: %v", gotMem, err)
-	}
-	if _, err := repoTrans.FindByID(ctx, "tok-not-in-mem"); !errors.Is(err, coreplayer.ErrInvalidSession) {
-		t.Errorf("expected ErrInvalidSession when session is not in memory, got %v", err)
+	if _, err := NewValkeySessionRepository(clTrans).FindByID(ctx, "tok-trans"); !errors.Is(err, coreplayer.ErrInvalidSession) {
+		t.Errorf("expected ErrInvalidSession on Valkey error, got %v", err)
 	}
 }
 
@@ -260,7 +259,7 @@ func TestValkeySessionRepository_Revoke_MockClient(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	repoEmpty := NewValkeySessionRepository(nil)
+	repoEmpty := NewValkeySessionRepository(valkeytest.NewMockClient())
 	if err := repoEmpty.Revoke(ctx, "   \t", now); !errors.Is(err, coreplayer.ErrInvalidSession) {
 		t.Errorf("expected ErrInvalidSession for whitespace id, got %v", err)
 	}
@@ -289,21 +288,11 @@ func TestValkeySessionRepository_Revoke_MockClient(t *testing.T) {
 		t.Fatalf("Revoke legacy failed: %v", err)
 	}
 
-	// 3. GETDEL returns nil, but session is present in memory
+	// 3. GETDEL returns nil
 	clNil := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, _ valkey.Completed) valkey.ValkeyResult {
 		return valkeytest.MakeNilResult()
 	}))
-	repoMem := NewValkeySessionRepository(clNil)
-	memSess := coreplayer.Session{ID: "tok-mem-rev", PlayerID: "p-mem", ExpiresAt: now.Add(time.Hour)}
-	repoMem.memorySessions[memSess.ID] = memSess
-
-	if err := repoMem.Revoke(ctx, memSess.ID, now); err != nil {
-		t.Fatalf("Revoke from in-memory fallback failed: %v", err)
-	}
-	if repoMem.MemorySessionCount() != 0 {
-		t.Errorf("expected 0 in-memory sessions, got %d", repoMem.MemorySessionCount())
-	}
-	if err := repoMem.Revoke(ctx, "unknown-id", now); !errors.Is(err, coreplayer.ErrInvalidSession) {
+	if err := NewValkeySessionRepository(clNil).Revoke(ctx, "unknown-id", now); !errors.Is(err, coreplayer.ErrInvalidSession) {
 		t.Errorf("expected ErrInvalidSession, got %v", err)
 	}
 }
@@ -311,7 +300,7 @@ func TestValkeySessionRepository_Revoke_MockClient(t *testing.T) {
 func TestValkeySessionRepository_DeleteByPlayerID_MockClient(t *testing.T) {
 	ctx := context.Background()
 
-	if err := NewValkeySessionRepository(nil).DeleteByPlayerID(ctx, "   "); err != nil {
+	if err := NewValkeySessionRepository(valkeytest.NewMockClient()).DeleteByPlayerID(ctx, "   "); err != nil {
 		t.Fatalf("expected nil for empty playerID, got %v", err)
 	}
 
@@ -357,9 +346,6 @@ func TestValkeySessionRepository_DeleteByPlayerID_MockClient(t *testing.T) {
 func TestValkeySessionRepository_PurgeExpiredZSet_EdgeCases(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
-
-	// Client is nil: safe no-op
-	NewValkeySessionRepository(nil).purgeExpiredZSet(ctx, "some-key", now)
 
 	// PlayerKey is empty: safe no-op
 	cl := valkeytest.NewMockClient()

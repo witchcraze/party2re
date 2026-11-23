@@ -4,10 +4,10 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
@@ -59,18 +59,18 @@ func mapLuaError(err error) error {
 }
 
 // ValkeyRepositoryOption configures ValkeyRepository.
-type ValkeyRepositoryOption func(*ValkeyRepository)
+type ValkeyRepositoryOption func(*repositoryConfig)
 
 // WithDurableLogRepository configures a delegate repository for durable adventure logs (e.g. MariaDB).
 func WithDurableLogRepository(logRepo AdventureLogRepository) ValkeyRepositoryOption {
-	return func(r *ValkeyRepository) {
+	return func(r *repositoryConfig) {
 		r.logRepo = logRepo
 	}
 }
 
 // WithLobbyKeyPrefix overrides the default lobby key prefix.
 func WithLobbyKeyPrefix(prefix string) ValkeyRepositoryOption {
-	return func(r *ValkeyRepository) {
+	return func(r *repositoryConfig) {
 		if prefix != "" {
 			r.lobbyPrefix = prefix
 		}
@@ -79,7 +79,7 @@ func WithLobbyKeyPrefix(prefix string) ValkeyRepositoryOption {
 
 // WithReadyKeyPrefix overrides the default ready countdown key prefix.
 func WithReadyKeyPrefix(prefix string) ValkeyRepositoryOption {
-	return func(r *ValkeyRepository) {
+	return func(r *repositoryConfig) {
 		if prefix != "" {
 			r.readyPrefix = prefix
 		}
@@ -88,7 +88,7 @@ func WithReadyKeyPrefix(prefix string) ValkeyRepositoryOption {
 
 // WithCharacterKeyPrefix overrides the default character-party index key prefix.
 func WithCharacterKeyPrefix(prefix string) ValkeyRepositoryOption {
-	return func(r *ValkeyRepository) {
+	return func(r *repositoryConfig) {
 		if prefix != "" {
 			r.charPrefix = prefix
 		}
@@ -97,7 +97,7 @@ func WithCharacterKeyPrefix(prefix string) ValkeyRepositoryOption {
 
 // WithLobbiesIndexKey overrides the default lobbies index key.
 func WithLobbiesIndexKey(key string) ValkeyRepositoryOption {
-	return func(r *ValkeyRepository) {
+	return func(r *repositoryConfig) {
 		if key != "" {
 			r.lobbiesIndexKey = key
 		}
@@ -106,7 +106,7 @@ func WithLobbiesIndexKey(key string) ValkeyRepositoryOption {
 
 // WithLobbyTTL overrides the default lobby TTL.
 func WithLobbyTTL(d time.Duration) ValkeyRepositoryOption {
-	return func(r *ValkeyRepository) {
+	return func(r *repositoryConfig) {
 		if d > 0 {
 			r.lobbyTTL = d
 		}
@@ -115,73 +115,63 @@ func WithLobbyTTL(d time.Duration) ValkeyRepositoryOption {
 
 // WithReadyTTL overrides the default ready check countdown TTL.
 func WithReadyTTL(d time.Duration) ValkeyRepositoryOption {
-	return func(r *ValkeyRepository) {
+	return func(r *repositoryConfig) {
 		if d > 0 {
 			r.readyTTL = d
 		}
 	}
 }
 
-// ValkeyRepository implements party.Repository by storing ephemeral party lobbies,
-// member wait states, and 60-second ready checks in Valkey Master.
-// When client is nil, it seamlessly falls back to a thread-safe in-memory store.
-type ValkeyRepository struct {
-	client  valkey.Client
-	logRepo AdventureLogRepository
-
+type repositoryConfig struct {
+	logRepo         AdventureLogRepository
 	lobbyPrefix     string
 	readyPrefix     string
 	charPrefix      string
 	lobbiesIndexKey string
+	lobbyTTL        time.Duration
+	readyTTL        time.Duration
+}
 
-	lobbyTTL time.Duration
-	readyTTL time.Duration
+func newRepositoryConfig(opts []ValkeyRepositoryOption) repositoryConfig {
+	cfg := repositoryConfig{
+		lobbyPrefix:     DefaultLobbyKeyPrefix,
+		readyPrefix:     DefaultReadyKeyPrefix,
+		charPrefix:      DefaultCharacterKeyPrefix,
+		lobbiesIndexKey: DefaultLobbiesIndexKey,
+		lobbyTTL:        DefaultLobbyTTL,
+		readyTTL:        DefaultReadyTTL,
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return cfg
+}
+
+// ValkeyRepository stores transient party lobbies and ready checks in Valkey.
+type ValkeyRepository struct {
+	client valkey.Client
+	repositoryConfig
 
 	// Lua scripts for atomic lobby state mutations
 	addMemberScript         *valkey.Lua
 	removeMemberScript      *valkey.Lua
 	updateMemberReadyScript *valkey.Lua
 	updatePartyScript       *valkey.Lua
-
-	// In-memory fallback
-	mu              sync.RWMutex
-	memLobbies      map[string]Party
-	memMembers      map[string]map[string]Member
-	memCharParty    map[string]string
-	memReadyExp     map[string]map[string]time.Time
-	memLobbyExp     map[string]time.Time
-	memLogs         []PartyAdventureLog
-	memPartyLocksMu sync.Mutex
-	memPartyLocks   map[string]string
 }
 
-// NewValkeyRepository constructs a new ValkeyRepository.
+// NewValkeyRepository constructs a ValkeyRepository. It panics if client is nil.
 func NewValkeyRepository(client valkey.Client, opts ...ValkeyRepositoryOption) *ValkeyRepository {
-	r := &ValkeyRepository{
+	if client == nil {
+		panic("party: Valkey client is required")
+	}
+	return &ValkeyRepository{
 		client:                  client,
-		lobbyPrefix:             DefaultLobbyKeyPrefix,
-		readyPrefix:             DefaultReadyKeyPrefix,
-		charPrefix:              DefaultCharacterKeyPrefix,
-		lobbiesIndexKey:         DefaultLobbiesIndexKey,
-		lobbyTTL:                DefaultLobbyTTL,
-		readyTTL:                DefaultReadyTTL,
+		repositoryConfig:        newRepositoryConfig(opts),
 		addMemberScript:         valkey.NewLuaScript(addMemberLua),
 		removeMemberScript:      valkey.NewLuaScript(removeMemberLua),
 		updateMemberReadyScript: valkey.NewLuaScript(updateMemberReadyLua),
 		updatePartyScript:       valkey.NewLuaScript(updatePartyLua),
-		memLobbies:              make(map[string]Party),
-		memMembers:              make(map[string]map[string]Member),
-		memCharParty:            make(map[string]string),
-		memReadyExp:             make(map[string]map[string]time.Time),
-		memLobbyExp:             make(map[string]time.Time),
-		memPartyLocks:           make(map[string]string),
 	}
-
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
 }
 
 func (r *ValkeyRepository) lobbyKey(id string) string {
@@ -198,24 +188,6 @@ func (r *ValkeyRepository) characterKey(charID string) string {
 
 // SaveParty stores a newly created party lobby in Valkey Master.
 func (r *ValkeyRepository) SaveParty(ctx context.Context, p Party) error {
-	if r.client == nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		now := time.Now().UTC()
-		r.memLobbies[p.ID] = p
-		r.memLobbyExp[p.ID] = now.Add(r.lobbyTTL)
-		if p.LeaderCharacterID != "" {
-			r.memCharParty[p.LeaderCharacterID] = p.ID
-		}
-		if _, exists := r.memMembers[p.ID]; !exists {
-			r.memMembers[p.ID] = make(map[string]Member)
-		}
-		if _, exists := r.memReadyExp[p.ID]; !exists {
-			r.memReadyExp[p.ID] = make(map[string]time.Time)
-		}
-		return nil
-	}
-
 	state := storedLobbyState{
 		Party: storedParty{
 			Party:        p,
@@ -252,20 +224,6 @@ func (r *ValkeyRepository) SaveParty(ctx context.Context, p Party) error {
 
 // GetParty retrieves party metadata from Valkey Master.
 func (r *ValkeyRepository) GetParty(ctx context.Context, id string) (Party, error) {
-	if r.client == nil {
-		r.mu.RLock()
-		defer r.mu.RUnlock()
-		exp, ok := r.memLobbyExp[id]
-		if !ok || time.Now().UTC().After(exp) {
-			return Party{}, ErrNotFound
-		}
-		p, ok := r.memLobbies[id]
-		if !ok || p.Status == StatusDisbanded {
-			return Party{}, ErrNotFound
-		}
-		return p, nil
-	}
-
 	data, err := r.client.Do(ctx, r.client.B().Get().Key(r.lobbyKey(id)).Build()).AsBytes()
 	if err != nil {
 		if valkey.IsValkeyNil(err) {
@@ -296,63 +254,6 @@ func (r *ValkeyRepository) GetPartyForUpdate(ctx context.Context, id string) (Pa
 // ListParties lists active party lobbies from Valkey Master using Sorted Set index.
 func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit, offset int) ([]PartySummary, int, error) {
 	limit, offset = pagination.NormalizeWithDefaults(limit, offset, 50, 100)
-
-	if r.client == nil {
-		r.mu.RLock()
-		defer r.mu.RUnlock()
-
-		now := time.Now().UTC()
-		var activeList []PartySummary
-		for id, p := range r.memLobbies {
-			exp, ok := r.memLobbyExp[id]
-			if !ok || now.After(exp) {
-				continue
-			}
-			if status != "" && p.Status != status {
-				continue
-			}
-			var leaderName string
-			memCount := len(r.memMembers[id])
-			for _, m := range r.memMembers[id] {
-				if m.IsLeader {
-					leaderName = m.CharacterName
-					break
-				}
-			}
-			activeList = append(activeList, PartySummary{
-				ID:                p.ID,
-				Name:              p.Name,
-				LeaderCharacterID: p.LeaderCharacterID,
-				LeaderName:        leaderName,
-				StageID:           p.StageID,
-				Speed:             p.Speed,
-				CurrentMembers:    memCount,
-				MaxMembers:        p.MaxMembers,
-				HasPassword:       p.PasswordHash != "",
-				MinLevel:          p.MinLevel,
-				MaxLevel:          p.MaxLevel,
-				MinHP:             p.MinHP,
-				NeedJoin:          p.NeedJoin,
-				Status:            p.Status,
-				CreatedAt:         p.CreatedAt,
-			})
-		}
-
-		// Sort newest first
-		sort.Slice(activeList, func(i, j int) bool {
-			return activeList[i].CreatedAt.After(activeList[j].CreatedAt)
-		})
-
-		total := len(activeList)
-		if offset >= total {
-			return []PartySummary{}, total, nil
-		}
-		end := offset + limit
-		if end > total {
-			end = total
-		}
-		return activeList[offset:end], total, nil
-	}
 
 	// In Valkey: Fetch IDs from sorted set
 	ids, err := r.client.Do(ctx, r.client.B().Zrevrange().Key(r.lobbiesIndexKey).Start(0).Stop(-1).Build()).AsStrSlice()
@@ -421,21 +322,6 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 
 // UpdateParty updates party metadata in Valkey Master.
 func (r *ValkeyRepository) UpdateParty(ctx context.Context, p Party) error {
-	if r.client == nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		exp, ok := r.memLobbyExp[p.ID]
-		if !ok || time.Now().UTC().After(exp) {
-			return ErrNotFound
-		}
-		if _, ok := r.memLobbies[p.ID]; !ok {
-			return ErrNotFound
-		}
-		r.memLobbies[p.ID] = p
-		r.memLobbyExp[p.ID] = time.Now().UTC().Add(r.lobbyTTL)
-		return nil
-	}
-
 	partyJSON, err := marshalStoredParty(p)
 	if err != nil {
 		return err
@@ -450,21 +336,6 @@ func (r *ValkeyRepository) UpdateParty(ctx context.Context, p Party) error {
 
 // DeleteParty disbands/deletes a party lobby and purges its members from Valkey Master.
 func (r *ValkeyRepository) DeleteParty(ctx context.Context, id string) error {
-	if r.client == nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		delete(r.memLobbies, id)
-		delete(r.memLobbyExp, id)
-		if members, ok := r.memMembers[id]; ok {
-			for charID := range members {
-				delete(r.memCharParty, charID)
-			}
-			delete(r.memMembers, id)
-		}
-		delete(r.memReadyExp, id)
-		return nil
-	}
-
 	data, err := r.client.Do(ctx, r.client.B().Get().Key(r.lobbyKey(id)).Build()).AsBytes()
 	if err != nil && !valkey.IsValkeyNil(err) {
 		return err
@@ -493,45 +364,6 @@ func (r *ValkeyRepository) DeleteParty(ctx context.Context, id string) error {
 
 // AddMember adds a member to a party lobby in Valkey Master.
 func (r *ValkeyRepository) AddMember(ctx context.Context, m Member) error {
-	if r.client == nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		exp, ok := r.memLobbyExp[m.PartyID]
-		if !ok || time.Now().UTC().After(exp) {
-			return ErrNotFound
-		}
-		p, ok := r.memLobbies[m.PartyID]
-		if !ok || p.Status == StatusDisbanded {
-			return ErrNotFound
-		}
-		if _, ok := r.memMembers[m.PartyID]; !ok {
-			r.memMembers[m.PartyID] = make(map[string]Member)
-		}
-		if _, ok := r.memReadyExp[m.PartyID]; !ok {
-			r.memReadyExp[m.PartyID] = make(map[string]time.Time)
-		}
-
-		maxMembers := p.MaxMembers
-		if maxMembers <= 0 {
-			maxMembers = MaxPartyMembers
-		}
-		_, alreadyMember := r.memMembers[m.PartyID][m.CharacterID]
-		if !alreadyMember && len(r.memMembers[m.PartyID]) >= maxMembers {
-			return ErrPartyFull
-		}
-
-		m.BattleActor = cloneBattleActor(m.BattleActor)
-		r.memMembers[m.PartyID][m.CharacterID] = m
-		r.memCharParty[m.CharacterID] = m.PartyID
-		if m.ReadyState {
-			r.memReadyExp[m.PartyID][m.CharacterID] = time.Now().UTC().Add(r.readyTTL)
-		} else {
-			delete(r.memReadyExp[m.PartyID], m.CharacterID)
-		}
-		r.memLobbyExp[m.PartyID] = time.Now().UTC().Add(r.lobbyTTL)
-		return nil
-	}
-
 	memberJSON, err := marshalStoredMember(m)
 	if err != nil {
 		return err
@@ -558,33 +390,6 @@ func (r *ValkeyRepository) AddMember(ctx context.Context, m Member) error {
 
 // GetMembers retrieves all members of a party lobby, resolving ready states against 60-second countdowns.
 func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Member, error) {
-	if r.client == nil {
-		r.mu.RLock()
-		defer r.mu.RUnlock()
-		now := time.Now().UTC()
-		membersMap, ok := r.memMembers[partyID]
-		if !ok {
-			return nil, nil
-		}
-		var list []Member
-		for _, m := range membersMap {
-			m.BattleActor = cloneBattleActor(m.BattleActor)
-			if readyExp, ok := r.memReadyExp[partyID][m.CharacterID]; ok && now.Before(readyExp) {
-				m.ReadyState = true
-			} else {
-				m.ReadyState = false
-			}
-			list = append(list, m)
-		}
-		sort.Slice(list, func(i, j int) bool {
-			if list[i].IsLeader != list[j].IsLeader {
-				return list[i].IsLeader
-			}
-			return list[i].JoinedAt.Before(list[j].JoinedAt)
-		})
-		return list, nil
-	}
-
 	data, err := r.client.Do(ctx, r.client.B().Get().Key(r.lobbyKey(partyID)).Build()).AsBytes()
 	if err != nil {
 		if valkey.IsValkeyNil(err) {
@@ -638,34 +443,6 @@ func (r *ValkeyRepository) GetMember(ctx context.Context, partyID, characterID s
 
 // GetActivePartyByCharacter returns the active party and member record for a character.
 func (r *ValkeyRepository) GetActivePartyByCharacter(ctx context.Context, characterID string) (Party, Member, error) {
-	if r.client == nil {
-		r.mu.RLock()
-		defer r.mu.RUnlock()
-		partyID, ok := r.memCharParty[characterID]
-		if !ok {
-			return Party{}, Member{}, ErrNotFound
-		}
-		exp, ok := r.memLobbyExp[partyID]
-		if !ok || time.Now().UTC().After(exp) {
-			return Party{}, Member{}, ErrNotFound
-		}
-		p, ok := r.memLobbies[partyID]
-		if !ok || p.Status == StatusDisbanded {
-			return Party{}, Member{}, ErrNotFound
-		}
-		m, ok := r.memMembers[partyID][characterID]
-		if !ok {
-			return Party{}, Member{}, ErrNotFound
-		}
-		m.BattleActor = cloneBattleActor(m.BattleActor)
-		if readyExp, ok := r.memReadyExp[partyID][characterID]; ok && time.Now().UTC().Before(readyExp) {
-			m.ReadyState = true
-		} else {
-			m.ReadyState = false
-		}
-		return p, m, nil
-	}
-
 	partyID, err := r.client.Do(ctx, r.client.B().Get().Key(r.characterKey(characterID)).Build()).ToString()
 	if err != nil {
 		if valkey.IsValkeyNil(err) {
@@ -689,27 +466,6 @@ func (r *ValkeyRepository) GetActivePartyByCharacter(ctx context.Context, charac
 
 // RemoveMember removes a member from a party lobby in Valkey Master.
 func (r *ValkeyRepository) RemoveMember(ctx context.Context, partyID, characterID string) error {
-	if r.client == nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		exp, ok := r.memLobbyExp[partyID]
-		if !ok || time.Now().UTC().After(exp) {
-			return ErrNotFound
-		}
-		if _, ok := r.memLobbies[partyID]; !ok {
-			return ErrNotFound
-		}
-		if members, ok := r.memMembers[partyID]; ok {
-			delete(members, characterID)
-		}
-		delete(r.memCharParty, characterID)
-		if readyMap, ok := r.memReadyExp[partyID]; ok {
-			delete(readyMap, characterID)
-		}
-		r.memLobbyExp[partyID] = time.Now().UTC().Add(r.lobbyTTL)
-		return nil
-	}
-
 	res := r.removeMemberScript.Exec(ctx, r.client, []string{
 		r.lobbyKey(partyID),
 		r.characterKey(characterID),
@@ -723,35 +479,6 @@ func (r *ValkeyRepository) RemoveMember(ctx context.Context, partyID, characterI
 
 // UpdateMemberReady sets or unsets member ready status with a 60-second countdown in Valkey Master.
 func (r *ValkeyRepository) UpdateMemberReady(ctx context.Context, partyID, characterID string, ready bool) error {
-	if r.client == nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		exp, ok := r.memLobbyExp[partyID]
-		if !ok || time.Now().UTC().After(exp) {
-			return ErrNotFound
-		}
-		members, ok := r.memMembers[partyID]
-		if !ok {
-			return ErrNotFound
-		}
-		m, ok := members[characterID]
-		if !ok {
-			return ErrCharacterNotInParty
-		}
-		m.ReadyState = ready
-		members[characterID] = m
-		if _, ok := r.memReadyExp[partyID]; !ok {
-			r.memReadyExp[partyID] = make(map[string]time.Time)
-		}
-		if ready {
-			r.memReadyExp[partyID][characterID] = time.Now().UTC().Add(r.readyTTL)
-		} else {
-			delete(r.memReadyExp[partyID], characterID)
-		}
-		r.memLobbyExp[partyID] = time.Now().UTC().Add(r.lobbyTTL)
-		return nil
-	}
-
 	readyArg := "0"
 	if ready {
 		readyArg = "1"
@@ -778,25 +505,12 @@ func (r *ValkeyRepository) CountMembers(ctx context.Context, partyID string) (in
 	return len(members), nil
 }
 
-// SaveAdventureLog persists durable adventure logs to MariaDB (or fallback).
-func (r *ValkeyRepository) SaveAdventureLog(ctx context.Context, log PartyAdventureLog) error {
-	if r.logRepo != nil {
-		return r.logRepo.SaveAdventureLog(ctx, log)
+// SaveAdventureLog persists durable adventure logs through the configured store.
+func (r *repositoryConfig) SaveAdventureLog(ctx context.Context, log PartyAdventureLog) error {
+	if r.logRepo == nil {
+		return errors.New("adventure log repository is required")
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.memLogs = append(r.memLogs, log)
-	return nil
-}
-
-// GetLogs returns in-memory logged adventure runs (useful for tests).
-func (r *ValkeyRepository) GetLogs() []PartyAdventureLog {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	copied := make([]PartyAdventureLog, len(r.memLogs))
-	copy(copied, r.memLogs)
-	return copied
+	return r.logRepo.SaveAdventureLog(ctx, log)
 }
 
 // Ensure interface compliance
