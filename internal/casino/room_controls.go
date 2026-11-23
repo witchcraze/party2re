@@ -9,7 +9,8 @@ type RoomControls struct {
 	KickTargets []string `json:"kick_targets"`
 }
 
-func (v RoomView) Controls(characterID string) (RoomControls, error) {
+// coins is the actor's balance, which gates the High & Low call.
+func (v RoomView) Controls(characterID string, coins int64) (RoomControls, error) {
 	c := RoomControls{Role: "member", Actions: []string{}, KickTargets: []string{}}
 	for _, m := range v.Members {
 		if m.CharacterID != characterID {
@@ -33,20 +34,30 @@ func (v RoomView) Controls(characterID string) (RoomControls, error) {
 		if v.Room.Round <= 0 || v.Room.Status != RoomStatusInProgress {
 			return c, nil
 		}
-		if v.Room.GameType != GameTypeDoppel && m.Action != "" && m.Action != "待機中" {
+		// A mid-game entrant (待機中) sits out; Doppel keeps marks open until all select.
+		if m.Action == "待機中" || (v.Room.GameType != GameTypeDoppel && m.Action != "") {
 			return c, nil
 		}
 		switch v.Room.GameType {
 		case GameTypeIndian:
 			c.Actions = []string{string(ActionCall), string(ActionShowdown), string(ActionFold)}
 		case GameTypeHighLow:
-			c.Actions = []string{string(HighLowActionCall), string(HighLowActionHigh)}
+			if highLowCanCall(v.Room.CurrentBet, v.Room.MaxBet, coins) {
+				c.Actions = append(c.Actions, string(HighLowActionCall))
+			}
+			c.Actions = append(c.Actions, string(HighLowActionHigh))
 			if v.Room.ParticipantCount > 2 {
 				c.Actions = append(c.Actions, string(HighLowActionLow))
 			}
 			c.Actions = append(c.Actions, string(HighLowActionFold))
 		case GameTypeDoppel:
-			for _, mark := range AuthenticDoppelMarks[:min(v.Room.ParticipantCount+1, len(AuthenticDoppelMarks))] {
+			players := v.Room.ParticipantCount
+			for _, p := range v.Members {
+				if !p.IsSpectator && p.Action == "待機中" {
+					players--
+				}
+			}
+			for _, mark := range AuthenticDoppelMarks[:min(players+1, len(AuthenticDoppelMarks))] {
 				c.Actions = append(c.Actions, string(mark))
 			}
 		}

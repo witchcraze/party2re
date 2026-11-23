@@ -30,14 +30,14 @@ Settlement returns the room to waiting with round zero; there is no separate fin
 
 ### Scoped legacy dispatch reconciliation
 
-The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Screenshot (`すくしょ`) and invitation (`さそう`) (`_casino.cgi:124–145`) have no replacement (#140). Open differences: High & Low offers “continue” at the maximum bet or without enough coins (#2636), and members who joined mid-game can act before the next start (#2637).
+The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Open: rooms have no log, so there is no in-room speech or `すくしょ` (#2644); the lobby invitation `さそう` is missing (#2645); and card-game bets stop at the balance instead of driving it negative (#2642).
 
 ## Game rules
 
 Non-obvious rules (deck, pot and round mechanics live in code):
 
 - Indian and High & Low fold still pay the current bet into the pot (`casino_indian.cgi:102`). Players with zero coins are ejected after settlement.
-- High & Low splits the pot between the highest High and lowest Low only with more than two players; with every player folded the pot is void (“お流れ”). Low requires more than two participants.
+- High & Low splits the pot between the highest High and lowest Low only with more than two players; a showdown with no High or Low declaration voids the pot (“お流れ”). Low requires more than two participants.
 - Doppel offers `min(participants, 7) + 1` marks. Coins are taken on a player's first selection in the round only. Matching children split the pot and one of them, chosen at random, becomes the leader; with no match the leader takes the pot and keeps leadership.
 - Slot: the 200-coin bet is limited to job46 (`casino.cgi:98,109–111`); a miss adds 1 fatigue (`casino.cgi:583,588`); the Wish 5 blessing gives a 25% chance of +50% on winning spins (`casino.cgi:565–568,577–580`).
 - Showdown winners increment casino wins (`casino_indian.cgi:165`, `casino_highlow.cgi:216`, `casino_doppel.cgi:120,138`), which feed the gambler ranking (`ranking.cgi:16`) and, with item039, unlock job46 at 10 wins (`_data.cgi:134`).

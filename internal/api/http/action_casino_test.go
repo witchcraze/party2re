@@ -758,7 +758,11 @@ func newRaceSafeKickLeaveSetup(t *testing.T, useValkey bool, wrap func(CasinoSer
 		if err != nil || v == nil {
 			return []playercontext.Activity{}, err
 		}
-		c, err := v.Controls(actor)
+		acc, err := svc.GetAccount(ctx, actor)
+		if err != nil {
+			return nil, err
+		}
+		c, err := v.Controls(actor, acc.Coins)
 		if err != nil {
 			return nil, err
 		}
@@ -893,5 +897,16 @@ func TestCasinoKickAndLeaveGatewayRace(t *testing.T) {
 				t.Fatalf("unexpected concurrent kick/leave outcome: kick=(%d,%s) leave=(%d,%s)", kickStatus, kickRaw, leaveStatus, leaveRaw)
 			}
 		})
+	}
+}
+
+func TestCasinoRoomRuleRejections(t *testing.T) {
+	for _, err := range []error{casino.ErrHighLowCallUnavailable, casino.ErrLowNotAllowedTwo} {
+		if status, d := casinoActionRejection(err); status != 400 || d.Code != "CASINO_INVALID_INPUT" {
+			t.Fatalf("%v: %d %+v", err, status, d)
+		}
+	}
+	if status, d := casinoActionRejection(casino.ErrAlreadyActed); status != 409 || d.Code != "CASINO_ALREADY_ACTED" {
+		t.Fatalf("waiting entrant rejection: %d %+v", status, d)
 	}
 }
