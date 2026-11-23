@@ -217,9 +217,9 @@ action table; `player.cgi:41–50` supplies both snippets and a referral link.
 `my2.cgi:27–51` chooses one taught phrase uniformly, independently of a speaker
 or whether any member remains, and reads the first three stored local members
 without renewing/pruning their presence. With no taught phrase, omit the phrase;
-do not fabricate a greeting or require a pet. Local visitor lifecycle comes from
-`lib/system.cgi:475–533,964–985` and Home's owning observation contract, not
-from card requests. Existing `TalkToCompanion` has different speaker/pet gates.
+do not fabricate a greeting or require a pet. Visitors come from the Home place's
+[member list](../architecture/place-log.md#members), never from card requests; the
+pet-only adapter is insufficient. Existing `TalkToCompanion` has different speaker/pet gates.
 
 Cards deliberately retain a different online test from the §2.12 list:
 `now < sampled_save_at + 900s`; equality is offline, and a forced entry snapshot
@@ -232,9 +232,7 @@ timestamps or invent historical dates during rollout; show an unavailable date
 when no actual save is known. The 900-second reference window is shared with §2.12; account/session validity is never an online signal.
 
 Character and Home delivery remain separate work in [#1819](https://github.com/witchcraze/party2re/issues/1819)
-and [#1820](https://github.com/witchcraze/party2re/issues/1820). The latter needs
-the missing local-visitor source owned by Home's migration scope; the pet-only
-adapter is insufficient.
+and [#1820](https://github.com/witchcraze/party2re/issues/1820).
 
 These are intentionally public gameplay facts, including visitors and wallet
 gold, not permission to serialize Character/Profile/Home aggregates. Exclude

@@ -141,13 +141,8 @@ sufficiency, duplicate names and capacity remain command-time service checks.
 `GET /blacksmith/seals` and `GET /characters/{id}/blacksmith/storage` are retired;
 the catalog now requires the owned context instead of an anonymous read.
 
-Legacy `system.cgi:9–25` also registers `br`, `いどう`, `まち`, `ほーむ`, optional
-`ぎるど`, `ささやき`, `はなす`, `しらべる`, `ろぐあうと` and `すくしょ`.
-Layout separators and screenshots belong to presentation; session logout replaces
-the logout action; navigation, Home, Guild and whisper retain their shared
-migration owners (#949/#950), rather than becoming equipment commands.
-Legacy `はなす` (`@words`, `blacksmith.cgi:17–19`) and NPC `しらべる` map to the
-shared `npc_talk` / `npc_inspect` commands.
+The shared `system.cgi` actions, including `はなす` and NPC `しらべる`, follow the
+[navigation reconciliation](../architecture/client-agent-api.md#scoped-legacy-navigation-reconciliation).
 
 Transport migration preserves existing service behavior, including equipped-item
 naming, leading/trailing whitespace trimming and ASCII `@` rejection. Legacy
