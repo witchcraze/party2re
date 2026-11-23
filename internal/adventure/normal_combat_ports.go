@@ -3,6 +3,7 @@ package adventure
 import (
 	"slices"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -33,12 +34,13 @@ func newRunPorts(frame corebattle.TargetContext, level *int, seals *corebattle.W
 func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, requester *corecharacter.Character, inspection map[string]corebattle.InspectionContent) skill.PlayerCallbackContexts {
 	d := p.damage
 	actor := findActor(state.Actors, d.ActorID)
-	held, icon := "", ""
-	if actor != nil {
-		icon = actor.Icon
-		if actor.HeldToolID != nil {
-			held = *actor.HeldToolID
-		}
+	held := ""
+	// The requester's own appearance ($m{icon}), not the actor's current form;
+	// shortcut: entry builds every player actor with the default icon, read the
+	// requester's avatar here once entry adopts it.
+	icon := battle.DefaultActorIcon
+	if actor != nil && actor.HeldToolID != nil {
+		held = *actor.HeldToolID
 	}
 	gender := ""
 	if requester != nil {
@@ -110,9 +112,24 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 		MachineFamiliar:     &corebattle.MachineFamiliarContext{DamageContext: d, RequesterGender: gender},
 		LateBreathSong:      &corebattle.LateBreathSongContext{DamageContext: d, BurnStrike: burn, Death: p.status},
 		Resources:           &resources,
-		Revival:             &corebattle.RevivalContext{TargetContext: d.TargetContext, NativeDefeat: p.defeat},
-		Status:              p.status,
-		Reset:               reset,
+		Revival: &corebattle.RevivalContext{
+			TargetContext: d.TargetContext, NativeDefeat: p.defeat, Defeat: d.Defeat,
+			Deaths: &corebattle.RevivalDeathCallbacks{
+				Validate: func(s *corebattle.LifetimeState, target corebattle.TargetContext, category corebattle.CallbackCategory, chance float64) error {
+					status := *p.status
+					status.TargetContext = target
+					return s.ValidateAreaStatus(&status, instantDeath(category), chance, false, true, random.Default())
+				},
+				Execute: func(s *corebattle.LifetimeState, target corebattle.TargetContext, category corebattle.CallbackCategory, chance float64, rng random.Generator) error {
+					status := *p.status
+					status.TargetContext = target
+					_, err := s.ApplyAreaStatus(&status, instantDeath(category), chance, false, true, rng)
+					return err
+				},
+			},
+		},
+		Status: p.status,
+		Reset:  reset,
 		Fields: &corebattle.NamedFieldContext{
 			DamageContext: d, Death: p.defeat, Roster: roster, RequesterGender: gender, RequesterIcon: icon,
 			NameKey: skill.OperationNameKey, EntryKey: func(id string) string { return skill.EntrySourceKey(id, false) },
@@ -206,4 +223,8 @@ func runFacts(frame corebattle.CallbackContext, apply func(*corebattle.CallbackC
 		facts.Target = work.TargetContext
 	}
 	return facts, nil
+}
+
+func instantDeath(category corebattle.CallbackCategory) corebattle.TargetEffect {
+	return corebattle.TargetEffect{Payload: corebattle.CallbackPayload{Symbol: "instant_death"}, Category: category}
 }

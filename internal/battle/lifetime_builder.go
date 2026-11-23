@@ -19,6 +19,10 @@ func WithJobHistoryRepository(repo JobHistoryRepository) Option {
 	return func(s *Service) { s.jobHistory = repo }
 }
 
+// DefaultActorIcon is the appearance every player actor enters a run with when
+// the consumer supplies none.
+const DefaultActorIcon = "assets/images/placeholders/character/character-default.svg"
+
 // BuildLifetimeActor shares the equipment-aware participant builder. The
 // consumer supplies the original appearance identity reference, and retains
 // transaction/snapshot ownership. Run reloads use saved state, not this builder.
@@ -48,7 +52,7 @@ func (s *Service) BuildLifetimeActor(ctx context.Context, characterID, icon stri
 		return corebattle.LifetimeActor{}, ErrInvalidRequest
 	}
 	if icon == "" {
-		icon = "assets/images/placeholders/character/character-default.svg"
+		icon = DefaultActorIcon
 	}
 	p.Icon = icon
 	// Explicit effects inspect equipped identities, never bag contents. The

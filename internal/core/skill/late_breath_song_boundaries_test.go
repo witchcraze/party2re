@@ -112,7 +112,7 @@ func TestLateSongChainProbabilityAndDamage(t *testing.T) {
 func TestLateSongForbiddenRecoilAfterNoEffect(t *testing.T) {
 	for _, guard := range []string{"one-hit", "null", "fallen", "sealed", "no-enemies"} {
 		s, c, d := lateSongFixture()
-		c.HeldBooks["self"] = "forbidden"
+		*s.Actors[0].HeldToolID = "item-196"
 		if guard != "sealed" {
 			c.Defeat = nil
 		}

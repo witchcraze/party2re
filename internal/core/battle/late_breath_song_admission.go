@@ -19,8 +19,7 @@ func (s *LifetimeState) ValidateLateBreathSong(c *LateBreathSongContext, id stri
 		return nil
 	case "job-84-entry-1", "job-84-entry-2", "job-86-entry-4":
 		if id == "job-86-entry-4" {
-			book, ok := c.HeldBooks[c.ActorID]
-			if !ok || book != "none" && book != "ordinary" && book != "forbidden" || a.MaxMP < 0 || a.MaxMP > 1e12 {
+			if _, ok := a.heldBook(); !ok || a.MaxMP < 0 || a.MaxMP > 1e12 {
 				return ErrUnsupportedEffect
 			}
 		}
