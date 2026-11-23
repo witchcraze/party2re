@@ -72,10 +72,6 @@ func newMiscServices(
 		return nil, err
 	}
 
-	eventplazaRepo, err := database.NewEventPlazaRepository(db)
-	if err != nil {
-		return nil, err
-	}
 	var plazaOpts []eventplaza.Option
 	if core.txProvider != nil {
 		plazaOpts = append(plazaOpts, eventplaza.WithTransactionProvider(core.txProvider))
@@ -86,11 +82,8 @@ func newMiscServices(
 	if core.itemCatalog != nil {
 		plazaOpts = append(plazaOpts, eventplaza.WithItemDefinitionProvider(core.itemCatalog))
 	}
-	if valkeyClient != nil {
-		plazaOpts = append(plazaOpts, eventplaza.WithPresenceTracker(eventplaza.NewValkeyPresenceTracker(valkeyClient)))
-	}
 	eventplazaService, err := eventplaza.NewService(
-		eventplazaRepo,
+		eventplaza.NewValkeyPresenceTracker(valkeyClient),
 		normalWriter(core),
 		core.invRepo,
 		plazaOpts...,

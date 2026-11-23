@@ -241,10 +241,9 @@ func (m *victoryCrowdTracker) AppendCrowd(ctx context.Context, crowd []eventplaz
 
 func TestWireBossVictoryBanquetHook(t *testing.T) {
 	tracker := &victoryCrowdTracker{}
-	// Embedded nil interfaces fail on any SQL, character or inventory access.
+	// Embedded nil interfaces fail on any character or inventory access.
 	plaza, err := eventplaza.NewService(
-		&struct{ eventplaza.Repository }{}, &struct{ eventplaza.CharacterRepository }{},
-		&struct{ eventplaza.InventoryRepository }{}, eventplaza.WithPresenceTracker(tracker))
+		tracker, &struct{ eventplaza.CharacterRepository }{}, &struct{ eventplaza.InventoryRepository }{})
 	if err != nil {
 		t.Fatal(err)
 	}

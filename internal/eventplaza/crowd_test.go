@@ -33,8 +33,8 @@ func TestVictoryCrowdIndependentDraws(t *testing.T) {
 			clock := &mockClock{now: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)}
 			store := newMockSortedSetStore()
 			rng := &crowdRNG{counts: []int{counts[0], counts[1], counts[0], counts[1]}}
-			svc, err := NewService(newMemoryRepo(), newMemoryCharacterRepo(), newMemoryInventoryRepo(),
-				WithClock(clock), WithPresenceTracker(NewValkeyPresenceTracker(store.Client())), WithRNG(rng))
+			svc, err := NewService(NewValkeyPresenceTracker(store.Client()), newMemoryCharacterRepo(), newMemoryInventoryRepo(),
+				WithClock(clock), WithRNG(rng))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -189,8 +189,8 @@ func TestPostReviewCrowdDuplicateSlots(t *testing.T) {
 			propCount:  1, // 1 + 1 = 2 props
 		}
 		tracker := NewValkeyPresenceTracker(store.Client())
-		svc, err := NewService(newMemoryRepo(), newMemoryCharacterRepo(), newMemoryInventoryRepo(),
-			WithClock(clock), WithPresenceTracker(tracker), WithRNG(rng))
+		svc, err := NewService(tracker, newMemoryCharacterRepo(), newMemoryInventoryRepo(),
+			WithClock(clock), WithRNG(rng))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -246,8 +246,8 @@ func TestPostReviewCrowdDuplicateSlots(t *testing.T) {
 			propCount:  1, // 1 + 1 = 2 props
 		}
 		tracker := NewValkeyPresenceTracker(store.Client())
-		svc, err := NewService(newMemoryRepo(), newMemoryCharacterRepo(), newMemoryInventoryRepo(),
-			WithClock(clock), WithPresenceTracker(tracker), WithRNG(rng))
+		svc, err := NewService(tracker, newMemoryCharacterRepo(), newMemoryInventoryRepo(),
+			WithClock(clock), WithRNG(rng))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -288,8 +288,8 @@ func TestPostReviewCrowdDuplicateSlots(t *testing.T) {
 			propCount:  0, // 1 + 0 = 1 prop
 		}
 		tracker := NewValkeyPresenceTracker(store.Client())
-		svc, err := NewService(newMemoryRepo(), newMemoryCharacterRepo(), newMemoryInventoryRepo(),
-			WithClock(clock), WithPresenceTracker(tracker), WithRNG(rng))
+		svc, err := NewService(tracker, newMemoryCharacterRepo(), newMemoryInventoryRepo(),
+			WithClock(clock), WithRNG(rng))
 		if err != nil {
 			t.Fatal(err)
 		}

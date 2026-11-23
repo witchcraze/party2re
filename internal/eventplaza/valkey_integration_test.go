@@ -45,7 +45,7 @@ func TestRealValkeyPresenceRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 	characters.characters[char.ID] = char
-	svc, err := NewService(newMemoryRepo(), characters, newMemoryInventoryRepo(), WithClock(clock), WithPresenceTracker(tracker))
+	svc, err := NewService(tracker, characters, newMemoryInventoryRepo(), WithClock(clock))
 	if err != nil {
 		t.Fatal(err)
 	}

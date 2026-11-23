@@ -59,11 +59,6 @@ type PlazaStatus struct {
 	NextTierThreshold      int    `json:"next_tier_threshold"`
 }
 
-type Repository interface {
-	RecordPresence(ctx context.Context, characterID string, at time.Time) error
-	CountActiveParticipants(ctx context.Context, cutoff time.Time) (int, error)
-}
-
 type PresenceTracker interface {
 	RecordPresence(ctx context.Context, displayName string, at time.Time) error
 	AppendCrowd(ctx context.Context, crowd []Presence) error
@@ -115,7 +110,6 @@ func (realClock) Now() time.Time {
 }
 
 type Service struct {
-	repo            Repository
 	presenceTracker PresenceTracker
 	characterRepo   CharacterRepository
 	inventoryRepo   InventoryRepository
@@ -154,12 +148,6 @@ func WithBazaarCatalog(catalog []BazaarItem) Option {
 	}
 }
 
-func WithPresenceTracker(tracker PresenceTracker) Option {
-	return func(s *Service) {
-		s.presenceTracker = tracker
-	}
-}
-
 func WithHelperProvider(helper HelperProvider) Option {
 	return func(s *Service) {
 		s.helper = helper
@@ -193,12 +181,12 @@ func (s *Service) SetCollectionRecorder(recorder CollectionRecorder) {
 }
 
 func NewService(
-	repo Repository,
+	tracker PresenceTracker,
 	characterRepo CharacterRepository,
 	inventoryRepo InventoryRepository,
 	opts ...Option,
 ) (*Service, error) {
-	if repo == nil || characterRepo == nil || inventoryRepo == nil {
+	if tracker == nil || characterRepo == nil || inventoryRepo == nil {
 		return nil, ErrNilDependency
 	}
 
@@ -208,12 +196,12 @@ func NewService(
 	}
 
 	svc := &Service{
-		repo:          repo,
-		characterRepo: characterRepo,
-		inventoryRepo: inventoryRepo,
-		clock:         realClock{},
-		bazaarCatalog: catalog,
-		rng:           random.Default(),
+		presenceTracker: tracker,
+		characterRepo:   characterRepo,
+		inventoryRepo:   inventoryRepo,
+		clock:           realClock{},
+		bazaarCatalog:   catalog,
+		rng:             random.Default(),
 	}
 
 	for _, opt := range opts {
@@ -234,18 +222,7 @@ func NewService(
 }
 
 func (s *Service) observeParticipants(ctx context.Context) (PresenceSnapshot, error) {
-	if s.presenceTracker != nil {
-		return s.presenceTracker.Observe(ctx, s.clock.Now())
-	}
-	count, err := s.repo.CountActiveParticipants(ctx, s.clock.Now().Add(-PresenceWindow))
-	return PresenceSnapshot{Stored: count, Active: count}, err
-}
-
-func (s *Service) recordPresence(ctx context.Context, characterID, displayName string, at time.Time) error {
-	if s.presenceTracker != nil {
-		return s.presenceTracker.RecordPresence(ctx, displayName, at)
-	}
-	return s.repo.RecordPresence(ctx, characterID, at)
+	return s.presenceTracker.Observe(ctx, s.clock.Now())
 }
 
 // CalculateMerchantTier selects the catalog using the stored count before display cleanup.
@@ -267,15 +244,11 @@ func (s *Service) RecordPresence(ctx context.Context, characterID string) error 
 	if characterID == "" {
 		return ErrCharacterNotFound
 	}
-	displayName := ""
-	if s.presenceTracker != nil {
-		char, err := s.characterRepo.FindByID(ctx, characterID)
-		if err != nil {
-			return err
-		}
-		displayName = char.Name
+	char, err := s.characterRepo.FindByID(ctx, characterID)
+	if err != nil {
+		return err
 	}
-	return s.recordPresence(ctx, characterID, displayName, s.clock.Now())
+	return s.presenceTracker.RecordPresence(ctx, char.Name, s.clock.Now())
 }
 
 func (s *Service) GetPlazaStatus(ctx context.Context) (PlazaStatus, error) {

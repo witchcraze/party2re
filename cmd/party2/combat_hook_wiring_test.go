@@ -53,8 +53,7 @@ func TestBossVictoryBanquetProductionHook(t *testing.T) {
 	f := newHookWiringFixture(t, testutil.OpenValkey(t))
 	tracker := &victoryCrowdTracker{}
 	plaza, err := eventplaza.NewService(
-		&struct{ eventplaza.Repository }{}, &struct{ eventplaza.CharacterRepository }{},
-		&struct{ eventplaza.InventoryRepository }{}, eventplaza.WithPresenceTracker(tracker))
+		tracker, &struct{ eventplaza.CharacterRepository }{}, &struct{ eventplaza.InventoryRepository }{})
 	if err != nil {
 		t.Fatal(err)
 	}

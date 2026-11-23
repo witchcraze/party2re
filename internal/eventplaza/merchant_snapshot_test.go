@@ -21,7 +21,7 @@ func TestRealAndVirtualGuestsShareDisplayNameCleanup(t *testing.T) {
 	characters.characters[char.ID] = char
 	store := newMockSortedSetStore()
 	tracker := NewValkeyPresenceTracker(store.Client())
-	svc, err := NewService(newMemoryRepo(), characters, newMemoryInventoryRepo(), WithClock(clock), WithPresenceTracker(tracker))
+	svc, err := NewService(tracker, characters, newMemoryInventoryRepo(), WithClock(clock))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestCatalogAndPurchaseUseExpiredStoredSnapshot(t *testing.T) {
 			}
 			char.Money = 50000
 			characters.characters[char.ID] = char
-			svc, err := NewService(newMemoryRepo(), characters, newMemoryInventoryRepo(), WithClock(&mockClock{now: now}), WithPresenceTracker(tracker))
+			svc, err := NewService(tracker, characters, newMemoryInventoryRepo(), WithClock(&mockClock{now: now}))
 			if err != nil {
 				t.Fatal(err)
 			}

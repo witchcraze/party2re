@@ -91,8 +91,8 @@ func (s *mockSortedSetStore) Client() valkey.Client {
 
 func newTrackedService(t *testing.T, store *mockSortedSetStore, clock *mockClock) *Service {
 	t.Helper()
-	svc, err := NewService(newMemoryRepo(), newMemoryCharacterRepo(), newMemoryInventoryRepo(),
-		WithClock(clock), WithPresenceTracker(NewValkeyPresenceTracker(store.Client())))
+	svc, err := NewService(NewValkeyPresenceTracker(store.Client()), newMemoryCharacterRepo(), newMemoryInventoryRepo(),
+		WithClock(clock))
 	if err != nil {
 		t.Fatal(err)
 	}

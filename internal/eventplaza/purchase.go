@@ -123,7 +123,8 @@ func (s *Service) PurchaseBazaarItem(
 				}
 			}
 
-			_ = s.recordPresence(txCtx, characterID, char.Name, s.clock.Now())
+			//lint:ignore error-swallow best-effort presence refresh must not veto the purchase
+			_ = s.presenceTracker.RecordPresence(txCtx, char.Name, s.clock.Now())
 
 			result = BazaarPurchaseResult{
 				CharacterID:         characterID,
@@ -184,7 +185,8 @@ func (s *Service) PurchaseBazaarItem(
 			}
 		}
 
-		_ = s.recordPresence(txCtx, characterID, char.Name, s.clock.Now())
+		//lint:ignore error-swallow best-effort presence refresh must not veto the purchase
+		_ = s.presenceTracker.RecordPresence(txCtx, char.Name, s.clock.Now())
 
 		result = BazaarPurchaseResult{
 			CharacterID:         characterID,
