@@ -26,6 +26,62 @@ func npc405Fixture() (corebattle.LifetimeState, *corebattle.NPCJob405Context, Ba
 	return s, c, d
 }
 
+// The ordered keys come from the assignments and fixed names in _skill.cgi:7888–8017.
+func TestNPC405SourceNameVariants(t *testing.T) {
+	for _, row := range []struct {
+		hp   int
+		keys []string
+	}{
+		{501, []string{"44f5964d65288c7b", "96e4df99e10741d7", "e46fb3f4faf6404c", "4f618c093dfe00c8", "e27efdff8f862033", "4e848b41825ed52c"}},
+		{500, []string{"c604216a64eb6f92", "96e4df99e10741d7", "e46fb3f4faf6404c", "4f618c093dfe00c8", "387bb6a46136243d", "8a1dd0ccbed0613e"}},
+	} {
+		s, c, d := npc405Fixture()
+		s.Actors[0].HP, s.Actors[0].MaxHP = row.hp, 1000
+		f := corebattle.CallbackContext{TargetContext: c.TargetContext}
+		bindings, err := s.CallbackBindings(&f, d.Invocations, 405)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var keys []string
+		for _, binding := range bindings {
+			keys = append(keys, BindingSourceKey(binding, false))
+		}
+		if !slices.Equal(keys, row.keys) {
+			t.Fatalf("HP %d: keys %v, want %v", row.hp, keys, row.keys)
+		}
+	}
+}
+
+func TestNPC405CustomSourceNameShadowsWeightedSlots(t *testing.T) {
+	s, c, f, d := npcSelectionFixture()
+	d.RegisterNPCJob405(&corebattle.NPCJob405Context{DamageContext: c.DamageContext})
+	d.RegisterDefenseGems()
+	a := &s.Actors[0]
+	a.Jobs = corebattle.BattleJobs{JobID: "job-405", OldJobID: "job-405"}
+	a.MP, a.CMP = 76, 100
+	a.NPCLoadout = &corebattle.NPCLoadout{
+		CustomName: "バプテスマ", // Exact source name of position 2 (_skill.cgi:7932).
+		Gems:       [3]string{"gem_guard_1"}, GemCosts: [3]int{20}, CustomCost: 20,
+	}
+	pool, err := d.npcChoicePool(&s, &f, NPCDefaultSeed())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, choice := range pool.Choices {
+		ids = append(ids, choice.ID)
+	}
+	if want := []string{"npc-normal-attack", "npc-custom", "npc-custom", "npc-custom"}; !slices.Equal(ids, want) {
+		t.Fatalf("pool %v, want %v", ids, want)
+	}
+	if err := s.ApplyNPCChoice(&f, pool.Catalog, pool.Choices[1], noArithmeticDraws{t}); err != nil {
+		t.Fatal(err)
+	}
+	if a.MP != 76 || a.CMP != 80 || a.Temporary != corebattle.TemporaryDefense {
+		t.Fatalf("overridden slot applied wrong body or cost: MP %d, CMP %d, temporary %q", a.MP, a.CMP, a.Temporary)
+	}
+}
+
 // executeNPC405 resolves id through the HP-selected table, as discovery does.
 func executeNPC405(t *testing.T, s *corebattle.LifetimeState, c *corebattle.NPCJob405Context, d BattleDefinitions, id string, args []string, draws ...float64) {
 	t.Helper()

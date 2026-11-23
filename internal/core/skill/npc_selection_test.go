@@ -543,14 +543,17 @@ func TestNPCSourceKeysCoverRegisteredTables(t *testing.T) {
 	if EntrySourceKey("npc-normal-attack", false) == "" {
 		t.Fatal("npc-normal-attack missing source name key")
 	}
-	for _, job := range []int{88, 90, 91, 92, 93, 94, 95, 97, 98, 99, 402, 403} {
-		entries := corebattle.NPCJobEntries(job)
-		if len(entries) == 0 {
-			t.Fatalf("job %d returned no NPC entries", job)
-		}
-		for _, entry := range entries {
-			if EntrySourceKey(entry.ID, false) == "" {
-				t.Errorf("NPC job %d entry %s missing source name key", job, entry.ID)
+	s, op := runNPCFixture(t)
+	frame := corebattle.CallbackContext{TargetContext: op.Damage.TargetContext, Damage: &op.Damage, Defeat: op.Defeat}
+	var d BattleDefinitions
+	registerNPCFixture(&d, &s, &frame)
+	for job, table := range d.Invocations.JobTables {
+		for _, entries := range table.Variants {
+			for _, entry := range entries {
+				// The generated job82 position takes its key from the selected child.
+				if d.Invocations.Entries[entry.ID].Invocation.Kind != "job-82-generated" && EntrySourceKey(entry.ID, false) == "" {
+					t.Errorf("NPC job %d entry %s missing source name key", job, entry.ID)
+				}
 			}
 		}
 	}
