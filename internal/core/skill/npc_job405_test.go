@@ -414,3 +414,49 @@ func TestNPC405BaptismSkipsFallenTargets(t *testing.T) {
 		t.Fatal(e, c.DamageCalls)
 	}
 }
+
+// Item239 raises single-target hits by helper count (×1.2 on the second,
+// _skill.cgi:10056–10060), so admission must carry the count between hits.
+func TestNPC405AdmissionCarriesItem239HitCount(t *testing.T) {
+	for _, row := range []struct {
+		name, id string
+		hp       [2]int
+		reject   bool
+	}{
+		// Cleave hit2: 799×1.2 → ≤1150; without the boost ≤958.
+		{"cleave-lethal", "npc-job-405-position-4-wounded", [2]int{2000, 1000}, true},
+		{"cleave-survives", "npc-job-405-position-4-wounded", [2]int{2000, 1200}, false},
+		// Chain on one enemy: ≤671 + 896×1.2 → ≤645 (≤537 unboosted).
+		{"chain-lethal", "npc-job-405-position-5-wounded", [2]int{1250, 1250}, true},
+		{"chain-survives", "npc-job-405-position-5-wounded", [2]int{1400, 1400}, false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			s, c, _ := npc405Fixture()
+			other := s.Actors[1]
+			other.ID = "enemy2"
+			s.Actors = append(s.Actors, other)
+			c.EnemyIDs = append(c.EnemyIDs, "enemy2")
+			s.Actors[0].HP, s.Actors[0].ItemDefinitionIDs = 500, []string{"item-239"}
+			s.Actors[1].HP, s.Actors[3].HP = row.hp[0], row.hp[1]
+			s.Actors[1].Defense, s.Actors[3].Defense = 0, 0
+			c.Death = nil
+			err := s.ValidateNPCJob405(c, row.id, noArithmeticDraws{t})
+			if row.reject != errors.Is(err, corebattle.ErrUnsupportedEffect) || (!row.reject && err != nil) {
+				t.Fatal(err)
+			}
+		})
+	}
+	// Near-maximal rolls: the boosted second cleave leaves 1200−1150.
+	s, c, d := npc405Fixture()
+	other := s.Actors[1]
+	other.ID = "enemy2"
+	s.Actors = append(s.Actors, other)
+	c.EnemyIDs = append(c.EnemyIDs, "enemy2")
+	s.Actors[0].HP, s.Actors[0].ItemDefinitionIDs = 500, []string{"item-239"}
+	s.Actors[1].HP, s.Actors[3].HP, s.Actors[1].Defense, s.Actors[3].Defense = 2000, 1200, 0, 0
+	c.Death = nil
+	executeNPC405(t, &s, c, d, "npc-job-405-position-4-wounded", nil, .999, .999, .999, .999)
+	if s.Actors[1].HP != 2000-958 || s.Actors[3].HP != 50 || c.DamageCalls != 2 {
+		t.Fatal(s.Actors[1].HP, s.Actors[3].HP, c.DamageCalls)
+	}
+}

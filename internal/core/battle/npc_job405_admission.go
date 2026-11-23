@@ -142,6 +142,16 @@ func (p *LifetimeState) admitNPC405Hit(damage *DamageContext, death *DefeatConte
 		return err
 	}
 	p.carryNPC405(states)
+	// Later hits read the helper count (item239's ×1.2–1.6 grows with it) and
+	// item185's ×0.75, which is carried only when every branch activates it.
+	if len(states) > 0 {
+		item185 := true
+		for _, state := range states {
+			damage.DamageCalls = max(damage.DamageCalls, state.Context.DamageCalls)
+			item185 = item185 && state.Context.Item185Activated
+		}
+		damage.Item185Activated = damage.Item185Activated || item185
+	}
 	return nil
 }
 
