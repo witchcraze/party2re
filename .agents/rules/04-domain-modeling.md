@@ -25,4 +25,4 @@ Feature modules MUST NOT mutate core fields directly. Use:
 - inventory: `Inventory.Add`, `Consume`;
 - equipment: `Equipment.Equip`, `Unequip`.
 
-Enforced by `internal/core/core_lint_test.go`. Passing it is not proof of legacy parity.
+See the [core mutation lint](../../internal/core/core_lint_test.go).

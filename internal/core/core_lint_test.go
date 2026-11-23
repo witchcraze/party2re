@@ -73,9 +73,34 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 	isAllowedInventory := isPathAllowed(filename, allowedInventoryPaths)
 	isAllowedEquipment := isPathAllowed(filename, allowedEquipmentPaths)
 
+	checkInventoryItemFieldWrite := func(expr ast.Expr) {
+		if isAllowedInventory {
+			return
+		}
+		field, ok := ast.Unparen(expr).(*ast.SelectorExpr)
+		if !ok {
+			return
+		}
+		row, ok := ast.Unparen(field.X).(*ast.IndexExpr)
+		if !ok {
+			return
+		}
+		items, ok := ast.Unparen(row.X).(*ast.SelectorExpr)
+		if !ok || items.Sel.Name != "Items" {
+			return
+		}
+		violations = append(violations, coreViolation{
+			file:    filename,
+			line:    fset.Position(expr.Pos()).Line,
+			field:   "Items",
+			message: "direct field mutation of Inventory.Items is prohibited; use Inventory.Add or Consume instead",
+		})
+	}
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch stmt := n.(type) {
 		case *ast.IncDecStmt:
+			checkInventoryItemFieldWrite(stmt.X)
 			if sel, ok := stmt.X.(*ast.SelectorExpr); ok {
 				fieldName := sel.Sel.Name
 				pos := fset.Position(stmt.Pos())
@@ -129,6 +154,7 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 
 		case *ast.AssignStmt:
 			for _, lhs := range stmt.Lhs {
+				checkInventoryItemFieldWrite(lhs)
 				// 1. Direct selector assignment (e.g. c.Experience = ..., c.Money += ..., inv.Items = ...)
 				if sel, ok := lhs.(*ast.SelectorExpr); ok {
 					fieldName := sel.Sel.Name
@@ -586,6 +612,7 @@ func HackJob(cj *CharacterJob) {
 			code: `package feature
 func Manage(inv *Inventory, inst Instance) error {
 	_ = inv.Add(inst)
+	_ = inv.Items[0].Quantity
 	return inv.Consume(inst.ID, 1)
 }`,
 			expectError: false,
@@ -611,6 +638,51 @@ func ModifyItem(inv *Inventory, inst Instance) {
 			expectError: true,
 			field:       "Items",
 			errSnippet:  "use Inventory.Add or Consume",
+		},
+		{
+			name:        "Violation: Inventory.Items quantity assignment",
+			path:        "internal/feature/service.go",
+			code:        `package feature; func ModifyItem(inv *Inventory) { inv.Items[0].Quantity = 2 }`,
+			expectError: true,
+			field:       "Items",
+			errSnippet:  "use Inventory.Add or Consume",
+		},
+		{
+			name:        "Violation: Inventory.Items definition assignment",
+			path:        "internal/feature/service.go",
+			code:        `package feature; func ModifyItem(inv *Inventory) { inv.Items[0].DefinitionID = "item-001" }`,
+			expectError: true,
+			field:       "Items",
+			errSnippet:  "use Inventory.Add or Consume",
+		},
+		{
+			name:        "Violation: Inventory.Items compound assignment",
+			path:        "internal/feature/service.go",
+			code:        `package feature; func ModifyItem(inv *Inventory) { ((inv.Items)[0]).Quantity += 2 }`,
+			expectError: true,
+			field:       "Items",
+			errSnippet:  "use Inventory.Add or Consume",
+		},
+		{
+			name:        "Violation: Inventory.Items increment",
+			path:        "internal/feature/service.go",
+			code:        `package feature; func ModifyItem(inv *Inventory) { inv.Items[0].Quantity++ }`,
+			expectError: true,
+			field:       "Items",
+			errSnippet:  "use Inventory.Add or Consume",
+		},
+		{
+			name:        "Violation: Inventory.Items decrement",
+			path:        "internal/feature/service.go",
+			code:        `package feature; func ModifyItem(inv *Inventory) { inv.Items[0].Quantity-- }`,
+			expectError: true,
+			field:       "Items",
+			errSnippet:  "use Inventory.Add or Consume",
+		},
+		{
+			name: "Valid Depot: Indexed quantity mutation",
+			path: "internal/depot/depot.go",
+			code: `package depot; func Stack(d *Depot) { d.Items[0].Quantity += 2; d.Items[0].Quantity-- }`,
 		},
 
 		// 5. Equipment Slots
