@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -290,5 +291,169 @@ func TestRunCombatAssetFailureAfterTravelOrWithdrawalRollsBack(t *testing.T) {
 				t.Fatal("retry did not travel")
 			}
 		})
+	}
+}
+
+// Stage25's first summon-path load in a request consumes the top-level branch
+// draw before the letter draw, and a subsequent job407 transform in the same
+// request does not repeat it.
+func TestRunCombatStage25SummonAndJob407ShareStageReload(t *testing.T) {
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage, err := stages.FindByID("stage-25")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := func(id, actorID string) corebattle.LifetimeActor {
+		m, err := monsters.FindByID(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := m.NPCPayload()
+		a.ID, a.TeamID, a.MaxHP, a.MaxMP = actorID, "enemies", a.HP, a.MP
+		return a
+	}
+
+	// Player uses held tool-78 (consumes 1 reload draw, then suffix .0 -> 'I',
+	// then position .0 -> pool[0]), followed in the same request by statue's
+	// job407 transform (which skips the reload draw and consumes 23 draws across
+	// 3 successors, plus statue's item-246 tail draw).
+	f, _ := lowRunCombat(t, 1)
+	// Draws: [seal .5] [player tmp .5] [reload .5] [suffix .0] [pos .0] [npc tmp .5] [npc sel .99] [job407: 23 draws] [item-246 .5]
+	draws := []float64{.5, .5, .5, 0, 0, .5, .99}
+	for range 23 {
+		draws = append(draws, .99)
+	}
+	draws = append(draws, .5)
+	rng := &scriptRNG{draws: draws}
+	f.cfg.RNG = rng
+	f.restart(t)
+	grantHeldTo(t, f, 0, "item-078")
+	statue := payload("ex-25-boss-224", "statue")
+	statue.HP, statue.MP = 5000, 54
+	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+		r.Stage = stage.OrdinarySeason("stage-25")
+		r.EncounterPool = nil
+		for _, id := range r.Stage.Ordinary.MonsterIDs {
+			r.EncounterPool = append(r.EncounterPool, payload(id, id))
+		}
+		r.AppearancePositions = append([]int(nil), r.Stage.Ordinary.Appears...)
+		a := runActorByID(r, f.actors[0].ID)
+		a.CMPCharge, a.CMPNeedCharge = 0, 9
+		a.HeldToolID = new("item-078")
+	}, statue, payload("ex-25-boss-206", "ice-a"))
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "harp", "tool", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	if rng.calls.Load() != 31 || len(rng.draws) != 0 {
+		t.Fatalf("unexpected draws: calls=%d remaining=%v", rng.calls.Load(), rng.draws)
+	}
+	r := readStockRoom(t, f, cmd.RunID)
+	// The summoned ice object was consolidated by job407 into a third successor (3 successors + statue = 4).
+	if len(r.Enemies) != 4 || r.Enemies[3] != "statue" {
+		t.Fatalf("expected 3 consolidated successors + statue, got %v", r.Enemies)
+	}
+}
+
+// Stage15's first summon in a request rebuilds ten pool entries from the
+// summoner's stats (20 draws), which a second summon in the same request
+// reuses; a new request whose first loader is an NPC rebuilds from that NPC.
+func TestRunCombatStage15RebuildsPoolFromFirstSummonerPerRequest(t *testing.T) {
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage, err := stages.FindByID("stage-15")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _ := lowRunCombat(t, 1)
+	// Request 1: player uses item-078 (rebuilds from player SP=17, AT=77),
+	// then npc-1 responds with job-95 (reuses player-rebuilt pool without reload).
+	// Draws: [seal .5] [tmp .5] [20 rebuild draws: 10×(0, 0 -> starter)] [suffix 0 -> I] [pos 0]
+	//        [npc tmp .5] [npc sel .99] [npc suffix .5 -> R] [npc pos 0]
+	draws := []float64{.5, .5}
+	for range 20 {
+		draws = append(draws, 0)
+	}
+	draws = append(draws, 0, 0, .5, .99, .5, 0)
+	rng := &scriptRNG{draws: draws}
+	f.cfg.RNG = rng
+	f.restart(t)
+	grantHeldTo(t, f, 0, "item-078")
+	npc1 := runEnemy("npc-1", 888)
+	npc1.MaxHP, npc1.MaxMP, npc1.Attack, npc1.BaseStats.Attack, npc1.MP = 888, 222, 123, 123, 100
+	npc1.Jobs = corebattle.BattleJobs{JobID: "job-95", SP: 67, OldJobID: "starter"}
+	npc2 := npc1
+	npc2.ID = "npc-2"
+	stale := runEnemy("stale", 99)
+	stale.Jobs = corebattle.BattleJobs{JobID: "job-01", SP: 1}
+	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+		r.Stage = stage
+		r.EncounterPool = []corebattle.LifetimeActor{stale}
+		a := runActorByID(r, f.actors[0].ID)
+		a.MaxHP, a.Attack, a.BaseStats.Attack = 432, 77, 77
+		a.Jobs = corebattle.BattleJobs{JobID: "job-01", SP: 17, OldJobID: "starter"}
+		a.CMPCharge, a.CMPNeedCharge = 0, 9
+		a.HeldToolID = new("item-078")
+	}, npc1, npc2)
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "req1-tool", "tool", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	if rng.calls.Load() != 28 || len(rng.draws) != 0 {
+		t.Fatalf("req1 draws: calls=%d remaining=%v", rng.calls.Load(), rng.draws)
+	}
+	r := readStockRoom(t, f, cmd.RunID)
+	var playerSummon, npcReuse *corebattle.LifetimeActor
+	for _, id := range r.Enemies {
+		a := runActorByID(r, id)
+		if a == nil {
+			continue
+		}
+		switch a.RosterIdentity {
+		case "enemy-generated-0-I":
+			playerSummon = a
+		case "enemy-generated-0-R":
+			npcReuse = a
+		}
+	}
+	if playerSummon == nil || npcReuse == nil || playerSummon.Jobs.SP != 17 || npcReuse.Jobs.SP != 17 || npcReuse.Jobs.JobID != "starter" || npcReuse.TeamID != "enemies" {
+		t.Fatalf("req1 stage15 summons: enemies=%v player=%+v npc=%+v", r.Enemies, playerSummon, npcReuse)
+	}
+
+	// Request 2: player defends, then npc-2 responds first with job-95 (rebuilds
+	// 10 entries from npc-2 SP=67, job draw .99 -> job-87).
+	f.clock.add(3 * time.Second)
+	cmd.Version = r.Version
+	draws2 := []float64{.5, .5}      // seal, player defend tmp
+	draws2 = append(draws2, .5, .99) // npc tmp, npc sel
+	for range 10 {
+		draws2 = append(draws2, 0, .99) // sex, job-87
+	}
+	draws2 = append(draws2, .95, 0) // suffix -> Z, pos -> 0
+	rng2 := &scriptRNG{draws: draws2}
+	f.cfg.RNG = rng2
+	f.restart(t)
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "req2-defend", "defend", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	if rng2.calls.Load() != 26 || len(rng2.draws) != 0 {
+		t.Fatalf("req2 draws: calls=%d remaining=%v", rng2.calls.Load(), rng2.draws)
+	}
+	r2 := readStockRoom(t, f, cmd.RunID)
+	var npcRebuilt *corebattle.LifetimeActor
+	for _, id := range r2.Enemies {
+		if a := runActorByID(r2, id); a != nil && a.RosterIdentity == "enemy-generated-0-Z" {
+			npcRebuilt = a
+		}
+	}
+	if npcRebuilt == nil || npcRebuilt.Jobs.SP != 67 || npcRebuilt.Jobs.JobID != "job-87" || npcRebuilt.TeamID != "enemies" {
+		t.Fatalf("req2 npc-rebuilt summon: enemies=%v npcRebuilt=%+v", r2.Enemies, npcRebuilt)
 	}
 }

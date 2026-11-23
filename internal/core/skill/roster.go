@@ -59,6 +59,7 @@ func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id stri
 			}
 			rollbackContext(frame, c)
 			rollbackContext(frame, c.Death)
+			rollbackStageLoaded(frame, c.StageLoaded)
 			c.TargetContext = frame.TargetContext
 			target := ""
 			if len(frame.Arguments) > 0 {

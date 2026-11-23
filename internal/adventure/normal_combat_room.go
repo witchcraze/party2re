@@ -52,19 +52,40 @@ func (room stageRoom) Combat(ctx context.Context, r *NormalRun, actor string, re
 	}
 	transitions = append(transitions, encounter)
 	unlocked := false
+	var stageLoaded bool
+	var stagePool []corebattle.LifetimeActor
 	return runhost.RoomCombat{
 		NormalStage:  true,
 		JobRoom:      jobRoom,
 		Tools:        s.heldTravelTools(ctx, r, actor, reset, held),
 		StoredTravel: storedTravel,
 		Summons: func() runhost.Summons {
-			summons := runhost.Summons{EnemyPool: r.EncounterPool, AppearancePositions: r.AppearancePositions, Hard: r.Mode == CrawlModeHard}
+			for _, each := range transitions {
+				if each.Reload {
+					stageLoaded = true
+					break
+				}
+			}
+			pool := r.EncounterPool
+			if stageLoaded && len(stagePool) > 0 {
+				pool = stagePool
+			}
+			summons := runhost.Summons{
+				EnemyPool:           pool,
+				AppearancePositions: r.AppearancePositions,
+				Hard:                r.Mode == CrawlModeHard,
+				StageLoaded:         &stageLoaded,
+			}
 			if t := r.Stage.Ordinary; t != nil {
 				summons.EXPool, summons.EXXPool = s.payloads(t.EXRoster), s.payloads(t.EXXRoster)
-				// Stage25's top-level boss-branch draw; shortcut: stage15's
-				// reread draws and pool rebuild belong to #2691.
 				if len(t.BossRosters) > 1 {
 					summons.ReloadDraws = 1
+				}
+				if t.PartyCopy {
+					summons.RebuildPool = func(summoner corebattle.LifetimeActor, rng random.Generator) []corebattle.LifetimeActor {
+						stagePool = stage15SummonPool(summoner, rng)
+						return stagePool
+					}
 				}
 			}
 			return summons

@@ -168,9 +168,7 @@ func (p *LifetimeState) validateNPC407Roster(c *RosterContext, rng random.Genera
 // top-level draws, then a living copy summons the goddess in place of the
 // whole side, otherwise every ice object is replaced by a class successor.
 func (s *LifetimeState) applyNPC407Roster(c *RosterContext, rng random.Generator) error {
-	for range c.ReloadDraws {
-		rng.Float64()
-	}
+	s.reloadStage(c, rng)
 	side := s.npc407Side(c)
 	remove := func(id string) {
 		a := s.actor(id)

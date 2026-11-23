@@ -75,6 +75,7 @@ func (p runPorts) callbacks(room RoomCombat, state *corebattle.LifetimeState, re
 		EnemyPool: summons.EnemyPool, AppearancePositions: summons.AppearancePositions,
 		Hard: summons.Hard, Death: p.defeat,
 		EXPool: summons.EXPool, EXXPool: summons.EXXPool, ReloadDraws: summons.ReloadDraws,
+		RebuildPool: summons.RebuildPool, StageLoaded: summons.StageLoaded,
 	}
 	resources := d
 	transform := &corebattle.TransformationContext{EffectContext: d.EffectContext, RequesterIcon: icon, RequesterGender: gender}

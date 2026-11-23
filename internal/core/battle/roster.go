@@ -20,10 +20,13 @@ type RosterContext struct {
 	AppearancePositions []int
 	Hard                bool
 	// EXPool and EXXPool are the current stage's @ex_bosses and @exx_bosses
-	// payloads; ReloadDraws are the stage file's top-level draws that a
-	// source re-require consumes. Only job407's roster transform reads them.
+	// payloads; ReloadDraws and RebuildPool are the stage file's top-level
+	// effects that the request's first re-require consumes. StageLoaded shares
+	// the request-scoped loaded flag between enemy summon and job407.
 	EXPool, EXXPool []LifetimeActor
 	ReloadDraws     int
+	RebuildPool     func(summoner LifetimeActor, rng random.Generator) []LifetimeActor
+	StageLoaded     *bool
 	Status          *RosterStatusCallbacks
 	Death           *DefeatContext
 }
