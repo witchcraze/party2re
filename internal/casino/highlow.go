@@ -4,9 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"math/big"
-	"slices"
 	"strings"
 	"time"
 )
@@ -161,7 +159,6 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 
 	var detail *RoomDetail
 	var readErr error
-	var showdownWinners []string
 	var secondarySyncErr error
 
 	err := s.withRoomMutationLock(ctx, roomID, characterID, func(lockedCtx context.Context) error {
@@ -200,17 +197,19 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 				return err
 			}
 
-			var participants []*RoomMember
-			var eliminated []string
+			var participantCount int
 			for i := range members {
 				m := &members[i]
+				if m.CharacterID == characterID {
+					*m = *member
+				}
 				if !m.IsSpectator {
-					participants = append(participants, m)
+					participantCount++
 				}
 			}
 
-			if !action.Valid(len(participants)) {
-				if action == HighLowActionLow && len(participants) <= 2 {
+			if !action.Valid(participantCount) {
+				if action == HighLowActionLow && participantCount <= 2 {
 					return ErrLowNotAllowedTwo
 				}
 				return ErrInvalidHighLowAction
@@ -229,159 +228,21 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 				room.Pot += betToDeduct
 			}
 
+			now := time.Now().UTC()
 			member.Action = string(action)
-			member.UpdatedAt = time.Now().UTC()
-
-			// Re-count actions of all participants
-			foldedCount := 0
-			highCount := 0
-			lowCount := 0
-			callCount := 0
-			actedCount := 0
-
-			for _, m := range participants {
-				if m.CharacterID == characterID {
-					*m = *member
-				}
-				switch m.Action {
-				case string(HighLowActionFold):
-					foldedCount++
-					actedCount++
-				case string(HighLowActionHigh):
-					highCount++
-					actedCount++
-				case string(HighLowActionLow):
-					lowCount++
-					actedCount++
-				case string(HighLowActionCall):
-					callCount++
-					actedCount++
-				case "待機中": // counted as acted, as legacy counts every non-empty action
-					actedCount++
+			member.UpdatedAt = now
+			for i := range members {
+				if members[i].CharacterID == characterID {
+					members[i] = *member
+					break
 				}
 			}
 
-			totalParticipants := len(participants)
-			activeNonFolded := totalParticipants - foldedCount
-
-			shouldShowdown := false
-			if actedCount == totalParticipants {
-				// All players have acted in this round; only the actor's balance
-				// after paying counts ($m{coin}, party2/lib/casino_highlow.cgi:146).
-				if acc.Coins-betToDeduct <= 0 || room.CurrentBet >= room.MaxBet || float64(highCount+lowCount) >= float64(activeNonFolded)*0.5 {
-					shouldShowdown = true
-				} else {
-					// Next Round!
-					room.Round++
-					room.CurrentBet += room.Rate
-					for _, m := range participants {
-						if m.Action != string(HighLowActionFold) && m.Action != "待機中" {
-							m.Action = ""
-							m.UpdatedAt = time.Now().UTC()
-						}
-					}
-				}
+			if err := s.evaluateHighLowRound(txCtx, room, &members, acc.Coins-betToDeduct, now, s.incrementCasinoWins); err != nil {
+				return err
 			}
 
-			if shouldShowdown {
-				// Showdown resolution (party2/lib/casino_highlow.cgi:167-224)
-				higher := ""
-				lower := ""
-				maxCard := -1
-				minCard := 99
-
-				for _, m := range participants {
-					if m.Action == string(HighLowActionHigh) {
-						if m.Card > maxCard {
-							higher = m.CharacterID
-							maxCard = m.Card
-						}
-					} else if m.Action == string(HighLowActionLow) {
-						if m.Card < minCard {
-							lower = m.CharacterID
-							minCard = m.Card
-						}
-					}
-				}
-
-				if totalParticipants > 2 && higher != "" && lower != "" {
-					// Split prize 50/50 between highest and lowest
-					halfPot := room.Pot / 2
-					if halfPot > 0 {
-						if _, err := s.repo.DeductBetAndCreditPayout(txCtx, higher, 0, halfPot); err != nil {
-							return err
-						}
-						if _, err := s.repo.DeductBetAndCreditPayout(txCtx, lower, 0, halfPot); err != nil {
-							return err
-						}
-					}
-					showdownWinners = []string{higher, lower}
-					winnerCombined := higher + "," + lower
-					room.WinnerCharacterID = &winnerCombined
-				} else if higher != "" {
-					if room.Pot > 0 {
-						if _, err := s.repo.DeductBetAndCreditPayout(txCtx, higher, 0, room.Pot); err != nil {
-							return err
-						}
-					}
-					showdownWinners = []string{higher}
-					room.WinnerCharacterID = &higher
-				} else if lower != "" {
-					if room.Pot > 0 {
-						if _, err := s.repo.DeductBetAndCreditPayout(txCtx, lower, 0, room.Pot); err != nil {
-							return err
-						}
-					}
-					showdownWinners = []string{lower}
-					room.WinnerCharacterID = &lower
-				} else {
-					// Everyone folded or no high/low winners
-					room.WinnerCharacterID = nil
-				}
-
-				for _, winnerID := range showdownWinners {
-					if s.charRepo != nil {
-						wChar, err := s.charRepo.FindByIDForUpdate(txCtx, winnerID)
-						if err != nil {
-							return err
-						}
-						wChar.CasinoWins++
-						if err := s.charRepo.Update(txCtx, wChar); err != nil {
-							return err
-						}
-					}
-				}
-
-				room.Round = 0
-				room.Status = RoomStatusWaiting
-				room.CurrentBet = room.Rate
-				room.Pot = 0
-
-				// Eject members with 0 coins and set surviving to "待機中"
-				primaryWinner := ""
-				if len(showdownWinners) > 0 {
-					primaryWinner = showdownWinners[0]
-				}
-
-				for _, m := range participants {
-					pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
-					if err != nil {
-						return fmt.Errorf("getting casino account for member %s: %w", m.CharacterID, err)
-					}
-					if pAcc.Coins <= 0 {
-						eliminated = append(eliminated, m.CharacterID)
-						if room.LeaderCharacterID == m.CharacterID && primaryWinner != "" {
-							room.LeaderCharacterID = primaryWinner
-						}
-					} else {
-						m.Action = "待機中"
-						m.UpdatedAt = time.Now().UTC()
-					}
-				}
-			}
-
-			room.UpdatedAt = time.Now().UTC()
-			members = slices.DeleteFunc(members, func(m RoomMember) bool { return slices.Contains(eliminated, m.CharacterID) })
+			room.UpdatedAt = now
 			if err := s.roomRepo.UpdateRoomDetail(txCtx, RoomDetail{Room: *room, Members: members}); err != nil {
 				if errors.Is(err, ErrSecondarySync) {
 					secondarySyncErr = err
@@ -409,4 +270,111 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 	}
 
 	return detail, nil
+}
+
+// evaluateHighLowRound mirrors next_round and battle (party2/lib/casino_highlow.cgi:130-224).
+func (s *Service) evaluateHighLowRound(txCtx context.Context, room *Room, members *[]RoomMember, actorCoins int64, now time.Time, creditWins creditWinsFunc) error {
+	if room.Round <= 0 || room.Status != RoomStatusInProgress {
+		return nil
+	}
+
+	var participants []*RoomMember
+	foldedCount := 0
+	highCount := 0
+	lowCount := 0
+	actedCount := 0
+
+	for i := range *members {
+		m := &(*members)[i]
+		if m.IsSpectator {
+			continue
+		}
+		participants = append(participants, m)
+		switch m.Action {
+		case string(HighLowActionFold):
+			foldedCount++
+			actedCount++
+		case string(HighLowActionHigh):
+			highCount++
+			actedCount++
+		case string(HighLowActionLow):
+			lowCount++
+			actedCount++
+		case string(HighLowActionCall), "待機中": // legacy counts every non-empty action, including 待機中
+			actedCount++
+		}
+	}
+
+	totalParticipants := len(participants)
+	if totalParticipants == 0 {
+		return nil
+	}
+	activeNonFolded := totalParticipants - foldedCount
+
+	shouldShowdown := false
+	if actedCount == totalParticipants {
+		// All players have acted in this round; only the acting/leaving player's
+		// balance counts ($m{coin}, party2/lib/casino_highlow.cgi:146).
+		if actorCoins <= 0 || room.CurrentBet >= room.MaxBet || float64(highCount+lowCount) >= float64(activeNonFolded)*0.5 {
+			shouldShowdown = true
+		} else {
+			room.Round++
+			room.CurrentBet += room.Rate
+			for _, m := range participants {
+				if m.Action != string(HighLowActionFold) && m.Action != "待機中" {
+					m.Action = ""
+					m.UpdatedAt = now
+				}
+			}
+		}
+	}
+
+	if !shouldShowdown || room.Pot <= 0 {
+		return nil
+	}
+
+	higher := ""
+	lower := ""
+	maxCard := -1
+	minCard := 99
+
+	for _, m := range participants {
+		if m.Action == string(HighLowActionHigh) {
+			if m.Card > maxCard {
+				higher = m.CharacterID
+				maxCard = m.Card
+			}
+		} else if m.Action == string(HighLowActionLow) {
+			if m.Card < minCard {
+				lower = m.CharacterID
+				minCard = m.Card
+			}
+		}
+	}
+
+	var showdownWinners []string
+	if totalParticipants > 2 && higher != "" && lower != "" {
+		halfPot := room.Pot / 2
+		if halfPot > 0 {
+			if _, err := s.repo.DeductBetAndCreditPayout(txCtx, higher, 0, halfPot); err != nil {
+				return err
+			}
+			if _, err := s.repo.DeductBetAndCreditPayout(txCtx, lower, 0, halfPot); err != nil {
+				return err
+			}
+		}
+		showdownWinners = []string{higher, lower}
+	} else if higher != "" {
+		if _, err := s.repo.DeductBetAndCreditPayout(txCtx, higher, 0, room.Pot); err != nil {
+			return err
+		}
+		showdownWinners = []string{higher}
+	} else if lower != "" {
+		if _, err := s.repo.DeductBetAndCreditPayout(txCtx, lower, 0, room.Pot); err != nil {
+			return err
+		}
+		showdownWinners = []string{lower}
+	}
+
+	return s.finalizeShowdown(txCtx, room, members, showdownWinners, now, creditWins)
 }

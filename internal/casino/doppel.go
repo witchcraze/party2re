@@ -4,9 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"math/big"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -107,7 +105,8 @@ func (s *Service) StartDoppel(ctx context.Context, roomID string, leaderID strin
 
 			room.Round = 1
 			room.Status = RoomStatusInProgress
-			room.CurrentBet = room.Rate
+			// Legacy stores the starting participant count in $now_bet for mark bounds (casino_doppel.cgi:76).
+			room.CurrentBet = int64(len(participants))
 			room.MaxBet = room.Rate
 			room.Pot = 0
 			room.WinnerCharacterID = nil
@@ -142,7 +141,6 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 
 	var detail *RoomDetail
 	var readErr error
-	var showdownWinners []string
 	var secondarySyncErr error
 
 	err := s.withRoomMutationLock(ctx, roomID, characterID, func(lockedCtx context.Context) error {
@@ -177,18 +175,9 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 				return err
 			}
 
-			var participants []*RoomMember
-			var eliminated []string
-			for i := range members {
-				m := &members[i]
-				if !m.IsSpectator {
-					participants = append(participants, m)
-				}
-			}
-
-			// Available marks: 0..min(members at start, 7); now_bet is fixed by kaishi
-			// (party2/lib/casino_doppel.cgi:13-17, 76), so mid-game entrants add none.
-			maxAllowed := countDoppelPlayers(participants)
+			// Available marks: 0..min(now_bet, 7); now_bet is fixed in CurrentBet at kaishi
+			// (party2/lib/casino_doppel.cgi:13-17, 76), so mid-game joins/leaves keep it unchanged.
+			maxAllowed := int(room.CurrentBet)
 			if maxAllowed > len(AuthenticDoppelMarks)-1 {
 				maxAllowed = len(AuthenticDoppelMarks) - 1
 			}
@@ -211,117 +200,25 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 				}
 			}
 
+			now := time.Now().UTC()
 			member.Card = markIndex
 			member.Action = string(AuthenticDoppelMarks[markIndex])
-			member.UpdatedAt = time.Now().UTC()
-			for _, m := range participants {
-				if m.CharacterID == characterID {
-					*m = *member
+			member.UpdatedAt = now
+			leaderCard := -1
+			for i := range members {
+				if members[i].CharacterID == characterID {
+					members[i] = *member
+				}
+				if members[i].CharacterID == room.LeaderCharacterID {
+					leaderCard = members[i].Card
 				}
 			}
 
-			// Check if all participants have selected a mark
-			allSelected := true
-			for _, m := range participants {
-				if m.Card < 0 && m.Action != "待機中" { // is_all_select skips 待機中
-					allSelected = false
-					break
-				}
+			if err := s.evaluateDoppelRound(txCtx, room, &members, leaderCard, now, s.incrementCasinoWins); err != nil {
+				return err
 			}
 
-			if allSelected {
-				// Showdown (party2/lib/casino_doppel.cgi:104-146)
-				// Leader is the "親" (dealer / target)
-				var leaderCard int
-				for _, m := range participants {
-					if m.CharacterID == room.LeaderCharacterID {
-						leaderCard = m.Card
-					}
-				}
-
-				var matchedChildren []string
-				for _, m := range participants {
-					if m.CharacterID == room.LeaderCharacterID || m.Action == "待機中" {
-						continue
-					}
-					if m.Card == leaderCard {
-						matchedChildren = append(matchedChildren, m.CharacterID)
-					}
-				}
-
-				if len(matchedChildren) >= 1 {
-					// Children win! Prize is split equally among matching children
-					payout := room.Pot / int64(len(matchedChildren))
-					if payout > 0 {
-						for _, childID := range matchedChildren {
-							if _, err := s.repo.DeductBetAndCreditPayout(txCtx, childID, 0, payout); err != nil {
-								return err
-							}
-						}
-					}
-					showdownWinners = matchedChildren
-					winnerStr := strings.Join(matchedChildren, ",")
-					room.WinnerCharacterID = &winnerStr
-
-					// Leadership changes to one of the winners chosen at random (party2/lib/casino_doppel.cgi:133)
-					n, err := rand.Int(rand.Reader, big.NewInt(int64(len(matchedChildren))))
-					if err == nil {
-						room.LeaderCharacterID = matchedChildren[n.Int64()]
-					} else {
-						room.LeaderCharacterID = matchedChildren[0]
-					}
-				} else {
-					// Parent (Leader) wins! Leader takes the full pot
-					if room.Pot > 0 {
-						if _, err := s.repo.DeductBetAndCreditPayout(txCtx, room.LeaderCharacterID, 0, room.Pot); err != nil {
-							return err
-						}
-					}
-					showdownWinners = []string{room.LeaderCharacterID}
-					room.WinnerCharacterID = &room.LeaderCharacterID
-				}
-
-				for _, winnerID := range showdownWinners {
-					if s.charRepo != nil {
-						wChar, err := s.charRepo.FindByIDForUpdate(txCtx, winnerID)
-						if err != nil {
-							return err
-						}
-						wChar.CasinoWins++
-						if err := s.charRepo.Update(txCtx, wChar); err != nil {
-							return err
-						}
-					}
-				}
-
-				room.Round = 0
-				room.Status = RoomStatusWaiting
-				room.Pot = 0
-
-				primaryWinner := ""
-				if len(showdownWinners) > 0 {
-					primaryWinner = showdownWinners[0]
-				}
-
-				for _, m := range participants {
-					pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
-					if err != nil {
-						return fmt.Errorf("getting casino account for member %s: %w", m.CharacterID, err)
-					}
-					if pAcc.Coins <= 0 {
-						eliminated = append(eliminated, m.CharacterID)
-						if room.LeaderCharacterID == m.CharacterID && primaryWinner != "" {
-							room.LeaderCharacterID = primaryWinner
-						}
-					} else {
-						m.Action = "待機中"
-						m.UpdatedAt = time.Now().UTC()
-					}
-				}
-			}
-
-			room.UpdatedAt = time.Now().UTC()
-			members = slices.DeleteFunc(members, func(m RoomMember) bool { return slices.Contains(eliminated, m.CharacterID) })
+			room.UpdatedAt = now
 			if err := s.roomRepo.UpdateRoomDetail(txCtx, RoomDetail{Room: *room, Members: members}); err != nil {
 				if errors.Is(err, ErrSecondarySync) {
 					secondarySyncErr = err
@@ -351,13 +248,68 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 	return detail, nil
 }
 
-// countDoppelPlayers counts the participants dealt into the current game.
-func countDoppelPlayers(participants []*RoomMember) int {
-	n := 0
-	for _, m := range participants {
-		if m.Action != "待機中" {
-			n++
+// evaluateDoppelRound mirrors next_round, is_all_select, and battle (party2/lib/casino_doppel.cgi:85-146).
+func (s *Service) evaluateDoppelRound(txCtx context.Context, room *Room, members *[]RoomMember, leaderCard int, now time.Time, creditWins creditWinsFunc) error {
+	if room.Round <= 0 || room.Status != RoomStatusInProgress {
+		return nil
+	}
+
+	var participants []*RoomMember
+	for i := range *members {
+		m := &(*members)[i]
+		if !m.IsSpectator {
+			participants = append(participants, m)
 		}
 	}
-	return n
+	if len(participants) == 0 {
+		return nil
+	}
+
+	for _, m := range participants {
+		if m.Card < 0 && m.Action != "待機中" { // is_all_select skips 待機中
+			return nil
+		}
+	}
+
+	if room.Pot <= 0 {
+		return nil
+	}
+
+	var matchedChildren []string
+	for _, m := range participants {
+		if m.CharacterID == room.LeaderCharacterID || m.Action == "待機中" {
+			continue
+		}
+		if m.Card == leaderCard {
+			matchedChildren = append(matchedChildren, m.CharacterID)
+		}
+	}
+
+	var showdownWinners []string
+	if len(matchedChildren) >= 1 {
+		payout := room.Pot / int64(len(matchedChildren))
+		if payout > 0 {
+			for _, childID := range matchedChildren {
+				if _, err := s.repo.DeductBetAndCreditPayout(txCtx, childID, 0, payout); err != nil {
+					return err
+				}
+			}
+		}
+		showdownWinners = matchedChildren
+
+		// Leadership changes to one of the winners chosen at random (party2/lib/casino_doppel.cgi:133)
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(matchedChildren))))
+		if err == nil {
+			room.LeaderCharacterID = matchedChildren[n.Int64()]
+		} else {
+			room.LeaderCharacterID = matchedChildren[0]
+		}
+	} else {
+		if _, err := s.repo.DeductBetAndCreditPayout(txCtx, room.LeaderCharacterID, 0, room.Pot); err != nil {
+			return err
+		}
+		showdownWinners = []string{room.LeaderCharacterID}
+	}
+
+	return s.finalizeShowdown(txCtx, room, members, showdownWinners, now, creditWins)
 }

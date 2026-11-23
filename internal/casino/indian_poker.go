@@ -4,9 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"math/big"
-	"slices"
 	"time"
 )
 
@@ -194,120 +192,19 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 			if err != nil {
 				return err
 			}
-
-			var participants []*RoomMember
-			var eliminated []string
-			foldedCount := 0
-			showdownCount := 0
-			actedCount := 0
-
 			for i := range members {
-				m := &members[i]
-				if m.CharacterID == characterID {
-					*m = *member
-				}
-				if m.IsSpectator {
-					continue
-				}
-				participants = append(participants, m)
-				if m.Action == string(ActionFold) {
-					foldedCount++
-					actedCount++
-				} else if m.Action == string(ActionShowdown) {
-					showdownCount++
-					actedCount++
-				} else if m.Action == string(ActionCall) || m.Action == "待機中" {
-					actedCount++ // legacy counts every non-empty action, including 待機中
+				if members[i].CharacterID == characterID {
+					members[i] = *member
+					break
 				}
 			}
 
-			totalParticipants := len(participants)
-			activeNonFolded := totalParticipants - foldedCount
-
-			shouldShowdown := false
-			if activeNonFolded <= 1 {
-				// All players except 1 folded
-				shouldShowdown = true
-			} else if actedCount == totalParticipants {
-				// All players have acted in this round; only the actor's balance
-				// after paying counts ($m{coin}, casino_indian.cgi:128).
-				if acc.Coins-betToDeduct <= 0 || room.CurrentBet >= room.MaxBet || float64(showdownCount) >= float64(activeNonFolded)*0.5 {
-					shouldShowdown = true
-				} else {
-					// Next Round!
-					room.Round++
-					room.CurrentBet += room.Rate
-					for _, m := range participants {
-						if m.Action != string(ActionFold) && m.Action != "待機中" {
-							m.Action = ""
-							m.UpdatedAt = time.Now().UTC()
-						}
-					}
-				}
+			now := time.Now().UTC()
+			if err := s.evaluateIndianPokerRound(txCtx, room, &members, acc.Coins-betToDeduct, now, s.incrementCasinoWins); err != nil {
+				return err
 			}
 
-			if shouldShowdown {
-				// Showdown resolution (party2/lib/casino_indian.cgi:147-176)
-				maxCard := -1
-				winnerID := ""
-
-				for _, m := range participants {
-					if m.Action == string(ActionFold) || m.Action == "待機中" {
-						continue
-					}
-					if m.Card > maxCard {
-						maxCard = m.Card
-						winnerID = m.CharacterID
-					}
-				}
-
-				if winnerID != "" {
-					if room.Pot > 0 {
-						_, err = s.repo.DeductBetAndCreditPayout(txCtx, winnerID, 0, room.Pot)
-						if err != nil {
-							return err
-						}
-					}
-					if s.charRepo != nil {
-						wChar, err := s.charRepo.FindByIDForUpdate(txCtx, winnerID)
-						if err != nil {
-							return err
-						}
-						wChar.CasinoWins++
-						if err := s.charRepo.Update(txCtx, wChar); err != nil {
-							return err
-						}
-					}
-				}
-
-				room.Round = 0
-				room.Status = RoomStatusWaiting
-				room.CurrentBet = room.Rate
-				room.Pot = 0
-				if winnerID != "" {
-					room.WinnerCharacterID = &winnerID
-				}
-
-				// Eject members with 0 coins and set surviving to "待機中"
-				for _, m := range participants {
-					pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
-					if err != nil {
-						return fmt.Errorf("getting casino account for member %s: %w", m.CharacterID, err)
-					}
-					if pAcc.Coins <= 0 {
-						eliminated = append(eliminated, m.CharacterID)
-						if room.LeaderCharacterID == m.CharacterID && winnerID != "" {
-							room.LeaderCharacterID = winnerID
-						}
-					} else {
-						m.Action = "待機中"
-						m.UpdatedAt = time.Now().UTC()
-					}
-				}
-			}
-
-			room.UpdatedAt = time.Now().UTC()
-			members = slices.DeleteFunc(members, func(m RoomMember) bool { return slices.Contains(eliminated, m.CharacterID) })
+			room.UpdatedAt = now
 			if err := s.roomRepo.UpdateRoomDetail(txCtx, RoomDetail{Room: *room, Members: members}); err != nil {
 				if errors.Is(err, ErrSecondarySync) {
 					secondarySyncErr = err
@@ -335,4 +232,85 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 	}
 
 	return detail, nil
+}
+
+// evaluateIndianPokerRound mirrors next_round and battle (party2/lib/casino_indian.cgi:109-176).
+func (s *Service) evaluateIndianPokerRound(txCtx context.Context, room *Room, members *[]RoomMember, actorCoins int64, now time.Time, creditWins creditWinsFunc) error {
+	if room.Round <= 0 || room.Status != RoomStatusInProgress {
+		return nil
+	}
+
+	var participants []*RoomMember
+	foldedCount := 0
+	showdownCount := 0
+	actedCount := 0
+
+	for i := range *members {
+		m := &(*members)[i]
+		if m.IsSpectator {
+			continue
+		}
+		participants = append(participants, m)
+		if m.Action == string(ActionFold) {
+			foldedCount++
+			actedCount++
+		} else if m.Action == string(ActionShowdown) {
+			showdownCount++
+			actedCount++
+		} else if m.Action == string(ActionCall) || m.Action == "待機中" {
+			actedCount++ // legacy counts every non-empty action, including 待機中
+		}
+	}
+
+	totalParticipants := len(participants)
+	if totalParticipants == 0 {
+		return nil
+	}
+	activeNonFolded := totalParticipants - foldedCount
+
+	shouldShowdown := false
+	if activeNonFolded <= 1 {
+		// All players except 1 folded
+		shouldShowdown = true
+	} else if actedCount == totalParticipants {
+		// All players have acted in this round; only the acting/leaving player's
+		// balance counts ($m{coin}, casino_indian.cgi:128).
+		if actorCoins <= 0 || room.CurrentBet >= room.MaxBet || float64(showdownCount) >= float64(activeNonFolded)*0.5 {
+			shouldShowdown = true
+		} else {
+			room.Round++
+			room.CurrentBet += room.Rate
+			for _, m := range participants {
+				if m.Action != string(ActionFold) && m.Action != "待機中" {
+					m.Action = ""
+					m.UpdatedAt = now
+				}
+			}
+		}
+	}
+
+	if !shouldShowdown || room.Pot <= 0 {
+		return nil
+	}
+
+	maxCard := -1
+	winnerID := ""
+	for _, m := range participants {
+		if m.Action == string(ActionFold) || m.Action == "待機中" {
+			continue
+		}
+		if m.Card > maxCard {
+			maxCard = m.Card
+			winnerID = m.CharacterID
+		}
+	}
+
+	var winnerIDs []string
+	if winnerID != "" {
+		if _, err := s.repo.DeductBetAndCreditPayout(txCtx, winnerID, 0, room.Pot); err != nil {
+			return err
+		}
+		winnerIDs = []string{winnerID}
+	}
+	return s.finalizeShowdown(txCtx, room, members, winnerIDs, now, creditWins)
 }

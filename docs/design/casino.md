@@ -37,6 +37,6 @@ Non-obvious rules (deck, pot and round mechanics live in code):
 
 - Indian and High & Low fold still pay the current bet into the pot (`casino_indian.cgi:102`). Players with zero coins are ejected after settlement.
 - High & Low splits the pot between the highest High and lowest Low only with more than two players; a showdown with no High or Low declaration voids the pot (“お流れ”). Low requires more than two participants.
-- Doppel offers `min(participants, 7) + 1` marks. Coins are taken on a player's first selection in the round only. Matching children split the pot and one of them, chosen at random, becomes the leader; with no match the leader takes the pot and keeps leadership.
+- Doppel: coins are taken on a player's first selection in the round only. Matching children split the pot and one of them, chosen at random, becomes the leader; with no match the leader takes the pot and keeps leadership.
 - Slot: the 200-coin bet is limited to job46 (`casino.cgi:98,109–111`); a miss adds 1 fatigue (`casino.cgi:583,588`); the Wish 5 blessing gives a 25% chance of +50% on winning spins (`casino.cgi:565–568,577–580`).
 - Showdown winners increment casino wins (`casino_indian.cgi:165`, `casino_highlow.cgi:216`, `casino_doppel.cgi:120,138`), which feed the gambler ranking (`ranking.cgi:16`) and, with item039, unlock job46 at 10 wins (`_data.cgi:134`).

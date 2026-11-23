@@ -51,13 +51,8 @@ func (v RoomView) Controls(characterID string, coins int64) (RoomControls, error
 			}
 			c.Actions = append(c.Actions, string(HighLowActionFold))
 		case GameTypeDoppel:
-			players := v.Room.ParticipantCount
-			for _, p := range v.Members {
-				if !p.IsSpectator && p.Action == "待機中" {
-					players--
-				}
-			}
-			for _, mark := range AuthenticDoppelMarks[:min(players+1, len(AuthenticDoppelMarks))] {
+			marks := min(max(int(v.Room.CurrentBet)+1, 0), len(AuthenticDoppelMarks))
+			for _, mark := range AuthenticDoppelMarks[:marks] {
 				c.Actions = append(c.Actions, string(mark))
 			}
 		}

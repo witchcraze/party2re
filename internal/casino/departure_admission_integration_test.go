@@ -178,7 +178,7 @@ type pausedDepartureCommit struct {
 	resume chan struct{}
 }
 
-func (r pausedDepartureCommit) CommitDeparture(ctx context.Context, d casino.Departure, mutate func(context.Context) error) error {
+func (r pausedDepartureCommit) CommitDeparture(ctx context.Context, d *casino.Departure, mutate func(context.Context) error) error {
 	close(r.staged)
 	select {
 	case <-r.resume:

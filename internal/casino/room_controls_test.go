@@ -15,14 +15,16 @@ func TestRoomViewControls(t *testing.T) {
 	for _, tc := range []struct {
 		actor, role string
 		game        GameType
+		currentBet  int64
 		actions     []string
 	}{
-		{"hero", "leader", GameTypeIndian, []string{"call", "showdown", "fold"}},
-		{"peer", "member", GameTypeHighLow, []string{"call", "high", "fold"}},
-		{"hero", "leader", GameTypeDoppel, []string{"★", "●", "◆"}},
-		{"watcher", "spectator", GameTypeIndian, []string{}},
+		{"hero", "leader", GameTypeIndian, 10, []string{"call", "showdown", "fold"}},
+		{"peer", "member", GameTypeHighLow, 10, []string{"call", "high", "fold"}},
+		{"hero", "leader", GameTypeDoppel, 2, []string{"★", "●", "◆"}},
+		{"watcher", "spectator", GameTypeIndian, 10, []string{}},
 	} {
 		v.Room.GameType = tc.game
+		v.Room.CurrentBet = tc.currentBet
 		c, err := v.Controls(tc.actor, 1000)
 		if err != nil || c.Role != tc.role || c.CanStart || len(c.KickTargets) != 0 || !reflect.DeepEqual(c.Actions, tc.actions) {
 			t.Fatalf("%s/%s: %+v %v", tc.game, tc.actor, c, err)
@@ -38,7 +40,7 @@ func TestRoomViewControls(t *testing.T) {
 	if len(c.Actions) != 0 {
 		t.Fatal("acted member can act again")
 	}
-	v.Room.GameType = GameTypeDoppel
+	v.Room.GameType, v.Room.CurrentBet = GameTypeDoppel, 3
 	c, _ = v.Controls("hero", 1000)
 	if len(c.Actions) != 4 {
 		t.Fatal("existing Doppel mark reselection was hidden")
@@ -49,7 +51,7 @@ func TestRoomViewControls(t *testing.T) {
 
 	// つづける needs now_bet < max_bet && coin >= now_bet (casino_highlow.cgi:13-16).
 	v.Members[0].Action = ""
-	v.Room.GameType = GameTypeHighLow
+	v.Room.GameType, v.Room.CurrentBet = GameTypeHighLow, 10
 	for _, tc := range []struct {
 		bet, coins int64
 		call       bool
@@ -61,9 +63,9 @@ func TestRoomViewControls(t *testing.T) {
 		}
 	}
 
-	// A mid-game entrant sits out every game and adds no Doppel mark.
+	// A mid-game entrant sits out every game and adds no Doppel mark; departures keep CurrentBet fixed.
 	v.Members = append(v.Members, MemberObservation{CharacterID: "late", Action: "待機中"})
-	v.Room.ParticipantCount = 3
+	v.Room.ParticipantCount, v.Room.CurrentBet = 3, 2
 	for _, game := range []GameType{GameTypeIndian, GameTypeHighLow, GameTypeDoppel} {
 		v.Room.GameType = game
 		if c, _ = v.Controls("late", 1000); len(c.Actions) != 0 {
@@ -72,6 +74,10 @@ func TestRoomViewControls(t *testing.T) {
 	}
 	if c, _ = v.Controls("hero", 1000); !reflect.DeepEqual(c.Actions, []string{"★", "●", "◆"}) {
 		t.Fatalf("waiting entrant widened Doppel marks: %v", c.Actions)
+	}
+	v.Room.ParticipantCount, v.Room.CurrentBet = 2, 3
+	if c, _ = v.Controls("hero", 1000); !reflect.DeepEqual(c.Actions, []string{"★", "●", "◆", "♪"}) {
+		t.Fatalf("departure shrank Doppel marks: %v", c.Actions)
 	}
 }
 
