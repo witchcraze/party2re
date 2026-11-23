@@ -163,22 +163,79 @@ func TestRunCombatEXJob407RosterTransformPersists(t *testing.T) {
 	}
 }
 
-// EX-only NPC jobs without a table reject the whole command.
-func TestRunCombatEXNPCJobResponseStaysGated(t *testing.T) {
-	for _, job := range []string{"job-406", "job-408"} {
-		t.Run(job, func(t *testing.T) {
-			f, depots := lowRunCombat(t, 1)
-			foe := runEnemy("foe", 900)
-			foe.Jobs = corebattle.BattleJobs{JobID: job, OldJobID: job}
-			cmd := combatRoom(t, f, f.actors[0], nil, foe)
-			before := readStockRoom(t, f, cmd.RunID)
-			strike := combatCommand(cmd, "strike", "attack", "foe", "")
-			if _, err := f.svc.Command(t.Context(), strike); err == nil {
-				t.Fatal("gated NPC job answered")
-			}
-			assertUnchanged(t, f, depots, strike, before, nil, nil)
-		})
+func TestRunCombatEXJob408AnswersAfterJob407Summons(t *testing.T) {
+	f, _ := lowRunCombat(t, 1)
+	f.cfg.RNG = &stockRunRNG{}
+	f.restart(t)
+	stage, err := f.cfg.Stages.FindByID("stage-25")
+	if err != nil {
+		t.Fatal(err)
 	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	statueTemplate, err := monsters.FindByID("ex-25-boss-224")
+	if err != nil {
+		t.Fatal(err)
+	}
+	statue := statueTemplate.NPCPayload()
+	statue.ID, statue.TeamID = "statue", "enemies"
+	statue.MaxHP, statue.MaxMP, statue.MP = statue.HP, statue.MP, 54
+	statueCopy := statue.Clone()
+	statueCopy.ID, statueCopy.RosterIdentity = "copy", statue.EncounterIdentity+"-copy-I"
+	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+		r.Stage, r.EncounterStageID = stage.OrdinarySeason("stage-25"), stage.ID
+		a := runActorByID(r, f.actors[0].ID)
+		a.HP, a.MaxHP = 2000, 2000
+		r.EncounterPool = nil
+		for _, id := range r.Stage.Ordinary.MonsterIDs {
+			m, err := monsters.FindByID(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.EncounterPool = append(r.EncounterPool, m.NPCPayload())
+		}
+	}, statue, statueCopy)
+	r := accepted(t, f, combatCommand(cmd, "summon", "defend", "", ""))
+	if len(r.Enemies) != 1 {
+		t.Fatalf("summon roster %v", r.Enemies)
+	}
+	goddess := runActorByID(r, r.Enemies[0])
+	if goddess.Jobs.JobID != "job-408" || goddess.EncounterIdentity != "exx-25-boss-264" {
+		t.Fatalf("summoned actor %+v", goddess)
+	}
+	id, mp := goddess.ID, goddess.MP
+	cmd.Version = r.Version
+	f.clock.add(3 * time.Second)
+	r = accepted(t, f, combatCommand(cmd, "answer", "defend", "", ""))
+	goddess = runActorByID(r, id)
+	if goddess.MP != mp-87 || runActorByID(r, cmd.ActorID).Temporary != "" {
+		t.Fatalf("freezing wave left NPC MP %d (want %d) and requester temporary %q", goddess.MP, mp-87, runActorByID(r, cmd.ActorID).Temporary)
+	}
+
+	f.cfg.RNG = &scriptRNG{draws: []float64{.3, .3, .3, .3, .3, .3, .3, .3}}
+	f.restart(t)
+	cmd.Version = r.Version
+	f.clock.add(3 * time.Second)
+	r = accepted(t, f, combatCommand(cmd, "aura", "defend", "", ""))
+	a := runActorByID(r, cmd.ActorID)
+	if mp := runActorByID(r, id).MP; mp != goddess.MP-75 || a.MaxHP != 1600 || a.HP <= a.MaxHP {
+		t.Fatalf("aura left NPC MP %d and requester HP %d/%d", mp, a.HP, a.MaxHP)
+	}
+}
+
+func TestRunCombatEXJob406ResponseStaysGated(t *testing.T) {
+	f, depots := lowRunCombat(t, 1)
+	foe := runEnemy("foe", 900)
+	foe.Jobs = corebattle.BattleJobs{JobID: "job-406", OldJobID: "job-406"}
+	cmd := combatRoom(t, f, f.actors[0], nil, foe)
+	before := readStockRoom(t, f, cmd.RunID)
+	strike := combatCommand(cmd, "strike", "attack", "foe", "")
+	if _, err := f.svc.Command(t.Context(), strike); err == nil {
+		t.Fatal("gated NPC job answered")
+	}
+	assertUnchanged(t, f, depots, strike, before, nil, nil)
 }
 
 // During the NPC turn `%m` is still the requester, so job79's form entry reads
