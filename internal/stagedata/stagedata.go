@@ -18,7 +18,9 @@ type Stage struct {
 	PartyCopy   bool       `json:"party_copy,omitempty"`
 	// EXRoster is the floor-12 table; summons keep using MonsterIDs/Appears.
 	EXRoster []string `json:"ex_roster,omitempty"`
-	EXField  string   `json:"ex_field,omitempty"`
+	// EXXRoster (@exx_bosses) is reached only by job407's roster transform.
+	EXXRoster []string `json:"exx_roster,omitempty"`
+	EXField   string   `json:"ex_field,omitempty"`
 }
 
 // Monster is one stage entry: base stats, rewards and the legacy battle payload.

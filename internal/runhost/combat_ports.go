@@ -15,6 +15,9 @@ type runPorts struct {
 	damage corebattle.DamageContext
 	defeat *corebattle.DefeatContext
 	status *corebattle.StatusContext
+	// requesterID names the player whose request an NPC response answers;
+	// `%m` (its held item) stays the requester's during npc_turn.
+	requesterID string
 }
 
 func newRunPorts(frame corebattle.TargetContext, level *int, seals *corebattle.WeaponSealTable, field string, rewards *corebattle.DefeatRewards, npc bool) runPorts {
@@ -39,8 +42,12 @@ func (p runPorts) callbacks(room RoomCombat, state *corebattle.LifetimeState, re
 	// shortcut: entry builds every player actor with the default icon, read the
 	// requester's avatar here once entry adopts it.
 	icon := battle.DefaultActorIcon
-	if actor != nil && actor.HeldToolID != nil {
-		held = *actor.HeldToolID
+	holder := actor
+	if p.requesterID != "" {
+		holder = findActor(state.Actors, p.requesterID)
+	}
+	if holder != nil && holder.HeldToolID != nil {
+		held = *holder.HeldToolID
 	}
 	gender := ""
 	if requester != nil {
@@ -67,6 +74,7 @@ func (p runPorts) callbacks(room RoomCombat, state *corebattle.LifetimeState, re
 		DamageContext: d, RequesterItemID: held, EnemyTeamID: enemyTeam,
 		EnemyPool: summons.EnemyPool, AppearancePositions: summons.AppearancePositions,
 		Hard: summons.Hard, Death: p.defeat,
+		EXPool: summons.EXPool, EXXPool: summons.EXXPool, ReloadDraws: summons.ReloadDraws,
 	}
 	resources := d
 	transform := &corebattle.TransformationContext{EffectContext: d.EffectContext, RequesterIcon: icon, RequesterGender: gender}

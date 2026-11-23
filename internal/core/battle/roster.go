@@ -19,8 +19,13 @@ type RosterContext struct {
 	EnemyPool           []LifetimeActor
 	AppearancePositions []int
 	Hard                bool
-	Status              *RosterStatusCallbacks
-	Death               *DefeatContext
+	// EXPool and EXXPool are the current stage's @ex_bosses and @exx_bosses
+	// payloads; ReloadDraws are the stage file's top-level draws that a
+	// source re-require consumes. Only job407's roster transform reads them.
+	EXPool, EXXPool []LifetimeActor
+	ReloadDraws     int
+	Status          *RosterStatusCallbacks
+	Death           *DefeatContext
 }
 
 // RosterStatusCallbacks connects the status owner's fully certified targeted
@@ -45,6 +50,9 @@ type HelperPayload struct {
 	Form           int
 	Stats          [5]float64 // HP, MP, AT, DF, AG before independent summon rolls.
 	Jobs           BattleJobs
+	// Icon and EncounterIdentity carry a stage payload's art and defeat
+	// identity; the zero values keep the helper placeholder.
+	Icon, EncounterIdentity string
 }
 
 func (s *LifetimeState) validateHelper(c *RosterContext, p HelperPayload, rng random.Generator) error {
@@ -87,20 +95,39 @@ func (s *LifetimeState) AddHelper(c *RosterContext, p HelperPayload, rng random.
 	if s.rosterIdentity(p.Identity) != nil {
 		return r, nil
 	}
+	return s.putHelper(c, p, rng), nil
+}
+
+// putHelper rolls p onto the actor's side. A member already holding the
+// identity is overwritten in place, keeping its ID and single order slot
+// (_add_party's same-name overwrite; its duplicate listing is not kept).
+func (s *LifetimeState) putHelper(c *RosterContext, p HelperPayload, rng random.Generator) RosterResult {
 	a := s.actor(c.ActorID)
 	values := summonStats(p.Stats, c.RequesterItemID == "item-165", rng)
-	id := s.nextRosterID()
 	helper := LifetimeActor{Participant: Participant{
-		ID: id, Name: p.Name, TeamID: a.TeamID,
+		Name: p.Name, TeamID: a.TeamID,
 		HP: values[0], MaxHP: values[0], MP: values[1], MaxMP: values[1],
 		Attack: values[2], Defense: values[3], Agility: values[4],
 		BaseStats: BattleBaseStats{values[2], values[3], values[4]}, Gear: &BattleGearStats{},
 		Icon:             "assets/images/placeholders/battle/helpers.svg#" + p.Identity + "-" + strconv.Itoa(p.Form),
 		ExperienceReward: *c.RequesterLevel / 2, GoldReward: *c.RequesterLevel / 4,
-	}, Jobs: p.Jobs, OriginalJobs: p.Jobs, NPC: a.NPC, RosterIdentity: p.Identity, SummonForm: p.Form, Hit: 95, Tension: 1}
+	}, Jobs: p.Jobs, OriginalJobs: p.Jobs, NPC: a.NPC, EncounterIdentity: p.EncounterIdentity, RosterIdentity: p.Identity, SummonForm: p.Form, Hit: 95, Tension: 1}
+	if p.Icon != "" {
+		helper.Icon = p.Icon
+	}
+	if old := s.rosterIdentity(p.Identity); old != nil {
+		helper.ID = old.ID
+		*old = helper
+		c.EnemyIDs = slices.DeleteFunc(c.EnemyIDs, func(id string) bool { return id == helper.ID })
+		if !slices.Contains(c.PartyIDs, helper.ID) {
+			c.PartyIDs = append(c.PartyIDs, helper.ID)
+		}
+		return RosterResult{Applied: true, HelperID: helper.ID}
+	}
+	helper.ID = s.nextRosterID()
 	s.Actors = append(s.Actors, helper)
-	c.PartyIDs = append(c.PartyIDs, id)
-	return RosterResult{Applied: true, HelperID: id}, nil
+	c.PartyIDs = append(c.PartyIDs, helper.ID)
+	return RosterResult{Applied: true, HelperID: helper.ID}
 }
 
 func summonStats(base [5]float64, bonus bool, rng random.Generator) (values [5]int) {

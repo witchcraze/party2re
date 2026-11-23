@@ -54,6 +54,14 @@ func NPCJobEntries(job int) []CallbackEntry {
 		}
 	case 405:
 		return NPCJob405Variants()[0]
+	case 407:
+		// Evidence: _skill.cgi:8284–8317; positions 0/1 share one name.
+		return []CallbackEntry{
+			{ID: "npc-job-407-position-0", Name: "ice-consolidation", MPCost: 24},
+			{ID: "npc-job-407-position-1", Name: "ice-consolidation", MPCost: 24},
+			{ID: "npc-job-407-position-2", Name: "ice-storm", MPCost: 55},
+			{ID: "npc-job-407-position-3", Name: "freezing-wave", MPCost: 66},
+		}
 	case 403:
 		return []CallbackEntry{
 			{ID: "npc-job-403-position-0", Name: "neutral-wave", RequiredSP: 10, MPCost: 34},
