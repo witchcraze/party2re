@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -42,6 +43,9 @@ func speechRejection(err error) (int, ErrorDetail) {
 	var missing recipientNotFoundError
 	if errors.As(err, &missing) {
 		return http.StatusNotFound, ErrorDetail{Code: "RECIPIENT_NOT_FOUND", Message: missing.name + "というプレイヤーが存在しません"}
+	}
+	if errors.Is(err, casino.ErrRoomNotFound) || errors.Is(err, casino.ErrMemberNotFound) {
+		return casinoActionRejection(err)
 	}
 	return 0, ErrorDetail{}
 }
@@ -134,6 +138,13 @@ func (h *Handler) speak(ctx context.Context, current playercontext.Result, text,
 	place, err := h.scenePlace(ctx, current)
 	if err != nil {
 		return SpeechResult{}, err
+	}
+	// Writing a room's log keeps the room alive (casino.cgi:124-129); the
+	// renewal also rejects a speaker whose room ended or who left it.
+	if place.Kind == placeKindCasinoRoom {
+		if err := h.casino.RenewRoom(ctx, place.ID, char.ID); err != nil {
+			return SpeechResult{}, err
+		}
 	}
 	if err := h.placeLog.Append(ctx, place, row); err != nil {
 		return SpeechResult{}, err

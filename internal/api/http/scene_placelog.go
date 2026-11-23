@@ -30,8 +30,15 @@ func WithPlaceLog(reader PlaceLog) Option {
 	return func(h *Handler) { h.placeLog = reader }
 }
 
+// placeKindCasinoRoom is a casino room's own log (_casino.cgi:5), keyed by room ID.
+const placeKindCasinoRoom = "casino_room"
+
 func (h *Handler) scenePlace(ctx context.Context, current playercontext.Result) (placelog.Place, error) {
 	destination := current.Snapshot.LocationID
+	// The room activity shares the lobby's location ID but is its own place.
+	if room, ok := activityFact(current, "casino"); ok {
+		return placelog.Place{Kind: placeKindCasinoRoom, ID: room.ID}, nil
+	}
 	if resolve := h.sceneAdapters[destination].place; resolve != nil {
 		return resolve(h, ctx, current)
 	}
@@ -56,4 +63,17 @@ func (h *Handler) readPlaceLog(ctx context.Context, current playercontext.Result
 			Name: r.Name, Color: r.Color, Text: r.Text, Private: r.RecipientCharacterID != ""})
 	}
 	return out, nil
+}
+
+// activityFact returns the current activity when it is of the given kind.
+func activityFact(current playercontext.Result, kind string) (playercontext.Activity, bool) {
+	if current.Snapshot.LocationID != kind {
+		return playercontext.Activity{}, false
+	}
+	for _, a := range current.Snapshot.Activities {
+		if a.Kind == kind {
+			return a, true
+		}
+	}
+	return playercontext.Activity{}, false
 }

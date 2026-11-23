@@ -11,8 +11,7 @@ The Casino follows `party2/lib/casino.cgi`, `_casino.cgi`, `casino_indian.cgi`, 
 
 ## Rooms
 
-- Leaving as a participant adds 1 fatigue (`_casino.cgi:216–218`); spectators leave freely and never act or win. Leadership passes to the next active member; the room disbands with no active members. Kick is leader-only before the game starts.
-- Casino owns a 30-minute idle lifetime. Open: legacy expiry also puts participants to sleep (#2635).
+- Casino owns a 30-minute idle lifetime, renewed by room commands and room speech ([casino rooms](../architecture/place-log.md#casino-rooms)). Open: legacy expiry also puts participants to sleep (#2635).
 - After an error, clients observe room and account state instead of replaying a wager; repeated actions on a finished round or an already-submitted turn are rejected. Publication ordering and cross-store limits are owned by [Valkey keyspace](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging).
 
 ### Observation and visibility
@@ -30,7 +29,7 @@ Settlement returns the room to waiting with round zero; there is no separate fin
 
 ### Scoped legacy dispatch reconciliation
 
-The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Open: rooms have no log, so there is no in-room speech or `すくしょ` (#2644); the lobby invitation `さそう` is missing (#2645); and card-game bets stop at the balance instead of driving it negative (#2642).
+The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Open: in-room `すくしょ` waits for the server-side capture (#2638); the lobby invitation `さそう` is missing (#2645); and card-game bets stop at the balance instead of driving it negative (#2642).
 
 ## Game rules
 

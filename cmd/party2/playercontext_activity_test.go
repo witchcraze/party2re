@@ -135,7 +135,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	if err != nil || len(facts) != 6 {
 		t.Fatalf("all facts: %+v %v", facts, err)
 	}
-	for i, want := range [][]string{{"party_leave", "party_ready", "party_start"}, {"pvp_leave", "pvp_advance"}, {"gvg_leave", "gvg_advance"}, {"dungeon_move", "dungeon_escape"}, {"challenge_advance", "challenge_retire"}, {"casino_room_leave"}} {
+	for i, want := range [][]string{{"party_leave", "party_ready", "party_start"}, {"pvp_leave", "pvp_advance"}, {"gvg_leave", "gvg_advance"}, {"dungeon_move", "dungeon_escape"}, {"challenge_advance", "challenge_retire"}, {"casino_room_leave", "place_say"}} {
 		if !slices.Equal(facts[i].Actions, want) {
 			t.Fatalf("%s actions=%v want=%v", facts[i].Kind, facts[i].Actions, want)
 		}
@@ -233,9 +233,9 @@ func TestActivityRoleAndPhaseControls(t *testing.T) {
 		{"gvg", gvg.StatusInProgress, "leader", 1, []string{"gvg_leave", "gvg_advance"}},
 		{"gvg", gvg.StatusInProgress, "member", 1, []string{"gvg_leave"}},
 		{"gvg", gvg.StatusCompleted, "member", 1, []string{"gvg_leave"}},
-		{"casino", string(casino.RoomStatusWaiting), "leader", 0, []string{"casino_room_leave", "casino_room_start", "casino_room_kick"}},
-		{"casino", string(casino.RoomStatusWaiting), "member", 0, []string{"casino_room_leave"}},
-		{"casino", string(casino.RoomStatusWaiting), "spectator", 0, []string{"casino_room_leave"}},
+		{"casino", string(casino.RoomStatusWaiting), "leader", 0, []string{"casino_room_leave", "place_say", "casino_room_start", "casino_room_kick"}},
+		{"casino", string(casino.RoomStatusWaiting), "member", 0, []string{"casino_room_leave", "place_say"}},
+		{"casino", string(casino.RoomStatusWaiting), "spectator", 0, []string{"casino_room_leave", "place_say"}},
 	} {
 		t.Run(tc.kind+"/"+tc.phase+"/"+tc.role, func(t *testing.T) {
 			f, pv, gv := &activityFixtures{}, &pvpActivityFixture{}, &gvgActivityFixture{}

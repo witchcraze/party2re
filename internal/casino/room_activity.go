@@ -3,6 +3,7 @@ package casino
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 )
@@ -83,4 +84,31 @@ func (s *Service) GetCharacterRoomView(ctx context.Context, playerID, characterI
 		return nil, nil
 	}
 	return view, err
+}
+
+// RenewRoom restarts an admitted member's room idle lifetime for a room log
+// write, since legacy measures idleness by the log's mtime (casino.cgi:124-129).
+func (s *Service) RenewRoom(ctx context.Context, roomID, characterID string) error {
+	if s.roomRepo == nil {
+		return errors.New("room repository is required")
+	}
+	return s.withRoomMutationLock(ctx, roomID, characterID, func(lockedCtx context.Context) error {
+		room, err := s.roomRepo.GetRoomForUpdate(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		if room.Status == RoomStatusDisbanded || room.UpdatedAt.Before(now.Add(-IdleRoomTimeout)) {
+			return ErrRoomNotFound
+		}
+		members, err := s.roomRepo.ListMembersForUpdate(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(members, func(m RoomMember) bool { return m.CharacterID == characterID }) {
+			return ErrMemberNotFound
+		}
+		room.UpdatedAt = now
+		return s.roomRepo.UpdateRoomDetail(lockedCtx, RoomDetail{Room: *room, Members: members})
+	})
 }
