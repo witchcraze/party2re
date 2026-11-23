@@ -337,4 +337,3 @@ Order and lifetime traps:
 
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
 - NPC-only jobs 406 and 408 (the goddess job407 summons) have no table, so their choices stay whole-action gates: #1915, #2692.
-- Enemy summons detect collisions by pool payload instead of source name family (#2690).

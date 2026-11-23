@@ -417,9 +417,9 @@ func TestRunCombatStage15RebuildsPoolFromFirstSummonerPerRequest(t *testing.T) {
 			continue
 		}
 		switch a.RosterIdentity {
-		case "enemy-generated-0-I":
+		case "generated-job:starter-I":
 			playerSummon = a
-		case "enemy-generated-0-R":
+		case "generated-job:starter-R":
 			npcReuse = a
 		}
 	}
@@ -449,11 +449,113 @@ func TestRunCombatStage15RebuildsPoolFromFirstSummonerPerRequest(t *testing.T) {
 	r2 := readStockRoom(t, f, cmd.RunID)
 	var npcRebuilt *corebattle.LifetimeActor
 	for _, id := range r2.Enemies {
-		if a := runActorByID(r2, id); a != nil && a.RosterIdentity == "enemy-generated-0-Z" {
+		if a := runActorByID(r2, id); a != nil && a.RosterIdentity == "generated-job:job-87-Z" {
 			npcRebuilt = a
 		}
 	}
 	if npcRebuilt == nil || npcRebuilt.Jobs.SP != 67 || npcRebuilt.Jobs.JobID != "job-87" || npcRebuilt.TeamID != "enemies" {
 		t.Fatalf("req2 npc-rebuilt summon: enemies=%v npcRebuilt=%+v", r2.Enemies, npcRebuilt)
+	}
+}
+
+// Stage25's twelve ice-object pool entries share ordinary-25-boss-22, so
+// summons from different pool positions collide on the same letter across
+// producers and persisted reload boundaries, retry the previous letter, and
+// skip when both are occupied.
+func TestRunCombatStage25SummonCollisionAndReload(t *testing.T) {
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage, err := stages.FindByID("stage-25")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := func(id, actorID string) corebattle.LifetimeActor {
+		m, err := monsters.FindByID(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := m.NPCPayload()
+		a.ID, a.TeamID, a.MaxHP, a.MaxMP = actorID, "enemies", a.HP, a.MP
+		return a
+	}
+
+	f, _ := lowRunCombat(t, 1)
+	rng := &scriptRNG{}
+	f.cfg.RNG = rng
+	f.restart(t)
+	grantHeldTo(t, f, 0, "item-078")
+	foe := runEnemy("foe", 5000)
+	foe.Jobs = corebattle.BattleJobs{JobID: "job-95", SP: 99, OldJobID: "starter"}
+	foe.MP, foe.MaxMP = 200, 200
+	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+		r.Stage = stage.OrdinarySeason("stage-25")
+		r.EncounterPool = nil
+		for _, id := range r.Stage.Ordinary.MonsterIDs {
+			r.EncounterPool = append(r.EncounterPool, payload(id, id))
+		}
+		a := runActorByID(r, f.actors[0].ID)
+		a.CMPCharge, a.CMPNeedCharge = 0, 9
+		a.HeldToolID = new("item-078")
+	}, foe)
+	// Req 1: player defends ([seal .5] [player tmp .5]), foe responds with
+	// job-95 ([npc sel .99] [npc tmp .5] [reload .5] [suffix 0->I] [pos 0/12]).
+	// Enemies rotates to [summoned-1, foe].
+	rng.calls.Store(0)
+	rng.draws = []float64{.5, .5, .99, .5, .5, 0, 0}
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "req1", "defend", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	if rng.calls.Load() != 7 || len(rng.draws) != 0 {
+		t.Fatalf("req1 draws: calls=%d rem=%v", rng.calls.Load(), rng.draws)
+	}
+	f.restart(t)
+	r1 := readStockRoom(t, f, cmd.RunID)
+	if len(r1.Enemies) != 2 || runActorByID(r1, r1.Enemies[0]).RosterIdentity != "ordinary-25-boss-22-I" {
+		t.Fatalf("req1 enemies=%v actor0=%+v", r1.Enemies, runActorByID(r1, r1.Enemies[0]))
+	}
+
+	// Req 2 (after reload): player uses held tool-78 on pool pos 1 with suffix 0 ->
+	// collides on I, retries Z; summoned-1 responds with attack. Enemies rotates to
+	// [foe, summoned-2, summoned-1].
+	f.clock.add(3 * time.Second)
+	rng2 := &scriptRNG{draws: []float64{.5, .5, 0, 1.0 / 12.0, 0, 0, .5, .5, .5, .5, .5}}
+	f.cfg.RNG = rng2
+	f.restart(t)
+	cmd.Version = r1.Version
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "req2", "tool", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	if rng2.calls.Load() != 11 || len(rng2.draws) != 0 {
+		t.Fatalf("req2 draws: calls=%d rem=%v", rng2.calls.Load(), rng2.draws)
+	}
+	f.restart(t)
+	r2 := readStockRoom(t, f, cmd.RunID)
+	if len(r2.Enemies) != 3 || runActorByID(r2, r2.Enemies[2]).RosterIdentity != "ordinary-25-boss-22-I" || runActorByID(r2, r2.Enemies[1]).RosterIdentity != "ordinary-25-boss-22-Z" {
+		t.Fatalf("req2 enemies=%v id1=%q id2=%q", r2.Enemies, runActorByID(r2, r2.Enemies[1]).RosterIdentity, runActorByID(r2, r2.Enemies[2]).RosterIdentity)
+	}
+
+	// Req 3 (after reload): player defends, foe responds with job-95 on pool pos 2
+	// with suffix 0 -> both I and Z occupied, accepted no-op.
+	f.clock.add(3 * time.Second)
+	rng3 := &scriptRNG{draws: []float64{.5, .5, .99, .5, .5, 0, 2.0 / 12.0}}
+	f.cfg.RNG = rng3
+	f.restart(t)
+	cmd.Version = r2.Version
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "req3", "defend", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	if rng3.calls.Load() != 7 || len(rng3.draws) != 0 {
+		t.Fatalf("req3 draws: calls=%d rem=%v", rng3.calls.Load(), rng3.draws)
+	}
+	r3 := readStockRoom(t, f, cmd.RunID)
+	want := []string{r2.Enemies[1], r2.Enemies[2], r2.Enemies[0]}
+	if !slices.Equal(r3.Enemies, want) {
+		t.Fatalf("req3 should not add another enemy: got=%v want=%v", r3.Enemies, want)
 	}
 }

@@ -38,7 +38,7 @@ func TestEnemySummonProjectionAllPositionsSuffixesAndOrder(t *testing.T) {
 		}
 		for i := range 4 {
 			for suffix := range 18 {
-				if !seen["enemy-species"+strconv.Itoa(i)+"-"+string(rune('I'+suffix))] {
+				if !seen["species"+strconv.Itoa(i)+"-"+string(rune('I'+suffix))] {
 					t.Fatal("omitted source candidate", i, suffix)
 				}
 			}
@@ -48,15 +48,18 @@ func TestEnemySummonProjectionAllPositionsSuffixesAndOrder(t *testing.T) {
 
 func TestEnemySummonProjectionDuplicateAndSkippedContexts(t *testing.T) {
 	s, c := rosterFixture()
-	c.EnemyPool = []LifetimeActor{enemySummonPayload()}
-	for _, identity := range []string{"enemy-species-I", "enemy-species-Z"} {
-		a := LifetimeActor{Participant: Participant{ID: identity, TeamID: "party", HP: 0}, RosterIdentity: identity}
+	first, second := enemySummonPayload(), enemySummonPayload()
+	first.ID, first.EncounterIdentity = "pos-0", "species"
+	second.ID, second.EncounterIdentity = "pos-1", "species"
+	c.EnemyPool = []LifetimeActor{first, second}
+	for _, identity := range []string{"species-I", "species-Z"} {
+		a := LifetimeActor{Participant: Participant{ID: identity, TeamID: "party", HP: 0}, EncounterIdentity: "species", RosterIdentity: identity}
 		s.Actors = append(s.Actors, a)
 		c.PartyIDs = append(c.PartyIDs, a.ID)
 	}
 	f := CallbackContext{TargetContext: c.TargetContext}
 	branches, err := s.ProjectEnemySummon(&c, &f)
-	if err != nil || len(branches) != 18 || !reflect.DeepEqual(branches[0].State, s) || !reflect.DeepEqual(branches[0].Context.TargetContext, f.TargetContext) || branches[1].State.Actors[4].RosterIdentity != "enemy-species-J" || branches[17].State.Actors[4].RosterIdentity != "enemy-species-Y" {
+	if err != nil || len(branches) != 2*18 || !reflect.DeepEqual(branches[0].State, s) || !reflect.DeepEqual(branches[0].Context.TargetContext, f.TargetContext) || branches[1].State.Actors[4].RosterIdentity != "species-J" || branches[17].State.Actors[4].RosterIdentity != "species-Y" || !reflect.DeepEqual(branches[18].State, s) || branches[19].State.Actors[4].RosterIdentity != "species-J" {
 		t.Fatal("two occupied suffixes are unchanged; fallback is previous suffix", err, branches)
 	}
 	for _, reason := range []string{"enemy-count", "no-room"} {
