@@ -217,16 +217,12 @@ func TestNPC407LivingCopySummonsGoddess(t *testing.T) {
 	}
 }
 
-// The actor as the only copy, or a fallen copy, does not summon. An acting
-// copy whose letter is reused is overwritten in place, keeping one slot.
+// The actor as the only copy does not summon. An acting copy whose letter is
+// reused is overwritten in place, keeping one slot.
 func TestNPC407CopyPresenceAndInPlaceOverwrite(t *testing.T) {
 	roll := []float64{0, 0, 0, 0, 0}
 	s, c, d := npc407Fixture(2500, 2600)
 	s.Actors[0].RosterIdentity = "statue-copy-J"
-	fallen := s.Actors[2]
-	fallen.ID, fallen.HP, fallen.RosterIdentity = "fallen-copy", 0, "statue-copy-Z"
-	s.Actors = append(s.Actors, fallen)
-	c.PartyIDs = append(c.PartyIDs, "fallen-copy")
 	draws := append(append([]float64{0, 0, 0, 0}, roll...), roll...)
 	executeNPC407(t, &s, c, d, "npc-job-407-position-0", append(draws, 0)...)
 	a := s.Actors[0]
@@ -242,6 +238,39 @@ func TestNPC407CopyPresenceAndInPlaceOverwrite(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatal(c.PartyIDs)
+	}
+}
+
+// Members felled earlier in the request stay in the source's NPC-turn party:
+// a fallen copy still summons the goddess, and a fallen ice object is still
+// consolidated and counted for the heal. A helper the requester dismissed this
+// request is not on that side.
+func TestNPC407FallenThisRequestStillCounts(t *testing.T) {
+	s, c, d := npc407Fixture()
+	copy := s.Actors[2]
+	copy.ID, copy.HP, copy.EncounterIdentity, copy.RosterIdentity = "fallen-copy", 0, "statue", "statue-copy-Z"
+	s.Actors = append(s.Actors, copy)
+	c.PartyIDs = append(c.PartyIDs, "fallen-copy")
+	executeNPC407(t, &s, c, d, "npc-job-407-position-0", 0, 0, 0, 0, 0, 0)
+	if g := npc407Actor(&s, "goddess"); g == nil || s.Actors[0].HP != 0 {
+		t.Fatal("fallen copy did not summon", g)
+	}
+
+	roll := []float64{0, 0, 0, 0, 0}
+	s, c, d = npc407Fixture(1000)
+	s.Actors[3].HP = 0
+	dismissed := s.Actors[2]
+	dismissed.ID, dismissed.HP, dismissed.EncounterIdentity, dismissed.RosterIdentity, dismissed.RosterDetached = "dismissed", 0, "ice", "calling-63", true
+	s.Actors = append(s.Actors, dismissed)
+	c.PartyIDs = append(c.PartyIDs, "dismissed")
+	// Extra small 100 → pos0; fallen 1000 → pos2 ×1.2; heal 150+600 → ×.9.
+	draws := append(append(append([]float64{0, 0, 0, 0}, roll...), 0, 0), roll...)
+	executeNPC407(t, &s, c, d, "npc-job-407-position-0", append(draws, 0)...)
+	if a := npc407Actor(&s, "ice-J"); a == nil || a.HP != 1080 || slices.Contains(c.PartyIDs, "ice-0") || s.Actors[0].HP != 5675 {
+		t.Fatal(a, c.PartyIDs, s.Actors[0].HP)
+	}
+	if d := s.Actors[len(s.Actors)-3]; d.ID != "dismissed" || d.RosterIdentity != "calling-63" || !slices.Contains(c.PartyIDs, "dismissed") {
+		t.Fatal("dismissed helper was consumed", d)
 	}
 }
 

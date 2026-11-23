@@ -102,11 +102,14 @@ func (s *LifetimeState) ApplyNPCJob407(c *RosterContext, id string, rng random.G
 	return nil
 }
 
-// npc407Side is the source's NPC-turn party: living members of the actor's side.
+// npc407Side is the source's NPC-turn party, the requester's opponent array:
+// built from living members at load, it keeps those felled during the request
+// (_battle.cgi:486–493; _npc_action.cgi:107–109). Earlier falls were pruned at
+// the last save; a helper dismissed this request stays in the requester's array.
 func (s *LifetimeState) npc407Side(c *RosterContext) []string {
 	var ids []string
 	for _, id := range c.PartyIDs {
-		if a := s.actor(id); a != nil && a.HP > 0 {
+		if a := s.actor(id); a != nil && !a.RosterDetached {
 			ids = append(ids, id)
 		}
 	}

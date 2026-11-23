@@ -323,7 +323,7 @@ Order and lifetime traps:
 - Duplication63 heals using the number of helpers present **before** creation. A present but fallen named helper blocks the appearance substitute. Special87 checks growth even if its damage killed the summoner (`_skill.cgi:4029–5447`).
 - Form switching registers the reverse entry last, so it wins name-keyed discovery when both forms exist. Job79's forward form compares against the requesting player's original icon, also for NPC actors (`_skill.cgi:173–217,6240–6292`).
 - NPC job95's summon has no enemy-count guard (gem82 has one); job99's escape and job405's renewal (every ally except the caster) write HP0 only, with no defeat, reward or roster removal. Job407's roster transform removes members from the side, its caster included, without defeat or reward (`_skill.cgi:7183–7189,7409–7412,7985–7987,10656–10690`).
-- The operation's enemy array is built once at load from living opponents and keeps enemies defeated during the operation, so defeating the last enemy still reaches the player tail and NPC response; front/back rebuilds it with fallen opponents included (`_battle.cgi:486–493,927`; `_skill.cgi:893–899`).
+- The operation's enemy array is built once at load from living opponents and keeps enemies defeated during the operation, so defeating the last enemy still reaches the player tail and NPC response, and job407's roster transform still consumes or summons from members felled earlier in the request; front/back rebuilds it with fallen opponents included (`_battle.cgi:486–493,927`; `_skill.cgi:893–899`).
 - Stage27 starts job88 at SP20, so only its first two positions are initially eligible (`stage/27.cgi:76–89`).
 
 ## Other combat rules
