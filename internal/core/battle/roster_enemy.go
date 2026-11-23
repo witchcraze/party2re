@@ -6,7 +6,7 @@ func (s *LifetimeState) validateEnemySummon(c *RosterContext, id string) error {
 	if len(s.Actors) >= 10 || id == "gem_summon_sky" && len(c.EnemyIDs) > 1 {
 		return nil
 	}
-	if len(c.EnemyPool) == 0 || c.EnemyTeamID == "" {
+	if len(c.EnemyPool) == 0 || c.EnemyTeamID == "" || c.ReloadDraws < 0 {
 		return ErrUnsupportedEffect
 	}
 	if s.RosterSequence >= 1e15 {
@@ -36,6 +36,31 @@ func (s *LifetimeState) validateEnemySummon(c *RosterContext, id string) error {
 	return nil
 }
 
+func (s *LifetimeState) reloadStage(c *RosterContext, rng random.Generator) {
+	if c.StageLoaded == nil {
+		var loaded bool
+		c.StageLoaded = &loaded
+	}
+	if *c.StageLoaded {
+		return
+	}
+	flag := c.StageLoaded
+	*flag = true
+	if s.rollbacks != nil {
+		*s.rollbacks = append(*s.rollbacks, func() { *flag = false })
+	}
+	for range c.ReloadDraws {
+		rng.Float64()
+	}
+	if c.RebuildPool != nil {
+		if summoner := s.actor(c.ActorID); summoner != nil {
+			if pool := c.RebuildPool(*summoner, rng); len(pool) > 0 {
+				c.EnemyPool = pool
+			}
+		}
+	}
+}
+
 // Whole payloads are retained, including explicit maxima, job pairs, status,
 // extended effects, custom costs and rewards. Only source-listed fields scale.
 func (s *LifetimeState) summonEnemy(c *RosterContext, id string, rng random.Generator) (RosterResult, error) {
@@ -43,6 +68,7 @@ func (s *LifetimeState) summonEnemy(c *RosterContext, id string, rng random.Gene
 	if len(s.Actors) >= 10 || id == "gem_summon_sky" && len(c.EnemyIDs) > 1 {
 		return r, nil
 	}
+	s.reloadStage(c, rng)
 	suffix := int(rng.Float64() * 18)
 	position := 0
 	if len(c.AppearancePositions) > 0 {
@@ -95,7 +121,11 @@ func (s *LifetimeState) addEnemyAt(c *RosterContext, suffix, position int) Roste
 	a.Jobs.SP, a.Jobs.OldSP = hard(a.Jobs.SP), hard(a.Jobs.OldSP)
 	a.OriginalJobs = a.Jobs
 	a.ExperienceReward, a.GoldReward, a.CrystalReward = hard(a.ExperienceReward), hard(a.GoldReward), hard(a.CrystalReward)
-	a.ID, a.RosterIdentity, a.TeamID = s.nextRosterID(), key, c.EnemyTeamID
+	team := c.EnemyTeamID
+	if summoner := s.actor(c.ActorID); summoner != nil && summoner.NPC {
+		team = summoner.TeamID
+	}
+	a.ID, a.RosterIdentity, a.TeamID = s.nextRosterID(), key, team
 	a.Name += " " + key[len(key)-1:]
 	a.NPC = true
 	if a.Hit == 0 {

@@ -27,3 +27,11 @@ func rollbackContext[T any](f *corebattle.CallbackContext, c *T) {
 	f.OnRollback(func() { *c = saved })
 	f.BindCounters(c)
 }
+
+func rollbackStageLoaded(f *corebattle.CallbackContext, loaded *bool) {
+	if loaded == nil {
+		return
+	}
+	saved := *loaded
+	f.OnRollback(func() { *loaded = saved })
+}

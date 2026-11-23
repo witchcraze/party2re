@@ -5,6 +5,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 func enemySummonPayload() LifetimeActor {
@@ -135,5 +137,75 @@ func TestEnemySummonWeightsFallbackAndReloadContinuation(t *testing.T) {
 			t.Fatalf("loadout=%+v mutated state", loadout)
 		}
 		rng.done()
+	}
+}
+
+func TestEnemySummonStageReloadDrawsOnceAndRebuildsPool(t *testing.T) {
+	s, c := rosterFixture()
+	s.Actors[0].MaxHP = 333
+	stale := enemySummonPayload()
+	stale.ID = "stale"
+	c.EnemyPool = []LifetimeActor{stale}
+	c.ReloadDraws = 1
+	var loaded bool
+	c.StageLoaded = &loaded
+	rebuilds := 0
+	c.RebuildPool = func(summoner LifetimeActor, rng random.Generator) []LifetimeActor {
+		rebuilds++
+		rng.Float64()
+		rebuilt := enemySummonPayload()
+		rebuilt.ID = "rebuilt"
+		rebuilt.MaxHP = summoner.MaxHP
+		return []LifetimeActor{rebuilt}
+	}
+
+	// Reload draws and RebuildPool run before suffix and position draws, once.
+	rng := &targetRNG{t: t, draws: []float64{.75, .25, .5, 0}}
+	r1, err := s.ApplyRoster(&c, "gem_summon_sky", "", rng)
+	if err != nil || !r1.Applied || !loaded || rebuilds != 1 || s.actor(r1.HelperID).RosterIdentity != "enemy-rebuilt-R" || s.actor(r1.HelperID).MaxHP != 333 {
+		t.Fatalf("first summon: err=%v r=%+v loaded=%v rebuilds=%d actor=%+v", err, r1, loaded, rebuilds, s.actor(r1.HelperID))
+	}
+	rng.done()
+
+	// A second summon sharing StageLoaded skips reload and reuses the rebuilt pool.
+	rng = &targetRNG{t: t, draws: []float64{0, 0}}
+	r2, err := s.ApplyRoster(&c, "tool-78", "", rng)
+	if err != nil || !r2.Applied || rebuilds != 1 || s.actor(r2.HelperID).RosterIdentity != "enemy-rebuilt-I" || s.actor(r2.HelperID).MaxHP != 333 {
+		t.Fatalf("second summon: err=%v r=%+v rebuilds=%d actor=%+v", err, r2, rebuilds, s.actor(r2.HelperID))
+	}
+	rng.done()
+
+	// Early return (gem_summon_sky with >1 enemy) skips reload and keeps loaded false.
+	s, c = rosterFixture()
+	c.EnemyPool = []LifetimeActor{stale}
+	c.ReloadDraws = 1
+	loaded = false
+	c.StageLoaded = &loaded
+	s.Actors = append(s.Actors, LifetimeActor{Participant: Participant{ID: "enemy-2", TeamID: "npc", HP: 10}})
+	c.EnemyIDs = append(c.EnemyIDs, "enemy-2")
+	rng = &targetRNG{t: t}
+	if r, err := s.ApplyRoster(&c, "gem_summon_sky", "", rng); err != nil || r.Applied || loaded {
+		t.Fatalf("early return loaded stage: err=%v r=%+v loaded=%v", err, r, loaded)
+	}
+	rng.done()
+
+	// Negative ReloadDraws rejects in validation before RNG or mutation.
+	s, c = rosterFixture()
+	c.EnemyPool = []LifetimeActor{stale}
+	c.ReloadDraws = -1
+	if err := s.ValidateRoster(&c, "tool-78", "", rng); !errors.Is(err, ErrUnsupportedEffect) {
+		t.Fatalf("negative ReloadDraws: err=%v", err)
+	}
+
+	// NPC summon with opposing EnemyTeamID (as runhost passes during npc_turn)
+	// still spawns onto the NPC's own team and PartyIDs (#2696).
+	s, c = rosterFixture()
+	c.EnemyPool = []LifetimeActor{enemySummonPayload()}
+	c.ActorID = "enemy"
+	c.PartyIDs, c.EnemyIDs = c.EnemyIDs, c.PartyIDs
+	c.EnemyTeamID = "party"
+	r, err := s.ApplyRoster(&c, "npc-job-95-position-0", "", &targetRNG{t: t, draws: []float64{0, 0}})
+	if err != nil || !r.Applied || !reflect.DeepEqual(c.PartyIDs, []string{"enemy", r.HelperID}) || s.actor(r.HelperID).TeamID != "npc" {
+		t.Fatalf("npc summon with opposing EnemyTeamID: err=%v r=%+v c=%+v actor=%+v", err, r, c, s.actor(r.HelperID))
 	}
 }

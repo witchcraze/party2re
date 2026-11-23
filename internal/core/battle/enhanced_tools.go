@@ -183,6 +183,7 @@ func (s *LifetimeState) useEnhancedTool(c *JobAssetContext, number int, rng rand
 			_, err = s.summonEnemy(&roster, "tool-78", rng)
 		}
 		c.TargetContext = roster.TargetContext
+		c.Roster.StageLoaded, c.Roster.EnemyPool = roster.StageLoaded, roster.EnemyPool
 	case 80:
 		for _, id := range c.PartyIDs {
 			s.actor(id).Temporary = TemporaryDefense

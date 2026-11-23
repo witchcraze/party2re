@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 // npc407Fixture is a stage25-shaped EX room: the statue, two encounter ice
@@ -392,4 +393,35 @@ func TestNPC407RosterSurvivesReload(t *testing.T) {
 	if !reflect.DeepEqual(ids, []string{"@statue", "@", "@iceAB", "ice-I@ice", "ice-J@ice"}) || !reflect.DeepEqual(frame.PartyIDs, []string{"statue", "other", "summoned-1", "summoned-2"}) {
 		t.Fatal(ids, frame.PartyIDs)
 	}
+}
+
+// Enemy summon and job407 share one request-scoped StageLoaded flag so only the
+// first loader consumes ReloadDraws, and execution rollback restores it.
+func TestNPC407AndEnemySummonShareStageLoadedFlagAndRollback(t *testing.T) {
+	s, c, d := npc407Fixture(600)
+	c.EnemyPool[0].EncounterIdentity = "other-species"
+	var loaded bool
+	c.StageLoaded = &loaded
+	c.EnemyTeamID = "party"
+	d.RegisterSummonAppearanceGems(c, nil)
+	d.Invocations.Entries["fail-at-exec"] = corebattle.CallbackDefinition{
+		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
+		Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error {
+			return corebattle.ErrUnsupportedEffect
+		},
+	}
+	f := corebattle.CallbackContext{TargetContext: c.TargetContext}
+	ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_summon_sky"}, {Kind: "entry", EntryID: "fail-at-exec"}}
+	if err := s.ApplyInvocations(&f, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{0, 0, 0}}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || loaded {
+		t.Fatalf("failed sequence did not roll back StageLoaded: err=%v loaded=%v", err, loaded)
+	}
+
+	// First loader (gem_summon_sky) consumes the 1 ReloadDraws + suffix + position.
+	executeNPC407(t, &s, c, d, "gem_summon_sky", 0, 0, 0)
+	if !loaded || len(s.Actors) != 5 {
+		t.Fatalf("gem_summon_sky: loaded=%v actors=%d", loaded, len(s.Actors))
+	}
+
+	// Subsequent job407 in the same request consumes 16 draws (skips the 1 reread draw).
+	executeNPC407(t, &s, c, d, "npc-job-407-position-0", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 }

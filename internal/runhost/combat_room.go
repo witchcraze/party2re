@@ -65,9 +65,12 @@ type Summons struct {
 	EnemyPool           []corebattle.LifetimeActor
 	AppearancePositions []int
 	Hard                bool
-	// EXPool/EXXPool and ReloadDraws feed job407's stage-file reread.
+	// EXPool/EXXPool, ReloadDraws, RebuildPool and StageLoaded feed
+	// request-scoped stage-file reloads in enemy summon and job407.
 	EXPool, EXXPool []corebattle.LifetimeActor
 	ReloadDraws     int
+	RebuildPool     func(summoner corebattle.LifetimeActor, rng random.Generator) []corebattle.LifetimeActor
+	StageLoaded     *bool
 }
 
 // JobRoom is job78's room mutation; Apply runs on the locked run.

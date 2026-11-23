@@ -254,8 +254,6 @@ Member order is preserved. Each summoned incarnation gets a run-local ID, separa
 
 **Decision (#1916, 2026-11-23).** When `_add_party` reuses a name that a member still holds (an acting statue copy's letter, or successors past Z, which get no letter), that member is overwritten in place and keeps its single slot. The source also lists the name a second time, so later area hits strike it twice; that duplicate listing is not reproduced.
 
-Enemy summoning consumes the frozen current-stage pool and its separate weighted appearance positions (`_skill.cgi:9834–9931`).
-
 NPC selection keeps duplicate eligible names as weights and resolves each through the last eligible name binding after current-job, previous-job and custom entries are appended. The selected cost is charged once after the callback, including accepted no-effect summons. These bindings do not initialize or execute a spawned NPC's next action. The frozen stage pool/appearance weights and resulting ordered roster are saved (`_npc_action.cgi:177–224,313–322`).
 
 #### Temporary transformation and job memory
@@ -312,7 +310,6 @@ Order and lifetime traps:
 - Values captured when the job table is built, not at execution: job84's strike multiplier (appearance, requester gender, burn field), job77's final-callback variant (temporary present or not), group dance's MP cost (12×party size) and job405's wounded variant (HP ≤ 50% before NPC start-of-action cures and poison). Save them with the frozen input (`_skill.cgi:5730–5917,5929–5983,6672–6709,7893`; `_npc_action.cgi:159`).
 - Job405's wounded chain carries each hit's tension-scaled power (×0.8), so tension held before the action scales every later hit (`_skill.cgi:8049,8067`).
 - Job405's renewal heals opponents by swapping the side arrays: each heal draws a random opponent and a fallen draw heals the caster (`_skill.cgi:7955–7963`).
-- Job407's roster transform re-requires the stage file. When it is the request's first load, stage25's top-level boss-branch draw is consumed before the body's own draws (`_skill.cgi:10654`; `stage/25.cgi:16`).
 - Job86's book power reads the **current** held-book class at execution (`_skill.cgi:6859–6866`).
 - Item92's name matches job86's book pattern without a book-table row, so double use falls back to table position0 (`_data.cgi:1293`; `_skill.cgi:6876–6882`).
 - Effects that still apply on accepted no-effect or after caster death: job3/25 vulnerability, job4's flame tails, job52's area-200 vulnerability, job98's vulnerability on every original enemy (including dead, redirected or blocked), job7.8's second defeat call, and sacrifice72's defeat call.
@@ -340,4 +337,4 @@ Order and lifetime traps:
 
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
 - NPC-only jobs 406 and 408 (the goddess job407 summons) have no table, so their choices stay whole-action gates: #1915, #2692.
-- Enemy summons detect collisions by pool payload instead of source name family (#2690), and skip the stage-file reread effects (#2691).
+- Enemy summons detect collisions by pool payload instead of source name family (#2690).

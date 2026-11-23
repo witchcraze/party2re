@@ -33,6 +33,7 @@ func (d *BattleDefinitions) RegisterNPCJob407(c *corebattle.RosterContext) {
 				}
 				rollbackContext(f, c)
 				rollbackContext(f, c.Death)
+				rollbackStageLoaded(f, c.StageLoaded)
 				c.TargetContext = f.TargetContext
 				err := s.ApplyNPCJob407(c, id, rng)
 				f.TargetContext = c.TargetContext

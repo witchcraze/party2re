@@ -60,18 +60,7 @@ func (s Stage) BuildOrdinaryEncounter(catalog *MonsterCatalog, party []corebattl
 				Combat: &corebattle.LifetimeActor{Jobs: a.Jobs, OriginalJobs: a.Jobs, Temporary: corebattle.TemporaryReflectMagic, CrystalReward: 5, NPCLoadout: &corebattle.NPCLoadout{Source: "ff97fc5:stage/15.cgi:15"}}}
 			bosses = append(bosses, m)
 		}
-		for i := 0; i < 10; i++ {
-			// The source's appearance draw precedes its job draw, even with native art.
-			rng.Float64()
-			job := int(rng.Float64() * 88)
-			jobID := fmt.Sprintf("job-%02d", job)
-			if job == 0 {
-				jobID = "starter"
-			}
-			jobs := corebattle.BattleJobs{JobID: jobID, SP: requester.Jobs.SP, OldJobID: "job-36", OldSP: 999}
-			pool = append(pool, Monster{ID: fmt.Sprintf("generated-%d", i), EncounterIdentity: generatedEncounterIdentity(jobID), Name: fmt.Sprintf("Generated combatant %d", i+1), HP: requester.MaxHP, MP: requester.MaxMP, Attack: requester.BaseStats.Attack, Defense: requester.BaseStats.Defense, Agility: requester.BaseStats.Agility, ExperienceReward: requester.ExperienceReward, GoldReward: requester.GoldReward,
-				Combat: &corebattle.LifetimeActor{Jobs: jobs, OriginalJobs: jobs, NPCLoadout: &corebattle.NPCLoadout{Source: "ff97fc5:stage/15.cgi:47"}}})
-		}
+		pool = stage15GeneratedMonsters(requester, rng)
 	} else {
 		if len(table.BossRosters) == 0 || len(table.MonsterIDs) == 0 {
 			return OrdinaryEncounter{}, ErrInvalidMonster
