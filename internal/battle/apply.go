@@ -22,9 +22,8 @@ type ApplyPostBattleRequest struct {
 	BattleResult          corebattle.PartyBattleResult
 	PreserveEarnedRewards bool                         // TotalReward currency/EXP/crystals were earned before the final outcome.
 	RecipientRewards      map[string]corebattle.Reward // Finalized personal earnings; modifiers were applied at their source operation.
-	DropItems             []string                     // Extra dropped item definition IDs (e.g. stage/boss drops)
 	RecipientDrops        map[string][]string          // Optional recipient-targeted drop item definition IDs (characterID -> []itemDefID)
-	RecipientCharacterID  string                       // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
+	RecipientCharacterID  string                       // Character receiving ExplicitDefeats.
 	DefeatedEnemies       []corebattle.Participant
 	ExplicitDefeats       []ExplicitDefeat // Already evaluated for RecipientCharacterID at each reached defeat.
 	Habitat               string           // Habitat/stage name for monster book recording
@@ -116,9 +115,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 
 		// 5. Apply earned assets independently of the final encounter outcome.
 		if req.BattleResult.Outcome == corebattle.OutcomeWin || req.PreserveEarnedRewards {
-			var charDrops []dropItem
+			var charDrops []string
 			if req.BattleResult.Outcome == corebattle.OutcomeWin {
-				charDrops = req.dropsForCharacter(charID)
+				charDrops = req.RecipientDrops[charID]
 			}
 			reward, err := s.resolveCharacterReward(req, charID, heldDefID)
 			if err != nil {
@@ -250,9 +249,9 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			}
 
 			if req.BattleResult.Outcome == corebattle.OutcomeWin || req.PreserveEarnedRewards {
-				var charDrops []dropItem
+				var charDrops []string
 				if req.BattleResult.Outcome == corebattle.OutcomeWin {
-					charDrops = req.dropsForCharacter(id)
+					charDrops = req.RecipientDrops[id]
 				}
 				reward, err := s.resolveCharacterReward(req, id, heldDefID)
 				if err != nil {
@@ -440,11 +439,9 @@ func (s *Service) resolveCharacterReward(req ApplyPostBattleRequest, charID, hel
 		}
 	}
 	return corebattle.Reward{
-		Experience:       exp,
-		Currency:         gold,
-		Crystals:         reward.Crystals,
-		ItemDefinitionID: reward.ItemDefinitionID,
-		ItemQuantity:     reward.ItemQuantity,
+		Experience: exp,
+		Currency:   gold,
+		Crystals:   reward.Crystals,
 	}, nil
 }
 

@@ -73,9 +73,7 @@ func TestWithJobAssetsPreservesKnownAndUnknownHands(t *testing.T) {
 			}
 			for i, defID := range tt.items {
 				inst := coreitem.Instance{ID: string(rune('a' + i)), DefinitionID: defID, Quantity: 1}
-				if err := inv.Add(inst); err != nil {
-					t.Fatal(err)
-				}
+				inv.Items = append(inv.Items, inst)
 			}
 
 			tc := &economy.TxContext{

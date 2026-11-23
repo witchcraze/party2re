@@ -385,39 +385,23 @@ func TestEnhancedToolSQLRollbackReceiptAndRestart(t *testing.T) {
 
 // A stacked tool row leaves the hand unknown, so nothing may be charged or consumed.
 func TestEnhancedToolSQLUnknownHandRejectsBeforeAssets(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		id   string
-		qty  int
-	}{
-		{"stacked-tool", "item-001", 2},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newNormalFixture(t, 1)
-			installAssets(t, f)
-			_, err := f.cfg.JobAssetRunner.ExecuteTransaction(context.Background(), economy.TransactionRequest{
-				CharacterID: f.actors[0].ID,
-				Grant:       economy.ResourceGrant{ItemDefinitionID: tc.id, ItemQuantity: tc.qty},
-			}, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			entry := f.enter(t, "normal")
-			run := entry.Command.RunID
-			seedAssetEncounter(t, f, run)
-			cmd := assetCommand(t, f, run, 0, "job-78-entry-0", "unknown-hand")
-			if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-				t.Fatal(err)
-			}
-			assertAssets(t, f, cmd.ActorID, 100, 1)
-			inv, err := f.invs.FindByCharacterID(context.Background(), cmd.ActorID)
-			if err != nil || len(inv.Items) != 1 || inv.Items[0].Quantity != tc.qty {
-				t.Fatal(inv, err)
-			}
-			if receipt, err := f.store.FindRunReceipt(context.Background(), run, cmd.ID); err != nil || receipt != nil {
-				t.Fatal("rejection stored a receipt", receipt, err)
-			}
-		})
+	f := newNormalFixture(t, 1)
+	installAssets(t, f)
+	seedStackedToolHand(t, f, f.actors[0].ID)
+	entry := f.enter(t, "normal")
+	run := entry.Command.RunID
+	seedAssetEncounter(t, f, run)
+	cmd := assetCommand(t, f, run, 0, "job-78-entry-0", "unknown-hand")
+	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatal(err)
+	}
+	assertAssets(t, f, cmd.ActorID, 100, 1)
+	inv, err := f.invs.FindByCharacterID(context.Background(), cmd.ActorID)
+	if err != nil || len(inv.Items) != 1 || inv.Items[0].Quantity != 2 {
+		t.Fatal(inv, err)
+	}
+	if receipt, err := f.store.FindRunReceipt(context.Background(), run, cmd.ID); err != nil || receipt != nil {
+		t.Fatal("rejection stored a receipt", receipt, err)
 	}
 }
 

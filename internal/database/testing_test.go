@@ -145,8 +145,8 @@ func TestDatabaseTestEntityFactories(t *testing.T) {
 
 	// 4. CreateTestInventoryWithItems
 	t.Run("CreateTestInventoryWithItems", func(t *testing.T) {
-		item1, _ := coreitem.NewInstance("herb-01", 3)
-		item2, _ := coreitem.NewInstance("potion-01", 2)
+		item1, _ := coreitem.NewInstance("weapon-01", 1)
+		item2, _ := coreitem.NewInstance("item-001", 1)
 		inv, err := CreateTestInventoryWithItems(ctx, db, charID, []coreitem.Instance{item1, item2})
 		if err != nil {
 			t.Fatalf("CreateTestInventoryWithItems error: %v", err)

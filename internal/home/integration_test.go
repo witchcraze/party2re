@@ -478,14 +478,11 @@ func TestHomeItemUsage_ConcurrentStress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Prepare 15 inventory seed items (item-018: 力の種)
+	// The inventory calls race to consume a single held seed.
 	inv, _ := coreinventory.New(char.ID)
-	for i := 0; i < 15; i++ {
-		_ = inv.Add(coreitem.Instance{
-			ID:           fmt.Sprintf("stress-inv-seed-%d", i),
-			DefinitionID: "item-018",
-			Quantity:     1,
-		})
+	seed := coreitem.Instance{ID: id.New(), DefinitionID: "item-018", Quantity: 1}
+	if err := inv.Add(seed); err != nil {
+		t.Fatal(err)
 	}
 	if err := invRepo.Save(ctx, inv); err != nil {
 		t.Fatal(err)
@@ -519,7 +516,7 @@ func TestHomeItemUsage_ConcurrentStress(t *testing.T) {
 		var itemID string
 		var source string
 		if curOp < 15 {
-			itemID = fmt.Sprintf("stress-inv-seed-%d", curOp)
+			itemID = seed.ID
 			source = "inventory"
 		} else {
 			itemID = fmt.Sprintf("stress-depot-seed-%d", curOp-15)
@@ -563,9 +560,8 @@ func TestHomeItemUsage_ConcurrentStress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedInvRemaining := 15 - int(inventorySuccesses)
-	if len(finalInv.Items) != expectedInvRemaining {
-		t.Errorf("expected %d inventory items remaining, got %d", expectedInvRemaining, len(finalInv.Items))
+	if inventorySuccesses != 1 || len(finalInv.Items) != 0 {
+		t.Errorf("expected the held seed to be consumed once, got %d successes and inventory %+v", inventorySuccesses, finalInv.Items)
 	}
 
 	finalDepot, err := depotRepo.FindByCharacterID(ctx, char.ID)

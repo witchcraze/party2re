@@ -72,15 +72,22 @@ func New(characterID string) (Inventory, error) {
 	return Inventory{CharacterID: strings.TrimSpace(characterID)}, nil
 }
 
+// Add fills an empty legacy hand field with one item.
 func (i *Inventory) Add(value item.Instance) error {
 	if i == nil || strings.TrimSpace(i.CharacterID) == "" || value.ID == "" ||
-		value.DefinitionID == "" || value.Quantity <= 0 {
+		strings.TrimSpace(value.DefinitionID) == "" {
 		return ErrInvalidInventory
+	}
+	if value.Quantity != 1 {
+		return ErrInvalidQuantity
 	}
 	for _, existing := range i.Items {
 		if existing.ID == value.ID {
 			return ErrDuplicateItem
 		}
+	}
+	if i.IsFull(value.DefinitionID) {
+		return ErrInventoryFull
 	}
 	i.Items = append(i.Items, value)
 	return nil

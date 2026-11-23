@@ -10,7 +10,7 @@ Items requested by helper quests are not sold (`get_helper_item`, filtered by le
 
 ## 5. Purchase Routing and Depot Auto-Transfer
 
-- A single purchase goes to the inventory only when the relevant legacy hand field is empty: main hand for weapons, body for armor, and the held-tool slot for shields, accessories and consumables. Otherwise, and for every quantity above 1, goods go to the Depot.
+- A single purchase fills the matching [legacy hand field](items-and-equipment.md#legacy-hand-fields) when it is empty. An occupied field or a quantity above 1 routes the goods to the Depot.
 - Depot delivery ignores capacity and may exceed it (`send_item`, `system.cgi:818–837`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
 - Batch purchase (`まとめてかう`: `weapon.cgi:116`, `armor.cgi:115`, `item.cgi:137`) exists only in the weapon, armor and item shops and always delivers to the Depot.
 

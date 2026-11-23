@@ -27,9 +27,9 @@ func TestApplyPostBattleResult_PreserveEarnedRewards(t *testing.T) {
 					PreserveEarnedRewards: preserve,
 					BattleResult: corebattle.PartyBattleResult{
 						Outcome:     corebattle.OutcomeDefeat,
-						TotalReward: corebattle.Reward{Experience: 7, Currency: 11, Crystals: 3, ItemDefinitionID: "unearned-drop", ItemQuantity: 1},
+						TotalReward: corebattle.Reward{Experience: 7, Currency: 11, Crystals: 3},
 					},
-					DropItems: []string{"unearned-extra"},
+					RecipientDrops: make(map[string][]string),
 				}
 				for i := 0; i < count; i++ {
 					c := corecharacter.Character{ID: fmt.Sprintf("earned-%d", i), Name: "Hero", Level: 10, JobLevel: 1, Money: 100, Crystal: 5, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}}
@@ -44,6 +44,7 @@ func TestApplyPostBattleResult_PreserveEarnedRewards(t *testing.T) {
 						t.Fatal(err)
 					}
 					req.CharacterIDs = append(req.CharacterIDs, c.ID)
+					req.RecipientDrops[c.ID] = []string{"item-001"}
 				}
 				resp, err := svc.ApplyPostBattleResult(ctx, req)
 				if err != nil {

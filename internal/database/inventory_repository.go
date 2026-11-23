@@ -90,9 +90,11 @@ func (r *InventoryRepository) findByCharacterIDWithQuery(ctx context.Context, ch
 		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity, &instance.EnhancementLevel); err != nil {
 			return coreinventory.Inventory{}, err
 		}
-		if err := value.Add(instance); err != nil {
-			return coreinventory.Inventory{}, err
+		if instance.ID == "" || instance.DefinitionID == "" || instance.Quantity <= 0 {
+			return coreinventory.Inventory{}, coreinventory.ErrInvalidInventory
 		}
+		// Load rows as stored so callers can detect and handle an old ambiguous hand.
+		value.Items = append(value.Items, instance)
 	}
 	if err := rows.Err(); err != nil {
 		return coreinventory.Inventory{}, err

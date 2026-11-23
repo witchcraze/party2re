@@ -12,60 +12,13 @@ import (
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
-type dropItem struct {
-	definitionID string
-	isTreasure   bool
-}
-
-// dropsForCharacter determines which item definition IDs should be delivered to the specified character.
-// It tags whether each item originated from a treasure chest (RecipientDrops) or shared battle drops.
-// It ensures that items are never cloned across party members.
-func (req ApplyPostBattleRequest) dropsForCharacter(charID string) []dropItem {
-	var drops []dropItem
-	if len(req.RecipientDrops) > 0 {
-		if explicit, ok := req.RecipientDrops[charID]; ok {
-			for _, defID := range explicit {
-				drops = append(drops, dropItem{definitionID: defID, isTreasure: true})
-			}
-		}
-	}
-
-	// Designated recipient receives shared/unpartitioned drops (req.DropItems and TotalReward.ItemDefinitionID)
-	if req.designatedRecipient() == charID {
-		if req.BattleResult.TotalReward.ItemDefinitionID != "" && req.BattleResult.TotalReward.ItemQuantity > 0 {
-			for i := 0; i < req.BattleResult.TotalReward.ItemQuantity; i++ {
-				drops = append(drops, dropItem{definitionID: req.BattleResult.TotalReward.ItemDefinitionID, isTreasure: false})
-			}
-		}
-		for _, defID := range req.DropItems {
-			drops = append(drops, dropItem{definitionID: defID, isTreasure: false})
-		}
-	}
-
-	return drops
-}
-
-// designatedRecipient returns the character ID that should receive global/shared drops.
-// If RecipientCharacterID is explicitly set, it is returned.
-// Otherwise, if no explicit RecipientDrops map is provided and CharacterIDs is non-empty,
-// the primary character (CharacterIDs[0]) is the default recipient.
-func (req ApplyPostBattleRequest) designatedRecipient() string {
-	if req.RecipientCharacterID != "" {
-		return req.RecipientCharacterID
-	}
-	if len(req.RecipientDrops) == 0 && len(req.CharacterIDs) > 0 {
-		return req.CharacterIDs[0]
-	}
-	return ""
-}
-
 func (s *Service) applyRewardsForCharacter(
 	ctx context.Context,
 	char *corecharacter.Character,
 	inv *coreinventory.Inventory,
 	held string,
 	reward corebattle.Reward,
-	drops []dropItem,
+	drops []string,
 	finalized bool,
 	deferGrowth bool,
 ) (int, int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
@@ -131,14 +84,13 @@ func (s *Service) applyRewardsForCharacter(
 	var invDrops []coreitem.Instance
 	var depotDrops []coreitem.Instance
 
-	for _, drop := range drops {
-		inst, err := coreitem.NewInstance(drop.definitionID, 1)
+	for _, definitionID := range drops {
+		inst, err := coreitem.NewInstance(definitionID, 1)
 		if err != nil {
 			continue
 		}
 
-		// Check hand / inventory eligibility
-		if s.canAcceptDrop(inv, drop) {
+		if depot.AcceptsTreasure(inv, definitionID) {
 			if err := inv.Add(inst); err == nil {
 				invDrops = append(invDrops, inst)
 				continue
@@ -152,25 +104,11 @@ func (s *Service) applyRewardsForCharacter(
 	return gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, nil
 }
 
-func (s *Service) canAcceptDrop(inv *coreinventory.Inventory, drop dropItem) bool {
-	if drop.isTreasure {
-		return depot.AcceptsTreasure(inv, drop.definitionID)
-	}
-	return len(inv.Items) < s.maxInventoryCapacity()
-}
-
 func (req ApplyPostBattleRequest) rewardForCharacter(charID string) corebattle.Reward {
 	if req.RecipientRewards != nil {
 		return req.RecipientRewards[charID]
 	}
 	return req.BattleResult.TotalReward
-}
-
-func (s *Service) maxInventoryCapacity() int {
-	if s.maxInvCap > 0 {
-		return s.maxInvCap
-	}
-	return 1 // Default 1 matching legacy $m{ite}
 }
 
 func (s *Service) deliverToDepot(

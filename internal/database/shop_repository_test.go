@@ -38,7 +38,7 @@ func TestShopRepositoryCommitTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inst, err := item.NewInstance("potion", 3)
+	inst, err := item.NewInstance("potion", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestShopRepositoryCommitTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(restoredInv.Items) != 1 || restoredInv.Items[0].Quantity != 3 {
+	if len(restoredInv.Items) != 1 || restoredInv.Items[0].Quantity != 1 {
 		t.Errorf("restored Inventory = %#v", restoredInv)
 	}
 }

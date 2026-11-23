@@ -116,12 +116,10 @@ type Result struct {
 }
 
 type Reward struct {
-	Experience       int
-	Currency         int
-	ItemDefinitionID string
-	ItemQuantity     int
-	SmallMedals      int
-	Crystals         int
+	Experience  int
+	Currency    int
+	SmallMedals int
+	Crystals    int
 }
 
 type Effect struct {
@@ -293,9 +291,7 @@ func validateParticipant(value Participant) error {
 }
 
 func validateReward(value Reward) error {
-	if value.Experience < 0 || value.Currency < 0 || value.Crystals < 0 ||
-		(value.ItemDefinitionID == "" && value.ItemQuantity != 0) ||
-		(value.ItemDefinitionID != "" && value.ItemQuantity <= 0) {
+	if value.Experience < 0 || value.Currency < 0 || value.Crystals < 0 {
 		return ErrInvalidReward
 	}
 	return nil

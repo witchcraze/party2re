@@ -121,9 +121,7 @@ func TestUseHomeItem_RewardBag_BothSourcesDeliverAboveCapacity(t *testing.T) {
 			dp, _ := depot.NewDepot(charID)
 			bag := coreitem.Instance{ID: "inst-bag", DefinitionID: "item-125", Quantity: 2}
 			if source == "inventory" {
-				if err := inv.Add(bag); err != nil {
-					t.Fatal(err)
-				}
+				inv.Items = []coreitem.Instance{bag} // Preserve partial consumption of a historical stack.
 			} else {
 				dp.Items = append(dp.Items, bag)
 			}

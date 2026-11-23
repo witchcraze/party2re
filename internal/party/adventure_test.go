@@ -1014,7 +1014,6 @@ func TestPartyAdventure_TreasureBlessing_ChestGenerationAndNoSettlementDuplicati
 		battle.WithDepotRepository(depotRepo),
 		battle.WithBlessingProvider(blessingProv),
 		battle.WithRandomSource(fixedPartyBattleRand{val: 0}), // Lucky roll in settlement too
-		battle.WithMaxInventoryCapacity(10),
 	)
 	svc.battleSettler = battleSvc
 
@@ -1123,7 +1122,6 @@ func TestPartyAdventure_TreasureBlessing_ActorScope(t *testing.T) {
 				battle.WithDepotRepository(depotRepo),
 				battle.WithBlessingProvider(blessingProv),
 				battle.WithRandomSource(fixedPartyBattleRand{val: 0}),
-				battle.WithMaxInventoryCapacity(10),
 			)
 			svc.battleSettler = battleSvc
 
@@ -1764,7 +1762,6 @@ func TestPartyAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
 		battle.WithDepotRepository(depotRepo),
 		battle.WithBlessingProvider(blessingProv),
 		battle.WithRandomSource(fixedPartyBattleRand{val: 0}),
-		battle.WithMaxInventoryCapacity(10),
 	)
 	svc.battleSettler = battleSvc
 

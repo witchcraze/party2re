@@ -137,13 +137,13 @@ func TestListHistory(t *testing.T) {
 				LoserID:  "mon-01",
 				Turns:    3,
 				Reward: corebattle.Reward{
-					Experience:       10,
-					Currency:         5,
-					ItemDefinitionID: "item-herb",
-					ItemQuantity:     1,
+					Experience: 10,
+					Currency:   5,
 				},
 			},
-			Resolved: true,
+			RewardItemID:       "item-herb",
+			RewardItemQuantity: 1,
+			Resolved:           true,
 		},
 		{
 			ID:          "adv-2",
@@ -200,7 +200,7 @@ func TestListHistory(t *testing.T) {
 		if first.ID != "adv-1" || first.StageName != "平原" || first.MonsterName != "スライム" {
 			t.Fatalf("expected enriched first entry, got %+v", first)
 		}
-		if first.Outcome != corebattle.OutcomeWin || first.BattleTurns != 3 || first.RewardExperience != 10 || first.RewardCurrency != 5 || first.RewardItemID != "item-herb" {
+		if first.Outcome != corebattle.OutcomeWin || first.BattleTurns != 3 || first.RewardExperience != 10 || first.RewardCurrency != 5 || first.RewardItemID != "item-herb" || first.RewardItemQuantity != 1 {
 			t.Fatalf("unexpected battle/reward fields in first entry: %+v", first)
 		}
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/collection"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -57,14 +58,13 @@ func TestDepotLifecycle_Integration(t *testing.T) {
 		t.Fatalf("initial depot not empty: %#v", initialDep)
 	}
 
-	// 2. Deposit an item
+	// 2. Deposit an existing stack from an older inventory.
 	potion, err := item.NewInstance("item-001", 3)
 	if err != nil {
 		t.Fatalf("NewInstance error = %v", err)
 	}
-	_, err = database.CreateTestInventoryWithItems(ctx, db, createdChar.ID, []item.Instance{potion})
-	if err != nil {
-		t.Fatalf("CreateTestInventoryWithItems error = %v", err)
+	if err := invRepo.Save(ctx, coreinventory.Inventory{CharacterID: createdChar.ID, Items: []item.Instance{potion}}); err != nil {
+		t.Fatalf("save historical inventory: %v", err)
 	}
 
 	dep, err := depotService.DepositItem(ctx, createdChar.ID, potion.ID)

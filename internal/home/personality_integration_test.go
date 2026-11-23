@@ -557,7 +557,7 @@ func TestItemAppearance_OverlappingFailedUsesPreservePriorState(t *testing.T) {
 			}
 
 			itemA := f.stockItemWithID(t, c, "inventory", id.New(), bookDefinition)
-			itemB := f.stockItemWithID(t, c, "inventory", id.New(), "item-045")
+			itemB := f.stockItemWithID(t, c, "depot", id.New(), "item-045")
 
 			undoEntered := make(chan struct{})
 			releaseUndo := make(chan struct{})
@@ -602,7 +602,7 @@ func TestItemAppearance_OverlappingFailedUsesPreservePriorState(t *testing.T) {
 			errB := make(chan error, 1)
 			go func() {
 				close(bStarted)
-				_, err := f.svc.UseHomeItem(ctx, c.ID, itemB, "inventory")
+				_, err := f.svc.UseHomeItem(ctx, c.ID, itemB, "depot")
 				errB <- err
 			}()
 			<-bStarted
@@ -641,9 +641,9 @@ func TestItemAppearance_OverlappingFailedUsesPreservePriorState(t *testing.T) {
 			}
 
 			st, err := f.presence.State(ctx, c.ID)
-			if err != nil || st.LoginMessage != "" || !f.held(t, c, "inventory", itemA) || !f.held(t, c, "inventory", itemB) || f.newsCount(t, c) != 0 {
+			if err != nil || st.LoginMessage != "" || !f.held(t, c, "inventory", itemA) || !f.held(t, c, "depot", itemB) || f.newsCount(t, c) != 0 {
 				t.Fatalf("SQL state mutated on rollback: message=%q heldA=%v heldB=%v news=%d err=%v",
-					st.LoginMessage, f.held(t, c, "inventory", itemA), f.held(t, c, "inventory", itemB), f.newsCount(t, c), err)
+					st.LoginMessage, f.held(t, c, "inventory", itemA), f.held(t, c, "depot", itemB), f.newsCount(t, c), err)
 			}
 		})
 	}
@@ -766,7 +766,7 @@ func TestItemAppearance_ContextCancelHoldsLockUntilUndoAndBlocksConcurrentWriter
 			}
 
 			itemA := f.stockItemWithID(t, c, "inventory", id.New(), bookDefinition)
-			itemB := f.stockItemWithID(t, c, "inventory", id.New(), "item-045")
+			itemB := f.stockItemWithID(t, c, "depot", id.New(), "item-045")
 
 			ctxA, cancelA := context.WithCancel(ctx)
 			defer cancelA()
@@ -822,7 +822,7 @@ func TestItemAppearance_ContextCancelHoldsLockUntilUndoAndBlocksConcurrentWriter
 			errB := make(chan error, 1)
 			go func() {
 				close(bStarted)
-				_, err := f.svc.UseHomeItem(ctx, c.ID, itemB, "inventory")
+				_, err := f.svc.UseHomeItem(ctx, c.ID, itemB, "depot")
 				errB <- err
 			}()
 			<-bStarted
@@ -861,9 +861,9 @@ func TestItemAppearance_ContextCancelHoldsLockUntilUndoAndBlocksConcurrentWriter
 			}
 
 			st, err := f.presence.State(ctx, c.ID)
-			if err != nil || st.LoginMessage != "" || !f.held(t, c, "inventory", itemA) || !f.held(t, c, "inventory", itemB) || f.newsCount(t, c) != 0 {
+			if err != nil || st.LoginMessage != "" || !f.held(t, c, "inventory", itemA) || !f.held(t, c, "depot", itemB) || f.newsCount(t, c) != 0 {
 				t.Fatalf("SQL state mutated on canceled rollback: message=%q heldA=%v heldB=%v news=%d err=%v",
-					st.LoginMessage, f.held(t, c, "inventory", itemA), f.held(t, c, "inventory", itemB), f.newsCount(t, c), err)
+					st.LoginMessage, f.held(t, c, "inventory", itemA), f.held(t, c, "depot", itemB), f.newsCount(t, c), err)
 			}
 		})
 	}

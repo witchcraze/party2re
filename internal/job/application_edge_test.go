@@ -388,7 +388,7 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 	}
 
 	// 8. When item IS needed and inventory has it -> item consumed and success
-	token, _ := item.NewInstance("item-028", 2)
+	token, _ := item.NewInstance("item-028", 1)
 	_ = inv.Add(token)
 	svc, _, _, invRepo := setupSvc(char, state, &inv)
 	updatedChar, _, err = svc.ChangeJob(ctx, char.ID, "job-34")
@@ -398,8 +398,8 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 	if updatedChar.JobID != "job-34" {
 		t.Fatalf("expected job-34, got %s", updatedChar.JobID)
 	}
-	if invRepo.inventory.Quantity("item-028") != 1 {
-		t.Fatalf("expected 1 item-028 remaining, got %d", invRepo.inventory.Quantity("item-028"))
+	if invRepo.inventory.Quantity("item-028") != 0 {
+		t.Fatalf("expected 0 item-028 remaining, got %d", invRepo.inventory.Quantity("item-028"))
 	}
 }
 
@@ -770,7 +770,7 @@ func TestExchangeJob_GenderMismatch_Rejected(t *testing.T) {
 	maleState.RecordMastery("job-16", 140, 140) // 白魔術師: required_gender = "f"
 
 	invMale, _ := coreinventory.New(maleChar.ID)
-	crystal, _ := item.NewInstance("item-168", 10)
+	crystal, _ := item.NewInstance("item-168", 1)
 	_ = invMale.Add(crystal)
 
 	maleRepo := &repositoryStub{value: maleState}
@@ -823,7 +823,7 @@ func TestExchangeJob_GenderMismatch_Rejected(t *testing.T) {
 	femaleState.RecordMastery("job-47", 160, 160) // ソルジャー: required_gender = "m"
 
 	invFemale, _ := coreinventory.New(femaleChar.ID)
-	crystalFemale, _ := item.NewInstance("item-168", 10)
+	crystalFemale, _ := item.NewInstance("item-168", 1)
 	_ = invFemale.Add(crystalFemale)
 
 	femaleRepo := &repositoryStub{value: femaleState}
@@ -964,7 +964,7 @@ func TestChangeJob_MasteredTargetStillRequiresPrerequisitesAndLeavesStateUnchang
 			ecoCharRepo := &errCharRepoStub{char: tc.char}
 
 			inv, _ := coreinventory.New(tc.char.ID)
-			sampleItem, _ := item.NewInstance("item-001", 2)
+			sampleItem, _ := item.NewInstance("item-001", 1)
 			_ = inv.Add(sampleItem)
 			invRepo := &errInventoryRepoStub{inv: inv}
 
@@ -1001,7 +1001,7 @@ func TestChangeJob_MasteredTargetStillRequiresPrerequisitesAndLeavesStateUnchang
 				if retained, ok := repo.value.SavedSP(tc.targetJobID); !ok || retained != tc.masteredSP {
 					t.Fatalf("mastered SP mutated on rejection: retained=%d ok=%v", retained, ok)
 				}
-				if invRepo.inv.Quantity("item-001") != 2 {
+				if invRepo.inv.Quantity("item-001") != 1 {
 					t.Fatalf("inventory mutated on rejection: qty=%d", invRepo.inv.Quantity("item-001"))
 				}
 				return

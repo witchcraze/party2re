@@ -14,6 +14,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
@@ -66,7 +67,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 		if err := core.charRepo.Update(ctx, c); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := database.CreateTestInventoryWithItems(ctx, db, c.ID, []coreitem.Instance{{ID: id.New(), DefinitionID: "item-001", Quantity: 2}}); err != nil {
+		if _, err := database.CreateTestInventoryWithItems(ctx, db, c.ID, []coreitem.Instance{{ID: id.New(), DefinitionID: "item-001", Quantity: 1}}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := database.CreateTestDepot(ctx, db, c.ID, 0, []coreitem.Instance{{ID: id.New(), DefinitionID: "item-002", Quantity: 1}}); err != nil {
@@ -93,7 +94,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 				t.Fatal(err)
 			}
 			if len(held.Items) == 0 {
-				if _, _, err := core.economy.GrantItem(ctx, actor.ID, "item-001", 2); err != nil {
+				if _, err := database.CreateTestInventoryWithItems(ctx, db, actor.ID, []coreitem.Instance{{ID: id.New(), DefinitionID: "item-001", Quantity: 1}}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -306,9 +307,16 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 	if _, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root", 1); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal("empty hand purchase bypassed enrollment", err)
 	}
-	_, granted, err := core.economy.GrantItem(ctx, actor.ID, "item-002", 1)
-	if err != nil {
-		t.Fatal("passive item reward rejected", err)
+	var granted depot.DeliveryResult
+	if err := database.RunInTx(ctx, db, func(txCtx context.Context) error {
+		locked, err := core.charRepo.FindByIDForUpdate(txCtx, actor.ID)
+		if err != nil {
+			return err
+		}
+		granted, err = depot.DeliverRewardItem(txCtx, core.invRepo, econ.depotRepo, locked, "item-002", 1, depot.PolicyTreatOverflowAsLost)
+		return err
+	}); err != nil || granted.DeliveredTo != depot.DeliveredToInventory {
+		t.Fatal("passive item reward did not reach the hand", granted, err)
 	}
 	beforeActor, err := core.charRepo.FindByID(ctx, actor.ID)
 	if err != nil {
@@ -349,7 +357,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 		t.Fatal(err)
 	}
 	finalInv, err := core.invRepo.FindByCharacterID(ctx, actor.ID)
-	if err != nil || len(finalInv.Items) != 1 || finalInv.Items[0].ID != granted.ID {
+	if err != nil || len(finalInv.Items) != 1 || finalInv.Items[0].ID != granted.Item.ID {
 		t.Fatal("exit lost passive item reward", finalInv, err)
 	}
 

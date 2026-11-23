@@ -37,12 +37,12 @@ func TestApplyPostBattleResult_SingleCharacter_FullDepot_LostDrops(t *testing.T)
 	}
 	_ = charRepo.Update(ctx, char)
 
-	// Inventory full with 2 items (capacity = 2)
+	// The occupied tool hand forces the treasure to the depot.
 	inv, _ := coreinventory.New("char-full-depot")
 	item1, _ := coreitem.NewInstance("item-dummy-1", 1)
-	item2, _ := coreitem.NewInstance("item-dummy-2", 1)
-	_ = inv.Add(item1)
-	_ = inv.Add(item2)
+	if err := inv.Add(item1); err != nil {
+		t.Fatal(err)
+	}
 	_ = invRepo.Save(ctx, inv)
 
 	// Depot full with items matching refreshed capacity for JobLevel
@@ -65,7 +65,6 @@ func TestApplyPostBattleResult_SingleCharacter_FullDepot_LostDrops(t *testing.T)
 		battle.WithEquipmentRepository(equipRepo),
 		battle.WithDepotRepository(depotRepo),
 		battle.WithTransactionRunner(txRunner),
-		battle.WithMaxInventoryCapacity(2),
 	)
 
 	battleRes := corebattle.PartyBattleResult{
@@ -75,16 +74,14 @@ func TestApplyPostBattleResult_SingleCharacter_FullDepot_LostDrops(t *testing.T)
 			"char-full-depot": 100,
 		},
 		TotalReward: corebattle.Reward{
-			Experience:       0,
-			Currency:         10,
-			ItemDefinitionID: "item-rare-drop",
-			ItemQuantity:     1,
+			Currency: 10,
 		},
 	}
 
 	req := battle.ApplyPostBattleRequest{
-		CharacterIDs: []string{"char-full-depot"},
-		BattleResult: battleRes,
+		CharacterIDs:   []string{"char-full-depot"},
+		BattleResult:   battleRes,
+		RecipientDrops: map[string][]string{"char-full-depot": {"item-rare-drop"}},
 	}
 
 	resp, err := svc.ApplyPostBattleResult(ctx, req)
@@ -139,12 +136,12 @@ func TestApplyPostBattleResult_MultiCharacter_FullDepot_LostDrops(t *testing.T) 
 	_ = charRepo.Update(ctx, c1)
 	_ = charRepo.Update(ctx, c2)
 
-	// c1 inventory full (2/2); depot full (1/1)
+	// c1 has an occupied tool hand and a full depot.
 	inv1, _ := coreinventory.New("char-multi-1")
 	i1, _ := coreitem.NewInstance("dummy-1", 1)
-	i2, _ := coreitem.NewInstance("dummy-2", 1)
-	_ = inv1.Add(i1)
-	_ = inv1.Add(i2)
+	if err := inv1.Add(i1); err != nil {
+		t.Fatal(err)
+	}
 	_ = invRepo.Save(ctx, inv1)
 
 	depCap1 := depot.CalculateCapacity(c1.JobLevel, 0, 0)
@@ -157,12 +154,12 @@ func TestApplyPostBattleResult_MultiCharacter_FullDepot_LostDrops(t *testing.T) 
 	}
 	_ = depotRepo.Save(ctx, dep1)
 
-	// c2 inventory full (2/2); depot has space (capacity 2, 0 items)
+	// c2 has an occupied tool hand and space in the depot.
 	inv2, _ := coreinventory.New("char-multi-2")
 	i3, _ := coreitem.NewInstance("dummy-3", 1)
-	i4, _ := coreitem.NewInstance("dummy-4", 1)
-	_ = inv2.Add(i3)
-	_ = inv2.Add(i4)
+	if err := inv2.Add(i3); err != nil {
+		t.Fatal(err)
+	}
 	_ = invRepo.Save(ctx, inv2)
 
 	dep2, _ := depot.NewDepot("char-multi-2")
@@ -176,7 +173,6 @@ func TestApplyPostBattleResult_MultiCharacter_FullDepot_LostDrops(t *testing.T) 
 		battle.WithEquipmentRepository(equipRepo),
 		battle.WithDepotRepository(depotRepo),
 		battle.WithTransactionProvider(txProv),
-		battle.WithMaxInventoryCapacity(2),
 	)
 
 	battleRes := corebattle.PartyBattleResult{
@@ -240,7 +236,7 @@ func TestApplyPostBattleResult_NilDepotRepo_LostDrops(t *testing.T) {
 	}
 	_ = charRepo.Update(ctx, char)
 
-	// Inventory full with 1 item (capacity = 1)
+	// The occupied tool hand forces the treasure to the depot.
 	inv, _ := coreinventory.New("char-no-depot-svc")
 	item1, _ := coreitem.NewInstance("item-dummy-1", 1)
 	_ = inv.Add(item1)
@@ -255,7 +251,6 @@ func TestApplyPostBattleResult_NilDepotRepo_LostDrops(t *testing.T) {
 		battle.WithInventoryRepository(invRepo),
 		battle.WithEquipmentRepository(equipRepo),
 		battle.WithTransactionRunner(txRunner),
-		battle.WithMaxInventoryCapacity(1),
 	)
 
 	battleRes := corebattle.PartyBattleResult{
@@ -271,9 +266,9 @@ func TestApplyPostBattleResult_NilDepotRepo_LostDrops(t *testing.T) {
 	}
 
 	req := battle.ApplyPostBattleRequest{
-		CharacterIDs: []string{"char-no-depot-svc"},
-		BattleResult: battleRes,
-		DropItems:    []string{"item-overflow-drop"},
+		CharacterIDs:   []string{"char-no-depot-svc"},
+		BattleResult:   battleRes,
+		RecipientDrops: map[string][]string{"char-no-depot-svc": {"item-overflow-drop"}},
 	}
 
 	resp, err := svc.ApplyPostBattleResult(ctx, req)
@@ -289,93 +284,6 @@ func TestApplyPostBattleResult_NilDepotRepo_LostDrops(t *testing.T) {
 	lost := resp.LostDrops["char-no-depot-svc"]
 	if len(lost) != 1 || lost[0].DefinitionID != "item-overflow-drop" {
 		t.Errorf("expected 1 lost drop (item-overflow-drop), got %+v", lost)
-	}
-}
-
-func TestApplyPostBattleResult_MultiCharacter_SingleRecipientDrop(t *testing.T) {
-	ctx := context.Background()
-	charRepo := newMockCharRepo()
-	invRepo := newMockInvRepo()
-	equipRepo := newMockEquipRepo()
-	depotRepo := newMockDepotRepo()
-
-	charIDs := []string{"char-p1", "char-p2", "char-p3", "char-p4"}
-	for _, id := range charIDs {
-		c := corecharacter.Character{
-			ID:       id,
-			Name:     id,
-			JobID:    "job-warrior",
-			Level:    1,
-			JobLevel: 1,
-			Stats:    corecharacter.Stats{HP: 100, MaxHP: 100},
-		}
-		_ = charRepo.Update(ctx, c)
-		inv, _ := coreinventory.New(id)
-		_ = invRepo.Save(ctx, inv)
-	}
-
-	txProv := &mockTxProvider{}
-	svc := battle.NewService(
-		battle.WithCharacterRepository(charRepo),
-		battle.WithInventoryRepository(invRepo),
-		battle.WithEquipmentRepository(equipRepo),
-		battle.WithDepotRepository(depotRepo),
-		battle.WithTransactionProvider(txProv),
-		battle.WithMaxInventoryCapacity(5),
-	)
-
-	battleRes := corebattle.PartyBattleResult{
-		Outcome:    corebattle.OutcomeWin,
-		WinnerSide: "allies",
-		RemainingHP: map[string]int{
-			"char-p1": 100,
-			"char-p2": 100,
-			"char-p3": 100,
-			"char-p4": 100,
-		},
-		TotalReward: corebattle.Reward{
-			Experience:       50,
-			Currency:         100,
-			ItemDefinitionID: "item-boss-sword",
-			ItemQuantity:     1,
-		},
-	}
-
-	// 1. Without RecipientCharacterID or RecipientDrops: default designated recipient is CharacterIDs[0] (char-p1)
-	req1 := battle.ApplyPostBattleRequest{
-		CharacterIDs: charIDs,
-		BattleResult: battleRes,
-	}
-	resp1, err := svc.ApplyPostBattleResult(ctx, req1)
-	if err != nil {
-		t.Fatalf("ApplyPostBattleResult failed: %v", err)
-	}
-	if len(resp1.InventoryDrops["char-p1"]) != 1 || resp1.InventoryDrops["char-p1"][0].DefinitionID != "item-boss-sword" {
-		t.Errorf("expected char-p1 to receive 1 item-boss-sword, got %+v", resp1.InventoryDrops["char-p1"])
-	}
-	for _, id := range []string{"char-p2", "char-p3", "char-p4"} {
-		if len(resp1.InventoryDrops[id]) != 0 {
-			t.Errorf("expected %s to receive 0 drops, got %d", id, len(resp1.InventoryDrops[id]))
-		}
-	}
-
-	// 2. With RecipientCharacterID explicitly specified (char-p3)
-	req2 := battle.ApplyPostBattleRequest{
-		CharacterIDs:         charIDs,
-		BattleResult:         battleRes,
-		RecipientCharacterID: "char-p3",
-	}
-	resp2, err := svc.ApplyPostBattleResult(ctx, req2)
-	if err != nil {
-		t.Fatalf("ApplyPostBattleResult failed: %v", err)
-	}
-	if len(resp2.InventoryDrops["char-p3"]) != 1 || resp2.InventoryDrops["char-p3"][0].DefinitionID != "item-boss-sword" {
-		t.Errorf("expected char-p3 to receive 1 item-boss-sword, got %+v", resp2.InventoryDrops["char-p3"])
-	}
-	for _, id := range []string{"char-p1", "char-p2", "char-p4"} {
-		if len(resp2.InventoryDrops[id]) != 0 {
-			t.Errorf("expected %s to receive 0 drops, got %d", id, len(resp2.InventoryDrops[id]))
-		}
 	}
 }
 

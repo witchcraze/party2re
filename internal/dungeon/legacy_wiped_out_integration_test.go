@@ -229,13 +229,8 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 			charID string
 			inst   coreitem.Instance
 		}{{lead.ID, leadItem}, {ally.ID, allyItem}} {
-			inv, err := coreinventory.New(pair.charID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := inv.Add(pair.inst); err != nil {
-				t.Fatal(err)
-			}
+			// The resumed expedition must debit one unit from a previously persisted stack.
+			inv := coreinventory.Inventory{CharacterID: pair.charID, Items: []coreitem.Instance{pair.inst}}
 			if err := invs.Save(ctx, inv); err != nil {
 				t.Fatal(err)
 			}

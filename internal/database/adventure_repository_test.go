@@ -671,14 +671,14 @@ func TestAdventureRepository_CrystalRewardsRoundTripAndUpdate(t *testing.T) {
 			WinnerID: character.ID,
 			Turns:    6,
 			Reward: corebattle.Reward{
-				Experience:       7,
-				Currency:         12,
-				Crystals:         1,
-				ItemDefinitionID: "item-001",
-				ItemQuantity:     2,
+				Experience: 7,
+				Currency:   12,
+				Crystals:   1,
 			},
 		},
-		Resolved: true,
+		RewardItemID:       "item-001",
+		RewardItemQuantity: 2,
+		Resolved:           true,
 	}
 	advLater := adventure.Adventure{
 		ID:               "00000000000000000000000000000003",
@@ -729,6 +729,9 @@ func TestAdventureRepository_CrystalRewardsRoundTripAndUpdate(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got.BattleResult.Reward, wantReward) {
 			t.Fatalf("FindByID(%s) reward = %+v, want %+v", advID, got.BattleResult.Reward, wantReward)
+		}
+		if advID == advCrystal.ID && (got.RewardItemID != advCrystal.RewardItemID || got.RewardItemQuantity != advCrystal.RewardItemQuantity) {
+			t.Fatalf("FindByID(%s) historical reward item = %q × %d", advID, got.RewardItemID, got.RewardItemQuantity)
 		}
 	}
 
@@ -846,14 +849,16 @@ func TestAdventureRewardCrystalsMigration(t *testing.T) {
 		t.Fatalf("FindByID after migration: %v", err)
 	}
 	wantReward := corebattle.Reward{
-		Experience:       10,
-		Currency:         20,
-		Crystals:         0,
-		ItemDefinitionID: "item-001",
-		ItemQuantity:     1,
+		Experience: 10,
+		Currency:   20,
+		Crystals:   0,
 	}
 	if !reflect.DeepEqual(got.BattleResult.Reward, wantReward) {
 		t.Fatalf("post-migration reward = %+v, want %+v", got.BattleResult.Reward, wantReward)
+	}
+
+	if got.RewardItemID != "item-001" || got.RewardItemQuantity != 1 {
+		t.Fatalf("historical reward item = %q × %d, want item-001 × 1", got.RewardItemID, got.RewardItemQuantity)
 	}
 
 	var crystalBalance int

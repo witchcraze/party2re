@@ -166,17 +166,17 @@ func TestExecuteTransaction_ItemCostAndGrants(t *testing.T) {
 	_ = charRepo.Update(context.Background(), char)
 
 	inv, _ := coreinventory.New("char-crafter")
-	wood, _ := coreitem.NewInstance("wood", 3)
+	wood, _ := coreitem.NewInstance("wood", 1)
 	_ = inv.Add(wood)
 	_ = invRepo.Save(context.Background(), inv)
 
-	// Consume 3 wood by definition, grant sword
+	// Consume 1 wood by definition, grant sword
 	res, err := svc.ExecuteTransaction(context.Background(), economy.TransactionRequest{
 		CharacterID: "char-crafter",
 		Cost: economy.ResourceCost{
 			Gold:              30,
 			ItemDefinitionID:  "wood",
-			ItemDefinitionQty: 3,
+			ItemDefinitionQty: 1,
 		},
 		Grant: economy.ResourceGrant{
 			ItemDefinitionID: "sword_bronze",

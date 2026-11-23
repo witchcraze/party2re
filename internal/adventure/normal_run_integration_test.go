@@ -265,7 +265,7 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter := battle.NewService(battle.WithCharacterRepository(chars), battle.WithCustomSkillRepository(customs), battle.WithInventoryRepository(invs), battle.WithDepotRepository(depots), battle.WithEquipmentRepository(equipment), battle.WithJobHistoryRepository(jobs), battle.WithTransactionProvider(database.NewTransactionProvider(db)), battle.WithTransactionRunner(runner), battle.WithMaxInventoryCapacity(30))
+	adapter := battle.NewService(battle.WithCharacterRepository(chars), battle.WithCustomSkillRepository(customs), battle.WithInventoryRepository(invs), battle.WithDepotRepository(depots), battle.WithEquipmentRepository(equipment), battle.WithJobHistoryRepository(jobs), battle.WithTransactionProvider(database.NewTransactionProvider(db)), battle.WithTransactionRunner(runner))
 	stages, err := adventure.InitialStageCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -533,7 +533,7 @@ func TestNormalRunChestReceiptAndSQLRollback(t *testing.T) {
 		t.Fatal("duplicate chest delivery", dep, err)
 	}
 	// A real concrete key instance is debited only on an additional inspection.
-	key, err := coreitem.NewInstance(runhost.ItemTreasurePocket, 2)
+	key, err := coreitem.NewInstance(runhost.ItemTreasurePocket, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -557,7 +557,7 @@ func TestNormalRunChestReceiptAndSQLRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k, ok := inv.Find(key.ID); !ok || k.Quantity != 2 {
+	if k, ok := inv.Find(key.ID); !ok || k.Quantity != 1 {
 		t.Fatal("rollback lost a key", inv)
 	}
 	f.store.failWrite.Store(false)
@@ -571,7 +571,7 @@ func TestNormalRunChestReceiptAndSQLRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k, ok := inv.Find(key.ID); !ok || k.Quantity != 1 {
-		t.Fatal("additional chest consumed key twice", inv)
+	if _, ok := inv.Find(key.ID); ok {
+		t.Fatal("additional chest did not consume the key", inv)
 	}
 }

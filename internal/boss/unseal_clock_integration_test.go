@@ -202,7 +202,6 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		battle.WithTransactionRunner(runner),
 		battle.WithUnsealClockWriter(bossRepo),
 		battle.WithNowFunc(clock.Now),
-		battle.WithMaxInventoryCapacity(30),
 	)
 
 	stages, err := adventure.InitialStageCatalog()

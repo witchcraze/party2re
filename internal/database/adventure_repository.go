@@ -71,8 +71,8 @@ func (r *AdventureRepository) Save(ctx context.Context, value adventure.Adventur
 		value.PartySize,
 		value.BattleResult.Reward.Experience, value.BattleResult.Reward.Currency,
 		value.BattleResult.Reward.Crystals,
-		nullableString(value.BattleResult.Reward.ItemDefinitionID, value.Resolved),
-		value.BattleResult.Reward.ItemQuantity, value.Resolved)
+		nullableString(value.RewardItemID, value.Resolved),
+		value.RewardItemQuantity, value.Resolved)
 	return err
 }
 
@@ -92,16 +92,17 @@ func scanAdventure(scanner adventureRowScanner) (adventure.Adventure, error) {
 	var value adventure.Adventure
 	var outcome, winnerID, loserID, rewardItemID, seasonStr sql.NullString
 	var turns sql.NullInt64
-	var seasonalSubID, rewardExperience, rewardCurrency, rewardCrystals, rewardItemQuantity int
+	var seasonalSubID, rewardExperience, rewardCurrency, rewardCrystals int
 	if err := scanner.Scan(&value.ID, &value.CharacterID, &value.Type, &value.StartedAt,
 		&value.ExperienceReward, &outcome, &winnerID, &loserID, &turns,
 		&value.FloorsCleared, &value.IsCleared,
 		&seasonalSubID, &seasonStr,
 		&value.PartySize,
 		&rewardExperience, &rewardCurrency, &rewardCrystals,
-		&rewardItemID, &rewardItemQuantity, &value.Resolved); err != nil {
+		&rewardItemID, &value.RewardItemQuantity, &value.Resolved); err != nil {
 		return adventure.Adventure{}, err
 	}
+	value.RewardItemID = rewardItemID.String
 	value.StageID = value.Type
 	value.SeasonalSubID = seasonalSubID
 	value.Season = seasonStr.String
@@ -117,11 +118,9 @@ func scanAdventure(scanner adventureRowScanner) (adventure.Adventure, error) {
 		LoserID:  loserID.String,
 		Turns:    int(turns.Int64),
 		Reward: corebattle.Reward{
-			Experience:       rewardExperience,
-			Currency:         rewardCurrency,
-			Crystals:         rewardCrystals,
-			ItemDefinitionID: rewardItemID.String,
-			ItemQuantity:     rewardItemQuantity,
+			Experience: rewardExperience,
+			Currency:   rewardCurrency,
+			Crystals:   rewardCrystals,
 		},
 	}
 	return value, nil

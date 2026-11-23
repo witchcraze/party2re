@@ -186,8 +186,8 @@ func (s *Service) buildHistoryEntry(adv Adventure) AdventureHistoryEntry {
 		BattleTurns:        adv.BattleResult.Turns,
 		RewardExperience:   adv.BattleResult.Reward.Experience,
 		RewardCurrency:     adv.BattleResult.Reward.Currency,
-		RewardItemID:       adv.BattleResult.Reward.ItemDefinitionID,
-		RewardItemQuantity: adv.BattleResult.Reward.ItemQuantity,
+		RewardItemID:       adv.RewardItemID,
+		RewardItemQuantity: adv.RewardItemQuantity,
 		Resolved:           adv.Resolved,
 	}
 }

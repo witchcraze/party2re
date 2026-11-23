@@ -770,7 +770,6 @@ func TestAdventure_TreasureBlessing_SingleChestGenerationNoItemDuplication(t *te
 				battle.WithInventoryRepository(invRepo),
 				battle.WithBlessingProvider(blessingProv),
 				battle.WithRandomSource(fixedBattleRand{val: 0}), // Lucky roll (0 % 5 == 0)
-				battle.WithMaxInventoryCapacity(10),
 			)
 
 			svc, err := adventure.NewServiceWithCatalogs(
@@ -888,7 +887,6 @@ func TestAdventure_TreasureBlessing_ActorScope(t *testing.T) {
 				battle.WithInventoryRepository(invRepo),
 				battle.WithBlessingProvider(blessingProv),
 				battle.WithRandomSource(fixedBattleRand{val: 0}), // Lucky roll (0 % 5 == 0)
-				battle.WithMaxInventoryCapacity(10),
 			)
 
 			svc, err := adventure.NewServiceWithCatalogs(
@@ -1170,7 +1168,6 @@ func TestAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
 		battle.WithInventoryRepository(invRepo),
 		battle.WithBlessingProvider(blessingProv),
 		battle.WithRandomSource(fixedBattleRand{val: 0}),
-		battle.WithMaxInventoryCapacity(10),
 	)
 
 	svc, err := adventure.NewServiceWithCatalogs(

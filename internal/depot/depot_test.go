@@ -473,7 +473,7 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 
 	inv, _ := coreinventory.New(char.ID)
 	potion, _ := item.NewInstance("item-001", 3)
-	_ = inv.Add(potion)
+	inv.Items = []item.Instance{potion} // An older inventory can still contain a stack.
 	invRepo.inventories[char.ID] = inv
 
 	service, _ := NewService(
@@ -583,8 +583,9 @@ func TestDepositAndWithdrawItem_EnhancedEquipment(t *testing.T) {
 	inv, _ := coreinventory.New(char.ID)
 	sword0, _ := item.NewInstanceWithEnhancement("weapon-01", 1, 0)
 	sword7, _ := item.NewInstanceWithEnhancement("weapon-01", 1, 7)
-	_ = inv.Add(sword0)
-	_ = inv.Add(sword7)
+	if err := inv.Add(sword0); err != nil {
+		t.Fatal(err)
+	}
 	invRepo.inventories[char.ID] = inv
 
 	service, _ := NewService(
@@ -602,6 +603,16 @@ func TestDepositAndWithdrawItem_EnhancedEquipment(t *testing.T) {
 	}
 
 	// Deposit +7 sword
+	inv, err = invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inv.Add(sword7); err != nil {
+		t.Fatal(err)
+	}
+	if err := invRepo.Save(ctx, inv); err != nil {
+		t.Fatal(err)
+	}
 	dep, err = service.DepositItem(ctx, char.ID, sword7.ID)
 	if err != nil {
 		t.Fatalf("DepositItem sword7 error: %v", err)

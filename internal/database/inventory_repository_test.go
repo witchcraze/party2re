@@ -15,7 +15,7 @@ func TestInventoryRepositoryPersistsAndLoadsInventory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	instance, err := item.NewInstance("potion", 2)
+	instance, err := item.NewInstance("potion", 1)
 	if err != nil {
 		t.Fatal(err)
 	}

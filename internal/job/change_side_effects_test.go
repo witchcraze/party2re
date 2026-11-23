@@ -353,7 +353,7 @@ func TestChangeJob_StalePreflight_ActiveJobMemoryUnderLock(t *testing.T) {
 			_ = inv.Add(fireArmor)
 			sageItem, _ := item.NewInstance("item-027", 1)
 			_ = inv.Add(sageItem)
-			miscItem, _ := item.NewInstance("item-12", 1)
+			miscItem, _ := item.NewInstance("weapon-01", 1)
 			_ = inv.Add(miscItem)
 			invRepo := &stalePreflightInvRepoStub{inv: inv}
 
@@ -430,8 +430,8 @@ func TestChangeJob_StalePreflight_ActiveJobMemoryUnderLock(t *testing.T) {
 			if invRepo.inv.Quantity("item-027") != 1 {
 				t.Fatalf("expected item-027 quantity 1 preserved in inventory, got %d", invRepo.inv.Quantity("item-027"))
 			}
-			if invRepo.inv.Quantity("item-12") != 1 {
-				t.Fatalf("expected item-12 quantity 1 preserved in inventory, got %d", invRepo.inv.Quantity("item-12"))
+			if invRepo.inv.Quantity("weapon-01") != 1 {
+				t.Fatalf("expected weapon-01 quantity 1 preserved in inventory, got %d", invRepo.inv.Quantity("weapon-01"))
 			}
 
 			// Ensure zero side-effects persisted or emitted

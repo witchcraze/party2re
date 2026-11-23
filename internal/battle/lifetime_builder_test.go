@@ -156,9 +156,7 @@ func TestLifetimeHeldToolPreservesKnownAndUnknownHands(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := inv.Add(tool); err != nil {
-					t.Fatal(err)
-				}
+				inv.Items = append(inv.Items, tool)
 				if tt.equipSlot != "" && i == tt.equipIndex {
 					equip.Slots[tt.equipSlot] = tool.ID
 				}
@@ -225,7 +223,7 @@ func TestLifetimeUnknownHeldToolRejectsScavengingAdmission(t *testing.T) {
 	inv, _ := coreinventory.New(char.ID)
 	for _, defID := range []string{"item-001", "item-002"} {
 		itemInst, _ := coreitem.NewInstance(defID, 1)
-		_ = inv.Add(itemInst)
+		inv.Items = append(inv.Items, itemInst)
 	}
 	_ = invs.Save(context.Background(), inv)
 

@@ -34,7 +34,6 @@ func setupRewardTestService(blessing string, rngVal int) (*battle.Service, *mock
 		battle.WithTransactionProvider(txProv),
 		battle.WithBlessingProvider(blessingProv),
 		battle.WithRandomSource(fixedRNG{val: rngVal}),
-		battle.WithMaxInventoryCapacity(10),
 	)
 	return svc, charRepo, invRepo
 }
@@ -248,15 +247,12 @@ func TestApplyPostBattleResult_DropBlessing_DoesNotDuplicateDrops(t *testing.T) 
 				RemainingHP: map[string]int{
 					char.ID: 100,
 				},
-				TotalReward: corebattle.Reward{
-					ItemDefinitionID: "item-001",
-					ItemQuantity:     1,
-				},
 			}
 
 			resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
-				CharacterIDs: []string{char.ID},
-				BattleResult: battleRes,
+				CharacterIDs:   []string{char.ID},
+				BattleResult:   battleRes,
+				RecipientDrops: map[string][]string{char.ID: {"item-001"}},
 			})
 			if err != nil {
 				t.Fatalf("ApplyPostBattleResult failed: %v", err)
@@ -312,7 +308,7 @@ func TestApplyPostBattleResult_JapaneseBlessingNames(t *testing.T) {
 }
 
 func TestApplyPostBattleResult_TreasureRoutingByDropKind(t *testing.T) {
-	// Tests legacy treasure delivery routing through ApplyPostBattleResult (cmd/party2 production wiring default, maxInvCap == 0).
+	// Tests legacy treasure delivery routing through ApplyPostBattleResult.
 	// Under _npc_action.cgi:66–78, treasure kind 3 enters an empty tool hand ($m{ite}), while weapons/armor route to depot-or-loss.
 	for _, tc := range []struct {
 		name       string
@@ -391,7 +387,6 @@ func TestApplyPostBattleResult_TreasureRoutingByDropKind(t *testing.T) {
 			depotRepo := newMockDepotRepo()
 			txProv := &mockTxProvider{}
 
-			// Production battleAdapter options: NO WithMaxInventoryCapacity override
 			svc := battle.NewService(
 				battle.WithCharacterRepository(charRepo),
 				battle.WithInventoryRepository(invRepo),
@@ -461,70 +456,6 @@ func TestApplyPostBattleResult_TreasureRoutingByDropKind(t *testing.T) {
 				t.Errorf("persisted depot items = %d, want %d", len(savedDepot.Items), tc.wantDepot)
 			}
 		})
-	}
-}
-
-func TestApplyPostBattleResult_CombatDrop_PreservesInventoryDelivery(t *testing.T) {
-	// Combat drops (DropItems / TotalReward) that are NOT treasure boxes still route to inventory
-	// when inventory is below maxInventoryCapacity (legacy 1 slot), preserving non-treasure reward behavior.
-	ctx := context.Background()
-	charRepo := newMockCharRepo()
-	invRepo := newMockInvRepo()
-	equipRepo := newMockEquipRepo()
-	depotRepo := newMockDepotRepo()
-	txProv := &mockTxProvider{}
-
-	svc := battle.NewService(
-		battle.WithCharacterRepository(charRepo),
-		battle.WithInventoryRepository(invRepo),
-		battle.WithEquipmentRepository(equipRepo),
-		battle.WithDepotRepository(depotRepo),
-		battle.WithTransactionProvider(txProv),
-	)
-
-	char := corecharacter.Character{
-		ID:       "char-combat-drop",
-		Name:     "戦闘報酬キャラ",
-		Level:    1,
-		JobLevel: 0,
-		Stats:    corecharacter.Stats{HP: 100, MaxHP: 100},
-	}
-	_ = charRepo.Update(ctx, char)
-
-	inv, _ := coreinventory.New(char.ID)
-	_ = invRepo.Save(ctx, inv)
-
-	dep, _ := depot.NewDepotWithCapacity(char.ID, 0, 0, 0)
-	_ = depotRepo.Save(ctx, dep)
-
-	battleRes := corebattle.PartyBattleResult{
-		Outcome:     corebattle.OutcomeWin,
-		WinnerSide:  "allies",
-		RemainingHP: map[string]int{char.ID: 100},
-		TotalReward: corebattle.Reward{
-			ItemDefinitionID: "item-combat-trophy",
-			ItemQuantity:     1,
-		},
-	}
-
-	req := battle.ApplyPostBattleRequest{
-		CharacterIDs: []string{char.ID},
-		BattleResult: battleRes,
-	}
-
-	resp, err := svc.ApplyPostBattleResult(ctx, req)
-	if err != nil {
-		t.Fatalf("ApplyPostBattleResult failed: %v", err)
-	}
-
-	if len(resp.InventoryDrops[char.ID]) != 1 || resp.InventoryDrops[char.ID][0].DefinitionID != "item-combat-trophy" {
-		t.Errorf("expected combat drop delivered to inventory, got %+v", resp.InventoryDrops[char.ID])
-	}
-	if len(resp.DepotDeliveries[char.ID]) != 0 {
-		t.Errorf("expected 0 depot deliveries, got %d", len(resp.DepotDeliveries[char.ID]))
-	}
-	if len(resp.LostDrops[char.ID]) != 0 {
-		t.Errorf("expected 0 lost drops, got %d", len(resp.LostDrops[char.ID]))
 	}
 }
 
@@ -811,7 +742,7 @@ func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
 			_ = inv.Add(skillOrb)
 			if ambiguous {
 				lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)
-				_ = inv.Add(lifeOrb)
+				inv.Items = append(inv.Items, lifeOrb) // Historical duplicate leaves the hand unknown.
 				equip, _ := coreequipment.New(char.ID)
 				equip.Slots[coreitem.SlotAccessory] = skillOrb.ID
 				_ = equipRepo.Save(ctx, equip)
@@ -874,22 +805,23 @@ func TestApplyPostBattleResult_ActiveItemOrbModifiers(t *testing.T) {
 				powerOrb, _ := coreitem.NewInstance(progression.ItemPowerStatOrb, 1)
 				_ = inv.Add(lifeOrb)
 
+				// Historical duplicate tool rows remain ambiguous until consumed.
 				var consumed []corebattle.ConsumedItem
 				if tc.equippedDef != "" {
 					ring, _ := coreitem.NewInstance(tc.equippedDef, 1)
-					_ = inv.Add(ring)
+					inv.Items = append(inv.Items, ring)
 					equip, _ := coreequipment.New(char.ID)
 					equip.Slots[coreitem.SlotAccessory] = ring.ID
 					_ = equipRepo.Save(ctx, equip)
 					if tc.consumeEquip {
 						consumed = append(consumed, corebattle.ConsumedItem{ID: ring.DefinitionID, InstanceID: ring.ID, Quantity: 1})
 					} else {
-						_ = inv.Add(powerOrb)
+						inv.Items = append(inv.Items, powerOrb)
 					}
 				} else {
 					skillOrb, _ := coreitem.NewInstance(battle.ItemSkillOrb, 1)
-					_ = inv.Add(skillOrb)
-					_ = inv.Add(powerOrb)
+					inv.Items = append(inv.Items, skillOrb)
+					inv.Items = append(inv.Items, powerOrb)
 				}
 				_ = invRepo.Save(ctx, inv)
 

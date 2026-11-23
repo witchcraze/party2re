@@ -398,7 +398,8 @@ func TestSellPartialQuantity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = inv.Add(herbInst)
+	// An older inventory can still contain a stack.
+	inv.Items = []item.Instance{herbInst}
 	_ = invRepo.Save(context.Background(), inv)
 
 	// Herb price = 30 G -> sell price = 15 G each. Selling 2 = 30 G payout.
@@ -433,7 +434,7 @@ func TestSellQuantityGreaterThanOwned(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Hero", 100)
 
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
-	herbInst, err := item.NewInstance("item-001", 2)
+	herbInst, err := item.NewInstance("item-001", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -554,7 +555,8 @@ func TestSell_QuantityBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = inv.Add(herbInst)
+	// An older inventory can still contain a stack.
+	inv.Items = []item.Instance{herbInst}
 	_ = invRepo.Save(context.Background(), inv)
 
 	// MaxTransactionQuantity + 1 -> fails with ErrInvalidQuantity
@@ -588,7 +590,8 @@ func TestSell_IntegerOverflowProtection(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Hero", 100)
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
 	gemInst, _ := item.NewInstance("huge_gem", 10)
-	_ = inv.Add(gemInst)
+	// An older inventory can still contain a stack.
+	inv.Items = []item.Instance{gemInst}
 	_ = invRepo.Save(context.Background(), inv)
 
 	_, err = service.Sell(context.Background(), char.ID, shop.ShopTypeItem, gemInst.ID, 4)

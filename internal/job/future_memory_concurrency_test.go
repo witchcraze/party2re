@@ -43,29 +43,16 @@ func TestFutureMemory_Integration_ConcurrentSavesEnforceCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Prepare inventory with 2 pieces of item-207
+	// An existing stack keeps a fragment available for the slot-limit rejection.
 	invRepo, err := database.NewInventoryRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	inv, err := coreinventory.New(char.ID)
+	stack, err := coreitem.NewInstance("item-207", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	frag1, err := coreitem.NewInstance("item-207", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag2, err := coreitem.NewInstance("item-207", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := inv.Add(frag1); err != nil {
-		t.Fatal(err)
-	}
-	if err := inv.Add(frag2); err != nil {
-		t.Fatal(err)
-	}
+	inv := coreinventory.Inventory{CharacterID: char.ID, Items: []coreitem.Instance{stack}}
 	if err := invRepo.Save(ctx, inv); err != nil {
 		t.Fatal(err)
 	}
