@@ -349,5 +349,3 @@ Rescue owns character-row coordination from receipt revalidation through applica
 and confirmation, so a delayed invocation cannot replay a completed receipt against
 later work. The timer owns monotonic absolute-deadline publication: an elapsed
 obligation creates no sleep, and a longer current or persistent lock is preserved.
-SQL/Valkey effects remain non-atomic; a failed application leaves the committed
-receipt available for retry.
