@@ -2,6 +2,7 @@ package battle_test
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 
@@ -228,30 +229,6 @@ func TestBuildParticipant(t *testing.T) {
 	}
 	_ = charRepo.Update(ctx, char)
 
-	// Inventory with items:
-	// - 闘気の盾 (item-161, UsageCategory 3)
-	// - ドクロのお守り (item-193, UsageCategory 3)
-	// - 転生の呪魂符 (item-260, UsageCategory 3)
-	// - 薬草 (item-001, UsageCategory 1)
-	// - 祈りの指輪 (item-012, UsageCategory 1, equipped)
-	inv, _ := coreinventory.New("char-hero")
-	tShield, _ := coreitem.NewInstance(battle.ItemToukiShield, 1)
-	dAmulet, _ := coreitem.NewInstance(battle.ItemDokuroAmulet, 1)
-	cTalisman, _ := coreitem.NewInstance(battle.ItemCursedTalisman, 1)
-	herb, _ := coreitem.NewInstance("item-001", 3)
-	pRing, _ := coreitem.NewInstance(battle.ItemPrayerRing, 1)
-
-	_ = inv.Add(tShield)
-	_ = inv.Add(dAmulet)
-	_ = inv.Add(cTalisman)
-	_ = inv.Add(herb)
-	_ = inv.Add(pRing)
-	_ = invRepo.Save(ctx, inv)
-
-	equip, _ := coreequipment.New("char-hero")
-	equip.Slots[coreitem.SlotAccessory] = pRing.ID
-	_ = equipRepo.Save(ctx, equip)
-
 	skillDef, _ := skill.NewDefinition(
 		"sk-01", "ギガデイン", []string{"job-pharaoh"}, 20, 15,
 		corebattle.Effect{Kind: "attack", Power: 80},
@@ -293,30 +270,39 @@ func TestBuildParticipant(t *testing.T) {
 		t.Errorf("part stats mismatch: atk=%d, def=%d, agi=%d", part.Attack, part.Defense, part.Agility)
 	}
 
-	// 2. Abilities validation
-	hasTouki := false
-	hasDokuro := false
-	hasCursed := false
-	hasPharaoh := false
-	for _, ab := range part.Abilities {
-		switch ab {
-		case "touki_shield":
-			hasTouki = true
-		case "dokuro_amulet":
-			hasDokuro = true
-		case "cursed_revive":
-			hasCursed = true
-		case "pharaoh":
-			hasPharaoh = true
-		}
-	}
-	if !hasTouki || !hasDokuro || !hasCursed || !hasPharaoh {
-		t.Errorf("abilities missing: touki=%v, dokuro=%v, cursed=%v, pharaoh=%v (got: %v)", hasTouki, hasDokuro, hasCursed, hasPharaoh, part.Abilities)
+	if !slices.Contains(part.Abilities, "pharaoh") {
+		t.Errorf("pharaoh ability missing: %v", part.Abilities)
 	}
 
-	// HP and MP tools require explicit callbacks, never batch HP payloads.
-	if len(part.ActionItems) != 0 {
-		t.Errorf("unexpected batch tools: %+v", part.ActionItems)
+	for _, tc := range []struct {
+		definitionID string
+		ability      string
+	}{
+		{battle.ItemToukiShield, "touki_shield"},
+		{battle.ItemDokuroAmulet, "dokuro_amulet"},
+		{battle.ItemCursedTalisman, "cursed_revive"},
+		{"item-001", ""},
+	} {
+		t.Run(tc.definitionID, func(t *testing.T) {
+			inv, _ := coreinventory.New(char.ID)
+			held, _ := coreitem.NewInstance(tc.definitionID, 1)
+			if err := inv.Add(held); err != nil {
+				t.Fatal(err)
+			}
+			if err := invRepo.Save(ctx, inv); err != nil {
+				t.Fatal(err)
+			}
+			part, err := svc.BuildParticipant(ctx, char.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.ability != "" && !slices.Contains(part.Abilities, tc.ability) {
+				t.Errorf("%s ability missing: %v", tc.ability, part.Abilities)
+			}
+			if len(part.ActionItems) != 0 {
+				t.Errorf("unexpected batch tools: %+v", part.ActionItems)
+			}
+		})
 	}
 
 	// 4. Skills & Custom Skills validation
@@ -447,12 +433,12 @@ func TestApplyPostBattleResult_SingleCharacterWithRunner(t *testing.T) {
 	}
 	_ = charRepo.Update(ctx, char)
 
-	// Inventory has 1 potion and 1 prayer ring equipped
+	// Inventory has an equipped prayer ring.
 	inv, _ := coreinventory.New("char-1")
-	potion, _ := coreitem.NewInstance("item-001", 2)
 	pRing, _ := coreitem.NewInstance(battle.ItemPrayerRing, 1)
-	_ = inv.Add(potion)
-	_ = inv.Add(pRing)
+	if err := inv.Add(pRing); err != nil {
+		t.Fatal(err)
+	}
 	_ = invRepo.Save(ctx, inv)
 
 	equip, _ := coreequipment.New("char-1")
@@ -473,7 +459,6 @@ func TestApplyPostBattleResult_SingleCharacterWithRunner(t *testing.T) {
 		battle.WithJobDefinitionProvider(jobProv),
 		battle.WithTransactionRunner(txRunner),
 		battle.WithRandomSource(fixedRNG{val: 2}),
-		battle.WithMaxInventoryCapacity(2), // limit to 2 slots -> 3rd item goes to depot
 	)
 
 	battleRes := corebattle.PartyBattleResult{
@@ -487,22 +472,19 @@ func TestApplyPostBattleResult_SingleCharacterWithRunner(t *testing.T) {
 		},
 		ConsumedItems: map[string][]corebattle.ConsumedItem{
 			"char-1": {
-				{ID: "item-001", InstanceID: potion.ID, Quantity: 1},
 				{ID: battle.ItemPrayerRing, InstanceID: pRing.ID, Quantity: 1},
 			},
 		},
 		TotalReward: corebattle.Reward{
-			Experience:       50,
-			Currency:         300,
-			ItemDefinitionID: "item-drop-sword",
-			ItemQuantity:     1,
+			Experience: 50,
+			Currency:   300,
 		},
 	}
 
 	req := battle.ApplyPostBattleRequest{
-		CharacterIDs: []string{"char-1"},
-		BattleResult: battleRes,
-		DropItems:    []string{"item-drop-shield"}, // second drop will exceed capacity (2) -> routes to depot
+		CharacterIDs:   []string{"char-1"},
+		BattleResult:   battleRes,
+		RecipientDrops: map[string][]string{"char-1": {"item-drop-tool", "weapon-01"}},
 	}
 
 	resp, err := svc.ApplyPostBattleResult(ctx, req)
@@ -527,10 +509,6 @@ func TestApplyPostBattleResult_SingleCharacterWithRunner(t *testing.T) {
 
 	// 2. Verify consumed items from inventory
 	savedInv, _ := invRepo.FindByCharacterID(ctx, "char-1")
-	potionInst, found := savedInv.Find(potion.ID)
-	if !found || potionInst.Quantity != 1 {
-		t.Errorf("expected 1 remaining potion, got found=%v, qty=%d", found, potionInst.Quantity)
-	}
 	_, ringFound := savedInv.Find(pRing.ID)
 	if ringFound {
 		t.Errorf("expected prayer ring to be consumed and removed from inventory")
@@ -554,7 +532,7 @@ func TestApplyPostBattleResult_SingleCharacterWithRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("depot not found: %v", err)
 	}
-	if len(savedDepot.Items) != 1 || savedDepot.Items[0].DefinitionID != "item-drop-shield" {
+	if len(savedDepot.Items) != 1 || savedDepot.Items[0].DefinitionID != "weapon-01" {
 		t.Errorf("depot items mismatch: %+v", savedDepot.Items)
 	}
 }
@@ -596,7 +574,6 @@ func TestApplyPostBattleResult_MultiCharacterPartyWithProvider(t *testing.T) {
 		battle.WithEquipmentRepository(equipRepo),
 		battle.WithDepotRepository(depotRepo),
 		battle.WithTransactionProvider(txProv),
-		battle.WithMaxInventoryCapacity(1), // inventory already has 1 item -> drops route to depot
 	)
 
 	battleRes := corebattle.PartyBattleResult{

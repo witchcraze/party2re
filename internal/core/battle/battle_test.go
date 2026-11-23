@@ -66,7 +66,7 @@ func TestEngineRejectsInvalidRequests(t *testing.T) {
 		{Participants: []Participant{
 			{ID: "first", HP: 1},
 			{ID: "second", HP: 1},
-		}, VictoryReward: Reward{ItemDefinitionID: "potion"}},
+		}, VictoryReward: Reward{Crystals: -1}},
 	}
 	for _, request := range tests {
 		if _, err := (Engine{}).Resolve(request); !errors.Is(err, ErrInvalidRequest) &&
@@ -115,9 +115,6 @@ func TestEngineRejectsInvalidRewardFields(t *testing.T) {
 	tests := []Reward{
 		{Experience: -1},
 		{Currency: -1},
-		{ItemDefinitionID: "", ItemQuantity: 5},
-		{ItemDefinitionID: "potion", ItemQuantity: 0},
-		{ItemDefinitionID: "potion", ItemQuantity: -1},
 	}
 	for _, reward := range tests {
 		req := Request{
@@ -516,9 +513,9 @@ func TestPartyBattleValidationErrors(t *testing.T) {
 	_, err = engine.ResolvePartyBattle(PartyBattleRequest{
 		Allies:     []Participant{validParticipant},
 		Enemies:    []Participant{validEnemy},
-		DrawReward: Reward{ItemQuantity: 1}, // missing ItemDefinitionID
+		DrawReward: Reward{Crystals: -1},
 	})
 	if !errors.Is(err, ErrInvalidReward) {
-		t.Errorf("expected ErrInvalidReward for invalid item reward, got %v", err)
+		t.Errorf("expected ErrInvalidReward for negative crystals, got %v", err)
 	}
 }

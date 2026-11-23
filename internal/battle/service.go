@@ -94,7 +94,6 @@ type Service struct {
 	txProvider        TransactionProvider
 	engine            BattleEngine
 	rng               corecharacter.RandomSource
-	maxInvCap         int
 	monsterTamer      MonsterTamer
 	blessingProvider  BlessingProvider
 	monsterRecorder   MonsterDefeatRecorder
@@ -184,15 +183,6 @@ func WithBattleEngine(engine BattleEngine) Option {
 func WithRandomSource(rng corecharacter.RandomSource) Option {
 	return func(s *Service) {
 		s.rng = rng
-	}
-}
-
-// WithMaxInventoryCapacity overrides the default inventory capacity threshold before depot transfer occurs.
-func WithMaxInventoryCapacity(cap int) Option {
-	return func(s *Service) {
-		if cap > 0 {
-			s.maxInvCap = cap
-		}
 	}
 }
 

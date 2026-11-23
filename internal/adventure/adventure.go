@@ -61,6 +61,8 @@ type Adventure struct {
 	PartySize             int
 	ExperienceReward      int
 	BattleResult          corebattle.Result
+	RewardItemID          string `json:"-"` // Retained for previously stored adventure history.
+	RewardItemQuantity    int    `json:"-"`
 	Resolved              bool
 }
 

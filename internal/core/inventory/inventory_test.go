@@ -7,46 +7,9 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 )
 
-func TestInventoryAddsAndCountsItemInstances(t *testing.T) {
-	inventory, err := New("character-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	first, _ := item.NewInstance("potion", 2)
-	second, _ := item.NewInstance("potion", 3)
-	if err := inventory.Add(first); err != nil {
-		t.Fatal(err)
-	}
-	if err := inventory.Add(second); err != nil {
-		t.Fatal(err)
-	}
-	if got := inventory.Quantity("potion"); got != 5 {
-		t.Fatalf("Quantity() = %d, want 5", got)
-	}
-}
-
-func TestInventoryConsumesOwnedQuantityAndRemovesEmptyInstance(t *testing.T) {
-	inventory, _ := New("character-1")
-	value, _ := item.NewInstance("potion", 2)
-	_ = inventory.Add(value)
-
-	if err := inventory.Consume(value.ID, 1); err != nil {
-		t.Fatal(err)
-	}
-	if inventory.Quantity("potion") != 1 {
-		t.Fatalf("quantity after partial consume = %d, want 1", inventory.Quantity("potion"))
-	}
-	if err := inventory.Consume(value.ID, 1); err != nil {
-		t.Fatal(err)
-	}
-	if inventory.Quantity("potion") != 0 || len(inventory.Items) != 0 {
-		t.Fatalf("inventory after full consume = %#v", inventory)
-	}
-}
-
 func TestInventoryRejectsUnownedAndExcessQuantity(t *testing.T) {
 	inventory, _ := New("character-1")
-	value, _ := item.NewInstance("potion", 2)
+	value, _ := item.NewInstance("potion", 1)
 	_ = inventory.Add(value)
 
 	if err := inventory.Consume("missing", 1); !errors.Is(err, ErrItemNotFound) {
@@ -101,33 +64,9 @@ func TestInventoryUpdate(t *testing.T) {
 	}
 }
 
-func TestInventory_AddsMultipleEquipmentInstancesSeparately(t *testing.T) {
-	inv, _ := New("char-equip-inv")
-	sword1, _ := item.NewInstance("weapon-01", 1)
-	sword2, _ := item.NewInstance("weapon-01", 1)
-
-	if err := inv.Add(sword1); err != nil {
-		t.Fatalf("Add(sword1) failed: %v", err)
-	}
-	if err := inv.Add(sword2); err != nil {
-		t.Fatalf("Add(sword2) failed: %v", err)
-	}
-
-	if len(inv.Items) != 2 {
-		t.Fatalf("expected 2 distinct equipment slots in inventory, got %d", len(inv.Items))
-	}
-	if inv.Items[0].ID == inv.Items[1].ID {
-		t.Errorf("expected distinct instance IDs")
-	}
-	if inv.Quantity("weapon-01") != 2 {
-		t.Errorf("Quantity(weapon-01) = %d, want 2", inv.Quantity("weapon-01"))
-	}
-}
-
-func TestInventory_ConsumeItem_And_ConsumeOne(t *testing.T) {
-	inv, _ := New("char-consume-inv")
+func TestInventoryConsumesPreviouslyStoredStack(t *testing.T) {
 	inst, _ := item.NewInstance("potion", 5)
-	_ = inv.Add(inst)
+	inv := Inventory{CharacterID: "char-consume-inv", Items: []item.Instance{inst}}
 
 	// 1. ConsumeOne
 	if err := inv.ConsumeOne(inst.ID); err != nil {
@@ -233,6 +172,19 @@ func TestInventoryCapacity(t *testing.T) {
 	}
 }
 
+func TestInventoryAddRejectsNonUnitQuantity(t *testing.T) {
+	inv, _ := New("char-hand")
+	for _, quantity := range []int{-1, 0, 2} {
+		stack := item.Instance{ID: "stack", DefinitionID: "item-001", Quantity: quantity}
+		if err := inv.Add(stack); !errors.Is(err, ErrInvalidQuantity) {
+			t.Errorf("Add with quantity %d = %v, want ErrInvalidQuantity", quantity, err)
+		}
+	}
+	if len(inv.Items) != 0 {
+		t.Fatalf("rejected writes changed inventory: %+v", inv.Items)
+	}
+}
+
 func TestInventoryHandOccupancyToolShieldAccessorySharing(t *testing.T) {
 	// Shields (SlotOffHand) and accessories (SlotAccessory) share kind 3 with consumables
 	inv, _ := New("char-tool-sharing")
@@ -256,6 +208,15 @@ func TestInventoryHandOccupancyToolShieldAccessorySharing(t *testing.T) {
 	}
 	if inv.IsFull("armor-01") {
 		t.Errorf("armor should not be full when holding shield")
+	}
+	for _, definitionID := range []string{"item-001", "item-012"} {
+		inst, _ := item.NewInstance(definitionID, 1)
+		if err := inv.Add(inst); !errors.Is(err, ErrInventoryFull) {
+			t.Errorf("Add(%s) = %v, want ErrInventoryFull", definitionID, err)
+		}
+	}
+	if len(inv.Items) != 1 || inv.Items[0] != shieldInst {
+		t.Fatalf("rejected writes changed inventory: %+v", inv.Items)
 	}
 }
 
@@ -315,15 +276,7 @@ func TestInventoryHeldToolID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inv, err := New("char-hand")
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, inst := range tt.items {
-				if err := inv.Add(inst); err != nil {
-					t.Fatal(err)
-				}
-			}
+			inv := Inventory{CharacterID: "char-hand", Items: tt.items}
 			got := inv.HeldToolID()
 			if tt.wantHeld == nil {
 				if got != nil {

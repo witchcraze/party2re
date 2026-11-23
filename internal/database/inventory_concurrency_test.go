@@ -69,11 +69,12 @@ func TestInventoryRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := slices.Clone(expected[worker])
-			after := append(slices.Clone(before), newItem)
+			after := slices.DeleteFunc(slices.Clone(before), func(existing item.Instance) bool {
+				return existing.DefinitionID == newItem.DefinitionID
+			})
+			after = append(after, newItem)
 			if round == 12 {
 				after = nil // Exercise the empty-set deletion as well as id NOT IN.
-			} else if len(after) > 8 {
-				after = after[:3]
 			}
 			sortItemsByID(after)
 			operations[worker] = func() error {
@@ -92,13 +93,20 @@ func TestInventoryRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 					if !slices.Equal(inv.Items, before) {
 						return fmt.Errorf("items before save: got %+v, want %+v", inv.Items, before)
 					}
-					if err := inv.Add(newItem); err != nil {
-						return err
-					}
 					if round == 12 {
 						inv.Items = nil
-					} else if len(inv.Items) > 8 {
-						inv.Items = inv.Items[:3]
+					} else {
+						for _, existing := range inv.Items {
+							if existing.DefinitionID == newItem.DefinitionID {
+								if err := inv.ConsumeOne(existing.ID); err != nil {
+									return err
+								}
+								break
+							}
+						}
+						if err := inv.Add(newItem); err != nil {
+							return err
+						}
 					}
 					return repo.Save(txCtx, inv)
 				})

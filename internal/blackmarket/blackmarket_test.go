@@ -404,8 +404,11 @@ func TestSacrificeItem_Inventory(t *testing.T) {
 	}
 
 	// Sacrifice restored item-059 (天馬のたづな)
+	inv, _ = invRepo.FindByCharacterID(ctx, "char-hero")
 	inst059, _ := coreitem.NewInstance("item-059", 1)
-	_ = inv.Add(inst059)
+	if err := inv.Add(inst059); err != nil {
+		t.Fatal(err)
+	}
 	_ = invRepo.Save(ctx, inv)
 
 	res059, err := svc.SacrificeItem(ctx, "char-hero", inst059.ID)
@@ -521,7 +524,7 @@ func TestSacrificeItem_PreservationOnFailure(t *testing.T) {
 	_ = charRepo.Update(ctx, char)
 
 	inv, _ := invRepo.FindByCharacterID(ctx, "char-fail")
-	instCommon, _ := coreitem.NewInstance("item-001", 2)
+	instCommon, _ := coreitem.NewInstance("item-001", 1)
 	_ = inv.Add(instCommon)
 	_ = invRepo.Save(ctx, inv)
 
@@ -549,8 +552,8 @@ func TestSacrificeItem_PreservationOnFailure(t *testing.T) {
 	// Verify inventory unchanged
 	inv, _ = invRepo.FindByCharacterID(ctx, "char-fail")
 	foundInst, found := inv.Find(instCommon.ID)
-	if !found || foundInst.Quantity != 2 {
-		t.Errorf("expected inventory item to be preserved with quantity 2, got found=%v quantity=%d", found, foundInst.Quantity)
+	if !found || foundInst.Quantity != 1 {
+		t.Errorf("expected inventory item to be preserved with quantity 1, got found=%v quantity=%d", found, foundInst.Quantity)
 	}
 
 	// Verify depot unchanged

@@ -46,7 +46,7 @@ func TestTestutilReExports(t *testing.T) {
 	}
 
 	// 4. CreateTestInventoryWithItems
-	it, _ := coreitem.NewInstance("potion-01", 5)
+	it, _ := coreitem.NewInstance("potion-01", 1)
 	inv, err := CreateTestInventoryWithItems(ctx, db, c.ID, []coreitem.Instance{it})
 	if err != nil {
 		t.Fatalf("CreateTestInventoryWithItems failed: %v", err)

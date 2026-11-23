@@ -58,27 +58,6 @@ func TestFindInventory_DatabaseReadErrorPropagation(t *testing.T) {
 
 	dbErr := errors.New("simulated database query failure or connection drop")
 
-	t.Run("GrantItem aborts and does not Save on read error", func(t *testing.T) {
-		invRepo := newTrackingInvRepo()
-		invRepo.readErr = dbErr
-
-		svc, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(&mockTxProvider{}))
-		if err != nil {
-			t.Fatalf("NewService failed: %v", err)
-		}
-
-		_, _, err = svc.GrantItem(ctx, char.ID, "item-001", 1)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if !errors.Is(err, dbErr) {
-			t.Fatalf("expected error to wrap %v, got %v", dbErr, err)
-		}
-		if invRepo.saveHits != 0 {
-			t.Fatalf("expected 0 Save calls on read error, got %d (risk of wiping inventory)", invRepo.saveHits)
-		}
-	})
-
 	t.Run("ConsumeItemInstance aborts on read error", func(t *testing.T) {
 		invRepo := newTrackingInvRepo()
 		invRepo.readErr = dbErr
@@ -171,53 +150,4 @@ func TestFindInventory_DatabaseReadErrorPropagation(t *testing.T) {
 			t.Fatalf("expected 0 Save calls on read error, got %d", invRepo.saveHits)
 		}
 	})
-
-	t.Run("Happy path creates empty inventory when repository returns nil error with 0 items", func(t *testing.T) {
-		invRepo := newTrackingInvRepo()
-
-		svc, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(&mockTxProvider{}))
-		if err != nil {
-			t.Fatalf("NewService failed: %v", err)
-		}
-
-		inv, inst, err := svc.GrantItem(ctx, char.ID, "item-001", 1)
-		if err != nil {
-			t.Fatalf("GrantItem failed: %v", err)
-		}
-		if len(inv.Items) != 1 {
-			t.Fatalf("expected 1 item in inventory, got %d", len(inv.Items))
-		}
-		if inst.DefinitionID != "item-001" {
-			t.Fatalf("expected item-001, got %s", inst.DefinitionID)
-		}
-		if invRepo.saveHits != 1 {
-			t.Fatalf("expected 1 Save call, got %d", invRepo.saveHits)
-		}
-	})
-}
-
-func TestGrantItem_InventoryFull(t *testing.T) {
-	ctx := context.Background()
-	charRepo := newMockCharRepo()
-	invRepo := newTrackingInvRepo()
-
-	char := corecharacter.Character{ID: "char-full"}
-	charRepo.chars[char.ID] = char
-
-	svc, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(&mockTxProvider{}))
-	if err != nil {
-		t.Fatalf("NewService failed: %v", err)
-	}
-
-	// 1st grant succeeds
-	_, _, err = svc.GrantItem(ctx, char.ID, "item-001", 1)
-	if err != nil {
-		t.Fatalf("first GrantItem failed: %v", err)
-	}
-
-	// 2nd grant into full inventory must fail with ErrInventoryFull
-	_, _, err = svc.GrantItem(ctx, char.ID, "item-002", 1)
-	if !errors.Is(err, economy.ErrInventoryFull) {
-		t.Fatalf("expected ErrInventoryFull, got %v", err)
-	}
 }

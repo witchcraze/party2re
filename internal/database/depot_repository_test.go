@@ -166,7 +166,7 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	potion, _ := item.NewInstance("item-001", 2)
-	_ = inv.Add(potion)
+	inv.Items = []item.Instance{potion} // An older inventory can still contain a stack.
 	if err := invRepo.Save(ctx, inv); err != nil {
 		t.Fatal(err)
 	}

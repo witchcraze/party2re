@@ -228,7 +228,8 @@ func TestWithdrawItem_RejectsWithoutChange(t *testing.T) {
 	t.Run("ambiguous held hand", func(t *testing.T) {
 		a := item.Instance{ID: "a", DefinitionID: "item-002", Quantity: 1}
 		b := item.Instance{ID: "b", DefinitionID: "item-071", Quantity: 1}
-		f := newSwapFixture(t, []item.Instance{a, b}, nil, []item.Instance{herb})
+		f := newSwapFixture(t, []item.Instance{a}, nil, []item.Instance{herb})
+		f.invs.inventories[f.char.ID] = coreinventory.Inventory{CharacterID: f.char.ID, Items: []item.Instance{a, b}}
 		if _, _, err := f.service.WithdrawItem(ctx, f.char.ID, herb.ID); !errors.Is(err, ErrInventoryFull) {
 			t.Fatalf("err = %v", err)
 		}

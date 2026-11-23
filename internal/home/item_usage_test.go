@@ -132,7 +132,7 @@ func TestItemUsage(t *testing.T) {
 	depotMgr := &mockDepotManager{depots: make(map[string]depot.Depot)}
 	catalog := &mockCatalog{
 		defs: map[string]coreitem.Definition{
-			"item-wea":    {ID: "item-wea", Name: "銅の剣", Price: 100, Slot: coreitem.SlotMainHand, Power: 14, Weight: 9},
+			"weapon-08":   {ID: "weapon-08", Name: "銅の剣", Price: 100, Slot: coreitem.SlotMainHand, Power: 14, Weight: 9},
 			"item-arm":    {ID: "item-arm", Name: "革の鎧", Price: 150, Slot: coreitem.SlotBody, Power: 12, Weight: 4},
 			"item-seed1":  {ID: "item-seed1", Name: "命の木の実", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
 			"item-seed2":  {ID: "item-seed2", Name: "不思議な木の実", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
@@ -152,22 +152,22 @@ func TestItemUsage(t *testing.T) {
 		},
 	}
 
-	inv, _ := coreinventory.New("char-1")
-	_ = inv.Add(coreitem.Instance{ID: "inst-wea", DefinitionID: "item-wea", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-seed1", DefinitionID: "item-seed1", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-seed3", DefinitionID: "item-seed3", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-seed4", DefinitionID: "item-seed4", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-seed5", DefinitionID: "item-seed5", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-seed6", DefinitionID: "item-seed6", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-happy", DefinitionID: "item-happy", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-fight", DefinitionID: "item-fight", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-fight2", DefinitionID: "item-fight2", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-herb", DefinitionID: "item-herb", Quantity: 2})
-	_ = inv.Add(coreitem.Instance{ID: "inst-potion", DefinitionID: "item-potion", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-drop", DefinitionID: "item-drop", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-water", DefinitionID: "item-water", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-other", DefinitionID: "item-other", Quantity: 1})
-	invMgr.invs["char-1"] = inv
+	weapon := coreitem.Instance{ID: "inst-wea", DefinitionID: "weapon-08", Quantity: 1}
+	seedHand := func(t *testing.T, charID, instanceID string) {
+		t.Helper()
+		inv, _ := coreinventory.New(charID)
+		if charID == "char-1" {
+			if err := inv.Add(weapon); err != nil {
+				t.Fatal(err)
+			}
+		}
+		definitionID := "item-" + strings.TrimPrefix(strings.TrimPrefix(instanceID, "inst-"), "over-")
+		if err := inv.Add(coreitem.Instance{ID: instanceID, DefinitionID: definitionID, Quantity: 1}); err != nil {
+			t.Fatal(err)
+		}
+		invMgr.invs[charID] = inv
+	}
+	seedHand(t, "char-1", "inst-seed1")
 
 	dp, _ := depot.NewDepot("char-1")
 	dp.Items = append(dp.Items,
@@ -176,15 +176,6 @@ func TestItemUsage(t *testing.T) {
 		coreitem.Instance{ID: "inst-medal", DefinitionID: "item-medal", Quantity: 1},
 	)
 	depotMgr.depots["char-1"] = dp
-
-	invOver, _ := coreinventory.New("char-over")
-	_ = invOver.Add(coreitem.Instance{ID: "inst-over-seed1", DefinitionID: "item-seed1", Quantity: 1})
-	_ = invOver.Add(coreitem.Instance{ID: "inst-over-seed2", DefinitionID: "item-seed2", Quantity: 1})
-	_ = invOver.Add(coreitem.Instance{ID: "inst-over-seed3", DefinitionID: "item-seed3", Quantity: 1})
-	_ = invOver.Add(coreitem.Instance{ID: "inst-over-seed4", DefinitionID: "item-seed4", Quantity: 1})
-	_ = invOver.Add(coreitem.Instance{ID: "inst-over-seed5", DefinitionID: "item-seed5", Quantity: 1})
-	_ = invOver.Add(coreitem.Instance{ID: "inst-over-seed6", DefinitionID: "item-seed6", Quantity: 1})
-	invMgr.invs["char-over"] = invOver
 
 	svc, err := NewService(
 		repo,
@@ -205,8 +196,8 @@ func TestItemUsage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ListHomeItems failed: %v", err)
 		}
-		if len(items) != 17 {
-			t.Errorf("expected 17 items total, got %d", len(items))
+		if len(items) != 5 {
+			t.Errorf("expected 5 items total, got %d", len(items))
 		}
 		for _, item := range items {
 			if item.Kind == 1 || item.Kind == 2 {
@@ -246,6 +237,7 @@ func TestItemUsage(t *testing.T) {
 		for _, instID := range combatItemInstances {
 			oldHP := chars["char-1"].Stats.HP
 			oldMP := chars["char-1"].Stats.MP
+			seedHand(t, "char-1", instID)
 			res, err := svc.UseHomeItem(ctx, "char-1", instID, "inventory")
 			if !errors.Is(err, ErrCannotUseHere) {
 				t.Fatalf("expected ErrCannotUseHere for instance %s, got res=%+v, err=%v", instID, res, err)
@@ -259,6 +251,7 @@ func TestItemUsage(t *testing.T) {
 	t.Run("consume seeds and medals", func(t *testing.T) {
 		oldMaxHP := chars["char-1"].Stats.MaxHP
 		oldHP := chars["char-1"].Stats.HP
+		seedHand(t, "char-1", "inst-seed1")
 		resSeed, err := svc.UseHomeItem(ctx, "char-1", "inst-seed1", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem seed failed: %v", err)
@@ -305,6 +298,7 @@ func TestItemUsage(t *testing.T) {
 
 	t.Run("consume 幸せの種 sets exp to level * level * 10", func(t *testing.T) {
 		// Hero is level 5, level * level * 10 = 250
+		seedHand(t, "char-1", "inst-happy")
 		res, err := svc.UseHomeItem(ctx, "char-1", "inst-happy", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem 幸せの種 failed: %v", err)
@@ -324,6 +318,7 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-1"].Tired == 0 {
 			t.Fatal("expected non-zero fatigue before using fight item")
 		}
+		seedHand(t, "char-1", "inst-fight")
 		res, err := svc.UseHomeItem(ctx, "char-1", "inst-fight", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem ファイト一発 failed: %v", err)
@@ -343,6 +338,7 @@ func TestItemUsage(t *testing.T) {
 		charHero := chars["char-1"]
 		charHero.Tired = 75
 		chars["char-1"] = charHero
+		seedHand(t, "char-1", "inst-fight2")
 		res2, err := svc.UseHomeItem(ctx, "char-1", "inst-fight2", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem 気合の霊薬 failed: %v", err)
@@ -359,6 +355,7 @@ func TestItemUsage(t *testing.T) {
 		oldStats := chars["char-over"].Stats
 
 		// 命の木の実
+		seedHand(t, "char-over", "inst-over-seed1")
 		resHP, err := svc.UseHomeItem(ctx, "char-over", "inst-over-seed1", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem seed1 failed: %v", err)
@@ -371,6 +368,7 @@ func TestItemUsage(t *testing.T) {
 		}
 
 		// 不思議な木の実
+		seedHand(t, "char-over", "inst-over-seed2")
 		resMP, err := svc.UseHomeItem(ctx, "char-over", "inst-over-seed2", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem seed2 failed: %v", err)
@@ -383,6 +381,7 @@ func TestItemUsage(t *testing.T) {
 		}
 
 		// 力の種
+		seedHand(t, "char-over", "inst-over-seed3")
 		resAtk, err := svc.UseHomeItem(ctx, "char-over", "inst-over-seed3", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem seed3 failed: %v", err)
@@ -395,6 +394,7 @@ func TestItemUsage(t *testing.T) {
 		}
 
 		// 守りの種
+		seedHand(t, "char-over", "inst-over-seed4")
 		resDef, err := svc.UseHomeItem(ctx, "char-over", "inst-over-seed4", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem seed4 failed: %v", err)
@@ -407,6 +407,7 @@ func TestItemUsage(t *testing.T) {
 		}
 
 		// 素早さの種
+		seedHand(t, "char-over", "inst-over-seed5")
 		resAgi, err := svc.UseHomeItem(ctx, "char-over", "inst-over-seed5", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem seed5 failed: %v", err)
@@ -420,6 +421,7 @@ func TestItemUsage(t *testing.T) {
 
 		// スキルの種 is NOT clamped by OverLevel
 		oldSP := chars["char-over"].SP
+		seedHand(t, "char-over", "inst-over-seed6")
 		resSP, err := svc.UseHomeItem(ctx, "char-over", "inst-over-seed6", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem seed6 failed: %v", err)
@@ -445,6 +447,7 @@ func TestItemUsage(t *testing.T) {
 
 		for _, itemCase := range combatInstances {
 			t.Run(itemCase.name, func(t *testing.T) {
+				seedHand(t, "char-1", itemCase.instID)
 				res, err := svc.UseHomeItem(ctx, "char-1", itemCase.instID, "inventory")
 				if !errors.Is(err, ErrCannotUseHere) {
 					t.Fatalf("expected ErrCannotUseHere, got res=%+v, err=%v", res, err)
@@ -458,6 +461,7 @@ func TestItemUsage(t *testing.T) {
 	})
 
 	t.Run("cannot use non-usable item in home", func(t *testing.T) {
+		seedHand(t, "char-1", "inst-other")
 		res, err := svc.UseHomeItem(ctx, "char-1", "inst-other", "inventory")
 		if !errors.Is(err, ErrCannotUseHere) {
 			t.Fatalf("expected ErrCannotUseHere, got res=%+v, err=%v", res, err)
@@ -1119,15 +1123,6 @@ func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
 	invMgr := &mockInventoryManager{invs: make(map[string]coreinventory.Inventory)}
 	depotMgr := &mockDepotManager{depots: make(map[string]depot.Depot)}
 
-	inv, _ := coreinventory.New(charID)
-	// Add authentic weapons from party2/lib/_data.cgi:394-500
-	_ = inv.Add(coreitem.Instance{ID: "inst-bamboo", DefinitionID: "weapon-02", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-copper", DefinitionID: "weapon-08", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-steel", DefinitionID: "weapon-13", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-zombie", DefinitionID: "weapon-15", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "inst-hagure-w", DefinitionID: "weapon-40", Quantity: 1})
-	invMgr.invs[charID] = inv
-
 	dp, _ := depot.NewDepot(charID)
 	// Add authentic armors from party2/lib/_data.cgi:506-613
 	dp.Items = append(dp.Items,
@@ -1154,39 +1149,50 @@ func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
 	}
 
 	weaponTests := []struct {
-		instID      string
-		expectedMsg string
-		disallowed  string // old Price/10 + 1 or Price/20 + 1
+		instID       string
+		definitionID string
+		expectedMsg  string
+		disallowed   string // old Price/10 + 1 or Price/20 + 1
 	}{
 		{
-			instID:      "inst-bamboo",
-			expectedMsg: "武器名：竹の槍 / 強さ：4 / 重さ：2 / 価格：30G",
-			disallowed:  "",
+			instID:       "inst-bamboo",
+			definitionID: "weapon-02",
+			expectedMsg:  "武器名：竹の槍 / 強さ：4 / 重さ：2 / 価格：30G",
+			disallowed:   "",
 		},
 		{
-			instID:      "inst-copper",
-			expectedMsg: "武器名：銅の剣 / 強さ：14 / 重さ：9 / 価格：400G",
-			disallowed:  "強さ：41", // old price/10+1 = 41
+			instID:       "inst-copper",
+			definitionID: "weapon-08",
+			expectedMsg:  "武器名：銅の剣 / 強さ：14 / 重さ：9 / 価格：400G",
+			disallowed:   "強さ：41", // old price/10+1 = 41
 		},
 		{
-			instID:      "inst-steel",
-			expectedMsg: "武器名：鋼鉄の剣 / 強さ：30 / 重さ：20 / 価格：1800G",
-			disallowed:  "強さ：181", // old price/10+1 = 181
+			instID:       "inst-steel",
+			definitionID: "weapon-13",
+			expectedMsg:  "武器名：鋼鉄の剣 / 強さ：30 / 重さ：20 / 価格：1800G",
+			disallowed:   "強さ：181", // old price/10+1 = 181
 		},
 		{
-			instID:      "inst-zombie",
-			expectedMsg: "武器名：不死殺しの剣 / 強さ：44 / 重さ：24 / 価格：3500G",
-			disallowed:  "強さ：351", // old price/10+1 = 351
+			instID:       "inst-zombie",
+			definitionID: "weapon-15",
+			expectedMsg:  "武器名：不死殺しの剣 / 強さ：44 / 重さ：24 / 価格：3500G",
+			disallowed:   "強さ：351", // old price/10+1 = 351
 		},
 		{
-			instID:      "inst-hagure-w",
-			expectedMsg: "武器名：流銀の剣 / 強さ：150 / 重さ：75 / 価格：30000G",
-			disallowed:  "強さ：3001", // old price/10+1 = 3001
+			instID:       "inst-hagure-w",
+			definitionID: "weapon-40",
+			expectedMsg:  "武器名：流銀の剣 / 強さ：150 / 重さ：75 / 価格：30000G",
+			disallowed:   "強さ：3001", // old price/10+1 = 3001
 		},
 	}
 
 	for _, tt := range weaponTests {
 		t.Run("weapon_"+tt.instID, func(t *testing.T) {
+			inv, _ := coreinventory.New(charID)
+			if err := inv.Add(coreitem.Instance{ID: tt.instID, DefinitionID: tt.definitionID, Quantity: 1}); err != nil {
+				t.Fatal(err)
+			}
+			invMgr.invs[charID] = inv
 			res, err := svc.UseHomeItem(ctx, charID, tt.instID, "inventory")
 			if err != nil {
 				t.Fatalf("UseHomeItem failed: %v", err)
@@ -1523,7 +1529,6 @@ func TestUseHomeItem_RejectsWithoutRunnerOrDispatch(t *testing.T) {
 	chars := map[string]corecharacter.Character{"c": {ID: "c", Name: "c"}}
 	inv, _ := coreinventory.New("c")
 	_ = inv.Add(coreitem.Instance{ID: "seed", DefinitionID: "item-seed6", Quantity: 1})
-	_ = inv.Add(coreitem.Instance{ID: "x", DefinitionID: "item-x", Quantity: 1})
 	invs := map[string]coreinventory.Inventory{"c": inv}
 	catalog := &mockCatalog{defs: map[string]coreitem.Definition{
 		"item-seed6": {ID: "item-seed6", Name: "スキルの種", UsageCategory: coreitem.UsageCategoryAnytime},
@@ -1541,10 +1546,15 @@ func TestUseHomeItem_RejectsWithoutRunnerOrDispatch(t *testing.T) {
 	if _, err := newSvc().UseHomeItem(context.Background(), "c", "seed", "inventory"); !errors.Is(err, ErrTransactionRunnerRequired) {
 		t.Fatalf("want ErrTransactionRunnerRequired, got %v", err)
 	}
-	if got := invs["c"]; len(got.Items) != 2 || chars["c"].SP != 0 {
+	if got := invs["c"]; len(got.Items) != 1 || chars["c"].SP != 0 {
 		t.Fatalf("state changed without a runner: %+v SP=%d", got.Items, chars["c"].SP)
 	}
 
+	inv, _ = coreinventory.New("c")
+	if err := inv.Add(coreitem.Instance{ID: "x", DefinitionID: "item-x", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	invs["c"] = inv
 	runner := &mockTransactionRunner{chars: chars, invs: invs}
 	if _, err := newSvc(WithTransactionRunner(runner)).UseHomeItem(context.Background(), "c", "x", "inventory"); !errors.Is(err, ErrCannotUseHere) || runner.calls != 0 {
 		t.Fatalf("want rejection before the runner, got %v (calls=%d)", err, runner.calls)

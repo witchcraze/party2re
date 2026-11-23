@@ -15,6 +15,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/database"
@@ -189,15 +190,14 @@ func TestAdventureConsumptionSQLIntegration(t *testing.T) {
 						t.Fatal(err)
 					}
 					originals = append(originals, c)
-					// MP tools in separate stacks expose definition-only or wrong-owner
-					// debits. Their native callbacks produce consumption intents.
+					// Historical MP tool stacks expose definition-only or wrong-owner debits.
 					items[c.ID] = []coreitem.Instance{
 						{ID: id.New(), DefinitionID: "item-012", Quantity: 3},
 						{ID: id.New(), DefinitionID: "item-012", Quantity: 4},
 						{ID: id.New(), DefinitionID: "item-012", Quantity: 2},
 						{ID: id.New(), DefinitionID: battle.ItemDokuroAmulet, Quantity: 1},
 					}
-					if _, err := database.CreateTestInventoryWithItems(ctx, db, c.ID, items[c.ID]); err != nil {
+					if err := invs.Save(ctx, coreinventory.Inventory{CharacterID: c.ID, Items: items[c.ID]}); err != nil {
 						t.Fatal(err)
 					}
 					if err := equips.Save(ctx, coreequipment.Equipment{CharacterID: c.ID, Slots: map[coreitem.Slot]string{

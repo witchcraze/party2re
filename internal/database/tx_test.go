@@ -117,7 +117,7 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 				return fmt.Errorf("depotRepo.Save: %w", err)
 			}
 			// 5. Grant inventory item
-			invItem, err := coreitem.NewInstance(itemDefID, 10)
+			invItem, err := coreitem.NewInstance(itemDefID, 1)
 			if err != nil {
 				return err
 			}
@@ -160,8 +160,8 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 		}
 
 		inv, err := invRepo.FindByCharacterID(ctx, char.ID)
-		if err != nil || len(inv.Items) != 1 || inv.Items[0].Quantity != 10 {
-			t.Fatalf("expected 1 inv item with qty 10, got %+v, err=%v", inv, err)
+		if err != nil || len(inv.Items) != 1 || inv.Items[0].Quantity != 1 {
+			t.Fatalf("expected 1 inv item with qty 1, got %+v, err=%v", inv, err)
 		}
 	})
 

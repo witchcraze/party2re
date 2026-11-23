@@ -369,7 +369,7 @@ func TestSendItem_ValidationAndExecutionErrors(t *testing.T) {
 func TestDepositItem_ValidationAndExecutionErrors(t *testing.T) {
 	ctx := context.Background()
 
-	potion, _ := item.NewInstance("potion", 2)
+	potion, _ := item.NewInstance("potion", 1)
 	inv, _ := coreinventory.New("char-1")
 	_ = inv.Add(potion)
 
@@ -448,7 +448,7 @@ func TestDepositItem_ValidationAndExecutionErrors(t *testing.T) {
 	invRepoSaveErr := &stubInvRepo{
 		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
 			testInv, _ := coreinventory.New("char-1")
-			p, _ := item.NewInstance("potion", 2)
+			p, _ := item.NewInstance("potion", 1)
 			p.ID = potion.ID
 			_ = testInv.Add(p)
 			return testInv, nil
@@ -466,7 +466,7 @@ func TestDepositItem_ValidationAndExecutionErrors(t *testing.T) {
 	invRepoWithPotion := &stubInvRepo{
 		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
 			testInv, _ := coreinventory.New("char-1")
-			p, _ := item.NewInstance("potion", 2)
+			p, _ := item.NewInstance("potion", 1)
 			p.ID = potion.ID
 			_ = testInv.Add(p)
 			return testInv, nil
@@ -676,7 +676,7 @@ func TestTransactionPaths_Expand(t *testing.T) {
 func TestTransactionPaths_DepositItem(t *testing.T) {
 	ctx := context.Background()
 
-	potion, _ := item.NewInstance("potion", 2)
+	potion, _ := item.NewInstance("potion", 1)
 	inv, _ := coreinventory.New("char-1")
 	_ = inv.Add(potion)
 
@@ -806,7 +806,7 @@ func TestTransactionPaths_DepositItem(t *testing.T) {
 	invRepoSaveErr := &stubInvRepo{
 		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
 			testInv, _ := coreinventory.New("char-1")
-			p, _ := item.NewInstance("potion", 2)
+			p, _ := item.NewInstance("potion", 1)
 			p.ID = potion.ID
 			_ = testInv.Add(p)
 			return testInv, nil

@@ -541,8 +541,11 @@ func TestStorageDepositAndWithdraw(t *testing.T) {
 
 	// 4. Test duplicate name collision guard ("同じ名前の武器を預けることはできない")
 	// Try depositing another weapon with custom name "CustomClub" (same as dep1)
+	iState, _ = invRepo.FindByCharacterID(ctx, char.ID)
 	w3Inst, _ := item.NewInstance("weapon-50", 1)
-	_ = iState.Add(w3Inst)
+	if err := iState.Add(w3Inst); err != nil {
+		t.Fatal(err)
+	}
 	_ = invRepo.Save(ctx, iState)
 	w3Def, _ := catalog.FindByID("weapon-50")
 	_, _ = eState.Equip(&iState, w3Def, w3Inst.ID)
@@ -565,8 +568,11 @@ func TestStorageDepositAndWithdraw(t *testing.T) {
 	}
 
 	// 5. Test storage full (3 items already stored)
+	iState, _ = invRepo.FindByCharacterID(ctx, char.ID)
 	w4Inst, _ := item.NewInstance("weapon-68", 1)
-	_ = iState.Add(w4Inst)
+	if err := iState.Add(w4Inst); err != nil {
+		t.Fatal(err)
+	}
 	_ = invRepo.Save(ctx, iState)
 	w4Def, _ := catalog.FindByID("weapon-68")
 	_, _ = eState.Equip(&iState, w4Def, w4Inst.ID)
@@ -583,9 +589,15 @@ func TestStorageDepositAndWithdraw(t *testing.T) {
 		t.Errorf("expected ErrWeaponSlotOccupied, got %v", err)
 	}
 
-	// Unequip weapon-68
+	// Clear the weapon hand before withdrawal.
 	_, _ = eState.Unequip(item.SlotMainHand)
 	_ = equipRepo.Save(ctx, eState)
+	if err := iState.ConsumeOne(w4Inst.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := invRepo.Save(ctx, iState); err != nil {
+		t.Fatal(err)
+	}
 
 	// 7. Withdraw slot 1 successfully
 	if err := svc.WithdrawWeapon(ctx, char.ID, 1); err != nil {

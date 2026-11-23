@@ -11,16 +11,21 @@ import (
 
 func TestEquipmentEquipsOwnedItemAndExchangesSlot(t *testing.T) {
 	value, _ := inventory.New("character-1")
-	first, _ := item.NewInstance("sword", 1)
-	second, _ := item.NewInstance("axe", 1)
+	first, _ := item.NewInstance("weapon-01", 1)
+	second, _ := item.NewInstance("weapon-02", 1)
 	_ = value.Add(first)
-	_ = value.Add(second)
-	sword, _ := item.NewEquipmentDefinition("sword", "Training Sword", 100, item.SlotMainHand)
-	axe, _ := item.NewEquipmentDefinition("axe", "Training Axe", 150, item.SlotMainHand)
+	sword, _ := item.NewEquipmentDefinition("weapon-01", "Training Sword", 100, item.SlotMainHand)
+	axe, _ := item.NewEquipmentDefinition("weapon-02", "Training Axe", 150, item.SlotMainHand)
 	equipment, _ := New("character-1")
 
 	if replaced, err := equipment.Equip(&value, sword, first.ID); err != nil || replaced != "" {
 		t.Fatalf("first Equip() = %q, %v", replaced, err)
+	}
+	if err := value.ConsumeOne(first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := value.Add(second); err != nil {
+		t.Fatal(err)
 	}
 	replaced, err := equipment.Equip(&value, axe, second.ID)
 	if err != nil || replaced != first.ID {

@@ -10,54 +10,6 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 )
 
-// GrantItem creates a new item instance and saves it into the character's inventory under an exclusive lock.
-func (s *Service) GrantItem(ctx context.Context, characterID string, itemDefinitionID string, quantity int) (coreinventory.Inventory, coreitem.Instance, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return coreinventory.Inventory{}, coreitem.Instance{}, ErrInvalidCharacterID
-	}
-	if strings.TrimSpace(itemDefinitionID) == "" {
-		return coreinventory.Inventory{}, coreitem.Instance{}, ErrItemNotFound
-	}
-	if quantity <= 0 {
-		return coreinventory.Inventory{}, coreitem.Instance{}, ErrInvalidQuantity
-	}
-
-	var resInv coreinventory.Inventory
-	var resInst coreitem.Instance
-
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		inv, err := s.findInventory(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		if inv.IsFull(itemDefinitionID) {
-			return ErrInventoryFull
-		}
-
-		inst, err := coreitem.NewInstance(itemDefinitionID, quantity)
-		if err != nil {
-			return err
-		}
-
-		if err := inv.Add(inst); err != nil {
-			return fmt.Errorf("%w: %v", ErrInventoryFull, err)
-		}
-
-		if err := s.inventories.Save(txCtx, inv); err != nil {
-			return err
-		}
-
-		resInv = inv
-		resInst = inst
-		return nil
-	})
-	if err != nil {
-		return coreinventory.Inventory{}, coreitem.Instance{}, err
-	}
-	return resInv, resInst, nil
-}
-
 // ConsumeItemInstance consumes quantity from a specific inventory item instance ID.
 func (s *Service) ConsumeItemInstance(ctx context.Context, characterID string, itemInstanceID string, quantity int) (coreinventory.Inventory, error) {
 	if strings.TrimSpace(characterID) == "" {

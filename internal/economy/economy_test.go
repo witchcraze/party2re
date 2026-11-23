@@ -351,51 +351,6 @@ func TestSmallMedals(t *testing.T) {
 	}
 }
 
-func TestGrantAndConsumeItem(t *testing.T) {
-	t.Parallel()
-
-	charRepo := newMockCharRepo()
-	charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1"}
-	invRepo := newMockInvRepo()
-	svc, _ := economy.NewService(charRepo, invRepo)
-
-	// Grant item
-	inv, inst, err := svc.GrantItem(context.Background(), "char-1", "item-001", 3)
-	if err != nil {
-		t.Fatalf("unexpected grant item error: %v", err)
-	}
-	if len(inv.Items) != 1 || inv.Items[0].Quantity != 3 {
-		t.Fatalf("expected 1 item with quantity 3, got %v", inv.Items)
-	}
-	if inst.DefinitionID != "item-001" || inst.Quantity != 3 {
-		t.Fatalf("expected instance item-001 qty 3, got %v", inst)
-	}
-
-	// Consume item instance
-	inv, err = svc.ConsumeItemInstance(context.Background(), "char-1", inst.ID, 1)
-	if err != nil {
-		t.Fatalf("unexpected consume item instance error: %v", err)
-	}
-	if inv.Items[0].Quantity != 2 {
-		t.Errorf("expected 2 items remaining in instance, got %d", inv.Items[0].Quantity)
-	}
-
-	// Consume item definition
-	inv, err = svc.ConsumeItemDefinition(context.Background(), "char-1", "item-001", 2)
-	if err != nil {
-		t.Fatalf("unexpected consume item definition error: %v", err)
-	}
-	if len(inv.Items) != 0 {
-		t.Errorf("expected inventory to be empty, got %d items", len(inv.Items))
-	}
-
-	// Consume item definition when not present
-	_, err = svc.ConsumeItemDefinition(context.Background(), "char-1", "item-001", 1)
-	if !errors.Is(err, economy.ErrInsufficientItemQuantity) {
-		t.Errorf("expected ErrInsufficientItemQuantity, got %v", err)
-	}
-}
-
 func TestExchange(t *testing.T) {
 	t.Parallel()
 
@@ -404,37 +359,25 @@ func TestExchange(t *testing.T) {
 	txProv := &mockTxProvider{}
 	svc, _ := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
 
-	t.Run("Rejects grant when inventory is full on partial consumption", func(t *testing.T) {
-		char := corecharacter.Character{ID: "char-1", Money: 1000, SmallMedals: 5}
-		_ = charRepo.Update(context.Background(), char)
-		_, inst, _ := svc.GrantItem(context.Background(), "char-1", "material-01", 10)
-
-		reqFull := economy.ExchangeRequest{
-			CharacterID:        "char-1",
-			DeductGold:         300,
-			DeductMedals:       2,
-			ConsumeInstanceID:  inst.ID,
-			ConsumeInstanceQty: 4,
-			GrantDefinitionID:  "sword-01",
-			GrantQuantity:      1,
-		}
-		if _, err := svc.Exchange(context.Background(), reqFull); !errors.Is(err, economy.ErrInventoryFull) {
-			t.Fatalf("expected ErrInventoryFull on partial consumption, got %v", err)
-		}
-	})
-
 	t.Run("Succeeds when full consumption vacates hand slot", func(t *testing.T) {
 		char := corecharacter.Character{ID: "char-2", Money: 1000, SmallMedals: 5}
 		_ = charRepo.Update(context.Background(), char)
-		_, inst, _ := svc.GrantItem(context.Background(), "char-2", "material-01", 10)
+		inv, _ := coreinventory.New(char.ID)
+		inst, _ := coreitem.NewInstance("item-001", 1)
+		if err := inv.Add(inst); err != nil {
+			t.Fatal(err)
+		}
+		if err := invRepo.Save(context.Background(), inv); err != nil {
+			t.Fatal(err)
+		}
 
 		req := economy.ExchangeRequest{
 			CharacterID:        "char-2",
 			DeductGold:         300,
 			DeductMedals:       2,
 			ConsumeInstanceID:  inst.ID,
-			ConsumeInstanceQty: 10,
-			GrantDefinitionID:  "sword-01",
+			ConsumeInstanceQty: 1,
+			GrantDefinitionID:  "item-002",
 			GrantQuantity:      1,
 		}
 
@@ -449,60 +392,11 @@ func TestExchange(t *testing.T) {
 		if res.Character.SmallMedals != 3 {
 			t.Errorf("expected 3 small medals, got %d", res.Character.SmallMedals)
 		}
-		if res.GrantedItem == nil || res.GrantedItem.DefinitionID != "sword-01" {
-			t.Errorf("expected granted sword-01, got %v", res.GrantedItem)
+		if res.GrantedItem == nil || res.GrantedItem.DefinitionID != "item-002" {
+			t.Errorf("expected granted item-002, got %v", res.GrantedItem)
 		}
-		if res.Inventory.Quantity("material-01") != 0 {
-			t.Errorf("expected 0 material-01 remaining, got %d", res.Inventory.Quantity("material-01"))
+		if res.Inventory.Quantity("item-001") != 0 {
+			t.Errorf("expected 0 item-001 remaining, got %d", res.Inventory.Quantity("item-001"))
 		}
 	})
-}
-
-func TestGrantItemHandOccupancy(t *testing.T) {
-	t.Parallel()
-
-	charRepo := newMockCharRepo()
-	invRepo := newMockInvRepo()
-	txProv := &mockTxProvider{}
-	svc, _ := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
-
-	ctx := context.Background()
-	char := corecharacter.Character{ID: "char-hand-test", Money: 1000}
-	_ = charRepo.Update(ctx, char)
-
-	// 1. Grant weapon-01
-	_, _, err := svc.GrantItem(ctx, char.ID, "weapon-01", 1)
-	if err != nil {
-		t.Fatalf("unexpected GrantItem error for weapon-01: %v", err)
-	}
-
-	// 2. Granting another weapon fails because weapon hand is occupied
-	_, _, err = svc.GrantItem(ctx, char.ID, "weapon-02", 1)
-	if !errors.Is(err, economy.ErrInventoryFull) {
-		t.Fatalf("expected ErrInventoryFull for second weapon, got %v", err)
-	}
-
-	// 3. Granting item-001 (tool hand) succeeds even though weapon is held
-	_, _, err = svc.GrantItem(ctx, char.ID, "item-001", 1)
-	if err != nil {
-		t.Fatalf("unexpected GrantItem error for tool item-001: %v", err)
-	}
-
-	// 4. Granting another tool (shield item-071) fails because tool hand is occupied
-	_, _, err = svc.GrantItem(ctx, char.ID, "item-071", 1)
-	if !errors.Is(err, economy.ErrInventoryFull) {
-		t.Fatalf("expected ErrInventoryFull for shield when tool hand is occupied, got %v", err)
-	}
-
-	// 5. Granting armor-01 succeeds because armor hand is empty
-	_, _, err = svc.GrantItem(ctx, char.ID, "armor-01", 1)
-	if err != nil {
-		t.Fatalf("unexpected GrantItem error for armor-01: %v", err)
-	}
-
-	// 6. Now all 3 hand fields are occupied; granting anything fails
-	_, _, err = svc.GrantItem(ctx, char.ID, "armor-02", 1)
-	if !errors.Is(err, economy.ErrInventoryFull) {
-		t.Fatalf("expected ErrInventoryFull when all hands are full, got %v", err)
-	}
 }

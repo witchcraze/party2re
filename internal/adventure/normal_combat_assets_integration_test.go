@@ -10,6 +10,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/database"
@@ -350,11 +351,8 @@ func TestRunCombatStoredToolConsumesAndTravelSelectionKeepsHistory(t *testing.T)
 // An ambiguous hand gates job78's enhanced tool before costs or draws.
 func TestRunCombatUnknownHandGatesEnhancedTool(t *testing.T) {
 	f, depots := assetRunCombat(t, 1)
-	// A stacked tool-hand row breaks the one-unit hand, so the hand is unknown.
-	if _, err := f.cfg.JobAssetRunner.ExecuteTransaction(t.Context(), economy.TransactionRequest{CharacterID: f.actors[0].ID, Grant: economy.ResourceGrant{ItemDefinitionID: "item-001", ItemQuantity: 2}}, nil); err != nil {
-		t.Fatal(err)
-	}
 	actor := f.actors[0].ID
+	seedStackedToolHand(t, f, actor)
 	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
 		a := runActorByID(r, actor)
 		a.Jobs, a.MP = corebattle.BattleJobs{JobID: "job-78", SP: 200}, 50
@@ -375,6 +373,17 @@ func TestRunCombatUnknownHandGatesEnhancedTool(t *testing.T) {
 	assertUnchanged(t, f, depots, enhanced, before, heldItems(t, f, 0), nil)
 	if rng.calls.Load()-calls != baseline {
 		t.Fatal("gated entry drew")
+	}
+}
+
+func seedStackedToolHand(t *testing.T, f *normalFixture, actor string) {
+	t.Helper()
+	stack, err := item.NewInstance("item-001", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.invs.Save(t.Context(), coreinventory.Inventory{CharacterID: actor, Items: []item.Instance{stack}}); err != nil {
+		t.Fatal(err)
 	}
 }
 
