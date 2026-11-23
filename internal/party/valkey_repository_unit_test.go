@@ -62,6 +62,15 @@ func sampleTestMembers(partyID, leaderID string) []party.Member {
 	}
 }
 
+func TestValkeyRepository_RequiresClient(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected nil Valkey client to be rejected")
+		}
+	}()
+	party.NewValkeyRepository(nil)
+}
+
 func TestValkeyRepository_NewWithOptions(t *testing.T) {
 	client := valkeytest.NewMockClient()
 	dummy := &dummyLogRepo{}
@@ -694,9 +703,9 @@ func TestLobbyState_UnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestValkeyRepository_BattleActorRoundTripAndPublicJSON(t *testing.T) {
+func TestMemoryRepository_BattleActorRoundTripAndPublicJSON(t *testing.T) {
 	ctx := context.Background()
-	repo := party.NewValkeyRepository(nil)
+	repo := party.NewMemoryRepository()
 	now := time.Now().UTC()
 	p := sampleTestParty("party-actor-1", "char-lead-1", "戦闘行テスト")
 	if err := repo.SaveParty(ctx, p); err != nil {

@@ -453,18 +453,6 @@ durable idempotency; do not promise a reconciler or automatic refund without
 an implementation and tests. Storage migration alone proves neither legacy
 parity nor complete cross-store recovery.
 
-## In-Memory Fallback Parity and verification
-
-Memory test adapters are owned by their feature packages. There is no shared
-`internal/valkey/memory.go` implementation. Equivalent transitions and errors
-must be checked against live Valkey; mocks do not certify Lua behavior.
-Production requires real MariaDB and Valkey connections before serving traffic.
-
-AST tests verify selected terms, script embedding, and banned commands. They do
-not prove payload bounds, sub-millisecond latency, all service race conditions,
-or full settlement recovery. Use feature integration and conservation tests
-when changing run transitions; `make check` remains the required repository gate.
-
 ## Run host: durable command boundary (#1325)
 
 The user approved SQL authority and the explicit idle-cleanup timing in #1325

@@ -127,14 +127,14 @@ func getLiveValkeyClient(t *testing.T) (valkey.Client, func()) {
 // 3. Characters receive exactly one set of rewards (zero duplicated EXP/Gold).
 // 4. No race conditions occur under -race.
 func TestStartPartyAdventure_ConcurrentCallsSerialize_InMemory(t *testing.T) {
-	testConcurrentAdventureSerialization(t, party.NewValkeyRepository(nil))
+	testConcurrentAdventureSerialization(t, party.NewMemoryRepository(party.WithDurableLogRepository(&dummyLogRepo{})))
 }
 
 // TestStartPartyAdventure_ConcurrentCallsSerialize_LiveValkey asserts serialization with real Valkey.
 func TestStartPartyAdventure_ConcurrentCallsSerialize_LiveValkey(t *testing.T) {
 	client, cleanup := getLiveValkeyClient(t)
 	defer cleanup()
-	testConcurrentAdventureSerialization(t, party.NewValkeyRepository(client))
+	testConcurrentAdventureSerialization(t, party.NewValkeyRepository(client, party.WithDurableLogRepository(&dummyLogRepo{})))
 }
 
 func testConcurrentAdventureSerialization(t *testing.T, partyRepo party.Repository) {
@@ -262,11 +262,11 @@ func testConcurrentAdventureSerialization(t *testing.T, partyRepo party.Reposito
 	}
 }
 
-// TestValkeyRepository_WithPartyAdventureLock_Reentrancy verifies that reentrant
+// TestMemoryRepository_WithPartyAdventureLock_Reentrancy verifies that reentrant
 // lock acquisition on the same context succeeds cleanly.
-func TestValkeyRepository_WithPartyAdventureLock_Reentrancy(t *testing.T) {
+func TestMemoryRepository_WithPartyAdventureLock_Reentrancy(t *testing.T) {
 	ctx := context.Background()
-	repo := party.NewValkeyRepository(nil)
+	repo := party.NewMemoryRepository()
 	partyID := "test-party-reentrant"
 
 	innerCalled := false
@@ -286,11 +286,11 @@ func TestValkeyRepository_WithPartyAdventureLock_Reentrancy(t *testing.T) {
 	}
 }
 
-// TestValkeyRepository_WithPartyAdventureLock_Conflict verifies that concurrent
+// TestMemoryRepository_WithPartyAdventureLock_Conflict verifies that concurrent
 // acquisition attempts on separate contexts fail with ErrPartyNotRecruiting.
-func TestValkeyRepository_WithPartyAdventureLock_Conflict(t *testing.T) {
+func TestMemoryRepository_WithPartyAdventureLock_Conflict(t *testing.T) {
 	ctx := context.Background()
-	repo := party.NewValkeyRepository(nil)
+	repo := party.NewMemoryRepository()
 	partyID := fmt.Sprintf("test-party-conflict-%d", time.Now().UnixNano())
 
 	holdLock := make(chan struct{})
@@ -335,12 +335,12 @@ func TestValkeyRepository_WithPartyAdventureLock_Conflict(t *testing.T) {
 	}
 }
 
-// TestValkeyRepository_WithPartyAdventureLock_InstanceIsolation asserts that separate
-// in-memory ValkeyRepository instances have isolated lock states and do not share global mutable state.
-func TestValkeyRepository_WithPartyAdventureLock_InstanceIsolation(t *testing.T) {
+// TestMemoryRepository_WithPartyAdventureLock_InstanceIsolation asserts that separate
+// memory repositories keep independent lock state.
+func TestMemoryRepository_WithPartyAdventureLock_InstanceIsolation(t *testing.T) {
 	ctx := context.Background()
-	repo1 := party.NewValkeyRepository(nil)
-	repo2 := party.NewValkeyRepository(nil)
+	repo1 := party.NewMemoryRepository()
+	repo2 := party.NewMemoryRepository()
 	partyID := fmt.Sprintf("isolated-party-%d", time.Now().UnixNano())
 
 	holdLock := make(chan struct{})

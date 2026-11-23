@@ -13,13 +13,15 @@ import (
 	"github.com/witchcraze/party2re/internal/god"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 // Each production milestone hook reaches the shared trajectory store.
 func TestTrajectoryProductionWiring(t *testing.T) {
 	db := database.OpenTestDB(t)
 	ctx := context.Background()
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +29,7 @@ func TestTrajectoryProductionWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +109,8 @@ func TestContestTrajectoryProductionWiring(t *testing.T) {
 		"character_photos", "contest_rounds", "contest_entries", "contest_votes", "contest_legends", "news_articles",
 	}...)
 	ctx := context.Background()
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +118,7 @@ func TestContestTrajectoryProductionWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

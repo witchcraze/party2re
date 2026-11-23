@@ -27,7 +27,8 @@ type blackMarketEquipmentFixture struct {
 func newBlackMarketEquipmentFixture(t *testing.T, slot item.Slot, definitionID string) blackMarketEquipmentFixture {
 	t.Helper()
 	db := database.OpenTestDB(t)
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +36,7 @@ func newBlackMarketEquipmentFixture(t *testing.T, slot item.Slot, definitionID s
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

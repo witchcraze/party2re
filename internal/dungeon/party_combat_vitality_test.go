@@ -92,6 +92,7 @@ func TestPartyCombat_MultiMemberBattleAndVitalityTracking(t *testing.T) {
 		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
 		dungeon.WithInventoryProvider(inventory),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -200,6 +201,7 @@ func TestPartyCombat_LeaderKilledAllySurvivesAndWins_ExplorationContinues(t *tes
 		dungeon.WithAdmission(approvedRoster{}),
 		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -314,6 +316,7 @@ func TestPartyCombat_AllMembersKilled_WipesOut(t *testing.T) {
 		dungeon.WithAdmission(approvedRoster{}),
 		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)

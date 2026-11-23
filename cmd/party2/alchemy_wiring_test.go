@@ -8,13 +8,14 @@ import (
 	"github.com/witchcraze/party2re/internal/alchemy"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 var errAlchemyLegendInjected = errors.New("legend induction failed after legend write")
 
 func TestAlchemyProductionConnections(t *testing.T) {
 	t.Run("legend inductor", func(t *testing.T) {
-		f := newHookWiringFixture(t, nil)
+		f := newHookWiringFixture(t, testutil.OpenValkey(t))
 		ctx := context.Background()
 		repo, err := database.NewAlchemyRepository(f.db)
 		if err != nil {
@@ -54,7 +55,7 @@ func (l writeThenFailAlchemyLegend) RecordLegend(ctx context.Context, category, 
 }
 
 func TestAlchemyProductionWiring_LegendRollbackAndRetry(t *testing.T) {
-	f := newHookWiringFixture(t, nil)
+	f := newHookWiringFixture(t, testutil.OpenValkey(t))
 	ctx := context.Background()
 	db, char, core, econ, soc, misc, cmbt := f.db, f.char, f.core, f.econ, f.soc, f.misc, f.cmbt
 

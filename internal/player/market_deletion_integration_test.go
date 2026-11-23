@@ -169,7 +169,7 @@ func TestMarketCreatedAfterDeletionDiscovery(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					accounts, err := player.NewService(f.players, player.NewValkeySessionRepository(nil),
+					accounts, err := player.NewService(f.players, newMemorySessionRepository(),
 						player.WithCharacterService(chars), player.WithTransactionProvider(tx))
 					if err != nil {
 						t.Fatal(err)

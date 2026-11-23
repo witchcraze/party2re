@@ -23,6 +23,7 @@ import (
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/tavern"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type mockSchedRepo struct {
@@ -664,7 +665,8 @@ func (m *wireMockCharRepo) Update(_ context.Context, char corecharacter.Characte
 func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	db := database.CreateTestDatabase(t, []string{"players", "characters", "character_depots", "character_homes", "house_town_capacity_lock", "guilds", "guild_members"}...)
 	ctx := context.Background()
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -672,7 +674,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

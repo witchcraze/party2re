@@ -13,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 var errBossLegendInjected = errors.New("legend induction failed after write")
@@ -31,7 +32,8 @@ func (l writeThenFailLegend) RecordLegend(ctx context.Context, category, charact
 func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.T) {
 	db := database.OpenTestDB(t)
 	ctx := context.Background()
-	core, err := newCoreServices(db, nil)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +41,7 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,10 +49,12 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmbt, err := newCmbtServices(db, core, soc, econ, nil)
+	cmbt, err := newCmbtServices(db, core, soc, econ, client)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// This test owns a boss settlement, not the recurring global schedules.
+	soc.sched = nil
 	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
 		t.Fatal(err)
 	}

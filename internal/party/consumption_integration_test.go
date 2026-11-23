@@ -309,7 +309,7 @@ func TestAdventureConsumptionSQLIntegration(t *testing.T) {
 				} else {
 					history := &consumptionPartyHistory{AdventureLogRepository: logs, afterSave: afterSave}
 					// Lobby state is outside this SQL contract; use its existing in-memory adapter.
-					lobby := party.NewValkeyRepository(nil, party.WithDurableLogRepository(history))
+					lobby := party.NewMemoryRepository(party.WithDurableLogRepository(history))
 					if err := lobby.SaveParty(ctx, party.Party{ID: partyID, LeaderCharacterID: originals[0].ID, StageID: adventure.StarterAdventure, Mode: tc.mode, Status: party.StatusRecruiting}); err != nil {
 						t.Fatal(err)
 					}

@@ -16,25 +16,7 @@ var cleanupCharacterScript = valkey.NewLuaScript(cleanupCharacterLua)
 // Reverse mappings are removed only when they still belong to this room.
 func (r *ValkeyRepository) CleanupParty(ctx context.Context, state LobbyState) error {
 	id := state.Party.ID
-	ids := []string{state.Party.LeaderCharacterID}
-	for _, m := range state.Members {
-		ids = append(ids, m.CharacterID)
-	}
-	if r.client == nil {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		for _, charID := range ids {
-			if r.memCharParty[charID] == id {
-				delete(r.memCharParty, charID)
-			}
-		}
-		delete(r.memLobbies, id)
-		delete(r.memLobbyExp, id)
-		delete(r.memMembers, id)
-		delete(r.memReadyExp, id)
-		return nil
-	}
-	for _, charID := range ids {
+	for _, charID := range lobbyCharacterIDs(state) {
 		if err := cleanupCharacterScript.Exec(ctx, r.client, []string{r.characterKey(charID)}, []string{id}).Error(); err != nil {
 			return err
 		}
@@ -46,4 +28,12 @@ func (r *ValkeyRepository) CleanupParty(ctx context.Context, state LobbyState) e
 		return err
 	}
 	return r.client.Do(ctx, r.client.B().Zrem().Key(r.lobbiesIndexKey).Member(id).Build()).Error()
+}
+
+func lobbyCharacterIDs(state LobbyState) []string {
+	ids := []string{state.Party.LeaderCharacterID}
+	for _, m := range state.Members {
+		ids = append(ids, m.CharacterID)
+	}
+	return ids
 }

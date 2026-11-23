@@ -133,7 +133,7 @@ func newDeletionFixture(t *testing.T) *deletionFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.accounts, err = player.NewService(f.players, player.NewValkeySessionRepository(nil),
+	f.accounts, err = player.NewService(f.players, newMemorySessionRepository(),
 		player.WithCharacterService(f.charSvc), player.WithAPITokenRepository(f.tokens), player.WithTransactionProvider(tx))
 	if err != nil {
 		t.Fatal(err)

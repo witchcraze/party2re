@@ -38,7 +38,7 @@ func TestIdentityDeletionPreservesSurvivingMailboxCopies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accounts, err := player.NewService(players, player.NewValkeySessionRepository(nil),
+	accounts, err := player.NewService(players, newMemorySessionRepository(),
 		player.WithCharacterService(chars), player.WithTransactionProvider(tx))
 	if err != nil {
 		t.Fatal(err)

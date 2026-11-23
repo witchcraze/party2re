@@ -201,7 +201,7 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		t.Fatal(err)
 	}
 
-	lobbyRepo := party.NewValkeyRepository(nil, party.WithDurableLogRepository(partyLogRepo))
+	lobbyRepo := party.NewMemoryRepository(party.WithDurableLogRepository(partyLogRepo))
 	partySvc, err := party.NewService(
 		lobbyRepo, chars, invs, stages, monsters, alwaysWinBattleEngine{},
 		party.WithParticipantBuilder(adapter),

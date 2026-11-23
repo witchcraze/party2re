@@ -133,6 +133,7 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 		dungeon.WithAdmission(approvedRoster{}),
 		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -296,6 +297,7 @@ func TestPartyCombat_OutcomeDraw_DoesNotWipeOut_PreventsMovement(t *testing.T) {
 		dungeon.WithAdmission(approvedRoster{}),
 		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -419,6 +421,7 @@ func TestPartyCombat_OutcomeDraw_MutualWipeout_WipesOut(t *testing.T) {
 		dungeon.WithAdmission(approvedRoster{}),
 		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
 		dungeon.WithParticipantBuilder(builder),
+		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)

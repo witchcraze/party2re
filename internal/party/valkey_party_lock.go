@@ -34,28 +34,6 @@ func (r *ValkeyRepository) WithPartyAdventureLock(ctx context.Context, partyID s
 		return fn(ctx)
 	}
 
-	if r.client == nil {
-		r.memPartyLocksMu.Lock()
-		if _, locked := r.memPartyLocks[partyID]; locked {
-			r.memPartyLocksMu.Unlock()
-			return ErrPartyNotRecruiting
-		}
-		token := id.New()
-		r.memPartyLocks[partyID] = token
-		r.memPartyLocksMu.Unlock()
-
-		defer func() {
-			r.memPartyLocksMu.Lock()
-			if r.memPartyLocks[partyID] == token {
-				delete(r.memPartyLocks, partyID)
-			}
-			r.memPartyLocksMu.Unlock()
-		}()
-
-		lockedCtx := withPartyAdventureLockedContext(ctx, partyID)
-		return fn(lockedCtx)
-	}
-
 	token := id.New()
 	lockKey := DefaultAdventureLockKeyPrefix + partyID
 	lockTTL := int64(DefaultAdventureLockTTL.Seconds())

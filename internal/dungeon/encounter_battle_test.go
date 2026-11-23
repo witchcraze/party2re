@@ -35,7 +35,7 @@ func TestActiveEncounterSharedResolver(t *testing.T) {
 		expectedEnemyHP = hp
 		return res, nil
 	}}
-	svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine, dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(random.NewDeterministic(1711)))
+	svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine, dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(random.NewDeterministic(1711)), dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()))
 	if err != nil {
 		t.Fatal(err)
 	}

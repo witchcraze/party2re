@@ -29,7 +29,7 @@ func newStoreDeliveryFixture(t *testing.T, barter bool) storeDeliveryFixture {
 	t.Helper()
 	f := newDepotEquipmentFixture(t, item.SlotMainHand, false)
 	ctx := context.Background()
-	soc, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop())
+	soc, err := newSocServices(f.db, f.core, f.econ, testutil.OpenValkey(t), logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

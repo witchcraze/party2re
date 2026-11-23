@@ -15,6 +15,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/testutil"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
 type depotEquipmentFixture struct {
@@ -28,7 +29,7 @@ type depotEquipmentFixture struct {
 func newDepotEquipmentFixture(t *testing.T, slot item.Slot, equipped bool) depotEquipmentFixture {
 	t.Helper()
 	db := database.OpenTestDB(t)
-	core, err := newCoreServices(db, nil)
+	core, err := newCoreServices(db, valkeytest.NewMockClient())
 	if err != nil {
 		t.Fatal(err)
 	}

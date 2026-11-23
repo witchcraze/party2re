@@ -12,20 +12,22 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
-func TestValkeyExpeditionRepository_NewAndFallback(t *testing.T) {
+func TestValkeyExpeditionRepository_RequiresClient(t *testing.T) {
+	if repo, err := dungeon.NewValkeyExpeditionRepository(nil); repo != nil || err == nil {
+		t.Fatalf("expected missing client error, got repo=%v err=%v", repo, err)
+	}
+}
+
+func TestMemoryExpeditionRepository_Lifecycle(t *testing.T) {
 	ctx := context.Background()
 
-	// When client is nil, it should seamlessly fall back to in-memory store
-	repo, err := dungeon.NewValkeyExpeditionRepository(nil, dungeon.WithExpeditionTTL(15*time.Minute))
-	if err != nil || repo == nil {
-		t.Fatalf("expected non-nil repo, got repo=%v err=%v", repo, err)
-	}
+	repo := dungeon.NewMemoryExpeditionRepository(dungeon.WithExpeditionTTL(15 * time.Minute))
 
 	exp := dungeon.ActiveExpedition{
-		ID:          "exp-fallback-1",
-		CharacterID: "char-fallback-1",
-		PartyID:     "party-fallback-1",
-		PartyName:   "Fallback Party",
+		ID:          "exp-memory-1",
+		CharacterID: "char-memory-1",
+		PartyID:     "party-memory-1",
+		PartyName:   "Memory Party",
 		DungeonID:   "cave_01",
 		PosX:        0,
 		PosY:        0,
@@ -39,23 +41,23 @@ func TestValkeyExpeditionRepository_NewAndFallback(t *testing.T) {
 		UpdatedAt:        time.Now().UTC(),
 	}
 
-	// 1. SaveActiveExpedition fallback
+	// 1. SaveActiveExpedition
 	if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
-		t.Fatalf("fallback SaveActiveExpedition error: %v", err)
+		t.Fatalf("SaveActiveExpedition error: %v", err)
 	}
 
-	// 2. GetActiveExpedition fallback
-	retrieved, err := repo.GetActiveExpedition(ctx, "char-fallback-1")
+	// 2. GetActiveExpedition
+	retrieved, err := repo.GetActiveExpedition(ctx, "char-memory-1")
 	if err != nil || retrieved == nil {
 		t.Fatalf("expected retrieved expedition, got %v, err=%v", retrieved, err)
 	}
-	if retrieved.ID != "exp-fallback-1" || retrieved.PartyID != "party-fallback-1" {
+	if retrieved.ID != "exp-memory-1" || retrieved.PartyID != "party-memory-1" {
 		t.Errorf("unexpected retrieved expedition: %+v", retrieved)
 	}
 
-	// 3. Step fallback
-	stepOutcome, err := repo.Step(ctx, "char-fallback-1", dungeon.StepParams{
-		ExpectedExpeditionID: "exp-fallback-1",
+	// 3. Step
+	stepOutcome, err := repo.Step(ctx, "char-memory-1", dungeon.StepParams{
+		ExpectedExpeditionID: "exp-memory-1",
 		NewX:                 1,
 		NewY:                 0,
 		HPDelta:              -5,
@@ -66,17 +68,17 @@ func TestValkeyExpeditionRepository_NewAndFallback(t *testing.T) {
 		Now:                  time.Now().UTC(),
 	})
 	if err != nil {
-		t.Fatalf("fallback Step error: %v", err)
+		t.Fatalf("Step error: %v", err)
 	}
 	if stepOutcome.Expedition.PosX != 1 || stepOutcome.Expedition.CurrentHP != 95 {
-		t.Errorf("unexpected fallback Step result: %+v", stepOutcome)
+		t.Errorf("unexpected Step result: %+v", stepOutcome)
 	}
 
-	// 4. DeleteActiveExpedition fallback
-	if err := repo.DeleteActiveExpedition(ctx, "char-fallback-1", exp.ID); err != nil {
-		t.Fatalf("fallback DeleteActiveExpedition error: %v", err)
+	// 4. DeleteActiveExpedition
+	if err := repo.DeleteActiveExpedition(ctx, "char-memory-1", exp.ID); err != nil {
+		t.Fatalf("DeleteActiveExpedition error: %v", err)
 	}
-	afterDelete, err := repo.GetActiveExpedition(ctx, "char-fallback-1")
+	afterDelete, err := repo.GetActiveExpedition(ctx, "char-memory-1")
 	if err != nil || afterDelete != nil {
 		t.Fatalf("expected nil after delete, got %v, err=%v", afterDelete, err)
 	}

@@ -20,6 +20,12 @@ type mockDungeonRepo struct {
 	awardedItems map[string][]coreitem.Instance
 }
 
+func TestNewService_RequiresActiveExpeditionStore(t *testing.T) {
+	if svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{}, corebattle.Engine{}); svc != nil || err == nil {
+		t.Fatalf("expected missing expedition store error, got svc=%v err=%v", svc, err)
+	}
+}
+
 func newMockDungeonRepo() *mockDungeonRepo {
 	return &mockDungeonRepo{
 		active:       make(map[string]*dungeon.ActiveExpedition),
@@ -142,7 +148,7 @@ func TestStartExpedition_SuccessAndGuards(t *testing.T) {
 	}
 	battleEngine := corebattle.Engine{}
 
-	service, err := dungeon.NewService(repo, charRepo, battleEngine)
+	service, err := dungeon.NewService(repo, charRepo, battleEngine, dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()))
 	if err != nil {
 		t.Fatal(err)
 	}

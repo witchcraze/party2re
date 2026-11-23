@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 var errNoticeAfterWrite = errors.New("notice failed after write")
@@ -32,7 +33,7 @@ func (f failAfterNotice) AddDeliveryFlag(ctx context.Context, characterID, notic
 
 func TestWireSendsNotifyRecipientHome_Integration(t *testing.T) {
 	f := newDepotEquipmentFixture(t, item.SlotMainHand, false)
-	soc, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop())
+	soc, err := newSocServices(f.db, f.core, f.econ, testutil.OpenValkey(t), logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +72,7 @@ func TestWireSendsNotifyRecipientHome_Integration(t *testing.T) {
 
 func TestWireDepotNoticeRollback_Integration(t *testing.T) {
 	f := newDepotEquipmentFixture(t, item.SlotMainHand, false)
-	soc, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop())
+	soc, err := newSocServices(f.db, f.core, f.econ, testutil.OpenValkey(t), logging.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestWireDepotNoticeRollback_Integration(t *testing.T) {
 		t.Fatal("failed sends changed assets or left notices")
 	}
 	// Rebuild the production connection for retry, without duplicating its option line.
-	if _, err := newSocServices(f.db, f.core, f.econ, nil, logging.Nop()); err != nil {
+	if _, err := newSocServices(f.db, f.core, f.econ, testutil.OpenValkey(t), logging.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.econ.depot.SendItem(ctx, f.sender.ID, f.recipient.ID, f.instance.ID); err != nil {

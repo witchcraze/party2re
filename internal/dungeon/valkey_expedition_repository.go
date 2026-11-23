@@ -54,12 +54,13 @@ type ValkeyExpeditionRepository struct {
 	client     valkeygo.Client
 	stepScript *valkeygo.Lua
 	ttl        time.Duration
-	fallback   *MemoryExpeditionRepository
 }
 
 // NewValkeyExpeditionRepository creates a new Valkey-backed expedition store.
-// If client is nil, it falls back to a thread-safe in-memory store.
 func NewValkeyExpeditionRepository(client valkeygo.Client, opts ...ValkeyOption) (*ValkeyExpeditionRepository, error) {
+	if client == nil {
+		return nil, errors.New("valkey client is required")
+	}
 	cfg := &valkeyConfig{
 		ttl: DefaultExpeditionTTL,
 	}
@@ -71,7 +72,6 @@ func NewValkeyExpeditionRepository(client valkeygo.Client, opts ...ValkeyOption)
 		client:     client,
 		stepScript: valkeygo.NewLuaScript(dungeonStepLua),
 		ttl:        cfg.ttl,
-		fallback:   NewMemoryExpeditionRepository(opts...),
 	}
 
 	return repo, nil
@@ -234,10 +234,6 @@ func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 }
 
 func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, characterID string, resolveMember bool) (*ActiveExpedition, error) {
-	if r.client == nil {
-		return r.fallback.GetActiveExpedition(ctx, characterID)
-	}
-
 	sKey := r.stateKey(characterID)
 	rKey := r.rewardsKey(characterID)
 
@@ -281,10 +277,6 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 }
 
 func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, exp ActiveExpedition) error {
-	if r.client == nil {
-		return r.fallback.SaveActiveExpedition(ctx, exp)
-	}
-
 	encounterJSON, err := encodeEncounter(exp.Encounter)
 	if err != nil {
 		return err
@@ -341,10 +333,6 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 }
 
 func (r *ValkeyExpeditionRepository) DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error {
-	if r.client == nil {
-		return r.fallback.DeleteActiveExpedition(ctx, characterID, expeditionID)
-	}
-
 	run, err := r.GetActiveExpedition(ctx, characterID)
 	if err != nil {
 		return err
@@ -365,10 +353,6 @@ func (r *ValkeyExpeditionRepository) DeleteActiveExpedition(ctx context.Context,
 }
 
 func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID string, params StepParams) (StepOutcome, error) {
-	if r.client == nil {
-		return r.fallback.Step(ctx, characterID, params)
-	}
-
 	sKey := r.stateKey(characterID)
 	rKey := r.rewardsKey(characterID)
 

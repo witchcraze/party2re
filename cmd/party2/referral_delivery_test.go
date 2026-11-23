@@ -24,6 +24,7 @@ import (
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
 type referralFixture struct {
@@ -55,7 +56,7 @@ func newReferralFixture(t *testing.T) referralFixture {
 	t.Helper()
 	tables := append([]string{"news_articles", "character_delivery_notices", "fleamarket_listings"}, helperWiringRequiredTables...)
 	db := database.CreateTestDatabase(t, tables...)
-	core, err := newCoreServices(db, nil)
+	core, err := newCoreServices(db, valkeytest.NewMockClient())
 	if err != nil {
 		t.Fatal(err)
 	}

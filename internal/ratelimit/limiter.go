@@ -139,7 +139,6 @@ type ValkeyLimiter struct {
 	client    valkey.Client
 	script    *valkey.Lua
 	keyPrefix string
-	fallback  *MemoryLimiter
 	failOpen  bool
 }
 
@@ -160,13 +159,15 @@ func WithFailOpen(failOpen bool) ValkeyOption {
 	}
 }
 
-// NewValkeyLimiter creates a new Valkey-backed distributed rate limiter.
+// NewValkeyLimiter creates a distributed rate limiter. It panics if client is nil.
 func NewValkeyLimiter(client valkey.Client, opts ...ValkeyOption) *ValkeyLimiter {
+	if client == nil {
+		panic("ratelimit: Valkey client is required")
+	}
 	lim := &ValkeyLimiter{
 		client:    client,
 		script:    valkey.NewLuaScript(rateLimitLua),
 		keyPrefix: defaultKeyPrefix,
-		fallback:  NewMemoryLimiter(),
 		failOpen:  true,
 	}
 	for _, opt := range opts {
@@ -184,16 +185,6 @@ func (v *ValkeyLimiter) Allow(ctx context.Context, key string, limit int64, wind
 		return Result{}, ErrInvalidWindow
 	}
 
-	if v.client == nil {
-		if v.fallback != nil {
-			return v.fallback.Allow(ctx, key, limit, window)
-		}
-		if v.failOpen {
-			return Result{Allowed: true, Limit: limit, Remaining: limit, ResetAfter: 0}, nil
-		}
-		return Result{}, errors.New("valkey client is not configured")
-	}
-
 	fullKey := v.keyPrefix + key
 	windowMs := window.Milliseconds()
 	if windowMs < 1 {
@@ -206,10 +197,6 @@ func (v *ValkeyLimiter) Allow(ctx context.Context, key string, limit int64, wind
 	})
 
 	if err := res.Error(); err != nil {
-		// If Valkey error occurs, fallback to in-memory limiter or fail-open
-		if v.fallback != nil {
-			return v.fallback.Allow(ctx, key, limit, window)
-		}
 		if v.failOpen {
 			return Result{Allowed: true, Limit: limit, Remaining: limit, ResetAfter: 0}, nil
 		}

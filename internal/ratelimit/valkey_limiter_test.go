@@ -11,7 +11,7 @@ import (
 )
 
 func TestValkeyLimiter_InvalidParams(t *testing.T) {
-	lim := NewValkeyLimiter(nil)
+	lim := NewValkeyLimiter(valkeytest.NewMockClient())
 	ctx := context.Background()
 
 	if _, err := lim.Allow(ctx, "k", 0, time.Second); !errors.Is(err, ErrInvalidLimit) {
@@ -28,37 +28,13 @@ func TestValkeyLimiter_InvalidParams(t *testing.T) {
 	}
 }
 
-func TestValkeyLimiter_NilClient(t *testing.T) {
-	ctx := context.Background()
-
-	// 1. Nil client with default fallback (MemoryLimiter)
-	limWithFallback := NewValkeyLimiter(nil)
-	res, err := limWithFallback.Allow(ctx, "key-fb", 2, time.Second)
-	if err != nil {
-		t.Fatalf("unexpected error with fallback: %v", err)
-	}
-	if !res.Allowed || res.Remaining != 1 {
-		t.Fatalf("expected allowed with remaining 1, got %+v", res)
-	}
-
-	// 2. Nil client without fallback, failOpen = true
-	limFailOpen := NewValkeyLimiter(nil, WithFailOpen(true))
-	limFailOpen.fallback = nil
-	res, err = limFailOpen.Allow(ctx, "key-failopen", 5, time.Second)
-	if err != nil {
-		t.Fatalf("unexpected error when failOpen=true: %v", err)
-	}
-	if !res.Allowed || res.Remaining != 5 || res.ResetAfter != 0 {
-		t.Fatalf("expected failOpen allowed result, got %+v", res)
-	}
-
-	// 3. Nil client without fallback, failOpen = false
-	limFailClosed := NewValkeyLimiter(nil, WithFailOpen(false))
-	limFailClosed.fallback = nil
-	_, err = limFailClosed.Allow(ctx, "key-failclosed", 5, time.Second)
-	if err == nil {
-		t.Fatal("expected error when client is nil, fallback is nil, and failOpen is false")
-	}
+func TestValkeyLimiter_RequiresClient(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected nil Valkey client to be rejected")
+		}
+	}()
+	NewValkeyLimiter(nil)
 }
 
 func TestValkeyLimiter_ValkeyExecError(t *testing.T) {
@@ -69,32 +45,18 @@ func TestValkeyLimiter_ValkeyExecError(t *testing.T) {
 		return valkeytest.MakeErrorResult(errValkeyDown)
 	}))
 
-	// 1. With fallback: should invoke fallback MemoryLimiter and succeed
-	limWithFallback := NewValkeyLimiter(client)
-	res, err := limWithFallback.Allow(ctx, "user-err-1", 3, time.Second)
-	if err != nil {
-		t.Fatalf("expected fallback to succeed, got %v", err)
-	}
-	if !res.Allowed || res.Remaining != 2 {
-		t.Fatalf("expected fallback allowed with remaining 2, got %+v", res)
-	}
-
-	// 2. Without fallback, failOpen = true: should allow
-	limFailOpen := NewValkeyLimiter(client, WithFailOpen(true))
-	limFailOpen.fallback = nil
-	res, err = limFailOpen.Allow(ctx, "user-err-2", 3, time.Second)
-	if err != nil {
-		t.Fatalf("expected failOpen to allow without error, got %v", err)
-	}
-	if !res.Allowed || res.Remaining != 3 {
-		t.Fatalf("expected failOpen allowed with remaining 3, got %+v", res)
+	// Failure is allowed by default, even when repeated for the same key.
+	limFailOpen := NewValkeyLimiter(client)
+	for range 4 {
+		res, err := limFailOpen.Allow(ctx, "user-err-2", 3, time.Second)
+		if err != nil || !res.Allowed || res.Remaining != 3 || res.ResetAfter != 0 {
+			t.Fatalf("expected fail-open result, got %+v, %v", res, err)
+		}
 	}
 
-	// 3. Without fallback, failOpen = false: should return error
+	// Disabling fail-open returns the Valkey error.
 	limFailClosed := NewValkeyLimiter(client, WithFailOpen(false))
-	limFailClosed.fallback = nil
-	_, err = limFailClosed.Allow(ctx, "user-err-3", 3, time.Second)
-	if err == nil || !errors.Is(err, errValkeyDown) {
+	if _, err := limFailClosed.Allow(ctx, "user-err-3", 3, time.Second); !errors.Is(err, errValkeyDown) {
 		t.Fatalf("expected wrapped errValkeyDown, got %v", err)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/shop"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
 type zeroRandomSource struct{}
@@ -31,7 +32,7 @@ type shopFixture struct {
 func newShopFixture(t *testing.T, money int) shopFixture {
 	t.Helper()
 	db := database.OpenTestDB(t)
-	core, err := newCoreServices(db, nil)
+	core, err := newCoreServices(db, valkeytest.NewMockClient())
 	if err != nil {
 		t.Fatal(err)
 	}

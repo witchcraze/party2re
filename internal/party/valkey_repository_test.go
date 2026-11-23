@@ -27,9 +27,9 @@ func (d *dummyLogRepo) SaveAdventureLog(_ context.Context, log party.PartyAdvent
 	return nil
 }
 
-func TestValkeyRepository_InMemory_Lifecycle(t *testing.T) {
+func TestMemoryRepository_Lifecycle(t *testing.T) {
 	ctx := context.Background()
-	repo := party.NewValkeyRepository(nil)
+	repo := party.NewMemoryRepository()
 
 	now := time.Now().UTC()
 	p := party.Party{
@@ -170,10 +170,10 @@ func TestValkeyRepository_InMemory_Lifecycle(t *testing.T) {
 	}
 }
 
-func TestValkeyRepository_InMemory_ReadyCountdownExpiry(t *testing.T) {
+func TestMemoryRepository_ReadyCountdownExpiry(t *testing.T) {
 	ctx := context.Background()
 	// Set 50ms ready countdown TTL
-	repo := party.NewValkeyRepository(nil, party.WithReadyTTL(50*time.Millisecond))
+	repo := party.NewMemoryRepository(party.WithReadyTTL(50 * time.Millisecond))
 
 	p := party.Party{
 		ID:        "party-countdown",
@@ -216,10 +216,10 @@ func TestValkeyRepository_InMemory_ReadyCountdownExpiry(t *testing.T) {
 	}
 }
 
-func TestValkeyRepository_InMemory_LobbyExpiry(t *testing.T) {
+func TestMemoryRepository_LobbyExpiry(t *testing.T) {
 	ctx := context.Background()
 	// Set 50ms lobby TTL
-	repo := party.NewValkeyRepository(nil, party.WithLobbyTTL(50*time.Millisecond))
+	repo := party.NewMemoryRepository(party.WithLobbyTTL(50 * time.Millisecond))
 
 	p := party.Party{
 		ID:                "party-abandoned",
@@ -255,10 +255,10 @@ func TestValkeyRepository_InMemory_LobbyExpiry(t *testing.T) {
 	}
 }
 
-func TestValkeyRepository_DurableLogDelegation(t *testing.T) {
+func TestMemoryRepository_DurableLogDelegation(t *testing.T) {
 	ctx := context.Background()
 	dummy := &dummyLogRepo{}
-	repo := party.NewValkeyRepository(nil, party.WithDurableLogRepository(dummy))
+	repo := party.NewMemoryRepository(party.WithDurableLogRepository(dummy))
 
 	log := party.PartyAdventureLog{
 		ID:                  "adv-123",
@@ -429,9 +429,9 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 	}
 }
 
-func TestValkeyRepository_CapacityEnforcement_InMemory(t *testing.T) {
+func TestMemoryRepository_CapacityEnforcement(t *testing.T) {
 	ctx := context.Background()
-	repo := party.NewValkeyRepository(nil)
+	repo := party.NewMemoryRepository()
 
 	// Non-existent party
 	err := repo.AddMember(ctx, party.Member{PartyID: "non-existent", CharacterID: "c1"})
@@ -569,9 +569,9 @@ func TestValkeyRepository_CapacityEnforcement_LiveValkey(t *testing.T) {
 	}
 }
 
-func TestValkeyRepository_ConcurrentJoinStress_InMemory(t *testing.T) {
+func TestMemoryRepository_ConcurrentJoinStress(t *testing.T) {
 	ctx := context.Background()
-	repo := party.NewValkeyRepository(nil)
+	repo := party.NewMemoryRepository()
 
 	partyID := "stress-party-mem"
 	maxMembers := 4

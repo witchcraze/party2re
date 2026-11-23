@@ -132,13 +132,3 @@ func TestValkeyLimiter_Integration(t *testing.T) {
 		t.Errorf("expected blocked with positive resetAfter, got %+v", res)
 	}
 }
-
-func TestValkeyLimiter_NilClientFallback(t *testing.T) {
-	lim := ratelimit.NewValkeyLimiter(nil)
-	ctx := context.Background()
-
-	res, err := lim.Allow(ctx, "fallback-key", 2, time.Second)
-	if err != nil || !res.Allowed {
-		t.Fatalf("expected fallback allowed, got %+v (err: %v)", res, err)
-	}
-}

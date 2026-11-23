@@ -16,6 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/pvp"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type tameWiringRandom struct{}
@@ -23,7 +24,7 @@ type tameWiringRandom struct{}
 func (tameWiringRandom) Intn(int) (int, error) { return 0, nil }
 
 func TestMonsterTamerProductionHook(t *testing.T) {
-	f := newHookWiringFixture(t, nil)
+	f := newHookWiringFixture(t, testutil.OpenValkey(t))
 	// A deterministic battle service leaves Monster injection to wireHooks.
 	f.cmbt.battle = battle.NewService(
 		battle.WithCharacterRepository(f.core.charRepo),
@@ -49,7 +50,7 @@ func TestMonsterTamerProductionHook(t *testing.T) {
 }
 
 func TestBossVictoryBanquetProductionHook(t *testing.T) {
-	f := newHookWiringFixture(t, nil)
+	f := newHookWiringFixture(t, testutil.OpenValkey(t))
 	tracker := &victoryCrowdTracker{}
 	plaza, err := eventplaza.NewService(
 		&struct{ eventplaza.Repository }{}, &struct{ eventplaza.CharacterRepository }{},
@@ -77,7 +78,7 @@ func TestBossVictoryBanquetProductionHook(t *testing.T) {
 }
 
 func TestGvGExitTavernProductionHook(t *testing.T) {
-	f := newHookWiringFixture(t, nil)
+	f := newHookWiringFixture(t, testutil.OpenValkey(t))
 	ctx := context.Background()
 
 	// Create 3 guild leaders for affordable, unaffordable, and no-delivery exit paths.
@@ -199,7 +200,7 @@ func TestGvGExitTavernProductionHook(t *testing.T) {
 }
 
 func TestPvPExitTavernProductionHook(t *testing.T) {
-	f := newHookWiringFixture(t, nil)
+	f := newHookWiringFixture(t, testutil.OpenValkey(t))
 	ctx := context.Background()
 
 	f.char.Money = 500
