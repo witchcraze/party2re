@@ -26,7 +26,7 @@ func (s *LifetimeState) ValidateNPCJob405(c *NPCJob405Context, id string, rng ra
 		}
 		// Enemy seals change no damage recipient, so they need no branches.
 		for range hits {
-			if err := p.admitAreaDamage(&damage, dualAgilityEffect("", 110, CategoryMagic, true), rng); err != nil {
+			if err := p.admitNPC405Area(&damage, child.Death, dualAgilityEffect("", 110, CategoryMagic, true), rng); err != nil {
 				return err
 			}
 		}
@@ -47,13 +47,13 @@ func (s *LifetimeState) ValidateNPCJob405(c *NPCJob405Context, id string, rng ra
 		for _, target := range child.EnemyIDs {
 			npc405Cleave(p.actor(target))
 		}
-		return p.admitAreaDamage(&damage, dualAgilityEffect("", 300, CategoryUntyped, true), rng)
+		return p.admitNPC405Area(&damage, child.Death, dualAgilityEffect("", 300, CategoryUntyped, true), rng)
 	case "npc-job-405-position-4-wounded":
 		// Each cleave precedes its own hit, so later enemies keep their
 		// covers and reflections for earlier hits.
 		for _, target := range child.EnemyIDs {
 			npc405Cleave(p.actor(target))
-			if err := p.admitDamageSequence(&damage, []TargetEffect{dualAgilityEffect(target, 799, CategoryUntyped, true)}, rng); err != nil {
+			if err := p.admitNPC405Hit(&damage, child.Death, dualAgilityEffect(target, 799, CategoryUntyped, true), rng); err != nil {
 				return err
 			}
 		}
@@ -73,8 +73,9 @@ func (s *LifetimeState) ValidateNPCJob405(c *NPCJob405Context, id string, rng ra
 		return nil
 	case "npc-job-405-position-5-wounded":
 		// Unspecified-target candidates cover every living enemy the chain can draw.
+		power := p.npc405ChainBound(child.ActorID, len(child.EnemyIDs))
 		for range max(1, len(child.EnemyIDs)) {
-			if err := p.admitDamageSequence(&damage, []TargetEffect{dualAgilityEffect("", 1, CategoryUntyped, false)}, rng); err != nil {
+			if err := p.admitNPC405Hit(&damage, child.Death, dualAgilityEffect("", power, CategoryUntyped, false), rng); err != nil {
 				return err
 			}
 			if err := p.ValidateStatDown(&damage.EffectContext, controlEffect("", .5, CategoryUntyped), StatCMP, rng); err != nil {
@@ -109,11 +110,54 @@ func (p *LifetimeState) validateNPC405Renewal(c *NPCJob405Context, damage Damage
 			if id == c.ActorID {
 				continue
 			}
-			if err := state.admitAreaDamage(&context, dualAgilityEffect("", float64(state.actor(id).HP)*1.5, CategoryUntyped, true), rng); err != nil {
+			if err := state.admitNPC405Area(&context, c.Death, dualAgilityEffect("", float64(state.actor(id).HP)*1.5, CategoryUntyped, true), rng); err != nil {
 				return err
 			}
 			state.actor(id).HP = 0
 		}
 	}
 	return nil
+}
+
+// admitNPC405Hit checks the hit's defeat/reset descendants with the shared
+// projection, then records it on the lightweight sequence. Projected
+// continuations are not carried into later hits, keeping the cost linear.
+func (p *LifetimeState) admitNPC405Hit(damage *DamageContext, death *DefeatContext, e TargetEffect, rng random.Generator) error {
+	if _, err := p.projectCallbackDamage(damage, death, e, e.Payload.Number, true, rng); err != nil {
+		return err
+	}
+	return p.admitDamageSequence(damage, []TargetEffect{e}, rng)
+}
+
+// admitNPC405Area checks every enemy at the undecayed power, then records the area.
+func (p *LifetimeState) admitNPC405Area(damage *DamageContext, death *DefeatContext, e TargetEffect, rng random.Generator) error {
+	if p.actor(damage.ActorID).HP > 0 {
+		for _, id := range damage.EnemyIDs {
+			hit := e
+			hit.TargetID = id
+			if _, err := p.projectCallbackDamage(damage, death, hit, hit.Payload.Number, true, rng); err != nil {
+				return err
+			}
+		}
+	}
+	return p.admitAreaDamage(damage, e, rng)
+}
+
+// npc405ChainBound is the largest pre-tension power any chain hit can carry;
+// item149 keeps tension, so the ×0.8 carry can grow instead of decay.
+func (p *LifetimeState) npc405ChainBound(actorID string, enemies int) float64 {
+	a := p.actor(actorID)
+	keep := hasItem(a.ItemDefinitionIDs, "item-149")
+	damage, tension, bound := float64(a.Attack+a.Defense+a.Agility+300*p.npc405Members(actorID)), a.Tension, 0.0
+	for range max(1, enemies) {
+		bound = max(bound, damage*tension)
+		damage = float64(int(damage * tension * .8))
+		if !keep {
+			tension = 1
+		}
+	}
+	if keep || a.Tension <= 0 {
+		return bound
+	}
+	return bound / a.Tension // The projection applies the opening tension again.
 }

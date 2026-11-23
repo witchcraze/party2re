@@ -291,3 +291,69 @@ func TestNPC405ReloadedActorChoosesAndActsIdentically(t *testing.T) {
 		t.Fatal(s, loaded)
 	}
 }
+
+// A reachable defeat must be admitted before the body runs, whether the port
+// is absent or its reward rejects; a nonlethal body needs no port.
+func TestNPC405AdmissionCoversReachableDefeat(t *testing.T) {
+	ids := []string{"npc-job-405-position-0", "npc-job-405-position-3", "npc-job-405-position-4",
+		"npc-job-405-position-4-wounded", "npc-job-405-position-5", "npc-job-405-position-5-wounded"}
+	for _, mode := range []string{"no-port", "reward-rejects"} {
+		for _, id := range ids {
+			s, c, _ := npc405Fixture()
+			s.Actors[0].HP, s.Actors[1].HP, s.Actors[2].HP = 1000, 1, 100
+			if id == "npc-job-405-position-4-wounded" || id == "npc-job-405-position-5-wounded" {
+				s.Actors[0].HP = 500
+			}
+			if mode == "no-port" {
+				c.Death = nil
+			} else {
+				c.Death.Rewards.Validate = func(*corebattle.LifetimeState, corebattle.TargetContext, string) error {
+					return corebattle.ErrUnsupportedEffect
+				}
+			}
+			c.Arguments = []string{"enemy"}
+			before, _ := json.Marshal(s)
+			if err := s.ApplyNPCJob405(c, id, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+				t.Fatal(mode, id, err)
+			}
+			if after, _ := json.Marshal(s); string(after) != string(before) {
+				t.Fatal(mode, id, "mutated before rejection")
+			}
+		}
+	}
+	s, c, d := npc405Fixture()
+	s.Actors[0].HP, c.Death = 500, nil
+	executeNPC405(t, &s, c, d, "npc-job-405-position-4-wounded", nil, .5, 0)
+	if s.Actors[1].HP != 415 {
+		t.Fatal(s.Actors[1])
+	}
+}
+
+// Item149 keeps tension, so the chain's carried power grows: only the second
+// hit (≈4480×5) can defeat an 8000-HP enemy, and admission must see it.
+func TestNPC405ChainAdmitsGrowingCarryWithItem149(t *testing.T) {
+	s, c, _ := npc405Fixture()
+	other := s.Actors[1]
+	other.ID = "enemy2"
+	s.Actors = append(s.Actors, other)
+	c.EnemyIDs = append(c.EnemyIDs, "enemy2")
+	s.Actors[0].HP, s.Actors[0].Tension, s.Actors[0].ItemDefinitionIDs = 500, 5, []string{"item-149"}
+	s.Actors[1].HP, s.Actors[3].HP = 8000, 8000
+	c.Death.Rewards.Validate = func(*corebattle.LifetimeState, corebattle.TargetContext, string) error {
+		return corebattle.ErrUnsupportedEffect
+	}
+	if err := s.ValidateNPCJob405(c, "npc-job-405-position-5-wounded", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatal(err)
+	}
+}
+
+// A first hit that defeats its target leaves no living recipient for the
+// second hit or either status; the 1.5 draw is still consumed.
+func TestNPC405BaptismSkipsFallenTargets(t *testing.T) {
+	s, c, d := npc405Fixture()
+	s.Actors[1].HP = 40
+	executeNPC405(t, &s, c, d, "npc-job-405-position-2", []string{"enemy", "enemy"}, 0, 0)
+	if e := s.Actors[1]; e.HP != 0 || e.Status != "" || c.DamageCalls != 1 {
+		t.Fatal(e, c.DamageCalls)
+	}
+}
