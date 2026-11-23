@@ -72,12 +72,19 @@ func (s *LifetimeState) ValidateNPCJob405(c *NPCJob405Context, id string, rng ra
 		}
 		return nil
 	case "npc-job-405-position-5-wounded":
-		// Unspecified-target candidates cover every living enemy the chain can draw.
-		power := p.npc405ChainBound(child.ActorID, len(child.EnemyIDs))
+		// Unspecified-target candidates cover every living enemy the chain can
+		// draw; the carry reads the tension before each hit, as the body does.
+		a := p.actor(child.ActorID)
+		power := float64(a.Attack + a.Defense + a.Agility + 300*p.npc405Members(child.ActorID))
 		for range max(1, len(child.EnemyIDs)) {
+			if p.actor(child.ActorID).HP <= 0 {
+				return nil
+			}
+			tension := p.actor(child.ActorID).Tension
 			if err := p.admitNPC405Hit(&damage, child.Death, dualAgilityEffect("", power, CategoryUntyped, false), rng); err != nil {
 				return err
 			}
+			power = float64(int(power * tension * .8))
 			if err := p.ValidateStatDown(&damage.EffectContext, controlEffect("", .5, CategoryUntyped), StatCMP, rng); err != nil {
 				return err
 			}
@@ -97,9 +104,12 @@ func (p *LifetimeState) validateNPC405Renewal(c *NPCJob405Context, damage Damage
 			return err
 		}
 	}
-	if _, err := p.gemTensionCeiling(&c.EffectContext, p.actor(c.ActorID), 1); err != nil {
+	// The 50% tension draw can raise the sacrifice's power.
+	ceiling, err := p.gemTensionCeiling(&c.EffectContext, p.actor(c.ActorID), 1)
+	if err != nil {
 		return err
 	}
+	p.actor(c.ActorID).Tension = max(p.actor(c.ActorID).Tension, ceiling)
 	p.actor(c.ActorID).Extended = ExtendedPurification
 	// The field draw either keeps the current field or installs an anti-field.
 	anti := p.callbackCopy()
@@ -120,44 +130,54 @@ func (p *LifetimeState) validateNPC405Renewal(c *NPCJob405Context, damage Damage
 }
 
 // admitNPC405Hit checks the hit's defeat/reset descendants with the shared
-// projection, then records it on the lightweight sequence. Projected
-// continuations are not carried into later hits, keeping the cost linear.
+// projection and records it on the lightweight sequence. Instead of carrying
+// branches, the projection keeps each actor's lowest reachable HP and highest
+// tension, so later hits see cumulative damage at linear cost.
 func (p *LifetimeState) admitNPC405Hit(damage *DamageContext, death *DefeatContext, e TargetEffect, rng random.Generator) error {
-	if _, err := p.projectCallbackDamage(damage, death, e, e.Payload.Number, true, rng); err != nil {
+	states, err := p.projectCallbackDamage(damage, death, e, e.Payload.Number, true, rng)
+	if err != nil {
 		return err
 	}
-	return p.admitDamageSequence(damage, []TargetEffect{e}, rng)
+	if err := p.admitDamageSequence(damage, []TargetEffect{e}, rng); err != nil {
+		return err
+	}
+	p.carryNPC405(states)
+	return nil
 }
 
-// admitNPC405Area checks every enemy at the undecayed power, then records the area.
+// admitNPC405Area admits each enemy hit of one area helper in source order.
 func (p *LifetimeState) admitNPC405Area(damage *DamageContext, death *DefeatContext, e TargetEffect, rng random.Generator) error {
-	if p.actor(damage.ActorID).HP > 0 {
-		for _, id := range damage.EnemyIDs {
-			hit := e
-			hit.TargetID = id
-			if _, err := p.projectCallbackDamage(damage, death, hit, hit.Payload.Number, true, rng); err != nil {
-				return err
+	for _, hit := range p.areaDamageEffects(damage, e) {
+		if p.actor(damage.ActorID).HP <= 0 {
+			return nil
+		}
+		if err := p.admitNPC405Hit(damage, death, hit, rng); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// carryNPC405 keeps the lowest positive HP any branch reaches (0 when none
+// survives) and the highest tension. Each value is reachable on its own.
+func (p *LifetimeState) carryNPC405(states []damageContinuation) {
+	if len(states) == 0 {
+		return
+	}
+	for i := range p.Actors {
+		a := &p.Actors[i]
+		low, tension, alive := a.HP, 0.0, false
+		for _, state := range states {
+			if b := state.State.actor(a.ID); b != nil {
+				if b.HP > 0 {
+					alive, low = true, min(low, b.HP)
+				}
+				tension = max(tension, b.Tension)
 			}
 		}
-	}
-	return p.admitAreaDamage(damage, e, rng)
-}
-
-// npc405ChainBound is the largest pre-tension power any chain hit can carry;
-// item149 keeps tension, so the ×0.8 carry can grow instead of decay.
-func (p *LifetimeState) npc405ChainBound(actorID string, enemies int) float64 {
-	a := p.actor(actorID)
-	keep := hasItem(a.ItemDefinitionIDs, "item-149")
-	damage, tension, bound := float64(a.Attack+a.Defense+a.Agility+300*p.npc405Members(actorID)), a.Tension, 0.0
-	for range max(1, enemies) {
-		bound = max(bound, damage*tension)
-		damage = float64(int(damage * tension * .8))
-		if !keep {
-			tension = 1
+		if !alive {
+			low = 0
 		}
+		a.HP, a.Tension = low, tension
 	}
-	if keep || a.Tension <= 0 {
-		return bound
-	}
-	return bound / a.Tension // The projection applies the opening tension again.
 }

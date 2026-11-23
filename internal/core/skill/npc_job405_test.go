@@ -329,21 +329,78 @@ func TestNPC405AdmissionCoversReachableDefeat(t *testing.T) {
 	}
 }
 
-// Item149 keeps tension, so the chain's carried power grows: only the second
-// hit (≈4480×5) can defeat an 8000-HP enemy, and admission must see it.
-func TestNPC405ChainAdmitsGrowingCarryWithItem149(t *testing.T) {
-	s, c, _ := npc405Fixture()
-	other := s.Actors[1]
-	other.ID = "enemy2"
-	s.Actors = append(s.Actors, other)
-	c.EnemyIDs = append(c.EnemyIDs, "enemy2")
-	s.Actors[0].HP, s.Actors[0].Tension, s.Actors[0].ItemDefinitionIDs = 500, 5, []string{"item-149"}
-	s.Actors[1].HP, s.Actors[3].HP = 8000, 8000
-	c.Death.Rewards.Validate = func(*corebattle.LifetimeState, corebattle.TargetContext, string) error {
-		return corebattle.ErrUnsupportedEffect
+// Item149 skips the tension multiplier but keeps tension, so the carry grows:
+// hit1 1120×1.5 → ≤997, hit2 int(1120×5×.8)×1.5 → ≤4021 (_skill.cgi:8049,8067,
+// 8887,8923,9954). Only the second hit can defeat a 3000-HP enemy; 8000 HP
+// survives both, so a rejecting defeat port must not block it.
+func TestNPC405ChainCarryWithItem149(t *testing.T) {
+	for _, row := range []struct {
+		hp     int
+		reject bool
+	}{{3000, true}, {8000, false}} {
+		s, c, d := npc405Fixture()
+		other := s.Actors[1]
+		other.ID = "enemy2"
+		s.Actors = append(s.Actors, other)
+		c.EnemyIDs = append(c.EnemyIDs, "enemy2")
+		s.Actors[0].HP, s.Actors[0].Tension, s.Actors[0].ItemDefinitionIDs = 500, 5, []string{"item-149"}
+		s.Actors[1].HP, s.Actors[3].HP = row.hp, row.hp
+		c.Death = nil
+		err := s.ValidateNPCJob405(c, "npc-job-405-position-5-wounded", noArithmeticDraws{t})
+		if row.reject != errors.Is(err, corebattle.ErrUnsupportedEffect) || (!row.reject && err != nil) {
+			t.Fatal(row.hp, err)
+		}
+		if !row.reject {
+			// Near-maximal rolls on one enemy: 996 + 4020. The CMP stat-down
+			// resets tension even with item149 (_skill.cgi:9284).
+			executeNPC405(t, &s, c, d, "npc-job-405-position-5-wounded", nil, 0, .999, 0, .999)
+			if s.Actors[1].HP != 8000-996-4020 || s.Actors[0].Tension != 1 {
+				t.Fatal(s.Actors[1].HP, s.Actors[0].Tension)
+			}
+		}
 	}
-	if err := s.ValidateNPCJob405(c, "npc-job-405-position-5-wounded", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal(err)
+}
+
+// Four holy rounds (≤132 each) cannot defeat a 300-HP enemy alone but can
+// together; 600 HP survives all four, so no defeat port is required.
+func TestNPC405AdmissionSeesCumulativeDamage(t *testing.T) {
+	for _, row := range []struct {
+		hp     int
+		reject bool
+	}{{300, true}, {600, false}} {
+		s, c, _ := npc405Fixture()
+		s.Actors[1].HP, c.Death = row.hp, nil
+		err := s.ValidateNPCJob405(c, "npc-job-405-position-0", noArithmeticDraws{t})
+		if row.reject != errors.Is(err, corebattle.ErrUnsupportedEffect) || (!row.reject && err != nil) {
+			t.Fatal(row.hp, err)
+		}
+	}
+}
+
+// Two sacrificed allies (HP100 → power 150): the first hit carries the drawn
+// tension 1.7 (≤306), the second does not (≤180). Only together can they
+// defeat 450 HP; 500 HP survives both.
+func TestNPC405RenewalAdmitsCumulativeSacrifice(t *testing.T) {
+	for _, row := range []struct {
+		hp     int
+		reject bool
+	}{{450, true}, {500, false}} {
+		s, c, _ := npc405Fixture()
+		ally := s.Actors[2]
+		ally.ID = "ally2"
+		s.Actors = append(s.Actors, ally)
+		c.PartyIDs = append(c.PartyIDs, "ally2")
+		s.Actors[2].HP, s.Actors[2].MaxHP, s.Actors[3].HP, s.Actors[3].MaxHP = 100, 100, 100, 100
+		// Purification resets each hit's target, so keep the reset port and
+		// reject only the defeat.
+		s.Actors[1].HP = row.hp
+		c.Death.Rewards.Validate = func(*corebattle.LifetimeState, corebattle.TargetContext, string) error {
+			return corebattle.ErrUnsupportedEffect
+		}
+		err := s.ValidateNPCJob405(c, "npc-job-405-position-3", noArithmeticDraws{t})
+		if row.reject != errors.Is(err, corebattle.ErrUnsupportedEffect) || (!row.reject && err != nil) {
+			t.Fatal(row.hp, err)
+		}
 	}
 }
 
