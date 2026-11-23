@@ -1,9 +1,7 @@
 # Transient Run and Session State (Candidates C and D)
 
-This document distinguishes implemented storage boundaries from the approved
-Challenge exit and normal-adventure targets below. The legacy CGI owns turn,
-timeout, reward, and penalty rules. The storage policy is in
-[the database rules](../../.agents/rules/05-database-and-caching.md).
+The legacy CGI owns turn, timeout, reward, and penalty rules. The storage policy
+is in [the database rules](../../.agents/rules/05-database-and-caching.md).
 
 ## Candidate C: Ephemeral Turn & Session Lobby
 
@@ -20,11 +18,8 @@ own lobby/ready keys. Room lists have activity-scored indices and lazy pruning;
 these are indexed operations, not an O(1) full-list guarantee.
 See [keyspace](valkey-keyspace.md) for precise names and coordination locks.
 
-Casino migration #635 is complete; former `casino_rooms`/member tables and the
-old SQL room repository are historical, not future migration targets. Durable
-`casino_accounts` remains in SQL. Composition selects live Valkey stores after
-startup checks. Factory nil-client branches exist for test injection; they are
-not permitted runtime connectivity-error fallback.
+Casino rooms have no SQL store (`casino_rooms` is retired); durable
+`casino_accounts` stays in SQL.
 
 PlayerContext observes these owners through public service ports. Party's actor
 reader propagates lobby/member storage failures and performs no stale-index
@@ -175,20 +170,14 @@ state/reward/revealed buffers; Challenge uses immutable run-keyed session/reward
 hashes. The [keyspace owner](valkey-keyspace.md) defines their 7200-second activity
 lifetime and run-qualified member references.
 
-Dungeon's `dungeon_step` atomically updates its existing buffer. Unresolved normal
-and boss encounters retain the enemy participant's HP/MP/status, allied statuses,
-CMP and remaining elemental field state together with their original destination
-in that buffer. These encounter-only facts are cleared when combat finishes; they
-are not durable character ailments. All cardinal moves reject before tile dispatch while
-an encounter remains, without consuming a turn, event or reward. The leader can
-resume through `Service.Fight` (`POST /characters/{id}/dungeons/fight`) or escape.
-Step revisions reject stale combat results and movement updates; the Memory
-adapter follows the same checks. Victory clears the encounter and grants its
-rewards once. Escape is the only terminal outcome; an all-fallen party stays in
-the run until it escapes. Carried-over pre-update frozen `wiped_out` buffers
-remain observable with leader Fight/Escape continuations and settle their
-recorded outcome once via the same SQL run-ID claim and owner/run-qualified
-cleanup, forfeiting unbanked run stock. Before SQL settlement, a revision-checked step freezes
+Dungeon's `dungeon_step` atomically updates its existing buffer. An unresolved
+encounter keeps its combat state and original destination in that buffer until
+combat finishes; these facts are not durable character ailments. Moves reject
+while an encounter remains, and the leader resumes through `Service.Fight` or
+escapes. Step revisions reject stale combat results and movement updates.
+Victory clears the encounter and grants its rewards once. Escape is the only
+terminal outcome; an all-fallen party stays in the run until it escapes.
+Before SQL settlement, a revision-checked step freezes
 the escape snapshot, rejecting further battle updates. Concurrent Escapes reuse
 that frozen snapshot rather than their earlier reads. A stale Escape cannot claim
 SQL settlement or delete a newer battle result. If SQL fails or post-commit
@@ -248,38 +237,22 @@ History and run/session identifiers must protect retries from duplicate grants.
 Do not assert that an endpoint is exactly-once solely because it uses `RunInTx`.
 Inspect the owning finalizer, durable idempotency guard, and failure tests when
 changing this boundary. Durable records include `dungeon_expedition_history` and
-`character_challenge_records`; legacy SQL
-active-state migrations are historical work, not a remaining rollout plan.
+`character_challenge_records`.
 
 ### Dungeon finalization
 
-`DungeonRepository.FinalizeExpedition` claims expedition settlement once per run
-by inserting `dungeon_expedition_history` keyed by the active expedition's run ID
-(`dungeon_expedition_history.id = exp.ID`). Inside `RunInTx`, it locks all participating
-expedition member characters in ascending ID order (`SELECT ... FOR UPDATE`, Rank 2),
-claims the history row, delegates surviving vitality persistence (HP/MP) and consumable inventory item deduction to shared post-battle settlement
-(`battle.ApplyPostBattleResult`), applies experience and gold rewards to each participating
-member, and delivers reward items to inventory/depot
-(Rank 3/5). Pre-cutover
-expedition `members` payloads that omit `current_mp` distinguish missing MP from explicit
-`"current_mp": 0` (`ExpeditionMember.HasCurrentMP()`): combat participant construction
-passes `nil` MP to `BuildParticipantWithState` so stored character MP is used and updated
-into the run buffer on combat completion, and non-combat settlement omits missing member MP
-from `RemainingMP` so `ApplyPostBattleResult` preserves the `SELECT ... FOR UPDATE` locked
-character's stored MP while explicit `0` MP is committed as `0`.
-If required member or run state cannot be read, settlement aborts before freezing or
-deleting the active run. Duplicate run-ID
-claims map to `ErrExpeditionAlreadyFinished`, which `internal/dungeon` treats as idempotent
-completion so post-commit Valkey `DeleteActiveExpedition` can safely retry without
-double-granting rewards or overwriting concurrent wallet updates. Escape passes
-both the owner and finalized run ID to each cleanup port;
-missing or replaced runs are a successful no-op. Valkey compares that identity
-and deletes state/rewards in one Lua invocation, while memory compares and
-deletes under its store lock. Member references are released only when their
-saved owner/run pair still matches, independently in each member's hash slot.
-SQL fallback deletion, including inside finalization, likewise requires both
-owner and run ID; replacing a fallback row also saves the new run's identity.
-Thus delayed finalization or cleanup retries cannot remove a later run or its
+`DungeonRepository.FinalizeExpedition` claims settlement once per run by inserting
+`dungeon_expedition_history` keyed by the run ID. In one transaction it locks the
+participating characters (Rank 2), then settles vitality, consumption, rewards
+and item delivery (Rank 3/5) through the shared post-battle settlement. Unreadable
+member or run state aborts settlement before the run is frozen or deleted. A
+duplicate claim (`ErrExpeditionAlreadyFinished`) is idempotent completion, so
+post-commit cleanup can retry without granting twice.
+
+Every cleanup, in Valkey and in the SQL fallback row alike, is qualified by both
+owner and run ID; a missing or replaced run is a successful no-op, and member
+references are released only while they still name that run. Delayed
+finalization or cleanup retries therefore cannot remove a later run or its
 unsettled rewards. SQL commit and Valkey cleanup remain separate boundaries.
 
 ### Dungeon treasure claims
@@ -321,13 +294,14 @@ fatigue, attempted-versus-cleared round counts and accessory bonuses.
 
 ### Challenge participant exit target
 
-**Decision: option A in [#1584](https://github.com/witchcraze/party2re/issues/1584),
-user-approved 2026-10-22.** Retain Valkey live-round authority, make run identity
-independent of leadership, and add SQL participant settlement receipts and
-recoverable publication. The runtime implements this boundary; Gateway
-exit adoption remains separate in #1208. It does not change Dungeon or introduce
-a generic cancellation framework. Gameplay evidence and exit effects belong to
-[Challenge](../design/challenge.md#individual-exit).
+**Superseded target.** [#1866](https://github.com/witchcraze/party2re/issues/1866)
+(user-approved 2026-11-23) moves Challenge onto the
+[normal-run SQL boundary](#normal-adventure-durable-command-boundary-1325) so that
+rounds use explicit player commands; Valkey live authority ends with that cutover.
+The Challenge sections of this document describe the current implementation of the
+earlier #1584 decision (Valkey live rounds, leadership-independent run identity,
+SQL participant receipts and recoverable publication) until it is deleted. Gameplay
+evidence and exit effects belong to [Challenge](../design/challenge.md#individual-exit).
 
 #### Identity and admission
 
@@ -507,20 +481,17 @@ and shared effect state in [Battle](../design/battle.md#explicit-action-resumpti
 
 SQL holds immutable admission identity, versioned run/effect state, ordered
 roster, actor/NPC timing, unique active enrollment, recipient entitlements and
-actor-owned receipts. See the [schema](../../migrations/111_normal_adventure_runs.sql)
-and [adapter](../../internal/database/adventure_run_repository.go). These records
-do not resurrect SQL waiting lobbies or establish a second Valkey authority.
+actor-owned receipts. These records do not resurrect SQL waiting lobbies or
+establish a second Valkey authority.
 
-The run snapshot stores assigned coordinates separately from encounter provenance,
-pending clear credit and the room-wide EX marker. Save the final roster after
-resolving the [old-enemy response](../design/adventure.md#combat-travel-and-encounter-replacement).
+Save the final roster after resolving the
+[old-enemy response](../design/adventure.md#combat-travel-and-encounter-replacement).
 
 Party admission takes its existing lobby lock, then serializes roster validation
 and the SQL handoff on the admission's durable run identity. Each member's
 private battle-row snapshot is captured in the Valkey lobby on create or join
-and handed off through the immutable admission record (pre-cutover lobbies
-without a captured snapshot fall back to building at enrollment), while
-remaining excluded from public lobby responses. Roster writers and
+and handed off through the immutable admission record, never through public
+lobby responses. Roster writers and
 the retained Party batch start use that same SQL boundary, including when the
 Valkey lease expires. Enrollment freezes floor 0 without combat. SQL ownership
 survives lobby cleanup failure, expiry and restart; retry finds the same admission
