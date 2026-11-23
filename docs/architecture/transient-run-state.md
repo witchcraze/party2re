@@ -5,21 +5,10 @@ is in [the database rules](../../.agents/rules/05-database-and-caching.md).
 
 ## Candidate C: Ephemeral Turn & Session Lobby
 
-| Owner | Current store | Idle lifetime |
-|---|---|---|
-| Party | `internal/party/valkey_repository.go` | 900s |
-| PvP | `internal/pvp/repository.go` | 1800s |
-| GvG | `internal/gvg/repository.go` | 1800s |
-| Casino | `internal/casino/valkey_room_repository.go` | 1800s |
-
-PvP/GvG/Casino use `party2:<domain>:room:<room_id>`,
-`party2:<domain>:rooms:active`, and character reverse mappings. Party uses its
-own lobby/ready keys. Room lists have activity-scored indices and lazy pruning;
-these are indexed operations, not an O(1) full-list guarantee.
-See [keyspace](valkey-keyspace.md) for precise names and coordination locks.
-
-Casino rooms have no SQL store (`casino_rooms` is retired); durable
-`casino_accounts` stays in SQL.
+Valkey owns live Party lobbies and PvP, GvG, and Casino rooms. Durable
+`casino_accounts` stays in SQL. Listing rooms can take work proportional to the
+size of the activity index. See the [Valkey key inventory](valkey-keyspace.md#current-key-inventory)
+for keys, lifetimes, and coordination locks.
 
 PlayerContext observes these owners through public service ports. Party's actor
 reader propagates lobby/member storage failures and performs no stale-index

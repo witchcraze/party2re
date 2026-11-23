@@ -48,7 +48,7 @@ func TestHelperProductionGuildWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	misc, err := newMiscServices(db, core, soc, econ, nil)
+	misc, err := newMiscServices(db, core, soc, econ, client)
 	if err != nil {
 		t.Fatal(err)
 	}

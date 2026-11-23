@@ -10,6 +10,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/battle"
+	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/contest"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -20,11 +21,36 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/tavern"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
+
+func TestRoomWiringRequiresValkey(t *testing.T) {
+	db := database.OpenTestDB(t)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	econ, err := newEconServices(db, core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if combat, err := newCmbtServices(db, core, soc, econ, nil); combat != nil || !errors.Is(err, pvp.ErrInvalidDependencies) {
+		t.Errorf("combat wiring error = %v, want missing PvP Valkey dependency", err)
+	}
+	if misc, err := newMiscServices(db, core, soc, econ, nil); misc != nil || !errors.Is(err, casino.ErrNilValkeyClient) {
+		t.Errorf("misc wiring error = %v, want missing Casino Valkey client", err)
+	}
+}
 
 type mockSchedRepo struct {
 	actions     []core_scheduling.ScheduledAction
