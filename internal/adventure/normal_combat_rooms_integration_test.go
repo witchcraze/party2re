@@ -99,6 +99,27 @@ func TestRunCombatEXNPCJobResponseStaysGated(t *testing.T) {
 	}
 }
 
+// During the NPC turn `%m` is still the requester, so job79's form entry reads
+// the requester's `$m{sex}` (_skill.cgi:6242,6278–6290). MP 25 leaves job79.2
+// (MP30) out of the pool, so the breath's gender gate is admitted alone.
+func TestRunCombatNPCJob79BreathUsesRequesterGender(t *testing.T) {
+	f := combatFixture(t, 1)
+	f.cfg.RNG = &stockRunRNG{} // The last choice, the breath.
+	f.restart(t)
+	foe := runEnemy("foe", 900)
+	foe.Jobs = corebattle.BattleJobs{JobID: "job-79", SP: 77, OldJobID: "starter"}
+	foe.MP, foe.MaxMP = 25, 50
+	cmd := combatRoom(t, f, f.actors[0], nil, foe)
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "defend", "defend", "", "")); err != nil {
+		t.Fatal(err)
+	}
+	r := readStockRoom(t, f, cmd.RunID)
+	// The breath's MP21 is spent; the NPC's icon is not the requester's, so no form.
+	if npc := runActorByID(r, foe.ID); npc.MP != 4 || npc.Icon != foe.Icon {
+		t.Fatalf("NPC breath: %+v", npc)
+	}
+}
+
 // A stored travel tool or book withdrawal followed by a failed asset write
 // commits no travel, combat, asset, depot or receipt change.
 func TestRunCombatAssetFailureAfterTravelOrWithdrawalRollsBack(t *testing.T) {

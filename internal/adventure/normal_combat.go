@@ -241,7 +241,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 	if result.ResponseReached && !result.Suppressed {
 		// A replaced encounter answers with its old responders, never new members.
 		if npc := travel.BeginNPCResponse(r, now); npc != "" {
-			if err := c.respond(r, npc, &level, &seals, rewards, assets, result.ArithmeticDivisor, &fx); err != nil {
+			if err := c.respond(r, npc, requester, &level, &seals, rewards, assets, result.ArithmeticDivisor, &fx); err != nil {
 				return fx, err
 			}
 			if err := r.RecordNPCResponse(npc, now); err != nil {
@@ -256,7 +256,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 
 // respond runs the selected NPC's response on the saved state. Its opponents
 // are the living members of other teams in member order.
-func (c runCombat) respond(r *NormalRun, npc string, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, divisor int, fx *RunActionEffects) error {
+func (c runCombat) respond(r *NormalRun, npc string, requester *corecharacter.Character, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, divisor int, fx *RunActionEffects) error {
 	team := r.actor(npc).TeamID
 	frame := corebattle.TargetContext{ActorID: npc}
 	before := make(map[string]bool, len(r.Battle.Actors))
@@ -281,7 +281,7 @@ func (c runCombat) respond(r *NormalRun, npc string, level *int, seals *corebatt
 	}
 	register := func(d *skill.BattleDefinitions, f *corebattle.CallbackContext) {
 		p := runPorts{damage: *f.Damage, defeat: f.Defeat, status: &corebattle.StatusContext{EffectContext: f.Damage.EffectContext, Defeat: f.Defeat}}
-		callbacks := p.callbacks(r, &saved, nil, nil)
+		callbacks := p.callbacks(r, &saved, requester, nil)
 		if f.Assets != nil {
 			callbacks.JobAssets = &corebattle.JobAssetContext{DamageContext: p.damage, DefeatContext: p.defeat, Roster: callbacks.Roster}
 		}
