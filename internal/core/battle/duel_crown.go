@@ -168,7 +168,7 @@ func (s *LifetimeState) duelReply(c *DuelCrownContext, actor, target string, rng
 }
 
 func duelReplyContext(c TargetContext, actor string) TargetContext {
-	c.duelOriginID, c.ActorID = c.ActorID, actor
+	c.sideSwapOriginID, c.ActorID = c.ActorID, actor
 	c.PartyIDs, c.EnemyIDs = c.EnemyIDs, c.PartyIDs
 	return c
 }

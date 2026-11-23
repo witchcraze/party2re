@@ -89,7 +89,7 @@ Target rules are per helper, not one global living-target filter:
 
 **NPC order decision:** preserve the original head rotation, including skipped heads. For enemy order `[A,B,C]`, when A is not interval-ready and B acts, the result is `[B,C,A]`, not `[A,C,B]`. Only B's action timestamp changes. With no eligible living NPC, no rotation occurs. Selection is `_npc_action.cgi:90–92`; rotation is `149–153`. Persist semantic order independently of SQL lock order.
 
-Adventure's ordinary tables retain all 315 source template sites (74 boss, 241 monster), including branch order and weighted appearances. Stage15 copies each ordered ally's jobs/current stats and maximum resources, and generates ten monster slots with jobs 0–87 and previous job 36/SP999. Preserve the complete generated summon pool as well as selected enemies. Stage25 chooses one of three three-boss rosters; stage26 uses room-marker priority spring/summer/autumn/winter, defaulting to spring. Reload never selects a branch or rolls stats again. Ordinary stage23 has the job21/SP10/MP30 boss; job406 is EX-only (`stage/15.cgi:13–66`; `25.cgi:16–204`; `26.cgi:16–28,623–1218`; `23.cgi:15–55`). The floor-12 EX tables (`@ex_bosses`, stages 22–25 and each stage26 season) use the same template conventions, boss scaling and summon pool; colliding source names share the ordinary encounter identity. NPC-only jobs [405](https://github.com/witchcraze/party2re/issues/1914), [406](https://github.com/witchcraze/party2re/issues/1915) and [407 with `@exx_bosses`](https://github.com/witchcraze/party2re/issues/1916) have no registered table, so their choices remain whole-action gates.
+Adventure's ordinary tables retain all 315 source template sites (74 boss, 241 monster), including branch order and weighted appearances. Stage15 copies each ordered ally's jobs/current stats and maximum resources, and generates ten monster slots with jobs 0–87 and previous job 36/SP999. Preserve the complete generated summon pool as well as selected enemies. Stage25 chooses one of three three-boss rosters; stage26 uses room-marker priority spring/summer/autumn/winter, defaulting to spring. Reload never selects a branch or rolls stats again. Ordinary stage23 has the job21/SP10/MP30 boss; job406 is EX-only (`stage/15.cgi:13–66`; `25.cgi:16–204`; `26.cgi:16–28,623–1218`; `23.cgi:15–55`). The floor-12 EX tables (`@ex_bosses`, stages 22–25 and each stage26 season) use the same template conventions, boss scaling and summon pool; colliding source names share the ordinary encounter identity.
 
 Initialization rolls each current stat as floor(base×(0.9+rand(0.3)+(party size−2)×0.1)); supplied nonzero maxima win. Hard ordinary monsters scale SP, previous SP and rewards by 1.5 before stat rolls. Custom CMP cost uses occupied slots, including duplicates, with the 1/1.1/1.2 multiplier for one/two/three slots.
 
@@ -299,13 +299,16 @@ Values that are not what they look like:
 - Job38's HP drain heals by the captured request, not returned damage; job18's extension sums returned (capped/overflow) healing, not actual HP gain (`_skill.cgi:1873–1986,3018–3069`).
 - Arrows and mana dances recover the returned MP debit, which can exceed the actual clamped loss (`_skill.cgi:3572–3686,3815–3934`).
 - Job47's wound strike can produce zero or negative power when HP exceeds MaxHP (`_skill.cgi:3418–3568`).
+- Job405's normal and wounded holy hit 4 and 5 times, not five and six. Its field step ticks a temporary field once when the 6–13 draw equals the remaining turns instead of clearing it, and a smaller draw never reaches expiry (`_skill.cgi:7903–7905,7968–7983`).
 - Job402's final CMP reduction skips the final floor clamp; its charge writes go to the first returned recipient even after redirection (`_skill.cgi:7802–7886`).
 - Job75.5 revival gives the target's pre-debit MP as HP without a MaxHP clamp; job66.6 can halve the helper's HP to 0 without defeat (`_skill.cgi:4911–4931,5791–5797`).
 - Copying (job36, book211) floors copied MP at 50 even above MaxMP (`_skill.cgi:2944–2964`; `_data.cgi:1716–1748`).
 
 Order and lifetime traps:
 
-- Values captured when the job table is built, not at execution: job84's strike multiplier (appearance, requester gender, burn field), job77's final-callback variant (temporary present or not) and group dance's MP cost (12×party size). Save them with the frozen input (`_skill.cgi:5730–5917,5929–5983,6672–6709`).
+- Values captured when the job table is built, not at execution: job84's strike multiplier (appearance, requester gender, burn field), job77's final-callback variant (temporary present or not), group dance's MP cost (12×party size) and job405's wounded variant (HP ≤ 50% before NPC start-of-action cures and poison). Save them with the frozen input (`_skill.cgi:5730–5917,5929–5983,6672–6709,7893`; `_npc_action.cgi:159`).
+- Job405's wounded chain carries each hit's tension-scaled power (×0.8), so tension held before the action scales every later hit (`_skill.cgi:8049,8067`).
+- Job405's renewal heals opponents by swapping the side arrays: each heal draws a random opponent and a fallen draw heals the caster (`_skill.cgi:7955–7963`).
 - Job86's book power reads the **current** held-book class at execution (`_skill.cgi:6859–6866`).
 - Item92's name matches job86's book pattern without a book-table row, so double use falls back to table position0 (`_data.cgi:1293`; `_skill.cgi:6876–6882`).
 - Effects that still apply on accepted no-effect or after caster death: job3/25 vulnerability, job4's flame tails, job52's area-200 vulnerability, job98's vulnerability on every original enemy (including dead, redirected or blocked), job7.8's second defeat call, and sacrifice72's defeat call.
@@ -315,7 +318,7 @@ Order and lifetime traps:
 - Job48's extension resets members through equipment before reviving them, so accessory callbacks can restore statuses first; job403 resets each enemy before reading its HP (`_skill.cgi:3418–3568,8077–8121`).
 - Duplication63 heals using the number of helpers present **before** creation. A present but fallen named helper blocks the appearance substitute. Special87 checks growth even if its damage killed the summoner (`_skill.cgi:4029–5447`).
 - Form switching registers the reverse entry last, so it wins name-keyed discovery when both forms exist. Job79's forward form compares against the requesting player's original icon, also for NPC actors (`_skill.cgi:173–217,6240–6292`).
-- NPC job95's summon has no enemy-count guard (gem82 has one); job99's escape writes HP0 only, with no defeat, reward or roster removal (`_skill.cgi:7183–7189,7409–7412`).
+- NPC job95's summon has no enemy-count guard (gem82 has one); job99's escape and job405's renewal (every ally except the caster) write HP0 only, with no defeat, reward or roster removal (`_skill.cgi:7183–7189,7409–7412,7985–7987`).
 - The operation's enemy array is built once at load from living opponents and keeps enemies defeated during the operation, so defeating the last enemy still reaches the player tail and NPC response; front/back rebuilds it with fallen opponents included (`_battle.cgi:486–493,927`; `_skill.cgi:893–899`).
 - Stage27 starts job88 at SP20, so only its first two positions are initially eligible (`stage/27.cgi:76–89`).
 
@@ -333,4 +336,4 @@ Order and lifetime traps:
 
 - Multi-row inventories leave the durable hand unknown, so player held-tool use and job50/78/86 stay gated: #2558.
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
-- NPC-only jobs 405, 406 and 407 tables: #1914, #1915, #1916.
+- NPC-only jobs 406 and 407 (with `@exx_bosses`) have no table, so their choices stay whole-action gates: #1915, #1916.

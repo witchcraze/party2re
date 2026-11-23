@@ -21,21 +21,7 @@ func (s *LifetimeState) ValidateNPCJob402(c *NPCJob402Context, id string, rng ra
 	case "npc-job-402-position-0":
 		return p.validateNPC402Hits(&child, id, "", 3, rng)
 	case "npc-job-402-position-1":
-		admission := statUpAdmission{mayReplace: make(map[string]float64)}
-		for _, stat := range []BattleStat{StatAttack, StatDefense, StatAgility} {
-			for _, target := range child.PartyIDs {
-				e := controlEffect(target, .5, CategoryMagic)
-				if err := p.validateStatUp(&child.EffectContext, e, stat, rng, admission); err != nil {
-					return err
-				}
-				p.recordStatUp205(&child.EffectContext, e, stat, &admission)
-			}
-			// Earlier helpers can cure the caster's magic seal.
-			if p.actor(c.ActorID).categorySealed(CategoryMagic) {
-				p.actor(c.ActorID).Status = ""
-			}
-		}
-		return nil
+		return p.admitNPCPartyStats(&child.EffectContext, .5, rng)
 	case "npc-job-402-position-2":
 		return p.validateNPC402Hits(&child, id, "", 2, rng)
 	case "npc-job-402-position-3", "npc-job-402-position-4":
@@ -87,38 +73,64 @@ func (s *LifetimeState) ValidateNPCJob402(c *NPCJob402Context, id string, rng ra
 }
 
 func (s *LifetimeState) validateNPC402Hits(c *NPCJob402Context, id, target string, hits int, rng random.Generator) error {
-	states := []damageContinuation{{State: s.callbackCopy(), Context: c.DamageContext}}
-	for hit := range hits {
-		argument := target
+	targets := make([]string, hits)
+	for hit := range targets {
+		targets[hit] = target
 		if id != "npc-job-402-position-3" {
-			argument = c.shift()
+			targets[hit] = c.shift()
 		}
+	}
+	return s.validateNPCHits(&c.DamageContext, c.Death, hits, func(a *LifetimeActor, hit int) TargetEffect {
+		switch {
+		case id == "npc-job-402-position-2" && hit == 1:
+			return dualAgilityEffect(targets[hit], float64(a.Attack)*1.2, CategoryPhysical, false)
+		case id == "npc-job-402-position-2":
+			return dualAgilityEffect(targets[hit], float64(a.Defense)*.6, CategoryMagic, true)
+		case id == "npc-job-402-position-3" && hit == 10:
+			return dualAgilityEffect(targets[hit], float64(a.Attack), CategoryPhysical, true)
+		case id == "npc-job-402-position-3":
+			return dualAgilityEffect(targets[hit], float64(a.Attack)*.4, CategoryPhysical, false)
+		}
+		return dualAgilityEffect(targets[hit], 110, CategoryMagic, true)
+	}, rng)
+}
+
+// validateNPCHits projects ordered single-target hits, including defeat
+// continuations; effect reads the actor as each hit's continuation left it.
+func (s *LifetimeState) validateNPCHits(c *DamageContext, death *DefeatContext, hits int, effect func(*LifetimeActor, int) TargetEffect, rng random.Generator) error {
+	states := []damageContinuation{{State: s.callbackCopy(), Context: *c}}
+	for hit := range hits {
 		var next []damageContinuation
 		for _, state := range states {
-			a := state.State.actor(c.ActorID)
-			e := dualAgilityEffect(argument, 110, CategoryMagic, true)
-			if id == "npc-job-402-position-2" {
-				e.Payload.Number = float64(a.Defense) * .6
-				if hit == 1 {
-					e = dualAgilityEffect(argument, float64(a.Attack)*1.2, CategoryPhysical, false)
-				}
-			} else if id == "npc-job-402-position-3" {
-				e = dualAgilityEffect(argument, float64(a.Attack)*.4, CategoryPhysical, false)
-				if hit == 10 {
-					e = dualAgilityEffect(argument, float64(a.Attack), CategoryPhysical, true)
-				}
-			}
-			continuations, err := state.State.projectCallbackDamage(&state.Context, c.Death, e, e.Payload.Number, hit+1 < hits, rng)
+			e := effect(state.State.actor(c.ActorID), hit)
+			continuations, err := state.State.projectCallbackDamage(&state.Context, death, e, e.Payload.Number, hit+1 < hits, rng)
 			if err != nil {
 				return err
 			}
-			if hit+1 < hits {
-				for _, continuation := range continuations {
-					next = appendDamageContinuation(next, continuation.State, continuation.Context, "")
-				}
+			for _, continuation := range continuations {
+				next = appendDamageContinuation(next, continuation.State, continuation.Context, "")
 			}
 		}
 		states = next
+	}
+	return nil
+}
+
+// admitNPCPartyStats admits the three ordered party stat helpers on p.
+func (p *LifetimeState) admitNPCPartyStats(c *EffectContext, coefficient float64, rng random.Generator) error {
+	admission := statUpAdmission{mayReplace: make(map[string]float64)}
+	for _, stat := range []BattleStat{StatAttack, StatDefense, StatAgility} {
+		for _, target := range c.PartyIDs {
+			e := controlEffect(target, coefficient, CategoryMagic)
+			if err := p.validateStatUp(c, e, stat, rng, admission); err != nil {
+				return err
+			}
+			p.recordStatUp205(c, e, stat, &admission)
+		}
+		// Earlier helpers can cure the caster's magic seal.
+		if p.actor(c.ActorID).categorySealed(CategoryMagic) {
+			p.actor(c.ActorID).Status = ""
+		}
 	}
 	return nil
 }

@@ -81,11 +81,20 @@ func (s *LifetimeState) validateAreaDamage(c *DamageContext, e TargetEffect, rng
 	projected := *s
 	projected.Actors = slices.Clone(s.Actors)
 	context := *c
-	a := projected.actor(c.ActorID)
+	if err := projected.validateTargetContext(context.TargetContext, rng); err != nil {
+		return err
+	}
+	return projected.admitAreaDamage(&context, e, rng)
+}
+
+// admitAreaDamage records one area helper on the caller's projection, so
+// repeated areas share consumed defenses and activation facts.
+func (projected *LifetimeState) admitAreaDamage(context *DamageContext, e TargetEffect, rng random.Generator) error {
+	a := projected.actor(context.ActorID)
 	if a.categorySealed(e.Category) {
 		a.Status = ""
 	}
-	decay := !projected.canPreserveAreaPower(&context, e)
+	decay := !projected.canPreserveAreaPower(context, e)
 	power := e.Payload.Number
 	if a.Extended == ExtendedAdditional && e.Category == CategoryMagic {
 		power *= 1.5
@@ -93,7 +102,7 @@ func (s *LifetimeState) validateAreaDamage(c *DamageContext, e TargetEffect, rng
 	context.AreaDamageCalls++
 	var effects []TargetEffect
 	if a.HP > 0 {
-		for _, id := range c.EnemyIDs {
+		for _, id := range context.EnemyIDs {
 			next := e
 			next.TargetID, next.Payload.Number = id, power
 			effects = append(effects, next)
@@ -102,7 +111,7 @@ func (s *LifetimeState) validateAreaDamage(c *DamageContext, e TargetEffect, rng
 			}
 		}
 	}
-	return projected.validateDamageSequence(&context, effects, rng)
+	return projected.admitDamageSequence(context, effects, rng)
 }
 
 func (s *LifetimeState) canPreserveAreaPower(c *DamageContext, e TargetEffect) bool {

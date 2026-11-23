@@ -82,9 +82,21 @@ func TestRunCombatRoyalBeeDefeatUnlocksEX(t *testing.T) {
 	}
 }
 
-// EX-only NPC jobs have no table: their response rejects the whole command.
+// The stage24 EX boss's job405 table admits its whole pool (stage/24.cgi:96–117).
+func TestRunCombatEXJob405BossAnswers(t *testing.T) {
+	f, _ := lowRunCombat(t, 1)
+	boss := runEnemy("boss", 25000)
+	boss.Jobs = corebattle.BattleJobs{JobID: "job-405", SP: 1000, OldJobID: "starter"}
+	boss.MP, boss.MaxMP, boss.Attack, boss.Defense, boss.Agility = 10000, 18000, 500, 500, 500
+	cmd := combatRoom(t, f, f.actors[0], nil, boss)
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "strike", "attack", "boss", "")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// EX-only NPC jobs without a table reject the whole command.
 func TestRunCombatEXNPCJobResponseStaysGated(t *testing.T) {
-	for _, job := range []string{"job-405", "job-406", "job-407"} {
+	for _, job := range []string{"job-406", "job-407"} {
 		t.Run(job, func(t *testing.T) {
 			f, depots := lowRunCombat(t, 1)
 			foe := runEnemy("foe", 900)
