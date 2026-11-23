@@ -124,7 +124,7 @@ func TestFutureMemory_TransactionalLifecycle(t *testing.T) {
 	futureRepo := &testFutureMemoryRepo{}
 
 	inventory, _ := coreinventory.New(char.ID)
-	frag, _ := item.NewInstance("item-207", 2)
+	frag, _ := item.NewInstance("item-207", 1)
 	_ = inventory.Add(frag)
 	invRepo := &testInventoryRepo{inventory: inventory}
 
@@ -153,8 +153,8 @@ func TestFutureMemory_TransactionalLifecycle(t *testing.T) {
 		t.Fatalf("unexpected saved snapshot: %#v", snapshot)
 	}
 	// Item consumed
-	if invRepo.inventory.Quantity("item-207") != 1 {
-		t.Fatalf("expected 1 fragment remaining, got %d", invRepo.inventory.Quantity("item-207"))
+	if invRepo.inventory.Quantity("item-207") != 0 {
+		t.Fatalf("expected no fragments remaining, got %d", invRepo.inventory.Quantity("item-207"))
 	}
 	// SP saved to state
 	if jobRepo.value.RecordedJobSP["job-05"] != 80 || jobRepo.value.RecordedJobSP["job-01"] != 40 {

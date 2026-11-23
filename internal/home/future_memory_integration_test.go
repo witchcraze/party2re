@@ -202,7 +202,7 @@ func TestHomeFutureMemory_Integration_BothSourcesAndOverFutureBoundary(t *testin
 	}{{"OverFuture0", 0}, {"OverFuture1", 1}} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFutureMemoryFixture(t, "FutMem"+tc.name[len(tc.name)-1:], tc.overFuture,
-				[]string{"fm-inv-1", "fm-inv-2"}, []string{"fm-dep-1"})
+				[]string{"fm-inv-1"}, []string{"fm-dep-1"})
 			ctx := context.Background()
 
 			res, err := f.svc.UseHomeItem(ctx, f.char.ID, f.id("fm-dep-1"), "depot")
@@ -234,23 +234,26 @@ func TestHomeFutureMemory_Integration_BothSourcesAndOverFutureBoundary(t *testin
 				t.Fatal("missing previous-job record must not be created")
 			}
 
-			// OverFuture=1 allows a second snapshot; after the last slot both are refused.
-			uses := []string{"fm-inv-1"}
+			// OverFuture=1 allows a second snapshot. Refill the hand after that use.
+			fragmentID := f.id("fm-inv-1")
 			if tc.overFuture == 1 {
-				if _, err := f.svc.UseHomeItem(ctx, f.char.ID, f.id("fm-inv-1"), "inventory"); err != nil {
+				if _, err := f.svc.UseHomeItem(ctx, f.char.ID, fragmentID, "inventory"); err != nil {
 					t.Fatalf("inventory save within OverFuture: %v", err)
 				}
-				uses = []string{"fm-inv-2"}
+				fragment, err := coreitem.NewInstance("item-207", 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := database.CreateTestInventoryWithItems(ctx, f.db, f.char.ID, []coreitem.Instance{fragment}); err != nil {
+					t.Fatal(err)
+				}
+				fragmentID = fragment.ID
 			}
-			for _, label := range uses {
-				id := f.id(label)
-				_, err := f.svc.UseHomeItem(ctx, f.char.ID, id, "inventory")
-				if !errors.Is(err, home.ErrCannotUseHere) {
-					t.Fatalf("want slot rejection, got %v", err)
-				}
-				if !f.owns(t, "inventory", id) {
-					t.Fatal("rejected item-207 must remain")
-				}
+			if _, err := f.svc.UseHomeItem(ctx, f.char.ID, fragmentID, "inventory"); !errors.Is(err, home.ErrCannotUseHere) {
+				t.Fatalf("want slot rejection, got %v", err)
+			}
+			if !f.owns(t, "inventory", fragmentID) {
+				t.Fatal("rejected item-207 must remain")
 			}
 			if got := len(f.memories(t)); got != tc.overFuture+1 {
 				t.Fatalf("want %d snapshots, got %d", tc.overFuture+1, got)
