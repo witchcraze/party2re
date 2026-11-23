@@ -186,7 +186,7 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 							file:    filename,
 							line:    pos.Line,
 							field:   fieldName,
-							message: "direct mutation or slicing of Inventory.Items is prohibited; use Inventory.Add, Consume, or Update instead",
+							message: "direct mutation or slicing of Inventory.Items is prohibited; use Inventory.Add or Consume instead",
 						})
 					}
 
@@ -212,7 +212,7 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 								file:    filename,
 								line:    pos.Line,
 								field:   fieldName,
-								message: "direct indexed mutation of Inventory.Items is prohibited; use Inventory.Add, Consume, or Update instead",
+								message: "direct indexed mutation of Inventory.Items is prohibited; use Inventory.Add or Consume instead",
 							})
 						}
 
@@ -581,12 +581,11 @@ func HackJob(cj *CharacterJob) {
 
 		// 4. Inventory Items
 		{
-			name: "Valid Inventory: Add, Consume, Update",
+			name: "Valid Inventory: Add and Consume",
 			path: "internal/feature/service.go",
 			code: `package feature
 func Manage(inv *Inventory, inst Instance) error {
 	_ = inv.Add(inst)
-	_ = inv.Update(inst)
 	return inv.Consume(inst.ID, 1)
 }`,
 			expectError: false,
@@ -600,7 +599,7 @@ func Bypass(inv *Inventory, inst Instance) {
 }`,
 			expectError: true,
 			field:       "Items",
-			errSnippet:  "use Inventory.Add, Consume, or Update",
+			errSnippet:  "use Inventory.Add or Consume",
 		},
 		{
 			name: "Violation: Inventory.Items indexed mutation",
@@ -611,7 +610,7 @@ func ModifyItem(inv *Inventory, inst Instance) {
 }`,
 			expectError: true,
 			field:       "Items",
-			errSnippet:  "use Inventory.Add, Consume, or Update",
+			errSnippet:  "use Inventory.Add or Consume",
 		},
 
 		// 5. Equipment Slots
