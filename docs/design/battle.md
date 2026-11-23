@@ -299,6 +299,7 @@ Values that are not what they look like:
 - Job38's HP drain heals by the captured request, not returned damage; job18's extension sums returned (capped/overflow) healing, not actual HP gain (`_skill.cgi:1873–1986,3018–3069`).
 - Arrows and mana dances recover the returned MP debit, which can exceed the actual clamped loss (`_skill.cgi:3572–3686,3815–3934`).
 - Job47's wound strike can produce zero or negative power when HP exceeds MaxHP (`_skill.cgi:3418–3568`).
+- Job408's aura can leave current HP above the reduced maximum. The single-target form reduces the opposing recipient returned by damage, including a cover recipient. The multi-target form reduces each originally listed opponent's maximum even when that opponent blocks or redirects the hit (`_skill.cgi:8324–8339`).
 - Job405's normal and wounded holy hit 4 and 5 times, not five and six. Its field step ticks a temporary field once when the 6–13 draw equals the remaining turns instead of clearing it, and a smaller draw never reaches expiry (`_skill.cgi:7903–7905,7968–7983`).
 - Job402's final CMP reduction skips the final floor clamp; its charge writes go to the first returned recipient even after redirection (`_skill.cgi:7802–7886`).
 - Job75.5 revival gives the target's pre-debit MP as HP without a MaxHP clamp; job66.6 can halve the helper's HP to 0 without defeat (`_skill.cgi:4911–4931,5791–5797`).
@@ -336,4 +337,4 @@ Order and lifetime traps:
 ## Open gaps
 
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
-- NPC-only jobs 406 and 408 (the goddess job407 summons) have no table, so their choices stay whole-action gates: #1915, #2692.
+- NPC-only job406 has no table, so its choices stay a whole-action gate ([#1915](https://github.com/witchcraze/party2re/issues/1915)).

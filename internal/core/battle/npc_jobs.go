@@ -62,6 +62,12 @@ func NPCJobEntries(job int) []CallbackEntry {
 			{ID: "npc-job-407-position-2", Name: "ice-storm", MPCost: 55},
 			{ID: "npc-job-407-position-3", Name: "freezing-wave", MPCost: 66},
 		}
+	case 408:
+		return []CallbackEntry{
+			{ID: "npc-job-408-position-0", Name: "divine-aura", MPCost: 75},
+			{ID: "npc-job-408-position-1", Name: "crystal-storm", MPCost: 89},
+			{ID: "npc-job-408-position-2", Name: "freezing-wave", MPCost: 87},
+		}
 	case 403:
 		return []CallbackEntry{
 			{ID: "npc-job-403-position-0", Name: "neutral-wave", RequiredSP: 10, MPCost: 34},
