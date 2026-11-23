@@ -39,7 +39,7 @@ func TestCombatTravelUnsealNotOnAssignmentOrExit(t *testing.T) {
 	if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, `{"floor":10}`)); err != nil {
 		t.Fatal(err)
 	}
-	f.send(t, run, 0, "kill", "")
+	f.kill(t, run, 0)
 	addTravelTool(t, f, 0, "item-070")
 	if _, err := f.svc.Command(context.Background(), travelCommand(t, f, run, 0, `{}`)); err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestCombatTravelUnsealTreasureReceiptSQL(t *testing.T) {
 					t.Fatal(err)
 				}
 				run = entry.Command.RunID
-				f.send(t, run, 1, "fall", "") // Fallen enrolled players also receive the source event.
+				f.stage(t, run, fall(f.actors[1].ID)) // Fallen enrolled players also receive the source event.
 			}
 			for _, definition := range []string{"item-070", "item-107"} {
 				addTravelTool(t, f, 0, definition)

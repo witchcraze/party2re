@@ -1,4 +1,4 @@
-package adventure
+package runhost
 
 import (
 	"encoding/json"
@@ -9,12 +9,11 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
-	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-func ordinaryTestOperation(t *testing.T, r *NormalRun, ctx NormalOperationContext, cmd runhost.Command) (*corebattle.PlayerOperation, error) {
+func ordinaryTestOperation(t *testing.T, r *State, ctx OperationContext, cmd Command) (*corebattle.PlayerOperation, error) {
 	t.Helper()
-	ops, err := r.normalOperations(cmd, ctx)
+	ops, err := r.operations(cmd, ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -22,7 +21,7 @@ func ordinaryTestOperation(t *testing.T, r *NormalRun, ctx NormalOperationContex
 	if err != nil {
 		return nil, err
 	}
-	if parsed.Kind != RunOperationBattle {
+	if parsed.Kind != OperationBattle {
 		t.Fatalf("expected battle action, got %+v", parsed)
 	}
 	targets := ops.ctx.Callback.TargetContext
@@ -31,7 +30,7 @@ func ordinaryTestOperation(t *testing.T, r *NormalRun, ctx NormalOperationContex
 	return &corebattle.PlayerOperation{First: parsed.First.PlayerAction, Tail: corebattle.PlayerTailContext{DamageContext: damage, DefeatContext: defeat}, ResponseEnabled: true}, nil
 }
 
-func applyOrdinaryTestAction(t *testing.T, r *NormalRun, ctx NormalOperationContext, cmd runhost.Command, rng random.Generator) (corebattle.PlayerOperationResult, error) {
+func applyOrdinaryTestAction(t *testing.T, r *State, ctx OperationContext, cmd Command, rng random.Generator) (corebattle.PlayerOperationResult, error) {
 	t.Helper()
 	op, err := ordinaryTestOperation(t, r, ctx, cmd)
 	if err != nil {
@@ -54,9 +53,9 @@ func TestOrdinaryFormationUsesMemberScanAndSurvivesReload(t *testing.T) {
 	r.Admission.Speed = 10
 	now := time.Unix(100, 0)
 	r.LastActions = map[string]time.Time{"e": now}
-	rng := &ordinaryRNG{value: .5}
+	rng := &fixedRNG{value: .5}
 
-	result, err := applyOrdinaryTestAction(t, r, ctx, runhost.Command{ActorID: "d", Input: "＠まえ"}, rng)
+	result, err := applyOrdinaryTestAction(t, r, ctx, Command{ActorID: "d", Input: "＠まえ"}, rng)
 	if err != nil || !result.Accepted || !result.ResponseReached || r.Battle.SkillBans["unrelated"] != 1 {
 		t.Fatalf("formation did not reach the ordinary tail: %+v %v", result, err)
 	}
@@ -70,11 +69,11 @@ func TestOrdinaryFormationUsesMemberScanAndSurvivesReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var loaded NormalRun
+	var loaded State
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatal(err)
 	}
-	result, err = applyOrdinaryTestAction(t, &loaded, ctx, runhost.Command{ActorID: "a", Action: "back"}, rng)
+	result, err = applyOrdinaryTestAction(t, &loaded, ctx, Command{ActorID: "a", Action: "back"}, rng)
 	var members []string
 	for _, a := range loaded.Battle.Actors {
 		members = append(members, a.ID)
@@ -109,15 +108,15 @@ func TestOrdinarySurvivalUsesSharedHealingAndLateCost(t *testing.T) {
 			if !tc.encounter {
 				r.Actor("c").HP = 0
 			}
-			cmd := runhost.Command{ActorID: "a", Input: "＠サバイバル>Bob"}
-			parsed, err := r.ParseNormalOperation(cmd, ctx)
+			cmd := Command{ActorID: "a", Input: "＠サバイバル>Bob"}
+			parsed, err := r.parseOperation(cmd, ctx, nil)
 			if err != nil || parsed.First.Cost != tc.pay || (parsed.First.EntryID == "job-78-entry-3") != tc.encounter {
 				t.Fatalf("survival binding: %+v %v", parsed, err)
 			}
 			if tc.encounter {
 				// The existing job callback has its own port and identity.
 				frame := corebattle.CallbackContext{TargetContext: corebattle.TargetContext{ActorID: "a", PartyIDs: []string{"a", "b"}, EnemyIDs: []string{"c"}}}
-				err = r.Battle.ApplyInvocations(&frame, ctx.Definitions.Invocations, []corebattle.CallbackInvocation{parsed.First.Invocation}, &ordinaryRNG{value: .5})
+				err = r.Battle.ApplyInvocations(&frame, ctx.Definitions.Invocations, []corebattle.CallbackInvocation{parsed.First.Invocation}, &fixedRNG{value: .5})
 			} else {
 				op, err := ordinaryTestOperation(t, r, ctx, cmd)
 				if err != nil {
@@ -131,7 +130,7 @@ func TestOrdinarySurvivalUsesSharedHealingAndLateCost(t *testing.T) {
 					}
 					return facts, err
 				}
-				result, applyErr := r.applyPlayerOperation(op, &ordinaryRNG{value: .5})
+				result, applyErr := r.applyPlayerOperation(op, &fixedRNG{value: .5})
 				if applyErr != nil || !result.Accepted || result.ResponseReached {
 					t.Fatalf("survival result: %+v %v", result, applyErr)
 				}
@@ -150,23 +149,23 @@ func TestOrdinarySeparatorIsHiddenButRunsTheTail(t *testing.T) {
 	a.Jobs.OldJobID, a.Jobs.OldSP, a.CMPNeedCharge = "job-01", 1, 3
 	a.Custom = &corebattle.CustomLoadout{Name: "br", Gems: [3]string{"missing"}}
 	a.Temporary = corebattle.TemporaryDefense
-	cmd := runhost.Command{ActorID: "a", Input: "＠br"}
-	choices, err := r.DiscoverNormalOperations(cmd, ctx)
-	if err != nil || slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "br" || c.Action == "custom" }) {
+	cmd := Command{ActorID: "a", Input: "＠br"}
+	choices, err := r.DiscoverOperations(cmd, ctx, nil)
+	if err != nil || slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "br" || c.Action == "custom" }) {
 		t.Fatalf("separator is visible: %+v %v", choices, err)
 	}
-	comment, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Input: "＠unknown"}, ctx)
-	if err != nil || comment.Kind != RunOperationComment {
+	comment, err := r.parseOperation(Command{ActorID: "a", Input: "＠unknown"}, ctx, nil)
+	if err != nil || comment.Kind != OperationComment {
 		t.Fatalf("unknown command: %+v %v", comment, err)
 	}
-	result, err := applyOrdinaryTestAction(t, r, ctx, cmd, &ordinaryRNG{value: .5})
+	result, err := applyOrdinaryTestAction(t, r, ctx, cmd, &fixedRNG{value: .5})
 	if err != nil || !result.Accepted || !result.NormalAction || !result.ResponseReached || r.Actor("a").Temporary != "" || r.Actor("a").CMPCharge != 1 {
 		t.Fatalf("separator did not reach the ordinary tail: %+v %v", result, err)
 	}
 	a = r.Actor("a")
 	a.Abilities = []string{"cursed"}
-	comment, err = r.ParseNormalOperation(cmd, ctx)
-	if err != nil || comment.Kind != RunOperationComment {
+	comment, err = r.parseOperation(cmd, ctx, nil)
+	if err != nil || comment.Kind != OperationComment {
 		t.Fatalf("unlisted separator: %+v %v", comment, err)
 	}
 }
@@ -181,9 +180,9 @@ func TestOrdinaryActionsRejectWithoutChangingTheRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rng := &ordinaryRNG{}
+	rng := &fixedRNG{}
 	for _, action := range []string{"front", "between-encounter-survival"} {
-		if _, err := applyOrdinaryTestAction(t, r, ctx, runhost.Command{ActorID: "a", Action: action}, rng); !errors.Is(err, runhost.ErrUnavailable) {
+		if _, err := applyOrdinaryTestAction(t, r, ctx, Command{ActorID: "a", Action: action}, rng); !errors.Is(err, ErrUnavailable) {
 			t.Fatalf("%s rejected with %v", action, err)
 		}
 	}
@@ -194,7 +193,7 @@ func TestOrdinaryActionsRejectWithoutChangingTheRun(t *testing.T) {
 
 	r.Actor("c").HP = 100
 	delete(r.Battle.SkillBans, "front")
-	op, err := ordinaryTestOperation(t, r, ctx, runhost.Command{ActorID: "b", Action: "front"})
+	op, err := ordinaryTestOperation(t, r, ctx, Command{ActorID: "b", Action: "front"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,3 +216,13 @@ func TestOrdinaryActionsRejectWithoutChangingTheRun(t *testing.T) {
 		t.Fatalf("failed tail changed saved formation: %v", err)
 	}
 }
+
+// fixedRNG draws value for every float and its scaled integer.
+type fixedRNG struct {
+	value float64
+	calls int
+}
+
+func (r *fixedRNG) Float64() float64 { r.calls++; return r.value }
+func (r *fixedRNG) Intn(n int) int   { return int(r.Float64() * float64(n)) }
+func (r *fixedRNG) IntN(n int) int   { return r.Intn(n) }

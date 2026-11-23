@@ -1,4 +1,4 @@
-package adventure
+package runhost
 
 import (
 	"errors"
@@ -12,31 +12,30 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/skill"
-	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-type RunOperationKind string
+type OperationKind string
 
 const (
-	RunOperationBattle     RunOperationKind = "battle"
-	RunOperationRoom       RunOperationKind = "room"
-	RunOperationComment    RunOperationKind = "comment"
-	RunOperationWhisper    RunOperationKind = "whisper"
-	RunOperationScreenshot RunOperationKind = "screenshot"
+	OperationBattle     OperationKind = "battle"
+	OperationRoom       OperationKind = "room"
+	OperationComment    OperationKind = "comment"
+	OperationWhisper    OperationKind = "whisper"
+	OperationScreenshot OperationKind = "screenshot"
 )
 
-// RunOperationChoice describes eligibility in the supplied input and port
+// OperationChoice describes eligibility in the supplied input and port
 // context. A gated choice may be shown but cannot be submitted as executable.
-type RunOperationChoice struct {
+type OperationChoice struct {
 	Action, Name string
-	Kind         RunOperationKind
+	Kind         OperationKind
 	MPCost       int
 	Gated        bool
 }
 
-// NormalOperationContext supplies operation-local battle ports. The requester
+// OperationContext supplies operation-local battle ports. The requester
 // is read separately from the temporary battle actor for stock and appearance.
-type NormalOperationContext struct {
+type OperationContext struct {
 	Definitions skill.BattleDefinitions
 	Callback    corebattle.CallbackContext
 	Requester   *corecharacter.Character
@@ -47,35 +46,37 @@ type NormalOperationContext struct {
 	Fields     *corebattle.NamedFieldContext
 }
 
-type runOperationCandidate struct {
-	RunOperationChoice
+type candidate struct {
+	OperationChoice
+	check    func(string) error
 	binding  corebattle.CallbackBinding
 	key      string
 	heldTool string
 	custom   bool
 }
 
-type normalOperations struct {
-	run      *NormalRun
+type operations struct {
+	run      *State
 	state    corebattle.LifetimeState
 	actor    *corebattle.LifetimeActor
-	ctx      NormalOperationContext
+	ctx      OperationContext
 	order    []string
-	byKey    map[string]runOperationCandidate
+	byKey    map[string]candidate
 	treasure bool
 }
 
 var separatorKey = skill.OperationNameKey("br")
 
-// DiscoverNormalOperations uses saved encounter membership and the same
-// argument-dependent admission as parsing. Authorization belongs to the caller.
-func (r *NormalRun) DiscoverNormalOperations(cmd runhost.Command, ctx NormalOperationContext) ([]RunOperationChoice, error) {
-	ops, err := r.normalOperations(cmd, ctx)
+// DiscoverOperations uses saved encounter membership and the same
+// argument-dependent admission as parsing; room holds the room library's
+// add_battle_action entries. Authorization belongs to the caller.
+func (r *State) DiscoverOperations(cmd Command, ctx OperationContext, room []Choice) ([]OperationChoice, error) {
+	ops, err := r.operations(cmd, ctx, room)
 	if err != nil {
 		return nil, err
 	}
-	choices := make([]RunOperationChoice, 0, len(ops.order))
-	checked := make(map[string]RunOperationChoice, len(ops.byKey))
+	choices := make([]OperationChoice, 0, len(ops.order))
+	checked := make(map[string]OperationChoice, len(ops.byKey))
 	for _, key := range ops.order {
 		if key == separatorKey {
 			continue
@@ -83,7 +84,7 @@ func (r *NormalRun) DiscoverNormalOperations(cmd runhost.Command, ctx NormalOper
 		choice, exists := checked[key]
 		if !exists {
 			candidate := ops.byKey[key]
-			choice = candidate.RunOperationChoice
+			choice = candidate.OperationChoice
 			_, err := ops.bind(candidate, cmd.TargetID, cmd.Input, false)
 			choice.Gated = err != nil
 			checked[key] = choice
@@ -93,24 +94,24 @@ func (r *NormalRun) DiscoverNormalOperations(cmd runhost.Command, ctx NormalOper
 	return choices, nil
 }
 
-func (r *NormalRun) normalOperations(cmd runhost.Command, ctx NormalOperationContext) (*normalOperations, error) {
+func (r *State) operations(cmd Command, ctx OperationContext, room []Choice) (*operations, error) {
 	actorID := cmd.ActorID
 	if r == nil || actorID == "" || r.TimedOut {
-		return nil, runhost.ErrConflict
+		return nil, ErrConflict
 	}
-	ops := &normalOperations{run: r, actor: r.Actor(actorID), ctx: ctx, byKey: make(map[string]runOperationCandidate)}
+	ops := &operations{run: r, actor: r.Actor(actorID), ctx: ctx, byKey: make(map[string]candidate)}
 	if !slices.Contains(r.Roster, actorID) {
 		if ops.actor != nil {
-			return nil, runhost.ErrForbidden
+			return nil, ErrForbidden
 		}
-		ops.addSpecial("whisper", "ささやき", RunOperationWhisper)
-		ops.addSpecial("exit", "にげる", RunOperationRoom)
-		ops.addSpecial("screenshot", "すくしょ", RunOperationScreenshot)
+		ops.addSpecial("whisper", "ささやき", OperationWhisper)
+		ops.addSpecial("exit", "にげる", OperationRoom)
+		ops.addSpecial("screenshot", "すくしょ", OperationScreenshot)
 		return ops, nil
 	}
 	a := ops.actor
 	if a == nil || a.NPC {
-		return nil, runhost.ErrForbidden
+		return nil, ErrForbidden
 	}
 
 	state, frame, inspection, err := r.ProjectCombat(actorID)
@@ -118,7 +119,7 @@ func (r *NormalRun) normalOperations(cmd runhost.Command, ctx NormalOperationCon
 		return nil, err
 	}
 	ops.state = state
-	ops.actor = runhost.FindActor(ops.state.Actors, actorID)
+	ops.actor = findActor(ops.state.Actors, actorID)
 	a = ops.actor
 	ops.ctx.Callback.TargetContext = frame
 	if len(ops.ctx.Callback.Inspection) == 0 {
@@ -132,7 +133,7 @@ func (r *NormalRun) normalOperations(cmd runhost.Command, ctx NormalOperationCon
 	}
 
 	cursed := slices.Contains(a.Abilities, "cursed")
-	ops.treasure = slices.ContainsFunc(r.Boxes, runhost.TreasureBox.IsUnopened)
+	ops.treasure = slices.ContainsFunc(r.Boxes, TreasureBox.IsUnopened)
 	enemies := len(frame.EnemyIDs) > 0
 	combat := r.Round > 0 && enemies
 	jobs := a.Jobs
@@ -156,13 +157,13 @@ func (r *NormalRun) normalOperations(cmd runhost.Command, ctx NormalOperationCon
 		ops.addBattle("front", "front", "まえ", "front")
 		ops.addBattle("back", "back", "うしろ", "back")
 	}
-	ops.addSpecial("whisper", "ささやき", RunOperationWhisper)
-	ops.addSpecial("exit", "にげる", RunOperationRoom)
-	ops.addSpecial("screenshot", "すくしょ", RunOperationScreenshot)
+	ops.addSpecial("whisper", "ささやき", OperationWhisper)
+	ops.addSpecial("exit", "にげる", OperationRoom)
+	ops.addSpecial("screenshot", "すくしょ", OperationScreenshot)
 	if r.Round == 0 {
-		ops.addSpecial("invite", "さそう", RunOperationRoom)
+		ops.addSpecial("invite", "さそう", OperationRoom)
 		if r.LeaderID == actorID {
-			ops.addSpecial("kick", "きっく", RunOperationRoom)
+			ops.addSpecial("kick", "きっく", OperationRoom)
 		}
 	}
 	if !cursed {
@@ -175,18 +176,18 @@ func (r *NormalRun) normalOperations(cmd runhost.Command, ctx NormalOperationCon
 			}
 		}
 	}
-	if !r.LivingEnemies() && (r.Round != 0 || r.LeaderID == actorID) && (r.Round < TreasureRoomFloor || r.HasEX() && r.Round <= EXBossFloor) {
-		ops.addSpecial("advance", "すすむ", RunOperationRoom)
-	}
-	if isTreasureFloor(r.Round) {
-		ops.addSpecial("chest", "しらべる", RunOperationRoom)
+	for _, c := range room {
+		ops.addSpecial(c.Action, c.Source, OperationRoom)
+		listed := ops.byKey[skill.OperationNameKey(c.Source)]
+		listed.check = c.Check
+		ops.byKey[skill.OperationNameKey(c.Source)] = listed
 	}
 	if enemies && !cursed {
 		ops.addCustom()
 	}
 	if p := ctx.Requester; p != nil && !enemies {
 		if exp, err := progression.ExperienceForNextLevelWithMax(p.Level, progression.MaxLevelForCharacter(p)); err == nil && p.Experience >= exp {
-			ops.addBattle(stockLevelAction, stockLevelAction, "すとっく", stockLevelAction)
+			ops.addBattle(StockLevelAction, StockLevelAction, "すとっく", StockLevelAction)
 		}
 	}
 	// Names are source keys; a repeated key resolves to its last candidate.
@@ -209,24 +210,24 @@ func (r *NormalRun) normalOperations(cmd runhost.Command, ctx NormalOperationCon
 	return ops, nil
 }
 
-func (o *normalOperations) add(c runOperationCandidate) {
+func (o *operations) add(c candidate) {
 	o.order = append(o.order, c.key)
 	o.byKey[c.key] = c
 }
 
-func (o *normalOperations) addSpecial(action, source string, kind RunOperationKind) {
-	o.add(runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: action, Name: action, Kind: kind}, key: skill.OperationNameKey(source)})
+func (o *operations) addSpecial(action, source string, kind OperationKind) {
+	o.add(candidate{OperationChoice: OperationChoice{Action: action, Name: action, Kind: kind}, key: skill.OperationNameKey(source)})
 }
 
-func (o *normalOperations) addBattle(action, name, source, entry string) {
-	c := runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: action, Name: name, Kind: RunOperationBattle}, key: skill.OperationNameKey(source)}
+func (o *operations) addBattle(action, name, source, entry string) {
+	c := candidate{OperationChoice: OperationChoice{Action: action, Name: name, Kind: OperationBattle}, key: skill.OperationNameKey(source)}
 	if entry != "" {
 		c.binding.Invocation = corebattle.CallbackInvocation{Kind: "entry", EntryID: entry}
 	}
 	o.add(c)
 }
 
-func (o *normalOperations) addJob(id string, sp int, previous bool) {
+func (o *operations) addJob(id string, sp int, previous bool) {
 	if sp == 0 {
 		return
 	}
@@ -248,7 +249,7 @@ func (o *normalOperations) addJob(id string, sp int, previous bool) {
 	}
 }
 
-func (o *normalOperations) extendedJob(id string) bool {
+func (o *operations) extendedJob(id string) bool {
 	a := o.actor
 	if id == "job-73" {
 		return false
@@ -267,14 +268,14 @@ func (o *normalOperations) extendedJob(id string) bool {
 	return false
 }
 
-func (o *normalOperations) addListed(entry corebattle.CallbackEntry, sp int) {
+func (o *operations) addListed(entry corebattle.CallbackEntry, sp int) {
 	o.addBinding(corebattle.CallbackBinding{
 		CallbackEntry: entry,
 		Invocation:    corebattle.CallbackInvocation{Kind: "entry", EntryID: entry.ID},
 	}, sp)
 }
 
-func (o *normalOperations) addBinding(binding corebattle.CallbackBinding, sp int) {
+func (o *operations) addBinding(binding corebattle.CallbackBinding, sp int) {
 	entry := binding.CallbackEntry
 	if entry.RequiredSP > sp {
 		return
@@ -295,10 +296,10 @@ func (o *normalOperations) addBinding(binding corebattle.CallbackBinding, sp int
 	if cost > o.actor.MP {
 		return
 	}
-	c := runOperationCandidate{
-		RunOperationChoice: RunOperationChoice{Action: entry.ID, Name: entry.Name, Kind: RunOperationBattle, MPCost: cost},
-		binding:            binding,
-		key:                key,
+	c := candidate{
+		OperationChoice: OperationChoice{Action: entry.ID, Name: entry.Name, Kind: OperationBattle, MPCost: cost},
+		binding:         binding,
+		key:             key,
 	}
 	if skill.IsCallOperationKey(key) && slices.Contains(o.actor.ItemDefinitionIDs, "item-165") {
 		c.MPCost = 0
@@ -306,7 +307,7 @@ func (o *normalOperations) addBinding(binding corebattle.CallbackBinding, sp int
 	o.add(c)
 }
 
-func (o *normalOperations) addGear() {
+func (o *operations) addGear() {
 	a := o.actor
 	for _, id := range a.ItemDefinitionIDs {
 		if gear, ok := skill.OperationGear(id); ok {
@@ -315,7 +316,7 @@ func (o *normalOperations) addGear() {
 	}
 }
 
-func (o *normalOperations) addHeldTool() error {
+func (o *operations) addHeldTool() error {
 	var held *string
 	if assets := o.ctx.Callback.Assets; assets != nil {
 		held = assets.HeldToolID
@@ -352,7 +353,7 @@ func (o *normalOperations) addHeldTool() error {
 	return nil
 }
 
-func (o *normalOperations) addBetweenEncounter() {
+func (o *operations) addBetweenEncounter() {
 	if len(o.ctx.Callback.EnemyIDs) != 0 || o.treasure {
 		return
 	}
@@ -385,7 +386,7 @@ func (o *normalOperations) addBetweenEncounter() {
 	}
 }
 
-func (o *normalOperations) addCustom() {
+func (o *operations) addCustom() {
 	a := o.actor
 	if a.Custom == nil || a.Custom.Name == "" || a.CMP < a.Custom.Cost || a.Custom.Gems == [3]string{} {
 		return
@@ -395,5 +396,5 @@ func (o *normalOperations) addCustom() {
 	if _, exists := o.byKey[key]; exists {
 		return
 	}
-	o.add(runOperationCandidate{RunOperationChoice: RunOperationChoice{Action: "custom", Name: name, Kind: RunOperationBattle}, key: key, custom: true})
+	o.add(candidate{OperationChoice: OperationChoice{Action: "custom", Name: name, Kind: OperationBattle}, key: key, custom: true})
 }

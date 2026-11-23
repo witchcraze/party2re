@@ -9,24 +9,15 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-type ordinaryCombat struct{ fieldCalls int }
+// levelCharacters reads every requester at level 1.
+type levelCharacters struct{ runhost.Characters }
 
-func (*ordinaryCombat) PrepareAdvance(context.Context, *NormalRun, string) error { return nil }
-func (c *ordinaryCombat) PrepareBossField(_ context.Context, r *NormalRun, id string) error {
-	c.fieldCalls++
-	frame := corebattle.TargetContext{ActorID: id, EnemyIDs: r.Enemies}
-	for _, a := range r.Battle.Actors {
-		if a.TeamID == r.Actor(id).TeamID {
-			frame.PartyIDs = append(frame.PartyIDs, a.ID)
-		}
-	}
-	return r.Battle.ApplySpecialBossField(&corebattle.EquipmentResetContext{TargetContext: frame}, &ordinaryRNG{})
-}
-func (*ordinaryCombat) ExecuteRunAction(context.Context, *NormalRun, runhost.Command) (RunActionEffects, error) {
-	return RunActionEffects{}, runhost.ErrUnavailable
+func (levelCharacters) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	return corecharacter.Character{ID: id, Level: 1}, nil
 }
 
 func TestOrdinaryAdvanceFreezesCompleteEncounterAndCaps(t *testing.T) {
@@ -53,13 +44,12 @@ func TestOrdinaryAdvanceFreezesCompleteEncounterAndCaps(t *testing.T) {
 	helper.BaseStats.Attack = 600
 	party = append(party, helper)
 	r := NormalRun{State: runhost.State{ID: "run", Round: 9, Roster: []string{"a", "b"}, Battle: corebattle.LifetimeState{Actors: party}}, Stage: stage}
-	combat := &ordinaryCombat{}
-	s := NormalRunService{cfg: NormalRunConfig{Monsters: monsters, Combat: combat, RNG: &ordinaryRNG{}}}
+	s := NormalRunService{cfg: NormalRunConfig{Monsters: monsters, Characters: levelCharacters{}, RNG: &ordinaryRNG{}}}
 	if err := s.advance(context.Background(), &r, "a"); err != nil {
 		t.Fatal(err)
 	}
-	if r.Round != 10 || r.EncounterFloor != 10 || len(r.Enemies) != 3 || len(r.EncounterPool) != 6 || !r.Battle.SpecialBossField || combat.fieldCalls != 1 {
-		t.Fatalf("%+v field calls%d", r, combat.fieldCalls)
+	if r.Round != 10 || r.EncounterFloor != 10 || len(r.Enemies) != 3 || len(r.EncounterPool) != 6 || !r.Battle.SpecialBossField {
+		t.Fatalf("%+v", r)
 	}
 	if r.Actor("helper").MaxHP != 999 || r.Actor("helper").Attack != 255 || r.Actor(r.Enemies[0]).HP != 5000 {
 		t.Fatal("helper omitted from party scaling/caps")

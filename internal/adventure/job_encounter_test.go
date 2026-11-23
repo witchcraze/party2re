@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -35,11 +36,11 @@ func TestJobEncounterRoomReplacementRetainsRoomFacts(t *testing.T) {
 		}
 		before := r.Recipients["a"]
 		fields := r.Battle.Fields
-		ctx := runhost.CommandContext(context.Background(), r.ID)
-		c, transition, err := s.PrepareJobEncounters(ctx, r, "a", &reset)
+		room, transition, err := s.prepareJobEncounters(context.Background(), r, "a", &reset)
 		if err != nil {
 			t.Fatal(err)
 		}
+		c := jobEncounterContext(r, room, &reset)
 		var d skill.BattleDefinitions
 		d.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{JobEncounters: c}, 2)
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"old"}}
@@ -80,4 +81,25 @@ func TestJobEncounterRoomReplacementRetainsRoomFacts(t *testing.T) {
 			t.Fatal("reload changed room state")
 		}
 	}
+}
+
+// jobEncounterContext binds room as the host does for a player step that
+// executes on r's own combat state.
+func jobEncounterContext(r *NormalRun, room runhost.JobRoom, reset *corebattle.EquipmentResetContext) *corebattle.JobEncounterContext {
+	frame := reset.TargetContext
+	jobRoom := &corebattle.JobRoomContext{ActorID: frame.ActorID, NormalStage: true, Floor: r.Round, Cursor: reset.Cursor, Validate: room.Validate}
+	for _, box := range r.Boxes {
+		if box.IsUnopened() {
+			jobRoom.TreasureIDs = append(jobRoom.TreasureIDs, box.ID)
+		}
+	}
+	jobRoom.Apply = func(id string) (corebattle.TargetContext, error) {
+		if err := room.Apply(id); err != nil {
+			return frame, err
+		}
+		jobRoom.Floor, jobRoom.Cursor = r.Round, reset.Cursor
+		frame.EnemyIDs, frame.MemberOnlyIDs = slices.Clone(r.Enemies), nil
+		return frame, nil
+	}
+	return &corebattle.JobEncounterContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: frame}}, Room: jobRoom}
 }

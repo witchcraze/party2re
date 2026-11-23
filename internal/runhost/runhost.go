@@ -17,6 +17,8 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 var (
@@ -170,8 +172,23 @@ type Characters interface {
 	Update(context.Context, corecharacter.Character) error
 }
 
+// Inventories locks party inventories before the requester's asset session
+// and saves a changed tool hand inside it.
 type Inventories interface {
 	FindByCharacterID(context.Context, string) (coreinventory.Inventory, error)
+	FindByCharacterIDForUpdate(context.Context, string) (coreinventory.Inventory, error)
+	Save(context.Context, coreinventory.Inventory) error
+}
+
+type Blessings interface {
+	GetActiveBlessing(context.Context, string) (string, error)
+}
+
+// JobAssetDepots locks and saves the requesting player's depot inside the
+// ambient Command transaction, after the economy runner's inventory lock.
+type JobAssetDepots interface {
+	FindByCharacterIDForUpdate(context.Context, string) (depot.Depot, error)
+	Save(context.Context, depot.Depot) error
 }
 
 type ActorBuilder interface {
@@ -220,15 +237,6 @@ type Room[R any] interface {
 	Conditional(r *R) bool
 }
 
-// Combat executes an explicit player operation and its NPC response, and the
-// stock-level operation. It must admit the action before effects, use the
-// ambient transaction and return a rejection rather than absorb it, so that
-// Command saves neither the run nor a receipt.
-type Combat[R any] interface {
-	Execute(ctx context.Context, r *R, cmd Command) (Effects, error)
-	StockLevel(ctx context.Context, r *R, cmd Command, requester corecharacter.Character, now time.Time) error
-}
-
 // Effects are one command's new earnings, consumption and settlement facts.
 type Effects struct {
 	Earnings        map[string]Earnings
@@ -256,7 +264,17 @@ type Config[R any] struct {
 	CheckEntry  func(context.Context, string) error
 	ExitEffects func(context.Context, string) error
 	Room        Room[R]
-	Combat      Combat[R]
+	// CombatRoom is Room's part of explicit combat; nil keeps the host defaults.
+	CombatRoom CombatRoom[R]
+	Blessings  Blessings
+
+	// The requester's asset session for combat callbacks (job50/job78/job86);
+	// without a runner, combat runs without one. JobAssetEquipment keeps
+	// equipment_slots on a changed tool hand; explicit test adapters may omit it.
+	JobAssetRunner    economy.TransactionRunner
+	JobAssetHelpers   func(context.Context) ([]int, error)
+	JobAssetDepots    JobAssetDepots
+	JobAssetEquipment depot.EquipmentRepository
 }
 
 type Service[R any, P Snapshot[R]] struct{ cfg Config[R] }
@@ -275,23 +293,25 @@ func (s *Service[R, P]) SetExitEffects(apply func(context.Context, string) error
 	s.cfg.ExitEffects = apply
 }
 
+func (s *Service[R, P]) SetBlessings(provider Blessings) { s.cfg.Blessings = provider }
+
 // ID derives a run identity from an admission generation.
 func (s *Service[R, P]) ID(generation string) string {
 	h := sha256.Sum256([]byte(s.cfg.Kind + ":" + generation))
 	return hex.EncodeToString(h[:16])
 }
 
-type commandContext struct{}
+type commandKey struct{}
 type admissionContext struct{}
 
-// CommandContext marks ctx as running inside runID's command transaction.
-func CommandContext(ctx context.Context, runID string) context.Context {
-	return context.WithValue(ctx, commandContext{}, runID)
+// commandContext marks ctx as running inside runID's command transaction.
+func commandContext(ctx context.Context, runID string) context.Context {
+	return context.WithValue(ctx, commandKey{}, runID)
 }
 
-// InCommand reports whether ctx runs inside runID's command transaction.
-func InCommand(ctx context.Context, runID string) bool {
-	return ctx.Value(commandContext{}) == runID
+// inCommand reports whether ctx runs inside runID's command transaction.
+func inCommand(ctx context.Context, runID string) bool {
+	return ctx.Value(commandKey{}) == runID
 }
 
 // CheckMutation protects conflicting service mutations without taking a run
@@ -301,7 +321,7 @@ func (s *Service[R, P]) CheckMutation(ctx context.Context, actor string) error {
 	if err != nil {
 		return err
 	}
-	if run != nil && !InCommand(ctx, run.RunID) {
+	if run != nil && !inCommand(ctx, run.RunID) {
 		return ErrBusy
 	}
 	return nil

@@ -369,7 +369,6 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
-	normalService.SetCombat(adventure.NewRunCombat(normalService))
 	partyService.SetLobbyBoundary(normalService.WithWaitingLobby)
 	core.normalGuard = normalService.CheckMutation
 	core.economy.SetMutationCheck(normalService.CheckMutation)

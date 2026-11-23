@@ -165,8 +165,8 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if _, err := f.svc.Command(context.Background(), runhost.Command{PlayerID: leader.PlayerID, ActorID: leader.ID, RunID: runID, ID: "living-enemy", Version: r.Version, Action: "advance"}); !errors.Is(err, adventure.ErrInvalidFloorAction) {
 		t.Fatal(err)
 	}
-	f.send(t, runID, 0, "earn", "")
-	before := r.Battle
+	f.earn(t, runID, 0)
+	before := readStockRoom(t, f, runID).Battle
 	f.send(t, runID, 0, "exit", "")
 	r, err = f.store.FindRun(context.Background(), runID)
 	wantBattle := before
@@ -174,11 +174,16 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if err != nil || r.LeaderID != member.ID || len(r.Roster) != 2 || slices.Contains(r.Roster, leader.ID) || !reflect.DeepEqual(wantBattle, r.Battle) {
 		t.Fatal("survivor continuation changed", r, err)
 	}
-	if r.Recipients[member.ID].Pending.Gold != 5 {
-		t.Fatal("peer stock lost")
+	// 5 gold with the three-member cooperative bonus (+20%).
+	const peerGold = 6
+	if r.Recipients[member.ID].Pending.Gold != peerGold {
+		t.Fatal("peer stock lost", r.Recipients[member.ID])
 	}
 	// Noncombat observation does not release another participant's pending stock.
-	f.send(t, runID, 1, "screenshot", "")
+	f.clock.add(3 * time.Second)
+	if _, err := f.svc.Command(context.Background(), runhost.Command{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: "screenshot", Version: r.Version, Action: "screenshot"}); !errors.Is(err, runhost.ErrUnavailable) {
+		t.Fatal(err)
+	}
 	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money {
 		t.Fatal(c, err)
 	}
@@ -188,7 +193,7 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if err != nil || r.LeaderID != f.actors[2].ID || len(r.Roster) != 1 || slices.Contains(r.Roster, member.ID) || !reflect.DeepEqual(wantBattle, r.Battle) {
 		t.Fatal("second survivor continuation changed", r, err)
 	}
-	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money+5 {
+	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money+peerGold {
 		t.Fatal(c, err)
 	}
 	if _, err := f.svc.GetRunReceipt(context.Background(), member.PlayerID, member.ID, runID, "enroll"); !errors.Is(err, runhost.ErrForbidden) {
@@ -251,7 +256,7 @@ func TestNormalRunTimeoutPendingRecoveryAndRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 	runID := entry.Command.RunID
-	f.send(t, runID, 0, "earn", "")
+	f.earn(t, runID, 0)
 	f.send(t, runID, 0, "exit", "")
 	member := f.actors[1]
 	r, err := f.store.FindRun(context.Background(), runID)

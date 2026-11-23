@@ -1,4 +1,4 @@
-package adventure
+package runhost
 
 import (
 	"encoding/json"
@@ -11,10 +11,9 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
-	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-func treasureCombatRun(t *testing.T) (*NormalRun, corecharacter.Character) {
+func treasureCombatRun(t *testing.T) (*State, corecharacter.Character) {
 	t.Helper()
 	requester := corecharacter.Character{
 		ID:       "a",
@@ -23,7 +22,7 @@ func treasureCombatRun(t *testing.T) (*NormalRun, corecharacter.Character) {
 		Level:    10,
 		Stats:    corecharacter.Stats{HP: 500, MaxHP: 500, MP: 120, MaxMP: 120, Attack: 100, Defense: 50, Agility: 50},
 	}
-	r := &NormalRun{State: runhost.State{ID: "run-treasure", Admission: runhost.Admission{Speed: 3}, Round: TreasureRoomFloor, LeaderID: "a", Roster: []string{"a"}, Recipients: map[string]runhost.Recipient{
+	r := &State{ID: "run-treasure", Admission: Admission{Speed: 3}, Round: treasureFloor, LeaderID: "a", Roster: []string{"a"}, Recipients: map[string]Recipient{
 		"a": {PlayerID: "p1"},
 	}, Battle: corebattle.LifetimeState{
 		Actors: []corebattle.LifetimeActor{
@@ -46,16 +45,16 @@ func treasureCombatRun(t *testing.T) (*NormalRun, corecharacter.Character) {
 				Tension: 1,
 			},
 		},
-	}, Boxes: []runhost.TreasureBox{
+	}, Boxes: []TreasureBox{
 		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
 		{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
-	}}, Stage: Stage{ID: "stage-00", Name: "Test Stage"}, Mode: CrawlModeNormal}
+	}}
 	return r, requester
 }
 
 func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 	r, requester := treasureCombatRun(t)
-	r.Boxes = append(r.Boxes, runhost.TreasureBox{ID: "box-3", Name: "金の宝箱A", ItemID: "item-267", Fixed: true})
+	r.Boxes = append(r.Boxes, TreasureBox{ID: "box-3", Name: "金の宝箱A", ItemID: "item-267", Fixed: true})
 
 	state, frame, inspection, err := r.ProjectCombat("a")
 	if err != nil {
@@ -69,12 +68,12 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 		t.Fatalf("unexpected inspection projection: %+v", inspection)
 	}
 
-	b1 := runhost.FindActor(state.Actors, "box-1")
+	b1 := findActor(state.Actors, "box-1")
 	if b1 == nil || b1.HP != 1000 || b1.MaxHP != 1000 || b1.Defense != 1000 || b1.BaseStats.Defense != 1000 ||
 		b1.Temporary != corebattle.TemporaryNullMagic || !b1.NPC || b1.OverLevel || b1.Gear == nil || b1.Tension != 1 {
 		t.Fatalf("unexpected ordinary box combat stats: %+v", b1)
 	}
-	b3 := runhost.FindActor(state.Actors, "box-3")
+	b3 := findActor(state.Actors, "box-3")
 	if b3 == nil || b3.HP != 2000 || b3.MaxHP != 2000 || b3.Defense != 2000 || b3.BaseStats.Defense != 2000 ||
 		b3.Temporary != corebattle.TemporaryNullMagic || !b3.NPC || !b3.OverLevel {
 		t.Fatalf("unexpected fixed box combat stats: %+v", b3)
@@ -82,25 +81,25 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 
 	// Magic attack against unopened box is nullified by TemporaryNullMagic.
 	level := requester.Level
-	effects := RunActionEffects{}
-	rewards := NewRunDefeatRewards(r, requester, "EXP", false, &ordinaryRNG{}, &effects)
+	effects := Effects{}
+	rewards := defeatRewards(r, RoomCombat{}, requester, "EXP", &fixedRNG{}, &effects)
 	reset := corebattle.EquipmentResetContext{TargetContext: frame, RequesterLevel: &level}
 	defeat := corebattle.DefeatContext{EquipmentResetContext: reset, Rewards: rewards}
 	damage := corebattle.DamageContext{
 		EffectContext: corebattle.EffectContext{TargetContext: frame, RequesterLevel: &level},
 		Defeat: func(id string) error {
-			_, err := state.ApplyDefeat(&defeat, id, &ordinaryRNG{})
+			_, err := state.ApplyDefeat(&defeat, id, &fixedRNG{})
 			return err
 		},
 		Reset: func(id string) error {
-			return state.ApplyEquipmentReset(&reset, id, &ordinaryRNG{})
+			return state.ApplyEquipmentReset(&reset, id, &fixedRNG{})
 		},
 	}
 	res, err := state.ApplyDamage(&damage, corebattle.TargetEffect{
 		TargetID: "box-1",
 		Category: corebattle.CategoryMagic,
 		Payload:  corebattle.CallbackPayload{Number: 500},
-	}, &ordinaryRNG{})
+	}, &fixedRNG{})
 	if err != nil || res.TargetID != "box-1" || b1.HP != 1000 {
 		t.Fatalf("magic should be nullified by box TemporaryNullMagic: res=%+v b1=%+v err=%v", res, b1, err)
 	}
@@ -122,28 +121,30 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var reloaded NormalRun
+	var reloaded State
 	if err := json.Unmarshal(raw, &reloaded); err != nil {
 		t.Fatal(err)
 	}
 	reloadedState, reloadedFrame, _, err := reloaded.ProjectCombat("a")
-	if err != nil || runhost.FindActor(reloadedState.Actors, "box-1").HP != 700 {
-		t.Fatalf("reloaded box HP lost: err=%v actor=%+v", err, runhost.FindActor(reloadedState.Actors, "box-1"))
+	if err != nil || findActor(reloadedState.Actors, "box-1").HP != 700 {
+		t.Fatalf("reloaded box HP lost: err=%v actor=%+v", err, findActor(reloadedState.Actors, "box-1"))
 	}
 
 	// Defeating box-1 via ApplyPlayerOperation clears it from next request without rewards or prize.
-	reloadedEffects := RunActionEffects{}
-	reloadedRewards := NewRunDefeatRewards(&reloaded, requester, "MONSTER", false, &ordinaryRNG{}, &reloadedEffects)
+	reloadedEffects := Effects{}
+	credited := 0
+	room := RoomCombat{Credited: func(string, random.Generator) { credited++ }}
+	reloadedRewards := defeatRewards(&reloaded, room, requester, "MONSTER", &fixedRNG{}, &reloadedEffects)
 	reloadedReset := corebattle.EquipmentResetContext{TargetContext: reloadedFrame, RequesterLevel: &level}
 	reloadedDefeat := corebattle.DefeatContext{EquipmentResetContext: reloadedReset, Rewards: reloadedRewards}
 	reloadedDmg := corebattle.DamageContext{
 		EffectContext: corebattle.EffectContext{TargetContext: reloadedFrame, RequesterLevel: &level},
 		Defeat: func(id string) error {
-			_, err := reloadedState.ApplyDefeat(&reloadedDefeat, id, &ordinaryRNG{})
+			_, err := reloadedState.ApplyDefeat(&reloadedDefeat, id, &fixedRNG{})
 			return err
 		},
 		Reset: func(id string) error {
-			return reloadedState.ApplyEquipmentReset(&reloadedReset, id, &ordinaryRNG{})
+			return reloadedState.ApplyEquipmentReset(&reloadedReset, id, &fixedRNG{})
 		},
 	}
 	var defs skill.BattleDefinitions
@@ -156,7 +157,7 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 		First: corebattle.PlayerAction{
 			EntryID: "attack",
 			Validate: func(s *corebattle.LifetimeState) error {
-				return s.ValidateDamage(&reloadedDmg, corebattle.TargetEffect{TargetID: "box-1", Category: corebattle.CategoryBreath, Payload: corebattle.CallbackPayload{Number: 5000}, Arguments: []string{"1"}}, &ordinaryRNG{})
+				return s.ValidateDamage(&reloadedDmg, corebattle.TargetEffect{TargetID: "box-1", Category: corebattle.CategoryBreath, Payload: corebattle.CallbackPayload{Number: 5000}, Arguments: []string{"1"}}, &fixedRNG{})
 			},
 			Execute: func(s *corebattle.LifetimeState, rng random.Generator) (corebattle.PlayerActionFacts, error) {
 				d := reloadedDmg
@@ -167,7 +168,7 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 		},
 		ResponseEnabled: false,
 	}
-	opRes, err := reloadedState.ApplyPlayerOperation(&op, &ordinaryRNG{})
+	opRes, err := reloadedState.ApplyPlayerOperation(&op, &fixedRNG{})
 	if err != nil || !opRes.Accepted || opRes.ResponseReached {
 		t.Fatalf("player operation against chest failed: res=%+v err=%v", opRes, err)
 	}
@@ -175,9 +176,9 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !reloaded.Boxes[0].Defeated || reloaded.Boxes[0].OpenedBy != "" || reloaded.Boxes[0].Combat != nil {
-		t.Fatalf("defeated box state wrong: box=%+v combat=%+v actor=%+v", reloaded.Boxes[0], reloaded.Boxes[0].Combat, runhost.FindActor(reloadedState.Actors, "box-1"))
+		t.Fatalf("defeated box state wrong: box=%+v combat=%+v actor=%+v", reloaded.Boxes[0], reloaded.Boxes[0].Combat, findActor(reloadedState.Actors, "box-1"))
 	}
-	if len(reloadedEffects.Earnings) != 0 || len(reloadedEffects.Defeats) != 0 || len(reloadedEffects.CreditedDefeats) != 0 {
+	if len(reloadedEffects.Earnings) != 0 || len(reloadedEffects.Defeats) != 0 || credited != 0 {
 		t.Fatalf("defeating box leaked rewards/defeats: %+v", reloadedEffects)
 	}
 	// box-3 is still unopened; once box-3 is defeated too, livingEnemies is false.
@@ -189,14 +190,14 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 	if err != nil || len(nextFrame.EnemyIDs) != 0 {
 		t.Fatalf("defeated boxes remained in next enemy pool: %+v err=%v", nextFrame, err)
 	}
-	if _, _, err := reloaded.ClaimChest(nil, nil, "a", "box-1"); !errors.Is(err, ErrNoUnopenedTreasure) {
+	if _, _, err := reloaded.ClaimChest(t.Context(), nil, "a", "box-1"); !errors.Is(err, ErrNoUnopenedTreasure) {
 		t.Fatalf("defeated box still claimable: %v", err)
 	}
 }
 
 func TestNormalRunTreasureReconcilePreservesOrderAfterMemberRemoval(t *testing.T) {
 	r, _ := treasureCombatRun(t)
-	r.Boxes = []runhost.TreasureBox{
+	r.Boxes = []TreasureBox{
 		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
 		{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
 		{ID: "box-3", Name: "黒い宝箱C", ItemID: "item-003"},
@@ -224,7 +225,7 @@ func TestNormalRunMixedEnemyAndTreasureInspectionPreservesEnemyReward(t *testing
 		Participant: corebattle.Participant{ID: "enemy-1", Name: "Slime", TeamID: "enemies", HP: 100, MaxHP: 100},
 		NPC:         true,
 	})
-	r.Boxes = []runhost.TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"}}
+	r.Boxes = []TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"}}
 
 	state, frame, projectionInspection, err := r.ProjectCombat("a")
 	if err != nil {
@@ -245,31 +246,31 @@ func TestNormalRunMixedEnemyAndTreasureInspectionPreservesEnemyReward(t *testing
 	defs.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{Tools: tools}, len(r.Roster))
 	defs.RegisterOrdinaryTools(tools)
 
-	// Intentionally leave Callback.Inspection empty so normalOperations overlays ProjectCombat's map.
-	opCtx := NormalOperationContext{
+	// Intentionally leave Callback.Inspection empty so operations overlays ProjectCombat's map.
+	opCtx := OperationContext{
 		Definitions: defs,
 		Callback:    corebattle.CallbackContext{Damage: &damage},
 		Requester:   &requester,
 	}
-	searchCmd, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Action: "job-78-entry-1", TargetID: "weapon-01"}, opCtx)
+	searchCmd, err := r.parseOperation(Command{ActorID: "a", Action: "job-78-entry-1", TargetID: "weapon-01"}, opCtx, nil)
 	if err != nil {
 		t.Fatalf("parse enemy reward search failed: %v", err)
 	}
-	boxCmd, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Input: "＠トレハンのかん>普通の宝箱A"}, opCtx)
+	boxCmd, err := r.parseOperation(Command{ActorID: "a", Input: "＠トレハンのかん>普通の宝箱A"}, opCtx, nil)
 	if err != nil {
 		t.Fatalf("parse box valuation failed: %v", err)
 	}
 
-	for _, parsed := range []ParsedRunOperation{searchCmd, boxCmd} {
+	for _, parsed := range []parsedOperation{searchCmd, boxCmd} {
 		cb := corebattle.CallbackContext{
 			TargetContext: frame,
 			Arguments:     parsed.First.Arguments,
 			Inspection:    projectionInspection,
 		}
-		if err := state.ValidateInvocations(&cb, defs.Invocations, []corebattle.CallbackInvocation{parsed.First.Invocation}, &ordinaryRNG{}); err != nil {
+		if err := state.ValidateInvocations(&cb, defs.Invocations, []corebattle.CallbackInvocation{parsed.First.Invocation}, &fixedRNG{}); err != nil {
 			t.Fatalf("validate %+v: %v", parsed.First, err)
 		}
-		if err := state.ApplyInvocations(&cb, defs.Invocations, []corebattle.CallbackInvocation{parsed.First.Invocation}, &ordinaryRNG{}); err != nil {
+		if err := state.ApplyInvocations(&cb, defs.Invocations, []corebattle.CallbackInvocation{parsed.First.Invocation}, &fixedRNG{}); err != nil {
 			t.Fatalf("apply %+v: %v", parsed.First, err)
 		}
 	}

@@ -24,7 +24,7 @@ func (f *normalFixture) timeoutParty(t *testing.T, mode string) string {
 		t.Fatal(err)
 	}
 	runID := entry.Command.RunID
-	f.send(t, runID, 0, "earn", "")
+	f.earn(t, runID, 0)
 	f.clock.add(1801 * time.Second)
 	r, err := f.store.FindRun(context.Background(), runID)
 	if err != nil || r == nil {
@@ -81,15 +81,12 @@ func (f *normalFixture) nextNormalRun(t *testing.T) string {
 	return r.Command.RunID
 }
 
+// claimCommand is actor 1's stock-releasing operation that earns nothing itself.
 func (f *normalFixture) claimCommand(t *testing.T, runID, cmdID string) runhost.Command {
 	t.Helper()
-	f.clock.add(3 * time.Second)
-	r, err := f.store.FindRun(context.Background(), runID)
-	if err != nil || r == nil {
-		t.Fatal(r, err)
-	}
-	c := f.actors[1]
-	return runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: cmdID, Version: r.Version, Action: "no_effect"}
+	cmd := f.idleCommand(t, runID, 1)
+	cmd.ID = cmdID
+	return cmd
 }
 
 func TestNormalRunTimeoutEarningsClaimedOnceAfterDisposal(t *testing.T) {

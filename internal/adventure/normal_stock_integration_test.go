@@ -27,7 +27,7 @@ func stockRun(t *testing.T, level, exp int, over bool) (*normalFixture, corechar
 		t.Fatal(err)
 	}
 	rng := &stockRunRNG{}
-	f.cfg.Combat, f.cfg.Jobs, f.cfg.RNG = nil, jobs, rng
+	f.cfg.Jobs, f.cfg.RNG = jobs, rng
 	f.restart(t)
 	c := f.actors[0]
 	c.Level, c.Experience, c.OverLevel, c.SP = level, exp, over, 30

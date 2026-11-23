@@ -62,7 +62,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		}
 		var ids []string
 		var requester corecharacter.Character
-		ctx = CommandContext(ctx, r.ID)
+		ctx = commandContext(ctx, r.ID)
 		if err := economy.LockInOrder(ctx, r.Roster, func(ctx context.Context, id string) error {
 			c, err := s.cfg.Characters.FindByIDForUpdate(ctx, id)
 			if err != nil {
@@ -96,10 +96,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 				return err
 			}
 		case cmd.Action == StockLevelAction:
-			if s.cfg.Combat == nil {
-				return ErrUnavailable
-			}
-			if err := s.cfg.Combat.StockLevel(ctx, run, cmd, requester, now); err != nil {
+			if err := s.stockLevel(ctx, run, cmd, requester, now); err != nil {
 				return err
 			}
 			effects.RoomActivity, effects.ActorActivity = true, true
@@ -131,11 +128,8 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 			}
 			effects.RoomActivity, effects.ActorActivity, effects.ReleaseStock = true, true, true
 		default:
-			if s.cfg.Combat == nil {
-				return ErrUnavailable
-			}
 			var err error
-			effects, err = s.cfg.Combat.Execute(ctx, run, cmd)
+			effects, err = s.executeCombat(ctx, run, cmd)
 			if err != nil {
 				return err
 			}
@@ -152,7 +146,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 				recipient := r.Recipients[cmd.ActorID]
 				var due Earnings
 				var err error
-				retained, due, err = s.RetainedDue(ctx, cmd.ActorID, recipient.Pending)
+				retained, due, err = s.retainedDue(ctx, cmd.ActorID, recipient.Pending)
 				if err != nil {
 					return err
 				}

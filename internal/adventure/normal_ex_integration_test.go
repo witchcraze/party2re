@@ -30,8 +30,8 @@ func exCommand(t *testing.T, f *normalFixture, runID, key, action string) runhos
 func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 	f := newNormalFixture(t, 1)
 	runID := f.enter(t, "normal").Command.RunID
-	f.send(t, runID, 0, "earn", "")
-	f.send(t, runID, 0, "ex11", "stage-23")
+	f.earn(t, runID, 0)
+	f.stage(t, runID, ex11(t, f.actors[0].ID, "stage-23"))
 	before, err := f.store.FindRun(context.Background(), runID)
 	if err != nil {
 		t.Fatal(err)
@@ -68,11 +68,11 @@ func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 		t.Fatal("receipt replay rerolled or mutated", err)
 	}
 
-	f.send(t, runID, 0, "kill", "")
+	f.kill(t, runID, 0)
 	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.FloorsCleared != adventure.EXBossFloor || len(r.Boxes) != 0 || r.StageCleared {
 		t.Fatal("EX defeat recorded incorrectly", r, err)
 	}
-	f.send(t, runID, 0, "fall", "")
+	f.stage(t, runID, fall(f.actors[0].ID))
 	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.Round != adventure.EXBossFloor || len(r.Roster) != 1 || len(r.Boxes) != 0 {
 		t.Fatal("defeat at 12 exited or created treasure", r, err)
 	}
@@ -85,20 +85,27 @@ func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 
 func TestNormalRunRoyalBeeDrawCommitsOnce(t *testing.T) {
 	f := newNormalFixture(t, 1)
-	f.cfg.Combat = normalDefeatCombat{f.combat, f.actors[0], f.rng}
-	f.restart(t)
 	runID := f.enter(t, "normal").Command.RunID
-	cmd := exCommand(t, f, runID, "bee", "bee")
-	cmd.TargetID = "stage-22"
+	stage, err := f.cfg.Stages.FindByID("stage-22")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := f.earnCommand(t, runID, 0)
+	f.stage(t, runID, func(r *adventure.NormalRun) {
+		r.Stage = stage
+		runActorByID(r, cmd.TargetID).EncounterIdentity = "ordinary-22-monster-175B"
+	})
+	cmd.Version++
 	draws := f.rng.calls.Load()
 	if _, err := f.svc.Command(context.Background(), cmd); err != nil {
 		t.Fatal(err)
 	}
 	r, err := f.store.FindRun(context.Background(), runID)
-	if err != nil || !r.EXUnlocked || f.rng.calls.Load() != draws+2 {
-		t.Fatal("royal bee draw missing or repeated", r, err)
+	drawn := f.rng.calls.Load()
+	if err != nil || !r.EXUnlocked || drawn == draws {
+		t.Fatal("royal bee draw missing", r, err)
 	}
-	if _, err := f.svc.Command(context.Background(), cmd); err != nil || f.rng.calls.Load() != draws+2 {
+	if _, err := f.svc.Command(context.Background(), cmd); err != nil || f.rng.calls.Load() != drawn {
 		t.Fatal("replay redrew", err)
 	}
 }
@@ -141,8 +148,8 @@ func TestNormalRunEXEntryVersusExitStress(t *testing.T) {
 		t.Fatal(err)
 	}
 	runID := entry.Command.RunID
-	f.send(t, runID, 0, "earn", "")
-	f.send(t, runID, 0, "ex11", "stage-23")
+	f.earn(t, runID, 0)
+	f.stage(t, runID, ex11(t, f.actors[0].ID, "stage-23"))
 	enter := exCommand(t, f, runID, "race-ex", "advance")
 	exit := runhost.Command{PlayerID: other.PlayerID, ActorID: other.ID, RunID: runID, ID: "race-exit", Version: enter.Version, Action: "exit"}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
@@ -182,9 +189,9 @@ func TestNormalRunEXEntryVersusExitStress(t *testing.T) {
 // exTreasureRun reaches a cleared stage26 spring EX encounter at floor 12.
 func exTreasureRun(t *testing.T, f *normalFixture, runID string) {
 	t.Helper()
-	f.send(t, runID, 0, "ex11", "stage-26")
+	f.stage(t, runID, ex11(t, f.actors[0].ID, "stage-26"))
 	f.send(t, runID, 0, "advance", "")
-	f.send(t, runID, 0, "kill", "")
+	f.kill(t, runID, 0)
 }
 
 func countItem(t *testing.T, f *normalFixture, characterID, itemID string) int {
@@ -211,7 +218,11 @@ func TestNormalRunEXTreasureEntryAndSeparateClaims(t *testing.T) {
 	c := f.actors[0]
 	runID := f.enter(t, "normal").Command.RunID
 	exTreasureRun(t, f, runID)
-	f.send(t, runID, 0, "spent", "")
+	f.stage(t, runID, func(r *adventure.NormalRun) {
+		p := r.Recipients[c.ID] // the ordinary allowance used earlier in the room
+		p.Inspected = 1
+		r.Recipients[c.ID] = p
+	})
 	before, err := f.store.FindRun(context.Background(), runID)
 	if err != nil || before.Recipients[c.ID].Inspected != 1 {
 		t.Fatal(before, err)
@@ -347,7 +358,19 @@ func TestNormalRunSaveBoundaryDropsFallenNPCs(t *testing.T) {
 	c := f.actors[0]
 	runID := f.enter(t, "normal").Command.RunID
 	f.send(t, runID, 0, "advance", "")
-	f.send(t, runID, 0, "stage23-helper", "")
+	// A cleared stage23 floor 10 whose helper fell; the next command's save drops it.
+	stage23, err := f.cfg.Stages.FindByID("stage-23")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.stage(t, runID, func(r *adventure.NormalRun) {
+		r.Stage, r.Round = stage23, 10
+		r.DiscardEncounter()
+		helper := runActorByID(r, c.ID).Clone()
+		helper.ID, helper.NPC, helper.RosterIdentity, helper.HP = "helper", true, "calling-64", 0
+		r.Battle.Actors = append(r.Battle.Actors, helper)
+	})
+	f.earn(t, runID, 0)
 	r, err := f.store.FindRun(context.Background(), runID)
 	if err != nil {
 		t.Fatal(err)
@@ -359,7 +382,7 @@ func TestNormalRunSaveBoundaryDropsFallenNPCs(t *testing.T) {
 	}
 	// Legacy sees one ally at the next advance, so stage23 creates no marker.
 	f.send(t, runID, 0, "advance", "")
-	f.send(t, runID, 0, "fall", "")
+	f.stage(t, runID, fall(c.ID))
 	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.EXUnlocked || r.Round != adventure.TreasureRoomFloor {
 		t.Fatal("fallen helper counted toward the stage23 marker", r, err)
 	}

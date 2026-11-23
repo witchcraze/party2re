@@ -35,18 +35,6 @@ type stubNormalPenalty struct{}
 
 func (stubNormalPenalty) ProjectRunPenalty(context.Context, string, time.Time) error { return nil }
 
-type stubNormalCombat struct{}
-
-func (*stubNormalCombat) PrepareAdvance(context.Context, *adventure.NormalRun, string) error {
-	return nil
-}
-func (*stubNormalCombat) PrepareBossField(context.Context, *adventure.NormalRun, string) error {
-	return nil
-}
-func (*stubNormalCombat) ExecuteRunAction(context.Context, *adventure.NormalRun, runhost.Command) (adventure.RunActionEffects, error) {
-	return adventure.RunActionEffects{}, runhost.ErrUnavailable
-}
-
 type failingAdventureRepo struct {
 	adventure.Repository
 	fail atomic.Bool
@@ -238,7 +226,7 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 	normalSvc, err := adventure.NewNormalRunService(adventure.NormalRunConfig{
 		Store: normalStore, Characters: chars, Inventories: invs,
 		Builder: adapter, Settler: adapter, History: advRepo,
-		Stages: stages, Monsters: monsters, Combat: &stubNormalCombat{},
+		Stages: stages, Monsters: monsters,
 		Penalty: stubNormalPenalty{}, Clock: clock, RNG: fixedZeroRNG{},
 		ExitEffects: func(context.Context, string) error { return nil },
 	})

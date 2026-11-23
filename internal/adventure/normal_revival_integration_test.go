@@ -43,7 +43,7 @@ func TestNormalRunFallenSelfRevivalAndReceiptIntegration(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newNormalFixture(t, 2)
-			installRunCombat(t, f)
+			f.restart(t)
 			_, lobby := f.waitingParty(t, adventure.CrawlModeNormal)
 			leader, ally := f.actors[0], f.actors[1]
 			entry, err := f.svc.EnterParty(t.Context(), leader.PlayerID, leader.ID, lobby)

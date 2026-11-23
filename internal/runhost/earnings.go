@@ -48,10 +48,10 @@ func (r *State) RecordEarnings(earned map[string]Earnings, conditional bool) err
 	return nil
 }
 
-// RetainedDue adds the actor's disposed-timeout balances to the stock being
+// retainedDue adds the actor's disposed-timeout balances to the stock being
 // released by the current command. Idle cleanup retains unpaid earnings instead
 // of paying them, so the next eligible stock release is their only settlement.
-func (s *Service[R, P]) RetainedDue(ctx context.Context, actor string, pending Earnings) ([]RetainedEarnings, Earnings, error) {
+func (s *Service[R, P]) retainedDue(ctx context.Context, actor string, pending Earnings) ([]RetainedEarnings, Earnings, error) {
 	retained, err := s.cfg.Store.FindRetainedEarnings(ctx, actor)
 	if err != nil {
 		return nil, Earnings{}, err
@@ -84,10 +84,10 @@ func (s *Service[R, P]) settleRetained(ctx context.Context, actor string, retain
 	return nil
 }
 
-// LevelUpDue is the player step's branch input. released is any already
+// levelUpDue is the player step's branch input. released is any already
 // pending (including retained) stock the operation releases; earned is the
 // operation's own unconditional EXP. Conditional stock never counts.
-func LevelUpDue(s *corebattle.LifetimeState, requester corecharacter.Character, conditional bool, released, earned int) (bool, error) {
+func levelUpDue(s *corebattle.LifetimeState, requester corecharacter.Character, conditional bool, released, earned int) (bool, error) {
 	threshold, err := progression.ExperienceForNextLevelWithMax(requester.Level, progression.MaxLevelForCharacter(&requester))
 	if s.SpecialBossField || err != nil {
 		return false, nil
@@ -106,7 +106,7 @@ func LevelUpDue(s *corebattle.LifetimeState, requester corecharacter.Character, 
 // tailLevel is the action tail's lv_up reached by room actions and treasure
 // inspection: at most one level from saved and released EXP (_battle.cgi:912,935–937).
 func (s *Service[R, P]) tailLevel(ctx context.Context, r *State, requester corecharacter.Character, released int, conditional bool) error {
-	due, err := LevelUpDue(&r.Battle, requester, conditional, released, 0)
+	due, err := levelUpDue(&r.Battle, requester, conditional, released, 0)
 	if err != nil || !due {
 		return err
 	}
@@ -117,7 +117,7 @@ func (s *Service[R, P]) tailLevel(ctx context.Context, r *State, requester corec
 	if err != nil {
 		return err
 	}
-	grown, err := GrowRequester(&r.Battle, requester.ID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
+	grown, err := growRequester(&r.Battle, requester.ID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
 		return progression.ApplyTailLevel(c, def, s.cfg.RNG, held, released)
 	})
 	if err != nil || !grown {
@@ -126,9 +126,9 @@ func (s *Service[R, P]) tailLevel(ctx context.Context, r *State, requester corec
 	return s.cfg.Characters.Update(ctx, requester)
 }
 
-// GrowRequester applies saved-EXP stock levels to the requester and mirrors the
+// growRequester applies saved-EXP stock levels to the requester and mirrors the
 // uncapped growth onto the battle actor (system.cgi:49–67).
-func GrowRequester(b *corebattle.LifetimeState, actorID string, requester *corecharacter.Character, apply func(*corecharacter.Character, string) ([]corecharacter.Stats, error)) (bool, error) {
+func growRequester(b *corebattle.LifetimeState, actorID string, requester *corecharacter.Character, apply func(*corecharacter.Character, string) ([]corecharacter.Stats, error)) (bool, error) {
 	i := slices.IndexFunc(b.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == actorID })
 	if i < 0 {
 		return false, ErrConflict

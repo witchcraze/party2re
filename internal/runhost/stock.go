@@ -1,4 +1,4 @@
-package adventure
+package runhost
 
 import (
 	"context"
@@ -9,13 +9,16 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/random"
-	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-const stockLevelAction = "stock-level"
-
-func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd runhost.Command, requester corecharacter.Character, now time.Time) error {
-	ops, err := r.normalOperations(cmd, NormalOperationContext{Requester: &requester})
+// stockLevel applies saved-EXP stock levels as an operation (system.cgi:49–67).
+func (s *Service[R, P]) stockLevel(ctx context.Context, run *R, cmd Command, requester corecharacter.Character, now time.Time) error {
+	r := P(run).Host()
+	var room []Choice
+	if s.cfg.CombatRoom != nil {
+		room = s.cfg.CombatRoom.Choices(run, cmd.ActorID)
+	}
+	ops, err := r.operations(cmd, OperationContext{Requester: &requester}, room)
 	if err != nil {
 		return err
 	}
@@ -23,11 +26,11 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd run
 	if err != nil {
 		return err
 	}
-	if now.Before(r.LastActions[cmd.ActorID].Add(time.Duration(r.Admission.Speed) * time.Second)) {
-		return runhost.ErrCooldown
+	if err := r.Ready(cmd.ActorID, now); err != nil {
+		return err
 	}
 	if s.cfg.Jobs == nil {
-		return runhost.ErrUnavailable
+		return ErrUnavailable
 	}
 	def, err := s.cfg.Jobs.FindByID(requester.JobID)
 	if err != nil {
@@ -45,7 +48,7 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd run
 	}
 	level := requester.Level
 	grow := func(b *corebattle.LifetimeState, rng random.Generator, single bool) (bool, error) {
-		return runhost.GrowRequester(b, cmd.ActorID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
+		return growRequester(b, cmd.ActorID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
 			return progression.ApplyStockLevels(c, def, rng, held, single)
 		})
 	}
@@ -59,8 +62,8 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd run
 		First: first,
 		Tail:  corebattle.PlayerTailContext{DamageContext: damage, DefeatContext: defeat},
 		Field: corebattle.NamedFieldContext{DamageContext: damage, Death: defeat},
-		// Treasure rooms disable NPC-dependent field exercises even after all boxes open.
-		ResponseEnabled: !isTreasureFloor(r.Round),
+		// A room without responses disables NPC-dependent field exercises.
+		ResponseEnabled: s.responds(run),
 		LevelUp: func(b *corebattle.LifetimeState, rng random.Generator) (bool, error) {
 			if b.SpecialBossField || requester.Level != level {
 				return false, nil
@@ -73,7 +76,7 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd run
 		return err
 	}
 	if !result.Accepted {
-		return runhost.ErrUnavailable
+		return ErrUnavailable
 	}
 	if requester.Level == level {
 		return nil

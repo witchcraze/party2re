@@ -1,20 +1,15 @@
-package adventure
+package runhost
 
 import (
 	"slices"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // NextNPC selects in semantic order, including skipped heads. It is a read:
 // rejected/ineligible operations and GET never change order or timestamps.
-// Treasure-room NPC response is disabled (vs_monster.cgi:38–41).
-func (r *NormalRun) NextNPC(now time.Time) string {
-	if isTreasureFloor(r.Round) {
-		return ""
-	}
+func (r *State) NextNPC(now time.Time) string {
 	for _, id := range r.Enemies {
 		a := r.Actor(id)
 		if a != nil && a.NPC && a.HP > 0 && now.Sub(r.LastActions[id]) >= time.Duration(r.Admission.Speed)*time.Second {
@@ -26,10 +21,10 @@ func (r *NormalRun) NextNPC(now time.Time) string {
 
 // RecordNPCResponse preserves source head rotation, not acted-member removal.
 // Call after successful execution, within the command's existing transaction.
-func (r *NormalRun) RecordNPCResponse(id string, now time.Time) error {
+func (r *State) RecordNPCResponse(id string, now time.Time) error {
 	a := r.Actor(id)
 	if id == "" || !slices.Contains(r.Enemies, id) || a == nil || !a.NPC {
-		return runhost.ErrConflict
+		return ErrConflict
 	}
 	if r.LastActions == nil {
 		r.LastActions = make(map[string]time.Time)

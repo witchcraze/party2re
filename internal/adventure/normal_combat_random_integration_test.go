@@ -32,14 +32,14 @@ func randomDraw(job, position, n int) []float64 {
 	return []float64{.5, .5, (float64(job) - .5) / 87, (float64(position) + .5) / float64(n)}
 }
 
-// randomFixture serves Command with the production RunCombat and asset
+// randomFixture serves Command with the host executor and asset
 // session, as cmd/party2 does; every random pool entry is then bound.
 func randomFixture(t *testing.T, draws ...float64) *normalFixture {
 	t.Helper()
 	f := newNormalFixture(t, 1)
 	f.cfg.RNG = &scriptRNG{draws: draws}
 	withAssetSession(t, f)
-	installRunCombat(t, f)
+	f.restart(t)
 	return f
 }
 

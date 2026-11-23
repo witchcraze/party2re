@@ -97,23 +97,19 @@ Battle engine operates independently of callers (adventures, arena, GvG, bosses,
 
 ### Run host
 
-**Responsibility:** The mode-neutral durable run (`internal/runhost`): enrollment, the versioned snapshot, one SQL transaction per command, receipts, recipient ledgers, treasure inspection, individual exit and recoverable idle cleanup. Room libraries embed its state in their snapshot and supply mode rules through its room port; the [durable run boundary](transient-run-state.md#run-host-durable-command-boundary-1325) owns persistence and recovery.
+**Responsibility:** The mode-neutral durable run (`internal/runhost`): enrollment, the versioned snapshot, one SQL transaction per command, receipts, recipient ledgers, treasure inspection, the explicit combat executor, individual exit and recoverable idle cleanup. Room libraries embed its state in their snapshot and supply mode rules through its room port and combat seams; the [durable run boundary](transient-run-state.md#run-host-durable-command-boundary-1325) owns persistence and recovery.
 
 ### Adventure / Quest
 
 **Responsibility:** Define and execute adventure-oriented game flows, dungeon crawl loops, encounter progressions, and stage reward distributions.
 
 Adventure's `NormalRunService` is the stage room library on the run host: stage
-admission, explicit progress and encounters, exit effects, records and the explicit
-combat executor. Party owns waiting admission; its roster writers serialize with
+admission, explicit progress and encounters, exit effects, records and the stage's
+combat seams. Party owns waiting admission; its roster writers serialize with
 the one-way SQL handoff. Core battle supplies serializable effects, the battle
 adapter supplies character binding and asset application, Home enforces durable
-sleep deadlines, and PlayerContext reads owned run facts.
-
-Production starts still use the request-local `CrawlSession` batch path.
-The verified Gateway cutover (#1330) remains
-required under [the interaction contract](../design/adventure.md#original-interaction-contract-and-reconstruction-target);
-the lifecycle service alone does not establish interactive gameplay parity.
+sleep deadlines, and PlayerContext reads owned run facts. Production starts still
+use the batch path; see the [run boundary](transient-run-state.md#run-host-durable-command-boundary-1325).
 
 ### Common Foundation Packages
 
