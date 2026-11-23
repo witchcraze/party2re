@@ -279,9 +279,15 @@ func (c runCombat) respond(r *NormalRun, npc string, requester *corecharacter.Ch
 		// Encounter payloads store the NPC's hand as its accessory, including an empty slot.
 		actor.HeldToolID = new(actor.Gear.AccessoryID)
 	}
-	register := func(d *skill.BattleDefinitions, f *corebattle.CallbackContext) {
+	register := func(d *skill.BattleDefinitions, work *corebattle.LifetimeState, f *corebattle.CallbackContext) {
 		p := runPorts{damage: *f.Damage, defeat: f.Defeat, status: &corebattle.StatusContext{EffectContext: f.Damage.EffectContext, Defeat: f.Defeat}}
-		callbacks := p.callbacks(r, &saved, requester, nil)
+		// Boxes are not projected into a response, so every member is empty.
+		inspection := make(map[string]corebattle.InspectionContent, len(work.Actors))
+		for _, a := range work.Actors {
+			inspection[a.ID] = corebattle.InspectionContent{Empty: true}
+		}
+		callbacks := p.callbacks(r, work, requester, inspection)
+		callbacks.JobEncounters = c.npcEncounters(r, work, f)
 		if f.Assets != nil {
 			callbacks.JobAssets = &corebattle.JobAssetContext{DamageContext: p.damage, DefeatContext: p.defeat, Roster: callbacks.Roster}
 		}
@@ -305,6 +311,45 @@ func (c runCombat) respond(r *NormalRun, npc string, requester *corecharacter.Ch
 		}
 	}
 	return nil
+}
+
+// npcEncounters binds job78's room bodies for a response. npc_turn restores
+// the members after the body (_npc_action.cgi:141–151), discarding set_monster's
+// list, so an NPC's bypass jump keeps the encounter: only the all-member reset
+// (its revival pass on the NPC's side) and the floor counter remain
+// (_skill.cgi:6116–6133). The NPC's enemies are never boxes, so treasure retry
+// finds none. f is the working frame the response executes on.
+func (c runCombat) npcEncounters(r *NormalRun, work *corebattle.LifetimeState, f *corebattle.CallbackContext) *corebattle.JobEncounterContext {
+	if f.Defeat == nil {
+		return nil
+	}
+	_, modeErr := ValidateCrawlMode(r.Mode)
+	room := &corebattle.JobRoomContext{ActorID: f.ActorID, NormalStage: modeErr == nil, Floor: r.Floor}
+	reset := func() corebattle.EquipmentResetContext {
+		reset := f.Defeat.EquipmentResetContext
+		reset.TargetContext = f.TargetContext
+		return reset
+	}
+	room.Validate = func(id string) error {
+		if id != "job-78-entry-2" {
+			return corebattle.ErrUnsupportedEffect
+		}
+		current := reset()
+		return battle.ValidateResetAll(work, &current, random.Default())
+	}
+	room.Apply = func(id string) (corebattle.TargetContext, error) {
+		if id != "job-78-entry-2" {
+			return f.TargetContext, corebattle.ErrUnsupportedEffect
+		}
+		current := reset()
+		if err := battle.ResetAll(work, &current, c.s.cfg.RNG); err != nil {
+			return f.TargetContext, err
+		}
+		r.Floor++
+		room.Floor, room.Cursor = r.Floor, current.Cursor
+		return f.TargetContext, nil
+	}
+	return &corebattle.JobEncounterContext{DamageContext: *f.Damage, DefeatContext: f.Defeat, Room: room}
 }
 
 func consumedCounts(s corebattle.LifetimeState) map[string]int {

@@ -2,6 +2,7 @@ package adventure_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -110,13 +111,67 @@ func TestRunCombatNPCJob79BreathUsesRequesterGender(t *testing.T) {
 	foe.Jobs = corebattle.BattleJobs{JobID: "job-79", SP: 77, OldJobID: "starter"}
 	foe.MP, foe.MaxMP = 25, 50
 	cmd := combatRoom(t, f, f.actors[0], nil, foe)
+	hp := runActorByID(readStockRoom(t, f, cmd.RunID), cmd.ActorID).HP
 	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "defend", "defend", "", "")); err != nil {
 		t.Fatal(err)
 	}
 	r := readStockRoom(t, f, cmd.RunID)
-	// The breath's MP21 is spent; the NPC's icon is not the requester's, so no form.
-	if npc := runActorByID(r, foe.ID); npc.MP != 4 || npc.Icon != foe.Icon {
-		t.Fatalf("NPC breath: %+v", npc)
+	// The breath's MP21 is spent and its area hit lands on the working state
+	// (#2630); the NPC's icon is not the requester's, so no form.
+	if npc := runActorByID(r, foe.ID); npc.MP != 4 || npc.Icon != foe.Icon || runActorByID(r, cmd.ActorID).HP >= hp {
+		t.Fatalf("NPC breath: NPC=%+v requester HP %d→%d", npc, hp, runActorByID(r, cmd.ActorID).HP)
+	}
+}
+
+// npcRoom enters a run with the asset session, so every random-pool entry is
+// bound as in production, and one NPC answering with the scripted draws.
+func npcRoom(t *testing.T, npc corebattle.LifetimeActor, draws ...float64) (*normalFixture, adventure.RunCommand) {
+	t.Helper()
+	f, _ := lowRunCombat(t, 1)
+	f.cfg.RNG = &scriptRNG{draws: draws}
+	f.restart(t)
+	return f, combatRoom(t, f, f.actors[0], nil, npc)
+}
+
+// Job79.2's NPC branch draws the general random helper twice
+// (_skill.cgi:6252–6262). Draws 0–3 are the player's defend, 4 selects the
+// last choice (job79.2), 5 starts the NPC action; each random then draws a
+// job and a position (job3.2, DF up 40×0.4, twice).
+func TestRunCombatNPCJob79TimeDrawsRandomTwice(t *testing.T) {
+	job, position := (3-.5)/87, 2.5/8
+	foe := runEnemy("foe", 900)
+	foe.Jobs = corebattle.BattleJobs{JobID: "job-79", SP: 55, OldJobID: "starter"}
+	foe.MP, foe.MaxMP, foe.Defense, foe.BaseStats.Defense = 50, 50, 40, 40
+	f, cmd := npcRoom(t, foe, .5, .5, .5, .5, .99, .5, job, position, job, position)
+	r := accepted(t, f, combatCommand(cmd, "defend", "defend", "", ""))
+	if npc := runActorByID(r, foe.ID); npc.MP != 20 || npc.Defense != 72 {
+		t.Fatalf("NPC time: MP %d (want 20), DF %d (want 72 after two draws)", npc.MP, npc.Defense)
+	}
+}
+
+// An NPC's bypass jump keeps the encounter: npc_turn restores the members over
+// set_monster's list (_npc_action.cgi:141–151), so only reset_status_all and
+// the floor counter remain (_skill.cgi:6116–6133). Draw 4 selects job78.2 (the
+// last choice) and draw 6 is its 1-in-3 roll.
+func TestRunCombatNPCBypassJumpAdvancesFloorOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		roll  float64
+		floor int
+	}{{"found", .1, 2}, {"not-found", .99, 1}} {
+		t.Run(tc.name, func(t *testing.T) {
+			foe := runEnemy("foe", 900)
+			foe.Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 30, OldJobID: "starter"}
+			foe.MP, foe.MaxMP = 50, 50
+			f, cmd := npcRoom(t, foe, .99, .99, .99, .99, .99, .99, tc.roll)
+			r := accepted(t, f, combatCommand(cmd, "defend", "defend", "", ""))
+			// The reset clears the requester's fresh defend (reset_status).
+			defended := runActorByID(r, cmd.ActorID).Temporary != ""
+			if r.Floor != tc.floor || r.EncounterFloor != 1 || !slices.Equal(r.Enemies, []string{foe.ID}) ||
+				runActorByID(r, foe.ID).MP != 40 || defended != (tc.floor == 1) {
+				t.Fatalf("floor %d encounter %d enemies %v NPC MP %d defended %v", r.Floor, r.EncounterFloor, r.Enemies, runActorByID(r, foe.ID).MP, defended)
+			}
+		})
 	}
 }
 

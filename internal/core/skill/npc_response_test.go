@@ -23,7 +23,7 @@ func runNPCFixture(t *testing.T) (battle.LifetimeState, battle.NPCOperation) {
 	}
 }
 
-func registerNPCFixture(d *BattleDefinitions, f *battle.CallbackContext) {
+func registerNPCFixture(d *BattleDefinitions, _ *battle.LifetimeState, f *battle.CallbackContext) {
 	d.RegisterNPCCallbacks(PlayerCallbackContexts{BaseGuard: &battle.BaseGuardContext{DamageContext: *f.Damage}}, f)
 }
 
@@ -155,8 +155,8 @@ func TestNPCOperationConfusionChoiceAndExpiryDrawOrder(t *testing.T) {
 		s.Actors[0].Status, s.Actors[0].Temporary = battle.StatusConfusion, battle.TemporaryRegeneration
 		seeds := []battle.CallbackBinding{responseBinding("one"), responseBinding("two")}
 		rng := &npcJobRNG{t: t, draws: []float64{row.draw, .75, .1}}
-		got, err := ApplyNPCOperation(&s, op, seeds, func(d *BattleDefinitions, f *battle.CallbackContext) {
-			registerNPCFixture(d, f)
+		got, err := ApplyNPCOperation(&s, op, seeds, func(d *BattleDefinitions, w *battle.LifetimeState, f *battle.CallbackContext) {
+			registerNPCFixture(d, w, f)
 			d.Invocations.Entries["one"] = responseCallback(func(*battle.LifetimeState, *battle.CallbackContext, random.Generator) error {
 				t.Fatal("expiry roll was used to select the action")
 				return nil
@@ -184,8 +184,8 @@ func TestNPCOperationPoisonAndRegeneration(t *testing.T) {
 		a := &s.Actors[0]
 		a.HP, a.MaxHP, a.Status, a.Temporary = 850, 900, row.status, battle.TemporaryRegeneration
 		rng := &npcJobRNG{t: t, draws: row.draws}
-		got, err := ApplyNPCOperation(&s, op, []battle.CallbackBinding{responseBinding("pass")}, func(d *BattleDefinitions, f *battle.CallbackContext) {
-			registerNPCFixture(d, f)
+		got, err := ApplyNPCOperation(&s, op, []battle.CallbackBinding{responseBinding("pass")}, func(d *BattleDefinitions, w *battle.LifetimeState, f *battle.CallbackContext) {
+			registerNPCFixture(d, w, f)
 			d.Invocations.Entries["pass"] = responseCallback(func(*battle.LifetimeState, *battle.CallbackContext, random.Generator) error { return nil })
 		}, rng)
 		if err != nil || !got.NormalAction || s.Actors[0].HP != row.hp || len(rng.draws) != 0 {
@@ -233,7 +233,7 @@ func TestNPCOperationRepeatSeedAndReload(t *testing.T) {
 func TestNPCOperationRegisteredSummonCarriesRoster(t *testing.T) {
 	s, op := runNPCFixture(t)
 	s.Actors[0].Jobs.JobID = "job-95"
-	register := func(d *BattleDefinitions, f *battle.CallbackContext) {
+	register := func(d *BattleDefinitions, w *battle.LifetimeState, f *battle.CallbackContext) {
 		d.RegisterNPCCallbacks(PlayerCallbackContexts{Roster: &battle.RosterContext{
 			EnemyTeamID: "party",
 			EnemyPool: []battle.LifetimeActor{{Participant: battle.Participant{
@@ -313,8 +313,8 @@ func TestNPCOperationLateRejectionRestoresStateAndPorts(t *testing.T) {
 	}
 	var executed bool
 	rng := &npcJobRNG{t: t, draws: []float64{0, .9, .9}}
-	res, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), func(d *BattleDefinitions, f *battle.CallbackContext) {
-		registerNPCFixture(d, f)
+	res, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), func(d *BattleDefinitions, w *battle.LifetimeState, f *battle.CallbackContext) {
+		registerNPCFixture(d, w, f)
 		d.Invocations.Entries["first"] = responseCallback(func(s *battle.LifetimeState, c *battle.CallbackContext, _ random.Generator) error {
 			executed = true
 			if c.Assets == nil || c.Assets.Wallet != 100 {

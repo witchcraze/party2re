@@ -642,7 +642,7 @@ func TestNPCLateCMPSourceIdentitySettlement(t *testing.T) {
 	}
 
 	// Full ApplyNPCOperation path uses the same resolved source-identity CMP settlement.
-	registerDualAgility := func(d *BattleDefinitions, f *corebattle.CallbackContext) {
+	registerDualAgility := func(d *BattleDefinitions, _ *corebattle.LifetimeState, f *corebattle.CallbackContext) {
 		d.RegisterNPCCallbacks(PlayerCallbackContexts{
 			BaseGuard:   &corebattle.BaseGuardContext{DamageContext: *f.Damage},
 			DualAgility: &corebattle.DualAgilityContext{DamageContext: *f.Damage},

@@ -40,14 +40,15 @@ func (d *BattleDefinitions) RegisterGemCallbacks(shared PlayerCallbackContexts, 
 
 // ApplyNPCOperation binds fresh definitions for the selected NPC. Use the mode
 // seed for a new request and the returned seed for another response in it.
-// register builds ports from the working frame without mutating caller inputs.
-func ApplyNPCOperation(s *corebattle.LifetimeState, op corebattle.NPCOperation, seed []corebattle.CallbackBinding, register func(*BattleDefinitions, *corebattle.CallbackContext), rng random.Generator) (corebattle.NPCOperationResult, error) {
+// register builds ports on the working state and frame without mutating caller
+// inputs; ports that write state must write that working state.
+func ApplyNPCOperation(s *corebattle.LifetimeState, op corebattle.NPCOperation, seed []corebattle.CallbackBinding, register func(*BattleDefinitions, *corebattle.LifetimeState, *corebattle.CallbackContext), rng random.Generator) (corebattle.NPCOperationResult, error) {
 	if register == nil {
 		return corebattle.NPCOperationResult{}, corebattle.ErrInvalidRequest
 	}
 	return s.ApplyNPCOperation(op, seed, func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (corebattle.NPCActionPlan, error) {
 		var d BattleDefinitions
-		register(&d, frame)
+		register(&d, s, frame)
 		return d.npcChoicePool(s, frame, seed)
 	}, rng)
 }
