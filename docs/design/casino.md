@@ -12,7 +12,7 @@ The Casino follows `party2/lib/casino.cgi`, `_casino.cgi`, `casino_indian.cgi`, 
 ## Rooms
 
 - Leaving as a participant adds 1 fatigue (`_casino.cgi:216–218`); spectators leave freely and never act or win. Leadership passes to the next active member; the room disbands with no active members. Kick is leader-only before the game starts.
-- Casino owns a 30-minute idle lifetime. Open: legacy expiry also applied a sleep penalty (`casino.cgi:178–190`), not yet reconciled (#949).
+- Casino owns a 30-minute idle lifetime. Open: legacy expiry also puts participants to sleep (#2635).
 - After an error, clients observe room and account state instead of replaying a wager; repeated actions on a finished round or an already-submitted turn are rejected. Publication ordering and cross-store limits are owned by [Valkey keyspace](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging).
 
 ### Observation and visibility
@@ -26,14 +26,11 @@ The anonymous lobby is a window of at most 100 active rooms with public summary 
 | Doppel, active | Own mark visible; other marks hidden | All marks hidden |
 | Before start / after settlement (`round <= 0`) | Remaining cards/marks and declarations visible | Same |
 
-Evidence: `lib/casino_indian.cgi:22–33`, `lib/casino_highlow.cgi:33–50`, `lib/casino_doppel.cgi:23–36`, admission `lib/casino.cgi:382–516`, dispatch `lib/_casino.cgi:10–32,100–111`. Settlement returns the room to waiting with round zero; there is no separate finished status. Go Doppel stores the selected mark in the action too, so other participants' mark actions are masked; legacy displays actions separately from hidden cards.
+Settlement returns the room to waiting with round zero; there is no separate finished status.
 
 ### Scoped legacy dispatch reconciliation
 
-The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Screenshot (`すくしょ`) and invitation (`さそう`) (`_casino.cgi:124–145`) have no replacement (#140). Known differences, reconciled under #949:
-
-- High & Low: legacy hides “continue” at the maximum bet or with insufficient coins (`casino_highlow.cgi:10–50`); the service accepts all-in calls.
-- Doppel: legacy clears declarations on start and stores mark changes in the card field, allowing reselection before all cards are selected (`casino_doppel.cgi:10–99`). Eligibility of waiting entrants follows the existing service.
+The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Screenshot (`すくしょ`) and invitation (`さそう`) (`_casino.cgi:124–145`) have no replacement (#140). Open differences: High & Low offers “continue” at the maximum bet or without enough coins (#2636), and members who joined mid-game can act before the next start (#2637).
 
 ## Game rules
 
