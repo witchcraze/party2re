@@ -96,12 +96,35 @@ func TestNPC407TableKeepsSourcePositions(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got []string
+	var keys []string
 	for _, b := range bindings {
 		got = append(got, fmt.Sprint(b.ID, "/", b.MPCost))
+		keys = append(keys, BindingSourceKey(b, false))
 	}
 	want := []string{"npc-job-407-position-0/24", "npc-job-407-position-1/24", "npc-job-407-position-2/55", "npc-job-407-position-3/66"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatal(got)
+	}
+	if want := []string{"e697cff309d2c3ab", "e697cff309d2c3ab", "16e8bf65478c95a1", "6535a05fa2f4b597"}; !slices.Equal(keys, want) {
+		t.Fatalf("keys %v, want %v", keys, want)
+	}
+}
+
+func TestNPC407PoolKeepsDuplicateTransformWeight(t *testing.T) {
+	s, c, d := npc407Fixture()
+	d.RegisterBaseGuard(&corebattle.BaseGuardContext{DamageContext: c.DamageContext})
+	s.Actors[0].Jobs.SP, s.Actors[0].MP = 0, 24
+	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Damage: &c.DamageContext}
+	pool, err := d.npcChoicePool(&s, &f, NPCDefaultSeed())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, choice := range pool.Choices {
+		ids = append(ids, choice.ID)
+	}
+	if want := []string{"npc-normal-attack", "npc-job-407-position-1", "npc-job-407-position-1"}; !slices.Equal(ids, want) {
+		t.Fatalf("pool %v, want %v", ids, want)
 	}
 }
 
