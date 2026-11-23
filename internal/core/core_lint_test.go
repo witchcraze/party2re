@@ -57,7 +57,7 @@ var (
 func isPathAllowed(relPath string, allowedMap map[string]bool) bool {
 	normalized := filepath.ToSlash(relPath)
 	for allowed := range allowedMap {
-		if strings.HasPrefix(normalized, allowed) {
+		if normalized == allowed || strings.HasPrefix(normalized, allowed+"/") {
 			return true
 		}
 	}
@@ -329,6 +329,7 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 var coreTargetKeywords = [][]byte{
 	[]byte("Experience"),
 	[]byte("Level"),
+	[]byte("SP"),
 	[]byte("Money"),
 	[]byte("SmallMedals"),
 	[]byte("Crystal"),
@@ -418,6 +419,28 @@ func TestCoreDomainInvariantsAST(t *testing.T) {
 	}
 
 	t.Logf("Successfully verified Core domain invariant encapsulation across %d production files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
+}
+
+func TestCoreDomainInvariantsAST_SPPrefilter(t *testing.T) {
+	const featurePath = "internal/feature/service.go"
+	src := []byte(`package feature
+func mutate(char *Character) { char.SP++ }
+`)
+	if !containsAnyCoreKeyword(src) {
+		t.Fatal("prefilter skipped a file whose only mutation is SP")
+	}
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, featurePath, src, parser.AllErrors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if violations := checkFileCoreRules(fset, node, featurePath); len(violations) != 1 || violations[0].field != "SP" {
+		t.Fatalf("expected one SP violation, got %+v", violations)
+	}
+	if violations := checkFileCoreRules(fset, node, "internal/core/progression/progression.go"); len(violations) != 0 {
+		t.Fatalf("expected progression exemption, got %+v", violations)
+	}
 }
 
 // TestCoreDomainInvariantsAST_Detection verifies that the linter correctly
@@ -683,6 +706,19 @@ func ModifyItem(inv *Inventory, inst Instance) {
 			name: "Valid Depot: Indexed quantity mutation",
 			path: "internal/depot/depot.go",
 			code: `package depot; func Stack(d *Depot) { d.Items[0].Quantity += 2; d.Items[0].Quantity-- }`,
+		},
+		{
+			name: "Valid Depot descendant: Indexed quantity mutation",
+			path: "internal/depot/storage/stack.go",
+			code: `package storage; func Stack(d *Depot) { d.Items[0].Quantity++ }`,
+		},
+		{
+			name:        "Violation: Depot prefix does not exempt a sibling",
+			path:        "internal/depottools/service.go",
+			code:        `package depottools; func ModifyItem(inv *Inventory) { inv.Items[0].Quantity++ }`,
+			expectError: true,
+			field:       "Items",
+			errSnippet:  "use Inventory.Add or Consume",
 		},
 
 		// 5. Equipment Slots
