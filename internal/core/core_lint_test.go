@@ -329,6 +329,7 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 var coreTargetKeywords = [][]byte{
 	[]byte("Experience"),
 	[]byte("Level"),
+	[]byte("SP"),
 	[]byte("Money"),
 	[]byte("SmallMedals"),
 	[]byte("Crystal"),
@@ -418,6 +419,28 @@ func TestCoreDomainInvariantsAST(t *testing.T) {
 	}
 
 	t.Logf("Successfully verified Core domain invariant encapsulation across %d production files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
+}
+
+func TestCoreDomainInvariantsAST_SPPrefilter(t *testing.T) {
+	const featurePath = "internal/feature/service.go"
+	src := []byte(`package feature
+func mutate(char *Character) { char.SP++ }
+`)
+	if !containsAnyCoreKeyword(src) {
+		t.Fatal("prefilter skipped a file whose only mutation is SP")
+	}
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, featurePath, src, parser.AllErrors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if violations := checkFileCoreRules(fset, node, featurePath); len(violations) != 1 || violations[0].field != "SP" {
+		t.Fatalf("expected one SP violation, got %+v", violations)
+	}
+	if violations := checkFileCoreRules(fset, node, "internal/core/progression/progression.go"); len(violations) != 0 {
+		t.Fatalf("expected progression exemption, got %+v", violations)
+	}
 }
 
 // TestCoreDomainInvariantsAST_Detection verifies that the linter correctly
