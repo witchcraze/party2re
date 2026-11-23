@@ -157,7 +157,8 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 			if member.IsSpectator {
 				return ErrSpectatorCannot
 			}
-			if member.Action != "" && member.Action != "待機中" {
+			// 待機中 (joined mid-game) is a declared action too (casino_indian.cgi:66-70).
+			if member.Action != "" {
 				return ErrAlreadyActed
 			}
 
@@ -215,8 +216,8 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 				} else if m.Action == string(ActionShowdown) {
 					showdownCount++
 					actedCount++
-				} else if m.Action == string(ActionCall) {
-					actedCount++
+				} else if m.Action == string(ActionCall) || m.Action == "待機中" {
+					actedCount++ // legacy counts every non-empty action, including 待機中
 				}
 			}
 
@@ -228,29 +229,16 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 				// All players except 1 folded
 				shouldShowdown = true
 			} else if actedCount == totalParticipants {
-				// All players have acted in this round
-				hasCoinlessPlayer := false
-				for _, m := range participants {
-					if m.Action != string(ActionFold) {
-						pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
-						if err != nil {
-							return err
-						}
-						if pAcc.Coins <= 0 {
-							hasCoinlessPlayer = true
-							break
-						}
-					}
-				}
-
-				if hasCoinlessPlayer || room.CurrentBet >= room.MaxBet || float64(showdownCount) >= float64(activeNonFolded)*0.5 {
+				// All players have acted in this round; only the actor's balance
+				// after paying counts ($m{coin}, casino_indian.cgi:128).
+				if acc.Coins-betToDeduct <= 0 || room.CurrentBet >= room.MaxBet || float64(showdownCount) >= float64(activeNonFolded)*0.5 {
 					shouldShowdown = true
 				} else {
 					// Next Round!
 					room.Round++
 					room.CurrentBet += room.Rate
 					for _, m := range participants {
-						if m.Action != string(ActionFold) {
+						if m.Action != string(ActionFold) && m.Action != "待機中" {
 							m.Action = ""
 							m.UpdatedAt = time.Now().UTC()
 						}
@@ -264,7 +252,7 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 				winnerID := ""
 
 				for _, m := range participants {
-					if m.Action == string(ActionFold) {
+					if m.Action == string(ActionFold) || m.Action == "待機中" {
 						continue
 					}
 					if m.Card > maxCard {

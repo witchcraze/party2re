@@ -50,7 +50,15 @@ func ParseHighLowAction(act string) (HighLowAction, error) {
 var (
 	ErrInvalidHighLowAction = errors.New("invalid high & low action: must be call, high, low (3+ players), or fold")
 	ErrLowNotAllowedTwo     = errors.New("low action is only available with more than 2 participants")
+	// ErrHighLowCallUnavailable: つづける is unregistered at the max bet or without enough coins.
+	ErrHighLowCallUnavailable = errors.New("call is only available below the max bet with enough coins")
 )
+
+// highLowCanCall mirrors the つづける registration: now_bet < max_bet && coin >= now_bet
+// (party2/lib/casino_highlow.cgi:13-16).
+func highLowCanCall(currentBet, maxBet, coins int64) bool {
+	return currentBet < maxBet && coins >= currentBet
+}
 
 // StartHighLow deals 1 card to each participant and starts Round 1 (party2/lib/casino_highlow.cgi:53-77).
 func (s *Service) StartHighLow(ctx context.Context, roomID string, leaderID string) (*RoomDetail, error) {
@@ -173,13 +181,17 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 			if member.IsSpectator {
 				return ErrSpectatorCannot
 			}
-			if member.Action != "" && member.Action != "待機中" {
+			// 待機中 (joined mid-game) is a declared action too (casino_highlow.cgi:83-86).
+			if member.Action != "" {
 				return ErrAlreadyActed
 			}
 
 			acc, err := s.repo.GetAccount(txCtx, characterID)
 			if err != nil {
 				return err
+			}
+			if action == HighLowActionCall && !highLowCanCall(room.CurrentBet, room.MaxBet, acc.Coins) {
+				return ErrHighLowCallUnavailable
 			}
 
 			// Re-fetch all members to validate participant count and rules
@@ -244,6 +256,8 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 				case string(HighLowActionCall):
 					callCount++
 					actedCount++
+				case "待機中": // counted as acted, as legacy counts every non-empty action
+					actedCount++
 				}
 			}
 
@@ -252,29 +266,16 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 
 			shouldShowdown := false
 			if actedCount == totalParticipants {
-				// All players have acted in this round (party2/lib/casino_highlow.cgi:146)
-				hasCoinlessPlayer := false
-				for _, m := range participants {
-					if m.Action != string(HighLowActionFold) {
-						pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
-						if err != nil {
-							return err
-						}
-						if pAcc.Coins <= 0 {
-							hasCoinlessPlayer = true
-							break
-						}
-					}
-				}
-
-				if hasCoinlessPlayer || room.CurrentBet >= room.MaxBet || float64(highCount+lowCount) >= float64(activeNonFolded)*0.5 || activeNonFolded <= 1 {
+				// All players have acted in this round; only the actor's balance
+				// after paying counts ($m{coin}, party2/lib/casino_highlow.cgi:146).
+				if acc.Coins-betToDeduct <= 0 || room.CurrentBet >= room.MaxBet || float64(highCount+lowCount) >= float64(activeNonFolded)*0.5 {
 					shouldShowdown = true
 				} else {
 					// Next Round!
 					room.Round++
 					room.CurrentBet += room.Rate
 					for _, m := range participants {
-						if m.Action != string(HighLowActionFold) {
+						if m.Action != string(HighLowActionFold) && m.Action != "待機中" {
 							m.Action = ""
 							m.UpdatedAt = time.Now().UTC()
 						}
@@ -299,16 +300,6 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 						if m.Card < minCard {
 							lower = m.CharacterID
 							minCard = m.Card
-						}
-					}
-				}
-
-				// If all active players folded except 1 and no one declared High/Low, surviving active player wins
-				if higher == "" && lower == "" && activeNonFolded == 1 {
-					for _, m := range participants {
-						if m.Action != string(HighLowActionFold) {
-							higher = m.CharacterID
-							break
 						}
 					}
 				}

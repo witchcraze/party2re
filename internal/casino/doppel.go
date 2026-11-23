@@ -162,6 +162,10 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 			if member.IsSpectator {
 				return ErrSpectatorCannot
 			}
+			// A mid-game entrant (待機中) gets no marks (casino_doppel.cgi:11-12,41-42).
+			if member.Action == "待機中" {
+				return ErrAlreadyActed
+			}
 
 			acc, err := s.repo.GetAccount(txCtx, characterID)
 			if err != nil {
@@ -182,8 +186,9 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 				}
 			}
 
-			// Available marks: 0..min(len(participants), 7) (party2/lib/casino_doppel.cgi:13-17, 76)
-			maxAllowed := len(participants)
+			// Available marks: 0..min(members at start, 7); now_bet is fixed by kaishi
+			// (party2/lib/casino_doppel.cgi:13-17, 76), so mid-game entrants add none.
+			maxAllowed := countDoppelPlayers(participants)
 			if maxAllowed > len(AuthenticDoppelMarks)-1 {
 				maxAllowed = len(AuthenticDoppelMarks) - 1
 			}
@@ -218,7 +223,7 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 			// Check if all participants have selected a mark
 			allSelected := true
 			for _, m := range participants {
-				if m.Card < 0 {
+				if m.Card < 0 && m.Action != "待機中" { // is_all_select skips 待機中
 					allSelected = false
 					break
 				}
@@ -236,7 +241,7 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 
 				var matchedChildren []string
 				for _, m := range participants {
-					if m.CharacterID == room.LeaderCharacterID {
+					if m.CharacterID == room.LeaderCharacterID || m.Action == "待機中" {
 						continue
 					}
 					if m.Card == leaderCard {
@@ -344,4 +349,15 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 	}
 
 	return detail, nil
+}
+
+// countDoppelPlayers counts the participants dealt into the current game.
+func countDoppelPlayers(participants []*RoomMember) int {
+	n := 0
+	for _, m := range participants {
+		if m.Action != "待機中" {
+			n++
+		}
+	}
+	return n
 }

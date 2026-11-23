@@ -104,7 +104,7 @@ func (h *Handler) casinoActivityData(ctx context.Context, result playercontext.R
 	if err != nil {
 		return nil, err
 	}
-	controls, err := view.Controls(actor.ID)
+	controls, err := view.Controls(actor.ID, account.Coins)
 	if err != nil {
 		return nil, err
 	}

@@ -54,6 +54,10 @@ func (f *activityFixtures) HasCharacterRoom(context.Context, string) (bool, erro
 	return f.casino != nil, f.err
 }
 
+func (f *activityFixtures) GetAccount(_ context.Context, id string) (casino.Account, error) {
+	return casino.Account{CharacterID: id, Coins: 1000}, f.err
+}
+
 type pvpActivityFixture struct {
 	room     pvp.RoomDetail
 	err      error

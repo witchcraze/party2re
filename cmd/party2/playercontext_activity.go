@@ -36,6 +36,7 @@ type challengeActivityReader interface {
 type casinoActivityReader interface {
 	GetCharacterRoomView(context.Context, string, string) (*casino.RoomView, error)
 	HasCharacterRoom(context.Context, string) (bool, error)
+	GetAccount(context.Context, string) (casino.Account, error)
 }
 
 type contextActivityReaders struct {
@@ -235,7 +236,11 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		return nil, fmt.Errorf("casino activity: %w", err)
 	}
 	if view != nil {
-		controls, err := view.Controls(actor)
+		account, err := r.casino.GetAccount(ctx, actor)
+		if err != nil {
+			return nil, fmt.Errorf("casino activity: %w", err)
+		}
+		controls, err := view.Controls(actor, account.Coins)
 		if err != nil {
 			return nil, err
 		}

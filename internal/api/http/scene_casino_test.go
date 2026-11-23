@@ -201,7 +201,11 @@ func (f *casinoSceneFixture) readActivities(ctx context.Context, owner, actor st
 	if err != nil || v == nil {
 		return []playercontext.Activity{}, err
 	}
-	c, err := v.Controls(actor)
+	acc, err := f.service.GetAccount(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	c, err := v.Controls(actor, acc.Coins)
 	if err != nil {
 		return nil, err
 	}

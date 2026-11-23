@@ -235,6 +235,7 @@ func casinoActionRejection(err error) (int, ErrorDetail) {
 		casino.ErrInvalidAction:            {http.StatusBadRequest, "CASINO_INVALID_INPUT"},
 		casino.ErrInvalidHighLowAction:     {http.StatusBadRequest, "CASINO_INVALID_INPUT"},
 		casino.ErrLowNotAllowedTwo:         {http.StatusBadRequest, "CASINO_INVALID_INPUT"},
+		casino.ErrHighLowCallUnavailable:   {http.StatusBadRequest, "CASINO_INVALID_INPUT"},
 		casino.ErrInvalidDoppelMark:        {http.StatusBadRequest, "CASINO_INVALID_INPUT"},
 		casino.ErrInvalidDoppelMarkIndex:   {http.StatusBadRequest, "CASINO_INVALID_INPUT"},
 	} {
