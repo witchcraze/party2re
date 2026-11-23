@@ -242,6 +242,19 @@ func TestNormalRunPairedCommandExitAndCleanupStress(t *testing.T) {
 			if stats.Failures != 0 {
 				t.Fatal(stats)
 			}
+			committed := 0
+			for _, commandID := range []string{cmd.ID, compete.ID} {
+				receipt, err := f.store.FindRunReceipt(t.Context(), runID, commandID)
+				if err != nil {
+					t.Fatalf("read receipt %s: %v", commandID, err)
+				}
+				if receipt != nil {
+					committed++
+				}
+			}
+			if committed != 1 {
+				t.Fatalf("committed commands = %d, want 1", committed)
+			}
 			state, err := f.store.FindRun(context.Background(), runID)
 			if err != nil {
 				t.Fatal(err)
