@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -235,7 +234,7 @@ func TestNormalRunPairedCommandExitAndCleanupStress(t *testing.T) {
 					request = compete
 				}
 				_, err := f.svc.Command(context.Background(), request)
-				if errors.Is(err, runhost.ErrConflict) || errors.Is(err, adventure.ErrNotFound) || errors.Is(err, runhost.ErrForbidden) || errors.Is(err, runhost.ErrRecovery) {
+				if errors.Is(err, runhost.ErrConflict) || errors.Is(err, runhost.ErrNotFound) || errors.Is(err, runhost.ErrForbidden) || errors.Is(err, runhost.ErrRecovery) {
 					return nil
 				}
 				return err
