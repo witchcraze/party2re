@@ -133,11 +133,9 @@ cross-feature work uses an explicit public contract or application orchestrator.
 Delayed feature rewards require one atomic claim-and-apply persistence operation.
 Costume owns rented appearance state independently of player-store transactions.
 
-Event Plaza owns ordinary presence and the temporary sealing crowd through its
-injected presence tracker. The composition root connects the Boss celebration
-hook directly to that public crowd operation; it has no banquet/toast SQL
-repository dependency. Historical banquet tables remain untouched. See
-[Event Plaza design](../design/eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) for storage boundaries.
+Event Plaza owns ordinary presence and the sealing crowd through its
+[Valkey tracker](valkey-keyspace.md#current-key-inventory). The Boss victory hook
+delegates crowd creation to Event Plaza after settlement.
 
 Game rules and legacy action mappings are indexed in [design/README.md](../design/README.md).
 Transport schemas belong to [OpenAPI](../api/openapi.json), SQL definitions to

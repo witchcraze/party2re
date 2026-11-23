@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,6 +44,16 @@ func TestEventPlazaRetiredRoutes(t *testing.T) {
 	}
 }
 
+type retirementPresenceTracker struct {
+	eventplaza.PresenceTracker
+	lastSeen atomic.Int64
+}
+
+func (p *retirementPresenceTracker) RecordPresence(_ context.Context, _ string, at time.Time) error {
+	p.lastSeen.Store(at.UnixNano())
+	return nil
+}
+
 func TestEventPlazaRetiredToastConcurrentRequestsPreserveAssets(t *testing.T) {
 	db := database.OpenTestDB(t)
 	ctx := context.Background()
@@ -58,11 +69,8 @@ func TestEventPlazaRetiredToastConcurrentRequestsPreserveAssets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo, err := database.NewEventPlazaRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	service, err := eventplaza.NewService(repo, characters, inventories, eventplaza.WithTransactionProvider(database.NewTransactionProvider(db)))
+	tracker := &retirementPresenceTracker{}
+	service, err := eventplaza.NewService(tracker, characters, inventories, eventplaza.WithTransactionProvider(database.NewTransactionProvider(db)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +86,7 @@ func TestEventPlazaRetiredToastConcurrentRequestsPreserveAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 	marker := time.Now().UTC().Truncate(time.Second).Add(-time.Minute)
-	if err := repo.RecordPresence(ctx, actor.ID, marker); err != nil {
+	if err := tracker.RecordPresence(ctx, actor.Name, marker); err != nil {
 		t.Fatal(err)
 	}
 	banquetIDs := []string{id.New(), id.New()}
@@ -99,9 +107,8 @@ func TestEventPlazaRetiredToastConcurrentRequestsPreserveAssets(t *testing.T) {
 		if err != nil || char.Money != actor.Money {
 			t.Fatalf("wallet changed: %+v, err=%v", char, err)
 		}
-		var presence time.Time
-		if err := db.QueryRowContext(ctx, "SELECT last_seen_at FROM eventplaza_presences WHERE character_id = ?", actor.ID).Scan(&presence); err != nil || !presence.Equal(marker) {
-			t.Fatalf("presence changed: %v, err=%v", presence, err)
+		if presence := time.Unix(0, tracker.lastSeen.Load()); !presence.Equal(marker) {
+			t.Fatalf("presence changed: %v, want %v", presence, marker)
 		}
 		var banquets, toasts, toastCount int
 		if err := db.QueryRowContext(ctx, "SELECT COUNT(*), SUM(toast_count) FROM celebration_banquets WHERE slayer_character_id = ?", actor.ID).Scan(&banquets, &toastCount); err != nil {

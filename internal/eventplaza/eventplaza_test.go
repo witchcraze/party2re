@@ -23,34 +23,17 @@ func (m *mockClock) Now() time.Time {
 	return m.now
 }
 
-type memoryRepo struct {
-	mu        sync.Mutex
-	presences map[string]time.Time
-}
-
-func newMemoryRepo() *memoryRepo {
-	return &memoryRepo{
-		presences: make(map[string]time.Time),
+func TestNewServiceRequiresPresenceTracker(t *testing.T) {
+	if svc, err := NewService(nil, newMemoryCharacterRepo(), newMemoryInventoryRepo()); svc != nil || !errors.Is(err, ErrNilDependency) {
+		t.Fatalf("missing presence tracker error = %v, want %v", err, ErrNilDependency)
 	}
 }
 
-func (m *memoryRepo) RecordPresence(ctx context.Context, characterID string, at time.Time) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.presences[characterID] = at
-	return nil
-}
-
-func (m *memoryRepo) CountActiveParticipants(ctx context.Context, cutoff time.Time) (int, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	count := 0
-	for _, lastSeen := range m.presences {
-		if !lastSeen.Before(cutoff) {
-			count++
-		}
+func TestValkeyPresenceTrackerRequiresClient(t *testing.T) {
+	tracker := NewValkeyPresenceTracker(nil)
+	if _, err := tracker.Observe(context.Background(), time.Now()); !errors.Is(err, ErrNilDependency) {
+		t.Fatalf("missing Valkey client error = %v, want %v", err, ErrNilDependency)
 	}
-	return count, nil
 }
 
 type memoryCharacterRepo struct {
@@ -173,10 +156,13 @@ func (m *mockCollectionRecorder) RecordItemDiscovered(ctx context.Context, chara
 	return nil
 }
 
-func populatePresences(repo *memoryRepo, count int, at time.Time) {
+func populatePresences(t *testing.T, tracker PresenceTracker, count int, at time.Time) {
+	t.Helper()
 	for i := 1; i <= count; i++ {
-		charID := fmt.Sprintf("presence-char-%03d", i)
-		_ = repo.RecordPresence(context.Background(), charID, at)
+		name := fmt.Sprintf("presence-char-%03d", i)
+		if err := tracker.RecordPresence(context.Background(), name, at); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -288,11 +274,11 @@ func TestRealTimePresence_AndPlazaStatus(t *testing.T) {
 	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	clock := &mockClock{now: now}
 
-	repo := newMemoryRepo()
+	tracker := NewValkeyPresenceTracker(newMockSortedSetStore().Client())
 	charRepo := newMemoryCharacterRepo()
 	invRepo := newMemoryInventoryRepo()
 
-	svc, err := NewService(repo, charRepo, invRepo, WithClock(clock))
+	svc, err := NewService(tracker, charRepo, invRepo, WithClock(clock))
 	if err != nil {
 		t.Fatalf("failed to init service: %v", err)
 	}
@@ -306,34 +292,34 @@ func TestRealTimePresence_AndPlazaStatus(t *testing.T) {
 		t.Errorf("expected 0 participants and tier 0, got %d / %d", status.ActiveParticipants, status.MerchantTier)
 	}
 
-	// 2. 12 characters register presence within window -> Tier 1
-	populatePresences(repo, 12, now)
+	// 2. Twelve visitors select tier 1 and the displayed count includes the merchant.
+	populatePresences(t, tracker, 12, now)
 	status, err = svc.GetPlazaStatus(ctx)
 	if err != nil {
 		t.Fatalf("GetPlazaStatus failed: %v", err)
 	}
-	if status.ActiveParticipants != 12 || status.MerchantTier != 1 {
-		t.Errorf("expected 12 participants and tier 1, got %d / %d", status.ActiveParticipants, status.MerchantTier)
+	if status.ActiveParticipants != 13 || status.MerchantSelectionCount != 12 || status.MerchantTier != 1 {
+		t.Errorf("expected 12 visitors plus the merchant at tier 1, got %+v", status)
 	}
 
-	// 3. Advance clock by 6 minutes (exceeding PresenceWindow 5 min) -> Members expire -> Tier 0
+	// 3. Expired rows still count for tier selection before observation removes them.
 	clock.now = now.Add(6 * time.Minute)
 	status, err = svc.GetPlazaStatus(ctx)
 	if err != nil {
 		t.Fatalf("GetPlazaStatus failed: %v", err)
 	}
-	if status.ActiveParticipants != 0 || status.MerchantTier != 0 {
-		t.Errorf("expected 0 active participants after 6m, got %d / %d", status.ActiveParticipants, status.MerchantTier)
+	if status.ActiveParticipants != 1 || status.MerchantSelectionCount != 13 || status.MerchantTier != 1 {
+		t.Errorf("expected only the merchant after cleanup, got %+v", status)
 	}
 
 	// 4. Record presence for 25 characters at new time -> Tier 2
-	populatePresences(repo, 25, clock.now)
+	populatePresences(t, tracker, 25, clock.now)
 	status, err = svc.GetPlazaStatus(ctx)
 	if err != nil {
 		t.Fatalf("GetPlazaStatus failed: %v", err)
 	}
-	if status.ActiveParticipants != 25 || status.MerchantTier != 2 {
-		t.Errorf("expected 25 participants and tier 2, got %d / %d", status.ActiveParticipants, status.MerchantTier)
+	if status.ActiveParticipants != 26 || status.MerchantTier != 2 {
+		t.Errorf("expected 25 visitors plus the merchant at tier 2, got %+v", status)
 	}
 }
 
@@ -342,13 +328,13 @@ func TestListAvailableBazaarItems_WithHelperExclusion(t *testing.T) {
 	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	clock := &mockClock{now: now}
 
-	repo := newMemoryRepo()
+	tracker := NewValkeyPresenceTracker(newMockSortedSetStore().Client())
 	charRepo := newMemoryCharacterRepo()
 	invRepo := newMemoryInventoryRepo()
 	helperMock := &mockHelperProvider{}
 
 	svc, err := NewService(
-		repo, charRepo, invRepo,
+		tracker, charRepo, invRepo,
 		WithClock(clock),
 		WithHelperProvider(helperMock),
 	)
@@ -366,7 +352,7 @@ func TestListAvailableBazaarItems_WithHelperExclusion(t *testing.T) {
 	}
 
 	// 2. 15 members -> Tier 1 (6 items)
-	populatePresences(repo, 15, now)
+	populatePresences(t, tracker, 15, now)
 	items, tier, err = svc.ListAvailableBazaarItems(ctx)
 	if err != nil {
 		t.Fatalf("ListAvailableBazaarItems failed: %v", err)
@@ -391,7 +377,7 @@ func TestListAvailableBazaarItems_WithHelperExclusion(t *testing.T) {
 	}
 
 	// 4. 25 members -> Tier 2 (6 items from Tier 2 list)
-	populatePresences(repo, 25, now)
+	populatePresences(t, tracker, 25, now)
 	helperMock.activeIDs = nil
 	items, tier, err = svc.ListAvailableBazaarItems(ctx)
 	if err != nil {
@@ -412,8 +398,8 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	clock := &mockClock{now: now}
 
-	repo := newMemoryRepo()
-	populatePresences(repo, 15, now) // Tier 1 unlocked
+	tracker := NewValkeyPresenceTracker(newMockSortedSetStore().Client())
+	populatePresences(t, tracker, 15, now) // Tier 1 unlocked
 
 	charRepo := newMemoryCharacterRepo()
 	invRepo := newMemoryInventoryRepo()
@@ -430,7 +416,7 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 	charRepo.characters[charID] = char
 
 	svc, err := NewService(
-		repo, charRepo, invRepo,
+		tracker, charRepo, invRepo,
 		WithClock(clock),
 		WithDepotRepository(depotRepo),
 		WithHelperProvider(helperMock),

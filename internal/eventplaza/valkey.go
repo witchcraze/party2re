@@ -57,7 +57,7 @@ func (t *ValkeyPresenceTracker) Observe(ctx context.Context, now time.Time) (Pre
 
 func (t *ValkeyPresenceTracker) update(ctx context.Context, change func([]Presence) ([]Presence, PresenceSnapshot)) (PresenceSnapshot, error) {
 	if t.client == nil {
-		return PresenceSnapshot{}, nil
+		return PresenceSnapshot{}, ErrNilDependency
 	}
 	retryLimit := t.retryLimit
 	if retryLimit <= 0 {
