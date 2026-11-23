@@ -46,13 +46,9 @@ func (r *CasinoRepository) FindPendingDeparture(ctx context.Context, characterID
 // CommitDeparture owns commit: publication must never precede an outer transaction's commit.
 // Transaction: RunInTx
 // Lock Order: casino_departures(0) -> characters(2, ascending ID) -> casino_departure_claims(8, ascending ID)
-func (r *CasinoRepository) CommitDeparture(ctx context.Context, d casino.Departure, mutate func(context.Context) error) error {
-	if TxFromContext(ctx) != nil || d.Detail.Room.ID == "" || d.Member.CharacterID == "" || d.Version < 1 || !d.Pending || mutate == nil {
+func (r *CasinoRepository) CommitDeparture(ctx context.Context, d *casino.Departure, mutate func(context.Context) error) error {
+	if TxFromContext(ctx) != nil || d == nil || d.Detail.Room.ID == "" || d.Member.CharacterID == "" || d.Version < 1 || !d.Pending || mutate == nil {
 		return casino.ErrDepartureRecovery
-	}
-	data, err := json.Marshal(d)
-	if err != nil {
-		return err
 	}
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		exec := ExecutorFromContext(txCtx, r.db)
@@ -71,6 +67,10 @@ func (r *CasinoRepository) CommitDeparture(ctx context.Context, d casino.Departu
 		if err := mutate(txCtx); err != nil {
 			return err
 		}
+		data, err := json.Marshal(d)
+		if err != nil {
+			return err
+		}
 		ids := slices.Clone(d.ClaimedIDs)
 		slices.Sort(ids)
 		for _, characterID := range slices.Compact(ids) {
@@ -78,7 +78,7 @@ func (r *CasinoRepository) CommitDeparture(ctx context.Context, d casino.Departu
 				return err
 			}
 		}
-		_, err := exec.ExecContext(txCtx, "UPDATE casino_departures SET version = ?, pending = TRUE, departure_json = ? WHERE room_id = ?", d.Version, data, d.Detail.Room.ID)
+		_, err = exec.ExecContext(txCtx, "UPDATE casino_departures SET version = ?, pending = TRUE, departure_json = ? WHERE room_id = ?", d.Version, data, d.Detail.Room.ID)
 		return err
 	})
 }

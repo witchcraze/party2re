@@ -3,6 +3,7 @@ package casino
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -35,7 +36,7 @@ type Departure struct {
 type DepartureRepository interface {
 	FindDeparture(context.Context, string) (Departure, error)
 	FindPendingDeparture(context.Context, string) (string, error)
-	CommitDeparture(context.Context, Departure, func(context.Context) error) error
+	CommitDeparture(context.Context, *Departure, func(context.Context) error) error
 	AcknowledgeDeparture(context.Context, string, int) error
 }
 
@@ -183,8 +184,17 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID, characterID string) err
 			return ErrDepartureRecovery
 		}
 		claimed := departureClaimedIDs(members)
+		leaderCard := -1
+		for _, m := range members {
+			if m.CharacterID == room.LeaderCharacterID {
+				leaderCard = m.Card
+				break
+			}
+		}
 		remaining := slices.Delete(members, index, index+1)
-		if !member.IsSpectator {
+		evalRound := !member.IsSpectator && room.Round > 0 && room.Status == RoomStatusInProgress &&
+			slices.ContainsFunc(remaining, func(m RoomMember) bool { return !m.IsSpectator })
+		if !member.IsSpectator && !evalRound {
 			firstActive := slices.IndexFunc(remaining, func(m RoomMember) bool { return !m.IsSpectator })
 			if firstActive < 0 {
 				room.Status = RoomStatusDisbanded
@@ -196,7 +206,7 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID, characterID string) err
 		room.DepartureVersion = previous.Version + 1
 		d := Departure{Version: room.DepartureVersion, Member: member, Detail: RoomDetail{Room: *room, Members: remaining},
 			PasswordHash: room.PasswordHash, ClaimedIDs: claimed, Pending: true}
-		if err := s.commitDeparture(lockedCtx, d, !member.IsSpectator); err != nil {
+		if err := s.commitDeparture(lockedCtx, &d, !member.IsSpectator, evalRound, leaderCard); err != nil {
 			return err
 		}
 		return s.publishDeparture(lockedCtx, d)
@@ -211,45 +221,109 @@ func departureClaimedIDs(members []RoomMember) []string {
 	return claimed
 }
 
-func (s *Service) commitDeparture(ctx context.Context, d Departure, addFatigue bool) error {
+func (s *Service) commitDeparture(ctx context.Context, d *Departure, addFatigue bool, evalRound bool, leaderCard int) error {
 	roomID := d.Detail.Room.ID
 	characterID := d.Member.CharacterID
 	if err := s.departures.CommitDeparture(ctx, d, func(txCtx context.Context) error {
 		return s.runInTx(txCtx, func(txCtx context.Context) error {
+			lockedChars := make(map[string]corecharacter.Character)
+			if s.charRepo != nil {
+				if err := economy.LockInOrder(txCtx, d.ClaimedIDs, func(txCtx context.Context, actorID string) error {
+					locked, err := s.charRepo.FindByIDForUpdate(txCtx, actorID)
+					if err != nil {
+						return err
+					}
+					lockedChars[actorID] = locked
+					currentRoom, err := s.roomRepo.GetCharacterRoom(txCtx, actorID)
+					if errors.Is(err, ErrRoomNotFound) {
+						return nil
+					}
+					if err != nil {
+						return err
+					}
+					if currentRoom != roomID {
+						return ErrDepartureRecovery
+					}
+					return nil
+				}); err != nil {
+					return err
+				}
+			}
+
+			dirtyChars := make(map[string]bool)
+			creditWins := func(_ context.Context, winnerIDs []string) error {
+				if s.charRepo == nil {
+					return nil
+				}
+				for _, winnerID := range winnerIDs {
+					ch, ok := lockedChars[winnerID]
+					if !ok {
+						return fmt.Errorf("winner %s missing from locked departure claims", winnerID)
+					}
+					ch.CasinoWins++
+					lockedChars[winnerID] = ch
+					dirtyChars[winnerID] = true
+				}
+				return nil
+			}
+
+			if evalRound {
+				if err := s.evaluateDepartureRound(txCtx, &d.Detail.Room, &d.Detail.Members, characterID, leaderCard, creditWins); err != nil {
+					return err
+				}
+				firstActive := slices.IndexFunc(d.Detail.Members, func(m RoomMember) bool { return !m.IsSpectator })
+				if firstActive < 0 {
+					d.Detail.Room.Status = RoomStatusDisbanded
+				} else if d.Detail.Room.LeaderCharacterID == characterID {
+					d.Detail.Room.LeaderCharacterID = d.Detail.Members[firstActive].CharacterID
+				}
+			}
+
 			if s.charRepo == nil {
 				return nil
 			}
-			var char corecharacter.Character
-			if err := economy.LockInOrder(txCtx, d.ClaimedIDs, func(txCtx context.Context, actorID string) error {
-				locked, err := s.charRepo.FindByIDForUpdate(txCtx, actorID)
-				if actorID == characterID {
-					char = locked
-				}
-				if err != nil {
+			if addFatigue {
+				ch := lockedChars[characterID]
+				ch.AddTired(1)
+				lockedChars[characterID] = ch
+				dirtyChars[characterID] = true
+			}
+			dirtyIDs := make([]string, 0, len(dirtyChars))
+			for id := range dirtyChars {
+				dirtyIDs = append(dirtyIDs, id)
+			}
+			slices.Sort(dirtyIDs)
+			for _, id := range dirtyIDs {
+				if err := s.charRepo.Update(txCtx, lockedChars[id]); err != nil {
 					return err
 				}
-				currentRoom, err := s.roomRepo.GetCharacterRoom(txCtx, actorID)
-				if errors.Is(err, ErrRoomNotFound) {
-					return nil
-				}
-				if err != nil {
-					return err
-				}
-				if currentRoom != roomID {
-					return ErrDepartureRecovery
-				}
-				return nil
-			}); err != nil {
-				return err
 			}
-			if !addFatigue {
-				return nil
-			}
-			char.AddTired(1)
-			return s.charRepo.Update(txCtx, char)
+			return nil
 		})
 	}); err != nil {
 		return errors.Join(ErrDepartureRecovery, err)
 	}
 	return nil
+}
+
+func (s *Service) evaluateDepartureRound(txCtx context.Context, room *Room, members *[]RoomMember, leaverID string, leaderCard int, creditWins creditWinsFunc) error {
+	now := time.Now().UTC()
+	switch room.GameType {
+	case GameTypeIndian:
+		leaverAcc, err := s.repo.GetAccount(txCtx, leaverID)
+		if err != nil {
+			return err
+		}
+		return s.evaluateIndianPokerRound(txCtx, room, members, leaverAcc.Coins, now, creditWins)
+	case GameTypeHighLow:
+		leaverAcc, err := s.repo.GetAccount(txCtx, leaverID)
+		if err != nil {
+			return err
+		}
+		return s.evaluateHighLowRound(txCtx, room, members, leaverAcc.Coins, now, creditWins)
+	case GameTypeDoppel:
+		return s.evaluateDoppelRound(txCtx, room, members, leaderCard, now, creditWins)
+	default:
+		return nil
+	}
 }

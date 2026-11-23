@@ -24,7 +24,7 @@ type departureEvidenceFault struct {
 	failAck    bool
 }
 
-func (r departureEvidenceFault) CommitDeparture(ctx context.Context, d casino.Departure, mutate func(context.Context) error) error {
+func (r departureEvidenceFault) CommitDeparture(ctx context.Context, d *casino.Departure, mutate func(context.Context) error) error {
 	if r.commitMode == "expired" {
 		d.Detail.Room.UpdatedAt = time.Now().Add(-casino.DefaultLobbyTTL - time.Minute)
 	}
@@ -502,4 +502,80 @@ func TestDepartureRecovery_RejectsAmbientTransactionAndStaleRoom(t *testing.T) {
 		t.Fatalf("stale admission accepted: %v", err)
 	}
 	assertDeparture(t, ctx, f, 0, 1)
+}
+
+func TestDepartureRecovery_SettlingDeparture(t *testing.T) {
+	db := database.OpenTestDB(t)
+	raw := openIsolatedTestValkey(t, 0)
+	t.Cleanup(raw.Close)
+	ctx := context.Background()
+
+	for _, mode := range []string{"sql-rollback", "payload-rejected", "acknowledgement"} {
+		t.Run(mode, func(t *testing.T) {
+			f := departureFixture(t, ctx, db, raw)
+			if err := f.play(ctx, 0, true); err != nil {
+				t.Fatal(err)
+			}
+			before := f.state(t, ctx) // actors[0]: 490 coins, actors[1]: 500 coins, pot: 10, round: 1
+
+			client := &departureWriteFault{Client: raw, roomID: f.roomID}
+			evidence := departureEvidenceFault{DepartureRepository: f.accounts}
+			switch mode {
+			case "sql-rollback":
+				evidence.commitMode = "rollback"
+			case "payload-rejected":
+				client.command = "SET"
+			case "acknowledgement":
+				evidence.failAck = true
+			}
+			client.enabled.Store(true)
+
+			svc := departureService(t, db, client, evidence)
+			if err := svc.LeaveRoom(ctx, f.roomID, f.actors[1]); !errors.Is(err, errDepartureFault) || !errors.Is(err, casino.ErrDepartureRecovery) {
+				t.Fatalf("interruption hidden: %v", err)
+			}
+			client.enabled.Store(false)
+
+			if mode == "sql-rollback" {
+				f.assertUnchanged(t, ctx, before)
+				return
+			}
+
+			// SQL committed settlement + fatigue before publication.
+			acc0, err := f.accounts.GetAccount(ctx, f.actors[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			ch0, err := f.characters.FindByID(ctx, f.actors[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			ch1, err := f.characters.FindByID(ctx, f.actors[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if acc0.Coins != 500 || ch0.CasinoWins != 1 || ch1.Tired != 1 {
+				t.Fatalf("settlement not committed: acc0=%d wins0=%d tired1=%d", acc0.Coins, ch0.CasinoWins, ch1.Tired)
+			}
+
+			// Repeated recovery publishes the settled snapshot without double payout, double wins, or double fatigue.
+			fresh := openIsolatedTestValkey(t, 0)
+			t.Cleanup(fresh.Close)
+			restarted := departureService(t, database.OpenTestDB(t), fresh, nil)
+			for range 3 {
+				if err := restarted.LeaveRoom(ctx, f.roomID, f.actors[1]); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			assertDeparture(t, ctx, f, 1, 1)
+			after := f.state(t, ctx)
+			if after.coins != [2]int64{500, 500} || after.wins != [2]int{1, 0} || after.room.Round != 0 ||
+				after.room.Status != casino.RoomStatusWaiting || after.room.Pot != 0 ||
+				after.room.WinnerCharacterID == nil || *after.room.WinnerCharacterID != f.actors[0] ||
+				len(after.members) != 1 || after.members[0].CharacterID != f.actors[0] {
+				t.Fatalf("settled departure recovery mismatch: %+v", after)
+			}
+		})
+	}
 }

@@ -41,9 +41,12 @@ func (r *MemoryDepartureRepository) FindPendingDeparture(_ context.Context, char
 	return r.claims[characterID], nil
 }
 
-func (r *MemoryDepartureRepository) CommitDeparture(ctx context.Context, d Departure, mutate func(context.Context) error) error {
+func (r *MemoryDepartureRepository) CommitDeparture(ctx context.Context, d *Departure, mutate func(context.Context) error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if d == nil {
+		return ErrDepartureRecovery
+	}
 	previous, err := r.find(d.Detail.Room.ID)
 	if err != nil {
 		return err
@@ -56,11 +59,11 @@ func (r *MemoryDepartureRepository) CommitDeparture(ctx context.Context, d Depar
 			return ErrDepartureRecovery
 		}
 	}
-	data, err := json.Marshal(d)
-	if err != nil {
+	if err := mutate(ctx); err != nil {
 		return err
 	}
-	if err := mutate(ctx); err != nil {
+	data, err := json.Marshal(d)
+	if err != nil {
 		return err
 	}
 	for _, characterID := range d.ClaimedIDs {

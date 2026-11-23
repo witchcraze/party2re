@@ -218,7 +218,7 @@ func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string
 			LeaderID:     leaderID,
 			WaitUntil:    now.Add(KickActionWait),
 		}
-		if err := s.commitDeparture(lockedCtx, d, false); err != nil {
+		if err := s.commitDeparture(lockedCtx, &d, false, false, -1); err != nil {
 			return err
 		}
 		return s.publishDeparture(lockedCtx, d)
