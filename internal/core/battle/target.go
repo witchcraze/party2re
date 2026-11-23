@@ -51,9 +51,10 @@ type TargetContext struct {
 	PhantomEnemyIDs  []string
 	// DefeatedStatus preserves the target's status before the defeat reset for reward Apply.
 	DefeatedStatus string
-	// A duel reply swaps the source arrays even when its fallback chose an ally.
-	// This transient provenance is set only by the intrinsic duel body.
-	duelOriginID string
+	// A duel reply or job405's opponent healing swaps the source arrays (the
+	// duel even when its fallback chose an ally). Transient provenance set only
+	// by those intrinsic bodies; it names the actor whose sides were swapped.
+	sideSwapOriginID string
 	// Possession changes only the actor; source rosters retain their origin.
 	possessionOriginID string
 	// Only concrete gem bodies certify symbolic-to-zero conversion tails.
@@ -113,8 +114,8 @@ func (s *LifetimeState) validateTargetContext(c TargetContext, rng random.Genera
 			return ErrInvalidParticipant
 		}
 	}
-	if c.duelOriginID != "" {
-		actor, partySide = s.actor(c.duelOriginID), 1
+	if c.sideSwapOriginID != "" {
+		actor, partySide = s.actor(c.sideSwapOriginID), 1
 		if actor == nil {
 			return ErrInvalidParticipant
 		}
@@ -129,7 +130,7 @@ func (s *LifetimeState) validateTargetContext(c TargetContext, rng random.Genera
 		}
 	}
 	party, enemy := c.PartyIDs, c.EnemyIDs
-	if c.duelOriginID != "" {
+	if c.sideSwapOriginID != "" {
 		party, enemy = enemy, party
 	}
 	for _, id := range c.MemberOnlyIDs {

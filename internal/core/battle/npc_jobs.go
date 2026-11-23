@@ -52,6 +52,8 @@ func NPCJobEntries(job int) []CallbackEntry {
 			{ID: "npc-job-402-position-4", Name: "barrier-break", RequiredSP: 100, MPCost: 55},
 			{ID: "npc-job-402-position-5", Name: "shared-mana-strike", RequiredSP: 100, MPCost: 80},
 		}
+	case 405:
+		return NPCJob405Variants()[0]
 	case 403:
 		return []CallbackEntry{
 			{ID: "npc-job-403-position-0", Name: "neutral-wave", RequiredSP: 10, MPCost: 34},
@@ -71,4 +73,24 @@ func npcRosterCommand(id string) string {
 		return "escape"
 	}
 	return ""
+}
+
+// NPCJob405Variants are the healthy and wounded (HP ≤ 50%) tables; positions
+// 0, 4 and 5 switch body and name. Evidence: _skill.cgi:7888–8076.
+func NPCJob405Variants() [2][]CallbackEntry {
+	shared := func(wounded bool) []CallbackEntry {
+		suffix, prefix := "", ""
+		if wounded {
+			suffix, prefix = "-wounded", "greater-"
+		}
+		return []CallbackEntry{
+			{ID: "npc-job-405-position-0" + suffix, Name: prefix + "holy-barrage", MPCost: 81},
+			{ID: "npc-job-405-position-1", Name: "triple-blessing", MPCost: 88},
+			{ID: "npc-job-405-position-2", Name: "sealing-baptism", MPCost: 76},
+			{ID: "npc-job-405-position-3", Name: "world-renewal", RequiredSP: 100, MPCost: 80},
+			{ID: "npc-job-405-position-4" + suffix, Name: prefix + "barrier-slash", RequiredSP: 100, MPCost: 79},
+			{ID: "npc-job-405-position-5" + suffix, Name: prefix + "triad-slash", RequiredSP: 100, MPCost: 90},
+		}
+	}
+	return [2][]CallbackEntry{shared(false), shared(true)}
 }

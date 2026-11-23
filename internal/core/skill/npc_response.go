@@ -24,6 +24,7 @@ func (d *BattleDefinitions) RegisterNPCCallbacks(shared PlayerCallbackContexts, 
 	d.RegisterNPCJob97(&corebattle.NPCJob97Context{DamageContext: damage, EquipmentReset: reset})
 	d.RegisterNPCJob98(&corebattle.NPCJob98Context{DamageContext: damage, EquipmentReset: reset})
 	d.RegisterNPCJob402(&corebattle.NPCJob402Context{DamageContext: damage, Death: death})
+	d.RegisterNPCJob405(&corebattle.NPCJob405Context{DamageContext: damage, Death: death})
 	d.RegisterNPCOrderedReset(&corebattle.NPCOrderedResetContext{DamageContext: damage, EquipmentReset: reset})
 	d.RegisterGemCallbacks(shared, frame.Damage)
 }
