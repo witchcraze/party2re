@@ -27,17 +27,24 @@ func TestStageRoomChoicesFollowFloors(t *testing.T) {
 	if got := choiceActions(room.Choices(r, "a")); len(got) != 0 {
 		t.Fatalf("living enemy listed %v", got)
 	}
+	// add_battle_action lists すすむ whenever no enemy remains; susumu rejects
+	// a nonleader's first advance and a finished quest when executed.
 	r.Enemies = nil
 	r.Round = 0
-	if got := choiceActions(room.Choices(r, "b")); len(got) != 0 {
-		t.Fatalf("first advance listed for a nonleader: %v", got)
+	for _, actor := range []string{"a", "b"} {
+		if got := choiceActions(room.Choices(r, actor)); !slices.Equal(got, []string{"advance"}) {
+			t.Fatalf("%s's first advance: %v", actor, got)
+		}
 	}
-	if got := choiceActions(room.Choices(r, "a")); !slices.Equal(got, []string{"advance"}) {
-		t.Fatalf("leader's first advance: %v", got)
-	}
-	r.Round = TreasureRoomFloor
+	// しらべる precedes すすむ; an unopened chest is an enemy.
+	r.Round, r.Boxes = TreasureRoomFloor, []runhost.TreasureBox{{ID: "box-1"}}
 	if got := choiceActions(room.Choices(r, "a")); !slices.Equal(got, []string{"chest"}) {
-		t.Fatalf("ordinary treasure floor without EX: %v", got)
+		t.Fatalf("treasure floor with an unopened chest: %v", got)
+	}
+	r.Boxes[0].OpenedBy = "a"
+	choices := room.Choices(r, "a")
+	if got := choiceActions(choices); !slices.Equal(got, []string{"chest", "advance"}) || choices[1].Check("") != nil {
+		t.Fatalf("finished ordinary treasure floor: %v", got)
 	}
 }
 
@@ -57,5 +64,9 @@ func TestStageRoomChoicesEXTreasureFloors(t *testing.T) {
 	r.Round, r.Boxes = EXTreasureFloor, []runhost.TreasureBox{{ID: "box-1", Fixed: true}}
 	if got := choiceActions(room.Choices(r, "a")); !slices.Equal(got, []string{"chest"}) {
 		t.Fatalf("floor-13 choices: %v", got)
+	}
+	r.Boxes[0].OpenedBy = "a"
+	if got := choiceActions(room.Choices(r, "a")); !slices.Equal(got, []string{"chest", "advance"}) {
+		t.Fatalf("finished floor-13 choices: %v", got)
 	}
 }

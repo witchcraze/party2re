@@ -9,20 +9,22 @@ import (
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-// Choices are vs_monster's add_battle_action entries: すすむ once no enemy
-// remains, しらべる on a treasure floor.
-func (stageRoom) Choices(r *NormalRun, actor string) []runhost.Choice {
+// Choices are vs_monster's add_battle_action entries: しらべる on a treasure
+// floor, then すすむ whenever no enemy or unopened chest remains. advance
+// rejects what susumu rejects (first advance, finished quest).
+func (stageRoom) Choices(r *NormalRun, _ string) []runhost.Choice {
 	var choices []runhost.Choice
-	if !r.LivingEnemies() && (r.Round != 0 || r.LeaderID == actor) && (r.Round < TreasureRoomFloor || r.HasEX() && r.Round <= EXBossFloor) {
+	if isTreasureFloor(r.Round) {
+		choices = append(choices, runhost.Choice{Action: "chest", Source: "しらべる"})
+	}
+	if !r.LivingEnemies() {
 		choices = append(choices, runhost.Choice{Action: "advance", Source: "すすむ", Check: func(string) error {
-			if r.Round == EXBossFloor && len(r.Stage.exTreasureItems()) == 0 || r.Round == TreasureRoomFloor && (r.Stage.Ordinary == nil || len(r.Stage.Ordinary.EXRoster) == 0) {
+			// Only advance's unsupported EX data is gated; susumu's rejections execute.
+			if r.HasEX() && (r.Round == EXBossFloor && len(r.Stage.exTreasureItems()) == 0 || r.Round == TreasureRoomFloor && (r.Stage.Ordinary == nil || len(r.Stage.Ordinary.EXRoster) == 0)) {
 				return runhost.ErrUnavailable
 			}
 			return nil
 		}})
-	}
-	if isTreasureFloor(r.Round) {
-		choices = append(choices, runhost.Choice{Action: "chest", Source: "しらべる"})
 	}
 	return choices
 }
