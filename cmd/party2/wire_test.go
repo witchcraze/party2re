@@ -52,6 +52,16 @@ func TestRoomWiringRequiresValkey(t *testing.T) {
 	}
 }
 
+func TestActivityWiringWithoutScheduler(t *testing.T) {
+	f := newHookWiringFixture(t, testutil.OpenValkey(t))
+	if f.misc.activity == nil {
+		t.Fatal("misc wiring is missing Activity")
+	}
+	if _, err := f.misc.activity.StartTraining(context.Background(), f.char.ID); err != nil {
+		t.Fatalf("start training without a scheduler: %v", err)
+	}
+}
+
 type mockSchedRepo struct {
 	actions     []core_scheduling.ScheduledAction
 	scheduleErr error

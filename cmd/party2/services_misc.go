@@ -393,16 +393,17 @@ func newMiscServices(
 		return nil, err
 	}
 
-	var activityService *activity.Service
-	if valkeyClient != nil {
-		activityRepo, err := database.NewActivityRepository(db)
-		if err != nil {
-			return nil, err
-		}
-		activityService, err = activity.NewService(activityRepo, core.charRepo, soc.sched, nil)
-		if err != nil {
-			return nil, err
-		}
+	activityRepo, err := database.NewActivityRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	var activityScheduler activity.Scheduler
+	if soc.sched != nil {
+		activityScheduler = soc.sched
+	}
+	activityService, err := activity.NewService(activityRepo, core.charRepo, activityScheduler, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	medalService.SetMutationCheck(normalWriter(core).check)
