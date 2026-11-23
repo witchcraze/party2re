@@ -182,10 +182,12 @@ func TestRunCombatEXJob408AnswersAfterJob407Summons(t *testing.T) {
 	statue := statueTemplate.NPCPayload()
 	statue.ID, statue.TeamID = "statue", "enemies"
 	statue.MaxHP, statue.MaxMP, statue.MP = statue.HP, statue.MP, 54
-	copy := statue.Clone()
-	copy.ID, copy.RosterIdentity = "copy", statue.EncounterIdentity+"-copy-I"
+	statueCopy := statue.Clone()
+	statueCopy.ID, statueCopy.RosterIdentity = "copy", statue.EncounterIdentity+"-copy-I"
 	cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
 		r.Stage, r.EncounterStageID = stage.OrdinarySeason("stage-25"), stage.ID
+		a := runActorByID(r, f.actors[0].ID)
+		a.HP, a.MaxHP = 2000, 2000
 		r.EncounterPool = nil
 		for _, id := range r.Stage.Ordinary.MonsterIDs {
 			m, err := monsters.FindByID(id)
@@ -194,7 +196,7 @@ func TestRunCombatEXJob408AnswersAfterJob407Summons(t *testing.T) {
 			}
 			r.EncounterPool = append(r.EncounterPool, m.NPCPayload())
 		}
-	}, statue, copy)
+	}, statue, statueCopy)
 	r := accepted(t, f, combatCommand(cmd, "summon", "defend", "", ""))
 	if len(r.Enemies) != 1 {
 		t.Fatalf("summon roster %v", r.Enemies)
@@ -210,6 +212,16 @@ func TestRunCombatEXJob408AnswersAfterJob407Summons(t *testing.T) {
 	goddess = runActorByID(r, id)
 	if goddess.MP != mp-87 || runActorByID(r, cmd.ActorID).Temporary != "" {
 		t.Fatalf("freezing wave left NPC MP %d (want %d) and requester temporary %q", goddess.MP, mp-87, runActorByID(r, cmd.ActorID).Temporary)
+	}
+
+	f.cfg.RNG = &scriptRNG{draws: []float64{.3, .3, .3, .3, .3, .3, .3, .3}}
+	f.restart(t)
+	cmd.Version = r.Version
+	f.clock.add(3 * time.Second)
+	r = accepted(t, f, combatCommand(cmd, "aura", "defend", "", ""))
+	a := runActorByID(r, cmd.ActorID)
+	if mp := runActorByID(r, id).MP; mp != goddess.MP-75 || a.MaxHP != 1600 || a.HP <= a.MaxHP {
+		t.Fatalf("aura left NPC MP %d and requester HP %d/%d", mp, a.HP, a.MaxHP)
 	}
 }
 
