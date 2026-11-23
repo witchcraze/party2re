@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -19,7 +20,7 @@ import (
 // with its asset session, so party operations take every member's inventory
 // lock and the requester's economy/depot session as cmd/party2 does. Enemies
 // wait on floor 1 for an hour so race outcomes depend only on the commands.
-func combatParty(t *testing.T, count int, enemies ...corebattle.LifetimeActor) (*normalFixture, adventure.RunCommand) {
+func combatParty(t *testing.T, count int, enemies ...corebattle.LifetimeActor) (*normalFixture, runhost.Command) {
 	t.Helper()
 	f, _ := assetRunCombat(t, count)
 	for i := range f.actors {
@@ -34,9 +35,9 @@ func combatParty(t *testing.T, count int, enemies ...corebattle.LifetimeActor) (
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := adventure.RunCommand{RunID: entry.Command.RunID, Version: entry.Version}
+	cmd := runhost.Command{RunID: entry.Command.RunID, Version: entry.Version}
 	editStockRoom(t, f, &cmd, func(r *adventure.NormalRun) {
-		r.Floor, r.EncounterFloor, r.EncounterStageID = 1, 1, r.Stage.ID
+		r.Round, r.EncounterFloor, r.EncounterStageID = 1, 1, r.Stage.ID
 		for _, c := range f.actors {
 			a := runActorByID(r, c.ID)
 			a.Attack, a.HP, a.MaxHP = 400, 500, 500
@@ -57,17 +58,17 @@ func rewardFoe(id string) corebattle.LifetimeActor {
 	return foe
 }
 
-func actorCommand(f *normalFixture, r *adventure.NormalRun, actor int, id, action, target string) adventure.RunCommand {
+func actorCommand(f *normalFixture, r *adventure.NormalRun, actor int, id, action, target string) runhost.Command {
 	c := f.actors[actor]
-	return adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: r.ID, ID: id, Version: r.Version, Action: action, TargetID: target}
+	return runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: r.ID, ID: id, Version: r.Version, Action: action, TargetID: target}
 }
 
 // raceCommands submits both commands behind one barrier and returns the index
 // of the one that committed; the other must lose the version race. Each has a
 // dead-man bound, so a lock-order hang surfaces as a deadlock, not a stuck test.
-func raceCommands(t *testing.T, f *normalFixture, a, b adventure.RunCommand) int {
+func raceCommands(t *testing.T, f *normalFixture, a, b runhost.Command) int {
 	t.Helper()
-	run := func(cmd adventure.RunCommand) func() error {
+	run := func(cmd runhost.Command) func() error {
 		return func() error {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
@@ -79,9 +80,9 @@ func raceCommands(t *testing.T, f *normalFixture, a, b adventure.RunCommand) int
 	switch {
 	case testutil.IsDeadlockError(errA) || testutil.IsDeadlockError(errB):
 		t.Fatalf("deadlock: %v / %v", errA, errB)
-	case errA == nil && errors.Is(errB, adventure.ErrRunConflict):
+	case errA == nil && errors.Is(errB, runhost.ErrConflict):
 		return 0
-	case errB == nil && errors.Is(errA, adventure.ErrRunConflict):
+	case errB == nil && errors.Is(errA, runhost.ErrConflict):
 		return 1
 	}
 	t.Fatalf("race outcome: %v / %v", errA, errB)
@@ -122,7 +123,7 @@ func assertSettledLedger(t *testing.T, f *normalFixture, r *adventure.NormalRun,
 func countReceipts(t *testing.T, f *normalFixture, runID, prefix string) int {
 	t.Helper()
 	var n int
-	if err := f.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM normal_adventure_receipts WHERE run_id=? AND command_id LIKE ?`, runID, prefix+"%").Scan(&n); err != nil {
+	if err := f.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM run_receipts WHERE run_id=? AND command_id LIKE ?`, runID, prefix+"%").Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -188,7 +189,7 @@ func TestRunCombatStrikeRacingExitKeepsSurvivorsAndEarnings(t *testing.T) {
 	departed := after.Recipients[f.actors[1].ID]
 	if after.Version != r.Version+2 || !reflect.DeepEqual(after.Roster, survivors) || !reflect.DeepEqual(members(after), survivors) ||
 		after.LeaderID != f.actors[0].ID || runActorByID(after, "foe") != nil || !reflect.DeepEqual(after.Enemies, []string{"guard"}) ||
-		departed.Disposition != "exit" || departed.Pending != (adventure.RunEarnings{}) || ledgerGold(after) <= 0 {
+		departed.Disposition != "exit" || departed.Pending != (runhost.Earnings{}) || ledgerGold(after) <= 0 {
 		t.Fatalf("roster=%v members=%v leader=%s enemies=%v departed=%+v", after.Roster, members(after), after.LeaderID, after.Enemies, departed)
 	}
 	assertSettledLedger(t, f, after, before)

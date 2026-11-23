@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 var ErrMemberBusy = errors.New("party member is busy")
@@ -120,7 +120,7 @@ func (s *Service) WithNormalRoster(ctx context.Context, actor, partyID string, s
 }
 
 // NormalAdmissionFromRoster builds a NormalRun admission from a locked lobby roster.
-func NormalAdmissionFromRoster(actor string, p Party, members []Member) adventure.NormalAdmission {
+func NormalAdmissionFromRoster(actor string, p Party, members []Member) runhost.Admission {
 	ids := make([]string, len(members))
 	hasCaptured := false
 	for i, m := range members {
@@ -138,7 +138,7 @@ func NormalAdmissionFromRoster(actor string, p Party, members []Member) adventur
 			}
 		}
 	}
-	return adventure.NormalAdmission{
+	return runhost.Admission{
 		Generation:   "party:" + p.ID,
 		PartyID:      p.ID,
 		ActorID:      actor,

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func TestCrawlEarnings_RevivalAndReload(t *testing.T) {
@@ -40,11 +41,11 @@ func TestCrawlEarnings_RevivalAndReload(t *testing.T) {
 
 func TestCrawlEarnings_OverflowKeepsPriorEarnings(t *testing.T) {
 	for _, gold := range []int{-1, math.MaxInt} {
-		s := CrawlSession{Earnings: map[string]RunEarnings{"a": {Gold: 5}}}
+		s := CrawlSession{Earnings: map[string]runhost.Earnings{"a": {Gold: 5}}}
 		if err := s.recordDefeatEarnings(corebattle.PartyBattleResult{BonusPercent: 10, DefeatEarnings: []corebattle.DefeatEarnings{{Reward: corebattle.Reward{Currency: gold}, RecipientIDs: []string{"a"}}}}); err == nil {
 			t.Fatal("accepted invalid or overflowing earnings", gold)
 		}
-		if !reflect.DeepEqual(s.Earnings, map[string]RunEarnings{"a": {Gold: 5}}) {
+		if !reflect.DeepEqual(s.Earnings, map[string]runhost.Earnings{"a": {Gold: 5}}) {
 			t.Fatal("failed accumulation changed prior earnings", s.Earnings)
 		}
 	}

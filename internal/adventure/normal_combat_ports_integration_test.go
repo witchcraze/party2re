@@ -7,6 +7,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func mpEnemy(id string, hp, mp int) corebattle.LifetimeActor {
@@ -17,7 +18,7 @@ func mpEnemy(id string, hp, mp int) corebattle.LifetimeActor {
 
 // accepted runs cmd, then checks the result survives reload and replays from
 // its receipt without executing again.
-func accepted(t *testing.T, f *normalFixture, cmd adventure.RunCommand) *adventure.NormalRun {
+func accepted(t *testing.T, f *normalFixture, cmd runhost.Command) *adventure.NormalRun {
 	t.Helper()
 	receipt, err := f.svc.Command(t.Context(), cmd)
 	if err != nil {
@@ -35,7 +36,7 @@ func accepted(t *testing.T, f *normalFixture, cmd adventure.RunCommand) *adventu
 }
 
 // rejected checks a whole-action rejection stores neither run state nor receipt.
-func rejected(t *testing.T, f *normalFixture, cmd adventure.RunCommand) {
+func rejected(t *testing.T, f *normalFixture, cmd runhost.Command) {
 	t.Helper()
 	before := readStockRoom(t, f, cmd.RunID)
 	if _, err := f.svc.Command(t.Context(), cmd); err == nil {
@@ -92,7 +93,7 @@ func TestRunCombatTransformationBreath(t *testing.T) {
 // named by its ＠× child on every member whose MP divides; an unknown name is
 // a failed cast and a non-arithmetic last match gates the whole action.
 func TestRunCombatArithmeticSelector(t *testing.T) {
-	room := func(t *testing.T, f *normalFixture) adventure.RunCommand {
+	room := func(t *testing.T, f *normalFixture) runhost.Command {
 		return customRoom(t, f, 9, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
 			a.Jobs = corebattle.BattleJobs{JobID: "job-72", SP: 150}
 			a.MP, a.MaxMP = 50, 50
@@ -196,7 +197,7 @@ func TestRunCombatArithmeticDivisorReachesSameCommandResponse(t *testing.T) {
 // field only; a listed command missing from the actions map (unaffordable)
 // aborts the request.
 func TestRunCombatDarknessContinuation(t *testing.T) {
-	room := func(t *testing.T, f *normalFixture) adventure.RunCommand {
+	room := func(t *testing.T, f *normalFixture) runhost.Command {
 		return customRoom(t, f, 0, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
 			a.Jobs = corebattle.BattleJobs{JobID: "job-22", SP: 140}
 			a.MP, a.MaxMP, a.ItemDefinitionIDs = 39, 39, []string{"item-240"}

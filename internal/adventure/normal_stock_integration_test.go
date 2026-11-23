@@ -11,6 +11,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -18,7 +19,7 @@ type stockRunRNG struct{ normalRNG }
 
 func (r *stockRunRNG) Float64() float64 { r.calls.Add(1); return .99 }
 
-func stockRun(t *testing.T, level, exp int, over bool) (*normalFixture, corecharacter.Character, adventure.RunCommand, *stockRunRNG) {
+func stockRun(t *testing.T, level, exp int, over bool) (*normalFixture, corecharacter.Character, runhost.Command, *stockRunRNG) {
 	t.Helper()
 	f := newNormalFixture(t, 1)
 	jobs, err := job.InitialCatalog()
@@ -36,11 +37,11 @@ func stockRun(t *testing.T, level, exp int, over bool) (*normalFixture, corechar
 		t.Fatal(err)
 	}
 	entry := f.enter(t, adventure.CrawlModeNormal)
-	cmd := adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: entry.Command.RunID, ID: "stock", Action: "stock-level", Version: entry.Version}
+	cmd := runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: entry.Command.RunID, ID: "stock", Action: "stock-level", Version: entry.Version}
 	return f, c, cmd, rng
 }
 
-func editStockRoom(t *testing.T, f *normalFixture, cmd *adventure.RunCommand, edit func(*adventure.NormalRun)) *adventure.NormalRun {
+func editStockRoom(t *testing.T, f *normalFixture, cmd *runhost.Command, edit func(*adventure.NormalRun)) *adventure.NormalRun {
 	t.Helper()
 	if err := f.store.WithRunForUpdate(t.Context(), cmd.RunID, false, func(ctx context.Context) error {
 		r, err := f.store.FindRun(ctx, cmd.RunID)
@@ -84,7 +85,7 @@ func TestNormalStockLevelPersistsAndReplays(t *testing.T) {
 				a.Jobs.JobID, a.Jobs.SP, a.Attack, a.Defense, a.Agility = "job-06", 6, 378, 419, 286
 				a.Extended, a.ExtendedTurns = corebattle.ExtendedIncense, 4
 				r.LastActions[c.ID] = f.clock.Now()
-				r.Floor = 1
+				r.Round = 1
 				r.Enemies = []string{"fallen-foe"}
 				r.Battle.Actors = append(r.Battle.Actors, corebattle.LifetimeActor{NPC: true, Participant: corebattle.Participant{ID: "fallen-foe", TeamID: "foes", MaxHP: 30}})
 			})
@@ -151,18 +152,18 @@ func TestNormalStockLevelCommandGates(t *testing.T) {
 		edit       func(*adventure.NormalRun)
 		want       error
 	}{
-		{"below threshold", 1, 9, false, nil, adventure.ErrRunUnavailable},
-		{"ordinary cap", 99, 100000, false, nil, adventure.ErrRunUnavailable},
-		{"over-level cap", 150, 225000, true, nil, adventure.ErrRunUnavailable},
+		{"below threshold", 1, 9, false, nil, runhost.ErrUnavailable},
+		{"ordinary cap", 99, 100000, false, nil, runhost.ErrUnavailable},
+		{"over-level cap", 150, 225000, true, nil, runhost.ErrUnavailable},
 		{"fallen", 1, 10, false, func(r *adventure.NormalRun) { r.Battle.Actors[0].HP = 0 }, adventure.ErrUnconsciousCharacter},
 		{"enemies", 1, 10, false, func(r *adventure.NormalRun) {
-			r.Floor, r.Enemies = 1, []string{"foe"}
+			r.Round, r.Enemies = 1, []string{"foe"}
 			r.Battle.Actors = append(r.Battle.Actors, corebattle.LifetimeActor{NPC: true, Participant: corebattle.Participant{ID: "foe", TeamID: "foes", HP: 30, MaxHP: 30}})
-		}, adventure.ErrRunUnavailable},
+		}, runhost.ErrUnavailable},
 		{"unopened chest", 1, 10, false, func(r *adventure.NormalRun) {
-			r.Floor, r.Boxes = adventure.TreasureRoomFloor, []adventure.TreasureBox{{ID: "chest"}}
-		}, adventure.ErrRunUnavailable},
-		{"cooldown", 1, 10, false, nil, adventure.ErrRunCooldown},
+			r.Round, r.Boxes = adventure.TreasureRoomFloor, []runhost.TreasureBox{{ID: "chest"}}
+		}, runhost.ErrUnavailable},
+		{"cooldown", 1, 10, false, nil, runhost.ErrCooldown},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f, c, cmd, rng := stockRun(t, tc.level, tc.exp, tc.over)
@@ -170,7 +171,7 @@ func TestNormalStockLevelCommandGates(t *testing.T) {
 			if tc.edit != nil {
 				before = editStockRoom(t, f, &cmd, tc.edit)
 			}
-			if tc.want == adventure.ErrRunCooldown {
+			if tc.want == runhost.ErrCooldown {
 				before = editStockRoom(t, f, &cmd, func(r *adventure.NormalRun) {
 					r.LastActions[c.ID] = f.clock.Now()
 				})
@@ -203,7 +204,7 @@ func TestNormalStockLevelIncapacitationUsesOrdinaryTail(t *testing.T) {
 	}
 }
 
-func assertStockUnchanged(t *testing.T, f *normalFixture, cmd adventure.RunCommand, c corecharacter.Character, before *adventure.NormalRun) {
+func assertStockUnchanged(t *testing.T, f *normalFixture, cmd runhost.Command, c corecharacter.Character, before *adventure.NormalRun) {
 	t.Helper()
 	got, err := f.chars.FindByID(t.Context(), c.ID)
 	if err != nil || got.Stats != c.Stats || got.Level != c.Level || got.SP != c.SP || got.Experience != c.Experience {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // lowRunCombat is assetRunCombat with the zero RNG, so job78's room draws
@@ -56,7 +57,7 @@ func TestRunCombatItem212StrikeDuringResponseCreditsNothing(t *testing.T) {
 		t.Fatalf("last strike did not land: %+v", foe)
 	}
 	after, err := f.chars.FindByID(t.Context(), cmd.ActorID)
-	if err != nil || after.Money != before.Money || after.Experience != before.Experience || r.Recipients[cmd.ActorID].Pending != (adventure.RunEarnings{}) {
+	if err != nil || after.Money != before.Money || after.Experience != before.Experience || r.Recipients[cmd.ActorID].Pending != (runhost.Earnings{}) {
 		t.Fatalf("NPC-response defeat credited: %+v pending=%+v %v", after, r.Recipients[cmd.ActorID].Pending, err)
 	}
 }
@@ -137,7 +138,7 @@ func TestRunCombatNPCJob79BreathUsesRequesterGender(t *testing.T) {
 
 // npcRoom enters a run with the asset session, so every random-pool entry is
 // bound as in production, and one NPC answering with the scripted draws.
-func npcRoom(t *testing.T, npc corebattle.LifetimeActor, draws ...float64) (*normalFixture, adventure.RunCommand) {
+func npcRoom(t *testing.T, npc corebattle.LifetimeActor, draws ...float64) (*normalFixture, runhost.Command) {
 	t.Helper()
 	f, _ := lowRunCombat(t, 1)
 	f.cfg.RNG = &scriptRNG{draws: draws}
@@ -179,9 +180,9 @@ func TestRunCombatNPCBypassJumpAdvancesFloorOnly(t *testing.T) {
 			r := accepted(t, f, combatCommand(cmd, "defend", "defend", "", ""))
 			// The reset clears the requester's fresh defend (reset_status).
 			defended := runActorByID(r, cmd.ActorID).Temporary != ""
-			if r.Floor != tc.floor || r.EncounterFloor != 1 || !slices.Equal(r.Enemies, []string{foe.ID}) ||
+			if r.Round != tc.floor || r.EncounterFloor != 1 || !slices.Equal(r.Enemies, []string{foe.ID}) ||
 				runActorByID(r, foe.ID).MP != 40 || defended != (tc.floor == 1) {
-				t.Fatalf("floor %d encounter %d enemies %v NPC MP %d defended %v", r.Floor, r.EncounterFloor, r.Enemies, runActorByID(r, foe.ID).MP, defended)
+				t.Fatalf("floor %d encounter %d enemies %v NPC MP %d defended %v", r.Round, r.EncounterFloor, r.Enemies, runActorByID(r, foe.ID).MP, defended)
 			}
 		})
 	}
@@ -210,7 +211,7 @@ func TestRunCombatAssetFailureAfterTravelOrWithdrawalRollsBack(t *testing.T) {
 			held := heldItems(t, f, 0)
 			depots.fail = true
 			failed := combatCommand(cmd, "failed", tc.entry, tc.selector, "")
-			if _, err := f.svc.Command(t.Context(), failed); err == nil || errors.Is(err, adventure.ErrRunUnavailable) {
+			if _, err := f.svc.Command(t.Context(), failed); err == nil || errors.Is(err, runhost.ErrUnavailable) {
 				t.Fatalf("asset failure: %v", err)
 			}
 			assertUnchanged(t, f, depots, failed, before, held, rows)
@@ -218,7 +219,7 @@ func TestRunCombatAssetFailureAfterTravelOrWithdrawalRollsBack(t *testing.T) {
 			if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "retry", tc.entry, tc.selector, "")); err != nil {
 				t.Fatal(err)
 			}
-			if tc.name == "stored-travel" && readStockRoom(t, f, cmd.RunID).Floor != before.Floor+1 {
+			if tc.name == "stored-travel" && readStockRoom(t, f, cmd.RunID).Round != before.Round+1 {
 				t.Fatal("retry did not travel")
 			}
 		})

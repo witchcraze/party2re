@@ -9,6 +9,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -29,7 +30,7 @@ func (f *normalFixture) timeoutParty(t *testing.T, mode string) string {
 	if err != nil || r == nil {
 		t.Fatal(r, err)
 	}
-	cmd := adventure.RunCommand{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: id.New(), Version: r.Version, Action: "cleanup"}
+	cmd := runhost.Command{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: id.New(), Version: r.Version, Action: "cleanup"}
 	if _, err := f.svc.Command(context.Background(), cmd); err != nil {
 		t.Fatal(err)
 	}
@@ -39,13 +40,13 @@ func (f *normalFixture) timeoutParty(t *testing.T, mode string) string {
 	return runID
 }
 
-func (f *normalFixture) storedRecipient(t *testing.T, runID, actor string) adventure.RunRecipient {
+func (f *normalFixture) storedRecipient(t *testing.T, runID, actor string) runhost.Recipient {
 	t.Helper()
 	var data []byte
-	if err := f.db.QueryRow(`SELECT recipient_json FROM normal_adventure_recipients WHERE run_id=? AND character_id=?`, runID, actor).Scan(&data); err != nil {
+	if err := f.db.QueryRow(`SELECT recipient_json FROM run_recipients WHERE run_id=? AND character_id=?`, runID, actor).Scan(&data); err != nil {
 		t.Fatal(err)
 	}
-	var p adventure.RunRecipient
+	var p runhost.Recipient
 	if err := json.Unmarshal(data, &p); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func (f *normalFixture) nextNormalRun(t *testing.T) string {
 	return r.Command.RunID
 }
 
-func (f *normalFixture) claimCommand(t *testing.T, runID, cmdID string) adventure.RunCommand {
+func (f *normalFixture) claimCommand(t *testing.T, runID, cmdID string) runhost.Command {
 	t.Helper()
 	f.clock.add(3 * time.Second)
 	r, err := f.store.FindRun(context.Background(), runID)
@@ -88,7 +89,7 @@ func (f *normalFixture) claimCommand(t *testing.T, runID, cmdID string) adventur
 		t.Fatal(r, err)
 	}
 	c := f.actors[1]
-	return adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: cmdID, Version: r.Version, Action: "no_effect"}
+	return runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: cmdID, Version: r.Version, Action: "no_effect"}
 }
 
 func TestNormalRunTimeoutEarningsClaimedOnceAfterDisposal(t *testing.T) {
@@ -96,7 +97,7 @@ func TestNormalRunTimeoutEarningsClaimedOnceAfterDisposal(t *testing.T) {
 	member := f.actors[1]
 	oldRun := f.timeoutParty(t, "normal")
 	stored := f.storedRecipient(t, oldRun, member.ID)
-	if stored.Pending != (adventure.RunEarnings{EXP: 3, Gold: 5, Crystals: 1}) || stored.TimerPending {
+	if stored.Pending != (runhost.Earnings{EXP: 3, Gold: 5, Crystals: 1}) || stored.TimerPending {
 		t.Fatal(stored)
 	}
 	// Recovery and a disposed-room command neither lose nor grant the stock.
@@ -105,7 +106,7 @@ func TestNormalRunTimeoutEarningsClaimedOnceAfterDisposal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := f.svc.Command(context.Background(), adventure.RunCommand{PlayerID: member.PlayerID, ActorID: member.ID, RunID: oldRun, ID: "late-exit", Version: 1, Action: "exit"}); !errors.Is(err, adventure.ErrNotFound) {
+	if _, err := f.svc.Command(context.Background(), runhost.Command{PlayerID: member.PlayerID, ActorID: member.ID, RunID: oldRun, ID: "late-exit", Version: 1, Action: "exit"}); !errors.Is(err, runhost.ErrNotFound) {
 		t.Fatal(err)
 	}
 	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money || c.Crystal != member.Crystal || c.Experience != member.Experience {
@@ -125,7 +126,7 @@ func TestNormalRunTimeoutEarningsClaimedOnceAfterDisposal(t *testing.T) {
 			t.Fatal("retained stock not credited exactly once", c, err)
 		}
 		p := f.storedRecipient(t, oldRun, member.ID)
-		if p.Pending != (adventure.RunEarnings{}) || p.Applied != stored.Pending || p.Disposition != "timeout" || !p.PenaltyUntil.Equal(stored.PenaltyUntil) {
+		if p.Pending != (runhost.Earnings{}) || p.Applied != stored.Pending || p.Disposition != "timeout" || !p.PenaltyUntil.Equal(stored.PenaltyUntil) {
 			t.Fatal("ledger did not move pending to applied without changing the penalty", p)
 		}
 	}
@@ -162,7 +163,7 @@ func TestNormalRunMultipleTimeoutsClaimedTogether(t *testing.T) {
 		t.Fatal(c, err)
 	}
 	for _, run := range []string{first, second} {
-		if p := f.storedRecipient(t, run, member.ID); p.Pending != (adventure.RunEarnings{}) || p.Applied.Gold != 5 {
+		if p := f.storedRecipient(t, run, member.ID); p.Pending != (runhost.Earnings{}) || p.Applied.Gold != 5 {
 			t.Fatal(run, p)
 		}
 	}
@@ -182,7 +183,7 @@ func TestNormalRunRetainedClaimRollsBackWithCommand(t *testing.T) {
 	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money {
 		t.Fatal("failed command leaked assets", c, err)
 	}
-	if p := f.storedRecipient(t, oldRun, member.ID); p.Pending.Gold != 5 || p.Applied != (adventure.RunEarnings{}) {
+	if p := f.storedRecipient(t, oldRun, member.ID); p.Pending.Gold != 5 || p.Applied != (runhost.Earnings{}) {
 		t.Fatal("failed command moved the ledger", p)
 	}
 	if _, err := f.svc.Command(context.Background(), cmd); err != nil {
@@ -200,14 +201,14 @@ func TestNormalRunRetainedClaimRejectsMidFlightLedgerMismatch(t *testing.T) {
 	newRun := f.nextNormalRun(t)
 	cmd := f.claimCommand(t, newRun, "claim")
 	f.store.tamperRetained.Store(true)
-	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, adventure.ErrRunConflict) {
+	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, runhost.ErrConflict) {
 		t.Fatal("expected ErrRunConflict on mid-flight ledger mismatch, got", err)
 	}
 	f.store.tamperRetained.Store(false)
 	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money {
 		t.Fatal("rejected command leaked assets", c, err)
 	}
-	if p := f.storedRecipient(t, oldRun, member.ID); p.Pending.Gold != 5 || p.Applied != (adventure.RunEarnings{}) {
+	if p := f.storedRecipient(t, oldRun, member.ID); p.Pending.Gold != 5 || p.Applied != (runhost.Earnings{}) {
 		t.Fatal("rejected command mutated ledger", p)
 	}
 	if _, err := f.svc.Command(context.Background(), cmd); err != nil {
@@ -229,7 +230,7 @@ func TestNormalRunTimeoutTryStockStaysRetained(t *testing.T) {
 	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money {
 		t.Fatal("conditional Try stock was paid", c, err)
 	}
-	if p := f.storedRecipient(t, oldRun, member.ID); p.Conditional.Gold != 5 || p.Pending != (adventure.RunEarnings{}) || p.Applied != (adventure.RunEarnings{}) {
+	if p := f.storedRecipient(t, oldRun, member.ID); p.Conditional.Gold != 5 || p.Pending != (runhost.Earnings{}) || p.Applied != (runhost.Earnings{}) {
 		t.Fatal("conditional Try stock was changed", p)
 	}
 }

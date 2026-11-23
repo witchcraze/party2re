@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // runCombat is the production RunCombat. It runs inside Command's transaction
@@ -24,7 +25,7 @@ func NewRunCombat(s *NormalRunService) RunCombat { return runCombat{s: s} }
 func (s *NormalRunService) SetCombat(c RunCombat) { s.cfg.Combat = c }
 
 func (c runCombat) resetContext(ctx context.Context, r *NormalRun, actorID string) (corebattle.EquipmentResetContext, error) {
-	actor := r.actor(actorID)
+	actor := r.Actor(actorID)
 	if actor == nil {
 		return corebattle.EquipmentResetContext{}, ErrNotParticipant
 	}
@@ -73,7 +74,7 @@ func (c runCombat) PrepareBossField(ctx context.Context, r *NormalRun, actorID s
 // execution error is returned so Command commits nothing.
 // Transaction: delegated to Command. Lock Order: all party inventories(3)
 // before WithJobAssets's requester depot(5), under Command's run and characters.
-func (c runCombat) ExecuteRunAction(ctx context.Context, r *NormalRun, cmd RunCommand) (RunActionEffects, error) {
+func (c runCombat) ExecuteRunAction(ctx context.Context, r *NormalRun, cmd runhost.Command) (RunActionEffects, error) {
 	if c.s.cfg.JobAssetRunner == nil {
 		requester, err := c.s.cfg.Characters.FindByID(ctx, cmd.ActorID)
 		if err != nil {
@@ -103,11 +104,11 @@ func (c runCombat) ExecuteRunAction(ctx context.Context, r *NormalRun, cmd RunCo
 	return fx, err
 }
 
-func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, requester *corecharacter.Character, assets *corebattle.JobAssets) (RunActionEffects, error) {
+func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd runhost.Command, requester *corecharacter.Character, assets *corebattle.JobAssets) (RunActionEffects, error) {
 	s := c.s
 	fx := RunActionEffects{RoomActivity: true, ActorActivity: true, ReleaseStock: true}
 	if s.cfg.Jobs == nil {
-		return fx, ErrRunUnavailable
+		return fx, runhost.ErrUnavailable
 	}
 	blessing := ""
 	if s.cfg.Blessings != nil {
@@ -124,7 +125,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 	if err != nil {
 		return fx, err
 	}
-	seals, err := battle.BuildWeaponSealTable(findActor(state.Actors, cmd.ActorID).Participant, s.cfg.RNG)
+	seals, err := battle.BuildWeaponSealTable(runhost.FindActor(state.Actors, cmd.ActorID).Participant, s.cfg.RNG)
 	if err != nil {
 		return fx, err
 	}
@@ -149,11 +150,11 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 	}
 	// Room, comment, whisper and screenshot dispatch belong to other owners.
 	if parsed.Kind != RunOperationBattle || parsed.First.EntryID == stockLevelAction {
-		return fx, ErrRunUnavailable
+		return fx, runhost.ErrUnavailable
 	}
 	now := s.cfg.Clock.Now()
 	if now.Before(r.LastActions[cmd.ActorID].Add(time.Duration(r.Admission.Speed) * time.Second)) {
-		return fx, ErrRunCooldown
+		return fx, runhost.ErrCooldown
 	}
 	if assets != nil && parsed.First.EntryID == "job-50-entry-7" {
 		assets.StoredItem, assets.StoredTarget = parsed.First.TargetID, parsed.First.Input
@@ -166,7 +167,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 		}
 		held := inv.HeldToolID()
 		if held == nil || toolEntry(*held) != parsed.First.EntryID {
-			return fx, ErrRunConflict
+			return fx, runhost.ErrConflict
 		}
 		consumeHeld(&parsed.First.PlayerAction, cmd.ActorID, *held, inv.Items[0].ID)
 	}
@@ -180,7 +181,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 			RequesterGender: contexts.Fields.RequesterGender, RequesterIcon: contexts.Fields.RequesterIcon,
 		},
 		// Treasure rooms disable the NPC response (vs_monster.cgi:38–41).
-		ResponseEnabled: !isTreasureFloor(r.Floor),
+		ResponseEnabled: !isTreasureFloor(r.Round),
 	}
 	if second := parsed.Second; second != nil {
 		if second.EntryID != "" {
@@ -191,7 +192,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 	}
 	released := 0
 	if r.Mode != CrawlModeTry {
-		_, due, err := s.retainedDue(ctx, cmd.ActorID, r.Recipients[cmd.ActorID].Pending)
+		_, due, err := s.RetainedDue(ctx, cmd.ActorID, r.Recipients[cmd.ActorID].Pending)
 		if err != nil {
 			return fx, err
 		}
@@ -206,11 +207,11 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 		if r.Mode != CrawlModeTry {
 			pending = released + fx.Earnings[requester.ID].EXP
 		}
-		return growRequester(b, cmd.ActorID, requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
+		return runhost.GrowRequester(b, cmd.ActorID, requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
 			return progression.ApplyTailLevel(c, def, rng, held, pending)
 		})
 	}
-	hadEnemies := r.livingEnemies()
+	hadEnemies := r.LivingEnemies()
 	consumed := consumedCounts(state)
 	result, err := state.ApplyPlayerOperation(&op, s.cfg.RNG)
 	if err != nil {
@@ -222,7 +223,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 			r.Battle.StoredToolHistory = rooms.history
 			return RunActionEffects{}, nil
 		}
-		return fx, ErrRunUnavailable
+		return fx, runhost.ErrUnavailable
 	}
 	fx.Consumed = addConsumed(fx.Consumed, state, consumed)
 	if err := r.ReconcileCombat(state, result.Target); err != nil {
@@ -232,7 +233,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 		r.syncFormation()
 	}
 	for _, id := range result.Target.MemberOnlyIDs {
-		if a := r.actor(id); a != nil && a.HP > 0 && a.TeamID != r.actor(cmd.ActorID).TeamID && !slices.Contains(r.Enemies, id) && !r.hasBox(id) {
+		if a := r.Actor(id); a != nil && a.HP > 0 && a.TeamID != r.Actor(cmd.ActorID).TeamID && !slices.Contains(r.Enemies, id) && !r.HasBox(id) {
 			fx.MemberOnlyIDs = append(fx.MemberOnlyIDs, id)
 		}
 	}
@@ -249,7 +250,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 			}
 		}
 	}
-	fx.EncounterDefeated = hadEnemies && !r.livingEnemies() && len(fx.MemberOnlyIDs) == 0 &&
+	fx.EncounterDefeated = hadEnemies && !r.LivingEnemies() && len(fx.MemberOnlyIDs) == 0 &&
 		r.EncounterFloor >= 1 && r.EncounterFloor <= EXBossFloor && !isTreasureFloor(r.EncounterFloor)
 	return fx, nil
 }
@@ -257,7 +258,7 @@ func (c runCombat) execute(ctx context.Context, r *NormalRun, cmd RunCommand, re
 // respond runs the selected NPC's response on the saved state. Its opponents
 // are the living members of other teams in member order.
 func (c runCombat) respond(r *NormalRun, npc string, requester *corecharacter.Character, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, divisor int, fx *RunActionEffects) error {
-	team := r.actor(npc).TeamID
+	team := r.Actor(npc).TeamID
 	frame := corebattle.TargetContext{ActorID: npc}
 	before := make(map[string]bool, len(r.Battle.Actors))
 	for _, a := range r.Battle.Actors {
@@ -273,8 +274,8 @@ func (c runCombat) respond(r *NormalRun, npc string, requester *corecharacter.Ch
 	}
 	ports := newRunPorts(frame, level, seals, r.Battle.Fields.Current(), rewards, true)
 	op := corebattle.NPCOperation{Damage: ports.damage, Defeat: ports.defeat, Field: corebattle.NamedFieldContext{DamageContext: ports.damage, Death: ports.defeat}, Assets: assets, ArithmeticDivisor: divisor}
-	saved := cloneLifetimeState(r.Battle)
-	actor := findActor(saved.Actors, npc)
+	saved := runhost.CloneBattle(r.Battle)
+	actor := runhost.FindActor(saved.Actors, npc)
 	if assets != nil && actor.HeldToolID == nil && actor.Gear != nil {
 		// Encounter payloads store the NPC's hand as its accessory, including an empty slot.
 		actor.HeldToolID = new(actor.Gear.AccessoryID)
@@ -306,7 +307,7 @@ func (c runCombat) respond(r *NormalRun, npc string, requester *corecharacter.Ch
 	}
 	// Members the response generated join the opposing order last.
 	for _, id := range res.Target.PartyIDs {
-		if a := r.actor(id); a != nil && !before[id] && a.HP > 0 {
+		if a := r.Actor(id); a != nil && !before[id] && a.HP > 0 {
 			r.Enemies = append(r.Enemies, id)
 		}
 	}
@@ -324,7 +325,7 @@ func (c runCombat) npcEncounters(r *NormalRun, work *corebattle.LifetimeState, f
 		return nil
 	}
 	_, modeErr := ValidateCrawlMode(r.Mode)
-	room := &corebattle.JobRoomContext{ActorID: f.ActorID, NormalStage: modeErr == nil, Floor: r.Floor}
+	room := &corebattle.JobRoomContext{ActorID: f.ActorID, NormalStage: modeErr == nil, Floor: r.Round}
 	reset := func() corebattle.EquipmentResetContext {
 		reset := f.Defeat.EquipmentResetContext
 		reset.TargetContext = f.TargetContext
@@ -345,8 +346,8 @@ func (c runCombat) npcEncounters(r *NormalRun, work *corebattle.LifetimeState, f
 		if err := battle.ResetAll(work, &current, c.s.cfg.RNG); err != nil {
 			return f.TargetContext, err
 		}
-		r.Floor++
-		room.Floor, room.Cursor = r.Floor, current.Cursor
+		r.Round++
+		room.Floor, room.Cursor = r.Round, current.Cursor
 		return f.TargetContext, nil
 	}
 	return &corebattle.JobEncounterContext{DamageContext: *f.Damage, DefeatContext: f.Defeat, Room: room}

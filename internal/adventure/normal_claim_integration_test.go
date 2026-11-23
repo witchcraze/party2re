@@ -13,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -34,8 +35,8 @@ func TestNormalRunPairedChestClaim(t *testing.T) {
 	f.clock.add(3 * time.Second)
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		c := f.actors[(worker+op)%2]
-		_, err := f.svc.Command(context.Background(), adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: "claim-" + c.ID, Version: r.Version, Action: "chest", TargetID: r.Boxes[0].ID})
-		if errors.Is(err, adventure.ErrRunConflict) {
+		_, err := f.svc.Command(context.Background(), runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: "claim-" + c.ID, Version: r.Version, Action: "chest", TargetID: r.Boxes[0].ID})
+		if errors.Is(err, runhost.ErrConflict) {
 			return nil
 		}
 		return err
@@ -74,7 +75,7 @@ type treasureClaimCombat struct {
 	responses atomic.Int64
 }
 
-func (c *treasureClaimCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
+func (c *treasureClaimCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd runhost.Command) (adventure.RunActionEffects, error) {
 	if cmd.Action != "inspect-valuation" && cmd.Action != "strike-nonlethal" && cmd.Action != "strike-lethal" {
 		return c.normalCombat.ExecuteRunAction(ctx, r, cmd)
 	}
@@ -108,11 +109,11 @@ func (c *treasureClaimCombat) ExecuteRunAction(ctx context.Context, r *adventure
 
 	var op corebattle.PlayerOperation
 	op.Tail = corebattle.PlayerTailContext{DamageContext: damage, DefeatContext: &defeat}
-	op.ResponseEnabled = r.Floor != adventure.TreasureRoomFloor && r.Floor != adventure.EXTreasureFloor
+	op.ResponseEnabled = r.Round != adventure.TreasureRoomFloor && r.Round != adventure.EXTreasureFloor
 
 	switch cmd.Action {
 	case "inspect-valuation":
-		parsed, err := r.ParseNormalOperation(adventure.RunCommand{ActorID: cmd.ActorID, Input: "＠トレハンのかん>" + cmd.TargetID}, adventure.NormalOperationContext{Definitions: defs, Callback: corebattle.CallbackContext{Damage: &damage, Inspection: inspection}, Requester: &requester})
+		parsed, err := r.ParseNormalOperation(runhost.Command{ActorID: cmd.ActorID, Input: "＠トレハンのかん>" + cmd.TargetID}, adventure.NormalOperationContext{Definitions: defs, Callback: corebattle.CallbackContext{Damage: &damage, Inspection: inspection}, Requester: &requester})
 		if err != nil {
 			return fx, err
 		}
@@ -237,16 +238,16 @@ func TestNormalRunTreasureCombatInspectionClaimAndReload(t *testing.T) {
 				}
 
 				// Parse legacy shiraberu text and opened-box rejection before claimChest.
-				if _, err := reloaded.ParseNormalOperation(adventure.RunCommand{ActorID: a.ID, Action: "chest", TargetID: openedID}, adventure.NormalOperationContext{}); !errors.Is(err, adventure.ErrNoUnopenedTreasure) {
+				if _, err := reloaded.ParseNormalOperation(runhost.Command{ActorID: a.ID, Action: "chest", TargetID: openedID}, adventure.NormalOperationContext{}); !errors.Is(err, adventure.ErrNoUnopenedTreasure) {
 					t.Fatalf("opened chest admitted by parse: %v", err)
 				}
-				parsed, err := reloaded.ParseNormalOperation(adventure.RunCommand{ActorID: a.ID, Input: "＠しらべる>" + unopenedName}, adventure.NormalOperationContext{})
+				parsed, err := reloaded.ParseNormalOperation(runhost.Command{ActorID: a.ID, Input: "＠しらべる>" + unopenedName}, adventure.NormalOperationContext{})
 				if err != nil || parsed.First.TargetID != unopenedID {
 					t.Fatalf("legacy shiraberu parse failed: %+v err=%v", parsed, err)
 				}
 
 				f.clock.add(3 * time.Second)
-				claimCmd := adventure.RunCommand{PlayerID: a.PlayerID, ActorID: a.ID, RunID: runID, ID: id.New(), Version: reloaded.Version, Action: "chest", TargetID: parsed.First.TargetID}
+				claimCmd := runhost.Command{PlayerID: a.PlayerID, ActorID: a.ID, RunID: runID, ID: id.New(), Version: reloaded.Version, Action: "chest", TargetID: parsed.First.TargetID}
 				receipt, err := f.svc.Command(context.Background(), claimCmd)
 				if err != nil || receipt.Box == nil || receipt.Box.OpenedBy != a.ID {
 					t.Fatalf("claim failed: %+v err=%v", receipt, err)
@@ -288,7 +289,7 @@ func TestNormalRunTreasureCombatInspectionClaimAndReload(t *testing.T) {
 					t.Fatalf("lethal defeat leaked EXP/money: before=%+v after=%+v err=%v", a, afterChar, err)
 				}
 				f.clock.add(3 * time.Second)
-				if _, err := f.svc.Command(context.Background(), adventure.RunCommand{PlayerID: a.PlayerID, ActorID: a.ID, RunID: runID, ID: id.New(), Version: reloaded.Version, Action: "chest", TargetID: unopenedID}); !errors.Is(err, adventure.ErrNoUnopenedTreasure) {
+				if _, err := f.svc.Command(context.Background(), runhost.Command{PlayerID: a.PlayerID, ActorID: a.ID, RunID: runID, ID: id.New(), Version: reloaded.Version, Action: "chest", TargetID: unopenedID}); !errors.Is(err, adventure.ErrNoUnopenedTreasure) {
 					t.Fatalf("defeated box claimable: %v", err)
 				}
 			}

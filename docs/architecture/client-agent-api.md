@@ -643,7 +643,7 @@ The command requires explicit `item_id` and `quantity`; it does not inherit the 
 
 ### Planned normal-adventure commands and recovery
 
-Adventure's [durable run authority](transient-run-state.md#normal-adventure-durable-command-boundary-1325)
+Adventure's [durable run authority](transient-run-state.md#run-host-durable-command-boundary-1325)
 provides service-level enrollment, explicit combat, owned facts and receipts. Its
 Gateway connection (#1330) remains pending under #1323;
 #948 owns coordinated transport replacement. Keep the existing

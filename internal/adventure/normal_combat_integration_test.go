@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // combatFixture serves Command with the production RunCombat.
@@ -44,7 +45,7 @@ func runEnemy(id string, hp int) corebattle.LifetimeActor {
 }
 
 // combatRoom enters a solo run and places enemies on its encounter floor 1.
-func combatRoom(t *testing.T, f *normalFixture, c corecharacter.Character, edit func(*adventure.NormalRun), enemies ...corebattle.LifetimeActor) adventure.RunCommand {
+func combatRoom(t *testing.T, f *normalFixture, c corecharacter.Character, edit func(*adventure.NormalRun), enemies ...corebattle.LifetimeActor) runhost.Command {
 	t.Helper()
 	c.JobID = "job-01"
 	if err := f.chars.Update(t.Context(), c); err != nil {
@@ -52,9 +53,9 @@ func combatRoom(t *testing.T, f *normalFixture, c corecharacter.Character, edit 
 	}
 	f.actors[0] = c
 	entry := f.enter(t, adventure.CrawlModeNormal)
-	cmd := adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: entry.Command.RunID, Version: entry.Version}
+	cmd := runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: entry.Command.RunID, Version: entry.Version}
 	editStockRoom(t, f, &cmd, func(r *adventure.NormalRun) {
-		r.Floor, r.EncounterFloor, r.EncounterStageID = 1, 1, r.Stage.ID
+		r.Round, r.EncounterFloor, r.EncounterStageID = 1, 1, r.Stage.ID
 		for _, e := range enemies {
 			r.Battle.Actors = append(r.Battle.Actors, e)
 			r.Enemies = append(r.Enemies, e.ID)
@@ -70,7 +71,7 @@ func combatRoom(t *testing.T, f *normalFixture, c corecharacter.Character, edit 
 	return cmd
 }
 
-func combatCommand(cmd adventure.RunCommand, id, action, target, input string) adventure.RunCommand {
+func combatCommand(cmd runhost.Command, id, action, target, input string) runhost.Command {
 	cmd.ID, cmd.Action, cmd.TargetID, cmd.Input = id, action, target, input
 	return cmd
 }
@@ -91,9 +92,9 @@ func TestRunCombatResumesOneOperationAndReplays(t *testing.T) {
 	}
 	now := f.clock.Now()
 	r := readStockRoom(t, f, cmd.RunID)
-	if runActorByID(r, "foe-a") != nil || !reflect.DeepEqual(r.Enemies, []string{"foe-b"}) || r.Floor != 1 || r.FloorsCleared != 0 ||
+	if runActorByID(r, "foe-a") != nil || !reflect.DeepEqual(r.Enemies, []string{"foe-b"}) || r.Round != 1 || r.FloorsCleared != 0 ||
 		!r.LastActions["foe-b"].Equal(now) || !r.LastActions[cmd.ActorID].Equal(now) || receipt.Version != cmd.Version+1 {
-		t.Fatalf("operation: enemies=%v floor=%d cleared=%d last=%v receipt=%+v", r.Enemies, r.Floor, r.FloorsCleared, r.LastActions, receipt)
+		t.Fatalf("operation: enemies=%v floor=%d cleared=%d last=%v receipt=%+v", r.Enemies, r.Round, r.FloorsCleared, r.LastActions, receipt)
 	}
 	after, err := f.chars.FindByID(t.Context(), cmd.ActorID)
 	if err != nil || after.Money != before.Money+5 || after.Experience != before.Experience+3 {
@@ -111,7 +112,7 @@ func TestRunCombatResumesOneOperationAndReplays(t *testing.T) {
 	if c, err := f.chars.FindByID(t.Context(), cmd.ActorID); err != nil || c.Money != after.Money || c.Experience != after.Experience {
 		t.Fatalf("replay granted twice: %+v %v", c, err)
 	}
-	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "strike", "attack", "foe-b", "")); !errors.Is(err, adventure.ErrRunConflict) {
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "strike", "attack", "foe-b", "")); !errors.Is(err, runhost.ErrConflict) {
 		t.Fatalf("receipt input conflict: %v", err)
 	}
 }
@@ -124,13 +125,13 @@ func TestRunCombatRejectionsMutateNothing(t *testing.T) {
 	f.clock.add(-time.Nanosecond)
 	before := readStockRoom(t, f, cmd.RunID)
 	for _, tc := range []struct {
-		cmd  adventure.RunCommand
+		cmd  runhost.Command
 		want error
 	}{
-		{combatCommand(cmd, "early", "attack", "foe", ""), adventure.ErrRunCooldown},
-		{combatCommand(cmd, "banned", "defend", "", ""), adventure.ErrRunUnavailable},
-		{combatCommand(cmd, "foreign-target", "attack", "nobody", ""), adventure.ErrRunConflict},
-		{combatCommand(cmd, "unsupported", "job-50-entry-7", "", ""), adventure.ErrRunUnavailable},
+		{combatCommand(cmd, "early", "attack", "foe", ""), runhost.ErrCooldown},
+		{combatCommand(cmd, "banned", "defend", "", ""), runhost.ErrUnavailable},
+		{combatCommand(cmd, "foreign-target", "attack", "nobody", ""), runhost.ErrConflict},
+		{combatCommand(cmd, "unsupported", "job-50-entry-7", "", ""), runhost.ErrUnavailable},
 	} {
 		if _, err := f.svc.Command(t.Context(), tc.cmd); !errors.Is(err, tc.want) {
 			t.Fatalf("%s: %v want %v", tc.cmd.ID, err, tc.want)
@@ -269,8 +270,8 @@ func TestRunCombatLevelsOnceInTheTail(t *testing.T) {
 				t.Fatalf("level=%d exp=%d err=%v", got.Level, got.Experience, err)
 			}
 			r := readStockRoom(t, f, cmd.RunID)
-			if r.FloorsCleared != 1 || len(r.Enemies) != 0 || r.Floor != 1 {
-				t.Fatalf("encounter defeat: cleared=%d enemies=%v floor=%d", r.FloorsCleared, r.Enemies, r.Floor)
+			if r.FloorsCleared != 1 || len(r.Enemies) != 0 || r.Round != 1 {
+				t.Fatalf("encounter defeat: cleared=%d enemies=%v floor=%d", r.FloorsCleared, r.Enemies, r.Round)
 			}
 			f.restart(t)
 			if _, err := f.svc.Command(t.Context(), strike); err != nil {
@@ -341,7 +342,7 @@ func TestRunCombatBossFieldCapsOnAdvance(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		r.Stage, r.Floor, r.FloorsCleared, r.EncounterFloor = stage, 9, 9, 9
+		r.Stage, r.Round, r.FloorsCleared, r.EncounterFloor = stage, 9, 9, 9
 		a := runActorByID(r, f.actors[0].ID)
 		a.MaxHP, a.HP = 2000, 2000
 	})
@@ -350,13 +351,13 @@ func TestRunCombatBossFieldCapsOnAdvance(t *testing.T) {
 	}
 	r := readStockRoom(t, f, cmd.RunID)
 	a := runActorByID(r, cmd.ActorID)
-	if r.Floor != 10 || len(r.Enemies) == 0 || !r.Battle.SpecialBossField || a.MaxHP != 999 || a.HP != 2000 {
-		t.Fatalf("floor=%d enemies=%v field=%v maxHP=%d hp=%d", r.Floor, r.Enemies, r.Battle.SpecialBossField, a.MaxHP, a.HP)
+	if r.Round != 10 || len(r.Enemies) == 0 || !r.Battle.SpecialBossField || a.MaxHP != 999 || a.HP != 2000 {
+		t.Fatalf("floor=%d enemies=%v field=%v maxHP=%d hp=%d", r.Round, r.Enemies, r.Battle.SpecialBossField, a.MaxHP, a.HP)
 	}
 }
 
 type failingRunCharacters struct {
-	adventure.RunCharacters
+	runhost.Characters
 	fail bool
 }
 
@@ -364,14 +365,14 @@ func (c *failingRunCharacters) Update(ctx context.Context, v corecharacter.Chara
 	if c.fail {
 		return errors.New("character write failed")
 	}
-	return c.RunCharacters.Update(ctx, v)
+	return c.Characters.Update(ctx, v)
 }
 
 // An external failure inside the operation discards the player step, the NPC
 // response and the level-up; the retried command then applies them once.
 func TestRunCombatExecutionFailureDiscardsOperation(t *testing.T) {
 	f := combatFixture(t, 1)
-	chars := &failingRunCharacters{RunCharacters: f.cfg.Characters, fail: true}
+	chars := &failingRunCharacters{Characters: f.cfg.Characters, fail: true}
 	f.cfg.Characters = chars
 	f.restart(t)
 	c := f.actors[0]
@@ -414,7 +415,7 @@ func TestNormalRunStockReleaseLevelsOnlyInTheTail(t *testing.T) {
 				t.Fatal(err)
 			}
 			entry := f.enter(t, adventure.CrawlModeNormal)
-			cmd := adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: entry.Command.RunID, Version: entry.Version}
+			cmd := runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: entry.Command.RunID, Version: entry.Version}
 			editStockRoom(t, f, &cmd, func(r *adventure.NormalRun) {
 				p := r.Recipients[c.ID]
 				p.Pending.EXP = 49

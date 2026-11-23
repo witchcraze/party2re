@@ -49,6 +49,7 @@ selection rule. These tiers are documentation priorities, not SQL lock ranks.
 | [guild](../../.arch/modules/guild.json) | Membership and GP; no donation leveling |
 | [monster](../../.arch/modules/monster.json) | Ranch and P2P monster gift |
 | [plantation](../../.arch/modules/plantation.json) | Cultivation and depot delivery |
+| [runhost](../../.arch/modules/runhost.json) | Run lock, sorted roster locks and one command transaction for every room library |
 | [shop](../../.arch/modules/shop.json) | Character, inventory, and conditional depot delivery |
 | [store](../../.arch/modules/store.json) | Shared sale then ascending characters and depot |
 | [tavern](../../.arch/modules/tavern.json) | Meal, raffle tickets, status, and reservation |

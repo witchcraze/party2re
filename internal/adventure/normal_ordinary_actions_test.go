@@ -9,9 +9,10 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-func ordinaryTestOperation(t *testing.T, r *NormalRun, ctx NormalOperationContext, cmd RunCommand) (*corebattle.PlayerOperation, error) {
+func ordinaryTestOperation(t *testing.T, r *NormalRun, ctx NormalOperationContext, cmd runhost.Command) (*corebattle.PlayerOperation, error) {
 	t.Helper()
 	ops, err := r.normalOperations(cmd, ctx)
 	if err != nil {
@@ -30,7 +31,7 @@ func ordinaryTestOperation(t *testing.T, r *NormalRun, ctx NormalOperationContex
 	return &corebattle.PlayerOperation{First: parsed.First.PlayerAction, Tail: corebattle.PlayerTailContext{DamageContext: damage, DefeatContext: defeat}, ResponseEnabled: true}, nil
 }
 
-func applyOrdinaryTestAction(t *testing.T, r *NormalRun, ctx NormalOperationContext, cmd RunCommand, rng random.Generator) (corebattle.PlayerOperationResult, error) {
+func applyOrdinaryTestAction(t *testing.T, r *NormalRun, ctx NormalOperationContext, cmd runhost.Command, rng random.Generator) (corebattle.PlayerOperationResult, error) {
 	t.Helper()
 	op, err := ordinaryTestOperation(t, r, ctx, cmd)
 	if err != nil {
@@ -43,19 +44,19 @@ func TestOrdinaryFormationUsesMemberScanAndSurvivesReload(t *testing.T) {
 	r, ctx := operationFixture()
 	r.Roster = []string{"a", "d", "b"}
 	r.Enemies = []string{"c", "e"}
-	d := r.actor("b").Clone()
+	d := r.Actor("b").Clone()
 	d.ID = "d"
-	e, fallen := r.actor("c").Clone(), r.actor("c").Clone()
+	e, fallen := r.Actor("c").Clone(), r.Actor("c").Clone()
 	e.ID, fallen.ID, fallen.HP, fallen.NPC = "e", "fallen", 0, false
 	r.Battle.Actors = slices.Insert(r.Battle.Actors, 1, d, fallen, e)
 	r.Battle.SkillBans = map[string]int{"unrelated": 2}
-	r.actor("d").CMPNeedCharge = 3
+	r.Actor("d").CMPNeedCharge = 3
 	r.Admission.Speed = 10
 	now := time.Unix(100, 0)
 	r.LastActions = map[string]time.Time{"e": now}
 	rng := &ordinaryRNG{value: .5}
 
-	result, err := applyOrdinaryTestAction(t, r, ctx, RunCommand{ActorID: "d", Input: "＠まえ"}, rng)
+	result, err := applyOrdinaryTestAction(t, r, ctx, runhost.Command{ActorID: "d", Input: "＠まえ"}, rng)
 	if err != nil || !result.Accepted || !result.ResponseReached || r.Battle.SkillBans["unrelated"] != 1 {
 		t.Fatalf("formation did not reach the ordinary tail: %+v %v", result, err)
 	}
@@ -73,7 +74,7 @@ func TestOrdinaryFormationUsesMemberScanAndSurvivesReload(t *testing.T) {
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatal(err)
 	}
-	result, err = applyOrdinaryTestAction(t, &loaded, ctx, RunCommand{ActorID: "a", Action: "back"}, rng)
+	result, err = applyOrdinaryTestAction(t, &loaded, ctx, runhost.Command{ActorID: "a", Action: "back"}, rng)
 	var members []string
 	for _, a := range loaded.Battle.Actors {
 		members = append(members, a.ID)
@@ -101,14 +102,14 @@ func TestOrdinarySurvivalUsesSharedHealingAndLateCost(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r, ctx := operationFixture()
 			ctx.Definitions.RegisterTreatmentMischief(&corebattle.TreatmentMischiefContext{})
-			a := r.actor("a")
+			a := r.Actor("a")
 			a.Jobs, a.MP, a.HP, a.MaxHP, a.Defense, a.Tension = tc.jobs, tc.mp, 30, 500, 100, 1
 			a.Status, a.ItemDefinitionIDs = corebattle.StatusMagicSeal, []string{"item-146"}
 			a.CMPNeedCharge = 3
 			if !tc.encounter {
-				r.actor("c").HP = 0
+				r.Actor("c").HP = 0
 			}
-			cmd := RunCommand{ActorID: "a", Input: "＠サバイバル>Bob"}
+			cmd := runhost.Command{ActorID: "a", Input: "＠サバイバル>Bob"}
 			parsed, err := r.ParseNormalOperation(cmd, ctx)
 			if err != nil || parsed.First.Cost != tc.pay || (parsed.First.EntryID == "job-78-entry-3") != tc.encounter {
 				t.Fatalf("survival binding: %+v %v", parsed, err)
@@ -125,8 +126,8 @@ func TestOrdinarySurvivalUsesSharedHealingAndLateCost(t *testing.T) {
 				execute := op.First.Execute
 				op.First.Execute = func(state *corebattle.LifetimeState, rng random.Generator) (corebattle.PlayerActionFacts, error) {
 					facts, err := execute(state, rng)
-					if r.actor("a").MP != tc.pay || facts.HealCalls != 1 {
-						t.Errorf("callback must return before the late charge, MP %d facts %+v", r.actor("a").MP, facts)
+					if r.Actor("a").MP != tc.pay || facts.HealCalls != 1 {
+						t.Errorf("callback must return before the late charge, MP %d facts %+v", r.Actor("a").MP, facts)
 					}
 					return facts, err
 				}
@@ -135,9 +136,9 @@ func TestOrdinarySurvivalUsesSharedHealingAndLateCost(t *testing.T) {
 					t.Fatalf("survival result: %+v %v", result, applyErr)
 				}
 			}
-			a = r.actor("a")
-			if err != nil || a.HP != tc.hp || a.Defense != tc.df || !tc.encounter && a.MP != 0 || r.actor("b").HP != 100 {
-				t.Fatalf("survival result: HP %d DF %d MP %d ally HP %d error %v", a.HP, a.Defense, a.MP, r.actor("b").HP, err)
+			a = r.Actor("a")
+			if err != nil || a.HP != tc.hp || a.Defense != tc.df || !tc.encounter && a.MP != 0 || r.Actor("b").HP != 100 {
+				t.Fatalf("survival result: HP %d DF %d MP %d ally HP %d error %v", a.HP, a.Defense, a.MP, r.Actor("b").HP, err)
 			}
 		})
 	}
@@ -145,24 +146,24 @@ func TestOrdinarySurvivalUsesSharedHealingAndLateCost(t *testing.T) {
 
 func TestOrdinarySeparatorIsHiddenButRunsTheTail(t *testing.T) {
 	r, ctx := operationFixture()
-	a := r.actor("a")
+	a := r.Actor("a")
 	a.Jobs.OldJobID, a.Jobs.OldSP, a.CMPNeedCharge = "job-01", 1, 3
 	a.Custom = &corebattle.CustomLoadout{Name: "br", Gems: [3]string{"missing"}}
 	a.Temporary = corebattle.TemporaryDefense
-	cmd := RunCommand{ActorID: "a", Input: "＠br"}
+	cmd := runhost.Command{ActorID: "a", Input: "＠br"}
 	choices, err := r.DiscoverNormalOperations(cmd, ctx)
 	if err != nil || slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "br" || c.Action == "custom" }) {
 		t.Fatalf("separator is visible: %+v %v", choices, err)
 	}
-	comment, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Input: "＠unknown"}, ctx)
+	comment, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Input: "＠unknown"}, ctx)
 	if err != nil || comment.Kind != RunOperationComment {
 		t.Fatalf("unknown command: %+v %v", comment, err)
 	}
 	result, err := applyOrdinaryTestAction(t, r, ctx, cmd, &ordinaryRNG{value: .5})
-	if err != nil || !result.Accepted || !result.NormalAction || !result.ResponseReached || r.actor("a").Temporary != "" || r.actor("a").CMPCharge != 1 {
+	if err != nil || !result.Accepted || !result.NormalAction || !result.ResponseReached || r.Actor("a").Temporary != "" || r.Actor("a").CMPCharge != 1 {
 		t.Fatalf("separator did not reach the ordinary tail: %+v %v", result, err)
 	}
-	a = r.actor("a")
+	a = r.Actor("a")
 	a.Abilities = []string{"cursed"}
 	comment, err = r.ParseNormalOperation(cmd, ctx)
 	if err != nil || comment.Kind != RunOperationComment {
@@ -172,9 +173,9 @@ func TestOrdinarySeparatorIsHiddenButRunsTheTail(t *testing.T) {
 
 func TestOrdinaryActionsRejectWithoutChangingTheRun(t *testing.T) {
 	r, ctx := operationFixture()
-	a := r.actor("a")
+	a := r.Actor("a")
 	a.Jobs.JobID, a.Jobs.SP, a.MP = "job-78", 55, 9
-	r.actor("c").HP = 0
+	r.Actor("c").HP = 0
 	r.Battle.SkillBans = map[string]int{"front": 2}
 	before, err := json.Marshal(r)
 	if err != nil {
@@ -182,7 +183,7 @@ func TestOrdinaryActionsRejectWithoutChangingTheRun(t *testing.T) {
 	}
 	rng := &ordinaryRNG{}
 	for _, action := range []string{"front", "between-encounter-survival"} {
-		if _, err := applyOrdinaryTestAction(t, r, ctx, RunCommand{ActorID: "a", Action: action}, rng); !errors.Is(err, ErrRunUnavailable) {
+		if _, err := applyOrdinaryTestAction(t, r, ctx, runhost.Command{ActorID: "a", Action: action}, rng); !errors.Is(err, runhost.ErrUnavailable) {
 			t.Fatalf("%s rejected with %v", action, err)
 		}
 	}
@@ -191,9 +192,9 @@ func TestOrdinaryActionsRejectWithoutChangingTheRun(t *testing.T) {
 		t.Fatalf("rejected action mutated the run or drew randomness: %v, draws %d", err, rng.calls)
 	}
 
-	r.actor("c").HP = 100
+	r.Actor("c").HP = 100
 	delete(r.Battle.SkillBans, "front")
-	op, err := ordinaryTestOperation(t, r, ctx, RunCommand{ActorID: "b", Action: "front"})
+	op, err := ordinaryTestOperation(t, r, ctx, runhost.Command{ActorID: "b", Action: "front"})
 	if err != nil {
 		t.Fatal(err)
 	}

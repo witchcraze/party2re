@@ -296,7 +296,7 @@ fatigue, attempted-versus-cleared round counts and accessory bonuses.
 
 **Superseded target.** [#1866](https://github.com/witchcraze/party2re/issues/1866)
 (user-approved 2026-11-23) moves Challenge onto the
-[normal-run SQL boundary](#normal-adventure-durable-command-boundary-1325) so that
+[run host SQL boundary](#run-host-durable-command-boundary-1325) so that
 rounds use explicit player commands; Valkey live authority ends with that cutover.
 The Challenge sections of this document describe the current implementation of the
 earlier #1584 decision (Valkey live rounds, leadership-independent run identity,
@@ -465,15 +465,21 @@ not prove payload bounds, sub-millisecond latency, all service race conditions,
 or full settlement recovery. Use feature integration and conservation tests
 when changing run transitions; `make check` remains the required repository gate.
 
-## Normal Adventure: durable command boundary (#1325)
+## Run host: durable command boundary (#1325)
 
 The user approved SQL authority and the explicit idle-cleanup timing in #1325
-on 2026-10-11. Adventure owns enrolled runs; Party Valkey owns waiting lobbies.
-[NormalRunService](../../internal/adventure/normal_run.go) implements the lifecycle
-boundary, and its production combat port rebuilds every callback port per
-operation. Production starts retain batch execution until the Gateway cutover
-(#1330). Neither this service nor Candidate D's loss limitations certify
-combat effects whose ports remain whole-action gates.
+on 2026-10-11. The [run host](../../internal/runhost/runhost.go) owns enrolled
+runs for every room library; Party Valkey owns waiting lobbies. Legacy runs
+every room mode on shared routines (treasure inspection and creation, enemy
+creation, exit and reset in `_battle.cgi`/`_npc_action.cgi`) and keys mode
+differences on `$m{lib}`. The host therefore owns the shared routines, and a room
+library supplies only its `vs_*.cgi` rules and `$m{lib}` branches through the
+room port; hosting other modes inside Adventure was rejected in #2649. Adventure
+stages are a room library
+([NormalRunService](../../internal/adventure/normal_run.go)) whose combat port
+rebuilds every callback port per operation. Production starts retain batch
+execution until the Gateway cutover (#1330). Neither this service nor Candidate
+D's loss limitations certify combat effects whose ports remain whole-action gates.
 Gameplay evidence remains in [Adventure](../design/adventure.md#resumable-normal-run-transitions)
 and shared effect state in [Battle](../design/battle.md#explicit-action-resumption-requirements).
 
@@ -493,7 +499,7 @@ private battle-row snapshot is captured in the Valkey lobby on create or join
 and handed off through the immutable admission record, never through public
 lobby responses. Roster writers and
 the retained Party batch start use that same SQL boundary, including when the
-Valkey lease expires. Enrollment freezes floor 0 without combat. SQL ownership
+Valkey lease expires. Enrollment freezes round 0 without combat. SQL ownership
 survives lobby cleanup failure, expiry and restart; retry finds the same admission
 before consulting the lobby. Cleanup removes only that lobby's reverse mappings
 and occurs after commit. No lobby lock is retained between requests or acquired
@@ -540,10 +546,10 @@ consume already debited items or award unopened chests.
 
 ### Individual settlement and recovery
 
-Personal exit atomically applies outstanding effects, resets fullness, writes
-recipient history/disposition, removes the departing participant from active
-combat membership (`Battle.Actors`) as well as room membership (`Roster`),
-selects the first remaining real participant in roster order and releases enrollment.
+Personal exit atomically applies outstanding effects and the room's exit effects,
+writes recipient history/disposition, removes the departing participant from both
+combat and room membership, selects the first remaining real participant in roster
+order and releases enrollment.
 Remaining actors, legitimate helpers, NPCs, resources and timestamps retain their
 state and order; subsequent encounter scaling, Stage15 echoes, targeting and EX
 marker checks observe only active members. Sorted lock order never changes leadership.

@@ -13,6 +13,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -45,7 +46,7 @@ func addTravelTool(t *testing.T, f *normalFixture, actor int, definition string)
 }
 
 // travelCommand uses the actor's single held tool (どうぐ) with a destination.
-func travelCommand(t *testing.T, f *normalFixture, run string, actor int, input string) adventure.RunCommand {
+func travelCommand(t *testing.T, f *normalFixture, run string, actor int, input string) runhost.Command {
 	t.Helper()
 	r, err := f.store.FindRun(context.Background(), run)
 	if err != nil || r == nil {
@@ -53,7 +54,7 @@ func travelCommand(t *testing.T, f *normalFixture, run string, actor int, input 
 	}
 	f.clock.add(3 * time.Second)
 	a := f.actors[actor]
-	return adventure.RunCommand{RunID: run, ID: id.New(), PlayerID: a.PlayerID, ActorID: a.ID, Version: r.Version, Action: "tool", Input: input}
+	return runhost.Command{RunID: run, ID: id.New(), PlayerID: a.PlayerID, ActorID: a.ID, Version: r.Version, Action: "tool", Input: input}
 }
 
 func TestCombatTravelSQLReceiptRollbackAndTryConversion(t *testing.T) {
@@ -83,7 +84,7 @@ func TestCombatTravelSQLReceiptRollbackAndTryConversion(t *testing.T) {
 	f.store.failWrite.Store(false)
 	f.store.loseCommit.Store(true)
 	first, err := f.svc.Command(context.Background(), cmd)
-	if err != nil || first.Floor != 10 || first.StageID != before.Stage.ID {
+	if err != nil || first.Round != 10 {
 		t.Fatal(first, err)
 	}
 	f.restart(t)
@@ -108,7 +109,7 @@ func TestCombatTravelSQLReceiptRollbackAndTryConversion(t *testing.T) {
 		t.Fatal(retry, err)
 	}
 	r, err := f.store.FindRun(context.Background(), run)
-	if err != nil || r.Floor != 11 || len(r.Enemies) != 0 || r.ClearPending || r.StageCleared || r.Mode != "normal" || r.Recipients[cmd.ActorID].Pending.Gold != 7 || r.Recipients[cmd.ActorID].Conditional.Gold != 0 {
+	if err != nil || r.Round != 11 || len(r.Enemies) != 0 || r.ClearPending || r.StageCleared || r.Mode != "normal" || r.Recipients[cmd.ActorID].Pending.Gold != 7 || r.Recipients[cmd.ActorID].Conditional.Gold != 0 {
 		t.Fatal(r, err)
 	}
 	f.send(t, run, 0, "exit", "")
@@ -159,7 +160,7 @@ func TestCombatTravelSQL150GeneratedAndOldResponse(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if (r.Enemies[0] == before.Enemies[0]) != ready || !r.ClearPending || r.Floor != 10 || len(r.EncounterPool) == 0 {
+			if (r.Enemies[0] == before.Enemies[0]) != ready || !r.ClearPending || r.Round != 10 || len(r.EncounterPool) == 0 {
 				t.Fatal("wrong persisted roster/generation flags", r)
 			}
 			// Generated members are fresh but never answer the same operation.
@@ -213,7 +214,7 @@ func TestCombatTravelSQLNoEffectSkipAndRejection(t *testing.T) {
 			if readErr != nil {
 				t.Fatal(readErr)
 			}
-			if after.Floor != 10 || scenario == "invalid" && !reflect.DeepEqual(before, after) {
+			if after.Round != 10 || scenario == "invalid" && !reflect.DeepEqual(before, after) {
 				t.Fatal("wrong no-effect/rejection", after)
 			}
 			inv, err := f.invs.FindByCharacterID(context.Background(), cmd.ActorID)
@@ -239,10 +240,10 @@ func TestCombatTravelSQLPairedTravelAndExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	run := entry.Command.RunID
-	commands := []adventure.RunCommand{travelCommand(t, f, run, 0, `{}`), travelCommand(t, f, run, 1, `{}`)}
+	commands := []runhost.Command{travelCommand(t, f, run, 0, `{}`), travelCommand(t, f, run, 1, `{}`)}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		_, err := f.svc.Command(context.Background(), commands[(worker+op)%2])
-		if errors.Is(err, adventure.ErrRunConflict) {
+		if errors.Is(err, runhost.ErrConflict) {
 			return nil
 		}
 		return err
@@ -278,14 +279,14 @@ func TestCombatTravelSQLPairedTravelAndExit(t *testing.T) {
 	}
 	travel := travelCommand(t, f, run, owner, `{}`)
 	other := f.actors[1-owner]
-	exit := adventure.RunCommand{RunID: run, ID: "racing-exit", PlayerID: other.PlayerID, ActorID: other.ID, Version: r.Version, Action: "exit"}
+	exit := runhost.Command{RunID: run, ID: "racing-exit", PlayerID: other.PlayerID, ActorID: other.ID, Version: r.Version, Action: "exit"}
 	stats = testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		cmd := travel
 		if (worker+op)%2 == 1 {
 			cmd = exit
 		}
 		_, err := f.svc.Command(context.Background(), cmd)
-		if errors.Is(err, adventure.ErrRunConflict) {
+		if errors.Is(err, runhost.ErrConflict) {
 			return nil
 		}
 		return err
@@ -326,7 +327,7 @@ func TestCombatTravelSQLTreasureEncounterSurvivesCoordinates(t *testing.T) {
 		t.Fatal(err)
 	}
 	after, err := f.store.FindRun(context.Background(), run)
-	if err != nil || after.Floor != 10 || !reflect.DeepEqual(before.Boxes, after.Boxes) {
+	if err != nil || after.Round != 10 || !reflect.DeepEqual(before.Boxes, after.Boxes) {
 		t.Fatal("treasure encounter lost", after, err)
 	}
 	f.clock.add(3 * time.Second)

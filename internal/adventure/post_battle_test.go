@@ -13,6 +13,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type mockPostBattleSettler struct {
@@ -493,7 +494,7 @@ func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Manually populate boxes without floor 11 unseal transition
-		sess.TreasureBoxes = []adventure.TreasureBox{{ID: "fake-box", ItemID: "item-001"}}
+		sess.TreasureBoxes = []runhost.TreasureBox{{ID: "fake-box", ItemID: "item-001"}}
 		sess.UnsealDemonKing = false
 		res := sess.Result()
 		if res.UnsealDemonKing {
@@ -1310,7 +1311,7 @@ func TestAdventure_Floor11Treasure_AutoCrawlDoesNotConsumeMasterKeyWithoutIntent
 
 	mockBuilder := &mockParticipantBuilderWithItems{
 		items: map[string][]string{
-			char.ID: {adventure.ItemTreasurePocket},
+			char.ID: {runhost.ItemTreasurePocket},
 		},
 	}
 
@@ -1373,7 +1374,7 @@ func TestAdventure_Floor11Treasure_ExplicitInspectionConsumesStackQuantity(t *te
 
 	p := corebattle.MustNewParticipant(char.ID, 50000, 10000, 10000)
 	// Participant with stacked quantity 2 of ItemTreasurePocket
-	p.ItemDefinitionIDs = []string{adventure.ItemTreasurePocket, adventure.ItemTreasurePocket}
+	p.ItemDefinitionIDs = []string{runhost.ItemTreasurePocket, runhost.ItemTreasurePocket}
 
 	stages, _ := adventure.InitialStageCatalog()
 	stage17, _ := stages.FindByID("stage-17")
@@ -1384,7 +1385,7 @@ func TestAdventure_Floor11Treasure_ExplicitInspectionConsumesStackQuantity(t *te
 	}
 	sess.CurrentFloor = adventure.TreasureRoomFloor
 	sess.StageCleared = true
-	sess.TreasureBoxes = []adventure.TreasureBox{
+	sess.TreasureBoxes = []runhost.TreasureBox{
 		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
 		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
 		{ID: "box-3", Name: "Chest 3", ItemID: "item-003"},

@@ -6,28 +6,29 @@ import (
 	"slices"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID string) error {
-	a := r.actor(actorID)
+	a := r.Actor(actorID)
 	if a == nil || a.HP <= 0 {
 		return ErrUnconsciousCharacter
 	}
-	if r.Floor == 0 && r.LeaderID != actorID {
+	if r.Round == 0 && r.LeaderID != actorID {
 		return ErrLeaderOnly
 	}
 	switch {
-	case r.livingEnemies():
+	case r.LivingEnemies():
 		return ErrInvalidFloorAction
-	case r.Floor < TreasureRoomFloor:
-	case !r.HasEX() || r.Floor > EXBossFloor: // ordinary end at 11, terminal 13
+	case r.Round < TreasureRoomFloor:
+	case !r.HasEX() || r.Round > EXBossFloor: // ordinary end at 11, terminal 13
 		return ErrInvalidFloorAction
-	case r.Floor == EXBossFloor && len(r.Stage.exTreasureItems()) == 0,
-		r.Floor == TreasureRoomFloor && (r.Stage.Ordinary == nil || len(r.Stage.Ordinary.EXRoster) == 0):
+	case r.Round == EXBossFloor && len(r.Stage.exTreasureItems()) == 0,
+		r.Round == TreasureRoomFloor && (r.Stage.Ordinary == nil || len(r.Stage.Ordinary.EXRoster) == 0):
 		return corebattle.ErrUnsupportedEffect
 	}
 	if s.cfg.Combat == nil {
-		return ErrRunUnavailable
+		return runhost.ErrUnavailable
 	}
 	// Required reads precede reset, random draws, consumption and publication.
 	blessing := ""
@@ -46,11 +47,11 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	}
 	// Old encounter actors do not survive creation; coordinates remain separate
 	// from encounter provenance, so travel cannot manufacture boss clear credit.
-	r.discardEncounter()
+	r.DiscardEncounter()
 	r.EncounterPool, r.AppearancePositions = nil, nil
 	r.markEXOnAdvance(actorID)
-	r.Floor++
-	switch r.Floor {
+	r.Round++
+	switch r.Round {
 	case TreasureRoomFloor:
 		return s.createTreasureEncounter(r, actorID, blessing)
 	case EXTreasureFloor:
@@ -63,11 +64,11 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 	if r.Stage.Ordinary != nil {
 		party := make([]corebattle.LifetimeActor, 0, len(r.Battle.Actors))
 		for _, a := range r.Battle.Actors {
-			if a.TeamID == r.actor(actorID).TeamID && !a.Banished && !a.RosterDetached {
+			if a.TeamID == r.Actor(actorID).TeamID && !a.Banished && !a.RosterDetached {
 				party = append(party, a)
 			}
 		}
-		encounter, err := r.Stage.BuildOrdinaryEncounter(s.cfg.Monsters, party, *r.actor(actorID), r.Floor, r.Mode, fmt.Sprintf("%s-f%d-v%d", r.ID, r.Floor, r.Version+1), s.cfg.RNG)
+		encounter, err := r.Stage.BuildOrdinaryEncounter(s.cfg.Monsters, party, *r.Actor(actorID), r.Round, r.Mode, fmt.Sprintf("%s-f%d-v%d", r.ID, r.Round, r.Version+1), s.cfg.RNG)
 		if err != nil {
 			return err
 		}
@@ -76,13 +77,13 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 		for _, a := range encounter.Actors {
 			r.Enemies = append(r.Enemies, a.ID)
 		}
-		if r.Floor == EXBossFloor {
+		if r.Round == EXBossFloor {
 			r.prepareEXAllies(actorID)
 		}
 		// Restoration precedes the cap, which leaves current HP/MP untouched (_battle.cgi:1485–1530).
-		if slices.Contains(r.Stage.SpecialBossFloors, r.Floor) {
+		if slices.Contains(r.Stage.SpecialBossFloors, r.Round) {
 			if s.cfg.Combat == nil {
-				return ErrRunUnavailable
+				return runhost.ErrUnavailable
 			}
 			if err := s.cfg.Combat.PrepareBossField(ctx, r, actorID); err != nil {
 				return err
@@ -95,7 +96,7 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 		return nil
 	}
 	ids := r.Stage.GetBossIDs()
-	if r.Floor < BossFloor {
+	if r.Round < BossFloor {
 		pool := r.Stage.GetNormalMonsterIDs()
 		if len(pool) == 0 {
 			return ErrStageNotFound
@@ -115,59 +116,13 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 		if err != nil {
 			return err
 		}
-		a := session.buildMonsterActor(fmt.Sprintf("%s-f%d-v%d-%d", m.ID, r.Floor, r.Version+1, i), m, float64(len(r.Roster)-2)*0.1, r.Floor == BossFloor)
+		a := session.buildMonsterActor(fmt.Sprintf("%s-f%d-v%d-%d", m.ID, r.Round, r.Version+1, i), m, float64(len(r.Roster)-2)*0.1, r.Round == BossFloor)
 		a.TeamID = "enemies"
 		r.Battle.Actors = append(r.Battle.Actors, a)
 		r.Enemies = append(r.Enemies, a.ID)
 	}
 	r.markEncounterCreated()
 	return nil
-}
-
-func (s *NormalRunService) claimChest(ctx context.Context, r *NormalRun, actorID, boxID string) (*TreasureBox, map[string][]corebattle.ConsumedItem, error) {
-	if !isTreasureFloor(r.Floor) {
-		return nil, nil, ErrInvalidFloorAction
-	}
-	a := r.actor(actorID)
-	if a == nil || a.HP <= 0 {
-		return nil, nil, ErrUnconsciousCharacter
-	}
-	i := slices.IndexFunc(r.Boxes, func(b TreasureBox) bool { return b.ID == boxID })
-	if i < 0 || !r.Boxes[i].isUnopened() {
-		return nil, nil, ErrNoUnopenedTreasure
-	}
-	consumed := map[string][]corebattle.ConsumedItem{}
-	if r.Boxes[i].Fixed {
-		r.Boxes[i].OpenedBy = actorID
-		r.Boxes[i].Combat = nil
-		return &r.Boxes[i], consumed, nil
-	}
-	p := r.Recipients[actorID]
-	if p.Inspected > 0 {
-		if s.cfg.Inventories == nil {
-			return nil, nil, ErrRunUnavailable
-		}
-		inv, err := s.cfg.Inventories.FindByCharacterID(ctx, actorID)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, item := range inv.Items {
-			if item.DefinitionID == ItemTreasurePocket && item.Quantity > 0 {
-				entry := corebattle.ConsumedItem{ID: item.DefinitionID, InstanceID: item.ID, Quantity: 1}
-				consumed[actorID] = []corebattle.ConsumedItem{entry}
-				removeHeldItem(&a.Participant, entry)
-				break
-			}
-		}
-		if len(consumed[actorID]) == 0 {
-			return nil, nil, ErrTreasureLimitReached
-		}
-	}
-	p.Inspected++
-	r.Recipients[actorID] = p
-	r.Boxes[i].OpenedBy = actorID
-	r.Boxes[i].Combat = nil
-	return &r.Boxes[i], consumed, nil
 }
 
 // createTreasureEncounter is shared by advance and job-driven room recreation.
@@ -181,11 +136,11 @@ func (s *NormalRunService) createTreasureEncounter(r *NormalRun, actorID, blessi
 			if err != nil {
 				return err
 			}
-			p.Pending, err = addRunEarnings(p.Pending, converted)
+			p.Pending, err = runhost.AddEarnings(p.Pending, converted)
 			if err != nil {
 				return err
 			}
-			p.Conditional = RunEarnings{}
+			p.Conditional = runhost.Earnings{}
 			r.Recipients[id] = p
 		}
 		r.Mode = CrawlModeNormal
@@ -193,6 +148,6 @@ func (s *NormalRunService) createTreasureEncounter(r *NormalRun, actorID, blessi
 	if r.ClearPending {
 		r.StageCleared, r.ClearPending = true, false
 	}
-	r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID
+	r.EncounterFloor, r.EncounterStageID = r.Round, r.Stage.ID
 	return nil
 }

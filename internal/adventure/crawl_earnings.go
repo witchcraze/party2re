@@ -6,6 +6,7 @@ import (
 	"maps"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // LoadBlessings queries active chapel blessings for all participants and records treasure eligibility.
@@ -40,19 +41,19 @@ func (r DungeonCrawlResult) RewardForCharacter(id string) corebattle.Reward {
 }
 
 func (s *CrawlSession) recordDefeatEarnings(result corebattle.PartyBattleResult) error {
-	floor := make(map[string]RunEarnings)
+	floor := make(map[string]runhost.Earnings)
 	for _, defeat := range result.DefeatEarnings {
 		r := defeat.Reward
-		base, err := addRunEarnings(RunEarnings{}, RunEarnings{EXP: r.Experience, Gold: r.Currency, Crystals: r.Crystals})
+		base, err := runhost.AddEarnings(runhost.Earnings{}, runhost.Earnings{EXP: r.Experience, Gold: r.Currency, Crystals: r.Crystals})
 		if err != nil {
 			return err
 		}
-		base, err = addRunEarnings(base, chapelDefeatBonus(base, s.Blessings[defeat.ActorID], s.rngIntn))
+		base, err = runhost.AddEarnings(base, chapelDefeatBonus(base, s.Blessings[defeat.ActorID], s.rngIntn))
 		if err != nil {
 			return err
 		}
 		for _, id := range defeat.RecipientIDs {
-			e, err := addRunEarnings(floor[id], base)
+			e, err := runhost.AddEarnings(floor[id], base)
 			if err != nil {
 				return err
 			}
@@ -61,7 +62,7 @@ func (s *CrawlSession) recordDefeatEarnings(result corebattle.PartyBattleResult)
 	}
 	earnings := maps.Clone(s.Earnings)
 	if earnings == nil {
-		earnings = make(map[string]RunEarnings)
+		earnings = make(map[string]runhost.Earnings)
 	}
 	for id, e := range floor {
 		// Keep the existing floor-level cooperative rounding, applied once.
@@ -69,7 +70,7 @@ func (s *CrawlSession) recordDefeatEarnings(result corebattle.PartyBattleResult)
 		if err != nil {
 			return err
 		}
-		earnings[id], err = addRunEarnings(earnings[id], e)
+		earnings[id], err = runhost.AddEarnings(earnings[id], e)
 		if err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-package adventure
+package runhost
 
 import (
 	"context"
@@ -6,8 +6,12 @@ import (
 	"testing"
 )
 
+type testRun struct{ State }
+
+func (r *testRun) Host() *State { return &r.State }
+
 type publicRunStore struct {
-	NormalRunStore
+	Store[testRun]
 	run *ActorRun
 	err error
 }
@@ -27,7 +31,7 @@ func TestHasActiveRun(t *testing.T) {
 	}{
 		{}, {run: &ActorRun{RunID: "private-run"}}, {err: wantErr},
 	} {
-		s := &NormalRunService{cfg: NormalRunConfig{Store: publicRunStore{run: tc.run, err: tc.err}}}
+		s := &Service[testRun, *testRun]{cfg: Config[testRun]{Store: publicRunStore{run: tc.run, err: tc.err}}}
 		active, err := s.HasActiveRun(context.Background(), "target")
 		if active != (tc.run != nil) || !errors.Is(err, tc.err) {
 			t.Fatalf("active=%v err=%v", active, err)

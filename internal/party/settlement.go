@@ -12,6 +12,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // PostBattleSettler applies post-battle state, rewards, and item drops via the Battle Adapter.
@@ -246,7 +247,7 @@ func (s *Service) settleFallback(
 	return rewardSummaries, lostDrops, nil
 }
 
-func updateTreasureDeliveries(boxes []adventure.TreasureBox, resp battleadapter.ApplyPostBattleResponse) {
+func updateTreasureDeliveries(boxes []runhost.TreasureBox, resp battleadapter.ApplyPostBattleResponse) {
 	remainingInv := make(map[string][]string)
 	for cID, items := range resp.InventoryDrops {
 		for _, inst := range items {

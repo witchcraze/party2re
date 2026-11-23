@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -123,10 +124,10 @@ func TestBookSQLPairedReturnsConserveInstances(t *testing.T) {
 	for _, actor := range f.actors {
 		seedDepot(t, depots, actor.ID)
 	}
-	commands := []adventure.RunCommand{assetCommand(t, f, run, 0, "job-86-entry-2", "return-a"), assetCommand(t, f, run, 1, "job-86-entry-2", "return-b")}
+	commands := []runhost.Command{assetCommand(t, f, run, 0, "job-86-entry-2", "return-a"), assetCommand(t, f, run, 1, "job-86-entry-2", "return-b")}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		_, err := f.svc.Command(context.Background(), commands[(worker+op)%2])
-		if errors.Is(err, adventure.ErrRunConflict) {
+		if errors.Is(err, runhost.ErrConflict) {
 			return nil
 		}
 		return err
@@ -196,7 +197,7 @@ type bookRejectCombat struct {
 	onCapture func(*corebattle.JobAssets, *string)
 }
 
-func (c *bookRejectCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
+func (c *bookRejectCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd runhost.Command) (adventure.RunActionEffects, error) {
 	if cmd.Action != "job-86-entry-0" {
 		return c.normalCombat.ExecuteRunAction(ctx, r, cmd)
 	}

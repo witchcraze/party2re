@@ -4,6 +4,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func (s *CrawlSession) rngIntn(n int) int {
@@ -136,7 +137,7 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 	if len(s.CharacterIDs) > 1 {
 		recipientRewards = make(map[string]corebattle.Reward, len(s.CharacterIDs))
 		for _, id := range s.CharacterIDs {
-			recipientRewards[id] = runReward(s.Earnings[id])
+			recipientRewards[id] = runhost.Reward(s.Earnings[id])
 		}
 	}
 

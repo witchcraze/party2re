@@ -15,6 +15,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type mockBattleSettler struct {
@@ -404,7 +405,7 @@ func testTreasureBoxRouting(t *testing.T, viaBattle bool) {
 
 	crawlResult := &adventure.DungeonCrawlResult{
 		Outcome: corebattle.OutcomeWin,
-		TreasureBoxes: []adventure.TreasureBox{
+		TreasureBoxes: []runhost.TreasureBox{
 			{OpenedBy: "c1", ItemID: "weapon-01"}, // c1: full depot -> lost
 			{OpenedBy: "c2", ItemID: "weapon-01"}, // c2: space in depot -> depot
 			{OpenedBy: "c3", ItemID: "item-001"},  // c3: empty tool hand -> inventory
@@ -506,7 +507,7 @@ func TestSettleFallback_TreasureDeliveryError_Propagated(t *testing.T) {
 	charMap := map[string]corecharacter.Character{"c1": c1}
 	crawlResult := &adventure.DungeonCrawlResult{
 		Outcome: corebattle.OutcomeWin,
-		TreasureBoxes: []adventure.TreasureBox{
+		TreasureBoxes: []runhost.TreasureBox{
 			{OpenedBy: "c1", ItemID: "weapon-01"}, // weapon -> routes to depot -> fails on save
 		},
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // CombatTravelInput is a destination, never a participant name or target ID.
@@ -21,7 +22,7 @@ type CombatTravelInput struct {
 func ParseCombatTravelInput(input string) (CombatTravelInput, error) {
 	var value CombatTravelInput
 	if !strings.HasPrefix(strings.TrimSpace(input), "{") {
-		return value, ErrRunConflict
+		return value, runhost.ErrConflict
 	}
 	d := json.NewDecoder(strings.NewReader(input))
 	d.DisallowUnknownFields()
@@ -29,7 +30,7 @@ func ParseCombatTravelInput(input string) (CombatTravelInput, error) {
 		return value, err
 	}
 	if err := d.Decode(new(any)); err != io.EOF {
-		return CombatTravelInput{}, ErrRunConflict
+		return CombatTravelInput{}, runhost.ErrConflict
 	}
 	return value, nil
 }
@@ -67,7 +68,7 @@ func (t CombatTravelTransition) BeginNPCResponse(r *NormalRun, now time.Time) st
 	npc := ""
 	for i, a := range t.ResponseEnemies {
 		times[a.ID] = t.oldTimes[a.ID]
-		if current := r.actor(a.ID); current != nil {
+		if current := r.Actor(a.ID); current != nil {
 			a = current.Clone()
 			times[a.ID] = r.LastActions[a.ID]
 		}
@@ -79,7 +80,7 @@ func (t CombatTravelTransition) BeginNPCResponse(r *NormalRun, now time.Time) st
 	if npc == "" {
 		return ""
 	}
-	r.discardEncounter()
+	r.DiscardEncounter()
 	for _, a := range actors {
 		r.Battle.Actors = append(r.Battle.Actors, a)
 		r.Enemies = append(r.Enemies, a.ID)
@@ -92,14 +93,14 @@ func (t CombatTravelTransition) BeginNPCResponse(r *NormalRun, now time.Time) st
 // ValidateCombatTravel is pure admission for these finite tool callbacks.
 // Incapacitation, whole-action tails and instance ownership stay with RunCombat.
 func (s *NormalRunService) ValidateCombatTravel(r *NormalRun, actor, tool string, input CombatTravelInput, reset *corebattle.EquipmentResetContext) error {
-	if r == nil || !slices.Contains(r.Roster, actor) || r.actor(actor) == nil {
+	if r == nil || !slices.Contains(r.Roster, actor) || r.Actor(actor) == nil {
 		return ErrNotParticipant
 	}
-	if r.actor(actor).HP <= 0 {
+	if r.Actor(actor).HP <= 0 {
 		return ErrUnconsciousCharacter
 	}
 	if input.Floor != 0 && tool != "item-150" || input.DestinationStageID != "" && tool != "item-184" {
-		return ErrRunConflict
+		return runhost.ErrConflict
 	}
 	if _, err := ValidateCrawlMode(r.Mode); err != nil && tool != "item-083" {
 		return err
@@ -107,13 +108,13 @@ func (s *NormalRunService) ValidateCombatTravel(r *NormalRun, actor, tool string
 	stage := travelStage(tool, input)
 	switch tool {
 	case "item-071":
-		gear := r.actor(actor).Gear
+		gear := r.Actor(actor).Gear
 		if gear == nil || gear.WeaponID != "weapon-35" || gear.ArmorID != "armor-37" {
-			return ErrRunConflict
+			return runhost.ErrConflict
 		}
 	case "item-184":
 		if stage != "stage-23" && stage != "stage-25" {
-			return ErrRunConflict
+			return runhost.ErrConflict
 		}
 	case "item-150":
 		if input.Floor < 1 || input.Floor > BossFloor {
@@ -135,7 +136,7 @@ func (s *NormalRunService) ValidateCombatTravel(r *NormalRun, actor, tool string
 			}
 		}
 		for _, id := range r.Enemies {
-			if a := r.actor(id); a == nil || !a.NPC || a.EncounterIdentity == "" {
+			if a := r.Actor(id); a == nil || !a.NPC || a.EncounterIdentity == "" {
 				return corebattle.ErrUnsupportedEffect
 			}
 		}
@@ -188,23 +189,23 @@ func (s *NormalRunService) ApplyCombatTravel(ctx context.Context, r *NormalRun, 
 	if err := ctx.Err(); err != nil {
 		return CombatTravelTransition{}, err
 	}
-	t := CombatTravelTransition{Consume: true, ResponseSuppressed: isTreasureFloor(r.Floor)}
+	t := CombatTravelTransition{Consume: true, ResponseSuppressed: isTreasureFloor(r.Round)}
 	if stage := travelStage(tool, input); stage != "" {
 		destination, err := s.cfg.Stages.FindByID(stage)
 		if err != nil {
 			return CombatTravelTransition{}, err
 		}
 		r.Stage = destination
-		r.Floor = 1
+		r.Round = 1
 		return t, nil
 	}
 	switch tool {
 	case "item-083":
-		if _, err := ValidateCrawlMode(r.Mode); err == nil && r.Floor < 9 {
-			r.Floor++
+		if _, err := ValidateCrawlMode(r.Mode); err == nil && r.Round < 9 {
+			r.Round++
 		}
 	case "item-107":
-		r.Floor = BossFloor
+		r.Round = BossFloor
 	case "item-150":
 		frame := *reset
 		if err := battle.ResetAll(&r.Battle, &frame, s.cfg.RNG); err != nil {
@@ -247,25 +248,16 @@ func (s *NormalRunService) validateTravelEncounter(stage Stage) error {
 	return nil
 }
 
-func (r *NormalRun) discardEncounter() {
-	for _, id := range r.Enemies {
-		delete(r.LastActions, id)
-	}
-	r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return slices.Contains(r.Enemies, a.ID) })
-	r.Enemies = nil
-	r.Boxes = nil
-}
-
 func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *NormalRun, actor string, floor int, blessing string) (CombatTravelTransition, error) {
-	t := CombatTravelTransition{ResponseSuppressed: isTreasureFloor(r.Floor), Reload: true}
+	t := CombatTravelTransition{ResponseSuppressed: isTreasureFloor(r.Round), Reload: true}
 	t.replaced, t.oldFloor, t.oldStage = true, r.EncounterFloor, r.EncounterStageID
 	t.oldTimes = make(map[string]time.Time, len(r.Enemies))
 	for _, id := range r.Enemies {
-		t.ResponseEnemies = append(t.ResponseEnemies, r.actor(id).Clone())
+		t.ResponseEnemies = append(t.ResponseEnemies, r.Actor(id).Clone())
 		t.oldTimes[id] = r.LastActions[id]
 	}
-	r.discardEncounter()
-	r.Floor = floor
+	r.DiscardEncounter()
+	r.Round = floor
 	var err error
 	switch floor {
 	case TreasureRoomFloor:
@@ -279,7 +271,7 @@ func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *Normal
 		return CombatTravelTransition{}, err
 	}
 	for i, id := range r.Enemies {
-		a := r.actor(id)
+		a := r.Actor(id)
 		for _, old := range t.ResponseEnemies {
 			if a.EncounterIdentity != "" && a.EncounterIdentity == old.EncounterIdentity {
 				a.ID, r.Enemies[i] = old.ID, old.ID
@@ -307,8 +299,8 @@ func (s *NormalRunService) PrepareStoredToolTravel(ctx context.Context, r *Norma
 			return s.ValidateCombatTravel(r, actor, tool, value, reset)
 		},
 		Apply: func(tool, target string, frame corebattle.TargetContext) (corebattle.TargetContext, error) {
-			if ctx.Value(normalMutationContext{}) != r.ID {
-				return frame, ErrRunForbidden
+			if !runhost.InCommand(ctx, r.ID) {
+				return frame, runhost.ErrForbidden
 			}
 			value, err := input(tool, target)
 			if err != nil {

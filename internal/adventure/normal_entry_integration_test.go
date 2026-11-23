@@ -7,6 +7,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func TestNormalRunDailyAdmissionRollbackAndRetry(t *testing.T) {
@@ -54,7 +55,7 @@ func TestNormalRunAdmissionSnapshotIsImmutable(t *testing.T) {
 	r.Admission.StageID = "stage-01"
 	r.Version++
 	err = f.store.WithRunForUpdate(context.Background(), r.ID, false, func(ctx context.Context) error { return f.store.SaveRun(ctx, *r, r.Version-1) })
-	if !errors.Is(err, adventure.ErrRunConflict) {
+	if !errors.Is(err, runhost.ErrConflict) {
 		t.Fatal("admission snapshot changed", err)
 	}
 	if _, err := f.svc.EnterSolo(context.Background(), f.actors[0].PlayerID, f.actors[0].ID, "start", adventure.StarterAdventure, "normal", 3); err != nil {

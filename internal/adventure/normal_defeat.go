@@ -6,9 +6,9 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // NewRunDefeatRewards binds the defeat port to a single command's result. The
@@ -25,16 +25,16 @@ func NewRunDefeatRewards(r *NormalRun, requester corecharacter.Character, blessi
 	validate := func(s *corebattle.LifetimeState, c corebattle.TargetContext, id string) error {
 		actor, target := find(s, c.ActorID), find(s, id)
 		if actor == nil || target == nil {
-			return ErrRunConflict
+			return runhost.ErrConflict
 		}
 		if actor.NPC || id == c.ActorID {
 			return nil
 		}
 		if requester.ID != c.ActorID || r == nil || rng == nil || effects == nil {
-			return ErrRunUnavailable
+			return runhost.ErrUnavailable
 		}
 		if target.ExperienceReward < 0 || target.GoldReward < 0 || target.CrystalReward < 0 {
-			return ErrRunConflict
+			return runhost.ErrConflict
 		}
 		return nil
 	}
@@ -52,12 +52,12 @@ func NewRunDefeatRewards(r *NormalRun, requester corecharacter.Character, blessi
 				return err
 			}
 			actor, target := find(s, c.ActorID), find(s, id)
-			if actor.NPC || id == c.ActorID || r.hasBox(id) {
+			if actor.NPC || id == c.ActorID || r.HasBox(id) {
 				return nil
 			}
 			strength := battle.Strong(target.MaxHP, target.MaxMP, target.Attack, target.Defense, target.Agility)
 			strong := battle.IsStrongEnemy(strength, requesterStrength)
-			reward := RunEarnings{EXP: target.ExperienceReward, Gold: target.GoldReward}
+			reward := runhost.Earnings{EXP: target.ExperienceReward, Gold: target.GoldReward}
 			rolled := target.CrystalDropRolled || target.CrystalDropped
 			if !rolled {
 				reward.Crystals = target.CrystalReward
@@ -78,14 +78,14 @@ func NewRunDefeatRewards(r *NormalRun, requester corecharacter.Character, blessi
 				return err
 			}
 			if effects.Earnings == nil {
-				effects.Earnings = make(map[string]RunEarnings)
+				effects.Earnings = make(map[string]runhost.Earnings)
 			}
 			for _, allyID := range r.Roster {
 				ally := find(s, allyID)
 				if ally == nil || ally.HP <= 0 || ally.TeamID != actor.TeamID || ally.RosterDetached || ally.Banished {
 					continue
 				}
-				effects.Earnings[allyID], err = addRunEarnings(effects.Earnings[allyID], reward)
+				effects.Earnings[allyID], err = runhost.AddEarnings(effects.Earnings[allyID], reward)
 				if err != nil {
 					return err
 				}
@@ -104,12 +104,12 @@ func NewRunDefeatRewards(r *NormalRun, requester corecharacter.Character, blessi
 	}
 }
 
-func modifyRunDefeatEarnings(e RunEarnings, gear *corebattle.BattleGearStats, mode, wish string, partySize int, rng random.Generator) (RunEarnings, error) {
+func modifyRunDefeatEarnings(e runhost.Earnings, gear *corebattle.BattleGearStats, mode, wish string, partySize int, rng random.Generator) (runhost.Earnings, error) {
 	if gear != nil && gear.AccessoryID == "item-167" {
 		var err error
 		e.EXP, err = economy.SafeAdd(e.EXP, e.EXP/5)
 		if err != nil {
-			return RunEarnings{}, err
+			return runhost.Earnings{}, err
 		}
 	}
 	if mode == CrawlModeCalm {
@@ -119,9 +119,9 @@ func modifyRunDefeatEarnings(e RunEarnings, gear *corebattle.BattleGearStats, mo
 	if gear != nil && gear.WeaponID == "weapon-01" && gear.ArmorID == "armor-01" && rng.Intn(4) == 0 {
 		bonus.EXP += 5
 	}
-	e, err := addRunEarnings(e, bonus)
+	e, err := runhost.AddEarnings(e, bonus)
 	if err != nil {
-		return RunEarnings{}, err
+		return runhost.Earnings{}, err
 	}
 	return scaleCooperativeEarnings(e, min(3, max(0, partySize-1))*10)
 }
@@ -151,17 +151,5 @@ func runDefeatFact(r *NormalRun, actor, target *corebattle.LifetimeActor, status
 // LevelUpEligible is the player step's branch input. releasedStockEXP is any
 // already pending (including retained) stock the operation releases.
 func (e RunActionEffects) LevelUpEligible(s *corebattle.LifetimeState, requester corecharacter.Character, mode string, releasedStockEXP int) (bool, error) {
-	threshold, err := progression.ExperienceForNextLevelWithMax(requester.Level, progression.MaxLevelForCharacter(&requester))
-	if s.SpecialBossField || err != nil {
-		return false, nil
-	}
-	exp := requester.Experience
-	if mode != CrawlModeTry {
-		exp, err = economy.SafeAdd(exp, releasedStockEXP)
-		if err != nil {
-			return false, err
-		}
-		exp, err = economy.SafeAdd(exp, e.Earnings[requester.ID].EXP)
-	}
-	return exp >= threshold && err == nil, err
+	return runhost.LevelUpDue(s, requester, mode == CrawlModeTry, releasedStockEXP, e.Earnings[requester.ID].EXP)
 }

@@ -16,7 +16,7 @@ type travelAdvanceCombat struct{ ordinaryCombat }
 func (*travelAdvanceCombat) PrepareAdvance(_ context.Context, r *NormalRun, id string) error {
 	frame := corebattle.EquipmentResetContext{TargetContext: corebattle.TargetContext{ActorID: id, EnemyIDs: r.Enemies}}
 	for _, a := range r.Battle.Actors {
-		if a.TeamID == r.actor(id).TeamID {
+		if a.TeamID == r.Actor(id).TeamID {
 			frame.PartyIDs = append(frame.PartyIDs, a.ID)
 		}
 	}
@@ -41,7 +41,7 @@ func TestCombatTravelExplicitAdvanceAndEXHooks(t *testing.T) {
 	} {
 		s, r, _, _ := travelFixture(t)
 		s.cfg.Combat, s.cfg.Clock = &travelAdvanceCombat{}, &testClock{now: time.Unix(100, 0)}
-		r.Floor = tc.floor
+		r.Round = tc.floor
 		r.Battle.Fields = corebattle.LifetimeFields{Temporary: "burn", Turns: 4, Default: "snow", AntiTurns: 2}
 		if _, err := s.ApplyCombatTravel(context.Background(), r, "a", tc.tool, tc.input, nil); err != nil {
 			t.Fatal(err)
@@ -49,7 +49,7 @@ func TestCombatTravelExplicitAdvanceAndEXHooks(t *testing.T) {
 		if err := s.advance(context.Background(), r, "a"); err != nil {
 			t.Fatal(err)
 		}
-		if r.Floor != tc.want || r.Battle.Fields.Temporary != "" || r.Battle.Fields.AntiTurns != 0 || r.Battle.Fields.Default != "snow" {
+		if r.Round != tc.want || r.Battle.Fields.Temporary != "" || r.Battle.Fields.AntiTurns != 0 || r.Battle.Fields.Default != "snow" {
 			t.Fatal(r)
 		}
 		if tc.want == 11 && (len(r.Enemies) != 0 || r.StageCleared || r.Mode != "normal" || r.Recipients["a"].Pending.Gold != 10 || r.Recipients["a"].Conditional.Gold != 0) {
@@ -59,7 +59,7 @@ func TestCombatTravelExplicitAdvanceAndEXHooks(t *testing.T) {
 	for _, stage := range []string{"stage-22", "stage-23", "stage-24", "stage-25", "stage-26"} {
 		s, r, rng, _ := travelFixture(t)
 		r.Stage, _ = s.cfg.Stages.FindByID(stage)
-		r.Floor = 10
+		r.Round = 10
 		s.cfg.Clock = &testClock{now: time.Unix(100, 0)}
 		if err := s.advance(context.Background(), r, "a"); err != nil {
 			t.Fatal(err)
@@ -89,12 +89,12 @@ func TestCombatTravel150BossClearMarkerAndRetainedResponseEffects(t *testing.T) 
 	if !r.EXUnlocked || !r.ClearPending || r.StageCleared || !r.Battle.SpecialBossField || r.EncounterFloor != 10 || r.EncounterStageID != "stage-24" {
 		t.Fatal("boss creation effects missing", r)
 	}
-	if r.actor("a").MaxHP != 999 || r.actor("a").HP != 500 {
+	if r.Actor("a").MaxHP != 999 || r.Actor("a").HP != 500 {
 		t.Fatal("boss cap healed or omitted actor")
 	}
 	// A same display name cannot impersonate the generated NPC's native identity.
 	s, r, _, reset = travelFixture(t)
-	old := r.actor("a").Clone()
+	old := r.Actor("a").Clone()
 	old.ID, old.NPC, old.TeamID, old.EncounterIdentity = "old", true, "enemies", "other"
 	old.Name = "ドットスライム" // ordinary-00-monster-29
 	r.Battle.Actors = append(r.Battle.Actors, old)
@@ -107,7 +107,7 @@ func TestCombatTravel150BossClearMarkerAndRetainedResponseEffects(t *testing.T) 
 	}
 	// The enclosing player tail can update the retained old enemy context.
 	transition.ResponseEnemies[0].HP = 3
-	if transition.BeginNPCResponse(r, time.Unix(100, 0)) != "old" || r.actor("old").HP != 3 || r.EncounterFloor != 8 || r.EncounterStageID != "stage-03" {
+	if transition.BeginNPCResponse(r, time.Unix(100, 0)) != "old" || r.Actor("old").HP != 3 || r.EncounterFloor != 8 || r.EncounterStageID != "stage-03" {
 		t.Fatal("old response context lost")
 	}
 }

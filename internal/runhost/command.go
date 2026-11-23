@@ -1,4 +1,4 @@
-package adventure
+package runhost
 
 import (
 	"context"
@@ -12,16 +12,19 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
+// StockLevelAction applies saved-EXP stock levels as an operation (system.cgi:49–67).
+const StockLevelAction = "stock-level"
+
 // Command serializes one explicit operation; observation never calls it.
-// Transaction: WithRunForUpdate. Lock Order: normal_adventure_runs(0) -> all characters(2, sorted) -> settler(3/4/5/8).
-func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunReceipt, error) {
+// Transaction: WithRunForUpdate. Lock Order: runs(0) -> all characters(2, sorted) -> settler(3/4/5/8).
+func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, error) {
 	if err := s.authorize(ctx, cmd.PlayerID, cmd.ActorID); err != nil {
-		return RunReceipt{}, err
+		return Receipt{}, err
 	}
 	if strings.TrimSpace(cmd.ID) == "" || len(cmd.ID) > 128 || cmd.RunID == "" || cmd.Action == "enroll" {
-		return RunReceipt{}, ErrRunConflict
+		return Receipt{}, ErrConflict
 	}
-	var result RunReceipt
+	var result Receipt
 	err := s.cfg.Store.WithRunForUpdate(ctx, cmd.RunID, false, func(ctx context.Context) error {
 		old, err := s.cfg.Store.FindRunReceipt(ctx, cmd.RunID, cmd.ID)
 		if err != nil {
@@ -29,43 +32,44 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 		}
 		if old != nil {
 			if old.Command.PlayerID != cmd.PlayerID || old.Command.ActorID != cmd.ActorID {
-				return ErrRunForbidden
+				return ErrForbidden
 			}
 			if old.Command != cmd {
-				return ErrRunConflict
+				return ErrConflict
 			}
 			result = *old
 			return nil
 		}
-		r, err := s.cfg.Store.FindRun(ctx, cmd.RunID)
+		run, err := s.cfg.Store.FindRun(ctx, cmd.RunID)
 		if err != nil {
 			return err
 		}
-		if r == nil {
+		if run == nil {
 			return ErrNotFound
 		}
-		if r.Encoding != 1 {
-			return ErrRunRecovery
+		r := P(run).Host()
+		if r.Encoding != 1 || r.Kind != s.cfg.Kind {
+			return ErrRecovery
 		}
 		if !slices.Contains(r.Roster, cmd.ActorID) || r.Recipients[cmd.ActorID].PlayerID != cmd.PlayerID {
-			return ErrRunForbidden
+			return ErrForbidden
 		}
 		if r.Version != cmd.Version {
-			return ErrRunConflict
+			return ErrConflict
 		}
 		if r.TimedOut {
-			return ErrRunRecovery
+			return ErrRecovery
 		}
 		var ids []string
 		var requester corecharacter.Character
-		ctx = context.WithValue(ctx, normalMutationContext{}, r.ID)
+		ctx = CommandContext(ctx, r.ID)
 		if err := economy.LockInOrder(ctx, r.Roster, func(ctx context.Context, id string) error {
 			c, err := s.cfg.Characters.FindByIDForUpdate(ctx, id)
 			if err != nil {
 				return err
 			}
 			if c.PlayerID != r.Recipients[id].PlayerID {
-				return ErrRunForbidden
+				return ErrForbidden
 			}
 			if id == cmd.ActorID {
 				requester = c
@@ -76,101 +80,86 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			return err
 		}
 		now := s.cfg.Clock.Now()
-		releaseStock := r.Mode != CrawlModeTry || cmd.Action == "exit"
-		effects := RunActionEffects{}
+		releaseStock := !s.cfg.Room.Conditional(run) || cmd.Action == "exit"
+		effects := Effects{}
 		// Releases credit EXP without growth; only an action tail levels (get_stock).
 		request := battle.ApplyPostBattleRequest{CharacterIDs: ids, PreserveEarnedRewards: true, RecipientRewards: map[string]corebattle.Reward{}, DeferGrowth: true}
 		var box *TreasureBox
 		var tames []battle.MonsterTameResult
-		switch cmd.Action {
-		case "advance", "chest", "exit":
-			if now.Before(r.LastActions[cmd.ActorID].Add(time.Duration(r.Admission.Speed) * time.Second)) {
-				return ErrRunCooldown
+		tail := false
+		switch {
+		case cmd.Action == "cleanup":
+			if !now.After(r.LastActivity.Add(1800 * time.Second)) {
+				return ErrConflict
 			}
-			effects.RoomActivity, effects.ActorActivity, effects.ReleaseStock = true, true, true
+			if err := s.timeout(ctx, run, now); err != nil {
+				return err
+			}
+		case cmd.Action == StockLevelAction:
+			if s.cfg.Combat == nil {
+				return ErrUnavailable
+			}
+			if err := s.cfg.Combat.StockLevel(ctx, run, cmd, requester, now); err != nil {
+				return err
+			}
+			effects.RoomActivity, effects.ActorActivity = true, true
+		case cmd.Action == "chest" || cmd.Action == "exit" || slices.Contains(s.cfg.Room.Actions(), cmd.Action):
+			if err := r.Ready(cmd.ActorID, now); err != nil {
+				return err
+			}
 			switch cmd.Action {
-			case "advance":
-				if err := s.advance(ctx, r, cmd.ActorID); err != nil {
-					return err
-				}
-				request.UnsealDemonKing = r.Stage.UnsealsOnTreasure && r.Floor == TreasureRoomFloor
 			case "chest":
 				var err error
-				box, effects.Consumed, err = s.claimChest(ctx, r, cmd.ActorID, cmd.TargetID)
+				box, effects.Consumed, err = r.ClaimChest(ctx, s.cfg.Inventories, cmd.ActorID, cmd.TargetID)
 				if err != nil {
 					return err
 				}
 				request.RecipientDrops = map[string][]string{cmd.ActorID: {box.ItemID}}
 				request.BattleResult.Outcome = corebattle.OutcomeWin
+				tail = true
 			case "exit":
-				if err := s.prepareExit(r, cmd.ActorID, &request); err != nil {
+				if err := s.prepareExit(run, cmd.ActorID, &request); err != nil {
 					return err
 				}
+			default:
+				var err error
+				if effects, err = s.cfg.Room.Act(ctx, run, cmd); err != nil {
+					return err
+				}
+				request.UnsealDemonKing = effects.UnsealDemonKing
+				tail = true
 			}
-		case "cleanup":
-			if !now.After(r.LastActivity.Add(1800 * time.Second)) {
-				return ErrRunConflict
-			}
-			if err := s.timeout(ctx, r, now); err != nil {
-				return err
-			}
-		case stockLevelAction:
-			if err := s.stockLevel(ctx, r, cmd, requester, now); err != nil {
-				return err
-			}
-			effects.RoomActivity, effects.ActorActivity = true, true
+			effects.RoomActivity, effects.ActorActivity, effects.ReleaseStock = true, true, true
 		default:
 			if s.cfg.Combat == nil {
-				return ErrRunUnavailable
+				return ErrUnavailable
 			}
 			var err error
-			effects, err = s.cfg.Combat.ExecuteRunAction(ctx, r, cmd)
+			effects, err = s.cfg.Combat.Execute(ctx, run, cmd)
 			if err != nil {
 				return err
 			}
 			request.UnsealDemonKing = effects.UnsealDemonKing
-			r.EXUnlocked = r.EXUnlocked || effects.EXUnlocked
 			request.RecipientCharacterID, request.ExplicitDefeats = cmd.ActorID, effects.Defeats
-			for _, id := range effects.MemberOnlyIDs {
-				if r.hasBox(id) {
-					continue
-				}
-				a, actor := r.actor(id), r.actor(cmd.ActorID)
-				if a == nil || actor == nil || a.TeamID == actor.TeamID || slices.Contains(r.Enemies, id) {
-					return ErrRunConflict
-				}
-				if a.HP > 0 {
-					r.Enemies = append(r.Enemies, id)
-				}
-			}
-			if effects.EncounterDefeated {
-				if r.livingEnemies() || r.EncounterFloor < 1 || r.EncounterFloor > EXBossFloor || isTreasureFloor(r.EncounterFloor) {
-					return ErrRunConflict
-				}
-				r.FloorsCleared = max(r.FloorsCleared, r.EncounterFloor)
-				if r.EncounterFloor == BossFloor {
-					r.StageCleared = true
-				}
-			}
 		}
-		if cmd.Action != "cleanup" && cmd.Action != stockLevelAction {
+		if cmd.Action != "cleanup" && cmd.Action != StockLevelAction {
 			releaseStock = (releaseStock && effects.ReleaseStock) || cmd.Action == "exit"
-			if err := r.recordEarnings(effects.Earnings); err != nil {
+			if err := r.RecordEarnings(effects.Earnings, s.cfg.Room.Conditional(run)); err != nil {
 				return err
 			}
 			var retained []RetainedEarnings
 			if releaseStock {
 				recipient := r.Recipients[cmd.ActorID]
-				var due RunEarnings
+				var due Earnings
 				var err error
-				retained, due, err = s.retainedDue(ctx, cmd.ActorID, recipient.Pending)
+				retained, due, err = s.RetainedDue(ctx, cmd.ActorID, recipient.Pending)
 				if err != nil {
 					return err
 				}
-				request.RecipientRewards[cmd.ActorID] = runReward(due)
+				request.RecipientRewards[cmd.ActorID] = Reward(due)
 			}
-			if cmd.Action == "advance" || cmd.Action == "chest" {
-				if err := s.roomTailLevel(ctx, r, requester, request.RecipientRewards[cmd.ActorID].Experience); err != nil {
+			if tail {
+				if err := s.tailLevel(ctx, r, requester, request.RecipientRewards[cmd.ActorID].Experience, s.cfg.Room.Conditional(run)); err != nil {
 					return err
 				}
 			}
@@ -178,11 +167,11 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			// Consume concrete owned instances in this transaction, never at exit again.
 			for id, entries := range effects.Consumed {
 				if !slices.Contains(r.Roster, id) && id != cmd.ActorID {
-					return ErrRunForbidden
+					return ErrForbidden
 				}
 				for _, entry := range entries {
 					if entry.InstanceID == "" || entry.Quantity <= 0 {
-						return ErrRunConflict
+						return ErrConflict
 					}
 				}
 			}
@@ -193,42 +182,28 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 			tames = response.MonsterTames[cmd.ActorID]
 			if box != nil {
 				boxes := []TreasureBox{*box}
-				updateTreasureDeliveries(boxes, response)
+				UpdateTreasureDeliveries(boxes, response)
 				*box = boxes[0]
 			}
 			if releaseStock {
 				recipient := r.Recipients[cmd.ActorID]
-				recipient.Applied, err = addRunEarnings(recipient.Applied, recipient.Pending)
+				recipient.Applied, err = AddEarnings(recipient.Applied, recipient.Pending)
 				if err != nil {
 					return err
 				}
-				recipient.Pending = RunEarnings{}
+				recipient.Pending = Earnings{}
 				r.Recipients[cmd.ActorID] = recipient
 				if err := s.settleRetained(ctx, cmd.ActorID, retained); err != nil {
 					return err
 				}
 			}
 			if cmd.Action == "exit" {
-				if s.cfg.ExitEffects == nil {
-					return ErrRunUnavailable
-				}
-				if err := s.cfg.ExitEffects(ctx, cmd.ActorID); err != nil {
+				if err := s.finishExit(ctx, run, cmd.ActorID); err != nil {
 					return err
-				}
-				if err := s.writeHistory(ctx, r, cmd.ActorID, "exit"); err != nil {
-					return err
-				}
-				r.Roster = slices.DeleteFunc(r.Roster, func(id string) bool { return id == cmd.ActorID })
-				r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == cmd.ActorID })
-				if r.LeaderID == cmd.ActorID {
-					r.LeaderID = ""
-					if len(r.Roster) > 0 {
-						r.LeaderID = r.Roster[0]
-					}
 				}
 			}
 		}
-		r.pruneFallenNPCs(cmd.ActorID)
+		r.PruneFallenNPCs(cmd.ActorID)
 		if effects.RoomActivity && len(r.Roster) > 0 {
 			r.LastActivity = now
 		}
@@ -246,10 +221,10 @@ func (s *NormalRunService) Command(ctx context.Context, cmd RunCommand) (RunRece
 				return err
 			}
 		}
-		if err := s.cfg.Store.SaveRun(ctx, *r, cmd.Version); err != nil {
+		if err := s.cfg.Store.SaveRun(ctx, *run, cmd.Version); err != nil {
 			return err
 		}
-		result = RunReceipt{Command: cmd, Version: r.Version, Floor: r.Floor, StageID: r.Stage.ID, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition, MonsterTames: tames}
+		result = Receipt{Command: cmd, Version: r.Version, Round: r.Round, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition, MonsterTames: tames}
 		return s.cfg.Store.SaveRunReceipt(ctx, result)
 	})
 	result, err = s.resolveReceipt(ctx, cmd, result, err)

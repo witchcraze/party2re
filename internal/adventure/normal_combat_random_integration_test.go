@@ -6,6 +6,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // scriptRNG scripts the Float64 draws that follow the operation's weapon-seal
@@ -50,7 +51,7 @@ func encounterEnemy(id string, hp int) corebattle.LifetimeActor {
 	return e
 }
 
-func metronomeRoom(t *testing.T, f *normalFixture, edit func(*adventure.NormalRun, *corebattle.LifetimeActor), enemies ...corebattle.LifetimeActor) adventure.RunCommand {
+func metronomeRoom(t *testing.T, f *normalFixture, edit func(*adventure.NormalRun, *corebattle.LifetimeActor), enemies ...corebattle.LifetimeActor) runhost.Command {
 	t.Helper()
 	saveCustom(t, f, "ゆび", [3]string{"gem_metronome", "", ""}, 5)
 	return customRoom(t, f, 30, func(r *adventure.NormalRun, a *corebattle.LifetimeActor) {

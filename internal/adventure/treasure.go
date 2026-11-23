@@ -8,12 +8,12 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // Legacy item IDs with special adventure interactions.
 const (
-	ItemLuckyPendant   = "item-191" // ラッキーペンダント (1/3 chance +1 treasure box)
-	ItemTreasurePocket = "item-215" // トレジャーポケット (allows opening additional treasure boxes; _data.cgi:1913)
+	ItemLuckyPendant = "item-191" // ラッキーペンダント (1/3 chance +1 treasure box)
 )
 
 // Acting-player treasure bonus jobs (vs_monster.cgi:93–98).
@@ -229,21 +229,8 @@ func GetDayOfWeekOrb(t time.Time, rng func(n int) int) string {
 	return fmt.Sprintf("item-%03d", 60+int(wday)-1)
 }
 
-// TreasureBox represents an individual treasure chest discovered on Floor 11.
-type TreasureBox struct {
-	ID          string                    `json:"id"`
-	Name        string                    `json:"name"`
-	OpenedBy    string                    `json:"opened_by,omitempty"`
-	Defeated    bool                      `json:"defeated,omitempty"`
-	ItemID      string                    `json:"item_id,omitempty"`
-	ItemName    string                    `json:"item_name,omitempty"`
-	DeliveredTo string                    `json:"delivered_to,omitempty"` // "inventory" or "depot"
-	Fixed       bool                      `json:"fixed,omitempty"`        // EX fixed-item chest (over_lv); never uses the ordinary allowance
-	Combat      *corebattle.LifetimeActor `json:"combat,omitempty"`
-}
-
 // GenerateTreasureBoxes creates the list of treasure chests for Floor 11 (legacy convenience wrapper).
-func GenerateTreasureBoxes(count int, dropPool []string, rng func(n int) int) []TreasureBox {
+func GenerateTreasureBoxes(count int, dropPool []string, rng func(n int) int) []runhost.TreasureBox {
 	return GenerateTreasureBoxesWithPools(count, StageTreasurePools{Items: dropPool}, time.Now().UTC(), rng)
 }
 
@@ -251,7 +238,7 @@ func GenerateTreasureBoxes(count int, dropPool []string, rng func(n int) int) []
 // each chest first adds the weekday orb to the tool pool (so orbs accumulate),
 // then picks weapon/armor/tool as 1/4, 1/4, 1/2, falling back to tools when the
 // chosen pool is empty. An empty pool entry ("") yields an empty chest.
-func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now time.Time, rng func(n int) int) []TreasureBox {
+func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now time.Time, rng func(n int) int) []runhost.TreasureBox {
 	if count <= 0 {
 		return nil
 	}
@@ -260,7 +247,7 @@ func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now tim
 	}
 
 	items := slices.Clone(pools.Items)
-	boxes := make([]TreasureBox, count)
+	boxes := make([]runhost.TreasureBox, count)
 	for i := 0; i < count; i++ {
 		name := boxName(defaultBoxNames[rng(len(defaultBoxNames))], i)
 		items = append(items, GetDayOfWeekOrb(now, rng))
@@ -273,7 +260,7 @@ func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now tim
 			pool = pools.Armors
 		}
 
-		boxes[i] = TreasureBox{
+		boxes[i] = runhost.TreasureBox{
 			ID:     fmt.Sprintf("box-%d", i+1),
 			Name:   name,
 			ItemID: pool[rng(len(pool))],

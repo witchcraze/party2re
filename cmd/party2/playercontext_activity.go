@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/witchcraze/party2re/internal/adventure"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
@@ -14,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/pvp"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // Consumer ports use public services; private repositories stay feature-owned.
@@ -41,7 +41,7 @@ type casinoActivityReader interface {
 
 type contextActivityReaders struct {
 	normal interface {
-		GetActorRun(context.Context, string, string) (*adventure.ActorRun, error)
+		GetActorRun(context.Context, string, string) (*runhost.ActorRun, error)
 		HasActiveRun(context.Context, string) (bool, error)
 	}
 	party     partyActivityReader
@@ -88,7 +88,7 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 			if run.Recipient.TimerPending {
 				phase = "recovery_pending"
 			}
-			facts = append(facts, playercontext.Activity{Kind: "adventure", ID: run.RunID, Revision: run.Version, PartyID: run.PartyID, Role: run.Role, Phase: phase, Round: run.Floor, BlocksWake: run.Recipient.TimerPending, Actions: []string{}})
+			facts = append(facts, playercontext.Activity{Kind: "adventure", ID: run.RunID, Revision: run.Version, PartyID: run.PartyID, Role: run.Role, Phase: phase, Round: run.Round, BlocksWake: run.Recipient.TimerPending, Actions: []string{}})
 		}
 	}
 	p, member, err := r.party.GetActiveParty(ctx, actor)

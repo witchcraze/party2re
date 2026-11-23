@@ -16,6 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
 
@@ -1157,7 +1158,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 	}
 
 	// Add stack of 2 ItemTreasurePocket to character's inventory in real DB
-	pocketInst, err := coreitem.NewInstance(adventure.ItemTreasurePocket, 2)
+	pocketInst, err := coreitem.NewInstance(runhost.ItemTreasurePocket, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1187,7 +1188,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 	}
 	var pocketCount int
 	for _, id := range part.ItemDefinitionIDs {
-		if id == adventure.ItemTreasurePocket {
+		if id == runhost.ItemTreasurePocket {
 			pocketCount++
 		}
 	}
@@ -1235,7 +1236,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 	}
 	var pocketInDB *coreitem.Instance
 	for i := range invAfterAuto.Items {
-		if invAfterAuto.Items[i].DefinitionID == adventure.ItemTreasurePocket {
+		if invAfterAuto.Items[i].DefinitionID == runhost.ItemTreasurePocket {
 			pocketInDB = &invAfterAuto.Items[i]
 			break
 		}
@@ -1252,7 +1253,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 	}
 	sess.CurrentFloor = adventure.TreasureRoomFloor
 	sess.StageCleared = true
-	sess.TreasureBoxes = []adventure.TreasureBox{
+	sess.TreasureBoxes = []runhost.TreasureBox{
 		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
 		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
 		{ID: "box-3", Name: "Chest 3", ItemID: "item-003"},
@@ -1270,7 +1271,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 		t.Fatalf("box 3: %v", err)
 	}
 	// 4th box attempt: rejected
-	sess.TreasureBoxes = append(sess.TreasureBoxes, adventure.TreasureBox{ID: "box-4", Name: "Chest 4", ItemID: "item-004"})
+	sess.TreasureBoxes = append(sess.TreasureBoxes, runhost.TreasureBox{ID: "box-4", Name: "Chest 4", ItemID: "item-004"})
 	if _, err := sess.ExamineTreasure(char.ID); !errors.Is(err, adventure.ErrTreasureLimitReached) {
 		t.Fatalf("box 4 should be rejected with ErrTreasureLimitReached, got %v", err)
 	}
@@ -1299,7 +1300,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 		t.Fatal(err)
 	}
 	for _, it := range invAfterSettle.Items {
-		if it.DefinitionID == adventure.ItemTreasurePocket {
+		if it.DefinitionID == runhost.ItemTreasurePocket {
 			t.Fatalf("expected ItemTreasurePocket to be completely consumed from DB, still found: %+v", it)
 		}
 	}
@@ -1308,7 +1309,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 	// Verify that if reward delivery fails AFTER key consumption succeeds,
 	// the entire transaction rolls back and neither key consumption nor reward delivery is committed.
 	// Step 1: Re-seed inventory with a stack of 2 ItemTreasurePocket in MariaDB.
-	resetPocket, err := coreitem.NewInstance(adventure.ItemTreasurePocket, 2)
+	resetPocket, err := coreitem.NewInstance(runhost.ItemTreasurePocket, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1348,7 +1349,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 			RemainingHP: map[string]int{char.ID: 100},
 			RemainingMP: map[string]int{char.ID: 50},
 			ConsumedItems: map[string][]corebattle.ConsumedItem{
-				char.ID: {{ID: adventure.ItemTreasurePocket, Quantity: 1}},
+				char.ID: {{ID: runhost.ItemTreasurePocket, Quantity: 1}},
 			},
 		},
 		RecipientDrops: map[string][]string{
@@ -1369,7 +1370,7 @@ func TestAdventure_TreasurePocket_RealDBSettlementAndRollback_Integration(t *tes
 	}
 	var pocketAfterRollback *coreitem.Instance
 	for i := range invAfterRollback.Items {
-		if invAfterRollback.Items[i].DefinitionID == adventure.ItemTreasurePocket {
+		if invAfterRollback.Items[i].DefinitionID == runhost.ItemTreasurePocket {
 			pocketAfterRollback = &invAfterRollback.Items[i]
 			break
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -44,7 +45,7 @@ func TestCombatTravelUnsealNotOnAssignmentOrExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := f.store.FindRun(context.Background(), run)
-	if err != nil || !r.StageCleared || r.Stage.ID != "stage-19" || r.Floor != 1 {
+	if err != nil || !r.StageCleared || r.Stage.ID != "stage-19" || r.Round != 1 {
 		t.Fatal(r, err)
 	}
 	f.send(t, run, 0, "exit", "")
@@ -88,12 +89,12 @@ func TestCombatTravelUnsealTreasureReceiptSQL(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if before.StageCleared || before.Floor != 10 {
+			if before.StageCleared || before.Round != 10 {
 				t.Fatal(before)
 			}
 			f.clock.add(3 * time.Second)
 			a := f.actors[0]
-			cmd := adventure.RunCommand{RunID: run, ID: "unseal-treasure", PlayerID: a.PlayerID, ActorID: a.ID, Version: before.Version, Action: "advance"}
+			cmd := runhost.Command{RunID: run, ID: "unseal-treasure", PlayerID: a.PlayerID, ActorID: a.ID, Version: before.Version, Action: "advance"}
 			f.store.failWrite.Store(true)
 			if _, err := f.svc.Command(context.Background(), cmd); err == nil {
 				t.Fatal("SQL failure accepted")
@@ -130,7 +131,7 @@ func TestCombatTravelUnsealTreasureReceiptSQL(t *testing.T) {
 				t.Fatal("restart changed the unseal receipt", retry, err)
 			}
 			after, err = f.store.FindRun(context.Background(), run)
-			if err != nil || after.Floor != 11 || after.StageCleared || len(after.Boxes) == 0 {
+			if err != nil || after.Round != 11 || after.StageCleared || len(after.Boxes) == 0 {
 				t.Fatal(after, err)
 			}
 			for _, member := range f.actors {

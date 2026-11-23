@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/skill"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type RunOperationKind string
@@ -68,7 +69,7 @@ var separatorKey = skill.OperationNameKey("br")
 
 // DiscoverNormalOperations uses saved encounter membership and the same
 // argument-dependent admission as parsing. Authorization belongs to the caller.
-func (r *NormalRun) DiscoverNormalOperations(cmd RunCommand, ctx NormalOperationContext) ([]RunOperationChoice, error) {
+func (r *NormalRun) DiscoverNormalOperations(cmd runhost.Command, ctx NormalOperationContext) ([]RunOperationChoice, error) {
 	ops, err := r.normalOperations(cmd, ctx)
 	if err != nil {
 		return nil, err
@@ -92,15 +93,15 @@ func (r *NormalRun) DiscoverNormalOperations(cmd RunCommand, ctx NormalOperation
 	return choices, nil
 }
 
-func (r *NormalRun) normalOperations(cmd RunCommand, ctx NormalOperationContext) (*normalOperations, error) {
+func (r *NormalRun) normalOperations(cmd runhost.Command, ctx NormalOperationContext) (*normalOperations, error) {
 	actorID := cmd.ActorID
 	if r == nil || actorID == "" || r.TimedOut {
-		return nil, ErrRunConflict
+		return nil, runhost.ErrConflict
 	}
-	ops := &normalOperations{run: r, actor: r.actor(actorID), ctx: ctx, byKey: make(map[string]runOperationCandidate)}
+	ops := &normalOperations{run: r, actor: r.Actor(actorID), ctx: ctx, byKey: make(map[string]runOperationCandidate)}
 	if !slices.Contains(r.Roster, actorID) {
 		if ops.actor != nil {
-			return nil, ErrRunForbidden
+			return nil, runhost.ErrForbidden
 		}
 		ops.addSpecial("whisper", "ささやき", RunOperationWhisper)
 		ops.addSpecial("exit", "にげる", RunOperationRoom)
@@ -109,7 +110,7 @@ func (r *NormalRun) normalOperations(cmd RunCommand, ctx NormalOperationContext)
 	}
 	a := ops.actor
 	if a == nil || a.NPC {
-		return nil, ErrRunForbidden
+		return nil, runhost.ErrForbidden
 	}
 
 	state, frame, inspection, err := r.ProjectCombat(actorID)
@@ -117,7 +118,7 @@ func (r *NormalRun) normalOperations(cmd RunCommand, ctx NormalOperationContext)
 		return nil, err
 	}
 	ops.state = state
-	ops.actor = findActor(ops.state.Actors, actorID)
+	ops.actor = runhost.FindActor(ops.state.Actors, actorID)
 	a = ops.actor
 	ops.ctx.Callback.TargetContext = frame
 	if len(ops.ctx.Callback.Inspection) == 0 {
@@ -131,9 +132,9 @@ func (r *NormalRun) normalOperations(cmd RunCommand, ctx NormalOperationContext)
 	}
 
 	cursed := slices.Contains(a.Abilities, "cursed")
-	ops.treasure = slices.ContainsFunc(r.Boxes, TreasureBox.isUnopened)
+	ops.treasure = slices.ContainsFunc(r.Boxes, runhost.TreasureBox.IsUnopened)
 	enemies := len(frame.EnemyIDs) > 0
-	combat := r.Floor > 0 && enemies
+	combat := r.Round > 0 && enemies
 	jobs := a.Jobs
 	if combat {
 		if !cursed {
@@ -158,7 +159,7 @@ func (r *NormalRun) normalOperations(cmd RunCommand, ctx NormalOperationContext)
 	ops.addSpecial("whisper", "ささやき", RunOperationWhisper)
 	ops.addSpecial("exit", "にげる", RunOperationRoom)
 	ops.addSpecial("screenshot", "すくしょ", RunOperationScreenshot)
-	if r.Floor == 0 {
+	if r.Round == 0 {
 		ops.addSpecial("invite", "さそう", RunOperationRoom)
 		if r.LeaderID == actorID {
 			ops.addSpecial("kick", "きっく", RunOperationRoom)
@@ -174,10 +175,10 @@ func (r *NormalRun) normalOperations(cmd RunCommand, ctx NormalOperationContext)
 			}
 		}
 	}
-	if !r.livingEnemies() && (r.Floor != 0 || r.LeaderID == actorID) && (r.Floor < TreasureRoomFloor || r.HasEX() && r.Floor <= EXBossFloor) {
+	if !r.LivingEnemies() && (r.Round != 0 || r.LeaderID == actorID) && (r.Round < TreasureRoomFloor || r.HasEX() && r.Round <= EXBossFloor) {
 		ops.addSpecial("advance", "すすむ", RunOperationRoom)
 	}
-	if isTreasureFloor(r.Floor) {
+	if isTreasureFloor(r.Round) {
 		ops.addSpecial("chest", "しらべる", RunOperationRoom)
 	}
 	if enemies && !cursed {
@@ -357,10 +358,10 @@ func (o *normalOperations) addBetweenEncounter() {
 	}
 	a := o.actor
 	j := a.Jobs
-	if o.run.Floor > 0 && (j.JobID == "job-78" && j.SP >= 55 || j.OldJobID == "job-78" && j.OldSP >= 55) {
+	if o.run.Round > 0 && (j.JobID == "job-78" && j.SP >= 55 || j.OldJobID == "job-78" && j.OldSP >= 55) {
 		o.addListed(corebattle.CallbackEntry{ID: "between-encounter-survival", Name: "survival", MPCost: 10}, j.OldSP)
 	}
-	if form, ok := a.BetweenEncounterForm(o.run.Floor, 0); ok {
+	if form, ok := a.BetweenEncounterForm(o.run.Round, 0); ok {
 		o.addListed(corebattle.CallbackEntry{ID: form.ID, Name: form.Name, MPCost: form.MPCost}, j.OldSP)
 	}
 	if !slices.Contains(a.ItemDefinitionIDs, "item-165") {

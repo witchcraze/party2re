@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func runActorByID(r *adventure.NormalRun, id string) *corebattle.LifetimeActor {
@@ -38,7 +39,7 @@ func TestNormalRunFallenSelfRevivalAndReceiptIntegration(t *testing.T) {
 		{name: "fallen appearance fallback", namedHP: -1, iconHP: 0, amulet: true},
 		{name: "living appearance fallback", namedHP: -1, iconHP: 11, amulet: true, wantHP: 50, wantHelper: 5, wantStatus: corebattle.StatusDofuu, wantBan: 2},
 		{name: "living named helper", namedHP: 10, iconHP: -1, amulet: true, wantHP: 50, wantHelper: 5, wantStatus: corebattle.StatusDofuu, wantBan: 2},
-		{name: "missing listing amulet", namedHP: 10, iconHP: -1, amulet: false, wantErr: adventure.ErrRunUnavailable},
+		{name: "missing listing amulet", namedHP: 10, iconHP: -1, amulet: false, wantErr: runhost.ErrUnavailable},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newNormalFixture(t, 2)
@@ -57,7 +58,7 @@ func TestNormalRunFallenSelfRevivalAndReceiptIntegration(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				r.Floor, r.Enemies = 1, []string{enemyID}
+				r.Round, r.Enemies = 1, []string{enemyID}
 				r.Battle.SkillBans = map[string]int{"other": 2}
 				self := runActorByID(r, leader.ID)
 				self.HP, self.MaxHP = 0, 100
@@ -84,7 +85,7 @@ func TestNormalRunFallenSelfRevivalAndReceiptIntegration(t *testing.T) {
 			}
 
 			f.clock.add(3 * time.Second)
-			cmd := adventure.RunCommand{
+			cmd := runhost.Command{
 				PlayerID: leader.PlayerID, ActorID: leader.ID, RunID: runID,
 				ID: id.New(), Version: version, Action: "job-66-revive",
 			}
@@ -125,11 +126,11 @@ func TestNormalRunFallenSelfRevivalAndReceiptIntegration(t *testing.T) {
 			}
 			if tc.wantBan > 0 {
 				f.clock.add(3 * time.Second)
-				again := adventure.RunCommand{
+				again := runhost.Command{
 					PlayerID: leader.PlayerID, ActorID: leader.ID, RunID: runID,
 					ID: id.New(), Version: saved.Version, Action: "job-66-revive",
 				}
-				if _, err := f.svc.Command(t.Context(), again); !errors.Is(err, adventure.ErrRunUnavailable) {
+				if _, err := f.svc.Command(t.Context(), again); !errors.Is(err, runhost.ErrUnavailable) {
 					t.Fatalf("banned submission allowed: %v", err)
 				}
 			}

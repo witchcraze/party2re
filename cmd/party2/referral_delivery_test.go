@@ -22,6 +22,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/notification"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -225,10 +226,10 @@ func TestRegistrationReferralLifecycle(t *testing.T) {
 	}
 }
 
-func activeReferralRun(t *testing.T, f referralFixture) (*database.NormalAdventureRepository, *adventure.NormalRun) {
+func activeReferralRun(t *testing.T, f referralFixture) (*database.RunRepository[adventure.NormalRun, *adventure.NormalRun], *adventure.NormalRun) {
 	t.Helper()
 	ctx := context.Background()
-	runRepo, err := database.NewNormalAdventureRepository(f.db)
+	runRepo, err := database.NewRunRepository[adventure.NormalRun](f.db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,24 +254,17 @@ func activeReferralRun(t *testing.T, f referralFixture) (*database.NormalAdventu
 		t.Fatal(err)
 	}
 	startedAt := time.Now().UTC()
-	run := adventure.NormalRun{
-		ID: id.New(), Version: 1, Encoding: 1,
-		Admission: adventure.NormalAdmission{
-			ActorID: f.referrer.ID, CharacterIDs: []string{f.referrer.ID},
-			StageID: adventure.StarterAdventure, Mode: "normal", Speed: 3,
-		},
-		Stage: adventure.Stage{ID: adventure.StarterAdventure}, Mode: "normal",
-		LeaderID: f.referrer.ID, Roster: []string{f.referrer.ID},
-		Recipients: map[string]adventure.RunRecipient{
-			f.referrer.ID: {PlayerID: f.referrer.PlayerID},
-		},
-		StartedAt: startedAt, LastActivity: startedAt,
-	}
+	run := adventure.NormalRun{State: runhost.State{ID: id.New(), Version: 1, Encoding: 1, Admission: runhost.Admission{
+		ActorID: f.referrer.ID, CharacterIDs: []string{f.referrer.ID},
+		StageID: adventure.StarterAdventure, Mode: "normal", Speed: 3,
+	}, LeaderID: f.referrer.ID, Roster: []string{f.referrer.ID}, Recipients: map[string]runhost.Recipient{
+		f.referrer.ID: {PlayerID: f.referrer.PlayerID},
+	}, StartedAt: startedAt, LastActivity: startedAt}, Stage: adventure.Stage{ID: adventure.StarterAdventure}, Mode: "normal"}
 	if err := runRepo.WithRunForUpdate(ctx, run.ID, true, func(runCtx context.Context) error {
 		if err := runRepo.SaveRun(runCtx, run, 0); err != nil {
 			return err
 		}
-		return runRepo.EnrollRun(runCtx, run)
+		return runRepo.EnrollRun(runCtx, run.State)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -291,8 +285,8 @@ func TestRegistrationReferralToActiveRunRecipient(t *testing.T) {
 			f := newReferralFixture(t)
 			ctx := context.Background()
 			runRepo, before := activeReferralRun(t, f)
-			if err := f.core.normalGuard(ctx, f.referrer.ID); !errors.Is(err, adventure.ErrRunBusy) {
-				t.Fatalf("real NormalRunService guard = %v, want %v", err, adventure.ErrRunBusy)
+			if err := f.core.normalGuard(ctx, f.referrer.ID); !errors.Is(err, runhost.ErrBusy) {
+				t.Fatalf("real NormalRunService guard = %v, want %v", err, runhost.ErrBusy)
 			}
 			if failDelivery {
 				if _, err := f.db.ExecContext(ctx, "CREATE TRIGGER fail_active_referral BEFORE INSERT ON character_delivery_notices FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected active referral failure'"); err != nil {

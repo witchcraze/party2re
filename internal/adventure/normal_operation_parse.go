@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // ParsedRunOperation carries dispatch and the frozen player entries. The
@@ -38,7 +39,7 @@ var (
 // ParseNormalOperation binds a typed selection or legacy free text against the
 // same ordered choices. It preserves omitted and wrong-side targets for the
 // callback helpers. Neither parsing nor admission executes a callback.
-func (r *NormalRun) ParseNormalOperation(cmd RunCommand, ctx NormalOperationContext) (ParsedRunOperation, error) {
+func (r *NormalRun) ParseNormalOperation(cmd runhost.Command, ctx NormalOperationContext) (ParsedRunOperation, error) {
 	ops, err := r.normalOperations(cmd, ctx)
 	if err != nil {
 		return ParsedRunOperation{}, err
@@ -46,7 +47,7 @@ func (r *NormalRun) ParseNormalOperation(cmd RunCommand, ctx NormalOperationCont
 	return ops.parse(cmd)
 }
 
-func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
+func (ops *normalOperations) parse(cmd runhost.Command) (ParsedRunOperation, error) {
 	if cmd.Action != "" && cmd.Action != "comment" {
 		var namedCustom *runOperationCandidate
 		for _, key := range ops.order {
@@ -61,7 +62,7 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 		if namedCustom != nil {
 			return ops.parseFirst(*namedCustom, cmd.TargetID, cmd.Input)
 		}
-		return ParsedRunOperation{}, ErrRunUnavailable
+		return ParsedRunOperation{}, runhost.ErrUnavailable
 	}
 
 	input := cmd.Input + " "
@@ -97,7 +98,7 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 			}
 			if action.Whitelisted && first.Whitelisted {
 				if !ops.registered(second) {
-					return ParsedRunOperation{}, ErrRunUnavailable
+					return ParsedRunOperation{}, runhost.ErrUnavailable
 				}
 				frame := ops.ctx.Callback
 				frame.Arguments = slices.Clone(action.Arguments)
@@ -110,7 +111,7 @@ func (ops *normalOperations) parse(cmd RunCommand) (ParsedRunOperation, error) {
 			result.Second = &action
 		} else if skill.IsSecondOperationKey(secondKey) {
 			if first.Whitelisted {
-				return ParsedRunOperation{}, ErrRunUnavailable
+				return ParsedRunOperation{}, runhost.ErrUnavailable
 			}
 			// The extended counter still sees a whitelisted name without an
 			// eligible second callback (_battle.cgi:1084–1089).
@@ -140,21 +141,21 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 		switch c.Action {
 		case "kick":
 			if action.TargetID != "" && (action.TargetID == o.actor.ID || !slices.Contains(o.run.Roster, action.TargetID)) {
-				return ParsedRunAction{}, ErrRunForbidden
+				return ParsedRunAction{}, runhost.ErrForbidden
 			}
 		case "advance":
-			if o.run.Floor == EXBossFloor && len(o.run.Stage.exTreasureItems()) == 0 || o.run.Floor == TreasureRoomFloor && (o.run.Stage.Ordinary == nil || len(o.run.Stage.Ordinary.EXRoster) == 0) {
-				return ParsedRunAction{}, ErrRunUnavailable
+			if o.run.Round == EXBossFloor && len(o.run.Stage.exTreasureItems()) == 0 || o.run.Round == TreasureRoomFloor && (o.run.Stage.Ordinary == nil || len(o.run.Stage.Ordinary.EXRoster) == 0) {
+				return ParsedRunAction{}, runhost.ErrUnavailable
 			}
 		case "chest":
-			if !isTreasureFloor(o.run.Floor) || action.TargetID == "" {
+			if !isTreasureFloor(o.run.Round) || action.TargetID == "" {
 				return ParsedRunAction{}, ErrNoUnopenedTreasure
 			}
 		}
 		return action, nil
 	}
 	if o.banned(c) {
-		return ParsedRunAction{}, ErrRunUnavailable
+		return ParsedRunAction{}, runhost.ErrUnavailable
 	}
 	if action.EntryID == stockLevelAction {
 		return action, nil
@@ -174,14 +175,14 @@ func (o *normalOperations) bind(c runOperationCandidate, target, input string, l
 		_, _, err = o.ctx.Definitions.PlayerCustomAction(state, &frame, nil, rng)
 	case c.Action == "attack":
 		if frame.Damage == nil {
-			return ParsedRunAction{}, ErrRunUnavailable
+			return ParsedRunAction{}, runhost.ErrUnavailable
 		}
 		damage := *frame.Damage
 		damage.TargetContext = frame.TargetContext
 		err = state.ValidateNormalAttack(&damage, action.TargetID, rng)
 	default:
 		if !o.registered(c) {
-			return ParsedRunAction{}, ErrRunUnavailable
+			return ParsedRunAction{}, runhost.ErrUnavailable
 		}
 		err = state.ValidateInvocations(&frame, o.ctx.Definitions.Invocations, []corebattle.CallbackInvocation{action.Invocation}, rng)
 	}
@@ -200,7 +201,7 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 		if legacy {
 			input, target = target, ""
 		} else if target != "" {
-			return ParsedRunAction{}, ErrRunConflict
+			return ParsedRunAction{}, runhost.ErrConflict
 		}
 	}
 	entry := c.binding.Invocation.EntryID
@@ -223,20 +224,20 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 			resolved = o.catalogItemID(target, legacy)
 		}
 		if resolved == "" {
-			return ParsedRunAction{}, ErrRunConflict
+			return ParsedRunAction{}, runhost.ErrConflict
 		}
 		target = resolved
 	}
 	if input != "" && (entry == "job-86-entry-5" || entry == "job-50-entry-7" && !toolSelector(target)) {
 		input = o.participantID(input, legacy)
 		if input == "" {
-			return ParsedRunAction{}, ErrRunConflict
+			return ParsedRunAction{}, runhost.ErrConflict
 		}
 	}
 	var args []string
 	bookSelector := entry == "job-86-entry-0" || entry == "job-86-entry-3"
 	if bookSelector && input != "" && target != "" {
-		return ParsedRunAction{}, ErrRunConflict
+		return ParsedRunAction{}, runhost.ErrConflict
 	}
 	if (takesSelector(c) || bookSelector) && input != "" {
 		args = []string{input}
@@ -258,7 +259,7 @@ func (o *normalOperations) parseEntry(c runOperationCandidate, target, input str
 }
 
 func (o *normalOperations) participantID(target string, legacy bool) string {
-	if findActor(o.state.Actors, target) != nil {
+	if runhost.FindActor(o.state.Actors, target) != nil {
 		return target
 	}
 	if legacy {
@@ -289,11 +290,11 @@ func (o *normalOperations) continuationTarget(rest string) string {
 }
 
 func (o *normalOperations) chestTargetID(target string, legacy bool) string {
-	if !isTreasureFloor(o.run.Floor) || target == "" {
+	if !isTreasureFloor(o.run.Round) || target == "" {
 		return ""
 	}
 	for _, box := range o.run.Boxes {
-		if !box.isUnopened() {
+		if !box.IsUnopened() {
 			continue
 		}
 		if box.ID == target {

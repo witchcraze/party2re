@@ -2,10 +2,10 @@ package adventure
 
 import (
 	"context"
-	"slices"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // PostBattleSettler applies post-battle state, rewards, and item drops.
@@ -66,7 +66,7 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 		return err
 	}
 
-	updateTreasureDeliveries(result.TreasureBoxes, resp)
+	runhost.UpdateTreasureDeliveries(result.TreasureBoxes, resp)
 
 	if len(resp.LostDrops) > 0 {
 		result.LostDrops = make(map[string][]string)
@@ -82,49 +82,4 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 	}
 
 	return nil
-}
-
-func updateTreasureDeliveries(boxes []TreasureBox, resp battle.ApplyPostBattleResponse) {
-	remainingInv := make(map[string][]string)
-	for cID, items := range resp.InventoryDrops {
-		for _, inst := range items {
-			remainingInv[cID] = append(remainingInv[cID], inst.DefinitionID)
-		}
-	}
-	remainingDepot := make(map[string][]string)
-	for cID, items := range resp.DepotDeliveries {
-		for _, inst := range items {
-			remainingDepot[cID] = append(remainingDepot[cID], inst.DefinitionID)
-		}
-	}
-	remainingLost := make(map[string][]string)
-	for cID, items := range resp.LostDrops {
-		for _, inst := range items {
-			remainingLost[cID] = append(remainingLost[cID], inst.DefinitionID)
-		}
-	}
-
-	for i := range boxes {
-		box := &boxes[i]
-		if box.OpenedBy == "" || box.ItemID == "" {
-			continue
-		}
-		cID := box.OpenedBy
-		if idx := slices.Index(remainingInv[cID], box.ItemID); idx != -1 {
-			box.DeliveredTo = "inventory"
-			remainingInv[cID] = append(remainingInv[cID][:idx], remainingInv[cID][idx+1:]...)
-			continue
-		}
-		if idx := slices.Index(remainingDepot[cID], box.ItemID); idx != -1 {
-			box.DeliveredTo = "depot"
-			remainingDepot[cID] = append(remainingDepot[cID][:idx], remainingDepot[cID][idx+1:]...)
-			continue
-		}
-		if idx := slices.Index(remainingLost[cID], box.ItemID); idx != -1 {
-			box.DeliveredTo = "lost"
-			remainingLost[cID] = append(remainingLost[cID][:idx], remainingLost[cID][idx+1:]...)
-			continue
-		}
-		box.DeliveredTo = "inventory"
-	}
 }

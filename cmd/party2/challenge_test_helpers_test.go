@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+
 	"github.com/witchcraze/party2re/internal/challenge"
 	"github.com/witchcraze/party2re/internal/database"
 )

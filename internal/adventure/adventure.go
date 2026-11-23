@@ -17,6 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 const (
@@ -29,8 +30,8 @@ var (
 	ErrNotFound             = errors.New("adventure not found")
 	ErrUnsupportedReward    = errors.New("adventure reward type is unsupported")
 	ErrCannotUseInCombat    = item.ErrCannotUseInCombat
-	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0) and cannot adventure")
-	ErrCharacterExhausted   = errors.New("character is exhausted (tired >= 100) and must rest")
+	ErrCharacterUnconscious = runhost.ErrCharacterUnconscious
+	ErrCharacterExhausted   = runhost.ErrCharacterExhausted
 	ErrDailyOnceAlreadyUsed = errors.New("character has already challenged the once-daily dungeon today")
 )
 
@@ -355,7 +356,7 @@ func (s *Service) executeCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	if session.StageCleared {
 		_, _ = session.AdvanceFloor(s.stages, s.monsters, pbr)
 		// Only open base allowance (1 box per surviving participant).
-		// Additional chest opening using ItemTreasurePocket requires explicit player choice (#948/#1330).
+		// Additional chest opening using runhost.ItemTreasurePocket requires explicit player choice (#948/#1330).
 		for _, c := range characters {
 			_, _ = session.ExamineTreasure(c.ID)
 		}
