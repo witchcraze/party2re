@@ -3,12 +3,14 @@ package casino_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 func TestCharacterRoomObservationUsesActualAdmission(t *testing.T) {
@@ -107,5 +109,53 @@ func TestCharacterRoomObservationPropagatesIndexFailure(t *testing.T) {
 	}
 	if active, err := blankSvc.HasCharacterRoom(context.Background(), "actor"); active || !errors.Is(err, casino.ErrInvalidRoomMapping) {
 		t.Fatalf("public blank index: %v %v", active, err)
+	}
+}
+
+// Room speech renews the room; it must reject non-members and ended rooms and,
+// racing admissions under the room lock, never drop a member it did not read.
+func TestRenewRoomRejectsOutsidersAndPreservesConcurrentAdmissions(t *testing.T) {
+	ctx := context.Background()
+	repo := casino.NewMemoryRoomRepository()
+	cfg := testutil.GetStressConfig()
+	chars := &inMemoryCharRepo{chars: map[string]corecharacter.Character{}}
+	svc, err := casino.NewService(newMockPrizeCasinoRepo(), casino.WithRoomRepository(repo), casino.WithCharacterRepository(chars))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().UTC().Add(-20 * time.Minute)
+	room := casino.Room{ID: "room", Name: "room", Status: casino.RoomStatusWaiting, GameType: casino.GameTypeIndian, MaxPlayers: cfg.Workers + 1, UpdatedAt: old}
+	if err := repo.CreateRoom(ctx, room, casino.RoomMember{RoomID: "room", CharacterID: "leader"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RenewRoom(ctx, "room", "outsider"); !errors.Is(err, casino.ErrMemberNotFound) {
+		t.Fatalf("outsider renewal: %v", err)
+	}
+
+	res := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
+		if op == 0 {
+			_, err := svc.JoinRoom(ctx, "room", fmt.Sprintf("joiner-%d", worker), "", 0)
+			return err
+		}
+		return svc.RenewRoom(ctx, "room", "leader")
+	})
+	if res.Failures != 0 {
+		t.Fatalf("stress failures: %+v", res)
+	}
+	members, err := repo.ListMembers(ctx, "room")
+	if err != nil || len(members) != cfg.Workers+1 {
+		t.Fatalf("members after race: %d %v", len(members), err)
+	}
+	if got, err := repo.GetRoom(ctx, "room"); err != nil || !got.UpdatedAt.After(old) {
+		t.Fatalf("room not renewed: %+v %v", got, err)
+	}
+
+	got, _ := repo.GetRoom(ctx, "room")
+	got.UpdatedAt = time.Now().UTC().Add(-casino.IdleRoomTimeout - time.Minute)
+	if err := repo.UpdateRoom(ctx, *got); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RenewRoom(ctx, "room", "leader"); !errors.Is(err, casino.ErrRoomNotFound) {
+		t.Fatalf("expired renewal: %v", err)
 	}
 }

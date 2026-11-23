@@ -245,7 +245,8 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 			return nil, err
 		}
 		// Room commands wait the room speed ($act_time = $speed, _casino.cgi:57,114).
-		a := playercontext.Activity{Kind: "casino", ID: view.Room.ID, Phase: string(view.Room.Status), Round: view.Room.Round, Role: controls.Role, Actions: []string{"casino_room_leave"}, Pace: time.Duration(view.Room.Speed) * time.Second}
+		// Plain speech goes to the room log; rooms register no ＠ささやき (_casino.cgi:10-33).
+		a := playercontext.Activity{Kind: "casino", ID: view.Room.ID, Phase: string(view.Room.Status), Round: view.Room.Round, Role: controls.Role, Actions: []string{"casino_room_leave", "place_say"}, Pace: time.Duration(view.Room.Speed) * time.Second}
 		if controls.CanStart {
 			a.Actions = append(a.Actions, "casino_room_start", "casino_room_kick")
 		}

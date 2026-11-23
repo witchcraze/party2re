@@ -31,6 +31,7 @@ type casinoRoomService interface {
 	RecoverCharacterDeparture(ctx context.Context, characterID string) error
 	StartGame(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error)
 	PlayRoomAction(ctx context.Context, roomID string, characterID string, action string) (*casino.RoomDetail, error)
+	RenewRoom(ctx context.Context, roomID, characterID string) error
 }
 
 type casinoSlotParams struct {
@@ -138,20 +139,30 @@ func WithCasino(service CasinoService) Option {
 			speech := fmt.Sprintf("コイン%d枚の賞品%d個と交換ですね！%sは%sの預かり所に送っておきました", res.Prize.CostCoins, res.Count, res.Prize.ItemName, char.Name)
 			return casinoPrizeExchangeResult{PrizeExchangeResult: res, NPCSpeech: speech}, nil
 		}, casinoActionRejection)(h)
+		// Entering a room leaves the lobby's member list (casino.cgi:376,469,513).
+		enter := func(ctx context.Context, actor string, room *casino.RoomDetail, err error) (any, error) {
+			if err == nil {
+				h.leavePlace(ctx, actor)
+			}
+			return casinoRoom(room, err)
+		}
 		withActionCommand("casino_room_create", func(ctx context.Context, actor string, p casinoRoomCreateParams) (any, error) {
-			return casinoRoom(service.CreateRoom(ctx, actor, casino.CreateRoomRequest{
+			room, err := service.CreateRoom(ctx, actor, casino.CreateRoomRequest{
 				Name: p.Name, GameType: p.GameType, Speed: p.Speed, MaxPlayers: p.MaxPlayers, Rate: p.Rate, Password: p.Password, AllowSpectators: p.AllowSpectators,
-			}))
+			})
+			return enter(ctx, actor, room, err)
 		}, casinoActionRejection)(h)
 		withActionCommand("casino_room_join", func(ctx context.Context, actor string, p casinoRoomEntryParams) (any, error) {
 			char, err := h.characters.Get(ctx, actor)
 			if err != nil {
 				return nil, err
 			}
-			return casinoRoom(service.JoinRoom(ctx, p.RoomID, actor, p.Password, char.Tired))
+			room, err := service.JoinRoom(ctx, p.RoomID, actor, p.Password, char.Tired)
+			return enter(ctx, actor, room, err)
 		}, casinoActionRejection)(h)
 		withActionCommand("casino_room_spectate", func(ctx context.Context, actor string, p casinoRoomEntryParams) (any, error) {
-			return casinoRoom(service.SpectateRoom(ctx, p.RoomID, actor, p.Password))
+			room, err := service.SpectateRoom(ctx, p.RoomID, actor, p.Password)
+			return enter(ctx, actor, room, err)
 		}, casinoActionRejection)(h)
 		withActionCommand("casino_room_start", func(ctx context.Context, actor string, p CasinoRoomParams) (any, error) {
 			return casinoRoom(service.StartGame(ctx, p.RoomID, actor))

@@ -60,8 +60,10 @@ func (h *Handler) readPlaceMembers(ctx context.Context, current playercontext.Re
 // runs, as legacy read_member precedes the action (party.cgi:19-20).
 func (h *Handler) refreshPlaceMember(ctx context.Context, current playercontext.Result) error {
 	characterID, location := current.Snapshot.Character.ID, current.Snapshot.LocationID
-	// An unavailable scene has no place; its member entry simply expires.
-	if h.placeMembers == nil || !h.sceneAdapters[location].placeLog || (current.Navigation != nil && current.Navigation.Unavailable) {
+	// An unavailable scene has no place; its member entry simply expires. A casino
+	// room keeps no member list (_casino.cgi read_member); its roster is the room view.
+	_, inRoom := activityFact(current, "casino")
+	if h.placeMembers == nil || inRoom || !h.sceneAdapters[location].placeLog || (current.Navigation != nil && current.Navigation.Unavailable) {
 		return nil
 	}
 	profile, err := h.characters.GetProfile(ctx, characterID)

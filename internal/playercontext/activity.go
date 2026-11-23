@@ -79,11 +79,13 @@ func continuationAllowed(action ActionDefinition, s *Snapshot, location string) 
 	})
 }
 
-func activityAllowsInspect(s *Snapshot, location string) bool {
+// activityAdmits reports whether the current activity lists a top-level
+// action, such as player_inspect or place_say, among its candidates.
+func activityAdmits(action ActionDefinition, s *Snapshot, location string) bool {
 	if s.Sleeping {
 		return false
 	}
 	return slices.ContainsFunc(s.Activities, func(a Activity) bool {
-		return a.Kind == location && slices.Contains(a.Actions, "player_inspect")
+		return a.Kind == location && slices.Contains(a.Actions, action.ID)
 	})
 }

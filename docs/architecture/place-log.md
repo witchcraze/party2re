@@ -26,9 +26,8 @@ configuration `0713fcc^:party2/config.cgi`.
 | Speech / whisper | `party.cgi:20-26`, `lib/system.cgi:251-263` | Plain input is logged as speech. `ささやき` checks that the recipient exists, sets `$to_name` and sets `act_time = 0`. |
 | Members | `lib/system.cgi:470-520,960-975` | Each request refreshes the place's member list. An entry expires after `$limit_member_time` = 300 s. Moving or logging out removes it. |
 
-Logs exist per place. That covers about 45 fixed facilities and towns, and also the
-per-user home and store, per-guild and per-quest/casino-room places. Battle and room
-logs stay with their own features.
+Logs exist per place: fixed facilities and towns, each home and store, each guild, and
+each quest or casino room. Battle and quest-room logs stay with their own features.
 
 ## Contract
 
@@ -46,7 +45,7 @@ logs stay with their own features.
   - Each row holds the time, the speaker kind (character or NPC), the speaker's name and colour as they were when the row was written, the text, and an optional private recipient.
   - Private rows count toward the shared cap, as in legacy.
 - **Observation**
-  - Facility scenes with a legacy log, the town hub and the four towns expose `scene.place_log`, viewer-filtered and newest first. It is `[]` for other scenes. Rows carry no character IDs; `private` marks a whisper the viewer sent or received.
+  - Facility scenes with a legacy log, the town hub, the four towns and the casino room activity expose `scene.place_log`, viewer-filtered and newest first. It is `[]` for other scenes. Rows carry no character IDs; `private` marks a whisper the viewer sent or received.
   - A store failure fails the observation.
   - A GET never writes.
 
@@ -114,6 +113,14 @@ Command echoes (the actor and NPC rows of facility commands) are open in [#1941]
 - **Observation**
   - The scenes with a place log expose `scene.members`: facility NPCs or the observed home's residents first, then characters in arrival order. Rows carry no character IDs.
   - A store failure fails the observation.
+
+### Casino rooms
+
+A casino room (`_casino.cgi:5`) is its own place, keyed by room, separate from the lobby.
+
+- **Speech**: the room activity offers `place_say` to participants and spectators. Rooms register no `ささやき` (`_casino.cgi:10-33`), so typed `＠ささやき>name text` is public speech there and `place_whisper` is not offered.
+- **Lifetime**: legacy measures room idleness by the log's mtime (`casino.cgi:124-129`), so speech renews the room's idle lifetime like a room command. The renewal is checked first: a room that ended or a speaker no longer admitted gets `404` and no row. The log becomes unreadable with the room, because only admitted members observe it.
+- **Members**: rooms keep no member list (`_casino.cgi` replaces `read_member`); the roster is the room view. The activity scene's `scene.members` is `[]`, room commands refresh no member list, and room entry leaves the lobby's list, as legacy `leave_member` does.
 
 ## Alternatives rejected
 

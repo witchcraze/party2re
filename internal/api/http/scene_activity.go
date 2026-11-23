@@ -60,12 +60,15 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 	if kind == "activity_conflict" {
 		scene.Kind = "activity_conflict"
 	}
-	for _, def := range playercontext.DefaultCatalog {
-		eligible := slices.Contains(result.AvailableActions, def.ID)
-		if def.ActivityKind == "" && !def.ActivityExempt && !(def.ID == "player_inspect" && eligible) {
-			continue
+	if data.Casino != nil {
+		var err error
+		if scene.PlaceLog, err = h.readPlaceLog(ctx, result); err != nil {
+			return true, err
 		}
-		if !eligible {
+	}
+	for _, def := range playercontext.DefaultCatalog {
+		// Top-level actions are eligible here only when exempt or admitted by the activity.
+		if !slices.Contains(result.AvailableActions, def.ID) {
 			continue
 		}
 		connected := h.actionCommands[def.ID].prepare != nil
