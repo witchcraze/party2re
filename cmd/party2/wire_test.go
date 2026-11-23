@@ -62,6 +62,44 @@ func TestActivityWiringWithoutScheduler(t *testing.T) {
 	}
 }
 
+func TestRescueActionCleanerWiring(t *testing.T) {
+	client := testutil.OpenValkey(t)
+	f := newHookWiringFixture(t, client)
+	ctx := context.Background()
+
+	t.Run("with scheduler", func(t *testing.T) {
+		soc := *f.soc
+		soc.sched = scheduling.NewService(soc.schedRepo)
+		misc, err := newMiscServices(f.db, f.core, &soc, f.econ, client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if _, err := soc.sched.CancelByActorID(ctx, f.char.ID); err != nil {
+				t.Error(err)
+			}
+		})
+		if _, err := soc.sched.Schedule(ctx, "test:rescue_wiring", f.char.ID, nil, time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		if actions, err := soc.sched.FindPendingByActorID(ctx, f.char.ID); err != nil || len(actions) != 1 {
+			t.Fatalf("pending before Unstuck = %+v, %v", actions, err)
+		}
+		if err := misc.rescue.Unstuck(ctx, f.char.ID); err != nil {
+			t.Fatalf("Unstuck with scheduler: %v", err)
+		}
+		if actions, err := soc.sched.FindPendingByActorID(ctx, f.char.ID); err != nil || len(actions) != 0 {
+			t.Fatalf("pending after Unstuck = %+v, %v", actions, err)
+		}
+	})
+
+	t.Run("without scheduler", func(t *testing.T) {
+		if err := f.misc.rescue.Unstuck(ctx, f.char.ID); err != nil {
+			t.Fatalf("Unstuck without scheduler: %v", err)
+		}
+	})
+}
+
 type mockSchedRepo struct {
 	actions     []core_scheduling.ScheduledAction
 	scheduleErr error
