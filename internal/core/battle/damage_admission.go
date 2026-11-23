@@ -90,6 +90,12 @@ func (s *LifetimeState) validateAreaDamage(c *DamageContext, e TargetEffect, rng
 // admitAreaDamage records one area helper on the caller's projection, so
 // repeated areas share consumed defenses and activation facts.
 func (projected *LifetimeState) admitAreaDamage(context *DamageContext, e TargetEffect, rng random.Generator) error {
+	return projected.admitDamageSequence(context, projected.areaDamageEffects(context, e), rng)
+}
+
+// areaDamageEffects records the area helper's entry facts on the projection
+// and returns its per-enemy hits with the source's power decay.
+func (projected *LifetimeState) areaDamageEffects(context *DamageContext, e TargetEffect) []TargetEffect {
 	a := projected.actor(context.ActorID)
 	if a.categorySealed(e.Category) {
 		a.Status = ""
@@ -111,7 +117,7 @@ func (projected *LifetimeState) admitAreaDamage(context *DamageContext, e Target
 			}
 		}
 	}
-	return projected.admitDamageSequence(context, effects, rng)
+	return effects
 }
 
 func (s *LifetimeState) canPreserveAreaPower(c *DamageContext, e TargetEffect) bool {
