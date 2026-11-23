@@ -153,7 +153,7 @@ func TestSummonAppearanceFrozenPayloadReloadAndRebuiltPorts(t *testing.T) {
 				}
 			}
 		}
-		if saved.State.RosterSequence != 1 || len(saved.State.Actors) != 3 || saved.State.Actors[2].RosterIdentity != "enemy-species-Z" || saved.State.Actors[0].Icon != tc.MonsterIcons[107] || saved.State.Actors[0].Temporary != corebattle.TemporaryDefense || saved.Input.DamageCalls != 7 || *saved.Input.Pool[0].Gear.WeaponAttack != 12 || *saved.Input.Pool[0].JobHistory["job-7"] != 17 {
+		if saved.State.RosterSequence != 1 || len(saved.State.Actors) != 3 || saved.State.Actors[2].RosterIdentity != "species-Z" || saved.State.Actors[0].Icon != tc.MonsterIcons[107] || saved.State.Actors[0].Temporary != corebattle.TemporaryDefense || saved.Input.DamageCalls != 7 || *saved.Input.Pool[0].Gear.WeaponAttack != 12 || *saved.Input.Pool[0].JobHistory["job-7"] != 17 {
 			t.Fatal(saved)
 		}
 		finals = append(finals, saved)

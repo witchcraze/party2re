@@ -84,7 +84,11 @@ func (s *LifetimeState) addEnemyAt(c *RosterContext, suffix, position int) Roste
 		position = 0
 	}
 	a := c.EnemyPool[position].Clone()
-	identity := func(n int) string { return "enemy-" + a.ID + "-" + string(rune('I'+n)) }
+	family := a.EncounterIdentity
+	if family == "" {
+		family = a.ID
+	}
+	identity := func(n int) string { return family + "-" + string(rune('I'+n)) }
 	key := identity(suffix)
 	if s.rosterIdentity(key) != nil {
 		key = identity((suffix + 17) % 18)

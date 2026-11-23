@@ -120,7 +120,7 @@ func TestNPCSummonPositionsRolesAndNoEffect(t *testing.T) {
 			before, _ := json.Marshal(c.EnemyPool)
 			applyNPCJob(t, &s, &c, d, entry.ID, &npcJobRNG{t: t, draws: []float64{0, 0}})
 			a := s.Actors[4]
-			if !a.NPC || a.TeamID != "enemy" || a.RosterIdentity != "enemy-species-I" || a.MaxHP != 900 || a.Jobs.JobID != "job-95" || a.CustomSkills[0].Gems[0].Kind != "unsupported-until-selected" {
+			if !a.NPC || a.TeamID != "enemy" || a.RosterIdentity != "species-I" || a.MaxHP != 900 || a.Jobs.JobID != "job-95" || a.CustomSkills[0].Gems[0].Kind != "unsupported-until-selected" {
 				t.Fatal(a)
 			}
 			if npc && !reflect.DeepEqual(c.PartyIDs, []string{"npc", "other-npc", a.ID}) || !npc && !reflect.DeepEqual(c.EnemyIDs, []string{"npc", "other-npc", a.ID}) {
@@ -131,7 +131,7 @@ func TestNPCSummonPositionsRolesAndNoEffect(t *testing.T) {
 				t.Fatal("stage payload changed")
 			}
 			applyNPCJob(t, &s, &c, d, entry.ID, &npcJobRNG{t: t, draws: []float64{0, 0}})
-			if s.Actors[5].RosterIdentity != "enemy-species-Z" {
+			if s.Actors[5].RosterIdentity != "species-Z" {
 				t.Fatal(s.Actors[5])
 			}
 			applyNPCJob(t, &s, &c, d, entry.ID, &npcJobRNG{t: t, draws: []float64{0, 0}})

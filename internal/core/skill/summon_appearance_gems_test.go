@@ -79,7 +79,7 @@ func TestSummonGemBeforeRegisteredTargetHelper(t *testing.T) {
 		t.Fatal(err, rng)
 	}
 	a := s.Actors[2]
-	if a.RosterIdentity != "enemy-species-I" || a.Tension != 1 || a.ID != "summoned-1" || s.RosterSequence != 1 || !reflect.DeepEqual(f.EnemyIDs, []string{"enemy", a.ID}) || !reflect.DeepEqual(f.Arguments, []string{"self", "tail"}) {
+	if a.RosterIdentity != "species-I" || a.Tension != 1 || a.ID != "summoned-1" || s.RosterSequence != 1 || !reflect.DeepEqual(f.EnemyIDs, []string{"enemy", a.ID}) || !reflect.DeepEqual(f.Arguments, []string{"self", "tail"}) {
 		t.Fatal(a, f)
 	}
 	// ff97fc5:_skill.cgi:9885–9906; hard truncation precedes party-size truncation.

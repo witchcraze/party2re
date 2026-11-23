@@ -31,7 +31,7 @@ func TestEnemySummonScalingPayloadAndTwoSuffixAttempts(t *testing.T) {
 		t.Fatal(c.EnemyIDs)
 	}
 	second, err := s.ApplyRoster(&c, "tool-78", "", &targetRNG{t: t, draws: []float64{0, .9}})
-	if err != nil || s.actor(second.HelperID).RosterIdentity != "enemy-species-Z" {
+	if err != nil || s.actor(second.HelperID).RosterIdentity != "species-Z" {
 		t.Fatal(second, err)
 	}
 	if r, err := s.ApplyRoster(&c, "tool-78", "", &targetRNG{t: t, draws: []float64{0, .5}}); err != nil || r.Applied {
@@ -86,7 +86,7 @@ func TestEnemySummonWeightsFallbackAndReloadContinuation(t *testing.T) {
 	c.EnemyPool = []LifetimeActor{one, two}
 	c.AppearancePositions = []int{1, 1, 0}
 	r, err := s.ApplyRoster(&c, "tool-78", "", &targetRNG{t: t, draws: []float64{.4, .5}})
-	if err != nil || s.actor(r.HelperID).RosterIdentity != "enemy-second-P" {
+	if err != nil || s.actor(r.HelperID).RosterIdentity != "second-P" {
 		t.Fatal(r, err)
 	}
 	data, err := json.Marshal(s)
@@ -162,7 +162,7 @@ func TestEnemySummonStageReloadDrawsOnceAndRebuildsPool(t *testing.T) {
 	// Reload draws and RebuildPool run before suffix and position draws, once.
 	rng := &targetRNG{t: t, draws: []float64{.75, .25, .5, 0}}
 	r1, err := s.ApplyRoster(&c, "gem_summon_sky", "", rng)
-	if err != nil || !r1.Applied || !loaded || rebuilds != 1 || s.actor(r1.HelperID).RosterIdentity != "enemy-rebuilt-R" || s.actor(r1.HelperID).MaxHP != 333 {
+	if err != nil || !r1.Applied || !loaded || rebuilds != 1 || s.actor(r1.HelperID).RosterIdentity != "rebuilt-R" || s.actor(r1.HelperID).MaxHP != 333 {
 		t.Fatalf("first summon: err=%v r=%+v loaded=%v rebuilds=%d actor=%+v", err, r1, loaded, rebuilds, s.actor(r1.HelperID))
 	}
 	rng.done()
@@ -170,7 +170,7 @@ func TestEnemySummonStageReloadDrawsOnceAndRebuildsPool(t *testing.T) {
 	// A second summon sharing StageLoaded skips reload and reuses the rebuilt pool.
 	rng = &targetRNG{t: t, draws: []float64{0, 0}}
 	r2, err := s.ApplyRoster(&c, "tool-78", "", rng)
-	if err != nil || !r2.Applied || rebuilds != 1 || s.actor(r2.HelperID).RosterIdentity != "enemy-rebuilt-I" || s.actor(r2.HelperID).MaxHP != 333 {
+	if err != nil || !r2.Applied || rebuilds != 1 || s.actor(r2.HelperID).RosterIdentity != "rebuilt-I" || s.actor(r2.HelperID).MaxHP != 333 {
 		t.Fatalf("second summon: err=%v r=%+v rebuilds=%d actor=%+v", err, r2, rebuilds, s.actor(r2.HelperID))
 	}
 	rng.done()
@@ -207,5 +207,60 @@ func TestEnemySummonStageReloadDrawsOnceAndRebuildsPool(t *testing.T) {
 	r, err := s.ApplyRoster(&c, "npc-job-95-position-0", "", &targetRNG{t: t, draws: []float64{0, 0}})
 	if err != nil || !r.Applied || !reflect.DeepEqual(c.PartyIDs, []string{"enemy", r.HelperID}) || s.actor(r.HelperID).TeamID != "npc" {
 		t.Fatalf("npc summon with opposing EnemyTeamID: err=%v r=%+v c=%+v actor=%+v", err, r, c, s.actor(r.HelperID))
+	}
+}
+
+func TestEnemySummonCollisionByEncounterIdentityFamily(t *testing.T) {
+	s, c := rosterFixture()
+	first := enemySummonPayload()
+	first.ID, first.EncounterIdentity = "pos-0", "ordinary-25-boss-22"
+	second := enemySummonPayload()
+	second.ID, second.EncounterIdentity = "pos-1", "ordinary-25-boss-22"
+	distinct := enemySummonPayload()
+	distinct.ID, distinct.EncounterIdentity, distinct.Name = "pos-2", "other-family", "別の敵"
+	c.EnemyPool = []LifetimeActor{first, second, distinct}
+
+	// Suffix I from pos 0, then suffix I from pos 1 collides and retries Z.
+	r1, err := s.ApplyRoster(&c, "tool-78", "", &targetRNG{t: t, draws: []float64{0, 0}})
+	if err != nil || !r1.Applied || s.actor(r1.HelperID).RosterIdentity != "ordinary-25-boss-22-I" {
+		t.Fatalf("first summon: err=%v r=%+v actor=%+v", err, r1, s.actor(r1.HelperID))
+	}
+	r2, err := s.ApplyRoster(&c, "tool-78", "", &targetRNG{t: t, draws: []float64{0, .5}})
+	if err != nil || !r2.Applied || s.actor(r2.HelperID).RosterIdentity != "ordinary-25-boss-22-Z" {
+		t.Fatalf("second summon: err=%v r=%+v actor=%+v", err, r2, s.actor(r2.HelperID))
+	}
+
+	// Reload keeps the family identities; a third draw for suffix I is a no-op,
+	// while a distinct family on suffix I still coexists.
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loaded LifetimeState
+	if err := json.Unmarshal(raw, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	r3, err := loaded.ApplyRoster(&c, "tool-78", "", &targetRNG{t: t, draws: []float64{0, .5}})
+	if err != nil || r3.Applied {
+		t.Fatalf("third same-family summon should be no-op: err=%v r=%+v", err, r3)
+	}
+	r4, err := loaded.ApplyRoster(&c, "tool-78", "", &targetRNG{t: t, draws: []float64{0, .9}})
+	if err != nil || !r4.Applied || loaded.actor(r4.HelperID).RosterIdentity != "other-family-I" {
+		t.Fatalf("distinct family should coexist: err=%v r=%+v", err, r4)
+	}
+
+	// Collides with a same-family member created by another producer (job407).
+	s, c = rosterFixture()
+	c.EnemyPool = []LifetimeActor{first, second}
+	s.Actors = append(s.Actors, LifetimeActor{
+		Participant:       Participant{ID: "job407-successor", TeamID: "npc", HP: 500},
+		NPC:               true,
+		EncounterIdentity: "ordinary-25-boss-22",
+		RosterIdentity:    "ordinary-25-boss-22-J",
+	})
+	c.EnemyIDs = append(c.EnemyIDs, "job407-successor")
+	r, err := s.ApplyRoster(&c, "tool-78", "", &targetRNG{t: t, draws: []float64{1.0 / 18.0, .8}})
+	if err != nil || !r.Applied || s.actor(r.HelperID).RosterIdentity != "ordinary-25-boss-22-I" {
+		t.Fatalf("collision against job407 successor should fall back to I: err=%v r=%+v actor=%+v", err, r, s.actor(r.HelperID))
 	}
 }
