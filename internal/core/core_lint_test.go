@@ -57,7 +57,7 @@ var (
 func isPathAllowed(relPath string, allowedMap map[string]bool) bool {
 	normalized := filepath.ToSlash(relPath)
 	for allowed := range allowedMap {
-		if strings.HasPrefix(normalized, allowed) {
+		if normalized == allowed || strings.HasPrefix(normalized, allowed+"/") {
 			return true
 		}
 	}
@@ -706,6 +706,19 @@ func ModifyItem(inv *Inventory, inst Instance) {
 			name: "Valid Depot: Indexed quantity mutation",
 			path: "internal/depot/depot.go",
 			code: `package depot; func Stack(d *Depot) { d.Items[0].Quantity += 2; d.Items[0].Quantity-- }`,
+		},
+		{
+			name: "Valid Depot descendant: Indexed quantity mutation",
+			path: "internal/depot/storage/stack.go",
+			code: `package storage; func Stack(d *Depot) { d.Items[0].Quantity++ }`,
+		},
+		{
+			name:        "Violation: Depot prefix does not exempt a sibling",
+			path:        "internal/depottools/service.go",
+			code:        `package depottools; func ModifyItem(inv *Inventory) { inv.Items[0].Quantity++ }`,
+			expectError: true,
+			field:       "Items",
+			errSnippet:  "use Inventory.Add or Consume",
 		},
 
 		// 5. Equipment Slots
