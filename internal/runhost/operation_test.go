@@ -1,7 +1,6 @@
-package adventure
+package runhost
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -11,18 +10,23 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
-	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-func operationFixture() (*NormalRun, NormalOperationContext) {
-	r := &NormalRun{State: runhost.State{Round: 1, LeaderID: "a", Roster: []string{"a", "b"}, Enemies: []string{"c"}, Battle: corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{
+// treasureFloor and chestRoom stand in for a room library's treasure floor,
+// where add_battle_action lists しらべる.
+const treasureFloor = 11
+
+var chestRoom = []Choice{{Action: "chest", Source: "しらべる"}}
+
+func operationFixture() (*State, OperationContext) {
+	r := &State{Round: 1, LeaderID: "a", Roster: []string{"a", "b"}, Enemies: []string{"c"}, Battle: corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{
 		{Participant: corebattle.Participant{ID: "a", Name: "Alice", TeamID: "party", HP: 100, MaxHP: 100, MP: 120, MaxMP: 120}},
 		{Participant: corebattle.Participant{ID: "b", Name: "Bob", TeamID: "party", HP: 100, MaxHP: 100}},
 		{Participant: corebattle.Participant{ID: "c", Name: "Enemy", TeamID: "enemy", HP: 100, MaxHP: 100}, NPC: true},
-	}}}}
+	}}}
 	level := 10
 	damage := corebattle.DamageContext{EffectContext: corebattle.EffectContext{RequesterLevel: &level}}
-	ctx := NormalOperationContext{Callback: corebattle.CallbackContext{Damage: &damage}}
+	ctx := OperationContext{Callback: corebattle.CallbackContext{Damage: &damage}}
 	ctx.Definitions.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{
 		BaseGuard:       &corebattle.BaseGuardContext{DamageContext: damage},
 		BasicMagic:      &corebattle.BasicMagicContext{DamageContext: damage},
@@ -36,110 +40,110 @@ func operationFixture() (*NormalRun, NormalOperationContext) {
 func TestDiscoverNormalOperationGates(t *testing.T) {
 	for _, tc := range []struct {
 		name, id string
-		change   func(*NormalRun, *NormalOperationContext)
+		change   func(*State, *OperationContext)
 		listed   bool
 		cost     int
 	}{
 		{"attack", "attack", nil, true, 0},
 		{"defend", "defend", nil, true, 0},
 		{"tension", "tension", nil, true, 0},
-		{"previous SP with current SP zero", "job-1-entry-1", func(r *NormalRun, _ *NormalOperationContext) {
+		{"previous SP with current SP zero", "job-1-entry-1", func(r *State, _ *OperationContext) {
 			r.Actor("a").Jobs = corebattle.BattleJobs{JobID: "job-06", OldJobID: "job-01", OldSP: 5}
 		}, true, 5},
-		{"current SP cannot pay previous threshold", "job-1-entry-1", func(r *NormalRun, _ *NormalOperationContext) {
+		{"current SP cannot pay previous threshold", "job-1-entry-1", func(r *State, _ *OperationContext) {
 			r.Actor("a").Jobs = corebattle.BattleJobs{JobID: "job-06", SP: 80, OldJobID: "job-01", OldSP: 4}
 		}, false, 0},
-		{"item249 truncates odd magician amount", "job-6-entry-3", func(r *NormalRun, _ *NormalOperationContext) {
+		{"item249 truncates odd magician amount", "job-6-entry-3", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Jobs.JobID, a.Jobs.SP, a.MP, a.ItemDefinitionIDs = "job-06", 8, 2, []string{"item-249"}
 		}, true, 2},
-		{"item249 doubles non-magician amount", "job-1-entry-1", func(r *NormalRun, _ *NormalOperationContext) {
+		{"item249 doubles non-magician amount", "job-1-entry-1", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Jobs.JobID, a.Jobs.SP, a.MP, a.ItemDefinitionIDs = "job-01", 5, 10, []string{"item-249"}
 		}, true, 10},
-		{"item249 doubled amount too expensive", "job-1-entry-1", func(r *NormalRun, _ *NormalOperationContext) {
+		{"item249 doubled amount too expensive", "job-1-entry-1", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Jobs.JobID, a.Jobs.SP, a.MP, a.ItemDefinitionIDs = "job-01", 5, 9, []string{"item-249"}
 		}, false, 0},
-		{"magician amulet extended SP zero", "job-6-entry-0", func(r *NormalRun, _ *NormalOperationContext) {
+		{"magician amulet extended SP zero", "job-6-entry-0", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Jobs.JobID, a.Jobs.SP, a.ItemDefinitionIDs = "job-06", 1, []string{"item-249"}
 		}, true, 0},
-		{"warrior amulet wrong job", "job-6-entry-0", func(r *NormalRun, _ *NormalOperationContext) {
+		{"warrior amulet wrong job", "job-6-entry-0", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Jobs.JobID, a.Jobs.SP, a.ItemDefinitionIDs = "job-06", 1, []string{"item-181"}
 		}, false, 0},
-		{"shift gear via item240", "job-73-gear-previous", func(r *NormalRun, _ *NormalOperationContext) {
+		{"shift gear via item240", "job-73-gear-previous", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Jobs.OldJobID, a.Jobs.OldSP, a.ItemDefinitionIDs = "job-73", 1, []string{"item-240"}
 		}, true, 1},
-		{"curse hides job but keeps book", "book-172", func(r *NormalRun, _ *NormalOperationContext) {
+		{"curse hides job but keeps book", "book-172", func(r *State, _ *OperationContext) {
 			r.Actor("a").Abilities, r.Actor("a").ItemDefinitionIDs = []string{"cursed"}, []string{"item-249", "item-172"}
 		}, true, 18},
-		{"curse hides job", "job-1-entry-1", func(r *NormalRun, _ *NormalOperationContext) {
+		{"curse hides job", "job-1-entry-1", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Jobs.JobID, a.Jobs.SP, a.Abilities = "job-01", 5, []string{"cursed"}
 		}, false, 0},
-		{"equipped extension independent of previous SP", "extension-163", func(r *NormalRun, _ *NormalOperationContext) {
+		{"equipped extension independent of previous SP", "extension-163", func(r *State, _ *OperationContext) {
 			r.Actor("a").ItemDefinitionIDs = []string{"item-163"}
 		}, true, 12},
-		{"seal requires previous SP", "seal-8-magic", func(r *NormalRun, _ *NormalOperationContext) {
+		{"seal requires previous SP", "seal-8-magic", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Gear, a.Jobs.OldSP, a.WeaponSeal = &corebattle.BattleGearStats{WeaponID: "weapon-50"}, 90, 8
 			a.ItemDefinitionIDs = []string{"item-249"}
 		}, true, 54},
-		{"seal cannot use current SP", "seal-8-magic", func(r *NormalRun, _ *NormalOperationContext) {
+		{"seal cannot use current SP", "seal-8-magic", func(r *State, _ *OperationContext) {
 			a := r.Actor("a")
 			a.Gear, a.Jobs.SP, a.Jobs.OldSP, a.WeaponSeal = &corebattle.BattleGearStats{WeaponID: "weapon-50"}, 120, 89, 8
 		}, false, 0},
-		{"category 1 tool at floor zero", "tool", func(r *NormalRun, _ *NormalOperationContext) {
+		{"category 1 tool at floor zero", "tool", func(r *State, _ *OperationContext) {
 			r.Round, r.Enemies, r.Actor("a").HeldToolID = 0, nil, new("item-001")
 		}, true, 0},
-		{"category 2 item", "tool", func(r *NormalRun, _ *NormalOperationContext) {
+		{"category 2 item", "tool", func(r *State, _ *OperationContext) {
 			r.Actor("a").HeldToolID = new("item-033")
 		}, false, 0},
-		{"equipped inventory cannot infer hand", "tool", func(r *NormalRun, _ *NormalOperationContext) {
+		{"equipped inventory cannot infer hand", "tool", func(r *State, _ *OperationContext) {
 			r.Actor("a").ItemDefinitionIDs = []string{"item-001"}
 		}, false, 0},
-		{"between encounters survival", "between-encounter-survival", func(r *NormalRun, _ *NormalOperationContext) {
+		{"between encounters survival", "between-encounter-survival", func(r *State, _ *OperationContext) {
 			r.Actor("c").HP, r.Actor("a").Jobs.JobID, r.Actor("a").Jobs.SP = 0, "job-78", 55
 		}, true, 10},
-		{"between encounters reverse form wins", "job-300-form", func(r *NormalRun, _ *NormalOperationContext) {
+		{"between encounters reverse form wins", "job-300-form", func(r *State, _ *OperationContext) {
 			r.Actor("c").HP = 0
 			r.Actor("a").Jobs = corebattle.BattleJobs{JobID: "job-82", SP: 111, OldJobID: "job-300"}
 		}, true, 0},
-		{"call at floor zero uses previous SP and item165 override", "job-59-summon", func(r *NormalRun, _ *NormalOperationContext) {
+		{"call at floor zero uses previous SP and item165 override", "job-59-summon", func(r *State, _ *OperationContext) {
 			r.Round, r.Enemies = 0, nil
 			a := r.Actor("a")
 			a.Jobs.JobID, a.Jobs.OldSP, a.ItemDefinitionIDs = "job-59", 10, []string{"item-165"}
 		}, true, 0},
 		{"front with two allies", "front", nil, true, 0},
-		{"back with solo member", "back", func(r *NormalRun, _ *NormalOperationContext) {
+		{"back with solo member", "back", func(r *State, _ *OperationContext) {
 			r.Battle.Actors = slices.Delete(r.Battle.Actors, 1, 2)
 			r.Roster = []string{"a"}
 		}, false, 0},
-		{"stock uses persistent exp at threshold", "stock-level", func(r *NormalRun, ctx *NormalOperationContext) {
+		{"stock uses persistent exp at threshold", "stock-level", func(r *State, ctx *OperationContext) {
 			r.Enemies = nil
 			ctx.Requester = &corecharacter.Character{Level: 100, OverLevel: true, Experience: 100000}
 		}, true, 0},
-		{"stock refuses capped ordinary level", "stock-level", func(r *NormalRun, ctx *NormalOperationContext) {
+		{"stock refuses capped ordinary level", "stock-level", func(r *State, ctx *OperationContext) {
 			r.Enemies = nil
 			ctx.Requester = &corecharacter.Character{Level: 99, Experience: 100000}
 		}, false, 0},
-		{"invite for nonleader", "invite", func(r *NormalRun, _ *NormalOperationContext) { r.Round, r.LeaderID = 0, "b" }, true, 0},
-		{"kick for leader", "kick", func(r *NormalRun, _ *NormalOperationContext) { r.Round = 0 }, true, 0},
-		{"kick withheld from nonleader", "kick", func(r *NormalRun, _ *NormalOperationContext) { r.Round, r.LeaderID = 0, "b" }, false, 0},
+		{"invite for nonleader", "invite", func(r *State, _ *OperationContext) { r.Round, r.LeaderID = 0, "b" }, true, 0},
+		{"kick for leader", "kick", func(r *State, _ *OperationContext) { r.Round = 0 }, true, 0},
+		{"kick withheld from nonleader", "kick", func(r *State, _ *OperationContext) { r.Round, r.LeaderID = 0, "b" }, false, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, ctx := operationFixture()
 			if tc.change != nil {
 				tc.change(r, &ctx)
 			}
-			choices, err := r.DiscoverNormalOperations(runhost.Command{ActorID: "a"}, ctx)
+			choices, err := r.DiscoverOperations(Command{ActorID: "a"}, ctx, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			i := slices.IndexFunc(choices, func(c RunOperationChoice) bool { return c.Action == tc.id })
+			i := slices.IndexFunc(choices, func(c OperationChoice) bool { return c.Action == tc.id })
 			if (i >= 0) != tc.listed || i >= 0 && choices[i].MPCost != tc.cost {
 				t.Fatalf("choice %s, want listed=%t MP=%d, got %+v", tc.id, tc.listed, tc.cost, choices)
 			}
@@ -152,23 +156,23 @@ func TestParseNormalOperationTargetsAndDispatch(t *testing.T) {
 	r.Actor("a").Jobs = corebattle.BattleJobs{JobID: "job-01", SP: 8}
 	for _, tc := range []struct {
 		name, action, target, input string
-		kind                        RunOperationKind
+		kind                        OperationKind
 		binding, gotTarget          string
 		wantErr                     error
 	}{
-		{"omission", "defend", "", "", RunOperationBattle, "job-0-entry-4", "", nil},
-		{"wrong side remains supplied", "defend", "c", "", RunOperationBattle, "job-0-entry-4", "c", nil},
-		{"stale", "defend", "previous-enemy", "", "", "", "", runhost.ErrConflict},
-		{"foreign", "job-1-entry-2", "foreign", "", "", "", "", runhost.ErrConflict},
-		{"plain text", "", "", "a comment", RunOperationComment, "", "", nil},
-		{"unknown text command", "comment", "", "＠no-such-skill>foreign", RunOperationComment, "", "", nil},
-		{"unknown typed command", "no-such-skill", "", "", "", "", "", runhost.ErrUnavailable},
-		{"whisper outside the encounter", "", "", "＠ささやき&gt;Carol", RunOperationWhisper, "whisper", "Carol", nil},
-		{"screenshot", "", "", "＠すくしょ", RunOperationScreenshot, "screenshot", "", nil},
-		{"legacy name and wrong-side alias", "", "", "text ＠ぼうぎょ　>Enemy", RunOperationBattle, "job-0-entry-4", "c", nil},
+		{"omission", "defend", "", "", OperationBattle, "job-0-entry-4", "", nil},
+		{"wrong side remains supplied", "defend", "c", "", OperationBattle, "job-0-entry-4", "c", nil},
+		{"stale", "defend", "previous-enemy", "", "", "", "", ErrConflict},
+		{"foreign", "job-1-entry-2", "foreign", "", "", "", "", ErrConflict},
+		{"plain text", "", "", "a comment", OperationComment, "", "", nil},
+		{"unknown text command", "comment", "", "＠no-such-skill>foreign", OperationComment, "", "", nil},
+		{"unknown typed command", "no-such-skill", "", "", "", "", "", ErrUnavailable},
+		{"whisper outside the encounter", "", "", "＠ささやき&gt;Carol", OperationWhisper, "whisper", "Carol", nil},
+		{"screenshot", "", "", "＠すくしょ", OperationScreenshot, "screenshot", "", nil},
+		{"legacy name and wrong-side alias", "", "", "text ＠ぼうぎょ　>Enemy", OperationBattle, "job-0-entry-4", "c", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Action: tc.action, TargetID: tc.target, Input: tc.input}, ctx)
+			got, err := r.parseOperation(Command{ActorID: "a", Action: tc.action, TargetID: tc.target, Input: tc.input}, ctx, nil)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("got %v want %v", err, tc.wantErr)
 			}
@@ -184,22 +188,22 @@ func TestParseNormalOperationDuplicateAndSecondCost(t *testing.T) {
 	a := r.Actor("a")
 	a.Jobs = corebattle.BattleJobs{JobID: "job-17", SP: 40, OldJobID: "job-33", OldSP: 30}
 	a.ItemDefinitionIDs, a.Extended = []string{"item-249"}, corebattle.ExtendedAdditional
-	cmd := runhost.Command{ActorID: "a", Input: "＠マジックバリア　＠フバーハ>Bob"}
-	got, err := r.ParseNormalOperation(cmd, ctx)
+	cmd := Command{ActorID: "a", Input: "＠マジックバリア　＠フバーハ>Bob"}
+	got, err := r.parseOperation(cmd, ctx, nil)
 	if err != nil || got.First.EntryID != "job-33-entry-0" || got.First.Cost != 12 || !got.First.Whitelisted ||
 		got.Second == nil || got.Second.EntryID != "job-33-entry-2" || got.Second.Cost != 7 || got.Second.TargetID != "b" || !got.Second.Whitelisted {
 		t.Fatalf("got %+v, second=%+v, err=%v", got, got.Second, err)
 	}
 	cmd.Action, cmd.Input = "job-17-entry-2", ""
-	if _, err := r.ParseNormalOperation(cmd, ctx); !errors.Is(err, runhost.ErrUnavailable) {
+	if _, err := r.parseOperation(cmd, ctx, nil); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("overwritten older entry still selectable: %v", err)
 	}
 	cmd.Action, cmd.Input = "", "＠マジックバリア ＠フバーハ>stale"
-	if _, err := r.ParseNormalOperation(cmd, ctx); !errors.Is(err, runhost.ErrConflict) {
+	if _, err := r.parseOperation(cmd, ctx, nil); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale second target not rejected: %v", err)
 	}
 	a.Extended = ""
-	if got, err := r.ParseNormalOperation(cmd, ctx); err != nil || got.Second != nil {
+	if got, err := r.parseOperation(cmd, ctx, nil); err != nil || got.Second != nil {
 		t.Fatalf("second parsed without additional submission: %+v %v", got, err)
 	}
 	a.Extended = corebattle.ExtendedAdditional
@@ -209,12 +213,12 @@ func TestParseNormalOperationDuplicateAndSecondCost(t *testing.T) {
 		return errors.New("entry state validator should not run for second parse")
 	}
 	ctx.Definitions.Invocations.Entries["job-33-entry-2"] = secondDef
-	if got, err := r.ParseNormalOperation(cmd, ctx); err != nil || got.Second == nil || got.Second.EntryID != "job-33-entry-2" {
+	if got, err := r.parseOperation(cmd, ctx, nil); err != nil || got.Second == nil || got.Second.EntryID != "job-33-entry-2" {
 		t.Fatalf("second parse ran state validator: %+v %v", got, err)
 	}
 	secondDef.Children = []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "unregistered-child"}}
 	ctx.Definitions.Invocations.Entries["job-33-entry-2"] = secondDef
-	if _, err := r.ParseNormalOperation(cmd, ctx); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+	if _, err := r.parseOperation(cmd, ctx, nil); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 		t.Fatalf("unregistered reachable second descendant not rejected: %v", err)
 	}
 }
@@ -238,8 +242,8 @@ func TestParseNormalOperationCustomAndUnsupportedAdmissionArePure(t *testing.T) 
 			return nil
 		},
 	}
-	cmd := runhost.Command{ActorID: "a", Action: "Echo"}
-	op, err := r.ParseNormalOperation(cmd, ctx)
+	cmd := Command{ActorID: "a", Action: "Echo"}
+	op, err := r.parseOperation(cmd, ctx, nil)
 	if err != nil || !op.First.Custom || op.First.EntryID != "custom" || op.First.TargetID != "" || validations == 0 {
 		t.Fatalf("custom not bound: %+v %v, %d checks", op, err, validations)
 	}
@@ -248,11 +252,11 @@ func TestParseNormalOperationCustomAndUnsupportedAdmissionArePure(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	choices, err := r.DiscoverNormalOperations(cmd, ctx)
-	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "custom" && c.Name == "Echo" && c.Gated }) {
+	choices, err := r.DiscoverOperations(cmd, ctx, nil)
+	if err != nil || !slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "custom" && c.Name == "Echo" && c.Gated }) {
 		t.Fatalf("missing unsupported choice: %+v %v", choices, err)
 	}
-	if _, err = r.ParseNormalOperation(cmd, ctx); err == nil {
+	if _, err = r.parseOperation(cmd, ctx, nil); err == nil {
 		t.Fatal("missing descendant admitted")
 	}
 	after, err := json.Marshal(r)
@@ -260,8 +264,8 @@ func TestParseNormalOperationCustomAndUnsupportedAdmissionArePure(t *testing.T) 
 		t.Fatal("admission changed run", err)
 	}
 	a.Custom.Name = "こうげき"
-	choices, err = r.DiscoverNormalOperations(cmd, ctx)
-	if err != nil || slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "custom" }) {
+	choices, err = r.DiscoverOperations(cmd, ctx, nil)
+	if err != nil || slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "custom" }) {
 		t.Fatalf("colliding custom was listed: %+v %v", choices, err)
 	}
 }
@@ -271,46 +275,46 @@ func TestDiscoverFallenAndSpectatorOperations(t *testing.T) {
 	a := r.Actor("a")
 	a.HP, a.Jobs.JobID, a.Jobs.SP, a.ItemDefinitionIDs = 0, "job-66", 150, []string{"item-158"}
 	r.Actor("b").RosterIdentity = "calling-66"
-	cmd := runhost.Command{ActorID: "a", Action: "job-66-revive", TargetID: "c"}
-	got, err := r.ParseNormalOperation(cmd, ctx)
+	cmd := Command{ActorID: "a", Action: "job-66-revive", TargetID: "c"}
+	got, err := r.parseOperation(cmd, ctx, nil)
 	if err != nil || !got.First.FallenSelf || got.First.TargetID != cmd.TargetID || got.First.Validate == nil || got.First.Execute == nil {
 		t.Fatalf("fallen revival: %+v %v", got, err)
 	}
 	r.Actor("b").HP = 0
-	if got, err := r.ParseNormalOperation(cmd, ctx); err != nil || !got.First.FallenSelf {
+	if got, err := r.parseOperation(cmd, ctx, nil); err != nil || !got.First.FallenSelf {
 		t.Fatalf("fallen designated helper means the listed callback has no effect: %+v %v", got, err)
 	}
 	r.Actor("b").RosterIdentity = ""
-	if got, err := r.ParseNormalOperation(cmd, ctx); err != nil || !got.First.FallenSelf {
+	if got, err := r.parseOperation(cmd, ctx, nil); err != nil || !got.First.FallenSelf {
 		t.Fatalf("missing designated helper means the listed callback has no effect: %+v %v", got, err)
 	}
 	for _, tc := range []struct {
 		name   string
-		change func(*NormalRun, *corebattle.LifetimeActor)
+		change func(*State, *corebattle.LifetimeActor)
 	}{
-		{"missing amulet", func(_ *NormalRun, a *corebattle.LifetimeActor) { a.ItemDefinitionIDs = nil }},
-		{"insufficient sp", func(_ *NormalRun, a *corebattle.LifetimeActor) { a.Jobs.SP = 149 }},
-		{"cursed", func(_ *NormalRun, a *corebattle.LifetimeActor) { a.Abilities = []string{"cursed"} }},
-		{"banned", func(r *NormalRun, _ *corebattle.LifetimeActor) {
+		{"missing amulet", func(_ *State, a *corebattle.LifetimeActor) { a.ItemDefinitionIDs = nil }},
+		{"insufficient sp", func(_ *State, a *corebattle.LifetimeActor) { a.Jobs.SP = 149 }},
+		{"cursed", func(_ *State, a *corebattle.LifetimeActor) { a.Abilities = []string{"cursed"} }},
+		{"banned", func(r *State, _ *corebattle.LifetimeActor) {
 			r.Battle.SkillBans = map[string]int{"job-66-revive": 1}
 		}},
-		{"no living enemy", func(r *NormalRun, _ *corebattle.LifetimeActor) { r.Actor("c").HP = 0 }},
+		{"no living enemy", func(r *State, _ *corebattle.LifetimeActor) { r.Actor("c").HP = 0 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, ctx := operationFixture()
 			a := r.Actor("a")
 			a.HP, a.Jobs.JobID, a.Jobs.SP, a.ItemDefinitionIDs = 0, "job-66", 150, []string{"item-158"}
 			tc.change(r, a)
-			if _, err := r.ParseNormalOperation(cmd, ctx); !errors.Is(err, runhost.ErrUnavailable) {
-				t.Fatalf("expected runhost.ErrUnavailable, got %v", err)
+			if _, err := r.parseOperation(cmd, ctx, nil); !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("expected ErrUnavailable, got %v", err)
 			}
 		})
 	}
 	cmd.Action = "attack"
-	if _, err := r.ParseNormalOperation(cmd, ctx); !errors.Is(err, ErrUnconsciousCharacter) {
+	if _, err := r.parseOperation(cmd, ctx, nil); !errors.Is(err, ErrActorUnconscious) {
 		t.Fatalf("fallen actor allowed ordinary attack: %v", err)
 	}
-	choices, err := r.DiscoverNormalOperations(runhost.Command{ActorID: "viewer"}, ctx)
+	choices, err := r.DiscoverOperations(Command{ActorID: "viewer"}, ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,71 +329,71 @@ func TestDiscoverFallenAndSpectatorOperations(t *testing.T) {
 
 func TestDiscoverOrdinaryTreasureProjectsUnopenedBoxes(t *testing.T) {
 	r, ctx := operationFixture()
-	r.Round, r.Enemies = TreasureRoomFloor, nil
-	r.Boxes = []runhost.TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"}}
+	r.Round, r.Enemies = treasureFloor, nil
+	r.Boxes = []TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"}}
 	ctx.Requester = &corecharacter.Character{Level: 1, Experience: 10}
-	choices, err := r.DiscoverNormalOperations(runhost.Command{ActorID: "a"}, ctx)
+	choices, err := r.DiscoverOperations(Command{ActorID: "a"}, ctx, chestRoom)
 	if err != nil ||
-		!slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "attack" && !c.Gated }) ||
-		!slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "chest" && c.Gated }) ||
-		slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "stock-level" }) {
+		!slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "attack" && !c.Gated }) ||
+		!slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "chest" && c.Gated }) ||
+		slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "stock-level" }) {
 		t.Fatalf("treasure discovery with unopened box: %+v %v", choices, err)
 	}
 	// When the actor has attack > 0 without a defeat port, admission against the projected box still gates attack.
 	r.Actor("a").Attack = 10
-	choices, err = r.DiscoverNormalOperations(runhost.Command{ActorID: "a"}, ctx)
-	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "attack" && c.Gated }) {
+	choices, err = r.DiscoverOperations(Command{ActorID: "a"}, ctx, chestRoom)
+	if err != nil || !slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "attack" && c.Gated }) {
 		t.Fatalf("unrepresented attack against projected box not gated: %+v %v", choices, err)
 	}
 	// Targeting the unopened box un-gates chest discovery.
-	choices, err = r.DiscoverNormalOperations(runhost.Command{ActorID: "a", TargetID: "box-1"}, ctx)
-	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "chest" && !c.Gated }) {
+	choices, err = r.DiscoverOperations(Command{ActorID: "a", TargetID: "box-1"}, ctx, chestRoom)
+	if err != nil || !slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "chest" && !c.Gated }) {
 		t.Fatalf("targeted chest discovery gated: %+v %v", choices, err)
 	}
 	// Once opened (or defeated), combat choices disappear and stock-level returns.
 	r.Boxes[0].OpenedBy = "a"
-	choices, err = r.DiscoverNormalOperations(runhost.Command{ActorID: "a"}, ctx)
+	choices, err = r.DiscoverOperations(Command{ActorID: "a"}, ctx, chestRoom)
 	if err != nil ||
-		slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "attack" }) ||
-		!slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "chest" && c.Gated }) ||
-		!slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "stock-level" }) {
+		slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "attack" }) ||
+		!slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "chest" && c.Gated }) ||
+		!slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == "stock-level" }) {
 		t.Fatalf("post-open treasure discovery: %+v %v", choices, err)
 	}
 }
 
 func TestParseNormalOperationTreasureChestTargets(t *testing.T) {
 	r, ctx := operationFixture()
-	r.Round, r.Enemies = TreasureRoomFloor, nil
-	r.Boxes = []runhost.TreasureBox{
+	r.Round, r.Enemies = treasureFloor, nil
+	r.Boxes = []TreasureBox{
 		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
 		{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
 		{ID: "box-3", Name: "黒い宝箱C", Defeated: true, ItemID: "item-003"},
 	}
 	for _, tc := range []struct {
 		name    string
-		cmd     runhost.Command
+		cmd     Command
 		wantID  string
 		wantErr error
 	}{
-		{"typed unopened ID", runhost.Command{ActorID: "a", Action: "chest", TargetID: "box-1"}, "box-1", nil},
-		{"legacy unopened name", runhost.Command{ActorID: "a", Input: "＠しらべる>普通の宝箱A"}, "box-1", nil},
-		{"legacy unopened @name", runhost.Command{ActorID: "a", Input: "＠しらべる>@普通の宝箱A"}, "box-1", nil},
-		{"typed empty target", runhost.Command{ActorID: "a", Action: "chest", TargetID: ""}, "", ErrNoUnopenedTreasure},
-		{"legacy empty target", runhost.Command{ActorID: "a", Input: "＠しらべる"}, "", ErrNoUnopenedTreasure},
-		{"typed foreign target", runhost.Command{ActorID: "a", Action: "chest", TargetID: "foreign"}, "", ErrNoUnopenedTreasure},
-		{"legacy foreign target", runhost.Command{ActorID: "a", Input: "＠しらべる>foreign"}, "", ErrNoUnopenedTreasure},
-		{"typed opened target", runhost.Command{ActorID: "a", Action: "chest", TargetID: "box-2"}, "", ErrNoUnopenedTreasure},
-		{"legacy opened target", runhost.Command{ActorID: "a", Input: "＠しらべる>青い宝箱B"}, "", ErrNoUnopenedTreasure},
-		{"typed defeated target", runhost.Command{ActorID: "a", Action: "chest", TargetID: "box-3"}, "", ErrNoUnopenedTreasure},
-		{"legacy defeated target", runhost.Command{ActorID: "a", Input: "＠しらべる>黒い宝箱C"}, "", ErrNoUnopenedTreasure},
-		{"typed display name rejected", runhost.Command{ActorID: "a", Action: "chest", TargetID: "普通の宝箱A"}, "", ErrNoUnopenedTreasure},
+		{"typed unopened ID", Command{ActorID: "a", Action: "chest", TargetID: "box-1"}, "box-1", nil},
+		{"legacy unopened name", Command{ActorID: "a", Input: "＠しらべる>普通の宝箱A"}, "box-1", nil},
+		{"legacy unopened @name", Command{ActorID: "a", Input: "＠しらべる>@普通の宝箱A"}, "box-1", nil},
+		{"typed empty target", Command{ActorID: "a", Action: "chest", TargetID: ""}, "", ErrNoUnopenedTreasure},
+		{"legacy empty target", Command{ActorID: "a", Input: "＠しらべる"}, "", ErrNoUnopenedTreasure},
+		{"typed foreign target", Command{ActorID: "a", Action: "chest", TargetID: "foreign"}, "", ErrNoUnopenedTreasure},
+		{"legacy foreign target", Command{ActorID: "a", Input: "＠しらべる>foreign"}, "", ErrNoUnopenedTreasure},
+		{"typed opened target", Command{ActorID: "a", Action: "chest", TargetID: "box-2"}, "", ErrNoUnopenedTreasure},
+		{"legacy opened target", Command{ActorID: "a", Input: "＠しらべる>青い宝箱B"}, "", ErrNoUnopenedTreasure},
+		{"typed defeated target", Command{ActorID: "a", Action: "chest", TargetID: "box-3"}, "", ErrNoUnopenedTreasure},
+		{"legacy defeated target", Command{ActorID: "a", Input: "＠しらべる>黒い宝箱C"}, "", ErrNoUnopenedTreasure},
+		{"typed display name rejected", Command{ActorID: "a", Action: "chest", TargetID: "普通の宝箱A"}, "", ErrNoUnopenedTreasure},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := r.ParseNormalOperation(tc.cmd, ctx)
+			got, err := r.parseOperation(tc.cmd, ctx, chestRoom)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("got err=%v want %v (op=%+v)", err, tc.wantErr, got)
 			}
-			if err == nil && (got.Kind != RunOperationRoom || got.First.Action != "chest" || got.First.TargetID != tc.wantID || !slices.Equal(got.First.Arguments, []string{tc.wantID})) {
+			if err == nil && (got.Kind != OperationRoom || got.First.Action != "chest" || got.First.TargetID != tc.wantID || !slices.Equal(got.First.Arguments, []string{tc.wantID})) {
 				t.Fatalf("unexpected parsed chest op: %+v", got)
 			}
 		})
@@ -398,8 +402,8 @@ func TestParseNormalOperationTreasureChestTargets(t *testing.T) {
 
 func TestNormalOperationTreasureCallbacksAndValuationSearch(t *testing.T) {
 	r, ctx := operationFixture()
-	r.Round, r.Enemies = TreasureRoomFloor, nil
-	r.Boxes = []runhost.TreasureBox{
+	r.Round, r.Enemies = treasureFloor, nil
+	r.Boxes = []TreasureBox{
 		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
 		{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
 	}
@@ -407,25 +411,13 @@ func TestNormalOperationTreasureCallbacksAndValuationSearch(t *testing.T) {
 	a.Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 200, OldJobID: "job-81", OldSP: 30}
 	a.Gear = &corebattle.BattleGearStats{}
 	a.HeldToolID = new("item-151")
-	stages, err := InitialStageCatalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-	monsters, err := InitialMonsterCatalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.Stage, err = stages.FindByID("stage-00")
-	if err != nil {
-		t.Fatal(err)
-	}
 	tools := &corebattle.OrdinaryToolContext{DamageContext: *ctx.Callback.Damage}
-	level := 10
-	s := &NormalRunService{cfg: NormalRunConfig{Stages: stages, Monsters: monsters}}
-	jobEnc, _, err := s.PrepareJobEncounters(context.Background(), r, "a", &corebattle.EquipmentResetContext{TargetContext: corebattle.TargetContext{ActorID: "a"}, RequesterLevel: &level})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// A room library's job78 room: treasure retry can reach the unopened box.
+	jobEnc := &corebattle.JobEncounterContext{DamageContext: *ctx.Callback.Damage, Room: &corebattle.JobRoomContext{
+		ActorID: "a", NormalStage: true, Floor: treasureFloor, TreasureIDs: []string{"box-1"},
+		Validate: func(string) error { return nil },
+		Apply:    func(string) (corebattle.TargetContext, error) { return corebattle.TargetContext{}, nil },
+	}}
 	ctx.Definitions.RegisterPlayerCallbacks(skill.PlayerCallbackContexts{
 		BaseGuard:       &corebattle.BaseGuardContext{DamageContext: *ctx.Callback.Damage},
 		BasicMagic:      &corebattle.BasicMagicContext{DamageContext: *ctx.Callback.Damage},
@@ -437,12 +429,12 @@ func TestNormalOperationTreasureCallbacksAndValuationSearch(t *testing.T) {
 	}, 2)
 	ctx.Definitions.RegisterOrdinaryTools(tools)
 
-	choices, err := r.DiscoverNormalOperations(runhost.Command{ActorID: "a"}, ctx)
+	choices, err := r.DiscoverOperations(Command{ActorID: "a"}, ctx, chestRoom)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, action := range []string{"job-78-entry-1", "job-81-entry-1", "job-78-entry-6", "tool"} {
-		if !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == action && !c.Gated }) {
+		if !slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == action && !c.Gated }) {
 			t.Fatalf("expected ungated %s in treasure choices: %+v", action, choices)
 		}
 	}
@@ -455,14 +447,14 @@ func TestNormalOperationTreasureCallbacksAndValuationSearch(t *testing.T) {
 		{"valuation by legacy box name", "", "", "＠トレハンのかん>普通の宝箱A", "job-78-entry-1", "box-1", nil},
 		{"reward search by item ID", "job-78-entry-1", "item-001", "", "job-78-entry-1", "item-001", nil},
 		{"reward search by legacy item name", "", "", "＠トレハンのかん>薬草", "job-78-entry-1", "item-001", nil},
-		{"valuation rejects opened box", "job-78-entry-1", "box-2", "", "", "", runhost.ErrConflict},
-		{"valuation rejects unknown ID", "job-78-entry-1", "foreign", "", "", "", runhost.ErrConflict},
+		{"valuation rejects opened box", "job-78-entry-1", "box-2", "", "", "", ErrConflict},
+		{"valuation rejects unknown ID", "job-78-entry-1", "foreign", "", "", "", ErrConflict},
 		{"content inspection by legacy box name", "", "", "＠とうぞくのはな>普通の宝箱A", "job-81-entry-1", "box-1", nil},
 		{"tool151 inspection", "tool", "", "", "tool-151", "", nil},
 		{"job78.6 by legacy box name", "", "", "＠トレハンのいじ>普通の宝箱A", "job-78-entry-6", "box-1", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Action: tc.action, TargetID: tc.target, Input: tc.input}, ctx)
+			got, err := r.parseOperation(Command{ActorID: "a", Action: tc.action, TargetID: tc.target, Input: tc.input}, ctx, chestRoom)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("got err=%v want %v", err, tc.wantErr)
 			}
@@ -477,17 +469,17 @@ func TestNormalStockLevelBindsTypedAndLegacySelection(t *testing.T) {
 	r, ctx := operationFixture()
 	r.Actor("c").HP = 0
 	ctx.Requester = &corecharacter.Character{Level: 1, Experience: 10}
-	for _, cmd := range []runhost.Command{
-		{ActorID: "a", Action: stockLevelAction},
+	for _, cmd := range []Command{
+		{ActorID: "a", Action: StockLevelAction},
 		{ActorID: "a", Input: "＠すとっく"},
 	} {
-		got, err := r.ParseNormalOperation(cmd, ctx)
-		if err != nil || got.Kind != RunOperationBattle || got.First.EntryID != stockLevelAction || got.First.Cost != 0 || got.Second != nil {
+		got, err := r.parseOperation(cmd, ctx, nil)
+		if err != nil || got.Kind != OperationBattle || got.First.EntryID != StockLevelAction || got.First.Cost != 0 || got.Second != nil {
 			t.Fatalf("stock selection: %+v, %v", got, err)
 		}
 	}
-	choices, err := r.DiscoverNormalOperations(runhost.Command{ActorID: "a"}, ctx)
-	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == stockLevelAction && !c.Gated }) {
+	choices, err := r.DiscoverOperations(Command{ActorID: "a"}, ctx, nil)
+	if err != nil || !slices.ContainsFunc(choices, func(c OperationChoice) bool { return c.Action == StockLevelAction && !c.Gated }) {
 		t.Fatalf("stock discovery: %+v, %v", choices, err)
 	}
 }
@@ -502,23 +494,6 @@ func TestNormalOperationSourceKeysCoverRegisteredTablePositions(t *testing.T) {
 				}
 			}
 		}
-	}
-}
-
-func TestNormalOperationsEXTreasureFloors(t *testing.T) {
-	r, ctx := operationFixture()
-	r.Stage, r.EXUnlocked, r.Enemies = Stage{ID: "stage-24", StageTraits: StageTraits{EX: &EXStage{Marker: markerBossEncounter, TreasureItems: []string{"item-104"}}}}, true, nil
-	r.Round = EXBossFloor
-	if got, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Action: "advance"}, ctx); err != nil || got.First.Action != "advance" {
-		t.Fatalf("12→13 advance: %+v %v", got, err)
-	}
-	r.Round, r.Boxes = EXTreasureFloor, []runhost.TreasureBox{{ID: "box-1", Fixed: true}}
-	if got, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Action: "chest", TargetID: "box-1"}, ctx); err != nil || got.First.TargetID != "box-1" {
-		t.Fatalf("floor-13 chest: %+v %v", got, err)
-	}
-	choices, err := r.DiscoverNormalOperations(runhost.Command{ActorID: "a"}, ctx)
-	if err != nil || !slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "chest" }) || slices.ContainsFunc(choices, func(c RunOperationChoice) bool { return c.Action == "advance" }) {
-		t.Fatalf("floor-13 discovery: %+v %v", choices, err)
 	}
 }
 
@@ -537,7 +512,7 @@ func TestParseNormalOperationKeepsDarknessContinuationText(t *testing.T) {
 		{"＠インヴァイトダーク　>＠あんこく nobody", "＠あんこく", "nobody"},
 		{"＠インヴァイトダーク Enemy", "", "c"},
 	} {
-		got, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Input: tc.input}, ctx)
+		got, err := r.parseOperation(Command{ActorID: "a", Input: tc.input}, ctx, nil)
 		if err != nil || got.First.EntryID != "job-22-entry-5" || got.First.TargetID != tc.command || fields.SubmittedCommand != tc.command || fields.SubmittedTarget != tc.target {
 			t.Fatalf("%q: %+v %+v %v", tc.input, got.First, fields, err)
 		}

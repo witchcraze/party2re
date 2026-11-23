@@ -16,11 +16,10 @@ import (
 )
 
 // installJobEncounter serves job78/79 room and order entries through the
-// production RunCombat with the zero RNG (room draws succeed).
+// host executor with the zero RNG (room draws succeed).
 func installJobEncounter(t *testing.T, f *normalFixture) {
 	t.Helper()
 	withAssetSession(t, f)
-	f.cfg.Combat, f.routed = nil, true
 	f.restart(t)
 }
 

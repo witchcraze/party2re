@@ -470,15 +470,17 @@ when changing run transitions; `make check` remains the required repository gate
 The user approved SQL authority and the explicit idle-cleanup timing in #1325
 on 2026-10-11. The [run host](../../internal/runhost/runhost.go) owns enrolled
 runs for every room library; Party Valkey owns waiting lobbies. Legacy runs
-every room mode on shared routines (treasure inspection and creation, enemy
-creation, exit and reset in `_battle.cgi`/`_npc_action.cgi`) and keys mode
-differences on `$m{lib}`. The host therefore owns the shared routines, and a room
-library supplies only its `vs_*.cgi` rules and `$m{lib}` branches through the
-room port; hosting other modes inside Adventure was rejected in #2649. Adventure
-stages are a room library
-([NormalRunService](../../internal/adventure/normal_run.go)) whose combat port
-rebuilds every callback port per operation. Production starts retain batch
-execution until the Gateway cutover (#1330). Neither this service nor Candidate
+every room mode on shared routines (the battle engine, treasure inspection and
+creation, enemy creation, exit and reset in `_battle.cgi`/`_npc_action.cgi`) and
+keys mode differences on `$m{lib}`. The host therefore owns the shared routines,
+including the explicit combat executor that rebuilds every callback port per
+operation. A room library supplies only its `vs_*.cgi` rules through the room
+port and its `$m{lib}` combat branches through the
+[combat seams](../../internal/runhost/combat_room.go); a mode without them gets
+legacy's non-vs_monster branch. Hosting other modes inside Adventure was rejected
+in #2649. Adventure stages are a room library
+([NormalRunService](../../internal/adventure/normal_run.go)). Production starts
+retain batch execution until the Gateway cutover (#1330). Neither this service nor Candidate
 D's loss limitations certify combat effects whose ports remain whole-action gates.
 Gameplay evidence remains in [Adventure](../design/adventure.md#resumable-normal-run-transitions)
 and shared effect state in [Battle](../design/battle.md#explicit-action-resumption-requirements).
@@ -533,9 +535,8 @@ earnings, chest delivery, history and the receipt together. Rejected commands
 change none of them or their clocks. A stored-tool selection message can still
 record tool history and a receipt without spending assets or renewing activity.
 
-The injected combat port supplies bounded explicit effects and activity/stock
-release facts; no batch resolver is its fallback. It must finish action/effect
-validation and any ordered external transitions within this contract. Finalized
+The executor admits the whole action before effects and finishes ordered
+external transitions within this transaction; no batch resolver is its fallback. Finalized
 recipient earnings bypass reward multipliers and level growth when released
 through the common settler; only an action tail grows a level.
 The same settler consumes the defeat owner's capture decisions, so box

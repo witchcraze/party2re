@@ -1,7 +1,8 @@
-package adventure
+package runhost
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -9,7 +10,6 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/economy"
-	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type mockJobAssetRunner struct {
@@ -81,23 +81,23 @@ func TestWithJobAssetsPreservesKnownAndUnknownHands(t *testing.T) {
 				Inventory: inv,
 			}
 			runner := &mockJobAssetRunner{tc: tc}
-			svc := &NormalRunService{cfg: NormalRunConfig{JobAssetRunner: runner}}
+			svc := &Service[testRun, *testRun]{cfg: Config[testRun]{JobAssetRunner: runner}}
 
-			r := &NormalRun{State: runhost.State{ID: runID, Roster: []string{charID}, Recipients: map[string]runhost.Recipient{charID: {PlayerID: playerID}}}}
-			cmd := runhost.Command{
+			r := &State{ID: runID, Roster: []string{charID}, Recipients: map[string]Recipient{charID: {PlayerID: playerID}}}
+			cmd := Command{
 				RunID:    runID,
 				PlayerID: playerID,
 				ActorID:  charID,
 			}
 
-			ctx := runhost.CommandContext(context.Background(), runID)
+			ctx := commandContext(context.Background(), runID)
 			var captured *corebattle.JobAssets
-			err = svc.WithJobAssets(ctx, r, cmd, func(assets *corebattle.JobAssets, _ *corecharacter.Character) error {
+			err = svc.withJobAssets(ctx, r, cmd, func(assets *corebattle.JobAssets, _ *corecharacter.Character) error {
 				captured = assets
 				return nil
 			})
 			if err != nil {
-				t.Fatalf("WithJobAssets error = %v", err)
+				t.Fatalf("withJobAssets error = %v", err)
 			}
 			if captured == nil {
 				t.Fatal("expected apply callback to be called")
@@ -117,4 +117,17 @@ func TestWithJobAssetsPreservesKnownAndUnknownHands(t *testing.T) {
 
 func ptr(s string) *string {
 	return &s
+}
+
+func TestWithJobAssetsRequiresTheRunCommand(t *testing.T) {
+	r := &State{ID: "run-1", Roster: []string{"actor-1"}, Recipients: map[string]Recipient{"actor-1": {PlayerID: "player-1"}}}
+	cmd := Command{RunID: "run-1", PlayerID: "player-1", ActorID: "actor-1"}
+	svc := &Service[testRun, *testRun]{cfg: Config[testRun]{JobAssetRunner: &mockJobAssetRunner{}}}
+	err := svc.withJobAssets(context.Background(), r, cmd, func(*corebattle.JobAssets, *corecharacter.Character) error {
+		t.Fatal("mutation outside Command")
+		return nil
+	})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatal(err)
+	}
 }

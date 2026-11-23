@@ -32,7 +32,7 @@ func travelFixture(t *testing.T) (*NormalRunService, *NormalRun, *ordinaryRNG, c
 	}
 	r := &NormalRun{State: runhost.State{ID: "travel", Admission: runhost.Admission{Speed: 3}, Round: 0, Roster: []string{"b", "a"}, LeaderID: "b", Battle: corebattle.LifetimeState{Actors: party}, LastActions: map[string]time.Time{}, Recipients: map[string]runhost.Recipient{"a": {Conditional: runhost.Earnings{Gold: 7}}}}, Stage: stage, Mode: "try"}
 	rng := &ordinaryRNG{}
-	s := &NormalRunService{cfg: NormalRunConfig{Stages: stages, Monsters: monsters, Combat: &ordinaryCombat{}, RNG: rng}}
+	s := &NormalRunService{cfg: NormalRunConfig{Stages: stages, Monsters: monsters, Characters: levelCharacters{}, RNG: rng}}
 	frame := corebattle.EquipmentResetContext{TargetContext: corebattle.TargetContext{ActorID: "a", PartyIDs: []string{"a", "b"}, Command: "tool"}}
 	return s, r, rng, frame
 }
@@ -41,24 +41,24 @@ func TestCombatTravelCoordinatesAndNoEffect(t *testing.T) {
 	for _, tc := range []struct {
 		tool, stage string
 		floor, want int
-		input       CombatTravelInput
+		input       combatTravelInput
 	}{
-		{"item-066", "stage-15", 0, 1, CombatTravelInput{}},
-		{"item-067", "stage-16", 11, 1, CombatTravelInput{}},
-		{"item-068", "stage-17", 3, 1, CombatTravelInput{}},
-		{"item-069", "stage-18", 3, 1, CombatTravelInput{}},
-		{"item-070", "stage-19", 3, 1, CombatTravelInput{}},
-		{"item-071", "stage-20", 3, 1, CombatTravelInput{}},
-		{"item-104", "stage-21", 3, 1, CombatTravelInput{}},
-		{"item-184", "stage-23", 3, 1, CombatTravelInput{DestinationStageID: "stage-23"}},
-		{"item-184", "stage-25", 3, 1, CombatTravelInput{DestinationStageID: "stage-25"}},
-		{"item-083", "stage-00", 0, 1, CombatTravelInput{}},
-		{"item-083", "stage-00", 8, 9, CombatTravelInput{}},
-		{"item-083", "stage-00", 9, 9, CombatTravelInput{}},
-		{"item-083", "stage-00", 10, 10, CombatTravelInput{}},
-		{"item-083", "stage-00", 11, 11, CombatTravelInput{}},
-		{"item-107", "stage-00", 0, 10, CombatTravelInput{}},
-		{"item-107", "stage-00", 10, 10, CombatTravelInput{}},
+		{"item-066", "stage-15", 0, 1, combatTravelInput{}},
+		{"item-067", "stage-16", 11, 1, combatTravelInput{}},
+		{"item-068", "stage-17", 3, 1, combatTravelInput{}},
+		{"item-069", "stage-18", 3, 1, combatTravelInput{}},
+		{"item-070", "stage-19", 3, 1, combatTravelInput{}},
+		{"item-071", "stage-20", 3, 1, combatTravelInput{}},
+		{"item-104", "stage-21", 3, 1, combatTravelInput{}},
+		{"item-184", "stage-23", 3, 1, combatTravelInput{DestinationStageID: "stage-23"}},
+		{"item-184", "stage-25", 3, 1, combatTravelInput{DestinationStageID: "stage-25"}},
+		{"item-083", "stage-00", 0, 1, combatTravelInput{}},
+		{"item-083", "stage-00", 8, 9, combatTravelInput{}},
+		{"item-083", "stage-00", 9, 9, combatTravelInput{}},
+		{"item-083", "stage-00", 10, 10, combatTravelInput{}},
+		{"item-083", "stage-00", 11, 11, combatTravelInput{}},
+		{"item-107", "stage-00", 0, 10, combatTravelInput{}},
+		{"item-107", "stage-00", 10, 10, combatTravelInput{}},
 	} {
 		t.Run(fmt.Sprintf("%s/%d/%s", tc.tool, tc.floor, tc.stage), func(t *testing.T) {
 			for _, enemies := range []bool{false, true} {
@@ -75,14 +75,14 @@ func TestCombatTravelCoordinatesAndNoEffect(t *testing.T) {
 					r.Battle.Actors = append(r.Battle.Actors, corebattle.LifetimeActor{Participant: corebattle.Participant{ID: "old", HP: 4}, NPC: true})
 				}
 				before, _ := json.Marshal(r)
-				if err := s.ValidateCombatTravel(r, "a", tc.tool, tc.input, nil); err != nil {
+				if err := s.validateCombatTravel(r, "a", tc.tool, tc.input, nil); err != nil {
 					t.Fatal(err)
 				}
 				after, _ := json.Marshal(r)
 				if string(before) != string(after) || rng.calls != 0 {
 					t.Fatal("preflight changed state or RNG")
 				}
-				result, err := s.ApplyCombatTravel(context.Background(), r, "a", tc.tool, tc.input, nil)
+				result, err := s.applyCombatTravel(context.Background(), r, "a", tc.tool, tc.input, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -109,27 +109,27 @@ func TestCombatTravelCoordinatesAndNoEffect(t *testing.T) {
 func TestCombatTravelRejectsWithoutMutation(t *testing.T) {
 	for _, tc := range []struct {
 		tool   string
-		input  CombatTravelInput
+		input  combatTravelInput
 		mutate func(*NormalRun)
 	}{
-		{"item-071", CombatTravelInput{}, func(*NormalRun) {}},
-		{"item-184", CombatTravelInput{}, func(*NormalRun) {}},
-		{"item-184", CombatTravelInput{DestinationStageID: "stage-24"}, func(*NormalRun) {}},
-		{"item-150", CombatTravelInput{Floor: 0}, func(*NormalRun) {}},
-		{"item-150", CombatTravelInput{Floor: 11}, func(*NormalRun) {}},
-		{"item-150", CombatTravelInput{Floor: 1}, func(r *NormalRun) { r.Actor("b").Gear.AccessoryID = "item-110" }},
-		{"item-150", CombatTravelInput{Floor: 1}, func(r *NormalRun) {
+		{"item-071", combatTravelInput{}, func(*NormalRun) {}},
+		{"item-184", combatTravelInput{}, func(*NormalRun) {}},
+		{"item-184", combatTravelInput{DestinationStageID: "stage-24"}, func(*NormalRun) {}},
+		{"item-150", combatTravelInput{Floor: 0}, func(*NormalRun) {}},
+		{"item-150", combatTravelInput{Floor: 11}, func(*NormalRun) {}},
+		{"item-150", combatTravelInput{Floor: 1}, func(r *NormalRun) { r.Actor("b").Gear.AccessoryID = "item-110" }},
+		{"item-150", combatTravelInput{Floor: 1}, func(r *NormalRun) {
 			r.Actor("b").RosterDetached, r.Actor("b").RosterIdentity = true, "dismissed-helper"
 		}},
-		{"item-066", CombatTravelInput{Floor: 1}, func(*NormalRun) {}},
-		{"item-107", CombatTravelInput{}, func(r *NormalRun) { r.Actor("a").HP = 0 }},
-		{"item-999", CombatTravelInput{}, func(*NormalRun) {}},
+		{"item-066", combatTravelInput{Floor: 1}, func(*NormalRun) {}},
+		{"item-107", combatTravelInput{}, func(r *NormalRun) { r.Actor("a").HP = 0 }},
+		{"item-999", combatTravelInput{}, func(*NormalRun) {}},
 	} {
 		t.Run(tc.tool, func(t *testing.T) {
 			s, r, rng, reset := travelFixture(t)
 			tc.mutate(r)
 			before, _ := json.Marshal(r)
-			if _, err := s.ApplyCombatTravel(context.Background(), r, "a", tc.tool, tc.input, &reset); err == nil {
+			if _, err := s.applyCombatTravel(context.Background(), r, "a", tc.tool, tc.input, &reset); err == nil {
 				t.Fatal("invalid travel accepted")
 			}
 			after, _ := json.Marshal(r)
@@ -140,9 +140,9 @@ func TestCombatTravelRejectsWithoutMutation(t *testing.T) {
 	}
 	for _, input := range []string{`{"floor":null}`, `{"floor":"1"}`, `{"floor":1.5}`, `{"floor":11}`, `{"floor":0}`, `null`, `{"floor":1,"unknown":1}`} {
 		s, r, _, reset := travelFixture(t)
-		value, err := ParseCombatTravelInput(input)
+		value, err := parseCombatTravelInput(input)
 		if err == nil {
-			err = s.ValidateCombatTravel(r, "a", "item-150", value, &reset)
+			err = s.validateCombatTravel(r, "a", "item-150", value, &reset)
 		}
 		if err == nil {
 			t.Fatal("invalid typed input accepted", input)
@@ -182,7 +182,7 @@ func TestCombatTravel150ResponseAndReload(t *testing.T) {
 				}
 			}
 			fields := r.Battle.Fields
-			transition, err := s.ApplyCombatTravel(context.Background(), r, "a", "item-150", CombatTravelInput{Floor: 1}, &reset)
+			transition, err := s.applyCombatTravel(context.Background(), r, "a", "item-150", combatTravelInput{Floor: 1}, &reset)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -190,7 +190,7 @@ func TestCombatTravel150ResponseAndReload(t *testing.T) {
 				t.Fatal("reset/generation contract failed", transition)
 			}
 			npc := ""
-			npc = transition.BeginNPCResponse(r, time.Unix(100, 0))
+			npc = transition.beginNPCResponse(r, time.Unix(100, 0))
 			responded := state == "ready" || state == "collision"
 			if (npc != "") != responded {
 				t.Fatal("wrong response", npc, state)

@@ -9,41 +9,19 @@ import (
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-// PrepareJobEncounters rebuilds operation ports from a locked run. The consumer
-// registers the returned context, admits the whole action before cost/draws,
-// then commits its changed enemy order and the transition with the normal tail.
+// prepareJobEncounters binds job78's room bodies (bypass jump, treasure retry)
+// to a locked run. The host admits the whole action before cost/draws, then
+// commits the changed enemy order and the transition with the normal tail.
 // Transaction: enclosing Command; no independent commit or settlement.
-func (s *NormalRunService) PrepareJobEncounters(ctx context.Context, r *NormalRun, actor string, reset *corebattle.EquipmentResetContext) (*corebattle.JobEncounterContext, *CombatTravelTransition, error) {
+func (s *NormalRunService) prepareJobEncounters(ctx context.Context, r *NormalRun, actor string, reset *corebattle.EquipmentResetContext) (runhost.JobRoom, *combatTravelTransition, error) {
 	if r == nil || r.Actor(actor) == nil || !slices.Contains(r.Roster, actor) {
-		return nil, nil, ErrNotParticipant
+		return runhost.JobRoom{}, nil, ErrNotParticipant
 	}
-	frame := corebattle.TargetContext{ActorID: actor, EnemyIDs: slices.Clone(r.Enemies)}
-	for _, a := range r.Battle.Actors {
-		if a.TeamID == r.Actor(actor).TeamID {
-			frame.PartyIDs = append(frame.PartyIDs, a.ID)
-		} else if !slices.Contains(frame.EnemyIDs, a.ID) {
-			frame.MemberOnlyIDs = append(frame.MemberOnlyIDs, a.ID)
-		}
-	}
-	if reset != nil {
-		frame = reset.TargetContext
-	}
-	c := &corebattle.JobEncounterContext{DamageContext: corebattle.DamageContext{EffectContext: corebattle.EffectContext{TargetContext: frame}}}
-	if reset != nil {
-		c.Cursor = reset.Cursor
-	}
-	transition := &CombatTravelTransition{ResponseSuppressed: isTreasureFloor(r.Round)}
-	_, modeErr := ValidateCrawlMode(r.Mode)
-	room := &corebattle.JobRoomContext{ActorID: actor, NormalStage: modeErr == nil, Floor: r.Round}
-	room.Cursor = c.Cursor
-	for _, box := range r.Boxes {
-		if box.IsUnopened() {
-			room.TreasureIDs = append(room.TreasureIDs, box.ID)
-		}
-	}
+	transition := &combatTravelTransition{ResponseSuppressed: isTreasureFloor(r.Round)}
+	room := runhost.JobRoom{}
 	room.Validate = func(id string) error {
 		if id == "job-78-entry-2" {
-			return s.ValidateCombatTravel(r, actor, "item-150", CombatTravelInput{Floor: r.Round + 1}, reset)
+			return s.validateCombatTravel(r, actor, "item-150", combatTravelInput{Floor: r.Round + 1}, reset)
 		}
 		if r.Round == EXTreasureFloor && len(r.Stage.exTreasureItems()) > 0 {
 			return nil
@@ -56,44 +34,35 @@ func (s *NormalRunService) PrepareJobEncounters(ctx context.Context, r *NormalRu
 		}
 		return nil
 	}
-	room.Apply = func(id string) (corebattle.TargetContext, error) {
-		if !runhost.InCommand(ctx, r.ID) {
-			return frame, runhost.ErrForbidden
-		}
+	room.Apply = func(id string) error {
 		if err := room.Validate(id); err != nil {
-			return frame, err
+			return err
 		}
 		if err := ctx.Err(); err != nil {
-			return frame, err
+			return err
 		}
 		blessing := ""
 		if isTreasureFloor(r.Round) && s.cfg.Blessings != nil {
 			var err error
 			blessing, err = s.cfg.Blessings.GetActiveBlessing(ctx, actor)
 			if err != nil {
-				return frame, err
+				return err
 			}
 		}
 		floor := r.Round
 		if id == "job-78-entry-2" {
 			if err := battle.ResetAll(&r.Battle, reset, s.cfg.RNG); err != nil {
-				return frame, err
+				return err
 			}
 			floor++
 		}
 		t, err := s.replaceCombatEncounter(ctx, r, actor, floor, blessing)
 		if err != nil {
-			return frame, err
+			return err
 		}
 		t.UnsealDemonKing = r.Stage.UnsealsOnTreasure && floor == TreasureRoomFloor
 		*transition = t
-		room.Floor = r.Round
-		frame.EnemyIDs, frame.MemberOnlyIDs = slices.Clone(r.Enemies), nil
-		if reset != nil {
-			room.Cursor = reset.Cursor
-		}
-		return frame, nil
+		return nil
 	}
-	c.Room = room
-	return c, transition, nil
+	return room, transition, nil
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// combatParty starts a normal party run served by the production RunCombat
+// combatParty starts a normal party run served by the host executor
 // with its asset session, so party operations take every member's inventory
 // lock and the requester's economy/depot session as cmd/party2 does. Enemies
 // wait on floor 1 for an hour so race outcomes depend only on the commands.

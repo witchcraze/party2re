@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -48,122 +47,6 @@ func (p *normalPenalty) ProjectRunPenalty(_ context.Context, _ string, until tim
 	}
 	p.deadline.Store(until.UnixNano())
 	return nil
-}
-
-// This test port supplies bounded effects, so these tests verify lifecycle
-// persistence rather than skill parity (NewRunCombat has its own tests).
-type normalCombat struct{ calls atomic.Int64 }
-
-func (*normalCombat) PrepareAdvance(context.Context, *adventure.NormalRun, string) error { return nil }
-func (*normalCombat) PrepareBossField(context.Context, *adventure.NormalRun, string) error {
-	return nil
-}
-func (e *normalCombat) ExecuteRunAction(_ context.Context, r *adventure.NormalRun, cmd runhost.Command) (adventure.RunActionEffects, error) {
-	e.calls.Add(1)
-	fx := adventure.RunActionEffects{RoomActivity: true, ActorActivity: true, ReleaseStock: true}
-	actor := slices.IndexFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == cmd.ActorID })
-	if actor < 0 {
-		return fx, adventure.ErrNotParticipant
-	}
-	switch cmd.Action {
-	case "earn", "kill":
-		fx.Earnings = map[string]runhost.Earnings{}
-		for _, id := range r.Roster {
-			fx.Earnings[id] = runhost.Earnings{EXP: 3, Gold: 5, Crystals: 1}
-		}
-		if cmd.Action == "kill" {
-			for i := range r.Battle.Actors {
-				if slices.Contains(r.Enemies, r.Battle.Actors[i].ID) {
-					r.Battle.Actors[i].HP = 0
-				}
-			}
-			fx.EncounterDefeated = true
-		}
-	case "fall":
-		r.Battle.Actors[actor].HP = 0
-	case "travel10":
-		r.Round = 10
-		for i := range r.Battle.Actors {
-			if slices.Contains(r.Enemies, r.Battle.Actors[i].ID) {
-				r.Battle.Actors[i].HP = 0
-			}
-		}
-	case "buff":
-		r.Battle.Actors[actor].Extended = corebattle.ExtendedIncense
-		r.Battle.Actors[actor].ExtendedTurns = 4
-		r.Battle.Actors[actor].MP = 7
-		r.Battle.Fields.AntiTurns = 2
-	case "stage23-helper": // a cleared stage23 floor 10 whose helper fell this operation
-		stages, err := adventure.InitialStageCatalog()
-		if err != nil {
-			return fx, err
-		}
-		if r.Stage, err = stages.FindByID("stage-23"); err != nil {
-			return fx, err
-		}
-		r.Round = 10
-		for i := range r.Battle.Actors {
-			if slices.Contains(r.Enemies, r.Battle.Actors[i].ID) {
-				r.Battle.Actors[i].HP = 0
-			}
-		}
-		helper := r.Battle.Actors[actor].Clone()
-		helper.ID, helper.NPC, helper.RosterIdentity, helper.HP = "helper", true, "calling-64", 0
-		r.Battle.Actors = append(r.Battle.Actors, helper)
-	case "spent": // the ordinary allowance used earlier in the room
-		p := r.Recipients[cmd.ActorID]
-		p.Inspected = 1
-		r.Recipients[cmd.ActorID] = p
-	case "merchant":
-		r.Battle.Actors[actor].Jobs.JobID = "job-07"
-	case "ex11": // a cleared EX treasure room with every chest opened
-		stages, err := adventure.InitialStageCatalog()
-		if err != nil {
-			return fx, err
-		}
-		stage, err := stages.FindByID(cmd.TargetID)
-		if err != nil {
-			return fx, err
-		}
-		r.Stage, r.Round, r.EXUnlocked, r.Boxes = stage.OrdinarySeason(), adventure.TreasureRoomFloor, true, nil
-		for i := range r.Battle.Actors {
-			if slices.Contains(r.Enemies, r.Battle.Actors[i].ID) {
-				r.Battle.Actors[i].HP = 0
-			}
-		}
-		r.Battle.Actors[actor].HP, r.Battle.Actors[actor].MP = 1, 0
-	case "comment", "unknown_text", "ignored_skill":
-		fx.ActorActivity = false
-		fx.ReleaseStock = false
-	case "whisper":
-		fx.ActorActivity = false
-		fx.ReleaseStock = false
-	case "screenshot", "invite":
-		fx.ActorActivity, fx.RoomActivity = false, false
-		fx.ReleaseStock = false
-	case "no_effect":
-	case "reject":
-		return fx, runhost.ErrCooldown
-	default:
-		return fx, runhost.ErrUnavailable
-	}
-	return fx, nil
-}
-
-// setupActions stay on the scripted fake so tests can stage rooms; every other
-// command reaches the production RunCombat.
-var setupActions = []string{"earn", "kill", "fall", "travel10", "buff", "stage23-helper", "spent", "merchant", "ex11"}
-
-type routedCombat struct {
-	setup *normalCombat
-	adventure.RunCombat
-}
-
-func (c routedCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd runhost.Command) (adventure.RunActionEffects, error) {
-	if slices.Contains(setupActions, cmd.Action) {
-		return c.setup.ExecuteRunAction(ctx, r, cmd)
-	}
-	return c.RunCombat.ExecuteRunAction(ctx, r, cmd)
 }
 
 type normalHistory struct {
@@ -226,16 +109,10 @@ type normalFixture struct {
 	store   *normalStore
 	clock   *normalClock
 	penalty *normalPenalty
-	combat  *normalCombat
 	rng     *normalRNG
 	cfg     adventure.NormalRunConfig
 	svc     *adventure.NormalRunService
 	actors  []corecharacter.Character
-	// explicit serves Command with the production RunCombat across restarts;
-	// routed keeps setupActions on the scripted fake.
-	explicit, routed bool
-	// decorate wraps the production RunCombat (counters, injected failures).
-	decorate func(adventure.RunCombat) adventure.RunCombat
 }
 
 func newNormalFixture(t *testing.T, count int) *normalFixture {
@@ -274,7 +151,7 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &normalFixture{db: db, customs: customs, chars: chars, invs: invs, equips: equipment, jobs: jobs, depots: depots, history: &normalHistory{Repository: history}, store: &normalStore{Store: runRepo}, clock: &normalClock{}, penalty: &normalPenalty{}, combat: &normalCombat{}, rng: &normalRNG{}}
+	f := &normalFixture{db: db, customs: customs, chars: chars, invs: invs, equips: equipment, jobs: jobs, depots: depots, history: &normalHistory{Repository: history}, store: &normalStore{Store: runRepo}, clock: &normalClock{}, penalty: &normalPenalty{}, rng: &normalRNG{}}
 	f.clock.nanos.Store(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for range count {
 		c, err := database.CreateTestCharacterWithFunds(context.Background(), db, id.New()[:8], 100)
@@ -287,7 +164,7 @@ func newNormalFixture(t *testing.T, count int) *normalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.cfg = adventure.NormalRunConfig{Jobs: jobCatalog, Store: f.store, Characters: chars, Inventories: invs, Builder: adapter, Settler: adapter, History: f.history, Stages: stages, Monsters: monsters, Combat: f.combat, Penalty: f.penalty, Clock: f.clock, RNG: f.rng, ExitEffects: func(context.Context, string) error { return nil }}
+	f.cfg = adventure.NormalRunConfig{Jobs: jobCatalog, Store: f.store, Characters: chars, Inventories: invs, Builder: adapter, Settler: adapter, History: f.history, Stages: stages, Monsters: monsters, Penalty: f.penalty, Clock: f.clock, RNG: f.rng, ExitEffects: func(context.Context, string) error { return nil }}
 	f.restart(t)
 	return f
 }
@@ -299,19 +176,6 @@ func (f *normalFixture) restart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var combat adventure.RunCombat
-	switch {
-	case f.routed:
-		combat = routedCombat{f.combat, adventure.NewRunCombat(f.svc)}
-	case f.explicit:
-		combat = adventure.NewRunCombat(f.svc)
-	default:
-		return
-	}
-	if f.decorate != nil {
-		combat = f.decorate(combat)
-	}
-	f.svc.SetCombat(combat)
 }
 
 func (f *normalFixture) enter(t *testing.T, mode string) runhost.Receipt {
@@ -343,7 +207,7 @@ func TestNormalRunAdmissionReceiptRestart(t *testing.T) {
 	f := newNormalFixture(t, 1)
 	entry := f.enter(t, "normal")
 	r, err := f.store.FindRun(context.Background(), entry.Command.RunID)
-	if err != nil || r.Round != 0 || len(r.Enemies) != 0 || f.combat.calls.Load() != 0 {
+	if err != nil || r.Round != 0 || len(r.Enemies) != 0 {
 		t.Fatal(r, err)
 	}
 	f.restart(t)
@@ -370,7 +234,8 @@ func TestNormalRunAdmissionReceiptRestart(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(before, *r) {
 		t.Fatal("GET mutated state", err)
 	}
-	cmd := runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: r.ID, ID: "lost-response", Version: r.Version, Action: "buff"}
+	cmd := f.earnCommand(t, r.ID, 0)
+	cmd.ID = "lost-response"
 	f.store.loseCommit.Store(true)
 	result, err := f.svc.Command(context.Background(), cmd)
 	if err != nil {
@@ -378,23 +243,23 @@ func TestNormalRunAdmissionReceiptRestart(t *testing.T) {
 	}
 	f.restart(t)
 	again, err := f.svc.Command(context.Background(), cmd)
-	if err != nil || !reflect.DeepEqual(result, again) || f.combat.calls.Load() != 1 {
+	if err != nil || !reflect.DeepEqual(result, again) {
 		t.Fatal(again, err)
 	}
 	r, err = f.store.FindRun(context.Background(), r.ID)
-	if err != nil || r.Battle.Actors[0].MP != 7 || r.Battle.Actors[0].ExtendedTurns != 4 || r.Battle.Fields.AntiTurns != 2 {
-		t.Fatal(r, err)
+	if err != nil || r.Version != result.Version || len(r.Enemies) != 0 {
+		t.Fatal("replay re-executed the operation", r, err)
 	}
-	cmd.Action = "earn"
+	if paid, err := f.chars.FindByID(context.Background(), c.ID); err != nil || paid.Money != c.Money+5 {
+		t.Fatal("replay paid twice", paid.Money, err)
+	}
+	cmd.Action = "defend"
 	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, runhost.ErrConflict) {
 		t.Fatal(err)
 	}
 	for _, key := range []string{"Key", "key", "key "} {
-		r, err := f.store.FindRun(context.Background(), cmd.RunID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cmd.ID, cmd.Version, cmd.Action = key, r.Version, "comment"
+		cmd := f.earnCommand(t, cmd.RunID, 0)
+		cmd.ID = key
 		if _, err := f.svc.Command(context.Background(), cmd); err != nil {
 			t.Fatal("distinct command identity collided", err)
 		}
@@ -406,8 +271,8 @@ func TestNormalRunRollbackDefeatExitAndChronicle(t *testing.T) {
 	entry := f.enter(t, "normal")
 	runID := entry.Command.RunID
 	c := f.actors[0]
-	f.send(t, runID, 0, "earn", "")
-	f.send(t, runID, 0, "fall", "")
+	f.earn(t, runID, 0)
+	f.stage(t, runID, fall(c.ID))
 	before, err := f.chars.FindByID(context.Background(), c.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -465,17 +330,17 @@ func TestNormalRunTryExitAndTravelTreasure(t *testing.T) {
 			f := newNormalFixture(t, 1)
 			entry := f.enter(t, "try")
 			runID := entry.Command.RunID
-			f.send(t, runID, 0, "earn", "")
-			f.send(t, runID, 0, "earn", "")
+			f.earn(t, runID, 0)
+			f.earn(t, runID, 0)
 			if success {
-				f.send(t, runID, 0, "travel10", "")
+				f.stage(t, runID, travel10)
 				f.send(t, runID, 0, "advance", "")
 				r, err := f.store.FindRun(context.Background(), runID)
 				if err != nil || r.Mode != "normal" || r.StageCleared || r.Recipients[f.actors[0].ID].Pending.Gold != 15 {
 					t.Fatal(r, err)
 				}
 				f.restart(t)
-				f.send(t, runID, 0, "fall", "")
+				f.stage(t, runID, fall(f.actors[0].ID))
 			}
 			f.send(t, runID, 0, "exit", "")
 			c, err := f.chars.FindByID(context.Background(), f.actors[0].ID)
@@ -494,8 +359,8 @@ func TestNormalRunChestReceiptAndSQLRollback(t *testing.T) {
 	f := newNormalFixture(t, 1)
 	entry := f.enter(t, "normal")
 	runID := entry.Command.RunID
-	f.send(t, runID, 0, "merchant", "")
-	f.send(t, runID, 0, "travel10", "")
+	f.stage(t, runID, withActor(f.actors[0].ID, func(a *corebattle.LifetimeActor) { a.Jobs.JobID = "job-07" }))
+	f.stage(t, runID, travel10)
 	f.send(t, runID, 0, "advance", "")
 	r, err := f.store.FindRun(context.Background(), runID)
 	if err != nil || len(r.Boxes) < 1 {

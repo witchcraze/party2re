@@ -13,14 +13,14 @@ import (
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-// CombatTravelInput is a destination, never a participant name or target ID.
-type CombatTravelInput struct {
+// combatTravelInput is a destination, never a participant name or target ID.
+type combatTravelInput struct {
 	Floor              int    `json:"floor,omitempty"`
 	DestinationStageID string `json:"destination_stage_id,omitempty"`
 }
 
-func ParseCombatTravelInput(input string) (CombatTravelInput, error) {
-	var value CombatTravelInput
+func parseCombatTravelInput(input string) (combatTravelInput, error) {
+	var value combatTravelInput
 	if !strings.HasPrefix(strings.TrimSpace(input), "{") {
 		return value, runhost.ErrConflict
 	}
@@ -30,15 +30,15 @@ func ParseCombatTravelInput(input string) (CombatTravelInput, error) {
 		return value, err
 	}
 	if err := d.Decode(new(any)); err != io.EOF {
-		return CombatTravelInput{}, runhost.ErrConflict
+		return combatTravelInput{}, runhost.ErrConflict
 	}
 	return value, nil
 }
 
-// CombatTravelTransition is operation-local. The command consumer binds and
+// combatTravelTransition is operation-local. The command consumer binds and
 // consumes its owned instance only when Consume is true, then runs the ordinary
-// player tail and BeginNPCResponse. Persist only the final run, never this port.
-type CombatTravelTransition struct {
+// player tail and beginNPCResponse. Persist only the final run, never this port.
+type combatTravelTransition struct {
 	Consume            bool
 	ResponseSuppressed bool
 	Reload             bool
@@ -53,14 +53,17 @@ type CombatTravelTransition struct {
 	replaced        bool
 }
 
-// BeginNPCResponse restores the old enemy list only when an old living member
+// beginNPCResponse restores the old enemy list only when an old living member
 // can respond. The consumer executes that one NPC and calls RecordNPCResponse.
 // Generated payloads win identity collisions, including their fresh timestamps.
-func (t CombatTravelTransition) BeginNPCResponse(r *NormalRun, now time.Time) string {
+func (t combatTravelTransition) beginNPCResponse(r *NormalRun, now time.Time) string {
 	if t.ResponseSuppressed {
 		return ""
 	}
 	if !t.replaced {
+		if isTreasureFloor(r.Round) {
+			return ""
+		}
 		return r.NextNPC(now)
 	}
 	actors := make([]corebattle.LifetimeActor, len(t.ResponseEnemies))
@@ -90,9 +93,9 @@ func (t CombatTravelTransition) BeginNPCResponse(r *NormalRun, now time.Time) st
 	return npc
 }
 
-// ValidateCombatTravel is pure admission for these finite tool callbacks.
-// Incapacitation, whole-action tails and instance ownership stay with RunCombat.
-func (s *NormalRunService) ValidateCombatTravel(r *NormalRun, actor, tool string, input CombatTravelInput, reset *corebattle.EquipmentResetContext) error {
+// validateCombatTravel is pure admission for these finite tool callbacks.
+// Incapacitation, whole-action tails and instance ownership stay with the host executor.
+func (s *NormalRunService) validateCombatTravel(r *NormalRun, actor, tool string, input combatTravelInput, reset *corebattle.EquipmentResetContext) error {
 	if r == nil || !slices.Contains(r.Roster, actor) || r.Actor(actor) == nil {
 		return ErrNotParticipant
 	}
@@ -126,9 +129,6 @@ func (s *NormalRunService) ValidateCombatTravel(r *NormalRun, actor, tool string
 		if !slices.Equal(reset.EnemyIDs, r.Enemies) {
 			return corebattle.ErrUnsupportedEffect
 		}
-		if r.Stage.ID == "stage-24" && input.Floor == BossFloor && s.cfg.Combat == nil {
-			return corebattle.ErrUnsupportedEffect
-		}
 		for _, a := range r.Battle.Actors {
 			// shortcut: a member dismissed earlier in the operation stays a gate; upgrade with an original-side projection.
 			if a.RosterDetached {
@@ -157,7 +157,7 @@ func (s *NormalRunService) ValidateCombatTravel(r *NormalRun, actor, tool string
 	return nil
 }
 
-func travelStage(tool string, input CombatTravelInput) string {
+func travelStage(tool string, input combatTravelInput) string {
 	switch tool {
 	case "item-066":
 		return "stage-15"
@@ -179,21 +179,21 @@ func travelStage(tool string, input CombatTravelInput) string {
 	return ""
 }
 
-// ApplyCombatTravel mutates the already locked run inside Command. It neither
+// applyCombatTravel mutates the already locked run inside Command. It neither
 // settles assets nor runs action tails; external failure rolls back that SQL
 // transaction. Selection/support errors are rejected before mutation or draws.
-func (s *NormalRunService) ApplyCombatTravel(ctx context.Context, r *NormalRun, actor, tool string, input CombatTravelInput, reset *corebattle.EquipmentResetContext) (CombatTravelTransition, error) {
-	if err := s.ValidateCombatTravel(r, actor, tool, input, reset); err != nil {
-		return CombatTravelTransition{}, err
+func (s *NormalRunService) applyCombatTravel(ctx context.Context, r *NormalRun, actor, tool string, input combatTravelInput, reset *corebattle.EquipmentResetContext) (combatTravelTransition, error) {
+	if err := s.validateCombatTravel(r, actor, tool, input, reset); err != nil {
+		return combatTravelTransition{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return CombatTravelTransition{}, err
+		return combatTravelTransition{}, err
 	}
-	t := CombatTravelTransition{Consume: true, ResponseSuppressed: isTreasureFloor(r.Round)}
+	t := combatTravelTransition{Consume: true, ResponseSuppressed: isTreasureFloor(r.Round)}
 	if stage := travelStage(tool, input); stage != "" {
 		destination, err := s.cfg.Stages.FindByID(stage)
 		if err != nil {
-			return CombatTravelTransition{}, err
+			return combatTravelTransition{}, err
 		}
 		r.Stage = destination
 		r.Round = 1
@@ -209,12 +209,12 @@ func (s *NormalRunService) ApplyCombatTravel(ctx context.Context, r *NormalRun, 
 	case "item-150":
 		frame := *reset
 		if err := battle.ResetAll(&r.Battle, &frame, s.cfg.RNG); err != nil {
-			return CombatTravelTransition{}, err
+			return combatTravelTransition{}, err
 		}
 		reset.Cursor = frame.Cursor
 		replacement, err := s.replaceCombatEncounter(ctx, r, actor, input.Floor, "")
 		if err != nil {
-			return CombatTravelTransition{}, err
+			return combatTravelTransition{}, err
 		}
 		replacement.Consume = true
 		return replacement, nil
@@ -248,8 +248,8 @@ func (s *NormalRunService) validateTravelEncounter(stage Stage) error {
 	return nil
 }
 
-func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *NormalRun, actor string, floor int, blessing string) (CombatTravelTransition, error) {
-	t := CombatTravelTransition{ResponseSuppressed: isTreasureFloor(r.Round), Reload: true}
+func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *NormalRun, actor string, floor int, blessing string) (combatTravelTransition, error) {
+	t := combatTravelTransition{ResponseSuppressed: isTreasureFloor(r.Round), Reload: true}
 	t.replaced, t.oldFloor, t.oldStage = true, r.EncounterFloor, r.EncounterStageID
 	t.oldTimes = make(map[string]time.Time, len(r.Enemies))
 	for _, id := range r.Enemies {
@@ -268,7 +268,7 @@ func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *Normal
 		err = s.createEncounter(ctx, r, actor)
 	}
 	if err != nil {
-		return CombatTravelTransition{}, err
+		return combatTravelTransition{}, err
 	}
 	for i, id := range r.Enemies {
 		a := r.Actor(id)
@@ -282,13 +282,13 @@ func (s *NormalRunService) replaceCombatEncounter(ctx context.Context, r *Normal
 	return t, nil
 }
 
-// PrepareStoredToolTravel adapts these tools for job50's stored invocation. The
+// prepareStoredToolTravel adapts these tools for job50's stored invocation. The
 // consumer registers the port on its JobAssetContext and finishes the returned
 // transition's tail; the stored instance is consumed only through
-// WithJobAssets's outcome, so the transition never consumes a held tool.
+// the host's asset-session outcome, so the transition never consumes a held tool.
 // Transaction: enclosing Command; no independent commit.
-func (s *NormalRunService) PrepareStoredToolTravel(ctx context.Context, r *NormalRun, actor string, reset *corebattle.EquipmentResetContext) (*corebattle.StoredToolTravel, *CombatTravelTransition) {
-	transition := &CombatTravelTransition{}
+func (s *NormalRunService) prepareStoredToolTravel(ctx context.Context, r *NormalRun, actor string, reset *corebattle.EquipmentResetContext) (*corebattle.StoredToolTravel, *combatTravelTransition) {
+	transition := &combatTravelTransition{}
 	input := travelInput
 	return &corebattle.StoredToolTravel{
 		Validate: func(tool, target string) error {
@@ -296,17 +296,14 @@ func (s *NormalRunService) PrepareStoredToolTravel(ctx context.Context, r *Norma
 			if err != nil {
 				return err
 			}
-			return s.ValidateCombatTravel(r, actor, tool, value, reset)
+			return s.validateCombatTravel(r, actor, tool, value, reset)
 		},
 		Apply: func(tool, target string, frame corebattle.TargetContext) (corebattle.TargetContext, error) {
-			if !runhost.InCommand(ctx, r.ID) {
-				return frame, runhost.ErrForbidden
-			}
 			value, err := input(tool, target)
 			if err != nil {
 				return frame, err
 			}
-			t, err := s.ApplyCombatTravel(ctx, r, actor, tool, value, reset)
+			t, err := s.applyCombatTravel(ctx, r, actor, tool, value, reset)
 			if err != nil {
 				return frame, err
 			}
@@ -321,12 +318,12 @@ func (s *NormalRunService) PrepareStoredToolTravel(ctx context.Context, r *Norma
 // travelTools are the finite travel callbacks, held or stored.
 var travelTools = []string{"item-066", "item-067", "item-068", "item-069", "item-070", "item-071", "item-083", "item-104", "item-107", "item-150", "item-184"}
 
-func travelInput(tool, target string) (CombatTravelInput, error) {
+func travelInput(tool, target string) (combatTravelInput, error) {
 	if !slices.Contains(travelTools, tool) {
-		return CombatTravelInput{}, corebattle.ErrUnsupportedEffect
+		return combatTravelInput{}, corebattle.ErrUnsupportedEffect
 	}
 	if !strings.HasPrefix(target, "{") {
-		return CombatTravelInput{}, nil // Coordinate tools ignore the remaining text.
+		return combatTravelInput{}, nil // Coordinate tools ignore the remaining text.
 	}
-	return ParseCombatTravelInput(target)
+	return parseCombatTravelInput(target)
 }

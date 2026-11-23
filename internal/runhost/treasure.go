@@ -178,10 +178,10 @@ func (r *State) ProjectCombat(actorID string) (corebattle.LifetimeState, corebat
 	if r == nil || r.Actor(actorID) == nil {
 		return corebattle.LifetimeState{}, corebattle.TargetContext{}, nil, ErrNotParticipant
 	}
-	state := CloneBattle(r.Battle)
+	state := cloneBattle(r.Battle)
 	frame := corebattle.TargetContext{ActorID: actorID}
 	for _, id := range r.Enemies {
-		if enemy := FindActor(state.Actors, id); enemy != nil && enemy.HP > 0 {
+		if enemy := findActor(state.Actors, id); enemy != nil && enemy.HP > 0 {
 			frame.EnemyIDs = append(frame.EnemyIDs, id)
 		}
 	}
@@ -190,7 +190,7 @@ func (r *State) ProjectCombat(actorID string) (corebattle.LifetimeState, corebat
 		if !box.IsUnopened() {
 			continue
 		}
-		if box.ID == "" || FindActor(state.Actors, box.ID) != nil {
+		if box.ID == "" || findActor(state.Actors, box.ID) != nil {
 			return corebattle.LifetimeState{}, corebattle.TargetContext{}, nil, ErrConflict
 		}
 		state.Actors = append(state.Actors, box.combatActor())
@@ -248,7 +248,7 @@ func (r *State) ReconcileCombat(state corebattle.LifetimeState, frame corebattle
 	for i, box := range r.Boxes {
 		boxIndex[box.ID] = i
 	}
-	next := CloneBattle(state)
+	next := cloneBattle(state)
 	actors := make([]corebattle.LifetimeActor, 0, len(next.Actors))
 	for _, a := range next.Actors {
 		if _, isBox := boxIndex[a.ID]; isBox {
@@ -271,7 +271,7 @@ func (r *State) ReconcileCombat(state corebattle.LifetimeState, frame corebattle
 	r.Enemies = enemies
 
 	for i := range r.Boxes {
-		a := FindActor(state.Actors, r.Boxes[i].ID)
+		a := findActor(state.Actors, r.Boxes[i].ID)
 		if a == nil {
 			continue
 		}
@@ -312,8 +312,8 @@ func (r *State) ReconcileCombat(state corebattle.LifetimeState, frame corebattle
 	return nil
 }
 
-// CloneBattle deep-copies the actors and history maps a battle step mutates.
-func CloneBattle(s corebattle.LifetimeState) corebattle.LifetimeState {
+// cloneBattle deep-copies the actors and history maps a battle step mutates.
+func cloneBattle(s corebattle.LifetimeState) corebattle.LifetimeState {
 	s.Actors = slices.Clone(s.Actors)
 	for i := range s.Actors {
 		s.Actors[i] = s.Actors[i].Clone()

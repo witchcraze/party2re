@@ -4,10 +4,8 @@ import (
 	"context"
 	"slices"
 	"strings"
-	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/runhost"
@@ -118,42 +116,3 @@ func (room stageRoom) Record(ctx context.Context, r *NormalRun, actor, dispositi
 }
 
 func (stageRoom) Conditional(r *NormalRun) bool { return r.Mode == CrawlModeTry }
-
-// Execute runs the stage executor and records the stage facts it reports:
-// enemies a callback moved out of the frame, the EX marker and floor clear credit.
-func (room stageRoom) Execute(ctx context.Context, r *NormalRun, cmd runhost.Command) (runhost.Effects, error) {
-	if room.s.cfg.Combat == nil {
-		return runhost.Effects{}, runhost.ErrUnavailable
-	}
-	fx, err := room.s.cfg.Combat.ExecuteRunAction(ctx, r, cmd)
-	if err != nil {
-		return runhost.Effects{}, err
-	}
-	r.EXUnlocked = r.EXUnlocked || fx.EXUnlocked
-	for _, id := range fx.MemberOnlyIDs {
-		if r.HasBox(id) {
-			continue
-		}
-		a, actor := r.Actor(id), r.Actor(cmd.ActorID)
-		if a == nil || actor == nil || a.TeamID == actor.TeamID || slices.Contains(r.Enemies, id) {
-			return runhost.Effects{}, runhost.ErrConflict
-		}
-		if a.HP > 0 {
-			r.Enemies = append(r.Enemies, id)
-		}
-	}
-	if fx.EncounterDefeated {
-		if r.LivingEnemies() || r.EncounterFloor < 1 || r.EncounterFloor > EXBossFloor || isTreasureFloor(r.EncounterFloor) {
-			return runhost.Effects{}, runhost.ErrConflict
-		}
-		r.FloorsCleared = max(r.FloorsCleared, r.EncounterFloor)
-		if r.EncounterFloor == BossFloor {
-			r.StageCleared = true
-		}
-	}
-	return runhost.Effects{Earnings: fx.Earnings, Consumed: fx.Consumed, RoomActivity: fx.RoomActivity, ActorActivity: fx.ActorActivity, ReleaseStock: fx.ReleaseStock, UnsealDemonKing: fx.UnsealDemonKing, Defeats: fx.Defeats}, nil
-}
-
-func (room stageRoom) StockLevel(ctx context.Context, r *NormalRun, cmd runhost.Command, requester corecharacter.Character, now time.Time) error {
-	return room.s.stockLevel(ctx, r, cmd, requester, now)
-}

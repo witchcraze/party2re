@@ -18,14 +18,14 @@ import (
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-// assetRunCombat serves Command with the production RunCombat and its asset
-// session (economy runner, helper requests and the requester depot).
+// assetRunCombat serves Command with the requester's asset session (economy
+// runner, helper requests and the requester depot).
 func assetRunCombat(t *testing.T, count int) (*normalFixture, *storedDepots) {
 	t.Helper()
 	f := newNormalFixture(t, count)
 	f.cfg.RNG = &midRNG{}
 	depots := withAssetSession(t, f)
-	installRunCombat(t, f)
+	f.restart(t)
 	return f, depots
 }
 

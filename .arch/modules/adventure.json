@@ -1,7 +1,7 @@
 {
   "module": "adventure",
   "tier": 1,
-  "description": "Adventure stage room library on the run host (admission rules, advance, encounters, exit effects, records, explicit combat executor), plus retained batch crawl execution.",
+  "description": "Adventure stage room library on the run host (admission rules, advance, encounters, exit effects, records, and the stage's combat seams: travel tools, job78 room, summon pool, defeat modifiers, clear credit), plus retained batch crawl execution.",
   "package": "internal/adventure",
   "implementation_package": "internal/adventure",
   "dependencies": [
@@ -42,22 +42,10 @@
       "source_ref": "internal/adventure/normal_room.go#stageRoom"
     },
     {
-      "name": "normal_run_combat",
-      "target_module": "core/battle",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/normal_run.go#RunCombat"
-    },
-    {
-      "name": "job_asset_runner",
-      "target_module": "economy",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/normal_run.go#NormalRunConfig"
-    },
-    {
-      "name": "job_asset_depots",
-      "target_module": "depot",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/normal_run.go#JobAssetDepots"
+      "name": "stage_combat_room",
+      "target_module": "runhost",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/adventure/normal_combat_room.go#stageRoom.Combat"
     }
   ],
   "transaction_boundaries": [
@@ -108,57 +96,11 @@
       "note": "Wraps post-battle reward/item settlement and adventure history persistence in a single RunInTx boundary; PostAdventureHook executes after commit."
     },
     {
-      "method": "ExecuteRunAction",
-      "source_ref": "internal/adventure/normal_combat.go#runCombat.ExecuteRunAction",
-      "transaction_type": "Delegated",
-      "lock_sequence": [
-        {
-          "table": "inventory_items",
-          "tier": 3,
-          "mode": "SELECT ... FOR UPDATE",
-          "note": "Prelock all party inventories in character ID order before WithJobAssets. In a solo run WithJobAssets acquires the inventory lock."
-        },
-        {
-          "table": "character_depots / depot_items",
-          "tier": 5,
-          "mode": "SELECT ... FOR UPDATE (via WithJobAssets)",
-          "note": "Requester depot only."
-        }
-      ],
-      "note": "Runs inside the run host's Command (via stageRoom.Execute) after its run and sorted character locks. The configured economy runner saves tail growth and wallet changes on the same requester. Reads retained earnings without row locks and returns consumption and earnings for the host's settler. Travel and job-encounter ports mutate the locked run copy."
-    },
-    {
-      "method": "WithJobAssets",
-      "source_ref": "internal/adventure/job_assets.go#NormalRunService.WithJobAssets",
-      "transaction_type": "ExecuteTransaction",
-      "lock_sequence": [
-        {
-          "table": "characters",
-          "tier": 2,
-          "mode": "SELECT ... FOR UPDATE",
-          "note": "Command already holds the full sorted roster; requester stays distinct from combat actor."
-        },
-        {
-          "table": "inventory_items",
-          "tier": 3,
-          "mode": "SELECT ... FOR UPDATE",
-          "note": "Requester wallet and held instance commit with Command state/receipt in the ambient SQL transaction."
-        },
-        {
-          "table": "character_depots / depot_items",
-          "tier": 5,
-          "mode": "SELECT ... FOR UPDATE (via JobAssetDepots)",
-          "note": "Requester depot for job50 stored tools and job86 books; consumption, exchange and return save only when no selection error occurred."
-        }
-      ],
-      "note": "Requires Command's run authority. The economy runner saves the requester after applying tail growth and asset changes, with no independent commit. Helper request reads do not lock rows."
-    },
-    {
-      "method": "ApplyCombatTravel",
-      "source_ref": "internal/adventure/combat_travel.go#NormalRunService.ApplyCombatTravel",
+      "method": "applyCombatTravel",
+      "source_ref": "internal/adventure/combat_travel.go#NormalRunService.applyCombatTravel",
       "transaction_type": "Delegated",
       "lock_sequence": [],
-      "note": "Mutation port for RunCombat under Command's existing transaction; no independent persistence, settlement or action-tail execution. Coordinate-only tools retain encounters; tool150 separates generated members and conditional old-enemy response before the caller saves the final run."
+      "note": "Travel seam for the run host's executor under Command's existing transaction; no independent persistence, settlement or action-tail execution. Coordinate-only tools retain encounters; tool150 separates generated members and conditional old-enemy response before the host saves the final run."
     }
   ]
 }

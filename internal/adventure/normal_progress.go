@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/runhost"
 )
@@ -27,9 +28,6 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 		r.Round == TreasureRoomFloor && (r.Stage.Ordinary == nil || len(r.Stage.Ordinary.EXRoster) == 0):
 		return corebattle.ErrUnsupportedEffect
 	}
-	if s.cfg.Combat == nil {
-		return runhost.ErrUnavailable
-	}
 	// Required reads precede reset, random draws, consumption and publication.
 	blessing := ""
 	if s.cfg.Blessings != nil {
@@ -42,9 +40,16 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := s.cfg.Combat.PrepareAdvance(ctx, r, actorID); err != nil {
+	// The all-member reset with item188's revival pass, then the floor field
+	// reset that keeps the default field (vs_monster.cgi susumu).
+	reset, err := s.resetContext(ctx, r, actorID)
+	if err != nil {
 		return err
 	}
+	if err := battle.ResetAll(&r.Battle, &reset, s.cfg.RNG); err != nil {
+		return err
+	}
+	r.Battle.Fields.ResetFloor()
 	// Old encounter actors do not survive creation; coordinates remain separate
 	// from encounter provenance, so travel cannot manufacture boss clear credit.
 	r.DiscardEncounter()
@@ -82,10 +87,11 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 		}
 		// Restoration precedes the cap, which leaves current HP/MP untouched (_battle.cgi:1485–1530).
 		if slices.Contains(r.Stage.SpecialBossFloors, r.Round) {
-			if s.cfg.Combat == nil {
-				return runhost.ErrUnavailable
+			reset, err := s.resetContext(ctx, r, actorID)
+			if err != nil {
+				return err
 			}
-			if err := s.cfg.Combat.PrepareBossField(ctx, r, actorID); err != nil {
+			if err := r.Battle.ApplySpecialBossField(&reset, s.cfg.RNG); err != nil {
 				return err
 			}
 			if !r.Battle.SpecialBossField {
@@ -150,4 +156,13 @@ func (s *NormalRunService) createTreasureEncounter(r *NormalRun, actorID, blessi
 	}
 	r.EncounterFloor, r.EncounterStageID = r.Round, r.Stage.ID
 	return nil
+}
+
+// resetContext is the all-member reset frame with the requester's saved level.
+func (s *NormalRunService) resetContext(ctx context.Context, r *NormalRun, actorID string) (corebattle.EquipmentResetContext, error) {
+	requester, err := s.cfg.Characters.FindByID(ctx, actorID)
+	if err != nil {
+		return corebattle.EquipmentResetContext{}, err
+	}
+	return r.ResetContext(actorID, &requester.Level)
 }

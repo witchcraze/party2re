@@ -48,7 +48,7 @@ func (s *CrawlSession) recordDefeatEarnings(result corebattle.PartyBattleResult)
 		if err != nil {
 			return err
 		}
-		base, err = runhost.AddEarnings(base, chapelDefeatBonus(base, s.Blessings[defeat.ActorID], s.rngIntn))
+		base, err = runhost.AddEarnings(base, runhost.ChapelDefeatBonus(base, s.Blessings[defeat.ActorID], s.rngIntn))
 		if err != nil {
 			return err
 		}
@@ -66,7 +66,7 @@ func (s *CrawlSession) recordDefeatEarnings(result corebattle.PartyBattleResult)
 	}
 	for id, e := range floor {
 		// Keep the existing floor-level cooperative rounding, applied once.
-		e, err := scaleCooperativeEarnings(e, result.BonusPercent)
+		e, err := runhost.ScaleCooperativeEarnings(e, result.BonusPercent)
 		if err != nil {
 			return err
 		}

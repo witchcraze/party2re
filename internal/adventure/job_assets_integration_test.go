@@ -22,21 +22,29 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// assetCombat decorates the production RunCombat: it counts executed
-// operations and can fail after their effects to prove rollback.
+// assetCombat wraps the requester's asset runner: it counts asset sessions,
+// one per executed operation, and can fail one after its effects to prove
+// rollback.
 type assetCombat struct {
-	adventure.RunCombat
+	economy.TransactionRunner
 	fail  atomic.Bool
 	calls atomic.Int64
 }
 
-func (c *assetCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd runhost.Command) (adventure.RunActionEffects, error) {
-	c.calls.Add(1)
-	fx, err := c.RunCombat.ExecuteRunAction(ctx, r, cmd)
-	if err == nil && c.fail.Load() {
-		return fx, errors.New("asset operation failed after effects")
+func (c *assetCombat) ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+	if fn == nil { // a direct grant, not an operation
+		return c.TransactionRunner.ExecuteTransaction(ctx, req, nil)
 	}
-	return fx, err
+	c.calls.Add(1)
+	return c.TransactionRunner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		if err := fn(tc); err != nil {
+			return err
+		}
+		if c.fail.Load() {
+			return errors.New("asset operation failed after effects")
+		}
+		return nil
+	})
 }
 
 // assetRNG lands hits (zero draws evade) while job78's 1/5 scavenging and
@@ -50,9 +58,8 @@ func (r *assetRNG) IntN(n int) int   { return r.Intn(n) }
 func installAssets(t *testing.T, f *normalFixture) *assetCombat {
 	t.Helper()
 	withAssetSession(t, f)
-	c := &assetCombat{}
-	f.cfg.Combat, f.routed, f.cfg.RNG = nil, true, &assetRNG{}
-	f.decorate = func(base adventure.RunCombat) adventure.RunCombat { c.RunCombat = base; return c }
+	c := &assetCombat{TransactionRunner: f.cfg.JobAssetRunner}
+	f.cfg.JobAssetRunner, f.cfg.RNG = c, &assetRNG{}
 	f.restart(t)
 	return c
 }
@@ -250,7 +257,7 @@ func TestJobAssetsSQLPairedRetry(t *testing.T) {
 	}
 }
 
-func TestJobAssetsSQLCapAndCommandAuthority(t *testing.T) {
+func TestJobAssetsSQLWalletCap(t *testing.T) {
 	f := newNormalFixture(t, 1)
 	installAssets(t, f)
 	_, err := f.cfg.JobAssetRunner.ExecuteTransaction(context.Background(), economy.TransactionRequest{CharacterID: f.actors[0].ID, Grant: economy.ResourceGrant{Gold: corecharacter.MaxMoney - 102}}, nil)
@@ -261,17 +268,6 @@ func TestJobAssetsSQLCapAndCommandAuthority(t *testing.T) {
 	run := entry.Command.RunID
 	seedAssetEncounter(t, f, run)
 	cmd := assetCommand(t, f, run, 0, "job-7-entry-2", "wallet-cap")
-	r, err := f.store.FindRun(context.Background(), run)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = f.svc.WithJobAssets(context.Background(), r, cmd, func(*corebattle.JobAssets, *corecharacter.Character) error {
-		t.Fatal("mutation outside Command")
-		return nil
-	})
-	if !errors.Is(err, runhost.ErrForbidden) {
-		t.Fatal(err)
-	}
 	if _, err := f.svc.Command(context.Background(), cmd); err != nil {
 		t.Fatal(err)
 	}

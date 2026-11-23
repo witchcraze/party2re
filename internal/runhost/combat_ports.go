@@ -1,4 +1,4 @@
-package adventure
+package runhost
 
 import (
 	"slices"
@@ -8,7 +8,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
-	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // runPorts are rebuilt for every operation from the saved run and requester.
@@ -32,9 +31,9 @@ func newRunPorts(frame corebattle.TargetContext, level *int, seals *corebattle.W
 	}
 }
 
-func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, requester *corecharacter.Character, inspection map[string]corebattle.InspectionContent) skill.PlayerCallbackContexts {
+func (p runPorts) callbacks(room RoomCombat, state *corebattle.LifetimeState, requester *corecharacter.Character, inspection map[string]corebattle.InspectionContent) skill.PlayerCallbackContexts {
 	d := p.damage
-	actor := runhost.FindActor(state.Actors, d.ActorID)
+	actor := findActor(state.Actors, d.ActorID)
 	held := ""
 	// The requester's own appearance ($m{icon}), not the actor's current form;
 	// shortcut: entry builds every player actor with the default icon, read the
@@ -49,7 +48,7 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 	}
 	enemyTeam := ""
 	for _, id := range slices.Concat(d.EnemyIDs, d.MemberOnlyIDs) {
-		if a := runhost.FindActor(state.Actors, id); a != nil && (actor == nil || a.TeamID != actor.TeamID) {
+		if a := findActor(state.Actors, id); a != nil && (actor == nil || a.TeamID != actor.TeamID) {
 			enemyTeam = a.TeamID
 			break
 		}
@@ -60,10 +59,14 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 	}
 	burn := actor != nil && requester != nil && actor.LateBreathSongBurn(state.Fields.Current(), requester.Gender)
 	reset := &p.defeat.EquipmentResetContext
+	var summons Summons
+	if room.Summons != nil {
+		summons = room.Summons()
+	}
 	roster := &corebattle.RosterContext{
 		DamageContext: d, RequesterItemID: held, EnemyTeamID: enemyTeam,
-		EnemyPool: r.EncounterPool, AppearancePositions: r.AppearancePositions,
-		Hard: r.Mode == CrawlModeHard, Death: p.defeat,
+		EnemyPool: summons.EnemyPool, AppearancePositions: summons.AppearancePositions,
+		Hard: summons.Hard, Death: p.defeat,
 	}
 	resources := d
 	transform := &corebattle.TransformationContext{EffectContext: d.EffectContext, RequesterIcon: icon, RequesterGender: gender}
@@ -84,7 +87,7 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 		},
 	}
 	return skill.PlayerCallbackContexts{
-		// Operation discovery fills the submitted text and names (normalOperations).
+		// Operation discovery fills the submitted text and names (operations).
 		Arithmetic:          &corebattle.ArithmeticContext{NameKey: skill.OperationNameKey, Defeat: d.Defeat},
 		BaseGuard:           &corebattle.BaseGuardContext{DamageContext: d, Status: p.status},
 		Martial:             &corebattle.MartialContext{DamageContext: d, Status: p.status},
@@ -143,7 +146,7 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 // bindRunAction supplies Validate/Execute for parsed entries that parsing
 // admitted but left unbound: the normal attack, the custom command and
 // ordinary registered invocations.
-func bindRunAction(action *ParsedRunAction, frame corebattle.CallbackContext, defs skill.BattleDefinitions) {
+func bindRunAction(action *parsedAction, frame corebattle.CallbackContext, defs skill.BattleDefinitions) {
 	if action.Validate != nil {
 		return
 	}

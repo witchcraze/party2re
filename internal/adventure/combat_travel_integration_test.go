@@ -17,12 +17,10 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// installTravel serves held travel tools through the production RunCombat;
-// setupActions stage rooms.
+// installTravel gives the requester an asset session for held travel tools.
 func installTravel(t *testing.T, f *normalFixture) {
 	t.Helper()
 	withAssetSession(t, f)
-	f.cfg.Combat, f.routed = nil, true
 	f.restart(t)
 }
 
@@ -63,7 +61,7 @@ func TestCombatTravelSQLReceiptRollbackAndTryConversion(t *testing.T) {
 	tool := addTravelTool(t, f, 0, "item-107")
 	entry := f.enter(t, "try")
 	run := entry.Command.RunID
-	f.send(t, run, 0, "earn", "")
+	f.earn(t, run, 0)
 	before, err := f.store.FindRun(context.Background(), run)
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +194,7 @@ func TestCombatTravelSQLNoEffectSkipAndRejection(t *testing.T) {
 			}
 			tool := addTravelTool(t, f, 0, definition)
 			run := f.enter(t, "normal").Command.RunID
-			f.send(t, run, 0, "travel10", "")
+			f.stage(t, run, travel10)
 			if scenario == "skip" {
 				// Dofuu always skips the callback (and its consumption) but completes the tail.
 				skipNextCallback(t, f, run, f.actors[0].ID)
@@ -316,7 +314,7 @@ func TestCombatTravelSQLTreasureEncounterSurvivesCoordinates(t *testing.T) {
 	installTravel(t, f)
 	addTravelTool(t, f, 0, "item-107")
 	run := f.enter(t, "normal").Command.RunID
-	f.send(t, run, 0, "travel10", "")
+	f.stage(t, run, travel10)
 	f.send(t, run, 0, "advance", "")
 	before, err := f.store.FindRun(context.Background(), run)
 	if err != nil || len(before.Boxes) == 0 {

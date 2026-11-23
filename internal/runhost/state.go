@@ -8,7 +8,7 @@ import (
 )
 
 func (r *State) Actor(id string) *corebattle.LifetimeActor {
-	return FindActor(r.Battle.Actors, id)
+	return findActor(r.Battle.Actors, id)
 }
 
 // Ready rejects an actor whose action interval has not elapsed at now.
@@ -58,7 +58,7 @@ func (r *State) DiscardEncounter() {
 	r.Boxes = nil
 }
 
-func FindActor(actors []corebattle.LifetimeActor, id string) *corebattle.LifetimeActor {
+func findActor(actors []corebattle.LifetimeActor, id string) *corebattle.LifetimeActor {
 	for i := range actors {
 		if actors[i].ID == id {
 			return &actors[i]

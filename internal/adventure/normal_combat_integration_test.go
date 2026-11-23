@@ -13,19 +13,13 @@ import (
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-// combatFixture serves Command with the production RunCombat.
+// combatFixture serves Command with an RNG that lands ordinary attacks.
 func combatFixture(t *testing.T, count int) *normalFixture {
 	t.Helper()
 	f := newNormalFixture(t, count)
 	f.cfg.RNG = &midRNG{}
-	installRunCombat(t, f)
-	return f
-}
-
-func installRunCombat(t *testing.T, f *normalFixture) {
-	t.Helper()
-	f.cfg.Combat, f.explicit = nil, true
 	f.restart(t)
+	return f
 }
 
 // midRNG hits ordinary attacks and never rolls crystal drops.

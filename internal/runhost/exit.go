@@ -114,7 +114,7 @@ func (s *Service[R, P]) RecoverTimeout(ctx context.Context, player, actor, runID
 			return ErrConflict
 		}
 		var ids []string
-		ctx = CommandContext(ctx, r.ID)
+		ctx = commandContext(ctx, r.ID)
 		if err := economy.LockInOrder(ctx, r.Roster, func(ctx context.Context, id string) error {
 			if _, err := s.cfg.Characters.FindByIDForUpdate(ctx, id); err != nil {
 				return err

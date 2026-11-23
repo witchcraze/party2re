@@ -40,7 +40,6 @@ var exSources = map[string][]exSource{
 func exFixture(t *testing.T, key string) (*NormalRunService, *NormalRun, *ordinaryRNG) {
 	t.Helper()
 	s, r, rng, _ := travelFixture(t)
-	s.cfg.Combat = &travelAdvanceCombat{}
 	stageID := key
 	if !strings.HasPrefix(key, "stage-") {
 		stageID = "stage-26"
@@ -154,13 +153,13 @@ func TestEXEntryGatesPreserveStateAndDraws(t *testing.T) {
 func TestEXMarkerSurvivesTravelAgainstDestination(t *testing.T) {
 	s, r, _ := exFixture(t, "stage-23")
 	r.Round = 3
-	if _, err := s.ApplyCombatTravel(context.Background(), r, "a", "item-066", CombatTravelInput{}, nil); err != nil {
+	if _, err := s.applyCombatTravel(context.Background(), r, "a", "item-066", combatTravelInput{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if r.HasEX() || !r.EXUnlocked {
 		t.Fatal("non-EX destination used or cleared the marker")
 	}
-	if _, err := s.ApplyCombatTravel(context.Background(), r, "a", "item-184", CombatTravelInput{DestinationStageID: "stage-25"}, nil); err != nil {
+	if _, err := s.applyCombatTravel(context.Background(), r, "a", "item-184", combatTravelInput{DestinationStageID: "stage-25"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !r.HasEX() {
