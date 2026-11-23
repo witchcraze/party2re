@@ -248,11 +248,13 @@ Automatic revival precedes final defeat, final strike, inheritance and rewards: 
 
 ##### Summoned roster and helper commands
 
-Member order is preserved. Each summoned incarnation gets a run-local ID, separate from the named helper or enemy species/suffix identity. Tools72/73/74 compete for one dummy identity, 216 uses a separate guardian identity, and extension244 a separate snow identity. Presence blocks another summon even at HP0. Saving removes dead NPCs/helpers, keeps fallen real players, then rebuilds side arrays in member order, keeping the operation actor's team even when that actor is a dead NPC being removed. A recalled helper receives a new incarnation ID. Dismissal first sets HP0 and NPC color; the current request's arrays keep their order until the save boundary, so a same-request revival can keep that participant on the NPC side after reload. No roster operation submits an additional NPC turn or finishes an action tail (`_battle.cgi:453–493,518–529`).
+Member order is preserved. Each summoned incarnation gets a run-local ID, separate from the named helper or enemy name-family identity. Saving removes dead NPCs/helpers, keeps fallen real players, then rebuilds side arrays in member order, keeping the operation actor's team even when that actor is a dead NPC being removed. A recalled helper receives a new incarnation ID. Dismissal first sets HP0 and NPC color; the current request's arrays keep their order until the save boundary, so a same-request revival can keep that participant on the NPC side after reload. No roster operation submits an additional NPC turn or finishes an action tail (`_battle.cgi:453–493,518–529`).
 
-Adding a helper (calling, tools and field recreation) independently rolls each of HP/MP/AT/DF/AG as floor(base × (0.9 + draw × 0.3)), sets the corresponding maximum/base, then floors ×1.2 for requester item165. Initial hit is 95 and tension 1; current/previous job payloads survive, and defeat EXP/gold are floor(requester level/2) and floor(requester level/4). Grave-field recreation rolls fresh stats rather than restoring a byte-identical old helper. Helpers use generic native identities and newly authored placeholder art (`_skill.cgi:9793–9828`; `_data.cgi:1140–1174,1914–1924`).
+`_add_party` (calling, tools, field recreation and job407's roster transform) rolls fresh stats from only the nine fields it is passed. Even during an NPC response, its item165 bonus and defeat rewards read the requester (`%m`), not the acting NPC. Helpers use generic native identities and newly authored placeholder art (`_skill.cgi:9793–9829`; `_npc_action.cgi:91–98`).
 
-Enemy summoning consumes a complete current-stage payload pool and separate weighted appearance positions, falling back to position 0 for an invalid sampled position. It draws an I–Z identity suffix and tries only that suffix and its predecessor (I wraps to Z). Member count ≥10 prevents all draws; gem82 also requires at most one enemy. Hard mode floors ×1.5 for current resources/stats, job SP and rewards before party scaling of resources/stats by 1 + (party count−2)×0.05. Supplied maxima, hit/tension, status, extended effects, jobs, rewards and custom costs are kept; absent maxima take the scaled current values (`_skill.cgi:9834–9931`; `_data.cgi:1197,2170`). Gem82 (CMP18) and gem100 (CMP0) project every reachable stage position and all 18 suffix choices, including duplicate and size/count no-effects.
+**Decision (#1916, 2026-11-23).** When `_add_party` reuses a name that a member still holds (an acting statue copy's letter, or successors past Z, which get no letter), that member is overwritten in place and keeps its single slot. The source also lists the name a second time, so later area hits strike it twice; that duplicate listing is not reproduced.
+
+Enemy summoning consumes the frozen current-stage pool and its separate weighted appearance positions (`_skill.cgi:9834–9931`).
 
 NPC selection keeps duplicate eligible names as weights and resolves each through the last eligible name binding after current-job, previous-job and custom entries are appended. The selected cost is charged once after the callback, including accepted no-effect summons. These bindings do not initialize or execute a spawned NPC's next action. The frozen stage pool/appearance weights and resulting ordered roster are saved (`_npc_action.cgi:177–224,313–322`).
 
@@ -303,12 +305,14 @@ Values that are not what they look like:
 - Job402's final CMP reduction skips the final floor clamp; its charge writes go to the first returned recipient even after redirection (`_skill.cgi:7802–7886`).
 - Job75.5 revival gives the target's pre-debit MP as HP without a MaxHP clamp; job66.6 can halve the helper's HP to 0 without defeat (`_skill.cgi:4911–4931,5791–5797`).
 - Copying (job36, book211) floors copied MP at 50 even above MaxMP (`_skill.cgi:2944–2964`; `_data.cgi:1716–1748`).
+- `@exx_bosses` lists rewards, item246, crystals and MaxMP for the goddess, but job407 summons her through `_add_party`, so none of them apply. Its index variable is undeclared, so the summon always takes the first entry (`stage/25.cgi:263–283`; `_skill.cgi:10657–10666`).
 
 Order and lifetime traps:
 
 - Values captured when the job table is built, not at execution: job84's strike multiplier (appearance, requester gender, burn field), job77's final-callback variant (temporary present or not), group dance's MP cost (12×party size) and job405's wounded variant (HP ≤ 50% before NPC start-of-action cures and poison). Save them with the frozen input (`_skill.cgi:5730–5917,5929–5983,6672–6709,7893`; `_npc_action.cgi:159`).
 - Job405's wounded chain carries each hit's tension-scaled power (×0.8), so tension held before the action scales every later hit (`_skill.cgi:8049,8067`).
 - Job405's renewal heals opponents by swapping the side arrays: each heal draws a random opponent and a fallen draw heals the caster (`_skill.cgi:7955–7963`).
+- Job407's roster transform re-requires the stage file. When it is the request's first load, stage25's top-level boss-branch draw is consumed before the body's own draws (`_skill.cgi:10654`; `stage/25.cgi:16`).
 - Job86's book power reads the **current** held-book class at execution (`_skill.cgi:6859–6866`).
 - Item92's name matches job86's book pattern without a book-table row, so double use falls back to table position0 (`_data.cgi:1293`; `_skill.cgi:6876–6882`).
 - Effects that still apply on accepted no-effect or after caster death: job3/25 vulnerability, job4's flame tails, job52's area-200 vulnerability, job98's vulnerability on every original enemy (including dead, redirected or blocked), job7.8's second defeat call, and sacrifice72's defeat call.
@@ -318,8 +322,8 @@ Order and lifetime traps:
 - Job48's extension resets members through equipment before reviving them, so accessory callbacks can restore statuses first; job403 resets each enemy before reading its HP (`_skill.cgi:3418–3568,8077–8121`).
 - Duplication63 heals using the number of helpers present **before** creation. A present but fallen named helper blocks the appearance substitute. Special87 checks growth even if its damage killed the summoner (`_skill.cgi:4029–5447`).
 - Form switching registers the reverse entry last, so it wins name-keyed discovery when both forms exist. Job79's forward form compares against the requesting player's original icon, also for NPC actors (`_skill.cgi:173–217,6240–6292`).
-- NPC job95's summon has no enemy-count guard (gem82 has one); job99's escape and job405's renewal (every ally except the caster) write HP0 only, with no defeat, reward or roster removal (`_skill.cgi:7183–7189,7409–7412,7985–7987`).
-- The operation's enemy array is built once at load from living opponents and keeps enemies defeated during the operation, so defeating the last enemy still reaches the player tail and NPC response; front/back rebuilds it with fallen opponents included (`_battle.cgi:486–493,927`; `_skill.cgi:893–899`).
+- NPC job95's summon has no enemy-count guard (gem82 has one); job99's escape and job405's renewal (every ally except the caster) write HP0 only, with no defeat, reward or roster removal. Job407's roster transform removes members from the side, its caster included, without defeat or reward (`_skill.cgi:7183–7189,7409–7412,7985–7987,10656–10690`).
+- The operation's enemy array is built once at load from living opponents and keeps enemies defeated during the operation, so defeating the last enemy still reaches the player tail and NPC response, and job407's roster transform still consumes or summons from members felled earlier in the request; front/back rebuilds it with fallen opponents included (`_battle.cgi:486–493,927`; `_skill.cgi:893–899`).
 - Stage27 starts job88 at SP20, so only its first two positions are initially eligible (`stage/27.cgi:76–89`).
 
 ## Other combat rules
@@ -335,4 +339,5 @@ Order and lifetime traps:
 ## Open gaps
 
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
-- NPC-only jobs 406 and 407 (with `@exx_bosses`) have no table, so their choices stay whole-action gates: #1915, #1916.
+- NPC-only jobs 406 and 408 (the goddess job407 summons) have no table, so their choices stay whole-action gates: #1915, #2692.
+- Enemy summons detect collisions by pool payload instead of source name family (#2690), and skip the stage-file reread effects (#2691).

@@ -2,6 +2,7 @@ package adventure_test
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -95,9 +96,75 @@ func TestRunCombatEXJob405BossAnswers(t *testing.T) {
 	}
 }
 
+// The stage25 statue's roster transform (_skill.cgi:10653–10829) in a response
+// where every draw is .99: the last choice (MP54 excludes the breath), the
+// stage reread, then the extra small int(100+297)=397 → position 9 ×2.093 and
+// both encounter ice objects (MaxHP 1100, class ≥1000) → position 11 ×1.497,
+// each rolled ×1.197; heal 150+2×600 → ×1.197. Item165 is the requester's,
+// never the NPC's (`%m` stays the requester in npc_turn). The saved order
+// rotates the post-action head.
+func TestRunCombatEXJob407RosterTransformPersists(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		requester, npc string
+		small, large   int
+	}{{"plain", "", "item-165", 994, 1971}, {"requester-item165", "item-165", "", 1192, 2365}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, _ := lowRunCombat(t, 1)
+			f.cfg.RNG = &stockRunRNG{}
+			f.restart(t)
+			stages, err := adventure.InitialStageCatalog()
+			if err != nil {
+				t.Fatal(err)
+			}
+			monsters, err := adventure.InitialMonsterCatalog()
+			if err != nil {
+				t.Fatal(err)
+			}
+			stage, err := stages.FindByID("stage-25")
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload := func(id, actorID string) corebattle.LifetimeActor {
+				m, err := monsters.FindByID(id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				a := m.NPCPayload()
+				a.ID, a.TeamID, a.MaxHP, a.MaxMP = actorID, "enemies", a.HP, a.MP
+				return a
+			}
+			statue := payload("ex-25-boss-224", "statue")
+			statue.HP, statue.MP = 5000, 54 // Below the breath's MP55: the transform is last.
+			statue.Gear.AccessoryID = tc.npc
+			cmd := combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+				r.Stage = stage.OrdinarySeason("stage-25")
+				r.EncounterPool = nil
+				for _, id := range r.Stage.Ordinary.MonsterIDs {
+					r.EncounterPool = append(r.EncounterPool, payload(id, id))
+				}
+				runActorByID(r, f.actors[0].ID).HeldToolID = new(tc.requester)
+			}, statue, payload("ex-25-boss-206", "ice-a"), payload("ex-25-boss-243", "ice-b"))
+			if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "guard", "defend", "", "")); err != nil {
+				t.Fatal(err)
+			}
+			r := readStockRoom(t, f, cmd.RunID)
+			var got []string
+			for _, id := range r.Enemies {
+				a := runActorByID(r, id)
+				got = append(got, fmt.Sprint(a.RosterIdentity, ":", a.HP))
+			}
+			want := []string{fmt.Sprint("ordinary-25-boss-22-I:", tc.small), fmt.Sprint("ordinary-25-boss-22-J:", tc.large), fmt.Sprint("ordinary-25-boss-22-K:", tc.large), ":6615"}
+			if !slices.Equal(got, want) || runActorByID(r, "ice-a") != nil || runActorByID(r, "ice-b") != nil {
+				t.Fatal(got)
+			}
+		})
+	}
+}
+
 // EX-only NPC jobs without a table reject the whole command.
 func TestRunCombatEXNPCJobResponseStaysGated(t *testing.T) {
-	for _, job := range []string{"job-406", "job-407"} {
+	for _, job := range []string{"job-406", "job-408"} {
 		t.Run(job, func(t *testing.T) {
 			f, depots := lowRunCombat(t, 1)
 			foe := runEnemy("foe", 900)

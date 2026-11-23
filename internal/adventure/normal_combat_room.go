@@ -58,7 +58,16 @@ func (room stageRoom) Combat(ctx context.Context, r *NormalRun, actor string, re
 		Tools:        s.heldTravelTools(ctx, r, actor, reset, held),
 		StoredTravel: storedTravel,
 		Summons: func() runhost.Summons {
-			return runhost.Summons{EnemyPool: r.EncounterPool, AppearancePositions: r.AppearancePositions, Hard: r.Mode == CrawlModeHard}
+			summons := runhost.Summons{EnemyPool: r.EncounterPool, AppearancePositions: r.AppearancePositions, Hard: r.Mode == CrawlModeHard}
+			if t := r.Stage.Ordinary; t != nil {
+				summons.EXPool, summons.EXXPool = s.payloads(t.EXRoster), s.payloads(t.EXXRoster)
+				// Stage25's top-level boss-branch draw; shortcut: stage15's
+				// reread draws and pool rebuild belong to #2691.
+				if len(t.BossRosters) > 1 {
+					summons.ReloadDraws = 1
+				}
+			}
+			return summons
 		},
 		Habitat: func() string { return r.Stage.Name },
 		Scale: func(e runhost.Earnings) runhost.Earnings {
@@ -131,4 +140,18 @@ func combinedTransition(transitions []*combatTravelTransition) combatTravelTrans
 	}
 	t.ResponseSuppressed, t.UnsealDemonKing = false, unseal
 	return t
+}
+
+// payloads resolves stage table IDs; a missing entry leaves the pool empty so
+// its reader rejects instead of using a partial table.
+func (s *NormalRunService) payloads(ids []string) []corebattle.LifetimeActor {
+	pool := make([]corebattle.LifetimeActor, 0, len(ids))
+	for _, id := range ids {
+		m, err := s.cfg.Monsters.FindByID(id)
+		if err != nil {
+			return nil
+		}
+		pool = append(pool, m.NPCPayload())
+	}
+	return pool
 }

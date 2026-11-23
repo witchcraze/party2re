@@ -65,6 +65,9 @@ type Summons struct {
 	EnemyPool           []corebattle.LifetimeActor
 	AppearancePositions []int
 	Hard                bool
+	// EXPool/EXXPool and ReloadDraws feed job407's stage-file reread.
+	EXPool, EXXPool []corebattle.LifetimeActor
+	ReloadDraws     int
 }
 
 // JobRoom is job78's room mutation; Apply runs on the locked run.

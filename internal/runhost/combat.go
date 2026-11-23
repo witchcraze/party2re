@@ -225,7 +225,7 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 			respond = room.Respond
 		}
 		if npc := respond(now); npc != "" {
-			if err := s.respond(run, npc, requester, &level, &seals, rewards, assets, result.ArithmeticDivisor, room, &fx); err != nil {
+			if err := s.respond(run, npc, cmd.ActorID, requester, &level, &seals, rewards, assets, result.ArithmeticDivisor, room, &fx); err != nil {
 				return fx, err
 			}
 			if err := r.RecordNPCResponse(npc, now); err != nil {
@@ -249,7 +249,7 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 
 // respond runs the selected NPC's response on the saved state. Its opponents
 // are the living members of other teams in member order.
-func (s *Service[R, P]) respond(run *R, npc string, requester *corecharacter.Character, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, divisor int, room RoomCombat, fx *Effects) error {
+func (s *Service[R, P]) respond(run *R, npc, requesterID string, requester *corecharacter.Character, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, divisor int, room RoomCombat, fx *Effects) error {
 	r := P(run).Host()
 	team := r.Actor(npc).TeamID
 	frame := corebattle.TargetContext{ActorID: npc}
@@ -274,7 +274,7 @@ func (s *Service[R, P]) respond(run *R, npc string, requester *corecharacter.Cha
 		actor.HeldToolID = new(actor.Gear.AccessoryID)
 	}
 	register := func(d *skill.BattleDefinitions, work *corebattle.LifetimeState, f *corebattle.CallbackContext) {
-		p := runPorts{damage: *f.Damage, defeat: f.Defeat, status: &corebattle.StatusContext{EffectContext: f.Damage.EffectContext, Defeat: f.Defeat}}
+		p := runPorts{damage: *f.Damage, defeat: f.Defeat, status: &corebattle.StatusContext{EffectContext: f.Damage.EffectContext, Defeat: f.Defeat}, requesterID: requesterID}
 		// Boxes are not projected into a response, so every member is empty.
 		inspection := make(map[string]corebattle.InspectionContent, len(work.Actors))
 		for _, a := range work.Actors {
@@ -298,6 +298,11 @@ func (s *Service[R, P]) respond(run *R, npc string, requester *corecharacter.Cha
 		}
 		fx.Consumed[id] = append(fx.Consumed[id], items...)
 	}
+	// Members the response removed leave the order before the head rotates.
+	r.Enemies = slices.DeleteFunc(r.Enemies, func(id string) bool {
+		a := r.Actor(id)
+		return slices.Contains(frame.PartyIDs, id) && !slices.Contains(res.Target.PartyIDs, id) && (a == nil || a.HP <= 0)
+	})
 	// Members the response generated join the opposing order last.
 	for _, id := range res.Target.PartyIDs {
 		if a := r.Actor(id); a != nil && !before[id] && a.HP > 0 {
