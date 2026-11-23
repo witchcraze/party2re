@@ -13,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // assetRunCombat serves Command with the production RunCombat and its asset
@@ -41,7 +42,7 @@ func withAssetSession(t *testing.T, f *normalFixture) *storedDepots {
 
 // assertUnchanged checks that a rejected command left run, hands, depot and
 // receipt untouched.
-func assertUnchanged(t *testing.T, f *normalFixture, depots *storedDepots, cmd adventure.RunCommand, run *adventure.NormalRun, held, stored []item.Instance) {
+func assertUnchanged(t *testing.T, f *normalFixture, depots *storedDepots, cmd runhost.Command, run *adventure.NormalRun, held, stored []item.Instance) {
 	t.Helper()
 	if got := readStockRoom(t, f, cmd.RunID); !reflect.DeepEqual(got, run) {
 		t.Fatalf("%s changed the run", cmd.ID)
@@ -67,7 +68,7 @@ func TestRunCombatHeldToolConsumesOnceAndRejectsAtomically(t *testing.T) {
 	held := heldItems(t, f, 0)
 	before := readStockRoom(t, f, cmd.RunID)
 	early := combatCommand(cmd, "herb-early", "tool", "", "")
-	if _, err := f.svc.Command(t.Context(), early); !errors.Is(err, adventure.ErrRunCooldown) {
+	if _, err := f.svc.Command(t.Context(), early); !errors.Is(err, runhost.ErrCooldown) {
 		t.Fatalf("early tool: %v", err)
 	}
 	assertUnchanged(t, f, depots, early, before, held, nil)
@@ -227,7 +228,7 @@ func TestRunCombatBookReleaseBansTwiceAndSuppressesTail(t *testing.T) {
 	f.clock.add(time.Hour)
 	cmd.Version = r.Version
 	banned := combatCommand(cmd, "release-again", "job-86-entry-3", "item-169", "")
-	if _, err := f.svc.Command(t.Context(), banned); !errors.Is(err, adventure.ErrRunUnavailable) {
+	if _, err := f.svc.Command(t.Context(), banned); !errors.Is(err, runhost.ErrUnavailable) {
 		t.Fatalf("banned release: %v", err)
 	}
 	assertUnchanged(t, f, depots, banned, r, heldItems(t, f, 0), depotItems(t, depots, actor))
@@ -303,8 +304,8 @@ func TestRunCombatStoredToolConsumesAndTravelSelectionKeepsHistory(t *testing.T)
 		t.Fatal(err)
 	}
 	after := readStockRoom(t, f, cmd.RunID)
-	if after.Floor != r.Floor || after.Stage.ID != r.Stage.ID || !after.Battle.StoredToolHistory[color]["item-071"] || runActorByID(after, actor).MP != runActorByID(r, actor).MP {
-		t.Fatalf("selection error: floor=%d stage=%s history=%v", after.Floor, after.Stage.ID, after.Battle.StoredToolHistory)
+	if after.Round != r.Round || after.Stage.ID != r.Stage.ID || !after.Battle.StoredToolHistory[color]["item-071"] || runActorByID(after, actor).MP != runActorByID(r, actor).MP {
+		t.Fatalf("selection error: floor=%d stage=%s history=%v", after.Round, after.Stage.ID, after.Battle.StoredToolHistory)
 	}
 	if got := depotItems(t, depots, actor); !reflect.DeepEqual(got, rows[1:]) {
 		t.Fatalf("selection error moved the row: %+v", got)
@@ -325,7 +326,7 @@ func TestRunCombatUnknownHandGatesEnhancedTool(t *testing.T) {
 	rng := f.cfg.RNG.(*midRNG)
 	// Baseline: the per-request seal table draws before any parsing.
 	calls := rng.calls.Load()
-	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "nobody", "attack", "nobody", "")); !errors.Is(err, adventure.ErrRunConflict) {
+	if _, err := f.svc.Command(t.Context(), combatCommand(cmd, "nobody", "attack", "nobody", "")); !errors.Is(err, runhost.ErrConflict) {
 		t.Fatal(err)
 	}
 	baseline := rng.calls.Load() - calls
@@ -350,8 +351,8 @@ func TestRunCombatHeldTravelKeepsEncounterAndResponds(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := readStockRoom(t, f, cmd.RunID)
-	if r.Floor != 2 || !reflect.DeepEqual(r.Enemies, []string{"foe"}) || !r.LastActions["foe"].Equal(f.clock.Now()) || len(heldItems(t, f, 0)) != 0 {
-		t.Fatalf("travel: floor=%d enemies=%v foe=%v items=%+v", r.Floor, r.Enemies, r.LastActions["foe"], heldItems(t, f, 0))
+	if r.Round != 2 || !reflect.DeepEqual(r.Enemies, []string{"foe"}) || !r.LastActions["foe"].Equal(f.clock.Now()) || len(heldItems(t, f, 0)) != 0 {
+		t.Fatalf("travel: floor=%d enemies=%v foe=%v items=%+v", r.Round, r.Enemies, r.LastActions["foe"], heldItems(t, f, 0))
 	}
 	if len(depotItems(t, depots, cmd.ActorID)) != 0 {
 		t.Fatal("held travel touched the depot")

@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func treasureCombatRun(t *testing.T) (*NormalRun, corecharacter.Character) {
@@ -22,50 +23,39 @@ func treasureCombatRun(t *testing.T) (*NormalRun, corecharacter.Character) {
 		Level:    10,
 		Stats:    corecharacter.Stats{HP: 500, MaxHP: 500, MP: 120, MaxMP: 120, Attack: 100, Defense: 50, Agility: 50},
 	}
-	r := &NormalRun{
-		ID:        "run-treasure",
-		Admission: NormalAdmission{Speed: 3},
-		Stage:     Stage{ID: "stage-00", Name: "Test Stage"},
-		Mode:      CrawlModeNormal,
-		Floor:     TreasureRoomFloor,
-		LeaderID:  "a",
-		Roster:    []string{"a"},
-		Recipients: map[string]RunRecipient{
-			"a": {PlayerID: "p1"},
-		},
-		Battle: corebattle.LifetimeState{
-			Actors: []corebattle.LifetimeActor{
-				{
-					Participant: corebattle.Participant{
-						ID:        "a",
-						Name:      "Alice",
-						TeamID:    "allies",
-						HP:        500,
-						MaxHP:     500,
-						MP:        120,
-						MaxMP:     120,
-						Attack:    100,
-						Defense:   50,
-						Agility:   50,
-						BaseStats: corebattle.BattleBaseStats{Attack: 100, Defense: 50, Agility: 50},
-						Gear:      &corebattle.BattleGearStats{WeaponID: "weapon-01", ArmorID: "armor-01", WeaponAttack: new(10)},
-					},
-					Jobs:    corebattle.BattleJobs{JobID: "job-06", SP: 20, OldJobID: "job-78", OldSP: 200},
-					Tension: 1,
+	r := &NormalRun{State: runhost.State{ID: "run-treasure", Admission: runhost.Admission{Speed: 3}, Round: TreasureRoomFloor, LeaderID: "a", Roster: []string{"a"}, Recipients: map[string]runhost.Recipient{
+		"a": {PlayerID: "p1"},
+	}, Battle: corebattle.LifetimeState{
+		Actors: []corebattle.LifetimeActor{
+			{
+				Participant: corebattle.Participant{
+					ID:        "a",
+					Name:      "Alice",
+					TeamID:    "allies",
+					HP:        500,
+					MaxHP:     500,
+					MP:        120,
+					MaxMP:     120,
+					Attack:    100,
+					Defense:   50,
+					Agility:   50,
+					BaseStats: corebattle.BattleBaseStats{Attack: 100, Defense: 50, Agility: 50},
+					Gear:      &corebattle.BattleGearStats{WeaponID: "weapon-01", ArmorID: "armor-01", WeaponAttack: new(10)},
 				},
+				Jobs:    corebattle.BattleJobs{JobID: "job-06", SP: 20, OldJobID: "job-78", OldSP: 200},
+				Tension: 1,
 			},
 		},
-		Boxes: []TreasureBox{
-			{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
-			{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
-		},
-	}
+	}, Boxes: []runhost.TreasureBox{
+		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
+		{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
+	}}, Stage: Stage{ID: "stage-00", Name: "Test Stage"}, Mode: CrawlModeNormal}
 	return r, requester
 }
 
 func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 	r, requester := treasureCombatRun(t)
-	r.Boxes = append(r.Boxes, TreasureBox{ID: "box-3", Name: "金の宝箱A", ItemID: "item-267", Fixed: true})
+	r.Boxes = append(r.Boxes, runhost.TreasureBox{ID: "box-3", Name: "金の宝箱A", ItemID: "item-267", Fixed: true})
 
 	state, frame, inspection, err := r.ProjectCombat("a")
 	if err != nil {
@@ -79,12 +69,12 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 		t.Fatalf("unexpected inspection projection: %+v", inspection)
 	}
 
-	b1 := findActor(state.Actors, "box-1")
+	b1 := runhost.FindActor(state.Actors, "box-1")
 	if b1 == nil || b1.HP != 1000 || b1.MaxHP != 1000 || b1.Defense != 1000 || b1.BaseStats.Defense != 1000 ||
 		b1.Temporary != corebattle.TemporaryNullMagic || !b1.NPC || b1.OverLevel || b1.Gear == nil || b1.Tension != 1 {
 		t.Fatalf("unexpected ordinary box combat stats: %+v", b1)
 	}
-	b3 := findActor(state.Actors, "box-3")
+	b3 := runhost.FindActor(state.Actors, "box-3")
 	if b3 == nil || b3.HP != 2000 || b3.MaxHP != 2000 || b3.Defense != 2000 || b3.BaseStats.Defense != 2000 ||
 		b3.Temporary != corebattle.TemporaryNullMagic || !b3.NPC || !b3.OverLevel {
 		t.Fatalf("unexpected fixed box combat stats: %+v", b3)
@@ -137,8 +127,8 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 		t.Fatal(err)
 	}
 	reloadedState, reloadedFrame, _, err := reloaded.ProjectCombat("a")
-	if err != nil || findActor(reloadedState.Actors, "box-1").HP != 700 {
-		t.Fatalf("reloaded box HP lost: err=%v actor=%+v", err, findActor(reloadedState.Actors, "box-1"))
+	if err != nil || runhost.FindActor(reloadedState.Actors, "box-1").HP != 700 {
+		t.Fatalf("reloaded box HP lost: err=%v actor=%+v", err, runhost.FindActor(reloadedState.Actors, "box-1"))
 	}
 
 	// Defeating box-1 via ApplyPlayerOperation clears it from next request without rewards or prize.
@@ -185,29 +175,28 @@ func TestNormalRunTreasureProjectCombatStatsAndReconcile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !reloaded.Boxes[0].Defeated || reloaded.Boxes[0].OpenedBy != "" || reloaded.Boxes[0].Combat != nil {
-		t.Fatalf("defeated box state wrong: box=%+v combat=%+v actor=%+v", reloaded.Boxes[0], reloaded.Boxes[0].Combat, findActor(reloadedState.Actors, "box-1"))
+		t.Fatalf("defeated box state wrong: box=%+v combat=%+v actor=%+v", reloaded.Boxes[0], reloaded.Boxes[0].Combat, runhost.FindActor(reloadedState.Actors, "box-1"))
 	}
 	if len(reloadedEffects.Earnings) != 0 || len(reloadedEffects.Defeats) != 0 || len(reloadedEffects.CreditedDefeats) != 0 {
 		t.Fatalf("defeating box leaked rewards/defeats: %+v", reloadedEffects)
 	}
 	// box-3 is still unopened; once box-3 is defeated too, livingEnemies is false.
 	reloaded.Boxes[2].Defeated = true
-	if reloaded.livingEnemies() {
+	if reloaded.LivingEnemies() {
 		t.Fatal("expected livingEnemies=false after all boxes opened or defeated")
 	}
 	_, nextFrame, _, err := reloaded.ProjectCombat("a")
 	if err != nil || len(nextFrame.EnemyIDs) != 0 {
 		t.Fatalf("defeated boxes remained in next enemy pool: %+v err=%v", nextFrame, err)
 	}
-	s := &NormalRunService{}
-	if _, _, err := s.claimChest(nil, &reloaded, "a", "box-1"); !errors.Is(err, ErrNoUnopenedTreasure) {
+	if _, _, err := reloaded.ClaimChest(nil, nil, "a", "box-1"); !errors.Is(err, ErrNoUnopenedTreasure) {
 		t.Fatalf("defeated box still claimable: %v", err)
 	}
 }
 
 func TestNormalRunTreasureReconcilePreservesOrderAfterMemberRemoval(t *testing.T) {
 	r, _ := treasureCombatRun(t)
-	r.Boxes = []TreasureBox{
+	r.Boxes = []runhost.TreasureBox{
 		{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"},
 		{ID: "box-2", Name: "青い宝箱B", OpenedBy: "b", ItemID: "item-002"},
 		{ID: "box-3", Name: "黒い宝箱C", ItemID: "item-003"},
@@ -229,13 +218,13 @@ func TestNormalRunTreasureReconcilePreservesOrderAfterMemberRemoval(t *testing.T
 
 func TestNormalRunMixedEnemyAndTreasureInspectionPreservesEnemyReward(t *testing.T) {
 	r, requester := treasureCombatRun(t)
-	r.Floor = 3
+	r.Round = 3
 	r.Enemies = []string{"enemy-1"}
 	r.Battle.Actors = append(r.Battle.Actors, corebattle.LifetimeActor{
 		Participant: corebattle.Participant{ID: "enemy-1", Name: "Slime", TeamID: "enemies", HP: 100, MaxHP: 100},
 		NPC:         true,
 	})
-	r.Boxes = []TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"}}
+	r.Boxes = []runhost.TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-001"}}
 
 	state, frame, projectionInspection, err := r.ProjectCombat("a")
 	if err != nil {
@@ -262,11 +251,11 @@ func TestNormalRunMixedEnemyAndTreasureInspectionPreservesEnemyReward(t *testing
 		Callback:    corebattle.CallbackContext{Damage: &damage},
 		Requester:   &requester,
 	}
-	searchCmd, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Action: "job-78-entry-1", TargetID: "weapon-01"}, opCtx)
+	searchCmd, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Action: "job-78-entry-1", TargetID: "weapon-01"}, opCtx)
 	if err != nil {
 		t.Fatalf("parse enemy reward search failed: %v", err)
 	}
-	boxCmd, err := r.ParseNormalOperation(RunCommand{ActorID: "a", Input: "＠トレハンのかん>普通の宝箱A"}, opCtx)
+	boxCmd, err := r.ParseNormalOperation(runhost.Command{ActorID: "a", Input: "＠トレハンのかん>普通の宝箱A"}, opCtx)
 	if err != nil {
 		t.Fatalf("parse box valuation failed: %v", err)
 	}

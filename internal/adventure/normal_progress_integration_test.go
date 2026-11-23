@@ -10,6 +10,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -35,18 +36,18 @@ func TestNormalRunOrdinaryBossRequiresExplicitTreasureAdvance(t *testing.T) {
 	for floor := 1; floor <= 10; floor++ {
 		f.send(t, runID, 0, "advance", "")
 		r, err := f.store.FindRun(context.Background(), runID)
-		if err != nil || r.Floor != floor || r.EncounterFloor != floor || len(r.Enemies) == 0 || len(r.Boxes) != 0 {
+		if err != nil || r.Round != floor || r.EncounterFloor != floor || len(r.Enemies) == 0 || len(r.Boxes) != 0 {
 			t.Fatal(r, err)
 		}
 		f.send(t, runID, 0, "kill", "")
 		r, err = f.store.FindRun(context.Background(), runID)
-		if err != nil || r.StageCleared != (floor == 10) || r.Floor != floor || len(r.Boxes) != 0 {
+		if err != nil || r.StageCleared != (floor == 10) || r.Round != floor || len(r.Boxes) != 0 {
 			t.Fatal(r, err)
 		}
 	}
 	f.send(t, runID, 0, "advance", "")
 	r, err := f.store.FindRun(context.Background(), runID)
-	if err != nil || r.Floor != 11 || !r.StageCleared || len(r.Boxes) == 0 {
+	if err != nil || r.Round != 11 || !r.StageCleared || len(r.Boxes) == 0 {
 		t.Fatal(r, err)
 	}
 	for _, box := range r.Boxes {
@@ -76,7 +77,7 @@ func TestNormalRunCancelledBlessingReadDoesNotDraw(t *testing.T) {
 	}
 	beforeRNG := f.rng.calls.Load()
 	c := f.actors[0]
-	cmd := adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: "cancelled", Version: r.Version, Action: "advance"}
+	cmd := runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: "cancelled", Version: r.Version, Action: "advance"}
 	if _, err := f.svc.Command(ctx, cmd); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
@@ -114,7 +115,7 @@ func TestNormalRunAdvanceUsesExecutingActorAndRequiredReads(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.clock.add(3 * time.Second)
-			cmd := adventure.RunCommand{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: "treasure", Version: r.Version, Action: "advance"}
+			cmd := runhost.Command{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: "treasure", Version: r.Version, Action: "advance"}
 			beforeRNG := f.rng.calls.Load()
 			if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, b.err) {
 				t.Fatal(err)
@@ -164,7 +165,7 @@ func TestNormalRunActivityClassificationAndBoundaries(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.clock.add(4 * time.Second)
-			cmd := adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: id.New(), Version: before.Version, Action: tc.action}
+			cmd := runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: id.New(), Version: before.Version, Action: tc.action}
 			_, err = f.svc.Command(context.Background(), cmd)
 			if (err != nil) != (tc.action == "reject") {
 				t.Fatal(err)
@@ -195,7 +196,7 @@ func TestNormalRunActivityClassificationAndBoundaries(t *testing.T) {
 	cmd := first.Command
 	cmd.ID, cmd.Version, cmd.Action = "exit-boundary", first.Version, "exit"
 	f.clock.add(3*time.Second - time.Nanosecond)
-	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, adventure.ErrRunCooldown) {
+	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, runhost.ErrCooldown) {
 		t.Fatal("before interval boundary accepted", err)
 	}
 	f.clock.add(time.Nanosecond)
@@ -225,16 +226,16 @@ func TestNormalRunPairedCommandExitAndCleanupStress(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cmd := adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: "race-exit", Version: r.Version, Action: action}
+			cmd := runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: "race-exit", Version: r.Version, Action: action}
 			other := f.actors[1]
-			compete := adventure.RunCommand{PlayerID: other.PlayerID, ActorID: other.ID, RunID: runID, ID: "race-command", Version: r.Version, Action: "no_effect"}
+			compete := runhost.Command{PlayerID: other.PlayerID, ActorID: other.ID, RunID: runID, ID: "race-command", Version: r.Version, Action: "no_effect"}
 			stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 				request := cmd
 				if (worker+op)%2 == 0 {
 					request = compete
 				}
 				_, err := f.svc.Command(context.Background(), request)
-				if errors.Is(err, adventure.ErrRunConflict) || errors.Is(err, adventure.ErrNotFound) || errors.Is(err, adventure.ErrRunForbidden) || errors.Is(err, adventure.ErrRunRecovery) {
+				if errors.Is(err, runhost.ErrConflict) || errors.Is(err, adventure.ErrNotFound) || errors.Is(err, runhost.ErrForbidden) || errors.Is(err, runhost.ErrRecovery) {
 					return nil
 				}
 				return err
@@ -251,7 +252,7 @@ func TestNormalRunPairedCommandExitAndCleanupStress(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				var recipient adventure.RunRecipient
+				var recipient runhost.Recipient
 				if state != nil {
 					recipient = state.Recipients[before.ID]
 				} else {

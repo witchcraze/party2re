@@ -12,6 +12,7 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // exSource is read independently from ff97fc5 stage/22–26.cgi @ex_bosses.
@@ -48,7 +49,7 @@ func exFixture(t *testing.T, key string) (*NormalRunService, *NormalRun, *ordina
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Stage, r.Floor, r.Mode, r.EXUnlocked = stage.OrdinarySeason(key), TreasureRoomFloor, CrawlModeNormal, true
+	r.Stage, r.Round, r.Mode, r.EXUnlocked = stage.OrdinarySeason(key), TreasureRoomFloor, CrawlModeNormal, true
 	r.Battle.Actors[0].HP, r.Battle.Actors[0].MaxHP, r.Battle.Actors[0].MP, r.Battle.Actors[0].MaxMP = 1, 1200, 0, 1500
 	r.Battle.Actors[0].CMP, r.Battle.Actors[0].MaxCMP = 0, 40
 	helper := r.Battle.Actors[0].Clone()
@@ -70,7 +71,7 @@ func TestEXEntryRostersRestorationDefaultFieldAndCaps(t *testing.T) {
 			if err := s.advance(context.Background(), r, "a"); err != nil {
 				t.Fatal(err)
 			}
-			if r.Floor != EXBossFloor || r.EncounterFloor != EXBossFloor || r.EncounterStageID != stageID || r.ClearPending || r.StageCleared || len(r.EncounterPool) != len(r.Stage.Ordinary.MonsterIDs) {
+			if r.Round != EXBossFloor || r.EncounterFloor != EXBossFloor || r.EncounterStageID != stageID || r.ClearPending || r.StageCleared || len(r.EncounterPool) != len(r.Stage.Ordinary.MonsterIDs) {
 				t.Fatalf("%+v", r)
 			}
 			if len(r.Enemies) != len(want) {
@@ -81,7 +82,7 @@ func TestEXEntryRostersRestorationDefaultFieldAndCaps(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				e := r.actor(r.Enemies[i])
+				e := r.Actor(r.Enemies[i])
 				j := m.Combat.Jobs
 				if j.JobID != src.job || j.SP != src.sp || j.OldJobID != src.old || j.OldSP != src.oldSP || m.HP != src.hp || m.MP != src.mp || m.GoldReward != src.gold || m.Combat.CrystalReward != src.crystal || m.Combat.Gear.AccessoryID != src.item {
 					t.Fatalf("%s payload %+v", src.id, m)
@@ -90,7 +91,7 @@ func TestEXEntryRostersRestorationDefaultFieldAndCaps(t *testing.T) {
 					t.Fatalf("%s actor %+v", src.id, e)
 				}
 			}
-			a, b, helper := r.actor("a"), r.actor("b"), r.actor("helper")
+			a, b, helper := r.Actor("a"), r.Actor("b"), r.Actor("helper")
 			capped := stageID == "stage-24" || stageID == "stage-25"
 			if r.Battle.SpecialBossField != capped || b.HP != b.MaxHP || a.MP != 1500 || a.CMP != 40 {
 				t.Fatalf("restoration/cap: %+v %+v", a, b)
@@ -124,16 +125,16 @@ func TestEXEntryGatesPreserveStateAndDraws(t *testing.T) {
 	}{
 		{"ordinary end without marker", func(r *NormalRun) { r.EXUnlocked = false }, ErrInvalidFloorAction},
 		{"marker on non-EX destination", func(r *NormalRun) { r.Stage.ID, r.Stage.EX = "stage-15", nil }, ErrInvalidFloorAction},
-		{"unopened chest", func(r *NormalRun) { r.Boxes = []TreasureBox{{ID: "box"}} }, ErrInvalidFloorAction},
+		{"unopened chest", func(r *NormalRun) { r.Boxes = []runhost.TreasureBox{{ID: "box"}} }, ErrInvalidFloorAction},
 		{"missing roster", func(r *NormalRun) { cp := *r.Stage.Ordinary; cp.EXRoster = nil; r.Stage.Ordinary = &cp }, corebattle.ErrUnsupportedEffect},
-		{"missing EX pool", func(r *NormalRun) { ex := *r.Stage.EX; ex.TreasureItems, r.Floor, r.Stage.EX = nil, EXBossFloor, &ex }, corebattle.ErrUnsupportedEffect},
+		{"missing EX pool", func(r *NormalRun) { ex := *r.Stage.EX; ex.TreasureItems, r.Round, r.Stage.EX = nil, EXBossFloor, &ex }, corebattle.ErrUnsupportedEffect},
 		{"living EX enemy", func(r *NormalRun) {
-			r.Floor = EXBossFloor
+			r.Round = EXBossFloor
 			e := r.Battle.Actors[0].Clone()
 			e.ID, e.TeamID, e.HP = "boss", "enemies", 9
 			r.Battle.Actors, r.Enemies = append(r.Battle.Actors, e), []string{"boss"}
 		}, ErrInvalidFloorAction},
-		{"terminal13", func(r *NormalRun) { r.Floor = EXBossFloor + 1 }, ErrInvalidFloorAction},
+		{"terminal13", func(r *NormalRun) { r.Round = EXBossFloor + 1 }, ErrInvalidFloorAction},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, r, rng := exFixture(t, "stage-23")
@@ -152,7 +153,7 @@ func TestEXEntryGatesPreserveStateAndDraws(t *testing.T) {
 
 func TestEXMarkerSurvivesTravelAgainstDestination(t *testing.T) {
 	s, r, _ := exFixture(t, "stage-23")
-	r.Floor = 3
+	r.Round = 3
 	if _, err := s.ApplyCombatTravel(context.Background(), r, "a", "item-066", CombatTravelInput{}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -250,8 +251,8 @@ func TestEXTreasureCreationPoolsCountsAndAllowanceReset(t *testing.T) {
 	for key, want := range exPools {
 		t.Run(key, func(t *testing.T) {
 			s, r, _ := exFixture(t, key)
-			r.Floor, r.StageCleared = EXBossFloor, false
-			r.Recipients = map[string]RunRecipient{"a": {Inspected: 1, Conditional: RunEarnings{Gold: 7}}, "b": {Inspected: 2}}
+			r.Round, r.StageCleared = EXBossFloor, false
+			r.Recipients = map[string]runhost.Recipient{"a": {Inspected: 1, Conditional: runhost.Earnings{Gold: 7}}, "b": {Inspected: 2}}
 			if !slices.Equal(r.Stage.exTreasureItems(), want.pool) || r.Stage.EX.FixedTreasure != want.fixed {
 				t.Fatalf("pool %v fixed %q", r.Stage.exTreasureItems(), r.Stage.EX.FixedTreasure)
 			}
@@ -267,14 +268,14 @@ func TestEXTreasureCreationPoolsCountsAndAllowanceReset(t *testing.T) {
 			if err := s.advance(context.Background(), r, "a"); err != nil {
 				t.Fatal(err)
 			}
-			wantBoxes := []TreasureBox{{ID: "box-1", Name: "黒い宝箱A", ItemID: want.pool[n-1]}, {ID: "box-2", Name: "普通の宝箱B", ItemID: want.pool[1]}}
+			wantBoxes := []runhost.TreasureBox{{ID: "box-1", Name: "黒い宝箱A", ItemID: want.pool[n-1]}, {ID: "box-2", Name: "普通の宝箱B", ItemID: want.pool[1]}}
 			if want.fixed != "" {
-				wantBoxes = append(wantBoxes, TreasureBox{ID: "box-3", Name: "金の宝箱A", ItemID: want.fixed, Fixed: true}, TreasureBox{ID: "box-4", Name: "煤けた宝箱B", ItemID: want.fixed, Fixed: true})
+				wantBoxes = append(wantBoxes, runhost.TreasureBox{ID: "box-3", Name: "金の宝箱A", ItemID: want.fixed, Fixed: true}, runhost.TreasureBox{ID: "box-4", Name: "煤けた宝箱B", ItemID: want.fixed, Fixed: true})
 			}
 			if !reflect.DeepEqual(r.Boxes, wantBoxes) || !slices.Equal(d.calls, wantCalls) {
 				t.Fatalf("boxes %+v draws %v", r.Boxes, d.calls)
 			}
-			if r.Floor != EXTreasureFloor || r.EncounterFloor != EXTreasureFloor || r.Recipients["a"].Inspected != 0 || r.Recipients["b"].Inspected != 0 || r.StageCleared || r.Recipients["a"].Conditional.Gold != 7 || r.Recipients["a"].Pending.Gold != 0 {
+			if r.Round != EXTreasureFloor || r.EncounterFloor != EXTreasureFloor || r.Recipients["a"].Inspected != 0 || r.Recipients["b"].Inspected != 0 || r.StageCleared || r.Recipients["a"].Conditional.Gold != 7 || r.Recipients["a"].Pending.Gold != 0 {
 				t.Fatalf("%+v", r)
 			}
 			if err := s.advance(context.Background(), r, "a"); !errors.Is(err, ErrInvalidFloorAction) {
@@ -298,9 +299,9 @@ func TestTreasurePartyCountsLivingHelpersOnly(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, r, _ := exFixture(t, "stage-22")
-			r.Floor = tc.floor
-			r.actor("helper").HP = tc.helperHP
-			r.pruneFallenNPCs("a") // the previous command's save boundary
+			r.Round = tc.floor
+			r.Actor("helper").HP = tc.helperHP
+			r.PruneFallenNPCs("a") // the previous command's save boundary
 			s.cfg.Clock = &testClock{now: time.Unix(100, 0)}
 			if err := s.advance(context.Background(), r, "a"); err != nil {
 				t.Fatal(err)
@@ -314,8 +315,8 @@ func TestTreasurePartyCountsLivingHelpersOnly(t *testing.T) {
 
 func TestEXFixedChestsBypassOrdinaryAllowance(t *testing.T) {
 	s, r, _ := exFixture(t, "stage-24")
-	r.Floor = EXBossFloor
-	r.Recipients = map[string]RunRecipient{"a": {}, "b": {}}
+	r.Round = EXBossFloor
+	r.Recipients = map[string]runhost.Recipient{"a": {}, "b": {}}
 	if err := s.advance(context.Background(), r, "a"); err != nil {
 		t.Fatal(err)
 	}
@@ -329,18 +330,18 @@ func TestEXFixedChestsBypassOrdinaryAllowance(t *testing.T) {
 	}
 	// is_get_fixed is not in @battle_datas, so it never survives the request (config.cgi:102–104).
 	for _, id := range fixed {
-		box, consumed, err := s.claimChest(context.Background(), r, "a", id)
+		box, consumed, err := r.ClaimChest(context.Background(), s.cfg.Inventories, "a", id)
 		if err != nil || box.OpenedBy != "a" || len(consumed) != 0 || r.Recipients["a"].Inspected != 0 {
 			t.Fatal(box, consumed, err)
 		}
 	}
-	if _, _, err := s.claimChest(context.Background(), r, "a", ordinary[0]); err != nil || r.Recipients["a"].Inspected != 1 {
+	if _, _, err := r.ClaimChest(context.Background(), s.cfg.Inventories, "a", ordinary[0]); err != nil || r.Recipients["a"].Inspected != 1 {
 		t.Fatal("fixed claim consumed the ordinary allowance", err)
 	}
-	if _, _, err := s.claimChest(context.Background(), r, "a", fixed[0]); !errors.Is(err, ErrNoUnopenedTreasure) {
+	if _, _, err := r.ClaimChest(context.Background(), s.cfg.Inventories, "a", fixed[0]); !errors.Is(err, ErrNoUnopenedTreasure) {
 		t.Fatal("opened fixed chest reclaimed", err)
 	}
-	if _, _, err := s.claimChest(context.Background(), r, "b", ordinary[1]); !errors.Is(err, ErrUnconsciousCharacter) {
+	if _, _, err := r.ClaimChest(context.Background(), s.cfg.Inventories, "b", ordinary[1]); !errors.Is(err, ErrUnconsciousCharacter) {
 		t.Fatal("fallen member claimed", err)
 	}
 }

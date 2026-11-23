@@ -14,6 +14,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 const (
@@ -149,7 +150,7 @@ type PartyAdventureResult struct {
 	TotalCrystals         int                      `json:"total_crystals,omitempty"`
 	SynergyBonusPercent   int                      `json:"synergy_bonus_percent"`
 	Rewards               []MemberRewardSummary    `json:"rewards"`
-	TreasureBoxes         []adventure.TreasureBox  `json:"treasure_boxes,omitempty"`
+	TreasureBoxes         []runhost.TreasureBox    `json:"treasure_boxes,omitempty"`
 	BattleResult          battle.PartyBattleResult `json:"battle_result"`
 	LostDrops             map[string][]string      `json:"lost_drops,omitempty"`
 

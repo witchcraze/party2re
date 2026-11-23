@@ -11,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func createTestCharacters() []corecharacter.Character {
@@ -1039,7 +1040,7 @@ func TestCrawlSession_ExamineTreasure_AllowanceAndMasterKey(t *testing.T) {
 		{ID: "char-dead", Name: "Dead Hero", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
 	}
 	p1 := corebattle.MustNewParticipant("char-1", 100, 10, 10)
-	p1.ItemDefinitionIDs = []string{adventure.ItemTreasurePocket} // char-1 has 1 master key
+	p1.ItemDefinitionIDs = []string{runhost.ItemTreasurePocket} // char-1 has 1 master key
 	p2 := corebattle.MustNewParticipant("char-2", 100, 10, 10)
 	// char-2 has no keys
 	pDead := corebattle.MustNewParticipant("char-dead", 100, 10, 10)
@@ -1056,7 +1057,7 @@ func TestCrawlSession_ExamineTreasure_AllowanceAndMasterKey(t *testing.T) {
 	}
 
 	sess.CurrentFloor = adventure.TreasureRoomFloor
-	sess.TreasureBoxes = []adventure.TreasureBox{
+	sess.TreasureBoxes = []runhost.TreasureBox{
 		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
 		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
 		{ID: "box-3", Name: "Chest 3", ItemID: "item-003"},
@@ -1107,7 +1108,7 @@ func TestCrawlSession_ExamineTreasure_AllowanceAndMasterKey(t *testing.T) {
 		t.Errorf("box3 opened by %s, want char-1", box3.OpenedBy)
 	}
 	consumed := sess.ConsumedItems["char-1"]
-	if len(consumed) != 1 || consumed[0].ID != adventure.ItemTreasurePocket || consumed[0].Quantity != 1 {
+	if len(consumed) != 1 || consumed[0].ID != runhost.ItemTreasurePocket || consumed[0].Quantity != 1 {
 		t.Fatalf("char-1 consumed items = %v, want 1 master key", consumed)
 	}
 
@@ -1117,7 +1118,7 @@ func TestCrawlSession_ExamineTreasure_AllowanceAndMasterKey(t *testing.T) {
 	}
 
 	// 8. Add a 4th box; char-1 tries to open -> rejected (ErrTreasureLimitReached because key was spent)
-	sess.TreasureBoxes = append(sess.TreasureBoxes, adventure.TreasureBox{ID: "box-4", Name: "Chest 4", ItemID: "item-004"})
+	sess.TreasureBoxes = append(sess.TreasureBoxes, runhost.TreasureBox{ID: "box-4", Name: "Chest 4", ItemID: "item-004"})
 	if _, err := sess.ExamineTreasure("char-1"); !errors.Is(err, adventure.ErrTreasureLimitReached) {
 		t.Fatalf("expected ErrTreasureLimitReached for char-1 after key exhausted, got %v", err)
 	}
@@ -1135,14 +1136,14 @@ func TestCrawlSession_ExamineTreasure_StackedTreasurePocket(t *testing.T) {
 	}
 	// Participant with stacked quantity 2 of ItemTreasurePocket
 	p := corebattle.MustNewParticipant("char-stack", 100, 10, 10)
-	p.ItemDefinitionIDs = []string{adventure.ItemTreasurePocket, adventure.ItemTreasurePocket}
+	p.ItemDefinitionIDs = []string{runhost.ItemTreasurePocket, runhost.ItemTreasurePocket}
 
 	sess, err := adventure.NewCrawlSessionWithParticipants(stage1, chars, []corebattle.Participant{p}, func(n int) int { return 0 })
 	if err != nil {
 		t.Fatal(err)
 	}
 	sess.CurrentFloor = adventure.TreasureRoomFloor
-	sess.TreasureBoxes = []adventure.TreasureBox{
+	sess.TreasureBoxes = []runhost.TreasureBox{
 		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
 		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
 		{ID: "box-3", Name: "Chest 3", ItemID: "item-003"},
@@ -1191,7 +1192,7 @@ func TestCrawlSession_ExamineTreasure_DoesNotMutateCallerItemDefinitionIDs(t *te
 	chars := []corecharacter.Character{
 		{ID: "char-1", Name: "Hero", Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
 	}
-	origItems := []string{adventure.ItemTreasurePocket, "item-161"}
+	origItems := []string{runhost.ItemTreasurePocket, "item-161"}
 	p := corebattle.MustNewParticipant("char-1", 100, 10, 10)
 	p.ItemDefinitionIDs = origItems
 
@@ -1200,7 +1201,7 @@ func TestCrawlSession_ExamineTreasure_DoesNotMutateCallerItemDefinitionIDs(t *te
 		t.Fatal(err)
 	}
 	sess1.CurrentFloor = adventure.TreasureRoomFloor
-	sess1.TreasureBoxes = []adventure.TreasureBox{
+	sess1.TreasureBoxes = []runhost.TreasureBox{
 		{ID: "box-1", Name: "Chest 1", ItemID: "item-001"},
 		{ID: "box-2", Name: "Chest 2", ItemID: "item-002"},
 	}
@@ -1209,7 +1210,7 @@ func TestCrawlSession_ExamineTreasure_DoesNotMutateCallerItemDefinitionIDs(t *te
 	if _, err := sess1.ExamineTreasure("char-1"); err != nil {
 		t.Fatalf("1st box: %v", err)
 	}
-	if !slices.Equal(origItems, []string{adventure.ItemTreasurePocket, "item-161"}) {
+	if !slices.Equal(origItems, []string{runhost.ItemTreasurePocket, "item-161"}) {
 		t.Fatalf("input items mutated after free box: %v", origItems)
 	}
 
@@ -1223,16 +1224,16 @@ func TestCrawlSession_ExamineTreasure_DoesNotMutateCallerItemDefinitionIDs(t *te
 	}
 
 	// Verify caller's slice was not mutated by slices.Delete
-	if !slices.Equal(origItems, []string{adventure.ItemTreasurePocket, "item-161"}) {
-		t.Fatalf("input items mutated after additional opening: %v, want [%s, item-161]", origItems, adventure.ItemTreasurePocket)
+	if !slices.Equal(origItems, []string{runhost.ItemTreasurePocket, "item-161"}) {
+		t.Fatalf("input items mutated after additional opening: %v, want [%s, item-161]", origItems, runhost.ItemTreasurePocket)
 	}
-	if !slices.Equal(p.ItemDefinitionIDs, []string{adventure.ItemTreasurePocket, "item-161"}) {
+	if !slices.Equal(p.ItemDefinitionIDs, []string{runhost.ItemTreasurePocket, "item-161"}) {
 		t.Fatalf("participant ItemDefinitionIDs mutated: %v", p.ItemDefinitionIDs)
 	}
 
 	// Verify executing session's own state
 	consumed := sess1.ConsumedItems["char-1"]
-	if len(consumed) != 1 || consumed[0].ID != adventure.ItemTreasurePocket || consumed[0].Quantity != 1 {
+	if len(consumed) != 1 || consumed[0].ID != runhost.ItemTreasurePocket || consumed[0].Quantity != 1 {
 		t.Fatalf("expected 1 consumed ItemTreasurePocket, got: %v", consumed)
 	}
 
@@ -1242,7 +1243,7 @@ func TestCrawlSession_ExamineTreasure_DoesNotMutateCallerItemDefinitionIDs(t *te
 		t.Fatal(err)
 	}
 	sess2.CurrentFloor = adventure.TreasureRoomFloor
-	sess2.TreasureBoxes = []adventure.TreasureBox{
+	sess2.TreasureBoxes = []runhost.TreasureBox{
 		{ID: "box-a", Name: "Chest A", ItemID: "item-001"},
 		{ID: "box-b", Name: "Chest B", ItemID: "item-002"},
 	}
@@ -1262,7 +1263,7 @@ func TestCrawlSession_ExamineTreasure_DoesNotMutateCallerItemDefinitionIDs(t *te
 		t.Fatal(err)
 	}
 	sess3.CurrentFloor = adventure.TreasureRoomFloor
-	sess3.TreasureBoxes = []adventure.TreasureBox{
+	sess3.TreasureBoxes = []runhost.TreasureBox{
 		{ID: "box-x", Name: "Chest X", ItemID: "item-001"},
 		{ID: "box-y", Name: "Chest Y", ItemID: "item-002"},
 	}

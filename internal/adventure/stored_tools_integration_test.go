@@ -6,11 +6,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -62,7 +62,7 @@ func depotItems(t *testing.T, depots *storedDepots, owner string) []item.Instanc
 	return value.Items
 }
 
-func storedCommand(t *testing.T, f *normalFixture, run string, actor int, selector, key string) adventure.RunCommand {
+func storedCommand(t *testing.T, f *normalFixture, run string, actor int, selector, key string) runhost.Command {
 	cmd := assetCommand(t, f, run, actor, storedAction, key)
 	cmd.TargetID, cmd.Input = selector, cmd.ActorID
 	return cmd
@@ -203,10 +203,10 @@ func TestStoredToolSQLPairedCommandsConserveItems(t *testing.T) {
 	for _, actor := range f.actors {
 		seedDepot(t, depots, actor.ID, "item-001")
 	}
-	commands := []adventure.RunCommand{storedCommand(t, f, run, 0, "item-001", "stored-a"), storedCommand(t, f, run, 1, "item-001", "stored-b")}
+	commands := []runhost.Command{storedCommand(t, f, run, 0, "item-001", "stored-a"), storedCommand(t, f, run, 1, "item-001", "stored-b")}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		_, err := f.svc.Command(context.Background(), commands[(worker+op)%2])
-		if errors.Is(err, adventure.ErrRunConflict) {
+		if errors.Is(err, runhost.ErrConflict) {
 			return nil
 		}
 		return err

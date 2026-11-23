@@ -17,6 +17,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -28,7 +29,7 @@ type assetCombat struct {
 	calls atomic.Int64
 }
 
-func (c *assetCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
+func (c *assetCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd runhost.Command) (adventure.RunActionEffects, error) {
 	c.calls.Add(1)
 	fx, err := c.RunCombat.ExecuteRunAction(ctx, r, cmd)
 	if err == nil && c.fail.Load() {
@@ -72,7 +73,7 @@ func seedAssetEncounter(t *testing.T, f *normalFixture, run string) {
 		npc.ID, npc.TeamID, npc.NPC = "asset-npc", "enemy", true
 		r.Battle.Actors = append(r.Battle.Actors, npc)
 		r.Enemies = []string{npc.ID}
-		r.Floor, r.EncounterFloor, r.EncounterStageID = 1, 1, r.Stage.ID
+		r.Round, r.EncounterFloor, r.EncounterStageID = 1, 1, r.Stage.ID
 		// The enemy cannot answer, so effects stay the operation's own.
 		r.LastActions[npc.ID] = time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
 		r.Version++
@@ -83,14 +84,14 @@ func seedAssetEncounter(t *testing.T, f *normalFixture, run string) {
 	}
 }
 
-func assetCommand(t *testing.T, f *normalFixture, run string, actor int, action, key string) adventure.RunCommand {
+func assetCommand(t *testing.T, f *normalFixture, run string, actor int, action, key string) runhost.Command {
 	t.Helper()
 	r, err := f.store.FindRun(context.Background(), run)
 	if err != nil {
 		t.Fatal(err)
 	}
 	c := f.actors[actor]
-	cmd := adventure.RunCommand{RunID: run, PlayerID: c.PlayerID, ActorID: c.ID, Version: r.Version, ID: key, Action: action, TargetID: "asset-npc"}
+	cmd := runhost.Command{RunID: run, PlayerID: c.PlayerID, ActorID: c.ID, Version: r.Version, ID: key, Action: action, TargetID: "asset-npc"}
 	// The requester knows the entry's job; item158 opens extended entries.
 	r = editStockRoom(t, f, &cmd, func(r *adventure.NormalRun) {
 		a := runActorByID(r, c.ID)
@@ -208,11 +209,11 @@ func TestJobAssetsSQLPairedRetry(t *testing.T) {
 			}
 			run := entry.Command.RunID
 			seedAssetEncounter(t, f, run)
-			commands := []adventure.RunCommand{assetCommand(t, f, run, 0, action, "requester-a"), assetCommand(t, f, run, 1, action, "requester-b")}
+			commands := []runhost.Command{assetCommand(t, f, run, 0, action, "requester-a"), assetCommand(t, f, run, 1, action, "requester-b")}
 			commands[0].Version = commands[1].Version // Both race the same committed state.
 			stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 				_, err := f.svc.Command(context.Background(), commands[(worker+op)%2])
-				if errors.Is(err, adventure.ErrRunConflict) {
+				if errors.Is(err, runhost.ErrConflict) {
 					return nil
 				}
 				return err
@@ -267,7 +268,7 @@ func TestJobAssetsSQLCapAndCommandAuthority(t *testing.T) {
 		t.Fatal("mutation outside Command")
 		return nil
 	})
-	if !errors.Is(err, adventure.ErrRunForbidden) {
+	if !errors.Is(err, runhost.ErrForbidden) {
 		t.Fatal(err)
 	}
 	if _, err := f.svc.Command(context.Background(), cmd); err != nil {

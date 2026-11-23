@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/customskill"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // saveCustom stores the actor's custom skill with persisted gem catalog IDs.
@@ -35,7 +36,7 @@ func withAlly(tension float64, temp corebattle.TemporaryEffect) func(*adventure.
 }
 
 // customRoom freezes the stored custom skill at entry and leaves the NPC idle.
-func customRoom(t *testing.T, f *normalFixture, cmp int, edit func(*adventure.NormalRun, *corebattle.LifetimeActor), enemies ...corebattle.LifetimeActor) adventure.RunCommand {
+func customRoom(t *testing.T, f *normalFixture, cmp int, edit func(*adventure.NormalRun, *corebattle.LifetimeActor), enemies ...corebattle.LifetimeActor) runhost.Command {
 	t.Helper()
 	return combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
 		a := runActorByID(r, f.actors[0].ID)

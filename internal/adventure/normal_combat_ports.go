@@ -8,6 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // runPorts are rebuilt for every operation from the saved run and requester.
@@ -33,7 +34,7 @@ func newRunPorts(frame corebattle.TargetContext, level *int, seals *corebattle.W
 
 func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, requester *corecharacter.Character, inspection map[string]corebattle.InspectionContent) skill.PlayerCallbackContexts {
 	d := p.damage
-	actor := findActor(state.Actors, d.ActorID)
+	actor := runhost.FindActor(state.Actors, d.ActorID)
 	held := ""
 	// The requester's own appearance ($m{icon}), not the actor's current form;
 	// shortcut: entry builds every player actor with the default icon, read the
@@ -48,7 +49,7 @@ func (p runPorts) callbacks(r *NormalRun, state *corebattle.LifetimeState, reque
 	}
 	enemyTeam := ""
 	for _, id := range slices.Concat(d.EnemyIDs, d.MemberOnlyIDs) {
-		if a := findActor(state.Actors, id); a != nil && (actor == nil || a.TeamID != actor.TeamID) {
+		if a := runhost.FindActor(state.Actors, id); a != nil && (actor == nil || a.TeamID != actor.TeamID) {
 			enemyTeam = a.TeamID
 			break
 		}

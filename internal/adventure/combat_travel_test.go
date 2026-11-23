@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 func travelFixture(t *testing.T) (*NormalRunService, *NormalRun, *ordinaryRNG, corebattle.EquipmentResetContext) {
@@ -29,7 +30,7 @@ func travelFixture(t *testing.T) (*NormalRunService, *NormalRun, *ordinaryRNG, c
 	for i := range party {
 		party[i].Gear = &corebattle.BattleGearStats{}
 	}
-	r := &NormalRun{ID: "travel", Admission: NormalAdmission{Speed: 3}, Stage: stage, Mode: "try", Floor: 0, Roster: []string{"b", "a"}, LeaderID: "b", Battle: corebattle.LifetimeState{Actors: party}, LastActions: map[string]time.Time{}, Recipients: map[string]RunRecipient{"a": {Conditional: RunEarnings{Gold: 7}}}}
+	r := &NormalRun{State: runhost.State{ID: "travel", Admission: runhost.Admission{Speed: 3}, Round: 0, Roster: []string{"b", "a"}, LeaderID: "b", Battle: corebattle.LifetimeState{Actors: party}, LastActions: map[string]time.Time{}, Recipients: map[string]runhost.Recipient{"a": {Conditional: runhost.Earnings{Gold: 7}}}}, Stage: stage, Mode: "try"}
 	rng := &ordinaryRNG{}
 	s := &NormalRunService{cfg: NormalRunConfig{Stages: stages, Monsters: monsters, Combat: &ordinaryCombat{}, RNG: rng}}
 	frame := corebattle.EquipmentResetContext{TargetContext: corebattle.TargetContext{ActorID: "a", PartyIDs: []string{"a", "b"}, Command: "tool"}}
@@ -62,13 +63,13 @@ func TestCombatTravelCoordinatesAndNoEffect(t *testing.T) {
 		t.Run(fmt.Sprintf("%s/%d/%s", tc.tool, tc.floor, tc.stage), func(t *testing.T) {
 			for _, enemies := range []bool{false, true} {
 				s, r, rng, _ := travelFixture(t)
-				r.Floor, r.StageCleared, r.EXUnlocked, r.ClearPending = tc.floor, true, true, true
+				r.Round, r.StageCleared, r.EXUnlocked, r.ClearPending = tc.floor, true, true, true
 				r.Battle.Fields = corebattle.LifetimeFields{Temporary: "burn", Turns: 3, AntiTurns: 2}
 				if tc.floor == TreasureRoomFloor {
-					r.Boxes = []TreasureBox{{ID: "old-box", ItemID: "item-001"}}
+					r.Boxes = []runhost.TreasureBox{{ID: "old-box", ItemID: "item-001"}}
 				}
-				r.actor("a").Status = corebattle.StatusPoison
-				r.actor("a").Gear.WeaponID, r.actor("a").Gear.ArmorID = "weapon-35", "armor-37"
+				r.Actor("a").Status = corebattle.StatusPoison
+				r.Actor("a").Gear.WeaponID, r.Actor("a").Gear.ArmorID = "weapon-35", "armor-37"
 				if enemies {
 					r.Enemies = []string{"old"}
 					r.Battle.Actors = append(r.Battle.Actors, corebattle.LifetimeActor{Participant: corebattle.Participant{ID: "old", HP: 4}, NPC: true})
@@ -86,15 +87,15 @@ func TestCombatTravelCoordinatesAndNoEffect(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if r.Stage.ID != tc.stage || r.Floor != tc.want || !result.Consume || result.ResponseSuppressed != (tc.floor == 11) {
-					t.Fatal(r.Stage.ID, r.Floor, result)
+				if r.Stage.ID != tc.stage || r.Round != tc.want || !result.Consume || result.ResponseSuppressed != (tc.floor == 11) {
+					t.Fatal(r.Stage.ID, r.Round, result)
 				}
 				// Only coordinates change, even with no effect, living enemies or floor0 nonleader use.
 				var want NormalRun
 				if err := json.Unmarshal(before, &want); err != nil {
 					t.Fatal(err)
 				}
-				want.Stage, want.Floor = r.Stage, tc.want
+				want.Stage, want.Round = r.Stage, tc.want
 				got, _ := json.Marshal(r)
 				expected, _ := json.Marshal(want)
 				if string(got) != string(expected) || rng.calls != 0 {
@@ -116,12 +117,12 @@ func TestCombatTravelRejectsWithoutMutation(t *testing.T) {
 		{"item-184", CombatTravelInput{DestinationStageID: "stage-24"}, func(*NormalRun) {}},
 		{"item-150", CombatTravelInput{Floor: 0}, func(*NormalRun) {}},
 		{"item-150", CombatTravelInput{Floor: 11}, func(*NormalRun) {}},
-		{"item-150", CombatTravelInput{Floor: 1}, func(r *NormalRun) { r.actor("b").Gear.AccessoryID = "item-110" }},
+		{"item-150", CombatTravelInput{Floor: 1}, func(r *NormalRun) { r.Actor("b").Gear.AccessoryID = "item-110" }},
 		{"item-150", CombatTravelInput{Floor: 1}, func(r *NormalRun) {
-			r.actor("b").RosterDetached, r.actor("b").RosterIdentity = true, "dismissed-helper"
+			r.Actor("b").RosterDetached, r.Actor("b").RosterIdentity = true, "dismissed-helper"
 		}},
 		{"item-066", CombatTravelInput{Floor: 1}, func(*NormalRun) {}},
-		{"item-107", CombatTravelInput{}, func(r *NormalRun) { r.actor("a").HP = 0 }},
+		{"item-107", CombatTravelInput{}, func(r *NormalRun) { r.Actor("a").HP = 0 }},
 		{"item-999", CombatTravelInput{}, func(*NormalRun) {}},
 	} {
 		t.Run(tc.tool, func(t *testing.T) {
@@ -153,14 +154,14 @@ func TestCombatTravel150ResponseAndReload(t *testing.T) {
 	for _, state := range []string{"absent", "unready", "ready", "fallen", "collision", "treasure"} {
 		t.Run(state, func(t *testing.T) {
 			s, r, rng, reset := travelFixture(t)
-			r.Floor, r.EncounterFloor, r.EncounterStageID = 2, 2, "stage-00"
+			r.Round, r.EncounterFloor, r.EncounterStageID = 2, 2, "stage-00"
 			if state == "treasure" {
-				r.Floor = 11
+				r.Round = 11
 			}
 			r.Battle.Fields = corebattle.LifetimeFields{Temporary: "burn", Turns: 4, AntiTurns: 2, Default: "snow"}
-			r.actor("a").Status, r.actor("a").Tension = corebattle.StatusPoison, 5
+			r.Actor("a").Status, r.Actor("a").Tension = corebattle.StatusPoison, 5
 			if state != "absent" {
-				a := r.actor("a").Clone()
+				a := r.Actor("a").Clone()
 				a.ID, a.TeamID, a.NPC, a.HP, a.EncounterIdentity = "old", "enemies", true, 10, "other-native-enemy"
 				if state == "fallen" {
 					a.HP = 0
@@ -185,7 +186,7 @@ func TestCombatTravel150ResponseAndReload(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !transition.Consume || r.Floor != 1 || r.actor("a").Status != "" || r.actor("a").Tension != 1 || r.actor("a").HP != 500 || r.Battle.Fields != fields || rng.calls == 0 {
+			if !transition.Consume || r.Round != 1 || r.Actor("a").Status != "" || r.Actor("a").Tension != 1 || r.Actor("a").HP != 500 || r.Battle.Fields != fields || rng.calls == 0 {
 				t.Fatal("reset/generation contract failed", transition)
 			}
 			npc := ""
@@ -206,8 +207,8 @@ func TestCombatTravel150ResponseAndReload(t *testing.T) {
 			if !responded && (len(r.Enemies) == 0 || r.Enemies[0] == "old") {
 				t.Fatal("new encounter lost", r.Enemies)
 			}
-			if state == "collision" && r.actor("old").HP != 4 {
-				t.Fatal("generated collision failed to overwrite old payload", r.actor("old"))
+			if state == "collision" && r.Actor("old").HP != 4 {
+				t.Fatal("generated collision failed to overwrite old payload", r.Actor("old"))
 			}
 			if len(r.Battle.Actors) != len(r.Enemies)+2 {
 				t.Fatal("unsaved roster leaked", r.Battle.Actors)

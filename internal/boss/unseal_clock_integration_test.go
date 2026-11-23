@@ -17,6 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/party"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type controllableClock struct{ nanos atomic.Int64 }
@@ -42,8 +43,8 @@ func (*stubNormalCombat) PrepareAdvance(context.Context, *adventure.NormalRun, s
 func (*stubNormalCombat) PrepareBossField(context.Context, *adventure.NormalRun, string) error {
 	return nil
 }
-func (*stubNormalCombat) ExecuteRunAction(context.Context, *adventure.NormalRun, adventure.RunCommand) (adventure.RunActionEffects, error) {
-	return adventure.RunActionEffects{}, adventure.ErrRunUnavailable
+func (*stubNormalCombat) ExecuteRunAction(context.Context, *adventure.NormalRun, runhost.Command) (adventure.RunActionEffects, error) {
+	return adventure.RunActionEffects{}, runhost.ErrUnavailable
 }
 
 type failingAdventureRepo struct {
@@ -77,12 +78,12 @@ func (r *failingPartyLogRepo) SaveAdventureLog(ctx context.Context, log party.Pa
 }
 
 type failingNormalStore struct {
-	adventure.NormalRunStore
+	runhost.Store[adventure.NormalRun]
 	failReceipt atomic.Bool
 }
 
-func (s *failingNormalStore) SaveRunReceipt(ctx context.Context, receipt adventure.RunReceipt) error {
-	if err := s.NormalRunStore.SaveRunReceipt(ctx, receipt); err != nil {
+func (s *failingNormalStore) SaveRunReceipt(ctx context.Context, receipt runhost.Receipt) error {
+	if err := s.Store.SaveRunReceipt(ctx, receipt); err != nil {
 		return err
 	}
 	if s.failReceipt.Load() {
@@ -135,8 +136,8 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		"players", "characters", "inventory_items", "equipment_slots",
 		"character_depots", "depot_items", "character_jobs", "character_job_history", "character_job_masteries",
 		"adventures", "party_adventure_logs",
-		"normal_adventure_runs", "normal_adventure_enrollments",
-		"normal_adventure_recipients", "normal_adventure_receipts",
+		"runs", "run_enrollments",
+		"run_recipients", "run_receipts",
 		"character_boss_records", "boss_challenge_history",
 		"boss_room_settlements", "boss_unseal_clock",
 	)
@@ -176,11 +177,11 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		t.Fatal(err)
 	}
 	partyLogRepo := &failingPartyLogRepo{AdventureLogRepository: partyDBRepo}
-	normalBaseStore, err := database.NewNormalAdventureRepository(db)
+	normalBaseStore, err := database.NewRunRepository[adventure.NormalRun](db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	normalStore := &failingNormalStore{NormalRunStore: normalBaseStore}
+	normalStore := &failingNormalStore{Store: normalBaseStore}
 	bossRepo, err := database.NewBossRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -325,7 +326,7 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		if err != nil {
 			return err
 		}
-		r.Floor = 10
+		r.Round = 10
 		r.EncounterFloor = 10
 		for i := range r.Battle.Actors {
 			if slices.Contains(r.Enemies, r.Battle.Actors[i].ID) {
@@ -344,7 +345,7 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	advCmd := adventure.RunCommand{
+	advCmd := runhost.Command{
 		RunID: runID, ID: "normal-unseal-cmd", PlayerID: heroNormal.PlayerID,
 		ActorID: heroNormal.ID, Version: beforeRun.Version, Action: "advance",
 	}
@@ -383,7 +384,7 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 	if err != nil || len(rAfter.Boxes) == 0 {
 		t.Fatalf("expected floor 11 boxes, run=%+v err=%v", rAfter, err)
 	}
-	for _, cmd := range []adventure.RunCommand{
+	for _, cmd := range []runhost.Command{
 		{RunID: runID, ID: id.New(), PlayerID: heroNormal.PlayerID, ActorID: heroNormal.ID, Version: rAfter.Version, Action: "chest", TargetID: rAfter.Boxes[0].ID},
 	} {
 		clock.Set(clock.Now().Add(5 * time.Second))
@@ -396,7 +397,7 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		t.Fatal(err)
 	}
 	clock.Set(clock.Now().Add(5 * time.Second))
-	if _, err := normalSvc.Command(ctx, adventure.RunCommand{
+	if _, err := normalSvc.Command(ctx, runhost.Command{
 		RunID: runID, ID: id.New(), PlayerID: heroNormal.PlayerID, ActorID: heroNormal.ID, Version: rAfterChest.Version, Action: "exit",
 	}); err != nil {
 		t.Fatal(err)

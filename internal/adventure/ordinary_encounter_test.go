@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type ordinaryCombat struct{ fieldCalls int }
@@ -18,14 +19,14 @@ func (c *ordinaryCombat) PrepareBossField(_ context.Context, r *NormalRun, id st
 	c.fieldCalls++
 	frame := corebattle.TargetContext{ActorID: id, EnemyIDs: r.Enemies}
 	for _, a := range r.Battle.Actors {
-		if a.TeamID == r.actor(id).TeamID {
+		if a.TeamID == r.Actor(id).TeamID {
 			frame.PartyIDs = append(frame.PartyIDs, a.ID)
 		}
 	}
 	return r.Battle.ApplySpecialBossField(&corebattle.EquipmentResetContext{TargetContext: frame}, &ordinaryRNG{})
 }
-func (*ordinaryCombat) ExecuteRunAction(context.Context, *NormalRun, RunCommand) (RunActionEffects, error) {
-	return RunActionEffects{}, ErrRunUnavailable
+func (*ordinaryCombat) ExecuteRunAction(context.Context, *NormalRun, runhost.Command) (RunActionEffects, error) {
+	return RunActionEffects{}, runhost.ErrUnavailable
 }
 
 func TestOrdinaryAdvanceFreezesCompleteEncounterAndCaps(t *testing.T) {
@@ -51,16 +52,16 @@ func TestOrdinaryAdvanceFreezesCompleteEncounterAndCaps(t *testing.T) {
 	helper.MaxHP = 3000
 	helper.BaseStats.Attack = 600
 	party = append(party, helper)
-	r := NormalRun{ID: "run", Stage: stage, Floor: 9, Roster: []string{"a", "b"}, Battle: corebattle.LifetimeState{Actors: party}}
+	r := NormalRun{State: runhost.State{ID: "run", Round: 9, Roster: []string{"a", "b"}, Battle: corebattle.LifetimeState{Actors: party}}, Stage: stage}
 	combat := &ordinaryCombat{}
 	s := NormalRunService{cfg: NormalRunConfig{Monsters: monsters, Combat: combat, RNG: &ordinaryRNG{}}}
 	if err := s.advance(context.Background(), &r, "a"); err != nil {
 		t.Fatal(err)
 	}
-	if r.Floor != 10 || r.EncounterFloor != 10 || len(r.Enemies) != 3 || len(r.EncounterPool) != 6 || !r.Battle.SpecialBossField || combat.fieldCalls != 1 {
+	if r.Round != 10 || r.EncounterFloor != 10 || len(r.Enemies) != 3 || len(r.EncounterPool) != 6 || !r.Battle.SpecialBossField || combat.fieldCalls != 1 {
 		t.Fatalf("%+v field calls%d", r, combat.fieldCalls)
 	}
-	if r.actor("helper").MaxHP != 999 || r.actor("helper").Attack != 255 || r.actor(r.Enemies[0]).HP != 5000 {
+	if r.Actor("helper").MaxHP != 999 || r.Actor("helper").Attack != 255 || r.Actor(r.Enemies[0]).HP != 5000 {
 		t.Fatal("helper omitted from party scaling/caps")
 	}
 	data, err := json.Marshal(r)
@@ -175,7 +176,7 @@ func TestOrdinaryBossPayloadAndReload(t *testing.T) {
 		t.Fatal("gem cost/equipment lost")
 	}
 	before := rng.calls
-	run := NormalRun{Battle: corebattle.LifetimeState{Actors: actors}}
+	run := NormalRun{State: runhost.State{Battle: corebattle.LifetimeState{Actors: actors}}}
 	data, err := json.Marshal(run)
 	if err != nil {
 		t.Fatal(err)
@@ -289,11 +290,11 @@ func TestOrdinarySuppliedStateAndHardScaling(t *testing.T) {
 
 func TestOrdinaryNPCSkippedHeadRotationAndReload(t *testing.T) {
 	now := time.Unix(1000, 0)
-	r := NormalRun{Admission: NormalAdmission{Speed: 18}, Enemies: []string{"a", "b", "c"}, LastActions: map[string]time.Time{"a": now, "b": now.Add(-18 * time.Second)}, Battle: corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{{Participant: corebattle.Participant{ID: "a", HP: 10}, NPC: true}, {Participant: corebattle.Participant{ID: "b", HP: 10}, NPC: true}, {Participant: corebattle.Participant{ID: "c", HP: 0}, NPC: true}}}}
+	r := NormalRun{State: runhost.State{Admission: runhost.Admission{Speed: 18}, Enemies: []string{"a", "b", "c"}, LastActions: map[string]time.Time{"a": now, "b": now.Add(-18 * time.Second)}, Battle: corebattle.LifetimeState{Actors: []corebattle.LifetimeActor{{Participant: corebattle.Participant{ID: "a", HP: 10}, NPC: true}, {Participant: corebattle.Participant{ID: "b", HP: 10}, NPC: true}, {Participant: corebattle.Participant{ID: "c", HP: 0}, NPC: true}}}}}
 	if r.NextNPC(now) != "b" {
 		t.Fatal("wrong eligible member")
 	}
-	r.actor("b").HP = 0 // The selected actor can fall during its own action/tails.
+	r.Actor("b").HP = 0 // The selected actor can fall during its own action/tails.
 	if err := r.RecordNPCResponse("b", now); err != nil {
 		t.Fatal(err)
 	}

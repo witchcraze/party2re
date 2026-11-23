@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 const (
@@ -23,15 +24,15 @@ const (
 )
 
 var (
-	ErrNoParticipants       = errors.New("adventure requires at least 1 participant")
+	ErrNoParticipants       = runhost.ErrNoParticipants
 	ErrTooManyParticipants  = errors.New("adventure supports at most 4 participants")
 	ErrDungeonCrawlFinished = errors.New("dungeon crawl already concluded")
-	ErrInvalidFloorAction   = errors.New("invalid floor action for current crawl state")
+	ErrInvalidFloorAction   = runhost.ErrInvalidAction
 	ErrLeaderOnly           = errors.New("only the party leader can advance the floor")
-	ErrTreasureLimitReached = errors.New("character has reached treasure inspection limit")
-	ErrUnconsciousCharacter = errors.New("unconscious character cannot open treasure")
-	ErrNotParticipant       = errors.New("character is not a participant in this adventure")
-	ErrNoUnopenedTreasure   = errors.New("no unopened treasure boxes remaining")
+	ErrTreasureLimitReached = runhost.ErrTreasureLimitReached
+	ErrUnconsciousCharacter = runhost.ErrActorUnconscious
+	ErrNotParticipant       = runhost.ErrNotParticipant
+	ErrNoUnopenedTreasure   = runhost.ErrNoUnopenedTreasure
 )
 
 // DungeonFloorResult records the outcome of a single dungeon floor.
@@ -73,7 +74,7 @@ type DungeonCrawlResult struct {
 	TotalCrystals         int                                   `json:"total_crystals"`
 	RecipientRewards      map[string]corebattle.Reward          `json:"-"`
 	FloorResults          []DungeonFloorResult                  `json:"floor_results"`
-	TreasureBoxes         []TreasureBox                         `json:"treasure_boxes,omitempty"`
+	TreasureBoxes         []runhost.TreasureBox                 `json:"treasure_boxes,omitempty"`
 	InspectedBoxes        map[string]int                        `json:"inspected_boxes,omitempty"`
 	PartySize             int                                   `json:"party_size"`
 	ParticipantHPs        map[string]int                        `json:"participant_hps"`
@@ -104,9 +105,9 @@ type CrawlSession struct {
 	TotalEXP            int                                  `json:"total_exp"`
 	TotalGold           int                                  `json:"total_gold"`
 	TotalCrystals       int                                  `json:"total_crystals"`
-	Earnings            map[string]RunEarnings               `json:"earnings,omitempty"`
+	Earnings            map[string]runhost.Earnings          `json:"earnings,omitempty"`
 	FloorResults        []DungeonFloorResult                 `json:"floor_results"`
-	TreasureBoxes       []TreasureBox                        `json:"treasure_boxes,omitempty"`
+	TreasureBoxes       []runhost.TreasureBox                `json:"treasure_boxes,omitempty"`
 	InspectedBoxes      map[string]int                       `json:"inspected_boxes,omitempty"`
 	Participants        []corebattle.Participant             `json:"participants"`
 	ConsumedItems       map[string][]corebattle.ConsumedItem `json:"consumed_items,omitempty"`
@@ -387,8 +388,8 @@ func (s *CrawlSession) AdvanceFloor(
 
 // ExamineTreasure opens a treasure box on Floor 11 (@しらべる).
 // Each surviving participant has a base allowance of 1 box.
-// Opening additional boxes requires and consumes 1 Treasure Pocket (ItemTreasurePocket = "item-215").
-func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error) {
+// Opening additional boxes requires and consumes 1 Treasure Pocket (runhost.ItemTreasurePocket = "item-215").
+func (s *CrawlSession) ExamineTreasure(characterID string) (*runhost.TreasureBox, error) {
 	if s.CurrentFloor != TreasureRoomFloor {
 		return nil, ErrInvalidFloorAction
 	}
@@ -407,7 +408,7 @@ func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error)
 		return nil, ErrUnconsciousCharacter
 	}
 
-	var targetBox *TreasureBox
+	var targetBox *runhost.TreasureBox
 	for i := range s.TreasureBoxes {
 		if s.TreasureBoxes[i].OpenedBy == "" {
 			targetBox = &s.TreasureBoxes[i]
@@ -424,13 +425,13 @@ func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error)
 
 	inspected := s.InspectedBoxes[characterID]
 	if inspected >= 1 {
-		keyIdx := slices.Index(actor.ItemDefinitionIDs, ItemTreasurePocket)
+		keyIdx := slices.Index(actor.ItemDefinitionIDs, runhost.ItemTreasurePocket)
 		if keyIdx < 0 {
 			return nil, ErrTreasureLimitReached
 		}
 		actor.ItemDefinitionIDs = slices.Clone(actor.ItemDefinitionIDs)
 		actor.ItemDefinitionIDs = slices.Delete(actor.ItemDefinitionIDs, keyIdx, keyIdx+1)
-		s.addConsumedItem(characterID, corebattle.ConsumedItem{ID: ItemTreasurePocket, Quantity: 1})
+		s.addConsumedItem(characterID, corebattle.ConsumedItem{ID: runhost.ItemTreasurePocket, Quantity: 1})
 	}
 
 	s.InspectedBoxes[characterID]++

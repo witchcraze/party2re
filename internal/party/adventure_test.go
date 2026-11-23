@@ -17,6 +17,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type mockDepotRepo struct {
@@ -2116,7 +2117,7 @@ func TestStartPartyAdventure_Floor11Treasure_AutoCrawlDoesNotConsumeMasterKeyWit
 
 	pBuilder := &mockPartyParticipantBuilderWithItems{
 		items: map[string][]string{
-			leader.ID: {adventure.ItemTreasurePocket},
+			leader.ID: {runhost.ItemTreasurePocket},
 		},
 	}
 	settler := &capturingPartyBattleSettler{}

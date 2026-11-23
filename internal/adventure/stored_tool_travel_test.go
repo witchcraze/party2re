@@ -7,6 +7,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/skill"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // Job50 reaches travel only through this port; the stored row is consumed by
@@ -25,7 +26,7 @@ func TestStoredToolTravelThroughJob50(t *testing.T) {
 			for i := range r.Battle.Actors {
 				r.Battle.Actors[i].TeamID = "party"
 			}
-			ctx := context.WithValue(context.Background(), normalMutationContext{}, r.ID)
+			ctx := runhost.CommandContext(context.Background(), r.ID)
 			travel, transition := s.PrepareStoredToolTravel(ctx, r, "a", nil)
 			frame := corebattle.TargetContext{ActorID: "a", PartyIDs: []string{"a", "b"}}
 			held := ""

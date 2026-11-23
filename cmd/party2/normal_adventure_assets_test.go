@@ -17,6 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/store"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -215,7 +216,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 			}
 			for _, check := range checks {
 				t.Run(check.name, func(t *testing.T) {
-					if err := check.run(); !errors.Is(err, adventure.ErrRunBusy) {
+					if err := check.run(); !errors.Is(err, runhost.ErrBusy) {
 						t.Fatalf("expected ownership rejection, got %v", err)
 					}
 				})
@@ -250,7 +251,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 				t.Fatal("passive capture reward rejected", err)
 			}
 			// Native exit still works through the same guarded Economy port.
-			if _, err := combat.normal.Command(ctx, adventure.RunCommand{PlayerID: actor.PlayerID, ActorID: actor.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {
+			if _, err := combat.normal.Command(ctx, runhost.Command{PlayerID: actor.PlayerID, ActorID: actor.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {
 				t.Fatal(err)
 			}
 			after, err = core.charRepo.FindByID(ctx, actor.ID)
@@ -302,7 +303,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root", 1); !errors.Is(err, adventure.ErrRunBusy) {
+	if _, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root", 1); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal("empty hand purchase bypassed enrollment", err)
 	}
 	_, granted, err := core.economy.GrantItem(ctx, actor.ID, "item-002", 1)
@@ -321,7 +322,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 	result := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		if (worker+op)%2 == 0 {
 			_, err := econ.depot.SendMoney(ctx, actor.ID, peer.ID, 1)
-			if !errors.Is(err, adventure.ErrRunBusy) {
+			if !errors.Is(err, runhost.ErrBusy) {
 				return fmt.Errorf("outgoing transfer: %v", err)
 			}
 			return nil
@@ -344,7 +345,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 	if afterActor.Money != beforeActor.Money || afterPeer.Money+held != beforePeer.Money || held != int(result.TotalOps/2) {
 		t.Fatal("credits/debits not conserved", beforeActor.Money, beforePeer.Money, afterActor.Money, afterPeer.Money)
 	}
-	if _, err := combat.normal.Command(ctx, adventure.RunCommand{PlayerID: actor.PlayerID, ActorID: actor.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {
+	if _, err := combat.normal.Command(ctx, runhost.Command{PlayerID: actor.PlayerID, ActorID: actor.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {
 		t.Fatal(err)
 	}
 	finalInv, err := core.invRepo.FindByCharacterID(ctx, actor.ID)

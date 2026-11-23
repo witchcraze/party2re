@@ -272,13 +272,7 @@ func verifySymbolExists(t *testing.T, fullPath, symbol string) {
 					}
 				} else if decl.Recv != nil && len(decl.Recv.List) > 0 {
 					// Method with receiver (e.g. *Service or Service)
-					recvType := decl.Recv.List[0].Type
-					if star, ok := recvType.(*ast.StarExpr); ok {
-						if ident, ok := star.X.(*ast.Ident); ok && ident.Name == targetReceiver {
-							found = true
-							return false
-						}
-					} else if ident, ok := recvType.(*ast.Ident); ok && ident.Name == targetReceiver {
+					if receiverName(decl.Recv.List[0].Type) == targetReceiver {
 						found = true
 						return false
 					}
@@ -291,6 +285,24 @@ func verifySymbolExists(t *testing.T, fullPath, symbol string) {
 	if !found {
 		t.Errorf("symbol %q not found in %s", symbol, fullPath)
 	}
+}
+
+// receiverName is a method receiver's type name, with pointer and type
+// parameters (Service[R, P]) removed.
+func receiverName(expr ast.Expr) string {
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	switch e := expr.(type) {
+	case *ast.IndexExpr:
+		expr = e.X
+	case *ast.IndexListExpr:
+		expr = e.X
+	}
+	if ident, ok := expr.(*ast.Ident); ok {
+		return ident.Name
+	}
+	return ""
 }
 
 func verifyRunInTxBoundary(t *testing.T, repoRoot, sourceRef string) {
@@ -353,13 +365,7 @@ func verifyRunInTxBoundary(t *testing.T, repoRoot, sourceRef string) {
 				return false
 			}
 		} else if decl.Recv != nil && len(decl.Recv.List) > 0 {
-			recvType := decl.Recv.List[0].Type
-			if star, ok := recvType.(*ast.StarExpr); ok {
-				if ident, ok := star.X.(*ast.Ident); ok && ident.Name == targetReceiver {
-					targetFunc = decl
-					return false
-				}
-			} else if ident, ok := recvType.(*ast.Ident); ok && ident.Name == targetReceiver {
+			if receiverName(decl.Recv.List[0].Type) == targetReceiver {
 				targetFunc = decl
 				return false
 			}

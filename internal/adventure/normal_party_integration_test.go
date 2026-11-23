@@ -19,6 +19,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/party"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -36,15 +37,15 @@ func (a *normalPartyAdmission) CheckSoloAdmission(ctx context.Context, actor str
 	if err != nil {
 		return err
 	}
-	return adventure.ErrRunBusy
+	return runhost.ErrBusy
 }
 
-func (a *normalPartyAdmission) WithNormalRoster(ctx context.Context, actor, partyID string, fn func(context.Context, adventure.NormalAdmission) error) error {
+func (a *normalPartyAdmission) WithRoster(ctx context.Context, actor, partyID string, fn func(context.Context, runhost.Admission) error) error {
 	return a.service.WithNormalRoster(ctx, actor, partyID, func(ctx context.Context, p party.Party, members []party.Member) error {
 		return fn(ctx, party.NormalAdmissionFromRoster(actor, p, members))
 	})
 }
-func (a *normalPartyAdmission) CleanupNormalLobby(ctx context.Context, snapshot adventure.NormalAdmission) error {
+func (a *normalPartyAdmission) CleanupLobby(ctx context.Context, snapshot runhost.Admission) error {
 	if a.fail.Load() {
 		return errors.New("Valkey cleanup unavailable")
 	}
@@ -120,16 +121,16 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if err == nil || entry.Version != 1 {
 		t.Fatal(entry, err)
 	}
-	if _, err := a.service.SetReady(context.Background(), lobby, f.actors[1].ID, false); !errors.Is(err, adventure.ErrRunBusy) {
+	if _, err := a.service.SetReady(context.Background(), lobby, f.actors[1].ID, false); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal("handed-off roster mutated", err)
 	}
-	if err := a.service.LeaveParty(context.Background(), lobby, leader.ID); !errors.Is(err, adventure.ErrRunBusy) {
+	if err := a.service.LeaveParty(context.Background(), lobby, leader.ID); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
-	if err := a.service.KickMember(context.Background(), lobby, leader.ID, f.actors[1].ID); !errors.Is(err, adventure.ErrRunBusy) {
+	if err := a.service.KickMember(context.Background(), lobby, leader.ID, f.actors[1].ID); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
-	if err := a.service.DisbandParty(context.Background(), lobby, leader.ID); !errors.Is(err, adventure.ErrRunBusy) {
+	if err := a.service.DisbandParty(context.Background(), lobby, leader.ID); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
 	// Simulate an expired live lobby: SQL admission remains sufficient on restart.
@@ -138,7 +139,7 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := a.CleanupNormalLobby(context.Background(), *admission); err != nil {
+	if err := a.CleanupLobby(context.Background(), *admission); err != nil {
 		t.Fatal(err)
 	}
 	f.restart(t)
@@ -152,7 +153,7 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	member := f.actors[1]
-	if _, err := f.svc.Command(context.Background(), adventure.RunCommand{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: "first", Version: r.Version, Action: "advance"}); !errors.Is(err, adventure.ErrLeaderOnly) {
+	if _, err := f.svc.Command(context.Background(), runhost.Command{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: "first", Version: r.Version, Action: "advance"}); !errors.Is(err, adventure.ErrLeaderOnly) {
 		t.Fatal(err)
 	}
 	f.send(t, runID, 0, "advance", "")
@@ -161,7 +162,7 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 		t.Fatal(r, err)
 	}
 	f.clock.add(3 * time.Second)
-	if _, err := f.svc.Command(context.Background(), adventure.RunCommand{PlayerID: leader.PlayerID, ActorID: leader.ID, RunID: runID, ID: "living-enemy", Version: r.Version, Action: "advance"}); !errors.Is(err, adventure.ErrInvalidFloorAction) {
+	if _, err := f.svc.Command(context.Background(), runhost.Command{PlayerID: leader.PlayerID, ActorID: leader.ID, RunID: runID, ID: "living-enemy", Version: r.Version, Action: "advance"}); !errors.Is(err, adventure.ErrInvalidFloorAction) {
 		t.Fatal(err)
 	}
 	f.send(t, runID, 0, "earn", "")
@@ -190,7 +191,7 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if c, err := f.chars.FindByID(context.Background(), member.ID); err != nil || c.Money != member.Money+5 {
 		t.Fatal(c, err)
 	}
-	if _, err := f.svc.GetRunReceipt(context.Background(), member.PlayerID, member.ID, runID, "enroll"); !errors.Is(err, adventure.ErrRunForbidden) {
+	if _, err := f.svc.GetRunReceipt(context.Background(), member.PlayerID, member.ID, runID, "enroll"); !errors.Is(err, runhost.ErrForbidden) {
 		t.Fatal("another actor's receipt exposed", err)
 	}
 }
@@ -227,13 +228,13 @@ func TestNormalRunPairedAdmissionStress(t *testing.T) {
 		t.Fatal(stats)
 	}
 	var enrollments, runs, receipts int
-	if err := f.db.QueryRow(`SELECT COUNT(*) FROM normal_adventure_enrollments WHERE character_id=?`, c.ID).Scan(&enrollments); err != nil {
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM run_enrollments WHERE character_id=?`, c.ID).Scan(&enrollments); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.db.QueryRow(`SELECT COUNT(*) FROM normal_adventure_recipients WHERE character_id=?`, c.ID).Scan(&runs); err != nil {
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM run_recipients WHERE character_id=?`, c.ID).Scan(&runs); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.db.QueryRow(`SELECT COUNT(*) FROM normal_adventure_receipts WHERE actor_id=?`, c.ID).Scan(&receipts); err != nil {
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM run_receipts WHERE actor_id=?`, c.ID).Scan(&receipts); err != nil {
 		t.Fatal(err)
 	}
 	if enrollments != 1 || runs != 1 || receipts != 1 {
@@ -258,8 +259,8 @@ func TestNormalRunTimeoutPendingRecoveryAndRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.clock.add(1800 * time.Second)
-	cmd := adventure.RunCommand{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: "cleanup", Version: r.Version, Action: "cleanup"}
-	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, adventure.ErrRunConflict) {
+	cmd := runhost.Command{PlayerID: member.PlayerID, ActorID: member.ID, RunID: runID, ID: "cleanup", Version: r.Version, Action: "cleanup"}
+	if _, err := f.svc.Command(context.Background(), cmd); !errors.Is(err, runhost.ErrConflict) {
 		t.Fatal("exact idle boundary accepted", err)
 	}
 	f.clock.add(time.Nanosecond)
@@ -276,7 +277,7 @@ func TestNormalRunTimeoutPendingRecoveryAndRetention(t *testing.T) {
 	if err != nil || active == nil || !active.Recipient.TimerPending {
 		t.Fatal(active, err)
 	}
-	if _, err := f.svc.EnterSolo(context.Background(), member.PlayerID, member.ID, "new", adventure.StarterAdventure, "normal", 3); !errors.Is(err, adventure.ErrRunBusy) {
+	if _, err := f.svc.EnterSolo(context.Background(), member.PlayerID, member.ID, "new", adventure.StarterAdventure, "normal", 3); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
 	departed, err := f.chars.FindByID(context.Background(), c.ID)
@@ -342,8 +343,8 @@ func TestNormalRunExitExcludesDepartedActorFromEncounterAndEXMarker(t *testing.T
 		t.Fatal(err)
 	}
 	r, err = f.store.FindRun(context.Background(), runID)
-	if err != nil || r.Stage.ID != "stage-23" || r.Floor != 10 {
-		t.Fatalf("expected stage-23 floor 10, got stage %s floor %d: %v", r.Stage.ID, r.Floor, err)
+	if err != nil || r.Stage.ID != "stage-23" || r.Round != 10 {
+		t.Fatalf("expected stage-23 floor 10, got stage %s floor %d: %v", r.Stage.ID, r.Round, err)
 	}
 
 	// Advance from floor 10 to floor 11.
@@ -401,7 +402,7 @@ func TestNormalRunExitRollbackPreservesBattleMembership(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.clock.add(3 * time.Second)
-	cmd := adventure.RunCommand{
+	cmd := runhost.Command{
 		PlayerID: leader.PlayerID,
 		ActorID:  leader.ID,
 		RunID:    runID,
@@ -672,7 +673,7 @@ func TestNormalRunPartyCapturedBattleRowStartRetry(t *testing.T) {
 	if err != nil || savedAdm == nil {
 		t.Fatalf("FindAdmission failed: %+v %v", savedAdm, err)
 	}
-	if err := adm.CleanupNormalLobby(context.Background(), *savedAdm); err != nil {
+	if err := adm.CleanupLobby(context.Background(), *savedAdm); err != nil {
 		t.Fatal(err)
 	}
 	f.restart(t)

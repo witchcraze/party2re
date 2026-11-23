@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type normalDefeatCombat struct {
@@ -22,7 +23,7 @@ type normalDefeatCombat struct {
 	rng       *normalRNG
 }
 
-func (c normalDefeatCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd adventure.RunCommand) (adventure.RunActionEffects, error) {
+func (c normalDefeatCombat) ExecuteRunAction(ctx context.Context, r *adventure.NormalRun, cmd runhost.Command) (adventure.RunActionEffects, error) {
 	if cmd.Action != "defeat" && cmd.Action != "reject-defeat" && cmd.Action != "bee" {
 		return c.RunCombat.ExecuteRunAction(ctx, r, cmd)
 	}
@@ -53,7 +54,7 @@ func (c normalDefeatCombat) ExecuteRunAction(ctx context.Context, r *adventure.N
 		return adventure.RunActionEffects{}, err
 	}
 	if cmd.Action == "reject-defeat" {
-		return adventure.RunActionEffects{}, adventure.ErrRunUnavailable
+		return adventure.RunActionEffects{}, runhost.ErrUnavailable
 	}
 	return effects, nil
 }
@@ -98,7 +99,7 @@ func TestNormalRunDefeatRewardsSettleAndReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Command(ctx, bad); !errors.Is(err, adventure.ErrRunUnavailable) {
+	if _, err := f.svc.Command(ctx, bad); !errors.Is(err, runhost.ErrUnavailable) {
 		t.Fatal(err)
 	}
 	if after, err := f.store.FindRun(ctx, runID); err != nil || !reflect.DeepEqual(after, before) {

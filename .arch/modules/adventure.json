@@ -1,7 +1,7 @@
 {
   "module": "adventure",
   "tier": 1,
-  "description": "Adventure-owned SQL normal-run lifecycle and individual settlement, plus retained batch crawl execution.",
+  "description": "Adventure stage room library on the run host (admission rules, advance, encounters, exit effects, records, explicit combat executor), plus retained batch crawl execution.",
   "package": "internal/adventure",
   "implementation_package": "internal/adventure",
   "dependencies": [
@@ -30,28 +30,22 @@
       "source_ref": "internal/adventure/options.go#TransactionProvider"
     },
     {
-      "name": "normal_run_store",
-      "target_module": "database",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/normal_run.go#NormalRunStore"
+      "name": "run_host",
+      "target_module": "runhost",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/adventure/normal_run.go#NormalRunService"
     },
     {
-      "name": "normal_run_characters",
-      "target_module": "core/character",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/normal_run.go#RunCharacters"
+      "name": "stage_room",
+      "target_module": "runhost",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/adventure/normal_room.go#stageRoom"
     },
     {
       "name": "normal_run_combat",
       "target_module": "core/battle",
       "relation_type": "consumer_interface",
       "source_ref": "internal/adventure/normal_run.go#RunCombat"
-    },
-    {
-      "name": "normal_run_admission",
-      "target_module": "party",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/normal_run.go#RunAdmission"
     },
     {
       "name": "job_asset_runner",
@@ -64,12 +58,6 @@
       "target_module": "depot",
       "relation_type": "consumer_interface",
       "source_ref": "internal/adventure/normal_run.go#JobAssetDepots"
-    },
-    {
-      "name": "normal_run_penalty",
-      "target_module": "core/timer",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/normal_run.go#RunPenalty"
     }
   ],
   "transaction_boundaries": [
@@ -120,75 +108,48 @@
       "note": "Wraps post-battle reward/item settlement and adventure history persistence in a single RunInTx boundary; PostAdventureHook executes after commit."
     },
     {
-      "method": "WithRunForUpdate",
-      "source_ref": "internal/database/adventure_run_repository.go#NormalAdventureRepository.WithRunForUpdate",
-      "transaction_type": "RunInTx",
-      "lock_sequence": [
-        {
-          "table": "normal_adventure_runs",
-          "tier": 0,
-          "mode": "SELECT ... FOR UPDATE",
-          "note": "Admission identity also serializes the one-way Party handoff and waiting roster writers."
-        }
-      ],
-      "note": "Starts before ambient character locks; callback owns bounded state, assets, history and receipts. Reentrant only for the same already-locked run."
-    },
-    {
-      "method": "Command",
-      "source_ref": "internal/adventure/normal_command.go#NormalRunService.Command",
-      "transaction_type": "Delegated",
-      "lock_sequence": [
-        {
-          "table": "normal_adventure_runs",
-          "tier": 0,
-          "mode": "SELECT ... FOR UPDATE (via NormalRunStore)",
-          "note": "Check actor-owned immutable receipt before new-command preconditions."
-        },
-        {
-          "table": "characters",
-          "tier": 2,
-          "mode": "SELECT ... FOR UPDATE",
-          "note": "Complete active roster sorted by character ID; roster/leader order remains separate."
-        },
-        {
-          "table": "inventory_items / equipment_slots",
-          "tier": 3,
-          "mode": "SELECT ... FOR UPDATE (ExecuteRunAction, economy runner, PostBattleSettler)",
-          "note": "Combat prelocks party inventories in ascending character order before the asset session. Settlement reuses those locks and applies concrete consumption and chest delivery. Equipment reads are ordinary reads."
-        },
-        {
-          "table": "character_depots / depot_items",
-          "tier": 5,
-          "mode": "SELECT ... FOR UPDATE (WithJobAssets, PostBattleSettler)",
-          "note": "Requester depot for combat assets and conditional overflow delivery."
-        },
-        {
-          "table": "adventures / normal_adventure_recipients / normal_adventure_enrollments / normal_adventure_receipts",
-          "tier": 8,
-          "mode": "INSERT / UPDATE / conditional ownership release",
-          "note": "Recipient history, disposition and immutable command result commit with state and assets."
-        }
-      ],
-      "note": "One bounded SQL transaction via WithRunForUpdate. The production RunCombat (NewRunCombat) runs the player step and at most one NPC response under this authority and can use Adventure-owned travel mutations. No automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
-    },
-    {
       "method": "ExecuteRunAction",
       "source_ref": "internal/adventure/normal_combat.go#runCombat.ExecuteRunAction",
       "transaction_type": "Delegated",
       "lock_sequence": [
-        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Prelock all party inventories in character ID order before WithJobAssets. In a solo run WithJobAssets acquires the inventory lock." },
-        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE (via WithJobAssets)", "note": "Requester depot only." }
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Prelock all party inventories in character ID order before WithJobAssets. In a solo run WithJobAssets acquires the inventory lock."
+        },
+        {
+          "table": "character_depots / depot_items",
+          "tier": 5,
+          "mode": "SELECT ... FOR UPDATE (via WithJobAssets)",
+          "note": "Requester depot only."
+        }
       ],
-      "note": "Runs inside Command after its run and sorted character locks. The configured economy runner saves tail growth and wallet changes on the same requester. Reads retained earnings without row locks and returns consumption and earnings for Command's settler. Travel and job-encounter ports mutate the locked run copy."
+      "note": "Runs inside the run host's Command (via stageRoom.Execute) after its run and sorted character locks. The configured economy runner saves tail growth and wallet changes on the same requester. Reads retained earnings without row locks and returns consumption and earnings for the host's settler. Travel and job-encounter ports mutate the locked run copy."
     },
     {
       "method": "WithJobAssets",
       "source_ref": "internal/adventure/job_assets.go#NormalRunService.WithJobAssets",
       "transaction_type": "ExecuteTransaction",
       "lock_sequence": [
-        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE", "note": "Command already holds the full sorted roster; requester stays distinct from combat actor." },
-        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Requester wallet and held instance commit with Command state/receipt in the ambient SQL transaction." },
-        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE (via JobAssetDepots)", "note": "Requester depot for job50 stored tools and job86 books; consumption, exchange and return save only when no selection error occurred." }
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Command already holds the full sorted roster; requester stays distinct from combat actor."
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Requester wallet and held instance commit with Command state/receipt in the ambient SQL transaction."
+        },
+        {
+          "table": "character_depots / depot_items",
+          "tier": 5,
+          "mode": "SELECT ... FOR UPDATE (via JobAssetDepots)",
+          "note": "Requester depot for job50 stored tools and job86 books; consumption, exchange and return save only when no selection error occurred."
+        }
       ],
       "note": "Requires Command's run authority. The economy runner saves the requester after applying tail growth and asset changes, with no independent commit. Helper request reads do not lock rows."
     },

@@ -5,17 +5,18 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // NextNPC selects in semantic order, including skipped heads. It is a read:
 // rejected/ineligible operations and GET never change order or timestamps.
 // Treasure-room NPC response is disabled (vs_monster.cgi:38–41).
 func (r *NormalRun) NextNPC(now time.Time) string {
-	if isTreasureFloor(r.Floor) {
+	if isTreasureFloor(r.Round) {
 		return ""
 	}
 	for _, id := range r.Enemies {
-		a := r.actor(id)
+		a := r.Actor(id)
 		if a != nil && a.NPC && a.HP > 0 && now.Sub(r.LastActions[id]) >= time.Duration(r.Admission.Speed)*time.Second {
 			return id
 		}
@@ -26,9 +27,9 @@ func (r *NormalRun) NextNPC(now time.Time) string {
 // RecordNPCResponse preserves source head rotation, not acted-member removal.
 // Call after successful execution, within the command's existing transaction.
 func (r *NormalRun) RecordNPCResponse(id string, now time.Time) error {
-	a := r.actor(id)
+	a := r.Actor(id)
 	if id == "" || !slices.Contains(r.Enemies, id) || a == nil || !a.NPC {
-		return ErrRunConflict
+		return runhost.ErrConflict
 	}
 	if r.LastActions == nil {
 		r.LastActions = make(map[string]time.Time)
@@ -39,7 +40,7 @@ func (r *NormalRun) RecordNPCResponse(id string, now time.Time) error {
 		// The next formation reads the same opposing order from the member scan.
 		ordered := make([]corebattle.LifetimeActor, 0, len(r.Enemies))
 		for _, id := range r.Enemies {
-			if a := r.actor(id); a != nil {
+			if a := r.Actor(id); a != nil {
 				ordered = append(ordered, *a)
 			}
 		}

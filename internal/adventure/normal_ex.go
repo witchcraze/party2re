@@ -7,6 +7,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // EX room-marker producers (StageTraits.EX.Marker).
@@ -31,12 +32,12 @@ func (r *NormalRun) HasEX() bool {
 }
 
 func (r *NormalRun) markEXOnAdvance(actor string) {
-	if r.Floor != BossFloor {
+	if r.Round != BossFloor {
 		return
 	}
 	count := 0
 	for _, a := range r.Battle.Actors {
-		if a.TeamID == r.actor(actor).TeamID && !a.Banished && !a.RosterDetached {
+		if a.TeamID == r.Actor(actor).TeamID && !a.Banished && !a.RosterDetached {
 			count++
 		}
 	}
@@ -46,8 +47,8 @@ func (r *NormalRun) markEXOnAdvance(actor string) {
 }
 
 func (r *NormalRun) markEncounterCreated() {
-	r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID
-	if r.Floor == BossFloor {
+	r.EncounterFloor, r.EncounterStageID = r.Round, r.Stage.ID
+	if r.Round == BossFloor {
 		r.ClearPending = true
 		if r.Stage.exMarker() == markerBossEncounter {
 			r.EXUnlocked = true
@@ -66,7 +67,7 @@ func rollRoyalBeeEX(stage Stage, identity string, rng random.Generator) bool {
 // including helpers and fallen members, regains current maxima, then the
 // declared default field is installed (_npc_action.cgi:715–722).
 func (r *NormalRun) prepareEXAllies(actor string) {
-	team := r.actor(actor).TeamID
+	team := r.Actor(actor).TeamID
 	for i := range r.Battle.Actors {
 		if a := &r.Battle.Actors[i]; a.TeamID == team && !a.Banished && !a.RosterDetached {
 			a.HP, a.MP, a.CMP = a.MaxHP, a.MaxMP, a.MaxCMP
@@ -89,7 +90,7 @@ func (s Stage) exTreasureItems() []string {
 // treasureCount mirrors @partys at creation: same-side members, fallen roster
 // members included (_battle.cgi:486–493). real counts only roster members.
 func (r *NormalRun) treasureCount(actorID, blessing string, rng func(int) int) (count, real int) {
-	a := r.actor(actorID)
+	a := r.Actor(actorID)
 	alive, total := 0, 0
 	for _, m := range r.Battle.Actors {
 		inRoster := slices.Contains(r.Roster, m.ID)
@@ -128,14 +129,14 @@ func (s *NormalRunService) createEXTreasure(r *NormalRun, actorID, blessing stri
 	r.Boxes = nil
 	for i := range count {
 		name := boxName(defaultBoxNames[s.cfg.RNG.Intn(len(defaultBoxNames))], i)
-		r.Boxes = append(r.Boxes, TreasureBox{ID: fmt.Sprintf("box-%d", i+1), Name: name, ItemID: items[s.cfg.RNG.Intn(len(items))]})
+		r.Boxes = append(r.Boxes, runhost.TreasureBox{ID: fmt.Sprintf("box-%d", i+1), Name: name, ItemID: items[s.cfg.RNG.Intn(len(items))]})
 	}
 	if fixed := r.Stage.EX.FixedTreasure; fixed != "" {
 		for i := range real {
 			name := boxName(fixedBoxNames[s.cfg.RNG.Intn(len(fixedBoxNames))], i)
-			r.Boxes = append(r.Boxes, TreasureBox{ID: fmt.Sprintf("box-%d", len(r.Boxes)+1), Name: name, ItemID: fixed, Fixed: true})
+			r.Boxes = append(r.Boxes, runhost.TreasureBox{ID: fmt.Sprintf("box-%d", len(r.Boxes)+1), Name: name, ItemID: fixed, Fixed: true})
 		}
 	}
-	r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID
+	r.EncounterFloor, r.EncounterStageID = r.Round, r.Stage.ID
 	return nil
 }

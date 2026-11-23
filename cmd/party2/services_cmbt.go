@@ -350,7 +350,7 @@ func newCmbtServices(
 			return nil
 		},
 	}
-	normalRepo, err := database.NewNormalAdventureRepository(db)
+	normalRepo, err := database.NewRunRepository[adventure.NormalRun](db)
 	if err != nil {
 		return nil, err
 	}

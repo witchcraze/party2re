@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/party"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type normalAdmissionAdapter struct {
@@ -23,16 +23,16 @@ func (a normalAdmissionAdapter) CheckSoloAdmission(ctx context.Context, actor st
 	if err != nil {
 		return err
 	}
-	return adventure.ErrRunBusy
+	return runhost.ErrBusy
 }
 
-func (a normalAdmissionAdapter) WithNormalRoster(ctx context.Context, actor, partyID string, start func(context.Context, adventure.NormalAdmission) error) error {
+func (a normalAdmissionAdapter) WithRoster(ctx context.Context, actor, partyID string, start func(context.Context, runhost.Admission) error) error {
 	return a.service.WithNormalRoster(ctx, actor, partyID, func(ctx context.Context, p party.Party, members []party.Member) error {
 		return start(ctx, party.NormalAdmissionFromRoster(actor, p, members))
 	})
 }
 
-func (a normalAdmissionAdapter) CleanupNormalLobby(ctx context.Context, snapshot adventure.NormalAdmission) error {
+func (a normalAdmissionAdapter) CleanupLobby(ctx context.Context, snapshot runhost.Admission) error {
 	state := party.LobbyState{Party: party.Party{ID: snapshot.PartyID, LeaderCharacterID: snapshot.ActorID}}
 	for _, id := range snapshot.CharacterIDs {
 		state.Members = append(state.Members, party.Member{PartyID: snapshot.PartyID, CharacterID: id})

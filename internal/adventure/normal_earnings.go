@@ -1,82 +1,45 @@
 package adventure
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-func chapelDefeatBonus(e RunEarnings, blessing string, rollIntn func(int) int) RunEarnings {
+func chapelDefeatBonus(e runhost.Earnings, blessing string, rollIntn func(int) int) runhost.Earnings {
 	wish := strings.ToLower(strings.TrimSpace(blessing))
 	switch {
 	case battle.IsGoldBlessing(wish):
 		if rollIntn(4) == 0 {
-			return RunEarnings{Gold: e.Gold / 2}
+			return runhost.Earnings{Gold: e.Gold / 2}
 		}
 	case battle.IsExpBlessing(wish):
 		if rollIntn(4) == 0 {
-			return RunEarnings{EXP: e.EXP / 2}
+			return runhost.Earnings{EXP: e.EXP / 2}
 		}
 	}
-	return RunEarnings{}
+	return runhost.Earnings{}
 }
 
-func addRunEarnings(a, b RunEarnings) (RunEarnings, error) {
-	if b.EXP < 0 || b.Gold < 0 || b.Crystals < 0 {
-		return RunEarnings{}, ErrRunConflict
-	}
-	var err error
-	a.EXP, err = economy.SafeAdd(a.EXP, b.EXP)
-	if err != nil {
-		return RunEarnings{}, err
-	}
-	a.Gold, err = economy.SafeAdd(a.Gold, b.Gold)
-	if err != nil {
-		return RunEarnings{}, err
-	}
-	a.Crystals, err = economy.SafeAdd(a.Crystals, b.Crystals)
-	return a, err
-}
-
-func scaleTryEarnings(e RunEarnings) (RunEarnings, error) {
+func scaleTryEarnings(e runhost.Earnings) (runhost.Earnings, error) {
 	// int(total * 1.5), without floating-point rounding or intermediate overflow.
-	return addRunEarnings(e, RunEarnings{EXP: e.EXP / 2, Gold: e.Gold / 2, Crystals: e.Crystals / 2})
+	return runhost.AddEarnings(e, runhost.Earnings{EXP: e.EXP / 2, Gold: e.Gold / 2, Crystals: e.Crystals / 2})
 }
 
-func scaleCooperativeEarnings(e RunEarnings, bonusPercent int) (RunEarnings, error) {
+func scaleCooperativeEarnings(e runhost.Earnings, bonusPercent int) (runhost.Earnings, error) {
 	if bonusPercent == 0 {
 		return e, nil
 	}
 	exp, err := economy.SafeMultiply(e.EXP, 100+bonusPercent)
 	if err != nil {
-		return RunEarnings{}, err
+		return runhost.Earnings{}, err
 	}
 	gold, err := economy.SafeMultiply(e.Gold, 100+bonusPercent)
 	if err != nil {
-		return RunEarnings{}, err
+		return runhost.Earnings{}, err
 	}
 	e.EXP, e.Gold = exp/100, gold/100
 	return e, nil
-}
-
-func (r *NormalRun) recordEarnings(earned map[string]RunEarnings) error {
-	for id, e := range earned {
-		if !slices.Contains(r.Roster, id) {
-			return ErrRunForbidden
-		}
-		p := r.Recipients[id]
-		var err error
-		if r.Mode == CrawlModeTry {
-			p.Conditional, err = addRunEarnings(p.Conditional, e)
-		} else {
-			p.Pending, err = addRunEarnings(p.Pending, e)
-		}
-		if err != nil {
-			return err
-		}
-		r.Recipients[id] = p
-	}
-	return nil
 }

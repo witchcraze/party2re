@@ -9,6 +9,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type mockJobAssetRunner struct {
@@ -84,18 +85,14 @@ func TestWithJobAssetsPreservesKnownAndUnknownHands(t *testing.T) {
 			runner := &mockJobAssetRunner{tc: tc}
 			svc := &NormalRunService{cfg: NormalRunConfig{JobAssetRunner: runner}}
 
-			r := &NormalRun{
-				ID:         runID,
-				Roster:     []string{charID},
-				Recipients: map[string]RunRecipient{charID: {PlayerID: playerID}},
-			}
-			cmd := RunCommand{
+			r := &NormalRun{State: runhost.State{ID: runID, Roster: []string{charID}, Recipients: map[string]runhost.Recipient{charID: {PlayerID: playerID}}}}
+			cmd := runhost.Command{
 				RunID:    runID,
 				PlayerID: playerID,
 				ActorID:  charID,
 			}
 
-			ctx := context.WithValue(context.Background(), normalMutationContext{}, runID)
+			ctx := runhost.CommandContext(context.Background(), runID)
 			var captured *corebattle.JobAssets
 			err = svc.WithJobAssets(ctx, r, cmd, func(assets *corebattle.JobAssets, _ *corecharacter.Character) error {
 				captured = assets

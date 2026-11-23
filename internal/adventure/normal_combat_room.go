@@ -9,6 +9,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // roomPorts binds the requester's assets and Adventure's travel/encounter
@@ -181,7 +182,7 @@ func consumeHeld(action *corebattle.PlayerAction, actorID, definitionID, instanc
 		if err != nil || facts.Inert {
 			return facts, err
 		}
-		if a := findActor(s.Actors, actorID); a != nil {
+		if a := runhost.FindActor(s.Actors, actorID); a != nil {
 			empty := ""
 			a.HeldToolID = &empty
 			a.ConsumedItems = append(a.ConsumedItems, corebattle.ConsumedItem{ID: definitionID, InstanceID: instanceID, Quantity: 1})

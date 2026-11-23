@@ -1,0 +1,105 @@
+{
+  "module": "runhost",
+  "tier": 2,
+  "description": "Mode-neutral SQL run host: enrollment, versioned snapshot, per-command transaction, receipts, recipients, retained earnings, idle cleanup, individual exit and treasure inspection (C1, C2).",
+  "package": "internal/runhost",
+  "implementation_package": "internal/runhost",
+  "dependencies": [
+    {
+      "name": "run_store",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/runhost/runhost.go#Store"
+    },
+    {
+      "name": "run_characters",
+      "target_module": "core/character",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/runhost/runhost.go#Characters"
+    },
+    {
+      "name": "run_lobby",
+      "target_module": "party",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/runhost/runhost.go#Lobby"
+    },
+    {
+      "name": "run_penalty",
+      "target_module": "core/timer",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/runhost/runhost.go#Penalty"
+    },
+    {
+      "name": "run_settler",
+      "target_module": "battle",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/runhost/runhost.go#Settler"
+    },
+    {
+      "name": "room_library",
+      "target_module": "adventure",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/runhost/runhost.go#Room"
+    },
+    {
+      "name": "room_combat",
+      "target_module": "adventure",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/runhost/runhost.go#Combat"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "WithRunForUpdate",
+      "source_ref": "internal/database/run_repository.go#RunRepository.WithRunForUpdate",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "runs",
+          "tier": 0,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Admission identity also serializes the one-way Party handoff and waiting roster writers."
+        }
+      ],
+      "note": "Starts before ambient character locks; callback owns bounded state, assets, history and receipts. Reentrant only for the same already-locked run."
+    },
+    {
+      "method": "Command",
+      "source_ref": "internal/runhost/command.go#Service.Command",
+      "transaction_type": "Delegated",
+      "lock_sequence": [
+        {
+          "table": "runs",
+          "tier": 0,
+          "mode": "SELECT ... FOR UPDATE (via Store)",
+          "note": "Check actor-owned immutable receipt before new-command preconditions."
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Complete active roster sorted by character ID; roster/leader order remains separate."
+        },
+        {
+          "table": "inventory_items / equipment_slots",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (Combat port, economy runner, Settler)",
+          "note": "Combat prelocks party inventories in ascending character order before the asset session. Settlement reuses those locks and applies concrete consumption and chest delivery. Equipment reads are ordinary reads."
+        },
+        {
+          "table": "character_depots / depot_items",
+          "tier": 5,
+          "mode": "SELECT ... FOR UPDATE (WithJobAssets, PostBattleSettler)",
+          "note": "Requester depot for combat assets and conditional overflow delivery."
+        },
+        {
+          "table": "room history (Room.Record) / run_recipients / run_enrollments / run_receipts",
+          "tier": 8,
+          "mode": "INSERT / UPDATE / conditional ownership release",
+          "note": "Recipient history, disposition and immutable command result commit with state and assets."
+        }
+      ],
+      "note": "One bounded SQL transaction via WithRunForUpdate. Room actions (Room.Act) and treasure inspection reach the action tail; explicit operations go through the Combat port, whose Adventure implementation runs the player step and at most one NPC response. No automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
+    }
+  ]
+}

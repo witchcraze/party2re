@@ -20,6 +20,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/party"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -234,16 +235,16 @@ func TestCombatAdmissionProduction(t *testing.T) {
 			t.Fatal("Challenge bypassed enrollment", err)
 		}
 		called := false
-		if _, err := core.economy.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: member.ID}, func(*economy.TxContext) error { called = true; return nil }); !errors.Is(err, adventure.ErrRunBusy) || called {
+		if _, err := core.economy.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: member.ID}, func(*economy.TxContext) error { called = true; return nil }); !errors.Is(err, runhost.ErrBusy) || called {
 			t.Fatal("actor mutation bypassed enrollment", err)
 		}
 		if err := core.txProvider.RunInTx(ctx, func(ctx context.Context) error {
 			_, err := normalWriter(core).FindByIDForUpdate(ctx, member.ID)
 			return err
-		}); !errors.Is(err, adventure.ErrRunBusy) {
+		}); !errors.Is(err, runhost.ErrBusy) {
 			t.Fatal("live-state writer bypassed enrollment", err)
 		}
-		if err := normalWriter(core).Delete(ctx, member.ID); !errors.Is(err, adventure.ErrRunBusy) {
+		if err := normalWriter(core).Delete(ctx, member.ID); !errors.Is(err, runhost.ErrBusy) {
 			t.Fatal("deletion orphaned an enrolled actor", err)
 		}
 		// Incoming peer credits remain valid and must survive later native exit.
@@ -261,7 +262,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		}
 		// This fixture constructs combat services without the later Tavern wiring.
 		combat.normal.SetExitEffects(func(context.Context, string) error { return nil })
-		if _, err := combat.normal.Command(ctx, adventure.RunCommand{PlayerID: member.PlayerID, ActorID: member.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {
+		if _, err := combat.normal.Command(ctx, runhost.Command{PlayerID: member.PlayerID, ActorID: member.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {
 			t.Fatal(err)
 		}
 		if after, err := core.charRepo.FindByID(ctx, member.ID); err != nil || after.Money != member.Money+7 {

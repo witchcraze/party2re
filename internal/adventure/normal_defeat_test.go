@@ -8,6 +8,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type rewardDraws struct {
@@ -29,7 +30,7 @@ func runRewardFixture() (NormalRun, corebattle.TargetContext, corecharacter.Char
 		{Participant: corebattle.Participant{ID: "fallen", TeamID: "party", Gear: &corebattle.BattleGearStats{}}},
 		{Participant: corebattle.Participant{ID: "enemy", TeamID: "enemy", Name: "Bee", HP: 30, MaxHP: 30, Gear: &corebattle.BattleGearStats{}, ExperienceReward: 25, GoldReward: 21}, NPC: true, EncounterIdentity: royalBeeIdentity + "A"},
 	}
-	r := NormalRun{Stage: Stage{ID: "stage-22", StageTraits: StageTraits{EX: &EXStage{Marker: markerRoyalBeeDefeat}}}, Roster: []string{"actor", "ally", "fallen"}, Battle: corebattle.LifetimeState{Actors: actors}}
+	r := NormalRun{State: runhost.State{Roster: []string{"actor", "ally", "fallen"}, Battle: corebattle.LifetimeState{Actors: actors}}, Stage: Stage{ID: "stage-22", StageTraits: StageTraits{EX: &EXStage{Marker: markerRoyalBeeDefeat}}}}
 	return r, corebattle.TargetContext{ActorID: "actor", PartyIDs: r.Roster, EnemyIDs: []string{"enemy"}}, corecharacter.Character{ID: "actor", Level: 2, Stats: corecharacter.Stats{MaxHP: 50}}
 }
 
@@ -38,44 +39,44 @@ func TestRunDefeatRewardModifiers(t *testing.T) {
 		name, mode, blessing string
 		gear                 corebattle.BattleGearStats
 		rolls, bounds        []int
-		want                 RunEarnings
+		want                 runhost.Earnings
 	}{
-		{name: "normal", rolls: []int{1, 2}, bounds: []int{50, 200, 3}, want: RunEarnings{30, 25, 1}},
-		{name: "calm gold", mode: CrawlModeCalm, blessing: "GOLD", rolls: []int{1, 0, 2}, bounds: []int{50, 4, 200, 3}, want: RunEarnings{14, 18, 0}},
-		{name: "exp and equipment", blessing: "EXP", gear: corebattle.BattleGearStats{WeaponID: "weapon-01", ArmorID: "armor-01", AccessoryID: "item-167"}, rolls: []int{2, 0, 0, 2}, bounds: []int{50, 4, 4, 200, 3}, want: RunEarnings{60, 25, 0}},
-		{name: "Try misses", mode: CrawlModeTry, blessing: "EXP", gear: corebattle.BattleGearStats{WeaponID: "weapon-01", ArmorID: "armor-01"}, rolls: []int{2, 3, 1, 0}, bounds: []int{50, 4, 4, 200, 3}, want: RunEarnings{30, 25, 0}},
+		{name: "normal", rolls: []int{1, 2}, bounds: []int{50, 200, 3}, want: runhost.Earnings{EXP: 30, Gold: 25, Crystals: 1}},
+		{name: "calm gold", mode: CrawlModeCalm, blessing: "GOLD", rolls: []int{1, 0, 2}, bounds: []int{50, 4, 200, 3}, want: runhost.Earnings{EXP: 14, Gold: 18, Crystals: 0}},
+		{name: "exp and equipment", blessing: "EXP", gear: corebattle.BattleGearStats{WeaponID: "weapon-01", ArmorID: "armor-01", AccessoryID: "item-167"}, rolls: []int{2, 0, 0, 2}, bounds: []int{50, 4, 4, 200, 3}, want: runhost.Earnings{EXP: 60, Gold: 25, Crystals: 0}},
+		{name: "Try misses", mode: CrawlModeTry, blessing: "EXP", gear: corebattle.BattleGearStats{WeaponID: "weapon-01", ArmorID: "armor-01"}, rolls: []int{2, 3, 1, 0}, bounds: []int{50, 4, 4, 200, 3}, want: runhost.Earnings{EXP: 30, Gold: 25, Crystals: 0}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, role, requester := runRewardFixture()
 			r.Mode = tc.mode
-			r.actor("actor").Gear = &tc.gear
+			r.Actor("actor").Gear = &tc.gear
 			rng := &rewardDraws{exDraws: exDraws{values: tc.rolls}, floats: []float64{.9}}
 			var effects RunActionEffects
 			port := NewRunDefeatRewards(&r, requester, tc.blessing, false, rng, &effects)
 			ctx := &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: role}, Rewards: port}
-			before := r.actor("enemy").Clone()
+			before := r.Actor("enemy").Clone()
 			if err := r.Battle.ValidateDefeat(ctx, "enemy", rng); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := port.Project(&r.Battle, role, "enemy"); err != nil {
 				t.Fatal(err)
 			}
-			if len(rng.calls) != 0 || !reflect.DeepEqual(before, *r.actor("enemy")) || !reflect.DeepEqual(effects, RunActionEffects{}) {
+			if len(rng.calls) != 0 || !reflect.DeepEqual(before, *r.Actor("enemy")) || !reflect.DeepEqual(effects, RunActionEffects{}) {
 				t.Fatal("admission changed caller state", rng.calls, effects)
 			}
 			if got, err := r.Battle.ApplyDefeat(ctx, "enemy", rng); err != nil || !got.RewardsReached {
 				t.Fatal(got, err)
 			}
-			if !slices.Equal(rng.calls, tc.bounds) || !reflect.DeepEqual(effects.Earnings, map[string]RunEarnings{"actor": tc.want, "ally": tc.want}) || !slices.Equal(effects.CreditedDefeats, []string{royalBeeIdentity + "A"}) || effects.EXUnlocked != (tc.mode == CrawlModeTry) {
+			if !slices.Equal(rng.calls, tc.bounds) || !reflect.DeepEqual(effects.Earnings, map[string]runhost.Earnings{"actor": tc.want, "ally": tc.want}) || !slices.Equal(effects.CreditedDefeats, []string{royalBeeIdentity + "A"}) || effects.EXUnlocked != (tc.mode == CrawlModeTry) {
 				t.Fatal(effects, rng.calls)
 			}
-			r.Recipients = make(map[string]RunRecipient)
-			if err := r.recordEarnings(effects.Earnings); err != nil {
+			r.Recipients = make(map[string]runhost.Recipient)
+			if err := r.RecordEarnings(effects.Earnings, r.Mode == CrawlModeTry); err != nil {
 				t.Fatal(err)
 			}
 			for _, id := range []string{"actor", "ally"} {
 				p := r.Recipients[id]
-				if r.Mode == CrawlModeTry && (p.Conditional != tc.want || p.Pending != (RunEarnings{})) || r.Mode != CrawlModeTry && p.Pending != tc.want {
+				if r.Mode == CrawlModeTry && (p.Conditional != tc.want || p.Pending != (runhost.Earnings{})) || r.Mode != CrawlModeTry && p.Pending != tc.want {
 					t.Fatal(id, p)
 				}
 			}
@@ -87,7 +88,7 @@ func TestRunDefeatCaptureAndCrystalIdentity(t *testing.T) {
 	for _, pvp := range []bool{false, true} {
 		r, role, requester := runRewardFixture()
 		r.Stage = Stage{ID: "stage-01"}
-		target := r.actor("enemy")
+		target := r.Actor("enemy")
 		target.Status = "capture"
 		rng := &rewardDraws{exDraws: exDraws{values: []int{1}}, floats: []float64{.02, .02}}
 		var effects RunActionEffects
@@ -115,7 +116,7 @@ func TestRunDefeatCaptureAndCrystalIdentity(t *testing.T) {
 func TestRunDefeatSelfAndNPCGrantNothing(t *testing.T) {
 	for _, npc := range []bool{false, true} {
 		r, role, requester := runRewardFixture()
-		r.actor("actor").NPC = npc
+		r.Actor("actor").NPC = npc
 		id := "actor"
 		if npc {
 			id = "ally"
@@ -124,7 +125,7 @@ func TestRunDefeatSelfAndNPCGrantNothing(t *testing.T) {
 		rng := &rewardDraws{}
 		ctx := &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: role}, Rewards: NewRunDefeatRewards(&r, requester, "gold", false, rng, &effects)}
 		got, err := r.Battle.ApplyDefeat(ctx, id, rng)
-		if err != nil || !got.Defeated || got.RewardsReached || !reflect.DeepEqual(effects, RunActionEffects{}) || r.actor(id).CrystalDropRolled || len(rng.calls) != 0 {
+		if err != nil || !got.Defeated || got.RewardsReached || !reflect.DeepEqual(effects, RunActionEffects{}) || r.Actor(id).CrystalDropRolled || len(rng.calls) != 0 {
 			t.Fatal(npc, got, err, effects, rng.calls)
 		}
 	}
@@ -146,7 +147,7 @@ func TestRunDefeatLevelUpBranch(t *testing.T) {
 		{level: 150, saved: 225000, over: true},
 	} {
 		requester := corecharacter.Character{ID: "actor", Level: tc.level, Experience: tc.saved, OverLevel: tc.over}
-		fx := RunActionEffects{Earnings: map[string]RunEarnings{"actor": {EXP: tc.direct}, "ally": {EXP: 100}}}
+		fx := RunActionEffects{Earnings: map[string]runhost.Earnings{"actor": {EXP: tc.direct}, "ally": {EXP: 100}}}
 		got, err := fx.LevelUpEligible(&corebattle.LifetimeState{SpecialBossField: tc.ex}, requester, tc.mode, tc.released)
 		if err != nil || got != tc.want {
 			t.Fatal(tc, got, err)

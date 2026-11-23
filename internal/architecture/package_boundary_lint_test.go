@@ -25,6 +25,7 @@ var sharedFoundationPackages = map[string]bool{
 	"internal/town":       true, // Pure town value objects
 	"internal/depot":      true, // Universal depot item storage and capacity system
 	"internal/battle":     true, // Battle Adapter service (ParticipantBuilder and ApplyPostBattleResult)
+	"internal/runhost":    true, // Mode-neutral run host that room libraries (Adventure, Challenge) consume
 	"internal/stagedata":  true, // Legacy stage transcription shared by Adventure and Dungeon
 }
 

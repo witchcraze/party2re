@@ -12,10 +12,11 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func exCommand(t *testing.T, f *normalFixture, runID, key, action string) adventure.RunCommand {
+func exCommand(t *testing.T, f *normalFixture, runID, key, action string) runhost.Command {
 	t.Helper()
 	f.clock.add(3 * time.Second)
 	r, err := f.store.FindRun(context.Background(), runID)
@@ -23,7 +24,7 @@ func exCommand(t *testing.T, f *normalFixture, runID, key, action string) advent
 		t.Fatal(r, err)
 	}
 	c := f.actors[0]
-	return adventure.RunCommand{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: key, Version: r.Version, Action: action}
+	return runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: runID, ID: key, Version: r.Version, Action: action}
 }
 
 func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
@@ -47,7 +48,7 @@ func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 	}
 	f.store.loseCommit.Store(true)
 	result, err := f.svc.Command(context.Background(), cmd)
-	if err != nil || result.Floor != adventure.EXBossFloor {
+	if err != nil || result.Round != adventure.EXBossFloor {
 		t.Fatal("commit-unknown EX entry not resolved from receipt", result, err)
 	}
 	r, err := f.store.FindRun(context.Background(), runID)
@@ -55,7 +56,7 @@ func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := r.Battle.Actors[0]
-	if r.Floor != adventure.EXBossFloor || r.EncounterFloor != adventure.EXBossFloor || len(r.Enemies) != 1 || actor.HP != actor.MaxHP || actor.MP != actor.MaxMP || r.Battle.Fields.Default != "snow" || len(r.Boxes) != 0 {
+	if r.Round != adventure.EXBossFloor || r.EncounterFloor != adventure.EXBossFloor || len(r.Enemies) != 1 || actor.HP != actor.MaxHP || actor.MP != actor.MaxMP || r.Battle.Fields.Default != "snow" || len(r.Boxes) != 0 {
 		t.Fatalf("EX encounter not persisted: %+v", r)
 	}
 	f.restart(t)
@@ -72,7 +73,7 @@ func TestNormalRunEXEntryRollbackCommitUnknownReplayAndDefeat(t *testing.T) {
 		t.Fatal("EX defeat recorded incorrectly", r, err)
 	}
 	f.send(t, runID, 0, "fall", "")
-	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.Floor != adventure.EXBossFloor || len(r.Roster) != 1 || len(r.Boxes) != 0 {
+	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.Round != adventure.EXBossFloor || len(r.Roster) != 1 || len(r.Boxes) != 0 {
 		t.Fatal("defeat at 12 exited or created treasure", r, err)
 	}
 	f.send(t, runID, 0, "exit", "")
@@ -143,14 +144,14 @@ func TestNormalRunEXEntryVersusExitStress(t *testing.T) {
 	f.send(t, runID, 0, "earn", "")
 	f.send(t, runID, 0, "ex11", "stage-23")
 	enter := exCommand(t, f, runID, "race-ex", "advance")
-	exit := adventure.RunCommand{PlayerID: other.PlayerID, ActorID: other.ID, RunID: runID, ID: "race-exit", Version: enter.Version, Action: "exit"}
+	exit := runhost.Command{PlayerID: other.PlayerID, ActorID: other.ID, RunID: runID, ID: "race-exit", Version: enter.Version, Action: "exit"}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		request := enter
 		if (worker+op)%2 == 0 {
 			request = exit
 		}
 		_, err := f.svc.Command(context.Background(), request)
-		if errors.Is(err, adventure.ErrRunConflict) || errors.Is(err, adventure.ErrRunForbidden) || errors.Is(err, adventure.ErrRunRecovery) {
+		if errors.Is(err, runhost.ErrConflict) || errors.Is(err, runhost.ErrForbidden) || errors.Is(err, runhost.ErrRecovery) {
 			return nil
 		}
 		return err
@@ -163,8 +164,8 @@ func TestNormalRunEXEntryVersusExitStress(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Exactly one of the competing commands committed against the shared version.
-	if (r.Floor == adventure.EXBossFloor) == (len(r.Roster) == 1) {
-		t.Fatalf("both or neither committed: floor=%d roster=%v", r.Floor, r.Roster)
+	if (r.Round == adventure.EXBossFloor) == (len(r.Roster) == 1) {
+		t.Fatalf("both or neither committed: floor=%d roster=%v", r.Round, r.Roster)
 	}
 	for _, before := range f.actors {
 		after, err := f.chars.FindByID(context.Background(), before.ID)
@@ -226,7 +227,7 @@ func TestNormalRunEXTreasureEntryAndSeparateClaims(t *testing.T) {
 	}
 	f.store.loseCommit.Store(true)
 	result, err := f.svc.Command(context.Background(), cmd)
-	if err != nil || result.Floor != adventure.EXTreasureFloor {
+	if err != nil || result.Round != adventure.EXTreasureFloor {
 		t.Fatal("commit-unknown EX treasure not resolved from receipt", result, err)
 	}
 	r, err := f.store.FindRun(context.Background(), runID)
@@ -234,7 +235,7 @@ func TestNormalRunEXTreasureEntryAndSeparateClaims(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Solo: one EX chest from the spring pool and one fixed chest; the allowance reset.
-	want := []adventure.TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-043"}, {ID: "box-2", Name: "煤けた宝箱A", ItemID: "item-263", Fixed: true}}
+	want := []runhost.TreasureBox{{ID: "box-1", Name: "普通の宝箱A", ItemID: "item-043"}, {ID: "box-2", Name: "煤けた宝箱A", ItemID: "item-263", Fixed: true}}
 	if !reflect.DeepEqual(r.Boxes, want) || r.Recipients[c.ID].Inspected != 0 || r.EncounterFloor != adventure.EXTreasureFloor {
 		t.Fatalf("EX treasure: %+v %+v", r.Boxes, r.Recipients[c.ID])
 	}
@@ -251,7 +252,7 @@ func TestNormalRunEXTreasureEntryAndSeparateClaims(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, err := coreitem.NewInstance(adventure.ItemTreasurePocket, 1)
+	key, err := coreitem.NewInstance(runhost.ItemTreasurePocket, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +280,7 @@ func TestNormalRunEXTreasureEntryAndSeparateClaims(t *testing.T) {
 	if r.Boxes[0].OpenedBy != c.ID || r.Boxes[1].OpenedBy != c.ID || r.Recipients[c.ID].Inspected != 1 {
 		t.Fatalf("claims: %+v %+v", r.Boxes, r.Recipients[c.ID])
 	}
-	if countItem(t, f, c.ID, "item-263") != 1 || countItem(t, f, c.ID, "item-043") != 1 || countItem(t, f, c.ID, adventure.ItemTreasurePocket) != 1 {
+	if countItem(t, f, c.ID, "item-263") != 1 || countItem(t, f, c.ID, "item-043") != 1 || countItem(t, f, c.ID, runhost.ItemTreasurePocket) != 1 {
 		t.Fatal("fixed and ordinary claims delivered or consumed incorrectly")
 	}
 }
@@ -305,18 +306,18 @@ func TestNormalRunEXFixedClaimVersusExitStress(t *testing.T) {
 			fixed = box.ID
 		}
 	}
-	if r.Floor != adventure.EXTreasureFloor || fixed == "" {
+	if r.Round != adventure.EXTreasureFloor || fixed == "" {
 		t.Fatalf("EX treasure missing: %+v", r)
 	}
 	f.clock.add(3 * time.Second)
-	commands := []adventure.RunCommand{
+	commands := []runhost.Command{
 		{PlayerID: a.PlayerID, ActorID: a.ID, RunID: runID, ID: "claim-a", Version: r.Version, Action: "chest", TargetID: fixed},
 		{PlayerID: b.PlayerID, ActorID: b.ID, RunID: runID, ID: "claim-b", Version: r.Version, Action: "chest", TargetID: fixed},
 		{PlayerID: b.PlayerID, ActorID: b.ID, RunID: runID, ID: "exit-b", Version: r.Version, Action: "exit"},
 	}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		_, err := f.svc.Command(context.Background(), commands[(worker+op)%len(commands)])
-		if errors.Is(err, adventure.ErrRunConflict) || errors.Is(err, adventure.ErrRunForbidden) || errors.Is(err, adventure.ErrRunRecovery) {
+		if errors.Is(err, runhost.ErrConflict) || errors.Is(err, runhost.ErrForbidden) || errors.Is(err, runhost.ErrRecovery) {
 			return nil
 		}
 		return err
@@ -359,7 +360,7 @@ func TestNormalRunSaveBoundaryDropsFallenNPCs(t *testing.T) {
 	// Legacy sees one ally at the next advance, so stage23 creates no marker.
 	f.send(t, runID, 0, "advance", "")
 	f.send(t, runID, 0, "fall", "")
-	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.EXUnlocked || r.Floor != adventure.TreasureRoomFloor {
+	if r, err = f.store.FindRun(context.Background(), runID); err != nil || r.EXUnlocked || r.Round != adventure.TreasureRoomFloor {
 		t.Fatal("fallen helper counted toward the stage23 marker", r, err)
 	}
 	if !slices.ContainsFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == c.ID && a.HP <= 0 }) {

@@ -95,17 +95,20 @@ Battle engine operates independently of callers (adventures, arena, GvG, bosses,
 - **AST Guard**: Prohibits direct construction of un-adapted participants in feature modules (`battle_adapter_lint_test.go`).
 - **Stage data (`internal/stagedata`)**: The legacy stage transcription (enemy templates with battle payloads, `@appears`, boss rosters) shared by Adventure and Dungeon, so no feature owns another's content (#2402).
 
+### Run host
+
+**Responsibility:** The mode-neutral durable run (`internal/runhost`): enrollment, the versioned snapshot, one SQL transaction per command, receipts, recipient ledgers, treasure inspection, individual exit and recoverable idle cleanup. Room libraries embed its state in their snapshot and supply mode rules through its room port; the [durable run boundary](transient-run-state.md#run-host-durable-command-boundary-1325) owns persistence and recovery.
+
 ### Adventure / Quest
 
 **Responsibility:** Define and execute adventure-oriented game flows, dungeon crawl loops, encounter progressions, and stage reward distributions.
 
-Adventure's `NormalRunService` owns SQL enrollment, explicit progress, individual
-chest/exit settlement and recoverable idle cleanup. Party owns waiting admission;
-its roster writers serialize with the one-way SQL handoff. The
-[durable run boundary](transient-run-state.md#normal-adventure-durable-command-boundary-1325)
-owns persistence and recovery. Core battle supplies serializable effects, the
-battle adapter supplies character binding and asset application, Home enforces
-durable sleep deadlines, and PlayerContext reads owned Adventure facts.
+Adventure's `NormalRunService` is the stage room library on the run host: stage
+admission, explicit progress and encounters, exit effects, records and the explicit
+combat executor. Party owns waiting admission; its roster writers serialize with
+the one-way SQL handoff. Core battle supplies serializable effects, the battle
+adapter supplies character binding and asset application, Home enforces durable
+sleep deadlines, and PlayerContext reads owned run facts.
 
 Production starts still use the request-local `CrawlSession` batch path.
 The verified Gateway cutover (#1330) remains

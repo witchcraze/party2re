@@ -2,188 +2,53 @@ package adventure
 
 import (
 	"context"
-	"errors"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-var (
-	ErrRunConflict    = errors.New("normal adventure command conflicts with committed state")
-	ErrRunForbidden   = errors.New("normal adventure actor is not authorized")
-	ErrRunBusy        = errors.New("character has unfinished normal adventure work")
-	ErrRunUnavailable = errors.New("normal adventure command implementation unavailable")
-	ErrRunCooldown    = errors.New("normal adventure actor interval has not elapsed")
-	ErrRunRecovery    = errors.New("normal adventure requires recovery")
-)
+// normalRunKind namespaces stage-run identities on the shared run host.
+const normalRunKind = "normal-adventure"
 
-// NormalRun is the Adventure-owned durable state, independent of waiting lobbies.
-// Character records and executable callbacks never belong in this snapshot.
+// NormalRun is the stage room library's snapshot: the host state plus the
+// stage, floor-progress and encounter fields only Adventure stages use.
 type NormalRun struct {
-	ID                  string                     `json:"id"`
-	Version             int                        `json:"version"`
-	Encoding            int                        `json:"encoding"`
-	Admission           NormalAdmission            `json:"admission"`
+	runhost.State
 	Stage               Stage                      `json:"stage"`
 	RecordSeason        string                     `json:"record_season"`
 	Mode                string                     `json:"mode"`
-	LeaderID            string                     `json:"leader_id"`
-	Roster              []string                   `json:"roster"`
-	Floor               int                        `json:"floor"`
 	FloorsCleared       int                        `json:"floors_cleared"`
 	StageCleared        bool                       `json:"stage_cleared"`
 	ClearPending        bool                       `json:"clear_pending"`
 	EXUnlocked          bool                       `json:"ex_unlocked"`
 	EncounterFloor      int                        `json:"encounter_floor"`
 	EncounterStageID    string                     `json:"encounter_stage_id"`
-	Enemies             []string                   `json:"enemies"`
 	EncounterPool       []corebattle.LifetimeActor `json:"encounter_pool,omitempty"`
 	AppearancePositions []int                      `json:"appearance_positions,omitempty"`
-	Battle              corebattle.LifetimeState   `json:"battle"`
-	LastActions         map[string]time.Time       `json:"last_actions"`
-	Recipients          map[string]RunRecipient    `json:"recipients"`
-	Boxes               []TreasureBox              `json:"boxes"`
-	StartedAt           time.Time                  `json:"started_at"`
-	LastActivity        time.Time                  `json:"last_activity"`
-	TimedOut            bool                       `json:"timed_out"`
 }
 
-// NormalAdmission is frozen under Party's roster lock. Generation is the lobby
-// identity for Party admission and the owned request identity for solo admission.
-type NormalAdmission struct {
-	Generation   string                     `json:"generation"`
-	PartyID      string                     `json:"party_id"`
-	ActorID      string                     `json:"actor_id"`
-	CharacterIDs []string                   `json:"character_ids"`
-	Actors       []corebattle.LifetimeActor `json:"actors,omitempty"`
-	StageID      string                     `json:"stage_id"`
-	Season       string                     `json:"season"`
-	Mode         string                     `json:"mode"`
-	Speed        int                        `json:"speed"`
-}
+func (r *NormalRun) Host() *runhost.State { return &r.State }
 
-type RunEarnings struct {
-	EXP      int `json:"experience"`
-	Gold     int `json:"gold"`
-	Crystals int `json:"crystals"`
-}
-
-type RunRecipient struct {
-	PlayerID     string      `json:"player_id"`
-	Pending      RunEarnings `json:"pending"`
-	Conditional  RunEarnings `json:"conditional"`
-	Applied      RunEarnings `json:"applied"`
-	Inspected    int         `json:"inspected"`
-	Disposition  string      `json:"disposition"`
-	PenaltyUntil time.Time   `json:"penalty_until"`
-	TimerPending bool        `json:"timer_pending"`
-}
-
-type RunCommand struct {
-	PlayerID string `json:"player_id"`
-	ActorID  string `json:"actor_id"`
-	RunID    string `json:"run_id"`
-	ID       string `json:"id"`
-	Version  int    `json:"version"`
-	Action   string `json:"action"`
-	TargetID string `json:"target_id"`
-	Input    string `json:"input"`
-}
-
-// RunReceipt contains only the executing actor's result, including after exit.
-type RunReceipt struct {
-	Command      RunCommand                 `json:"command"`
-	Version      int                        `json:"version"`
-	Floor        int                        `json:"floor"`
-	StageID      string                     `json:"stage_id"`
-	Disposition  string                     `json:"disposition"`
-	Box          *TreasureBox               `json:"box,omitempty"`
-	Recipient    RunRecipient               `json:"recipient"`
-	MonsterTames []battle.MonsterTameResult `json:"monster_tames,omitempty"`
-}
-
-type ActorRun struct {
-	RunID        string
-	PartyID      string
-	Version      int
-	Floor        int
-	LeaderID     string
-	Role         string
-	IdleDue      bool
-	LastActivity time.Time
-	Recipient    RunRecipient
-}
-
-// RetainedEarnings is an unpaid unconditional balance that a timed-out run left
-// in its recipient ledger after the active room was disposed.
-type RetainedEarnings struct {
-	RunID     string
-	Recipient RunRecipient
-}
-
-// RetainedEarningsStore owns the claim path for RetainedEarnings. The read
-// precedes settlement; the write runs after it (Rank 8), locks the row and fails
-// with ErrRunConflict unless its unpaid balance equals the credited one.
-type RetainedEarningsStore interface {
-	FindRetainedEarnings(context.Context, string) ([]RetainedEarnings, error)
-	SaveRetainedRecipient(context.Context, string, string, RunEarnings, RunRecipient) error
-}
-
-// NormalRunStore keeps receipts and recipient dispositions beyond active state
-// disposal. WithRunForUpdate must start before any ambient character transaction.
-type NormalRunStore interface {
-	RetainedEarningsStore
-	WithRunForUpdate(context.Context, string, bool, func(context.Context) error) error
-	FindRun(context.Context, string) (*NormalRun, error)
-	SaveRun(context.Context, NormalRun, int) error
-	FindRunReceipt(context.Context, string, string) (*RunReceipt, error)
-	SaveRunReceipt(context.Context, RunReceipt) error
-	EnrollRun(context.Context, NormalRun) error
-	SaveRunRecipient(context.Context, string, string, RunRecipient) error
-	FindActorRun(context.Context, string) (*ActorRun, error)
-	FindAdmission(context.Context, string) (*NormalAdmission, error)
-	FindPenalty(context.Context, string) (*ActorRun, error)
-}
-
-type RunCharacters interface {
-	FindByID(context.Context, string) (corecharacter.Character, error)
-	FindByIDForUpdate(context.Context, string) (corecharacter.Character, error)
-	Update(context.Context, corecharacter.Character) error
-}
-
-type RunActorBuilder interface {
-	BuildLifetimeActor(context.Context, string, string) (corebattle.LifetimeActor, error)
-}
-
-// RunAdmission serializes live waiting-roster validation, but never owns SQL
-// asset locks. Roster validation runs under the matching SQL handoff lock.
-type RunAdmission interface {
-	WithNormalRoster(context.Context, string, string, func(context.Context, NormalAdmission) error) error
-	CleanupNormalLobby(context.Context, NormalAdmission) error
-	CheckSoloAdmission(context.Context, string) error
-}
-
-// RunCombat is the explicit command seam (NewRunCombat). It must admit the
-// action before effects, use the ambient transaction, and return only new
-// earnings/consumption. It must return an execution-time rejection or failure
-// rather than absorb it: core restores only the battle state, so Command then
-// saves neither this run copy (travel/room changes included) nor a receipt.
-// No batch resolver is a fallback for this port.
+// RunCombat is Adventure's explicit command executor (NewRunCombat). It must
+// admit the action before effects, use the ambient transaction, and return
+// only new earnings/consumption. It must return an execution-time rejection or
+// failure rather than absorb it: core restores only the battle state, so the
+// host then saves neither this run copy (travel/room changes included) nor a
+// receipt. No batch resolver is a fallback for this port.
 type RunCombat interface {
 	PrepareAdvance(context.Context, *NormalRun, string) error
 	PrepareBossField(context.Context, *NormalRun, string) error
-	ExecuteRunAction(context.Context, *NormalRun, RunCommand) (RunActionEffects, error)
+	ExecuteRunAction(context.Context, *NormalRun, runhost.Command) (RunActionEffects, error)
 }
 
 type RunActionEffects struct {
-	Earnings          map[string]RunEarnings
+	Earnings          map[string]runhost.Earnings
 	Consumed          map[string][]corebattle.ConsumedItem
 	RoomActivity      bool
 	ActorActivity     bool
@@ -200,31 +65,25 @@ type RunActionEffects struct {
 	EXUnlocked      bool
 }
 
-// RunPenalty projects a committed absolute deadline. SQL ownership remains held
-// until this succeeds; Home must independently enforce the durable deadline.
-type RunPenalty interface {
-	ProjectRunPenalty(context.Context, string, time.Time) error
-}
-
 type RunInventories interface {
 	InventoryRepository
 	FindByCharacterIDForUpdate(context.Context, string) (coreinventory.Inventory, error)
 }
 
 type NormalRunConfig struct {
-	Store       NormalRunStore
-	Characters  RunCharacters
+	Store       runhost.Store[NormalRun]
+	Characters  runhost.Characters
 	Inventories RunInventories
-	Builder     RunActorBuilder
+	Builder     runhost.ActorBuilder
 	Settler     PostBattleSettler
 	History     Repository
 	Stages      *StageCatalog
 	Monsters    *MonsterCatalog
 	Jobs        job.DefinitionProvider
-	Admission   RunAdmission
+	Admission   runhost.Lobby
 	Combat      RunCombat
 	Blessings   BlessingProvider
-	Penalty     RunPenalty
+	Penalty     runhost.Penalty
 	Clock       Clock
 	RNG         random.Generator
 	CheckEntry  func(context.Context, string) error
@@ -243,45 +102,38 @@ type JobAssetDepots interface {
 	Save(context.Context, depot.Depot) error
 }
 
-type NormalRunService struct{ cfg NormalRunConfig }
-
-type normalMutationContext struct{}
-type normalAdmissionContext struct{}
-
-// CheckMutation protects conflicting service mutations without taking a run
-// lock after character locks. Native commands carry the already-held run identity.
-func (s *NormalRunService) CheckMutation(ctx context.Context, actor string) error {
-	run, err := s.cfg.Store.FindActorRun(ctx, actor)
-	if err != nil {
-		return err
-	}
-	if run != nil && ctx.Value(normalMutationContext{}) != run.RunID {
-		return ErrRunBusy
-	}
-	return nil
+// NormalRunService runs Adventure stages on the shared run host: the host owns
+// enrollment, commands, receipts, exit and cleanup; stageRoom supplies the rules.
+type NormalRunService struct {
+	*runhost.Service[NormalRun, *NormalRun]
+	cfg NormalRunConfig
 }
 
 func NewNormalRunService(cfg NormalRunConfig) (*NormalRunService, error) {
-	if cfg.Store == nil || cfg.Characters == nil || cfg.Inventories == nil || cfg.Builder == nil || cfg.Settler == nil || cfg.History == nil || cfg.Stages == nil || cfg.Monsters == nil || cfg.Clock == nil || cfg.Penalty == nil {
-		return nil, ErrRunUnavailable
+	if cfg.Inventories == nil || cfg.History == nil || cfg.Stages == nil || cfg.Monsters == nil {
+		return nil, runhost.ErrUnavailable
 	}
 	if cfg.RNG == nil {
 		cfg.RNG = random.Default()
 	}
-	return &NormalRunService{cfg: cfg}, nil
+	s := &NormalRunService{cfg: cfg}
+	room := stageRoom{s: s}
+	host, err := runhost.NewService[NormalRun](runhost.Config[NormalRun]{
+		Kind: normalRunKind, Store: cfg.Store, Characters: cfg.Characters, Inventories: cfg.Inventories,
+		Builder: cfg.Builder, Settler: cfg.Settler, Jobs: cfg.Jobs, Lobby: cfg.Admission, Penalty: cfg.Penalty,
+		Clock: cfg.Clock, RNG: cfg.RNG, CheckEntry: cfg.CheckEntry, ExitEffects: cfg.ExitEffects, Room: room, Combat: room,
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.Service = host
+	return s, nil
 }
 
-func (s *NormalRunService) SetExitEffects(apply func(context.Context, string) error) {
-	s.cfg.ExitEffects = apply
+// EnterSolo enrolls actor alone in stageID without creating an encounter. The
+// caller retains key on retries.
+func (s *NormalRunService) EnterSolo(ctx context.Context, player, actor, key, stageID, mode string, speed int) (runhost.Receipt, error) {
+	return s.Enroll(ctx, player, key, runhost.Admission{ActorID: actor, StageID: stageID, Mode: mode, Speed: speed})
 }
 
 func (s *NormalRunService) SetBlessings(provider BlessingProvider) { s.cfg.Blessings = provider }
-
-func (r *NormalRun) actor(id string) *corebattle.LifetimeActor {
-	for i := range r.Battle.Actors {
-		if r.Battle.Actors[i].ID == id {
-			return &r.Battle.Actors[i]
-		}
-	}
-	return nil
-}

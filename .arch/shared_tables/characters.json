@@ -14,7 +14,7 @@
     "internal/bank/bank.go#Repository",
     "internal/pvp/service.go#CharacterRepository",
     "internal/dungeon/dungeon.go#CharacterRepository",
-    "internal/adventure/normal_run.go#RunCharacters",
+    "internal/runhost/runhost.go#Characters",
     "internal/customskill/custom_skill.go#CharacterProvider",
     "internal/character/presence.go#PresenceRepository"
   ],
@@ -209,8 +209,8 @@
       "purpose": "Lock all participating expedition member characters in ascending ID order before claiming expedition history by run ID, persisting post-battle vitality/consumed items, and applying rewards"
     },
     {
-      "module": "adventure",
-      "caller_method": "internal/adventure/normal_command.go#NormalRunService.Command",
+      "module": "runhost",
+      "caller_method": "internal/runhost/command.go#Service.Command",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock the complete ordered run roster by sorted IDs after its Rank 0 coordination row; preserve receipt and recipient settlement atomicity."

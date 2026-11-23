@@ -11,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -30,16 +31,16 @@ func setJobEncounterRoom(t *testing.T, f *normalFixture, run, action string) {
 		if err != nil {
 			return err
 		}
-		r.Floor = 8
+		r.Round = 8
 		if action == "job-78-entry-6" {
 			r.Stage, err = f.cfg.Stages.FindByID("stage-19")
 			if err != nil {
 				return err
 			}
-			r.Floor = 11
-			r.Boxes = []adventure.TreasureBox{{ID: "owned-box", ItemID: "item-001"}}
+			r.Round = 11
+			r.Boxes = []runhost.TreasureBox{{ID: "owned-box", ItemID: "item-001"}}
 		}
-		r.EncounterFloor, r.EncounterStageID = r.Floor, r.Stage.ID
+		r.EncounterFloor, r.EncounterStageID = r.Round, r.Stage.ID
 		if action == "job-78-entry-2" {
 			// The room tool needs an existing encounter; this one cannot answer yet.
 			foe := runEnemy("foe", 900)
@@ -80,7 +81,7 @@ func TestJobEncounterSQLRollbackReceiptAndUnseal(t *testing.T) {
 				t.Fatal(err)
 			}
 			a := f.actors[0]
-			cmd := adventure.RunCommand{RunID: run, PlayerID: a.PlayerID, ActorID: a.ID, ID: id.New(), Version: before.Version, Action: action, TargetID: target}
+			cmd := runhost.Command{RunID: run, PlayerID: a.PlayerID, ActorID: a.ID, ID: id.New(), Version: before.Version, Action: action, TargetID: target}
 			f.store.failWrite.Store(true)
 			if _, err := f.svc.Command(context.Background(), cmd); err == nil {
 				t.Fatal("failed SQL receipt accepted")
@@ -117,10 +118,10 @@ func TestJobEncounterSQLRollbackReceiptAndUnseal(t *testing.T) {
 			if err != nil || char.MaoCount != wantCount || char.Money != a.Money+7 {
 				t.Fatal("wrong settlement", char, err)
 			}
-			if action == "job-78-entry-2" && (after.Floor != 9 || len(after.Enemies) == 0 || after.Enemies[0] == "foe") {
+			if action == "job-78-entry-2" && (after.Round != 9 || len(after.Enemies) == 0 || after.Enemies[0] == "foe") {
 				t.Fatal(after)
 			}
-			if action == "job-78-entry-6" && (after.Floor != 11 || len(after.Boxes) == 0 || after.Boxes[0].ID == "owned-box") {
+			if action == "job-78-entry-6" && (after.Round != 11 || len(after.Boxes) == 0 || after.Boxes[0].ID == "owned-box") {
 				t.Fatal(after)
 			}
 		})
@@ -132,7 +133,7 @@ func TestJobEncounterSQLTimeRestoresHeadLastForNextRequest(t *testing.T) {
 	installJobEncounter(t, f)
 	run := f.enter(t, "normal").Command.RunID
 	f.send(t, run, 0, "advance", "")
-	cmd := adventure.RunCommand{RunID: run, Version: readStockRoom(t, f, run).Version}
+	cmd := runhost.Command{RunID: run, Version: readStockRoom(t, f, run).Version}
 	before := editStockRoom(t, f, &cmd, func(r *adventure.NormalRun) {
 		a := runActorByID(r, f.actors[0].ID)
 		a.Jobs, a.MP = corebattle.BattleJobs{JobID: "job-79", SP: 100}, 80
@@ -169,13 +170,13 @@ func TestJobEncounterSQLPairedTreasureCommandsConserveCounterAndStock(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	commands := make([]adventure.RunCommand, 2)
+	commands := make([]runhost.Command, 2)
 	for i, a := range f.actors {
-		commands[i] = adventure.RunCommand{RunID: run, PlayerID: a.PlayerID, ActorID: a.ID, ID: id.New(), Version: r.Version, Action: "job-78-entry-6", TargetID: "owned-box"}
+		commands[i] = runhost.Command{RunID: run, PlayerID: a.PlayerID, ActorID: a.ID, ID: id.New(), Version: r.Version, Action: "job-78-entry-6", TargetID: "owned-box"}
 	}
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 		_, err := f.svc.Command(context.Background(), commands[(worker+op)%2])
-		if errors.Is(err, adventure.ErrRunConflict) {
+		if errors.Is(err, runhost.ErrConflict) {
 			return nil
 		}
 		return err

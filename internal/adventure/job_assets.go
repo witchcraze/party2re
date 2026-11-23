@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // WithJobAssets supplies requester facts to the enclosing, fully admitted combat
@@ -19,17 +20,17 @@ import (
 // Job86 withdrawals swap in place; returns deliver even over capacity.
 // A selection error commits no assets; stored-tool history stays in the run.
 // Transaction: ExecuteTransaction within Command. Lock Order: prelocked run(0) -> prelocked sorted characters(2) -> requester inventory(3) -> requester depot(5).
-func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd RunCommand, apply func(*corebattle.JobAssets, *corecharacter.Character) error) error {
-	if r == nil || ctx.Value(normalMutationContext{}) != r.ID || cmd.RunID != r.ID ||
+func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd runhost.Command, apply func(*corebattle.JobAssets, *corecharacter.Character) error) error {
+	if r == nil || !runhost.InCommand(ctx, r.ID) || cmd.RunID != r.ID ||
 		!slices.Contains(r.Roster, cmd.ActorID) || r.Recipients[cmd.ActorID].PlayerID != cmd.PlayerID {
-		return ErrRunForbidden
+		return runhost.ErrForbidden
 	}
 	if s.cfg.JobAssetRunner == nil || apply == nil {
 		return corebattle.ErrUnsupportedEffect
 	}
 	_, err := s.cfg.JobAssetRunner.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: cmd.ActorID, LockInventory: true}, func(tc *economy.TxContext) error {
 		if tc.Character.PlayerID != cmd.PlayerID {
-			return ErrRunForbidden
+			return runhost.ErrForbidden
 		}
 		assets := corebattle.JobAssets{RequesterID: cmd.ActorID, Wallet: tc.Character.Money, AddWallet: economy.SafeAdd}
 		assets.HeldToolID = tc.Inventory.HeldToolID()
@@ -57,7 +58,7 @@ func (s *NormalRunService) WithJobAssets(ctx context.Context, r *NormalRun, cmd 
 			return err
 		}
 		if assets.RequesterID != cmd.ActorID || assets.Wallet < 0 {
-			return ErrRunConflict
+			return runhost.ErrConflict
 		}
 		if assets.SelectionError {
 			return nil
@@ -129,7 +130,7 @@ func storedTools(d depot.Depot) []corebattle.StoredTool {
 func exchangeStoredTool(tc *economy.TxContext, d *depot.Depot, instanceID, held string) (string, error) {
 	index := slices.IndexFunc(d.Items, func(i item.Instance) bool { return i.ID == instanceID })
 	if index < 0 {
-		return held, ErrRunConflict
+		return held, runhost.ErrConflict
 	}
 	taken, err := d.ConsumeOne(instanceID)
 	if err != nil {
@@ -155,7 +156,7 @@ func exchangeStoredTool(tc *economy.TxContext, d *depot.Depot, instanceID, held 
 // merges into an eligible stack or appends, even at or over capacity.
 func returnHeldTool(tc *economy.TxContext, d *depot.Depot, held string) (string, error) {
 	if held == "" {
-		return held, ErrRunConflict
+		return held, runhost.ErrConflict
 	}
 	unit, err := tc.Inventory.ConsumeOneItem(tc.Inventory.Items[0].ID)
 	if err != nil {

@@ -2,7 +2,6 @@ package adventure
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -10,11 +9,12 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 const stockLevelAction = "stock-level"
 
-func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd RunCommand, requester corecharacter.Character, now time.Time) error {
+func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd runhost.Command, requester corecharacter.Character, now time.Time) error {
 	ops, err := r.normalOperations(cmd, NormalOperationContext{Requester: &requester})
 	if err != nil {
 		return err
@@ -24,10 +24,10 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 		return err
 	}
 	if now.Before(r.LastActions[cmd.ActorID].Add(time.Duration(r.Admission.Speed) * time.Second)) {
-		return ErrRunCooldown
+		return runhost.ErrCooldown
 	}
 	if s.cfg.Jobs == nil {
-		return ErrRunUnavailable
+		return runhost.ErrUnavailable
 	}
 	def, err := s.cfg.Jobs.FindByID(requester.JobID)
 	if err != nil {
@@ -45,7 +45,7 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 	}
 	level := requester.Level
 	grow := func(b *corebattle.LifetimeState, rng random.Generator, single bool) (bool, error) {
-		return growRequester(b, cmd.ActorID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
+		return runhost.GrowRequester(b, cmd.ActorID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
 			return progression.ApplyStockLevels(c, def, rng, held, single)
 		})
 	}
@@ -60,7 +60,7 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 		Tail:  corebattle.PlayerTailContext{DamageContext: damage, DefeatContext: defeat},
 		Field: corebattle.NamedFieldContext{DamageContext: damage, Death: defeat},
 		// Treasure rooms disable NPC-dependent field exercises even after all boxes open.
-		ResponseEnabled: !isTreasureFloor(r.Floor),
+		ResponseEnabled: !isTreasureFloor(r.Round),
 		LevelUp: func(b *corebattle.LifetimeState, rng random.Generator) (bool, error) {
 			if b.SpecialBossField || requester.Level != level {
 				return false, nil
@@ -73,60 +73,10 @@ func (s *NormalRunService) stockLevel(ctx context.Context, r *NormalRun, cmd Run
 		return err
 	}
 	if !result.Accepted {
-		return ErrRunUnavailable
+		return runhost.ErrUnavailable
 	}
 	if requester.Level == level {
 		return nil
 	}
 	return s.cfg.Characters.Update(ctx, requester)
-}
-
-// roomTailLevel is the action tail's lv_up reached by すすむ/しらべる: at most
-// one level from saved and released EXP (_battle.cgi:912,935–937).
-func (s *NormalRunService) roomTailLevel(ctx context.Context, r *NormalRun, requester corecharacter.Character, released int) error {
-	due, err := RunActionEffects{}.LevelUpEligible(&r.Battle, requester, r.Mode, released)
-	if err != nil || !due {
-		return err
-	}
-	if s.cfg.Jobs == nil {
-		return ErrRunUnavailable
-	}
-	def, err := s.cfg.Jobs.FindByID(requester.JobID)
-	if err != nil {
-		return err
-	}
-	grown, err := growRequester(&r.Battle, requester.ID, &requester, func(c *corecharacter.Character, held string) ([]corecharacter.Stats, error) {
-		return progression.ApplyTailLevel(c, def, s.cfg.RNG, held, released)
-	})
-	if err != nil || !grown {
-		return err
-	}
-	return s.cfg.Characters.Update(ctx, requester)
-}
-
-// growRequester applies saved-EXP stock levels to the requester and mirrors the
-// uncapped growth onto the battle actor (system.cgi:49–67).
-func growRequester(b *corebattle.LifetimeState, actorID string, requester *corecharacter.Character, apply func(*corecharacter.Character, string) ([]corecharacter.Stats, error)) (bool, error) {
-	i := slices.IndexFunc(b.Actors, func(a corebattle.LifetimeActor) bool { return a.ID == actorID })
-	if i < 0 {
-		return false, ErrRunConflict
-	}
-	a := &b.Actors[i]
-	held := ""
-	if a.HeldToolID != nil {
-		held = *a.HeldToolID
-	} else if a.Gear != nil {
-		held = a.Gear.AccessoryID
-	}
-	startingLevel, startingSP := requester.Level, requester.SP
-	growth, err := apply(requester, held)
-	if err != nil {
-		return false, err
-	}
-	cappedLevels := 0
-	if requester.OverLevel {
-		cappedLevels = max(0, progression.MaxLevel-startingLevel)
-	}
-	a.ApplyLevelGrowth(growth, requester.SP-startingSP, cappedLevels)
-	return len(growth) > 0, nil
 }

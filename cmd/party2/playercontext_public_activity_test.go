@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/challenge"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type publicNormalActivity struct {
@@ -26,7 +26,7 @@ func (f publicNormalActivity) HasActiveRun(_ context.Context, actor string) (boo
 	return f.active, f.err
 }
 
-func (f publicNormalActivity) GetActorRun(context.Context, string, string) (*adventure.ActorRun, error) {
+func (f publicNormalActivity) GetActorRun(context.Context, string, string) (*runhost.ActorRun, error) {
 	panic("public inspection must not read the owned run")
 }
 
