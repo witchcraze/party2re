@@ -305,7 +305,7 @@ type Service struct {
 	repo               Repository
 	characterRepo      CharacterRepository
 	invRepo            InventoryProvider
-	battleEngine       corebattle.Resolver
+	battleEngine       corebattle.PartyBattleResolver
 	activeStore        ActiveExpeditionStore
 	dungeons           []Dungeon
 	dungeonMap         map[string]Dungeon
@@ -358,7 +358,7 @@ func WithParticipantBuilder(builder ParticipantBuilder) Option {
 func NewService(
 	repo Repository,
 	characterRepo CharacterRepository,
-	battleEngine corebattle.Resolver,
+	battleEngine corebattle.PartyBattleResolver,
 	opts ...Option,
 ) (*Service, error) {
 	if repo == nil {

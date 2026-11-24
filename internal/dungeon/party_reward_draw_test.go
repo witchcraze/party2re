@@ -13,10 +13,6 @@ type customPartyBattleEngine struct {
 	resolvePartyFn func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
 }
 
-func (e *customPartyBattleEngine) Resolve(req corebattle.Request) (corebattle.Result, error) {
-	return corebattle.Result{}, nil
-}
-
 func (e *customPartyBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 	if e.resolvePartyFn != nil {
 		return e.resolvePartyFn(req)

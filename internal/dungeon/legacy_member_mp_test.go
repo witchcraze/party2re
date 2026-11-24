@@ -23,10 +23,6 @@ type mpSpendingResolver struct {
 	seenMP map[string]int
 }
 
-func (r *mpSpendingResolver) Resolve(req corebattle.Request) (corebattle.Result, error) {
-	return corebattle.Result{Outcome: corebattle.OutcomeWin}, nil
-}
-
 func (r *mpSpendingResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 	if r.seenMP == nil {
 		r.seenMP = make(map[string]int, len(req.Allies))
