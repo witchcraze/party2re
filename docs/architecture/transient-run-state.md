@@ -446,7 +446,7 @@ parity nor complete cross-store recovery.
 
 The user approved SQL authority and the explicit idle-cleanup timing in #1325
 on 2026-10-11. The [run host](../../internal/runhost/runhost.go) owns enrolled
-runs for every room library; Party Valkey owns waiting lobbies. Legacy runs
+runs for every room library; Party and PvP Valkey lobbies own waiting rosters. Legacy runs
 every room mode on shared routines (the battle engine, treasure inspection and
 creation, enemy creation, exit and reset in `_battle.cgi`/`_npc_action.cgi`) and
 keys mode differences on `$m{lib}`. The host therefore owns the shared routines,
@@ -456,7 +456,14 @@ port and its `$m{lib}` combat branches through the
 [combat seams](../../internal/runhost/combat_room.go); a mode without them gets
 legacy's non-vs_monster branch. Hosting other modes inside Adventure was rejected
 in #2649. Adventure stages are a room library
-([NormalRunService](../../internal/adventure/normal_run.go)). Production starts
+([NormalRunService](../../internal/adventure/normal_run.go)). PvP is a room
+library whose round-0 lobby stays in Valkey. Its first `かいし` commits the
+lobby's `host` transition inside the run's waiting-admission transaction (runs,
+then `pvp_room_transitions`, then characters), moving the bet escrow into the
+run. Room deletion and claim release follow the commit, as in
+[PvP financial publication](#pvp-financial-publication). A room without an
+encounter sets `Teams`, so each combat frame treats every other color as the
+enemy. Production starts
 retain batch execution until the Gateway cutover (#1330). Neither this service nor Candidate
 D's loss limitations certify combat effects whose ports remain whole-action gates.
 Gameplay evidence remains in [Adventure](../design/adventure.md#resumable-normal-run-transitions)

@@ -1,14 +1,15 @@
 {
   "module": "pvp",
   "tier": 2,
-  "description": "Ephemeral colosseum rooms with durable SQL financial versions, participation claims and publication recovery (C1, C2, C3).",
+  "description": "Ephemeral colosseum lobbies with durable SQL financial versions, participation claims and publication recovery; the first かいし hands the escrow to the run host room library (C1, C2, C3).",
   "package": "internal/pvp",
   "dependencies": [
     {"name": "transitions", "target_module": "database", "relation_type": "contract_interface", "source_ref": "internal/pvp/transition.go#TransitionRepository"},
     {"name": "characters", "target_module": "character", "relation_type": "contract_interface", "source_ref": "internal/pvp/service.go#CharacterRepository"},
     {"name": "rooms", "target_module": "pvp", "relation_type": "contract_interface", "source_ref": "internal/pvp/repository.go#RoomRepository"},
     {"name": "battle_settler", "target_module": "battle", "relation_type": "contract_interface", "source_ref": "internal/pvp/service.go#PostBattleSettler"},
-    {"name": "post_exit_hook", "target_module": "tavern", "relation_type": "contract_interface", "source_ref": "internal/pvp/service.go#PostExitHook"}
+    {"name": "post_exit_hook", "target_module": "tavern", "relation_type": "contract_interface", "source_ref": "internal/pvp/service.go#PostExitHook"},
+    {"name": "run_host", "target_module": "runhost", "relation_type": "contract_interface", "source_ref": "internal/runhost/runhost.go#Room"}
   ],
   "transaction_boundaries": [
     {
@@ -29,6 +30,18 @@
         {"table": "pvp_room_transitions", "tier": 0, "mode": "SELECT ... FOR UPDATE", "note": "Acknowledge only the published version."},
         {"table": "pvp_character_claims", "tier": 8, "mode": "DELETE scoped to character and room", "note": "Release departed claims only after cache publication; terminal settlement releases all participants."}
       ]
+    },
+    {
+      "method": "WithRoster",
+      "source_ref": "internal/pvp/run_lobby.go#matchLobby.WithRoster",
+      "transaction_type": "Delegated",
+      "lock_sequence": [
+        {"table": "runs", "tier": 0, "mode": "SELECT ... FOR UPDATE (via WithWaitingLobby)", "note": "Admission identity of the lobby room; rejects an already committed handoff."},
+        {"table": "pvp_room_transitions", "tier": 0, "mode": "SELECT ... FOR UPDATE (via CommitTransition)", "note": "The host transition commits the disbanded lobby with its escrow moved into the run."},
+        {"table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE (ascending ID, run host enrollment)", "note": "matchRoom.Open reads the committed room to fix teams, target wins and the pool."},
+        {"table": "run_enrollments / run_receipts", "tier": 8, "mode": "INSERT", "note": "Unique active enrollment and the enrollment receipt."}
+      ],
+      "note": "Runs under the Valkey room lock inside the run host's waiting-admission transaction. Publication (room and mapping deletion, claim release in AcknowledgeTransition) follows the commit through CleanupLobby or the next room-lock recovery."
     }
   ]
 }

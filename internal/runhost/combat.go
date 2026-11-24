@@ -14,7 +14,8 @@ import (
 )
 
 // ResetContext is actor's all-member reset frame on the saved run: actor's
-// side and the living members of the current encounter.
+// side, the living members of the current encounter and everyone else as
+// member-only.
 func (r *State) ResetContext(actorID string, requesterLevel *int) (corebattle.EquipmentResetContext, error) {
 	actor := r.Actor(actorID)
 	if actor == nil {
@@ -24,8 +25,10 @@ func (r *State) ResetContext(actorID string, requesterLevel *int) (corebattle.Eq
 	for _, a := range r.Battle.Actors {
 		if a.TeamID == actor.TeamID {
 			frame.PartyIDs = append(frame.PartyIDs, a.ID)
-		} else if slices.Contains(r.Enemies, a.ID) && a.HP > 0 {
+		} else if slices.Contains(r.frameEnemies(actor.TeamID), a.ID) && a.HP > 0 {
 			frame.EnemyIDs = append(frame.EnemyIDs, a.ID)
+		} else {
+			frame.MemberOnlyIDs = append(frame.MemberOnlyIDs, a.ID)
 		}
 	}
 	return corebattle.EquipmentResetContext{TargetContext: frame, RequesterLevel: requesterLevel}, nil

@@ -1,7 +1,7 @@
-package challenge_test
+package runhost_test
 
 import (
-	"github.com/witchcraze/party2re/internal/challenge"
+	"github.com/witchcraze/party2re/internal/runhost"
 	"testing"
 )
 
@@ -15,7 +15,7 @@ func TestExitBonus(t *testing.T) {
 		{"item-105", 0, .5, 0, 0}, {"item-105", 3, .5, 60, 0}, {"item-106", 0, .5, 0, 0},
 		{"item-106", 3, .5, 0, 115}, {"item-106", 2, .999, 0, 153}, {"", 3, .5, 0, 0},
 	} {
-		exp, gold, err := challenge.ExitBonus(tc.item, tc.round, tc.draw)
+		exp, gold, err := runhost.ExitBonus(tc.item, tc.round, tc.draw)
 		if err != nil || exp != tc.exp || gold != tc.gold {
 			t.Fatalf("%+v got=%d/%d %v", tc, exp, gold, err)
 		}

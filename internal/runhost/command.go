@@ -104,6 +104,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 			if err := r.Ready(cmd.ActorID, now); err != nil {
 				return err
 			}
+			renew := true
 			switch cmd.Action {
 			case "chest":
 				var err error
@@ -119,6 +120,9 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 					return err
 				}
 			default:
+				// A fallen actor's room action never renews its action time (_battle.cgi:655–662).
+				a := r.Actor(cmd.ActorID)
+				renew = a == nil || a.HP > 0
 				var err error
 				if effects, err = s.cfg.Room.Act(ctx, run, cmd); err != nil {
 					return err
@@ -126,7 +130,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 				request.UnsealDemonKing = effects.UnsealDemonKing
 				tail = true
 			}
-			effects.RoomActivity, effects.ActorActivity, effects.ReleaseStock = true, true, true
+			effects.RoomActivity, effects.ActorActivity, effects.ReleaseStock = true, renew, true
 		default:
 			var err error
 			effects, err = s.executeCombat(ctx, run, cmd)

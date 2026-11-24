@@ -42,7 +42,7 @@ type TransitionRepository interface {
 
 // IsActivityTransitionKind reports whether kind is a room-activity writer subject to inactivity guards.
 func IsActivityTransitionKind(kind string) bool {
-	return kind == "select" || kind == "start" || kind == "advance" || kind == "kick"
+	return kind == "select" || kind == "start" || kind == "advance" || kind == "kick" || kind == "host"
 }
 
 func WithTransitionRepository(repo TransitionRepository) Option {
@@ -58,9 +58,29 @@ func (s *Service) GetCharacterClaim(ctx context.Context, characterID string) (st
 type transitionVersionKey struct{}
 
 func (s *Service) commitTransition(ctx context.Context, t Transition, mutate func(context.Context) error) error {
+	t, err := s.commitSQL(ctx, t, mutate)
+	if err != nil {
+		return err
+	}
+	published, err := s.publishTransition(ctx, t)
+	if err != nil {
+		return err
+	}
+	if t.Kind != "timeout" && published.Kind == "timeout" {
+		if t.Kind == "leave" && slices.Contains(published.RemovedIDs, t.ActorID) {
+			return nil
+		}
+		return ErrRoomInactive
+	}
+	return nil
+}
+
+// commitSQL commits t as the room's next pending version; publication follows
+// only after the caller's transaction commits.
+func (s *Service) commitSQL(ctx context.Context, t Transition, mutate func(context.Context) error) (Transition, error) {
 	version, _ := ctx.Value(transitionVersionKey{}).(int)
 	if t.Detail.Room.FinancialVersion != version {
-		return ErrTransitionConflict
+		return Transition{}, ErrTransitionConflict
 	}
 	t.Version = version + 1
 	t.Detail.Room.FinancialVersion = t.Version
@@ -80,19 +100,9 @@ func (s *Service) commitTransition(ctx context.Context, t Transition, mutate fun
 	if err := s.transitions.CommitTransition(ctx, t, func(txCtx context.Context) error {
 		return s.runInTx(txCtx, mutate)
 	}); err != nil {
-		return err
+		return Transition{}, err
 	}
-	published, err := s.publishTransition(ctx, t)
-	if err != nil {
-		return err
-	}
-	if t.Kind != "timeout" && published.Kind == "timeout" {
-		if t.Kind == "leave" && slices.Contains(published.RemovedIDs, t.ActorID) {
-			return nil
-		}
-		return ErrRoomInactive
-	}
-	return nil
+	return t, nil
 }
 
 func (s *Service) publishTransition(ctx context.Context, t Transition) (Transition, error) {

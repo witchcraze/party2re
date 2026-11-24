@@ -8,6 +8,7 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 // settleParticipants runs inside the accepted command's run lock and transaction.
@@ -89,6 +90,6 @@ func (r *ChallengeRepository) applyChallengeExitBonus(ctx context.Context, m *ch
 	if bonus == "item-106" {
 		draw = random.Float64()
 	}
-	m.ExitBonusExp, m.ExitBonusGold, err = challenge.ExitBonus(bonus, round, draw)
+	m.ExitBonusExp, m.ExitBonusGold, err = runhost.ExitBonus(bonus, round, draw)
 	return err
 }

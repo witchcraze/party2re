@@ -180,7 +180,8 @@ func (r *State) ProjectCombat(actorID string) (corebattle.LifetimeState, corebat
 	}
 	state := cloneBattle(r.Battle)
 	frame := corebattle.TargetContext{ActorID: actorID}
-	for _, id := range r.Enemies {
+	team := r.Actor(actorID).TeamID
+	for _, id := range r.frameEnemies(team) {
 		if enemy := findActor(state.Actors, id); enemy != nil && enemy.HP > 0 {
 			frame.EnemyIDs = append(frame.EnemyIDs, id)
 		}
@@ -203,7 +204,6 @@ func (r *State) ProjectCombat(actorID string) (corebattle.LifetimeState, corebat
 			}
 		}
 	}
-	team := r.Actor(actorID).TeamID
 	for _, member := range state.Actors {
 		switch {
 		case member.TeamID == team:

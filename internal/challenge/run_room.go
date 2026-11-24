@@ -80,21 +80,9 @@ func (room stageRoom) Act(ctx context.Context, r *Run, cmd runhost.Command) (run
 	return room.s.advance(ctx, r, cmd.ActorID)
 }
 
-// Exit is nigeru's Challenge part (_battle.cgi:1208–1218): fatigue for the
-// current round and the item105/item106 bonus. Challenge has no calm mode.
+// Exit is nigeru's Challenge part; Challenge has no calm mode.
 func (room stageRoom) Exit(r *Run, actor string) (runhost.Earnings, int, error) {
-	bonus := runhost.Earnings{}
-	if a := r.Actor(actor); a != nil && a.Gear != nil && slices.Contains(a.ItemDefinitionIDs, a.Gear.AccessoryID) {
-		draw := 0.0
-		if a.Gear.AccessoryID == "item-106" {
-			draw = room.s.cfg.RNG.Float64()
-		}
-		var err error
-		if bonus.EXP, bonus.Gold, err = ExitBonus(a.Gear.AccessoryID, r.Round, draw); err != nil {
-			return bonus, 0, err
-		}
-	}
-	return bonus, r.Round*3 + 1, nil
+	return r.DefaultExit(actor, room.s.cfg.RNG)
 }
 
 // Record is a no-op: nigeru only prints the result screen for Challenge.
