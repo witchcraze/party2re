@@ -47,7 +47,7 @@ func TestEncounterFightEscapeStaleSettlement(t *testing.T) {
 				defer unblock()
 				char := createTestChar(id.New(), 10, 100, 30, 20)
 				repo := &errorInjectingDungeonRepo{mockDungeonRepo: newMockDungeonRepo()}
-				monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23, DropItemID: "potion"}
+				monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23}
 				exp := sampleExpedition(id.New(), char.ID, "review")
 				exp.Encounter = &dungeon.ActiveEncounter{Monsters: []dungeon.DungeonMonster{monster}, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: dungeon.EventBattle, X: 1}
 				if err := underlying.SaveActiveExpedition(ctx, exp); err != nil {
@@ -92,7 +92,7 @@ func TestEncounterFightEscapeStaleSettlement(t *testing.T) {
 				if _, err = svc.Escape(ctx, char.ID); err != nil {
 					t.Fatal(err)
 				}
-				if len(repo.histories[char.ID]) != 1 || repo.histories[char.ID][0].GoldReward != expectedGold || repo.histories[char.ID][0].ExpReward != expectedExp || repo.histories[char.ID][0].ItemsRewardCount != 1 || repo.savedChars[char.ID].Stats.HP != 80 {
+				if len(repo.histories[char.ID]) != 1 || repo.histories[char.ID][0].GoldReward != expectedGold || repo.histories[char.ID][0].ExpReward != expectedExp || repo.savedChars[char.ID].Stats.HP != 80 {
 					t.Fatalf("lost victory reward/vitality: %+v", repo.histories[char.ID])
 				}
 			})

@@ -9,7 +9,6 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/dungeon"
 )
 
@@ -22,13 +21,12 @@ func (e *errorInjectingDungeonRepo) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
 	character *corecharacter.Character,
-	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
 ) error {
 	if e.errFinalizeExpedition != nil {
 		return e.errFinalizeExpedition
 	}
-	return e.mockDungeonRepo.FinalizeExpedition(ctx, history, character, rewardItems, members...)
+	return e.mockDungeonRepo.FinalizeExpedition(ctx, history, character, members...)
 }
 
 func customSettlementDungeons() []dungeon.Dungeon {
@@ -39,7 +37,7 @@ func customSettlementDungeons() []dungeon.Dungeon {
 		Variants: []dungeon.Floor{{
 			Width: 3, Height: 1,
 			Grid:  []string{"SB0"},
-			Pools: []dungeon.EncounterPool{{Bosses: []dungeon.DungeonMonster{{ID: "floor-boss", Name: "階層ボス", HP: 40, Attack: 10, Defense: 5, ExpReward: 150, GoldReward: 300, DropItemID: "boss-orb"}}}},
+			Pools: []dungeon.EncounterPool{{Bosses: []dungeon.DungeonMonster{{ID: "floor-boss", Name: "階層ボス", HP: 40, Attack: 10, Defense: 5, ExpReward: 150, GoldReward: 300}}}},
 		}},
 	}}
 }
@@ -179,14 +177,13 @@ func TestEscape_ErrorPropagation(t *testing.T) {
 		now := time.Now().UTC()
 
 		_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-			CharacterID:      "hero",
-			DungeonID:        "test-dg-01",
-			Status:           dungeon.StatusExploring,
-			AccumulatedExp:   120,
-			AccumulatedGold:  350,
-			AccumulatedItems: []string{"item-pot-01"},
-			StartedAt:        now,
-			UpdatedAt:        now,
+			CharacterID:     "hero",
+			DungeonID:       "test-dg-01",
+			Status:          dungeon.StatusExploring,
+			AccumulatedExp:  120,
+			AccumulatedGold: 350,
+			StartedAt:       now,
+			UpdatedAt:       now,
 		})
 
 		res, err := service.Escape(ctx, "hero")
@@ -251,15 +248,14 @@ func TestEscape_IdempotentOnDeleteFailureRetry(t *testing.T) {
 
 	now := time.Now().UTC()
 	_ = store.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-		ID:               "exp-retry-1",
-		CharacterID:      "hero",
-		DungeonID:        "test-dg-01",
-		Status:           dungeon.StatusExploring,
-		AccumulatedExp:   100,
-		AccumulatedGold:  250,
-		AccumulatedItems: []string{"potion"},
-		StartedAt:        now,
-		UpdatedAt:        now,
+		ID:              "exp-retry-1",
+		CharacterID:     "hero",
+		DungeonID:       "test-dg-01",
+		Status:          dungeon.StatusExploring,
+		AccumulatedExp:  100,
+		AccumulatedGold: 250,
+		StartedAt:       now,
+		UpdatedAt:       now,
 	})
 
 	// First Escape succeeds in SQL (mock repo), but activeStore.DeleteActiveExpedition fails
@@ -287,13 +283,10 @@ func TestEscape_IdempotentOnDeleteFailureRetry(t *testing.T) {
 		t.Fatalf("unexpected second escape result: %+v", res2)
 	}
 
-	// Verify only 1 history entry and 1 item reward were recorded
+	// Verify only 1 history entry was recorded
 	histories, _ := repo.GetHistory(ctx, "hero", 10)
 	if len(histories) != 1 || histories[0].ID != "exp-retry-1" {
 		t.Fatalf("expected exactly 1 history with ID exp-retry-1, got %+v", histories)
-	}
-	if len(repo.awardedItems["hero"]) != 1 {
-		t.Fatalf("expected 1 awarded item, got %d", len(repo.awardedItems["hero"]))
 	}
 	activeAfter, _ := store.GetActiveExpedition(ctx, "hero")
 	if activeAfter != nil {

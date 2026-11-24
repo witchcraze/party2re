@@ -14,7 +14,6 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/economy"
@@ -36,12 +35,11 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 	query := `
 		SELECT id, character_id, party_id, dungeon_id, pos_x, pos_y,
 		       current_hp, turns_remaining, accumulated_exp, accumulated_gold,
-		       accumulated_items_json, members_json, status, started_at, updated_at
+		       members_json, status, started_at, updated_at
 		FROM dungeon_active_expeditions
 		WHERE character_id = ?
 	`
 	var exp dungeon.ActiveExpedition
-	var itemsJSON string
 	var statusStr string
 	var partyID sql.NullString
 	var membersJSON sql.NullString
@@ -57,7 +55,6 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 		&exp.Round, // shortcut: round is stored in the old turns_remaining column; drop with the unused table (#2365)
 		&exp.AccumulatedExp,
 		&exp.AccumulatedGold,
-		&itemsJSON,
 		&membersJSON,
 		&statusStr,
 		&exp.StartedAt,
@@ -80,13 +77,12 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 	}
 
 	exp.Status = dungeon.ExpeditionStatus(statusStr)
-	exp.AccumulatedItems = dungeon.DecodeItems(itemsJSON)
 
 	return &exp, nil
 }
 
 func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeon.ActiveExpedition) error {
-	itemsJSON := dungeon.EncodeItems(exp.AccumulatedItems)
+	itemsJSON := "[]"
 	membersJSON := dungeon.EncodeMembers(exp.Members)
 	now := time.Now().UTC()
 
@@ -146,13 +142,12 @@ func (r *DungeonRepository) DeleteActiveExpedition(ctx context.Context, characte
 }
 
 // FinalizeExpedition claims expedition completion once by history.ID (run ID) inside a SQL transaction.
-// Lock order: Rank 2 (characters FOR UPDATE in ascending ID order) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items) -> Rank 5 (character_depots) -> Rank 8 (tavern_character_status on Escape).
+// Lock order: Rank 2 (characters FOR UPDATE in ascending ID order) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items via shared post-battle settlement) -> Rank 8 (tavern_character_status on Escape).
 // Returns dungeon.ErrExpeditionAlreadyFinished if history.ID has already been settled.
 func (r *DungeonRepository) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
 	character *corecharacter.Character,
-	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
 ) error {
 	charID := history.CharacterID
@@ -215,8 +210,8 @@ func (r *DungeonRepository) FinalizeExpedition(
 		insertHistoryQuery := `
 			INSERT INTO dungeon_expedition_history (
 				id, character_id, dungeon_id, outcome,
-				exp_reward, gold_reward, items_reward_count, created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				exp_reward, gold_reward, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?)
 		`
 		_, err := executor.ExecContext(
 			txCtx,
@@ -227,7 +222,6 @@ func (r *DungeonRepository) FinalizeExpedition(
 			string(history.Outcome),
 			history.ExpReward,
 			history.GoldReward,
-			history.ItemsRewardCount,
 			history.CreatedAt,
 		)
 		if err != nil {
@@ -321,19 +315,6 @@ func (r *DungeonRepository) FinalizeExpedition(
 			}
 		}
 
-		// 5. Deliver reward item instances (Rank 3 Inventory -> Rank 5 Depot)
-		if len(rewardItems) > 0 {
-			for i := range rewardItems {
-				if rewardItems[i].ID == "" {
-					rewardItems[i].ID = id.New()
-				}
-			}
-			leaderChar := applied.UpdatedCharacters[charID]
-			if err := deliverRewardItems(txCtx, r.db, leaderChar, rewardItems); err != nil {
-				return err
-			}
-		}
-
 		// nigeru clears is_eat (_battle.cgi:1211).
 		if history.Outcome == dungeon.StatusEscaped {
 			tavern := &TavernRepository{db: r.db}
@@ -344,7 +325,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 			}
 		}
 
-		// 6. Delete only this owner's finalized run, preserving any replacement.
+		// 5. Delete only this owner's finalized run, preserving any replacement.
 		if err := r.DeleteActiveExpedition(txCtx, charID, history.ID); err != nil {
 			return err
 		}
@@ -356,7 +337,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 func (r *DungeonRepository) GetHistory(ctx context.Context, characterID string, limit int) ([]dungeon.DungeonExpeditionHistory, error) {
 	query := `
 		SELECT id, character_id, dungeon_id, outcome,
-		       exp_reward, gold_reward, items_reward_count, created_at
+		       exp_reward, gold_reward, created_at
 		FROM dungeon_expedition_history
 		WHERE character_id = ?
 		ORDER BY created_at DESC
@@ -380,7 +361,6 @@ func (r *DungeonRepository) GetHistory(ctx context.Context, characterID string, 
 			&outcomeStr,
 			&h.ExpReward,
 			&h.GoldReward,
-			&h.ItemsRewardCount,
 			&h.CreatedAt,
 		); err != nil {
 			return nil, err

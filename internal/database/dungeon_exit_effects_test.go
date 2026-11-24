@@ -91,14 +91,14 @@ func TestDungeonRepository_FinalizeExpedition_EscapeExitEffects(t *testing.T) {
 	}
 	leader, _ := chars.FindByID(ctx, members[0].CharacterID)
 	errA, errB := testutil.RunRace2(
-		func() error { l := leader; return dungeonRepo.FinalizeExpedition(ctx, history, &l, nil, members...) },
-		func() error { l := leader; return dungeonRepo.FinalizeExpedition(ctx, history, &l, nil, members...) },
+		func() error { l := leader; return dungeonRepo.FinalizeExpedition(ctx, history, &l, members...) },
+		func() error { l := leader; return dungeonRepo.FinalizeExpedition(ctx, history, &l, members...) },
 	)
 	if (errA == nil) == (errB == nil) || !errors.Is(errors.Join(errA, errB), dungeon.ErrExpeditionAlreadyFinished) {
 		t.Fatalf("concurrent Escape: want exactly one settlement, got %v / %v", errA, errB)
 	}
 	// A retry after commit is also a no-op.
-	if err := dungeonRepo.FinalizeExpedition(ctx, history, &leader, nil, members...); !errors.Is(err, dungeon.ErrExpeditionAlreadyFinished) {
+	if err := dungeonRepo.FinalizeExpedition(ctx, history, &leader, members...); !errors.Is(err, dungeon.ErrExpeditionAlreadyFinished) {
 		t.Fatalf("retry: got %v", err)
 	}
 

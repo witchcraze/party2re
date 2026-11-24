@@ -11,7 +11,6 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/id"
@@ -56,7 +55,6 @@ func (r *preFinalizeHookRepo) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
 	character *corecharacter.Character,
-	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
 ) error {
 	if r.beforeFinalize != nil {
@@ -64,7 +62,7 @@ func (r *preFinalizeHookRepo) FinalizeExpedition(
 			return err
 		}
 	}
-	return r.Repository.FinalizeExpedition(ctx, history, character, rewardItems, members...)
+	return r.Repository.FinalizeExpedition(ctx, history, character, members...)
 }
 
 type failingFindCharRepo struct {
@@ -296,11 +294,10 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 					PosY:        0,
 					CurrentHP:   40,
 					Round:       30, RoundLimit: 50,
-					Status:           dungeon.StatusExploring,
-					AccumulatedItems: []string{},
-					ConsumedEvents:   []string{},
-					StartedAt:        time.Now().UTC(),
-					UpdatedAt:        time.Now().UTC(),
+					Status:         dungeon.StatusExploring,
+					ConsumedEvents: []string{},
+					StartedAt:      time.Now().UTC(),
+					UpdatedAt:      time.Now().UTC(),
 				}
 				if err := store.SaveActiveExpedition(ctx, seedExp); err != nil {
 					t.Fatal(err)

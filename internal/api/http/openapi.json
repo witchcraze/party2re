@@ -9903,15 +9903,6 @@
           "accumulated_gold": {
             "type": "integer"
           },
-          "accumulated_items": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "character_id": {
             "type": "string"
           },
@@ -9992,7 +9983,6 @@
           "round_limit",
           "accumulated_exp",
           "accumulated_gold",
-          "accumulated_items",
           "status",
           "started_at",
           "updated_at"
@@ -10222,9 +10212,6 @@
           "is_finished": {
             "type": "boolean"
           },
-          "item_found": {
-            "type": "string"
-          },
           "member_damages": {
             "additionalProperties": {
               "type": "integer"
@@ -10323,9 +10310,6 @@
           },
           "defense": {
             "type": "integer"
-          },
-          "drop_item_id": {
-            "type": "string"
           },
           "exp_reward": {
             "type": "integer"

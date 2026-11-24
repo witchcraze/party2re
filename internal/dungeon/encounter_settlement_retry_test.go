@@ -173,7 +173,7 @@ func TestEncounterMutualKnockoutEscapes(t *testing.T) {
 			char := createTestChar(id.New(), 10, 100, 30, 20)
 			repo := newMockDungeonRepo()
 			exp := sampleExpedition(id.New(), char.ID, "mutual")
-			exp.AccumulatedExp, exp.AccumulatedGold, exp.AccumulatedItems = 11, 13, nil
+			exp.AccumulatedExp, exp.AccumulatedGold = 11, 13
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23}
 			exp.Encounter = &dungeon.ActiveEncounter{Monsters: []dungeon.DungeonMonster{monster}, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: dungeon.EventBattle, X: 1}
 			if err := store.SaveActiveExpedition(ctx, exp); err != nil {

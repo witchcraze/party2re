@@ -36,7 +36,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 				char := createTestChar(id.New(), 10, 100, 30, 20)
 				charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 				repo := newMockDungeonRepo()
-				monster := dungeon.DungeonMonster{ID: "enemy", Name: "Enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23, DropItemID: "potion"}
+				monster := dungeon.DungeonMonster{ID: "enemy", Name: "Enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23}
 				floor := dungeon.Floor{Width: 3, Height: 3, StartX: 1, StartY: 1, Grid: []string{"1T1", "ES0", "1D1"}, Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{monster}}}}
 				catalog := []dungeon.Dungeon{{ID: "encounter", RoundLimit: 21, Variants: []dungeon.Floor{floor}}}
 				calls := 0
@@ -134,7 +134,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 					t.Fatal(err)
 				}
 				if ending == "win" {
-					if final.Expedition.Encounter != nil || final.Expedition.PosX != 2 || final.Expedition.AccumulatedExp != 17 || final.Expedition.AccumulatedGold != 23 || len(final.Expedition.AccumulatedItems) != 1 {
+					if final.Expedition.Encounter != nil || final.Expedition.PosX != 2 || final.Expedition.AccumulatedExp != 17 || final.Expedition.AccumulatedGold != 23 {
 						t.Fatalf("victory: %+v", final)
 					}
 					if _, err = svc.Fight(ctx, char.ID); !errors.Is(err, dungeon.ErrNoActiveCombat) {
@@ -212,7 +212,6 @@ func TestEncounterStepCAS(t *testing.T) {
 			params.Encounter = nil
 			params.ExpDelta = 17
 			params.GoldDelta = 23
-			params.RewardItemID = "potion"
 			errs := testutil.RunRace(func() error {
 				_, err := store.Step(ctx, exp.CharacterID, params)
 				if errors.Is(err, dungeon.ErrExpeditionStateChanged) {
@@ -235,7 +234,7 @@ func TestEncounterStepCAS(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if active.Encounter != nil || active.AccumulatedExp != 17 || active.AccumulatedGold != 23 || len(active.AccumulatedItems) != 1 || len(active.ConsumedEvents) != 0 || active.Round != 2 {
+			if active.Encounter != nil || active.AccumulatedExp != 17 || active.AccumulatedGold != 23 || len(active.ConsumedEvents) != 0 || active.Round != 2 {
 				t.Fatalf("duplicate or lost update: %+v", active)
 			}
 		})

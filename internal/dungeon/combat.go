@@ -191,7 +191,6 @@ func (s *Service) resolveMonsterCombat(
 			RoundLimit:           carry.RoundLimit,
 			ExpDelta:             leaderExpDelta,
 			GoldDelta:            leaderGoldDelta,
-			RewardItemID:         monsters[0].DropItemID, // shortcut: invented path kept as is until #2741 deletes it
 			Now:                  time.Now().UTC(),
 		})
 		if err != nil {
@@ -205,7 +204,6 @@ func (s *Service) resolveMonsterCombat(
 			MemberDamages: memberDamages,
 			ExpEarned:     leaderExpDelta,
 			GoldFound:     leaderGoldDelta,
-			ItemFound:     monsters[0].DropItemID,
 			Monsters:      monsters,
 			CombatOutcome: corebattle.OutcomeWin,
 		}, nil

@@ -7,7 +7,6 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -21,7 +20,7 @@ type pausedFinalizeRepository struct {
 	resume  chan struct{}
 }
 
-func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, c *corecharacter.Character, items []coreitem.Instance, members ...dungeon.ExpeditionMember) error {
+func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, c *corecharacter.Character, members ...dungeon.ExpeditionMember) error {
 	if ctx.Value(staleEscapeKey{}) != nil {
 		close(r.entered)
 		select {
@@ -30,7 +29,7 @@ func (r *pausedFinalizeRepository) FinalizeExpedition(ctx context.Context, h dun
 			return ctx.Err()
 		}
 	}
-	return r.Repository.FinalizeExpedition(ctx, h, c, items, members...)
+	return r.Repository.FinalizeExpedition(ctx, h, c, members...)
 }
 
 func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {

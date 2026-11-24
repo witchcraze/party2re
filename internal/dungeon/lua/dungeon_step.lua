@@ -192,15 +192,14 @@ local hp_delta = tonumber(ARGV[4]) or 0
 local round_delta = tonumber(ARGV[5]) or 0
 local exp_delta = tonumber(ARGV[6]) or 0
 local gold_delta = tonumber(ARGV[7]) or 0
-local reward_item = ARGV[8]
-local now_timestamp = ARGV[9]
-local ttl_seconds = tonumber(ARGV[10]) or 7200
-local event_key = ARGV[11] or ''
-local member_hp_deltas_str = ARGV[12] or '{}'
-local member_mp_deltas_str = ARGV[13] or '{}'
-local consumed_items_str = ARGV[14] or '{}'
-local member_exp_deltas_str = ARGV[15] or '{}'
-local member_gold_deltas_str = ARGV[16] or '{}'
+local now_timestamp = ARGV[8]
+local ttl_seconds = tonumber(ARGV[9]) or 7200
+local event_key = ARGV[10] or ''
+local member_hp_deltas_str = ARGV[11] or '{}'
+local member_mp_deltas_str = ARGV[12] or '{}'
+local consumed_items_str = ARGV[13] or '{}'
+local member_exp_deltas_str = ARGV[14] or '{}'
+local member_gold_deltas_str = ARGV[15] or '{}'
 
 -- 1. Check existence of active expedition state key
 if redis.call('EXISTS', state_key) == 0 then
@@ -220,18 +219,18 @@ if status ~= 'exploring' then
 end
 
 local encounter = redis.call('HGET', state_key, 'encounter') or ''
-if encounter ~= '' and ARGV[18] ~= 'true' then
+if encounter ~= '' and ARGV[17] ~= 'true' then
     return redis.error_reply('ERR_COMBAT_ACTIVE')
 end
 local revision, rev_err = parse_int_field(state_key, 'revision')
 if rev_err then
     return redis.error_reply(rev_err)
 end
-if ARGV[17] ~= '' and tonumber(ARGV[17]) ~= revision then
+if ARGV[16] ~= '' and tonumber(ARGV[16]) ~= revision then
     return redis.error_reply('ERR_EXPEDITION_STATE_CHANGED')
 end
 revision = revision + 1
-encounter = ARGV[19] or ''
+encounter = ARGV[18] or ''
 
 -- 4. Calculate new HP and round
 local current_hp, hp_err = parse_int_field(state_key, 'current_hp')
@@ -362,8 +361,8 @@ end
 
 -- An all-fallen party stays exploring until Escape; only exits finish a run.
 local final_status = 'exploring'
-if ARGV[20] and ARGV[20] ~= '' then
-    final_status = ARGV[20]
+if ARGV[19] and ARGV[19] ~= '' then
+    final_status = ARGV[19]
 end
 
 -- 5. Check and record event consumption
@@ -380,10 +379,6 @@ end
 local _, gold_err = parse_int_field(rewards_key, 'gold')
 if gold_err then
     return redis.error_reply(gold_err)
-end
-local items, _, items_err = decode_array_field(rewards_key, 'items', 'string')
-if items_err then
-    return redis.error_reply(items_err)
 end
 
 local event_consumed = 1
@@ -450,34 +445,23 @@ redis.call('HMSET', state_key,
 )
 
 -- A floor change carries the round and switches the limit with the layout.
-local map_variant = tonumber(ARGV[21]) or 0
+local map_variant = tonumber(ARGV[20]) or 0
 if map_variant > 0 then
-    redis.call('HSET', state_key, 'map_variant', tostring(map_variant), 'round_limit', ARGV[22])
+    redis.call('HSET', state_key, 'map_variant', tostring(map_variant), 'round_limit', ARGV[21])
 end
 
 -- The map's own run state is replaced whole; the revision check above guards it.
-if ARGV[24] == 'true' then
-    redis.call('HSET', state_key, 'map_state', ARGV[23])
+if ARGV[23] == 'true' then
+    redis.call('HSET', state_key, 'map_state', ARGV[22])
 end
 
 -- 7. Update rewards hash
 if event_consumed == 0 then
     exp_delta = 0
     gold_delta = 0
-    reward_item = ''
 end
 local total_exp = redis.call('HINCRBY', rewards_key, 'exp', exp_delta)
 local total_gold = redis.call('HINCRBY', rewards_key, 'gold', gold_delta)
-
-if reward_item and reward_item ~= '' then
-    table.insert(items, reward_item)
-end
-
-local new_items_str = '[]'
-if #items > 0 then
-    new_items_str = cjson.encode(items)
-end
-redis.call('HSET', rewards_key, 'items', new_items_str)
 
 -- 8. Refresh sliding TTL (2 hours)
 redis.call('EXPIRE', state_key, ttl_seconds)
@@ -495,7 +479,6 @@ return {
     tostring(round),
     tostring(total_exp),
     tostring(total_gold),
-    new_items_str,
     now_timestamp,
     dungeon_id,
     started_at,

@@ -64,14 +64,6 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	invRepo, err := database.NewInventoryRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	depotRepo, err := database.NewDepotRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	bankRepo, err := database.NewBankRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +92,6 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		}
 		exp.AccumulatedGold = 250
 		exp.AccumulatedExp = 80
-		exp.AccumulatedItems = []string{"potion"}
 		if err := vStore.SaveActiveExpedition(ctx, *exp); err != nil {
 			t.Fatalf("SaveActiveExpedition failed: %v", err)
 		}
@@ -133,17 +124,6 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		if err != nil || len(histories) != 1 {
 			t.Fatalf("expected 1 history record, got %d (err=%v)", len(histories), err)
 		}
-		inv, err := invRepo.FindByCharacterID(ctx, char.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		dep, err := depotRepo.FindByCharacterID(ctx, char.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(inv.Items)+len(dep.Items) != 1 {
-			t.Errorf("expected 1 item delivered across inv+depot, got inv=%d depot=%d", len(inv.Items), len(dep.Items))
-		}
 	})
 
 	t.Run("ConcurrentEscapeAndBankMovement", func(t *testing.T) {
@@ -166,7 +146,6 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		}
 		exp.AccumulatedGold = 300
 		exp.AccumulatedExp = 60
-		exp.AccumulatedItems = []string{"potion"}
 		if err := vStore.SaveActiveExpedition(ctx, *exp); err != nil {
 			t.Fatalf("SaveActiveExpedition failed: %v", err)
 		}
@@ -239,17 +218,6 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		histories, err := svc.GetHistory(ctx, char.ID, 10)
 		if err != nil || len(histories) != 1 {
 			t.Fatalf("expected 1 history record, got %d (err=%v)", len(histories), err)
-		}
-		inv, err := invRepo.FindByCharacterID(ctx, char.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		dep, err := depotRepo.FindByCharacterID(ctx, char.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(inv.Items)+len(dep.Items) != 1 {
-			t.Errorf("expected 1 item delivered across inv+depot, got inv=%d depot=%d", len(inv.Items), len(dep.Items))
 		}
 	})
 }

@@ -232,7 +232,7 @@ changing this boundary. Durable records include `dungeon_expedition_history` and
 
 `DungeonRepository.FinalizeExpedition` claims settlement once per run by inserting
 `dungeon_expedition_history` keyed by the run ID. The same transaction settles
-every member's vitality, consumption, Escape exit effects, rewards, item delivery
+every member's vitality, consumption, Escape exit effects, rewards
 and meal flag through the shared post-battle settlement. Unreadable
 member or run state aborts settlement before the run is frozen or deleted. A
 duplicate claim (`ErrExpeditionAlreadyFinished`) is idempotent completion, so

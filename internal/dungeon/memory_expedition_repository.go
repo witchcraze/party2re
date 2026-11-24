@@ -62,7 +62,6 @@ func (m *MemoryExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 
 	cp := exp
 	cp.Encounter = cloneEncounter(exp.Encounter)
-	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
@@ -75,7 +74,6 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 
 	cp := exp
 	cp.Encounter = cloneEncounter(exp.Encounter)
-	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
@@ -234,9 +232,6 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	if eventConsumed {
 		exp.AccumulatedExp += params.ExpDelta
 		exp.AccumulatedGold += params.GoldDelta
-		if params.RewardItemID != "" {
-			exp.AccumulatedItems = append(exp.AccumulatedItems, params.RewardItemID)
-		}
 
 		if len(params.MemberExpDeltas) > 0 {
 			for i := range exp.Members {
@@ -265,7 +260,6 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 
 	cp := exp
 	cp.Encounter = cloneEncounter(exp.Encounter)
-	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
