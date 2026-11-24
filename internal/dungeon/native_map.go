@@ -14,15 +14,9 @@ import (
 // NativeMap0ID is the first native map (legacy map/0, six initial variants).
 const NativeMap0ID = "native-map-0"
 
-// nativeMap0 uses the layouts and round limit from map/0/1.cgi–6.cgi.
-// Legacy I and 2 are written H and C.
+// nativeMap0 uses the layouts and round limit from map/0/1.cgi–6.cgi and
+// stages 0–1 (int(rand(2))). Legacy I and 2 are written H and C.
 func nativeMap0() Dungeon {
-	monsters := []DungeonMonster{
-		{ID: "nm0-rat", Name: "洞窟ネズミ", HP: 8, Attack: 7, Defense: 2, Agility: 8, ExpReward: 2, GoldReward: 3},
-		{ID: "nm0-bat", Name: "大コウモリ", HP: 10, Attack: 8, Defense: 3, Agility: 12, ExpReward: 3, GoldReward: 4},
-		{ID: "nm0-ooze", Name: "緑の粘体", HP: 14, Attack: 9, Defense: 5, Agility: 5, ExpReward: 4, GoldReward: 5},
-	}
-	boss := &DungeonMonster{ID: "nm0-boss", Name: "ビックスライム", HP: 280, Attack: 32, Defense: 12, Agility: 35, ExpReward: 55, GoldReward: 25}
 	grids := [][]string{
 		{"0000C", "11B11", "00000", "H1110", "00S00"},
 		{"0000C", "11B11", "00000", "0111H", "00S00"},
@@ -31,7 +25,7 @@ func nativeMap0() Dungeon {
 		{"C0000", "11B11", "00000", "11110", "00S00"},
 		{"C0000", "11B11", "00000", "01111", "00S00"},
 	}
-	variants := variantFloors(Floor{Monsters: monsters, Boss: boss,
+	variants := variantFloors(Floor{Pools: stagePools(0, 1),
 		events: map[byte]mapEvent{'H': {action: hiddenEvent{}}, 'C': {action: treasureEvent{}}}}, grids)
 	return Dungeon{
 		ID:          NativeMap0ID,
@@ -100,14 +94,23 @@ type nativeStep struct {
 }
 
 type nativeBattle struct {
-	monster DungeonMonster
+	enemies []DungeonMonster
 	kind    TileEventType
 	key     string
 	status  string
 }
 
-func (n *nativeStep) fight(monster DungeonMonster, kind TileEventType, key, status string) {
-	n.battle = &nativeBattle{monster: monster, kind: kind, key: key, status: status}
+// partySize is legacy @partys: the whole roster, fallen members included.
+func (n *nativeStep) partySize() int { return max(1, len(n.exp.Members)) }
+
+// fightGroup spawns an ordinary group from pool (add_monster).
+func (n *nativeStep) fightGroup(pool EncounterPool, key, status string) {
+	n.battle = &nativeBattle{enemies: pool.group(n.partySize(), n.rng), kind: EventBattle, key: key, status: status}
+}
+
+// fightRoster spawns every member of a boss roster (add_boss).
+func (n *nativeStep) fightRoster(roster []DungeonMonster, key, status string) {
+	n.battle = &nativeBattle{enemies: spawnRoster(roster, n.partySize(), n.rng), kind: EventBoss, key: key, status: status}
 }
 
 // moveNative applies one admitted native step: the pre-move revival pass runs
@@ -145,7 +148,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader,
 	}
 	if battle := n.battle; battle != nil {
 		revived = preCombatDamage(exp, n.step, revived)
-		return s.resolveMonsterCombat(ctx, exp, leader, battle.monster, battle.kind, x, y, battle.key, battle.status, revived, n.step, damages)
+		return s.resolveMonsterCombat(ctx, exp, leader, battle.enemies, battle.kind, x, y, battle.key, battle.status, revived, n.step, damages)
 	}
 	addHPDeltas(&n.step, leader.ID, revived)
 
@@ -263,19 +266,33 @@ func (n *nativeStep) encounterPool() EncounterPool {
 	f := n.floor
 	switch len(f.Pools) {
 	case 0:
-		return EncounterPool{Monsters: f.Monsters, Boss: f.Boss}
+		return EncounterPool{}
 	case 1:
 		return f.Pools[0]
 	}
 	return f.Pools[n.rng.Intn(len(f.Pools))]
 }
 
-// monster draws one enemy through the weighted index list (add_monster).
-func (p EncounterPool) monster(rng RandomSource) DungeonMonster {
-	if len(p.Appears) > 0 {
-		return p.Monsters[p.Appears[rng.Intn(len(p.Appears))]]
+// group is add_monster: int(rand(2.5 + party × 0.6)) + 1 members, each drawn
+// through the weighted index list (an unknown index falls back to 0), rolled,
+// and named A..H in spawn order.
+func (p EncounterPool) group(party int, rng RandomSource) []DungeonMonster {
+	out := make([]DungeonMonster, int(rng.Float64()*(2.5+0.6*float64(party)))+1)
+	for i := range out {
+		var no int
+		if len(p.Appears) > 0 {
+			if no = p.Appears[rng.Intn(len(p.Appears))]; no < 0 || no >= len(p.Monsters) {
+				no = 0
+			}
+		} else {
+			no = rng.Intn(len(p.Monsters))
+		}
+		out[i] = p.Monsters[no].spawn(party, rng)
+		if i < maxEncounterEnemies {
+			out[i].Name += string(rune('A' + i))
+		}
 	}
-	return p.Monsters[rng.Intn(len(p.Monsters))]
+	return out
 }
 
 // treasureEncounter creates unopened chests like add_treasure: one per living

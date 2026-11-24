@@ -266,7 +266,7 @@ func TestNativeMap2_FloorBossesAreOncePerRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Monster == nil || res.Monster.Name != "デビルシェル" || res.EventType != dungeon.EventBoss {
+	if !slices.Equal(monsterIDs(res.Monsters), []string{"ordinary-03-boss-10", "ordinary-03-boss-28"}) || res.EventType != dungeon.EventBoss {
 		t.Fatalf("7 %+v", res)
 	}
 	exp := f.reload(t, "boss")
@@ -278,13 +278,13 @@ func TestNativeMap2_FloorBossesAreOncePerRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.rng.intCalls, f.rng.floatCalls = 0, 0
-	if res, err := f.svc.Move(ctx, "boss", dungeon.DirectionWest); err != nil || res.Monster != nil || f.rng.calls() != 0 {
+	if res, err := f.svc.Move(ctx, "boss", dungeon.DirectionWest); err != nil || len(res.Monsters) != 0 || f.rng.calls() != 0 {
 		t.Fatalf("second 7 %+v err=%v", res, err)
 	}
 
 	g := newNativeFixture(t, map2Hero("golem", 5000))
 	g.placeMap2(t, "golem", 4, 0, 4, 3)
-	if res, err := g.svc.Move(ctx, "golem", dungeon.DirectionEast); err != nil || res.Monster == nil || res.Monster.Name != "ゴーレム" {
+	if res, err := g.svc.Move(ctx, "golem", dungeon.DirectionEast); err != nil || len(res.Monsters) == 0 || res.Monsters[0].Name != "ゴーレム" {
 		t.Fatalf("8 %+v err=%v", res, err)
 	}
 }
@@ -298,8 +298,8 @@ func TestNativeMap2_PassageDrawsTheFloorStage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Monster == nil || res.Monster.Name != "メイジバット" {
-		t.Fatalf("spawn %+v", res.Monster)
+	if len(res.Monsters) == 0 || res.Monsters[0].Name != "メイジバットA" {
+		t.Fatalf("spawn %+v", res.Monsters)
 	}
 }
 

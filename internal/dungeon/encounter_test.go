@@ -37,12 +37,12 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 				charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 				repo := newMockDungeonRepo()
 				monster := dungeon.DungeonMonster{ID: "enemy", Name: "Enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23, DropItemID: "potion"}
-				floor := dungeon.Floor{Width: 3, Height: 3, StartX: 1, StartY: 1, Grid: []string{"1T1", "ES0", "1D1"}, Monsters: []dungeon.DungeonMonster{monster}}
+				floor := dungeon.Floor{Width: 3, Height: 3, StartX: 1, StartY: 1, Grid: []string{"1T1", "ES0", "1D1"}, Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{monster}}}}
 				catalog := []dungeon.Dungeon{{ID: "encounter", RoundLimit: 21, Variants: []dungeon.Floor{floor}}}
 				calls := 0
 				engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 					calls++
-					wantEnemyHP := 100 - (calls-1)*30
+					wantEnemyHP := 80 - (calls-1)*30 // spawned at 0.8 × 100
 					if req.Enemies[0].HP != wantEnemyHP {
 						t.Fatalf("enemy healed on resume: got %d want %d", req.Enemies[0].HP, wantEnemyHP)
 					}
@@ -67,7 +67,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 					return corebattle.PartyBattleResult{Outcome: outcome, WinnerSide: side, RemainingHP: hp, RemainingMP: map[string]int{"enemy": 4}, RemainingStatus: map[string]string{"enemy": "poison"}}, nil
 				}}
 				newService := func() *dungeon.Service {
-					svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(&minimalRandomSource{}))
+					svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(zeroRNG{}))
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -90,7 +90,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if first.Expedition.Encounter == nil || first.Expedition.Encounter.Enemies[0].HP != 70 {
+				if first.Expedition.Encounter == nil || first.Expedition.Encounter.Enemies[0].HP != 50 {
 					t.Fatalf("missing active enemy: %+v", first.Expedition)
 				}
 				// Mutating a returned snapshot must not mutate stored combat state.
@@ -126,7 +126,7 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 					return
 				}
 				second, err := svc.Fight(ctx, char.ID)
-				if err != nil || second.Expedition.Encounter == nil || second.Expedition.Encounter.Enemies[0].HP != 40 {
+				if err != nil || second.Expedition.Encounter == nil || second.Expedition.Encounter.Enemies[0].HP != 20 {
 					t.Fatalf("second draw: %+v %v", second, err)
 				}
 				final, err := svc.Fight(ctx, char.ID)
@@ -180,7 +180,11 @@ func TestEncounterStepCAS(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			enc := &dungeon.ActiveEncounter{Monster: dungeon.DungeonMonster{ID: "enemy", HP: 100}, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 70, 10, 10)}, EventType: dungeon.EventBattle, X: 1}
+			// A group with a defeated member: only the living one blocks.
+			fallen := corebattle.MustNewParticipant("enemy#2", 1, 10, 10)
+			fallen.HP = 0
+			enc := &dungeon.ActiveEncounter{Monsters: []dungeon.DungeonMonster{{ID: "enemy", HP: 100}, {ID: "enemy", HP: 90}},
+				Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 70, 10, 10), fallen}, EventType: dungeon.EventBattle, X: 1}
 			params := dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &exp.Revision, Combat: true, Encounter: enc, RoundDelta: 1, Now: time.Now().UTC()}
 			if _, err := store.Step(ctx, exp.CharacterID, params); err != nil {
 				t.Fatal(err)
@@ -200,6 +204,9 @@ func TestEncounterStepCAS(t *testing.T) {
 			active, err := store.GetActiveExpedition(ctx, exp.CharacterID)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if active.Encounter == nil || !reflect.DeepEqual(active.Encounter.Enemies, enc.Enemies) || len(active.Encounter.Monsters) != 2 {
+				t.Fatalf("stale steps changed the group: %+v", active.Encounter)
 			}
 			params.ExpectedRevision = &active.Revision
 			params.Encounter = nil

@@ -11,8 +11,8 @@ const NativeMap12ID = "native-map-12"
 
 // map/12/1.cgi repeats map11's layout, regular enemies and H tables; only the
 // bosses and treasure stages differ. 片翼の天使 is replaced (rule 00 §3).
-var nm12Bosses = map[byte]DungeonMonster{
-	'A': strongest([]DungeonMonster{ // get_boss_data2
+var nm12Bosses = map[byte][]DungeonMonster{
+	'A': { // get_boss_data2
 		{ID: "nm12-fallen-angel", Name: "隻翼の堕天使", HP: 12000, Attack: 500, Defense: 300, Agility: 300, ExpReward: 3000, GoldReward: 2000,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant:   corebattle.Participant{MP: 8000, MaxMP: 30000},
@@ -40,8 +40,8 @@ var nm12Bosses = map[byte]DungeonMonster{
 				Temporary:     "するぞ",
 			}),
 		},
-	}),
-	'B': strongest([]DungeonMonster{ // get_boss_data
+	},
+	'B': { // get_boss_data
 		{ID: "nm12-dragon-right-eye", Name: "竜の右目", HP: 6000, Attack: 500, Defense: 400, Agility: 900, ExpReward: 300, GoldReward: 300,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant:   corebattle.Participant{MP: 999},
@@ -67,7 +67,7 @@ var nm12Bosses = map[byte]DungeonMonster{
 				Temporary:     corebattle.TemporaryDeflect,
 			}),
 		},
-	}),
+	},
 }
 
 // nativeMap12 has round limit 30 and the menu threshold for dungeon 12 (job
@@ -75,7 +75,7 @@ var nm12Bosses = map[byte]DungeonMonster{
 func nativeMap12() Dungeon {
 	bosses := maps.Clone(nm12Bosses)
 	for sym, stage := range map[byte]int{'C': 13, 'D': 18, 'E': 12, 'F': 10} {
-		bosses[sym] = *stagePool(stage).Boss
+		bosses[sym] = stagePool(stage).Bosses
 	}
 	marks := map[byte]string{'2': "宝", '3': "宝", '4': "宝", 'A': "◎", 'B': "◎", 'C': "◎", 'D': "◎", 'E': "◎", 'F': "◎"}
 	floor := gridFloor(Floor{Pools: []EncounterPool{{Monsters: nm11Monsters}}, Bosses: bosses, Marks: marks, events: nativeMap11Events}, nativeMap11Grid)

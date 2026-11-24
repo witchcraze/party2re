@@ -9,12 +9,14 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
-// ActiveEncounter retains the enemy and destination until combat finishes.
+// ActiveEncounter retains the spawned group and destination until combat
+// finishes. Monsters[i] is the rolled source of Enemies[i]; defeated members
+// stay until victory.
 type ActiveEncounter struct {
 	Statuses  map[string]string        `json:"statuses,omitempty"`
 	CMP       map[string]int           `json:"cmp,omitempty"`
 	Field     *corebattle.FieldState   `json:"field,omitempty"`
-	Monster   DungeonMonster           `json:"monster"`
+	Monsters  []DungeonMonster         `json:"monsters"`
 	Enemies   []corebattle.Participant `json:"enemies"`
 	EventType TileEventType            `json:"event_type"`
 	X         int                      `json:"x"`
@@ -42,15 +44,27 @@ func (enc *ActiveEncounter) blocking() bool {
 // hostile reports an encounter that Fight resolves; treasure is not combat.
 func (enc *ActiveEncounter) hostile() bool { return enc != nil && enc.EventType != EventTreasure }
 
-func pendingEncounter(exp *ActiveExpedition, monster DungeonMonster, enemy corebattle.Participant, event TileEventType, x, y int, result corebattle.Result, field *corebattle.FieldState) *ActiveEncounter {
-	if hp, ok := result.RemainingHP[enemy.ID]; ok {
-		enemy.HP = hp
+// pendingEncounter keeps the group after a draw or defeat, or nil once no
+// enemy survives.
+func pendingEncounter(exp *ActiveExpedition, monsters []DungeonMonster, enemies []corebattle.Participant, event TileEventType, x, y int, result corebattle.Result, field *corebattle.FieldState) *ActiveEncounter {
+	enemies = slices.Clone(enemies)
+	for i := range enemies {
+		enemy := &enemies[i]
+		if hp, ok := result.RemainingHP[enemy.ID]; ok {
+			enemy.HP = hp
+		}
+		if mp, ok := result.RemainingMP[enemy.ID]; ok {
+			enemy.MP = mp
+		}
+		if status, ok := result.RemainingStatus[enemy.ID]; ok {
+			enemy.Status = status
+		}
+		if value, ok := result.RemainingCMP[enemy.ID]; ok {
+			enemy.CMP = value
+		}
 	}
-	if mp, ok := result.RemainingMP[enemy.ID]; ok {
-		enemy.MP = mp
-	}
-	if status, ok := result.RemainingStatus[enemy.ID]; ok {
-		enemy.Status = status
+	if !slices.ContainsFunc(enemies, func(e corebattle.Participant) bool { return e.HP > 0 }) {
+		return nil
 	}
 	statuses := make(map[string]string)
 	cmp := make(map[string]int)
@@ -63,10 +77,7 @@ func pendingEncounter(exp *ActiveExpedition, monster DungeonMonster, enemy coreb
 	}
 	maps.Copy(statuses, result.RemainingStatus)
 	maps.Copy(cmp, result.RemainingCMP)
-	if value, ok := cmp[enemy.ID]; ok {
-		enemy.CMP = value
-	}
-	return &ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{enemy}, EventType: event, X: x, Y: y, Statuses: statuses, CMP: cmp, Field: field.Clone()}
+	return &ActiveEncounter{Monsters: monsters, Enemies: enemies, EventType: event, X: x, Y: y, Statuses: statuses, CMP: cmp, Field: field.Clone()}
 }
 
 // Fight resumes the current encounter through the shared battle resolver.
@@ -98,20 +109,28 @@ func (s *Service) Fight(ctx context.Context, characterID string) (ExpeditionStep
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monster, enc.EventType, enc.X, enc.Y, "", "", nil, StepParams{}, nil)
+	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monsters, enc.EventType, enc.X, enc.Y, "", "", nil, StepParams{}, nil)
 }
 
-// encounterRecord adds private enemy data only to the stored buffer.
+// encounterRecord adds each enemy's private combat data, by index, only to
+// the stored buffer.
 type encounterRecord struct {
 	*ActiveEncounter
-	EnemyCombat *corebattle.LifetimeActor `json:"enemy_combat,omitempty"`
+	EnemyCombat []*corebattle.LifetimeActor `json:"enemy_combat,omitempty"`
 }
 
 func encodeEncounter(enc *ActiveEncounter) (string, error) {
 	if enc == nil {
 		return "", nil
 	}
-	b, err := json.Marshal(encounterRecord{ActiveEncounter: enc, EnemyCombat: enc.Monster.combat})
+	record := encounterRecord{ActiveEncounter: enc}
+	if len(enc.Monsters) > 0 {
+		record.EnemyCombat = make([]*corebattle.LifetimeActor, len(enc.Monsters))
+		for i, m := range enc.Monsters {
+			record.EnemyCombat[i] = m.combat
+		}
+	}
+	b, err := json.Marshal(record)
 	return string(b), err
 }
 
@@ -124,15 +143,19 @@ func decodeEncounter(data string) (*ActiveEncounter, error) {
 	if err := json.Unmarshal([]byte(data), &record); err != nil {
 		return nil, err
 	}
-	enc.Monster.combat = record.EnemyCombat
 	if enc.EventType == EventTreasure {
-		if len(enc.Chests) == 0 || len(enc.Enemies) != 0 {
+		if len(enc.Chests) == 0 || len(enc.Enemies) != 0 || len(enc.Monsters) != 0 {
 			return nil, corebattle.ErrInvalidParticipant
 		}
 		return &enc, nil
 	}
-	if len(enc.Enemies) != 1 || enc.Enemies[0].HP <= 0 {
+	n := len(enc.Enemies)
+	if n == 0 || n > maxEncounterEnemies || len(enc.Monsters) != n || len(record.EnemyCombat) != n ||
+		!slices.ContainsFunc(enc.Enemies, func(e corebattle.Participant) bool { return e.HP > 0 }) {
 		return nil, corebattle.ErrInvalidParticipant
+	}
+	for i := range enc.Monsters {
+		enc.Monsters[i].combat = record.EnemyCombat[i]
 	}
 	return &enc, nil
 }
@@ -142,9 +165,12 @@ func cloneEncounter(enc *ActiveEncounter) *ActiveEncounter {
 		return nil
 	}
 	cp := *enc
-	if enc.Monster.combat != nil {
-		combat := enc.Monster.combat.Clone()
-		cp.Monster.combat = &combat
+	cp.Monsters = slices.Clone(enc.Monsters)
+	for i, m := range cp.Monsters {
+		if m.combat != nil {
+			combat := m.combat.Clone()
+			cp.Monsters[i].combat = &combat
+		}
 	}
 	cp.Enemies = slices.Clone(enc.Enemies)
 	cp.Chests = slices.Clone(enc.Chests)

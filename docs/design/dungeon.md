@@ -162,21 +162,14 @@ map without a section has none beyond its code and tests; unrestored maps are
 tracked by their own Issues. Numeric and letter identifiers here are evidence
 pointers, not native enums.
 
-Every restored map shares these gaps: group size and scaling
-([#1954](https://github.com/witchcraze/party2re/issues/1954)), applying enemy
-accuracy, job skills and temporary effects in explicit combat
-([#1865](https://github.com/witchcraze/party2re/issues/1865)), defeat rewards and
+Every restored map shares these gaps: applying enemy accuracy, job skills and
+temporary effects in explicit combat ([#1865](https://github.com/witchcraze/party2re/issues/1865)), defeat rewards and
 crystals ([#1957](https://github.com/witchcraze/party2re/issues/1957)), chest
 contents and inspection ([treasure contract](#treasure-inspection-and-delivery);
 per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428),
 map15 [#2451](https://github.com/witchcraze/party2re/issues/2451),
 map17 [#2455](https://github.com/witchcraze/party2re/issues/2455))
 and narration, owned by the Dungeon log ([#948](https://github.com/witchcraze/party2re/issues/948)).
-
-### Map0 implementation
-
-The three placeholder regular enemies remain until the stage 0/1 pools are
-restored with groups ([#1954](https://github.com/witchcraze/party2re/issues/1954)).
 
 ### Map3 implementation
 

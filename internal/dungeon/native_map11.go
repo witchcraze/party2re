@@ -48,8 +48,8 @@ var nm11Monsters = []DungeonMonster{
 	},
 }
 
-// nm11BossA stands in for get_boss_data's group.
-var nm11BossA = strongest([]DungeonMonster{
+// nm11BossA is get_boss_data's group.
+var nm11BossA = []DungeonMonster{
 	{ID: "nm11-death-flame-a", Name: "死の炎A", HP: 6666, Attack: 666, Defense: 222, Agility: 999, ExpReward: 333, GoldReward: 222,
 		combat: enemyCombat(corebattle.LifetimeActor{
 			Participant:   corebattle.Participant{MP: 999},
@@ -75,7 +75,7 @@ var nm11BossA = strongest([]DungeonMonster{
 			Temporary:     corebattle.TemporaryAbsorbMagic,
 		}),
 	},
-})
+}
 
 // H is map5's remedy table: only an acting job 43 spends the flag.
 var nativeMap11Events = map[byte]mapEvent{
@@ -94,9 +94,9 @@ var nativeMap11Events = map[byte]mapEvent{
 // nativeMap11 has round limit 30 and the menu threshold for dungeon 11 (job
 // level 23). B–F load the boss of stages 20, 17, 11, 9 and 8.
 func nativeMap11() Dungeon {
-	bosses := map[byte]DungeonMonster{'A': nm11BossA}
+	bosses := map[byte][]DungeonMonster{'A': nm11BossA}
 	for sym, stage := range map[byte]int{'B': 20, 'C': 17, 'D': 11, 'E': 9, 'F': 8} {
-		bosses[sym] = *stagePool(stage).Boss
+		bosses[sym] = stagePool(stage).Bosses
 	}
 	marks := map[byte]string{'2': "宝", '3': "宝", '4': "宝", 'A': "◎", 'B': "◎", 'C': "◎", 'D': "◎", 'E': "◎", 'F': "◎"}
 	floor := gridFloor(Floor{Pools: []EncounterPool{{Monsters: nm11Monsters}}, Bosses: bosses, Marks: marks, events: nativeMap11Events}, nativeMap11Grid)

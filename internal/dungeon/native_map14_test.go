@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"reflect"
 	"slices"
 	"strings"
@@ -266,15 +267,15 @@ func treasureSites(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 		}
 	}
 	for _, tc := range []struct {
-		site    byte
-		draws   []float64
-		event   dungeon.TileEventType
-		monster string
+		site     byte
+		draws    []float64
+		event    dungeon.TileEventType
+		monsters []string
 	}{
-		{'c', []float64{0}, dungeon.EventMove, ""},
-		{'k', []float64{0.49, 0.99}, dungeon.EventTreasure, ""},
-		{'f', []float64{0.5, 0.49}, dungeon.EventBoss, "nm14-ship-mimic"},
-		{'h', []float64{0.5, 0.5}, dungeon.EventBoss, "nm14-armored-chest"},
+		{'c', []float64{0}, dungeon.EventMove, nil},
+		{'k', []float64{0.49, 0.99}, dungeon.EventTreasure, nil},
+		{'f', []float64{0.5, 0.49}, dungeon.EventBoss, []string{"nm14-ship-mimic"}},
+		{'h', []float64{0.5, 0.5}, dungeon.EventBoss, []string{"nm14-man-eater", "nm14-group-mimic", "nm14-armored-chest"}},
 	} {
 		pos := cellOf(ship, tc.site)[0]
 		from, dir := approach(ship, pos)
@@ -305,7 +306,7 @@ func treasureSites(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 				t.Fatalf("chests %+v, draws %d", enc, f.rng.calls())
 			}
 		case dungeon.EventBoss:
-			if enc == nil || enc.EventType != tc.event || enc.Monster.ID != tc.monster || len(enc.Enemies) != 1 || enc.Enemies[0].HP <= 0 {
+			if enc == nil || enc.EventType != tc.event || !slices.Equal(monsterIDs(enc.Monsters), tc.monsters) || slices.ContainsFunc(enc.Enemies, func(e corebattle.Participant) bool { return e.HP <= 0 }) {
 				t.Fatalf("site %c pending encounter %+v", tc.site, enc)
 			}
 		}
@@ -346,8 +347,8 @@ func TestNativeMap14_InactivePointIsAPassage(t *testing.T) {
 	f.setFloor(t, "idle", 1, 5, 1)
 	f.rng.floats, f.rng.ints = []float64{0.5}, []int{14}
 	res, err := f.svc.Move(ctx, "idle", dungeon.DirectionWest)
-	if err != nil || res.EventType != dungeon.EventBattle || res.Monster == nil || res.Monster.ID != "nm14-turtle-warrior" {
-		t.Fatalf("spawn %+v err=%v", res.Monster, err)
+	if err != nil || res.EventType != dungeon.EventBattle || len(res.Monsters) == 0 || !slices.Contains(monsterIDs(res.Monsters), "nm14-turtle-warrior") {
+		t.Fatalf("spawn %+v err=%v", res.Monsters, err)
 	}
 }
 

@@ -175,7 +175,7 @@ func TestNativeMap8_BossesAndTreasureFireOnce(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.rng.floats = []float64{0.99} // the passage roll, if any, spawns nothing
-			if res, err := f.svc.Move(ctx, "once", tc.againDir); err != nil || res.EventType != dungeon.EventMove || res.Monster != nil {
+			if res, err := f.svc.Move(ctx, "once", tc.againDir); err != nil || res.EventType != dungeon.EventMove || len(res.Monsters) != 0 {
 				t.Fatalf("repeat %+v err=%v", res, err)
 			}
 			if exp := f.reload(t, "once"); !slices.Equal(exp.ConsumedEvents, []string{tc.name}) {

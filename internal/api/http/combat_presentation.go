@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/boss"
@@ -28,15 +29,19 @@ func toDungeonStepResult(result dungeon.ExpeditionStepResult) dungeonStepResultR
 	switch {
 	case result.EventType == dungeon.EventEscape:
 		response.Message = "探索を中断し、戦利品を持って無事に脱出した！"
-	case result.Monster != nil:
-		m := result.Monster
+	case len(result.Monsters) > 0:
+		names := make([]string, len(result.Monsters))
+		for i, m := range result.Monsters {
+			names[i] = m.Name
+		}
+		name := strings.Join(names, "、")
 		switch result.CombatOutcome {
 		case corebattle.OutcomeWin:
-			response.Message = fmt.Sprintf("%s との戦闘に勝利した！ (EXP: +%d, G: +%d)", m.Name, m.ExpReward, m.GoldReward)
+			response.Message = fmt.Sprintf("%s との戦闘に勝利した！ (EXP: +%d, G: +%d)", name, result.ExpEarned, result.GoldFound)
 		case corebattle.OutcomeDefeat:
-			response.Message = fmt.Sprintf("%s との戦いに敗れ、全滅してしまった…", m.Name)
+			response.Message = fmt.Sprintf("%s との戦いに敗れ、全滅してしまった…", name)
 		case corebattle.OutcomeDraw:
-			response.Message = fmt.Sprintf("%s との戦いは時間切れで決着がつかなかった… (引き分け)", m.Name)
+			response.Message = fmt.Sprintf("%s との戦いは時間切れで決着がつかなかった… (引き分け)", name)
 		}
 	case result.EventType == dungeon.EventWipeout:
 		response.Message = "探索に失敗した…"

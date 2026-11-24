@@ -110,11 +110,11 @@ func (ev shipSiteEvent) apply(n *nativeStep) error {
 	if n.rng.Float64() < 0.5 {
 		return treasureEvent{}.apply(n)
 	}
-	monster := nm14Mimic
+	roster := []DungeonMonster{nm14Mimic}
 	if n.rng.Float64() >= 0.5 {
-		monster = nm14ArmoredChest
+		roster = nm14ChestGroup
 	}
-	n.fight(monster, EventBoss, n.key, "")
+	n.fightRoster(roster, n.key, "")
 	return nil
 }
 
@@ -179,15 +179,53 @@ var (
 			Temporary:   corebattle.TemporaryDouble,
 		}),
 	}
-	// shortcut: the strongest chest monster represents the group until #1954 adds groups.
-	nm14ArmoredChest = DungeonMonster{ID: "nm14-armored-chest", Name: "魔装の宝箱", HP: 500, Attack: 300, Defense: 95, Agility: 400, ExpReward: 70, GoldReward: 200,
-		combat: enemyCombat(corebattle.LifetimeActor{
-			Participant: corebattle.Participant{MP: 69},
-			Jobs:        corebattle.BattleJobs{JobID: "job-93", SP: 20},
-			Temporary:   corebattle.TemporaryDouble,
-		}),
+	// nm14ChestGroup is _T.cgi's get_monster_data_tre2; its mimic is slower than the single one.
+	nm14ChestGroup = []DungeonMonster{
+		{ID: "nm14-man-eater", Name: "人食い箱", HP: 100, Attack: 250, Defense: 35, Agility: 100, ExpReward: 20, GoldReward: 70,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant: corebattle.Participant{MP: 42},
+				Jobs:        corebattle.BattleJobs{JobID: "job-92", SP: 30},
+				Temporary:   corebattle.TemporaryDouble,
+			}),
+		},
+		{ID: "nm14-group-mimic", Name: "ミミック", HP: 300, Attack: 280, Defense: 65, Agility: 200, ExpReward: 40, GoldReward: 100,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant: corebattle.Participant{MP: 68},
+				Jobs:        corebattle.BattleJobs{JobID: "job-93", SP: 10},
+				Temporary:   corebattle.TemporaryDouble,
+			}),
+		},
+		{ID: "nm14-armored-chest", Name: "魔装の宝箱", HP: 500, Attack: 300, Defense: 95, Agility: 400, ExpReward: 70, GoldReward: 200,
+			combat: enemyCombat(corebattle.LifetimeActor{
+				Participant: corebattle.Participant{MP: 69},
+				Jobs:        corebattle.BattleJobs{JobID: "job-93", SP: 20},
+				Temporary:   corebattle.TemporaryDouble,
+			}),
+		},
 	}
 )
+
+// nm14Skeleton and nm14Kraken flank the P and K bosses (_dataP.cgi, _dataK.cgi).
+func nm14Skeleton(suffix string) DungeonMonster {
+	return DungeonMonster{ID: "nm14-pirate-skeleton-" + strings.ToLower(suffix), Name: "カイゾクガイコツ" + suffix, HP: 330, Attack: 148, Defense: 47, Agility: 86, ExpReward: 70, GoldReward: 43,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant:   corebattle.Participant{MP: 102},
+			Jobs:          corebattle.BattleJobs{JobID: "job-81", SP: 55},
+			CrystalReward: 1,
+		}),
+	}
+}
+
+func nm14Kraken(suffix string) DungeonMonster {
+	return DungeonMonster{ID: "nm14-emerald-kraken-" + strings.ToLower(suffix), Name: "エメラルドクラーケン" + suffix, HP: 1500, Attack: 230, Defense: 160, Agility: 80, ExpReward: 480, GoldReward: 300,
+		combat: enemyCombat(corebattle.LifetimeActor{
+			Participant:   corebattle.Participant{MP: 250},
+			Jobs:          corebattle.BattleJobs{JobID: "job-76", SP: 190, OldJobID: "job-20", OldSP: 10},
+			Hit:           444,
+			CrystalReward: 3,
+		}),
+	}
+}
 
 // Map14 loads a different custom skill for the diver at each destination.
 func map14Diver(loadout corebattle.NPCLoadout) DungeonMonster {
@@ -201,7 +239,7 @@ func map14Diver(loadout corebattle.NPCLoadout) DungeonMonster {
 }
 
 // nm14Pools are _data.cgi (main floor and _T), _dataP.cgi and _dataK.cgi with
-// their appearance weights; P and K bosses stand in for their groups.
+// their appearance weights and boss rosters.
 var nm14Pools = [3]EncounterPool{
 	{
 		Monsters: []DungeonMonster{
@@ -243,14 +281,14 @@ var nm14Pools = [3]EncounterPool{
 			nm14Turtle,
 		},
 		Appears: []int{0, 0, 0, 0, 0, 1, 1, 2, 3},
-		Boss: &DungeonMonster{ID: "nm14-captain-skeleton", Name: "キャプテンガイコツ", HP: 1500, Attack: 248, Defense: 82, Agility: 140, ExpReward: 500, GoldReward: 320,
+		Bosses: []DungeonMonster{nm14Skeleton("A"), {ID: "nm14-captain-skeleton", Name: "キャプテンガイコツ", HP: 1500, Attack: 248, Defense: 82, Agility: 140, ExpReward: 500, GoldReward: 320,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant:   corebattle.Participant{MP: 548},
 				Jobs:          corebattle.BattleJobs{JobID: "job-81", SP: 130, OldJobID: "job-02", OldSP: 20},
 				CrystalReward: 3,
 				Temporary:     corebattle.TemporaryNullMagic,
 			}),
-		},
+		}, nm14Skeleton("B")},
 	},
 	{
 		Monsters: []DungeonMonster{
@@ -282,7 +320,7 @@ var nm14Pools = [3]EncounterPool{
 			},
 		},
 		Appears: []int{0, 0, 0, 1, 2, 2, 2, 3, 3, 4, 5},
-		Boss: &DungeonMonster{ID: "nm14-leviakel", Name: "リヴァイケル", HP: 5800, Attack: 300, Defense: 200, Agility: 160, ExpReward: 800, GoldReward: 1000,
+		Bosses: []DungeonMonster{nm14Kraken("A"), {ID: "nm14-leviakel", Name: "リヴァイケル", HP: 5800, Attack: 300, Defense: 200, Agility: 160, ExpReward: 800, GoldReward: 1000,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant:   corebattle.Participant{MP: 1500},
 				Jobs:          corebattle.BattleJobs{JobID: "job-403", SP: 190, OldJobID: "job-83", OldSP: 35},
@@ -290,7 +328,7 @@ var nm14Pools = [3]EncounterPool{
 				CrystalReward: 8,
 				Temporary:     corebattle.TemporaryDeflect,
 			}),
-		},
+		}, nm14Kraken("B")},
 	},
 }
 

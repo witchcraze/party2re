@@ -33,10 +33,10 @@ func nativeMap2() Dungeon {
 	floors := [4]Floor{
 		{FloorNumber: 1, Name: name + "１階", Pools: []EncounterPool{s2, s3, s4}, Marks: up,
 			Exits:  map[byte]FloorExit{'F': {Variants: []int{4, 5, 6}}},
-			Bosses: map[byte]DungeonMonster{'7': *s3.Boss}},
+			Bosses: map[byte][]DungeonMonster{'7': s3.Bosses}},
 		{FloorNumber: 2, Name: name + "２階", RoundLimit: 40, Pools: []EncounterPool{s3, s4, s5}, Marks: up,
 			Exits:  map[byte]FloorExit{'F': {Variants: []int{8}}, 'T': {Variants: []int{1, 2, 3}, Trap: 30}},
-			Bosses: map[byte]DungeonMonster{'8': *s4.Boss}},
+			Bosses: map[byte][]DungeonMonster{'8': s4.Bosses}},
 		{FloorNumber: 3, Name: name + "３階", RoundLimit: 50, Pools: []EncounterPool{s4, s5, s6},
 			Marks: map[byte]string{'F': "凸", 'B': "◎", 'Q': "　", 'T': "　"},
 			Exits: map[byte]FloorExit{'F': {Variants: []int{9, 10, 11}}, 'T': {Variants: []int{4, 5, 6, 7}, Trap: 70}}},

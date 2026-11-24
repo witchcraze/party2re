@@ -391,7 +391,7 @@ func TestMove_Item188RevivalPrecedesDestinationEvent(t *testing.T) {
 		f := newItem188PartyFixture(t, dungeon.NewMemoryExpeditionRepository(), chars, []string{"holder"})
 		before := startItem188PartyAt(t, f, dungeon.NativeMap0ID, 1, 2, 2, 2, []string{"lead", "holder"}, []string{"lead"})
 
-		f.rng.floats = []float64{0}
+		f.rng.floats = []float64{0, 0, 0, 0, 0, 0, 0} // revival, then the boss roll at its low bound
 		res, err := f.svc.Move(ctx, "holder", dungeon.DirectionNorth)
 		if err != nil {
 			t.Fatal(err)
@@ -399,7 +399,7 @@ func TestMove_Item188RevivalPrecedesDestinationEvent(t *testing.T) {
 		if res.EventType != dungeon.EventBoss || res.CombatOutcome != corebattle.OutcomeWin || res.BattleResult == nil {
 			t.Fatalf("boss %+v", res)
 		}
-		boss := mapDef(t, dungeon.NativeMap0ID).Variants[0].Boss
+		boss := mapDef(t, dungeon.NativeMap0ID).Variants[0].Pools[0].Bosses[0]
 		wantLeadHP := res.BattleResult.RemainingHP["lead"]
 		if wantLeadHP != 50 {
 			t.Fatalf("revived leader combat HP=%d, want 50", wantLeadHP)

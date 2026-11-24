@@ -24,7 +24,7 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 	logs := []corebattle.TurnLog{{Turn: 1, Kind: "damage", ActorID: "c1", ActorName: "Hero", TargetID: "enemy", TargetName: "Slime", ActionName: "攻撃", DamageDealt: 12, RemainingHP: map[string]int{"c1": 100, "enemy": 0}}}
 	solo := corebattle.Result{Outcome: corebattle.OutcomeWin, Logs: logs}
 	group := corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, Logs: logs}
-	dungeonResult := dungeon.ExpeditionStepResult{EventType: dungeon.EventBattle, Monster: &dungeon.DungeonMonster{Name: "Slime", ExpReward: 2, GoldReward: 3}, CombatOutcome: corebattle.OutcomeWin, BattleResult: &solo}
+	dungeonResult := dungeon.ExpeditionStepResult{EventType: dungeon.EventBattle, Monsters: []dungeon.DungeonMonster{{Name: "Slime", ExpReward: 2, GoldReward: 3}}, CombatOutcome: corebattle.OutcomeWin, BattleResult: &solo}
 	moveResult := dungeonResult
 	moveResult.EventType = dungeon.EventBoss
 	moveResult.MemberDamages = map[string]int{"c1": 90}

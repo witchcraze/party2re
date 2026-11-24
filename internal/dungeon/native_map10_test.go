@@ -127,8 +127,8 @@ func TestNativeMap10_SpawnMeetsASealedParty(t *testing.T) {
 	f.placeMap10(t, "spawn", 1, 1, 6, 1)
 	f.rng.floats, f.rng.ints = []float64{0.5}, []int{24}
 	res, err := f.svc.Move(context.Background(), "spawn", dungeon.DirectionNorth)
-	if err != nil || res.EventType != dungeon.EventBattle || res.Monster == nil || res.Monster.ID != "nm10-quicksilver-king" {
-		t.Fatalf("spawn %+v err=%v", res.Monster, err)
+	if err != nil || res.EventType != dungeon.EventBattle || len(res.Monsters) == 0 || !slices.Contains(monsterIDs(res.Monsters), "nm10-quicksilver-king") {
+		t.Fatalf("spawn %+v err=%v", res.Monsters, err)
 	}
 	if exp := f.reload(t, "spawn"); exp.Encounter.Statuses["spawn"] != corebattle.StatusPhysicalSeal {
 		t.Fatalf("not sealed %+v", exp.Encounter)
@@ -153,8 +153,8 @@ func TestNativeMap10_FloorBosses(t *testing.T) {
 			f := newNativeFixture(t, map10Hero("boss"))
 			f.placeMap10(t, "boss", tc.variant, tc.x, tc.y, 1)
 			res, err := f.svc.Move(ctx, "boss", tc.dir)
-			if err != nil || res.EventType != dungeon.EventBoss || res.Monster == nil || res.Monster.ID != tc.want {
-				t.Fatalf("boss %+v err=%v", res.Monster, err)
+			if err != nil || res.EventType != dungeon.EventBoss || len(res.Monsters) == 0 || !slices.Contains(monsterIDs(res.Monsters), tc.want) {
+				t.Fatalf("boss %+v err=%v", res.Monsters, err)
 			}
 			exp := f.reload(t, "boss")
 			if exp.Encounter.Statuses["boss"] != corebattle.StatusPhysicalSeal || !slices.Equal(exp.ConsumedEvents, []string{tc.name}) {

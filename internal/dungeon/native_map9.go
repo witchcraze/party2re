@@ -71,8 +71,8 @@ var nm9Monsters = []DungeonMonster{
 	},
 }
 
-// nm9Boss stands in for _data.cgi's boss group.
-var nm9Boss = strongest([]DungeonMonster{
+// nm9Boss is _data.cgi's boss group.
+var nm9Boss = []DungeonMonster{
 	{ID: "nm9-cyclops-a", Name: "サイクロプスA", HP: 5000, Attack: 600, Defense: 50, Agility: 100, ExpReward: 500, GoldReward: 10,
 		combat: enemyCombat(corebattle.LifetimeActor{
 			Participant:   corebattle.Participant{MP: 999},
@@ -98,7 +98,7 @@ var nm9Boss = strongest([]DungeonMonster{
 			Temporary:     corebattle.TemporaryReflectAttack,
 		}),
 	},
-})
+}
 
 // Every event seals the party's magic before its once guard, so a sealed
 // party meets every encounter here. B and C load one of stages 8–12
@@ -119,7 +119,7 @@ func nativeMap9Events() map[byte]mapEvent {
 
 // nativeMap9 has round limit 60 and the menu threshold for dungeon 9 (job level 19).
 func nativeMap9() Dungeon {
-	pools := []EncounterPool{{Monsters: nm9Monsters, Boss: &nm9Boss}}
+	pools := []EncounterPool{{Monsters: nm9Monsters, Bosses: nm9Boss}}
 	marks := map[byte]string{'2': "宝", '3': "宝", '4': "宝", 'A': "◎", 'B': "◎", 'C': "◎"}
 	variants := variantFloors(Floor{Pools: pools, Marks: marks, events: nativeMap9Events()}, nativeMap9Grids)
 	return Dungeon{
