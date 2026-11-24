@@ -17,6 +17,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/dungeon"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -145,7 +146,7 @@ func (r *DungeonRepository) DeleteActiveExpedition(ctx context.Context, characte
 }
 
 // FinalizeExpedition claims expedition completion once by history.ID (run ID) inside a SQL transaction.
-// Lock order: Rank 2 (characters FOR UPDATE in ascending ID order) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items) -> Rank 5 (character_depots).
+// Lock order: Rank 2 (characters FOR UPDATE in ascending ID order) -> Rank 8 (dungeon_expedition_history claim) -> Rank 3 (inventory_items) -> Rank 5 (character_depots) -> Rank 8 (tavern_character_status on Escape).
 // Returns dungeon.ErrExpeditionAlreadyFinished if history.ID has already been settled.
 func (r *DungeonRepository) FinalizeExpedition(
 	ctx context.Context,
@@ -265,10 +266,21 @@ func (r *DungeonRepository) FinalizeExpedition(
 			battle.WithEquipmentRepository(&EquipmentRepository{db: r.db}),
 			battle.WithTransactionProvider(NewTransactionProvider(r.db)),
 		)
-		applied, err := adapter.ApplyPostBattleResult(txCtx, battle.ApplyPostBattleRequest{
-			CharacterIDs: ids,
-			BattleResult: state,
-		})
+		req := battle.ApplyPostBattleRequest{CharacterIDs: ids, BattleResult: state}
+		if history.Outcome == dungeon.StatusEscaped {
+			// Escape is nigeru: round×3+1 fatigue and the held item105/106 bonus (_battle.cgi:1208–1220).
+			fatigue, err := economy.SafeMultiply(history.ExitRound, 3)
+			if err != nil {
+				return err
+			}
+			req.ExitFatigue = fatigue + 1
+			req.ExitBonusRounds = history.ExitRound
+			req.RecipientRewards = make(map[string]corebattle.Reward, len(ids))
+			for _, cid := range ids {
+				req.RecipientRewards[cid] = corebattle.Reward{}
+			}
+		}
+		applied, err := adapter.ApplyPostBattleResult(txCtx, req)
 		if err != nil {
 			return err
 		}
@@ -319,6 +331,16 @@ func (r *DungeonRepository) FinalizeExpedition(
 			leaderChar := applied.UpdatedCharacters[charID]
 			if err := deliverRewardItems(txCtx, r.db, leaderChar, rewardItems); err != nil {
 				return err
+			}
+		}
+
+		// nigeru clears is_eat (_battle.cgi:1211).
+		if history.Outcome == dungeon.StatusEscaped {
+			tavern := &TavernRepository{db: r.db}
+			for _, m := range sortedMembers {
+				if err := tavern.ResetFullness(txCtx, m.CharacterID); err != nil {
+					return err
+				}
 			}
 		}
 

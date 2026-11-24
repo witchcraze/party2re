@@ -11,8 +11,7 @@ Cardinal movement is available only when no living enemy-side members remain, in
 unopened Dungeon chests. Movement advances the shared round and dispatches the
 selected map's `event_<symbol>`. Both action registration and the movement guard
 enforce this restriction (`lib/vs_dungeon.cgi:37–48,74–80`). Combat actions
-remain available, and `lib/_battle.cgi:1184–1220` permits escape with current
-vitality and earned stock.
+and Escape remain available.
 A wall hit invokes the selected map's wall event without consuming a round.
 
 The initial leader advance changes round 0 to 1 without moving or dispatching
@@ -119,7 +118,7 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 | `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
 | Treasure `しらべる` → `shiraberu(target)` (`45–48`) | Participant inspection under the [treasure contract](#treasure-inspection-and-delivery). Map0 [#2119](https://github.com/witchcraze/party2re/issues/2119), map3 [#2374](https://github.com/witchcraze/party2re/issues/2374). |
 | `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Open: map16 mining (#1777) |
-| Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Existing Escape, available after exhaustion with stock kept. Open: per-character departure, fatigue and exit equipment effects (#1956); whole-party Escape is not equivalent |
+| Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Leader Escape settles every member as `nigeru`, at the saved round. The menu never offers calm mode (commented out, `quest.cgi:41,46,319`), so its fatigue halving does not apply. Open: per-character departure (#1956); whole-party Escape is not equivalent |
 
 ### Treasure inspection and delivery
 
