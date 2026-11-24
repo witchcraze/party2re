@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Temporary snow form</title>
+  <g fill="#f4f8fb" stroke="#56708a" stroke-width="2">
+    <circle cx="32" cy="44" r="16"/>
+    <circle cx="32" cy="20" r="11"/>
+  </g>
+  <g fill="#2f3f4f"><circle cx="28" cy="18" r="2"/><circle cx="36" cy="18" r="2"/></g>
+  <path d="M32 21l7 2-7 2z" fill="#e8873a"/>
+</svg>

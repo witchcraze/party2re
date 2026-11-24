@@ -95,11 +95,12 @@ overrides. Missing art uses an available placeholder rather than a broken URL.
 
 - Status: Placeholder available; **artwork will be replaced** during future image implementation.
 - Type: Character / Monster
-- Files: `assets/images/placeholders/battle/forms.svg` (128×128 sheet, four64×64 views)
-  and `assets/images/placeholders/battle/monster-default.svg` (64×64).
+- Files: `assets/images/placeholders/battle/forms.svg` (128×128 sheet, four64×64 views),
+  `monster-default.svg`, `frog.svg` and `snowman.svg` (64×64 each) in the same directory.
 - Used by: Explicit Battle transformation appearance references; client integration remains pending.
-- Purpose: Distinguish mechanical/winged forms by requesting-player gender and
-  provide a missing-monster appearance fallback. These shapes and colors are
+- Purpose: Distinguish mechanical/winged forms by requesting-player gender,
+  show the frog and snow forms that skills write onto a target, and provide a
+  missing-monster appearance fallback. These shapes and colors are
   development aids, not approved final character designs.
 - Format: SVG; transparent backgrounds.
 - Provenance: Newly authored geometric drawings in this repository; no legacy
@@ -107,7 +108,8 @@ overrides. Missing art uses an available placeholder rather than a broken URL.
 - License status: Project-created placeholders, not final assets.
 - Replacement contract: Saved `Icon` values are appearance identity references,
   not resolved display URLs. Preserve the `mechanical-m`, `mechanical-f`,
-  `winged-m`, `winged-f` fragments and existing references, or provide resolver
+  `winged-m`, `winged-f` fragments, the three snow-form fragments `1`–`3` and
+  existing references, or provide resolver
   aliases when replacing the art. Changing an illustration must not change
   job79's appearance-dependent callback or invalidate saved runs.
 - Follow-up: The image catalog/manifest/resolver (#140, #654, #729) will replace

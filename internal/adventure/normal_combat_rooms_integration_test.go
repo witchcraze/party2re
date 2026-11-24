@@ -225,17 +225,19 @@ func TestRunCombatEXJob408AnswersAfterJob407Summons(t *testing.T) {
 	}
 }
 
-func TestRunCombatEXJob406ResponseStaysGated(t *testing.T) {
-	f, depots := lowRunCombat(t, 1)
+// With every draw at .5 the stage23 EX NPC picks the middle of its three
+// choices (job406's snowfall), lands the 7/10 draw and writes the third snow
+// form on the requester; the saved run keeps it (_skill.cgi:8249–8263).
+func TestRunCombatEXJob406SnowfallSavesForm(t *testing.T) {
 	foe := runEnemy("foe", 900)
-	foe.Jobs = corebattle.BattleJobs{JobID: "job-406", OldJobID: "job-406"}
-	cmd := combatRoom(t, f, f.actors[0], nil, foe)
-	before := readStockRoom(t, f, cmd.RunID)
-	strike := combatCommand(cmd, "strike", "attack", "foe", "")
-	if _, err := f.svc.Command(t.Context(), strike); err == nil {
-		t.Fatal("gated NPC job answered")
+	foe.Jobs = corebattle.BattleJobs{JobID: "job-406", OldJobID: "starter"}
+	foe.MP, foe.MaxMP = 22, 22
+	f, cmd := npcRoom(t, foe)
+	accepted(t, f, combatCommand(cmd, "defend", "defend", "", ""))
+	r := readStockRoom(t, f, cmd.RunID)
+	if npc, a := runActorByID(r, foe.ID), runActorByID(r, cmd.ActorID); npc.MP != 0 || a.Icon != "assets/images/placeholders/battle/snowman.svg#3" {
+		t.Fatalf("NPC MP %d, requester icon %q", npc.MP, a.Icon)
 	}
-	assertUnchanged(t, f, depots, strike, before, nil, nil)
 }
 
 // During the NPC turn `%m` is still the requester, so job79's form entry reads

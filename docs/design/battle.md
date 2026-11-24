@@ -335,4 +335,3 @@ Order and lifetime traps:
 ## Open gaps
 
 - Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.
-- NPC-only job406 has no table, so its choices stay a whole-action gate ([#1915](https://github.com/witchcraze/party2re/issues/1915)).

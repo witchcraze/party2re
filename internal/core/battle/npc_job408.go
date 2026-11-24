@@ -52,7 +52,7 @@ func (s *LifetimeState) validateNPC408(f *CallbackContext, id string, rng random
 		damage = p.nativeDamageContext(damage, f.Defeat, rng)
 		for _, target := range f.EnemyIDs {
 			e := dualAgilityEffect(target, 400, CategoryUntyped, true)
-			if err := p.admitNPC405Hit(&damage, f.Defeat, e, rng); err != nil {
+			if err := p.admitNPC405Hit(&damage, f.Defeat, e, 400, rng); err != nil {
 				return err
 			}
 			t := p.actor(target)

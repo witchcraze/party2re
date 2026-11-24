@@ -109,8 +109,6 @@ An EX room continues 11→12→13, where 13 is terminal; a room without EX ends 
 
 **Pitfall (fixed chests).** `shiraberu` marks a fixed chest (`over_lv`) in `$ms{$m}{is_get_fixed}`, but that key is not in `@battle_datas` (`config.cgi_origin:102–104`), so it is lost when the request ends. Fixed chests therefore have no lasting per-actor limit and never consume item215. They also leave the ordinary allowance untouched (`_npc_action.cgi:42–54`). The reconstruction reproduces this rather than repairing it.
 
-The batch crawl is not a fallback for EX jobs that stay whole-action gates ([Battle](battle.md#open-gaps)).
-
 ## Batch crawl
 
 The batch crawl (`internal/adventure`, `internal/party`) is the current production path. It is not authorization to keep automatic battles, advance, inspection or exit in the interactive adventure. Its formulas live in code and tests; these points are decisions or non-obvious source behavior:
