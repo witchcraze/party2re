@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -146,24 +145,6 @@ func TestCalculateTreasureCount_BlessingBonus(t *testing.T) {
 	}
 }
 
-func TestGenerateTreasureBoxes(t *testing.T) {
-	pool := []string{"item-001", "item-002", "item-003"}
-	boxes := adventure.GenerateTreasureBoxes(3, pool, func(n int) int { return 0 })
-
-	if len(boxes) != 3 {
-		t.Fatalf("expected 3 boxes, got %d", len(boxes))
-	}
-	if boxes[0].ID != "box-1" || boxes[0].Name != "普通の宝箱A" || boxes[0].ItemID != "item-001" {
-		t.Errorf("unexpected box[0]: %+v", boxes[0])
-	}
-	if boxes[1].ID != "box-2" || boxes[1].Name != "普通の宝箱B" {
-		t.Errorf("unexpected box[1]: %+v", boxes[1])
-	}
-	if boxes[2].ID != "box-3" || boxes[2].Name != "普通の宝箱C" {
-		t.Errorf("unexpected box[2]: %+v", boxes[2])
-	}
-}
-
 func TestCalculateTreasureCount_StageMultiplier(t *testing.T) {
 	// Legacy vs_monster.cgi:92 ($#partys+1)*3 = 2*3 = 6. Inclusive 0..6 produces 7 boxes.
 	if got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{AliveMembers: 2, TripleTreasure: true}); got != 7 {
@@ -220,135 +201,6 @@ func TestCalculateTreasureCount_GamblerBonus(t *testing.T) {
 	})
 	if gotGuarded < 4 {
 		t.Errorf("gotGuarded = %d, expected >= 4 with Lucky Pendant", gotGuarded)
-	}
-}
-
-func TestGetDayOfWeekOrb(t *testing.T) {
-	tests := []struct {
-		weekday time.Weekday
-		rngVal  int
-		wantOrb string
-	}{
-		{time.Monday, 0, "item-060"},
-		{time.Tuesday, 0, "item-061"},
-		{time.Wednesday, 0, "item-062"},
-		{time.Thursday, 0, "item-063"},
-		{time.Friday, 0, "item-064"},
-		{time.Saturday, 0, "item-065"},
-		{time.Sunday, 2, "item-062"}, // Sunday with rng(6) = 2 -> 60 + 2 = 62
-		{time.Sunday, 5, "item-065"}, // Sunday with rng(6) = 5 -> 60 + 5 = 65
-	}
-
-	for _, tt := range tests {
-		// 2026-08-23 was Sunday (0), 2026-08-24 Monday (1), etc.
-		date := time.Date(2026, 8, 23+int(tt.weekday), 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
-		orb := adventure.GetDayOfWeekOrb(date, func(n int) int { return tt.rngVal })
-		if orb != tt.wantOrb {
-			t.Errorf("GetDayOfWeekOrb(%v) = %s, want %s", tt.weekday, orb, tt.wantOrb)
-		}
-	}
-}
-
-func TestGetDayOfWeekOrb_JSTBoundary(t *testing.T) {
-	// 2026-08-23 23:00 UTC is Sunday in UTC, but 2026-08-24 08:00 JST (Monday) in JST (UTC+9).
-	utcSundayNight := time.Date(2026, 8, 23, 23, 0, 0, 0, time.UTC)
-	orb := adventure.GetDayOfWeekOrb(utcSundayNight, func(n int) int { return 0 })
-	// Should evaluate in JST to Monday (item-060), NOT UTC Sunday.
-	if orb != "item-060" {
-		t.Errorf("GetDayOfWeekOrb(UTC Sunday 23:00 = JST Monday 08:00) = %s, want item-060", orb)
-	}
-}
-
-func TestGenerateTreasureBoxesWithPools(t *testing.T) {
-	pools := adventure.StageTreasurePools{
-		Weapons: []string{"weapon-01"},
-		Armors:  []string{"armor-01"},
-		Items:   []string{"item-001"},
-	}
-
-	// rand(4) + 1:
-	// if rng(4) == 0 -> v = 1 -> weapon
-	// if rng(4) == 1 -> v = 2 -> armor
-	// if rng(4) == 2 -> v = 3 -> item
-	// if rng(4) == 3 -> v = 4 (clamped to 3) -> item
-	// When n == 4, roll category:
-	// box 0: 0 -> v=1 (weapon)
-	// box 1: 1 -> v=2 (armor)
-	// box 2: 2 -> v=3 (item)
-	categoryRolls := []int{0, 1, 2}
-	rollIdx := 0
-	rng := func(n int) int {
-		if n == 4 && rollIdx < len(categoryRolls) {
-			r := categoryRolls[rollIdx]
-			rollIdx++
-			return r
-		}
-		return 0
-	}
-
-	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) // Monday -> item-060
-	boxes := adventure.GenerateTreasureBoxesWithPools(3, pools, now, rng)
-
-	if len(boxes) != 3 {
-		t.Fatalf("expected 3 boxes, got %d", len(boxes))
-	}
-	if boxes[0].ItemID != "weapon-01" {
-		t.Errorf("box[0] ItemID = %s, want weapon-01", boxes[0].ItemID)
-	}
-	if boxes[1].ItemID != "armor-01" {
-		t.Errorf("box[1] ItemID = %s, want armor-01", boxes[1].ItemID)
-	}
-}
-
-// Legacy add_treasure pushes the weekday orb inside the chest loop, so chest i
-// draws its tool from the stage pool plus i+1 orbs (#2118).
-func TestGenerateTreasureBoxesWithPools_OrbsAccumulatePerChest(t *testing.T) {
-	for _, tc := range []struct {
-		name      string
-		now       time.Time
-		wantSunny int // rng(6) draws for Sunday's random orb
-	}{
-		{name: "weekday", now: time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)},
-		{name: "sunday", now: time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC), wantSunny: 3},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var toolPoolSizes []int
-			sunny := 0
-			rng := func(n int) int {
-				switch n {
-				case 4:
-					return 2 // tool
-				case 6:
-					sunny++
-				case 7: // box name
-				default:
-					toolPoolSizes = append(toolPoolSizes, n)
-				}
-				return n - 1
-			}
-			pools := adventure.StageTreasurePools{Weapons: []string{"weapon-01"}, Items: []string{"item-001", "item-002", "item-003", "item-004", "item-005", "item-006", "item-007"}}
-			boxes := adventure.GenerateTreasureBoxesWithPools(3, pools, tc.now, rng)
-			if want := []int{8, 9, 10}; !slices.Equal(toolPoolSizes, want) {
-				t.Fatalf("tool pool sizes = %v, want %v", toolPoolSizes, want)
-			}
-			if sunny != tc.wantSunny {
-				t.Errorf("sunday orb draws = %d, want %d", sunny, tc.wantSunny)
-			}
-			for i, b := range boxes {
-				if !strings.HasPrefix(b.ItemID, "item-06") {
-					t.Errorf("box %d = %q, want an orb", i, b.ItemID)
-				}
-			}
-		})
-	}
-}
-
-// A legacy empty pool entry yields an empty chest, never an invented item (#2118).
-func TestGenerateTreasureBoxesWithPools_EmptyEntryStaysEmpty(t *testing.T) {
-	pools := adventure.StageTreasurePools{Items: []string{"", "item-001"}}
-	boxes := adventure.GenerateTreasureBoxesWithPools(1, pools, time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC), func(int) int { return 0 })
-	if len(boxes) != 1 || boxes[0].ItemID != "" {
-		t.Fatalf("boxes = %+v, want one empty chest", boxes)
 	}
 }
 
@@ -431,15 +283,6 @@ func TestCalculateTreasureCount_DeadMembersPenalty(t *testing.T) {
 		})
 		if got != tc.want {
 			t.Errorf("special stage 17 total=%d, alive=%d, dead=%d: got %d, want %d", tc.total, tc.alive, tc.dead, got, tc.want)
-		}
-	}
-}
-
-func TestIsTreasureBlessingAcceptsOnlyStoredChapelValue(t *testing.T) {
-	// The chapel adapter supplies chapel.BlessingDrop ("DROP"); display names and numbers never reach adventure.
-	for _, b := range []string{"DROP", "drop", "4", "宝箱がほしい", ""} {
-		if got := adventure.IsTreasureBlessing(b); got != (b == "DROP") {
-			t.Errorf("IsTreasureBlessing(%q) = %v", b, got)
 		}
 	}
 }

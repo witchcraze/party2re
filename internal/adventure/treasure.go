@@ -1,10 +1,6 @@
 package adventure
 
 import (
-	"fmt"
-	"slices"
-	"time"
-
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -22,16 +18,6 @@ const (
 	gamblerJob        = "job-81"
 	treasureHunterJob = "job-78"
 )
-
-var defaultBoxNames = []string{
-	"普通の宝箱",
-	"大きい宝箱",
-	"小さい宝箱",
-	"黒い宝箱",
-	"青い宝箱",
-	"古い宝箱",
-	"丸い宝箱",
-}
 
 // TreasureCalculationInput specifies the party state when arriving at Floor 11 (Treasure Room).
 type TreasureCalculationInput struct {
@@ -109,30 +95,7 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 		count++
 	}
 
-	// Legacy party2/lib/_npc_action.cgi:499 fallback:
-	//   my $count = shift || $#partys;
-	// In Perl, if $count passed from vs_monster.cgi evaluated to 0 (falsy), it falls back to $#partys (total - 1).
-	if count == 0 {
-		count = total - 1
-	}
-
-	// Chapel Blessing 4 ("宝箱がほしい"): 20% chance of +1 box (party2/lib/_npc_action.cgi:501, rand(5) < 1)
-	if input.HasTreasureBlessing && rng(5) == 0 {
-		count++
-	}
-
-	// Dead party members penalty (party2/lib/_npc_action.cgi:503-505):
-	//   for my $name (@partys) { --$count if $ms{$name}{hp} <= 0; }
-	count -= dead
-
-	// Legacy box generation loop: for my $i (0 .. $count) (party2/lib/_npc_action.cgi:519)
-	// In Perl, 0 .. $count is inclusive:
-	// - If count < 0: produces 0 boxes (empty range)
-	// - If count >= 0: produces count + 1 boxes
-	if count < 0 {
-		return 0
-	}
-	return count + 1
+	return runhost.TreasureCount(count, total, dead, input.HasTreasureBlessing, rng)
 }
 
 // ParticipantHasLuckyPendant reports whether a combat participant has equipped Lucky Pendant (item-191).
@@ -196,83 +159,9 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 		Rng:                 s.Rng,
 	})
 
-	pools := StageTreasurePools{Weapons: s.Stage.TreasureWeapons, Armors: s.Stage.TreasureArmors, Items: s.Stage.TreasureItems}
-	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, s.now(), s.Rng)
+	pools := runhost.TreasurePools{Weapons: s.Stage.TreasureWeapons, Armors: s.Stage.TreasureArmors, Items: s.Stage.TreasureItems}
+	s.TreasureBoxes = runhost.GenerateTreasureBoxes(boxCount, pools, s.now(), s.Rng)
 	if s.Stage.UnsealsOnTreasure {
 		s.UnsealDemonKing = true
 	}
-}
-
-// IsTreasureBlessing reports Chapel Blessing 4 ("宝箱がほしい") as the chapel stores it.
-func IsTreasureBlessing(blessing string) bool { return blessing == "DROP" }
-
-// StageTreasurePools defines candidate item pools across equipment and consumables for Floor 11.
-type StageTreasurePools struct {
-	Weapons []string
-	Armors  []string
-	Items   []string
-}
-
-// GetDayOfWeekOrb returns the canonical weekday orb item ID matching legacy Party2 (_npc_action.cgi:541-543).
-// Weekday is evaluated in JST (UTC+9) matching authentic server time.
-// Sunday (0): random among item-060..item-065
-// Monday (1) .. Saturday (6): item-060 .. item-065
-func GetDayOfWeekOrb(t time.Time, rng func(n int) int) string {
-	if rng == nil {
-		rng = random.Intn
-	}
-	jst := time.FixedZone("JST", 9*60*60)
-	wday := t.In(jst).Weekday()
-	if wday == time.Sunday {
-		return fmt.Sprintf("item-%03d", 60+rng(6))
-	}
-	return fmt.Sprintf("item-%03d", 60+int(wday)-1)
-}
-
-// GenerateTreasureBoxes creates the list of treasure chests for Floor 11 (legacy convenience wrapper).
-func GenerateTreasureBoxes(count int, dropPool []string, rng func(n int) int) []runhost.TreasureBox {
-	return GenerateTreasureBoxesWithPools(count, StageTreasurePools{Items: dropPool}, time.Now().UTC(), rng)
-}
-
-// GenerateTreasureBoxesWithPools creates treasure chests with the legacy add_treasure draw:
-// each chest first adds the weekday orb to the tool pool (so orbs accumulate),
-// then picks weapon/armor/tool as 1/4, 1/4, 1/2, falling back to tools when the
-// chosen pool is empty. An empty pool entry ("") yields an empty chest.
-func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now time.Time, rng func(n int) int) []runhost.TreasureBox {
-	if count <= 0 {
-		return nil
-	}
-	if rng == nil {
-		rng = random.Intn
-	}
-
-	items := slices.Clone(pools.Items)
-	boxes := make([]runhost.TreasureBox, count)
-	for i := 0; i < count; i++ {
-		name := boxName(defaultBoxNames[rng(len(defaultBoxNames))], i)
-		items = append(items, GetDayOfWeekOrb(now, rng))
-
-		pool := items
-		switch v := rng(4) + 1; {
-		case v == 1 && len(pools.Weapons) > 0:
-			pool = pools.Weapons
-		case v == 2 && len(pools.Armors) > 0:
-			pool = pools.Armors
-		}
-
-		boxes[i] = runhost.TreasureBox{
-			ID:     fmt.Sprintf("box-%d", i+1),
-			Name:   name,
-			ItemID: pool[rng(len(pool))],
-		}
-	}
-	return boxes
-}
-
-func boxName(base string, i int) string {
-	suffix := rune('A' + (i % 26))
-	if i >= 26 {
-		suffix = rune('a' + ((i - 26) % 26))
-	}
-	return fmt.Sprintf("%s%c", base, suffix)
 }

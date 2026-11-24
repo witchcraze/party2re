@@ -27,7 +27,7 @@ func (s *CrawlSession) LoadBlessings(ctx context.Context, provider BlessingProvi
 	if actorID == "" && len(s.CharacterIDs) > 0 {
 		actorID = s.CharacterIDs[0]
 	}
-	if actorID != "" && IsTreasureBlessing(blessings[actorID]) {
+	if actorID != "" && runhost.IsTreasureBlessing(blessings[actorID]) {
 		s.HasTreasureBlessing = true
 	}
 	return nil
