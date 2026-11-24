@@ -62,7 +62,7 @@ func TestNativeMap0_LayoutsMatchLegacy(t *testing.T) {
 		if hidden := len(cellOf(f, 'H')) > 0; hidden != (i < 4) {
 			t.Fatalf("variant %d hidden passage presence %v", i+1, hidden)
 		}
-		if f.Grid[f.StartY][f.StartX] != 'S' || f.Boss == nil || len(f.Monsters) == 0 {
+		if f.Grid[f.StartY][f.StartX] != 'S' || len(f.Pools) != 2 {
 			t.Fatalf("variant %d start/content invalid", i+1)
 		}
 	}
@@ -319,7 +319,7 @@ func TestNativeMap0_BossTriggersOnceWithoutClearing(t *testing.T) {
 	ctx := context.Background()
 	f := newNativeFixture(t, strongHero("boss"))
 	f.place(t, "boss", 2, 2, 4)
-	boss := mapDef(t, dungeon.NativeMap0ID).Variants[0].Boss
+	boss := mapDef(t, dungeon.NativeMap0ID).Variants[0].Pools[0].Bosses[0]
 
 	res, err := f.svc.Move(ctx, "boss", dungeon.DirectionNorth)
 	if err != nil {

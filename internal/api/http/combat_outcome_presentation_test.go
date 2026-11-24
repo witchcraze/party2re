@@ -15,28 +15,29 @@ import (
 )
 
 func TestDungeonOutcomePresentation(t *testing.T) {
-	monster := &dungeon.DungeonMonster{Name: "Slime", ExpReward: 20, GoldReward: 30}
+	group := []dungeon.DungeonMonster{{Name: "SlimeA", ExpReward: 7}, {Name: "SlimeB", ExpReward: 13}}
 	for _, tc := range []struct {
-		name    string
-		event   dungeon.TileEventType
-		outcome corebattle.Outcome
-		monster *dungeon.DungeonMonster
-		want    string
+		name     string
+		event    dungeon.TileEventType
+		outcome  corebattle.Outcome
+		monsters []dungeon.DungeonMonster
+		want     string
 	}{
 		{"move", dungeon.EventMove, "", nil, ""},
 		{"treasure", dungeon.EventTreasure, "", nil, ""},
 		{"escape", dungeon.EventEscape, "", nil, "探索を中断し、戦利品を持って無事に脱出した！"},
 		{"resumed escape", dungeon.EventEscape, "", nil, "探索を中断し、戦利品を持って無事に脱出した！"},
 		{"wipeout", dungeon.EventWipeout, "", nil, "探索に失敗した…"},
-		{"victory", dungeon.EventBattle, corebattle.OutcomeWin, monster, "Slime との戦闘に勝利した！ (EXP: +20, G: +30)"},
-		{"boss victory", dungeon.EventBoss, corebattle.OutcomeWin, monster, "Slime との戦闘に勝利した！ (EXP: +20, G: +30)"},
-		{"defeat", dungeon.EventBattle, corebattle.OutcomeDefeat, monster, "Slime との戦いに敗れ、全滅してしまった…"},
-		{"draw", dungeon.EventBattle, corebattle.OutcomeDraw, monster, "Slime との戦いは時間切れで決着がつかなかった… (引き分け)"},
+		{"victory", dungeon.EventBattle, corebattle.OutcomeWin, group, "SlimeA、SlimeB との戦闘に勝利した！ (EXP: +20, G: +30)"},
+		{"boss victory", dungeon.EventBoss, corebattle.OutcomeWin, group[:1], "SlimeA との戦闘に勝利した！ (EXP: +20, G: +30)"},
+		{"defeat", dungeon.EventBattle, corebattle.OutcomeDefeat, group, "SlimeA、SlimeB との戦いに敗れ、全滅してしまった…"},
+		{"draw", dungeon.EventBattle, corebattle.OutcomeDraw, group, "SlimeA、SlimeB との戦いは時間切れで決着がつかなかった… (引き分け)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			facts := dungeon.ExpeditionStepResult{EventType: tc.event, CombatOutcome: tc.outcome, Monster: tc.monster}
+			// The win message reports the step's credited rewards, not a member's source values.
+			facts := dungeon.ExpeditionStepResult{EventType: tc.event, CombatOutcome: tc.outcome, Monsters: tc.monsters, ExpEarned: 20, GoldFound: 30}
 			got := toDungeonStepResult(facts)
-			if got.Message != tc.want || got.BattleResult != nil || got.ExpEarned != 0 {
+			if got.Message != tc.want || got.BattleResult != nil {
 				t.Fatalf("got %+v want %q", got, tc.want)
 			}
 		})

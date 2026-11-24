@@ -14374,8 +14374,12 @@
               "draw"
             ]
           },
-          "monster": {
-            "$ref": "#/components/schemas/DungeonMonster"
+          "monsters": {
+            "type": "array",
+            "description": "Spawned group sources in spawn order; ordinary members carry their A..H name suffix.",
+            "items": {
+              "$ref": "#/components/schemas/DungeonMonster"
+            }
           }
         },
         "required": [
@@ -16463,12 +16467,18 @@
       },
       "DungeonActiveEncounter": {
         "type": "object",
-        "description": "Pending enemy state and destination, retained across unresolved battles. Each hostile encounter currently has one enemy. A treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
+        "description": "Pending enemy group and destination, retained across unresolved battles. monsters[i] is the rolled source of enemies[i]; defeated members stay until victory, and the encounter blocks movement while any enemy lives. A treasure encounter has null monsters and enemies and one chest per generated chest; it blocks movement until every chest is opened.",
         "properties": {
-          "monster": {
-            "type": "object",
-            "description": "Dungeon monster definition including encounter rewards.",
-            "additionalProperties": true
+          "monsters": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/DungeonMonster"
+            }
           },
           "enemies": {
             "type": [
@@ -16476,7 +16486,7 @@
               "null"
             ],
             "minItems": 1,
-            "maxItems": 1,
+            "maxItems": 8,
             "items": {
               "type": "object",
               "description": "Shared battle participant; field names follow corebattle.Participant.",

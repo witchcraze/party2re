@@ -38,8 +38,8 @@ func customSettlementDungeons() []dungeon.Dungeon {
 		RoundLimit: 26,
 		Variants: []dungeon.Floor{{
 			Width: 3, Height: 1,
-			Grid: []string{"SB0"},
-			Boss: &dungeon.DungeonMonster{ID: "floor-boss", Name: "階層ボス", HP: 40, Attack: 10, Defense: 5, ExpReward: 150, GoldReward: 300, DropItemID: "boss-orb"},
+			Grid:  []string{"SB0"},
+			Pools: []dungeon.EncounterPool{{Bosses: []dungeon.DungeonMonster{{ID: "floor-boss", Name: "階層ボス", HP: 40, Attack: 10, Defense: 5, ExpReward: 150, GoldReward: 300, DropItemID: "boss-orb"}}}},
 		}},
 	}}
 }

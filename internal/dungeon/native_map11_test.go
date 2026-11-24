@@ -31,12 +31,12 @@ func TestNativeMap11_Catalog(t *testing.T) {
 		t.Fatalf("geometry %+v", fl)
 	}
 	for sym, stage := range map[byte]string{'B': "ordinary-20-", 'C': "ordinary-17-", 'D': "ordinary-11-", 'E': "ordinary-09-", 'F': "ordinary-08-"} {
-		if !strings.HasPrefix(fl.Bosses[sym].ID, stage) {
-			t.Errorf("%c boss %q, want stage %s", sym, fl.Bosses[sym].ID, stage)
+		if !strings.HasPrefix(fl.Bosses[sym][0].ID, stage) {
+			t.Errorf("%c boss %q, want stage %s", sym, fl.Bosses[sym][0].ID, stage)
 		}
 	}
-	if fl.Bosses['A'].ID != "nm11-lucifer" {
-		t.Errorf("A boss %q", fl.Bosses['A'].ID)
+	if !slices.Contains(monsterIDs(fl.Bosses['A']), "nm11-lucifer") {
+		t.Errorf("A bosses %v", monsterIDs(fl.Bosses['A']))
 	}
 }
 
@@ -46,8 +46,8 @@ func TestNativeMap11_PassageSpawn(t *testing.T) {
 	f.placeNative(t, dungeon.NativeMap11ID, "spawn", 1, 1, 2, 1)
 	f.rng.floats, f.rng.ints = []float64{0.5}, []int{4}
 	res, err := f.svc.Move(context.Background(), "spawn", dungeon.DirectionNorth)
-	if err != nil || res.EventType != dungeon.EventBattle || res.Monster == nil || res.Monster.ID != "nm11-lantern-imp" {
-		t.Fatalf("spawn %+v err=%v", res.Monster, err)
+	if err != nil || res.EventType != dungeon.EventBattle || len(res.Monsters) == 0 || !slices.Contains(monsterIDs(res.Monsters), "nm11-lantern-imp") {
+		t.Fatalf("spawn %+v err=%v", res.Monsters, err)
 	}
 }
 
@@ -61,8 +61,8 @@ func TestNativeMap11_BossBindingsFireOnce(t *testing.T) {
 			f := newNativeFixture(t, map11Hero("boss", "job-01"))
 			f.placeNative(t, dungeon.NativeMap11ID, "boss", 1, 1, y+1, 1)
 			res, err := f.svc.Move(ctx, "boss", dungeon.DirectionNorth)
-			if err != nil || res.EventType != dungeon.EventBoss || res.Monster == nil || res.Monster.ID != fl.Bosses[byte(sym)].ID {
-				t.Fatalf("boss %+v err=%v", res.Monster, err)
+			if err != nil || res.EventType != dungeon.EventBoss || len(res.Monsters) == 0 || !slices.Equal(monsterIDs(res.Monsters), monsterIDs(fl.Bosses[byte(sym)])) {
+				t.Fatalf("boss %+v err=%v", res.Monsters, err)
 			}
 			exp := f.reload(t, "boss")
 			if !slices.Equal(exp.ConsumedEvents, []string{string(sym)}) {

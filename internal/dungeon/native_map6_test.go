@@ -108,21 +108,21 @@ func TestNativeMap6_ChoiceOutcomesAtBoundaries(t *testing.T) {
 		{1, 'D', 2, "heal", "none"}, // gold loss: #2417
 		{1, 'E', 3, "boss:stage", "monster:stage"},
 		{1, 'F', 3, "rock", "none"},
-		{2, 'A', 5, "treasure", "boss:nm6-pandora"},
+		{2, 'A', 5, "treasure", "boss:nm6-man-eater,nm6-mimic,nm6-pandora"},
 		{2, 'B', 3, "boss:stage", "monster:stage"},
 		{2, 'C', 0, "boss:stage", "boss:stage"},
 		{2, 'D', 3, "monster:stage", "rock"},
-		{2, 'E', 0, "boss:nm6-cerberus", "boss:nm6-cerberus"},
-		{2, 'F', 0, "boss:nm6-shadow-panther", "boss:nm6-shadow-panther"},
+		{2, 'E', 0, "boss:nm6-pup-a,nm6-cerberus,nm6-pup-b", "boss:nm6-pup-a,nm6-cerberus,nm6-pup-b"},
+		{2, 'F', 0, "boss:nm6-cub-a,nm6-shadow-panther,nm6-cub-b", "boss:nm6-cub-a,nm6-shadow-panther,nm6-cub-b"},
 		{3, 'A', 0, "boss:stage", "boss:stage"},
-		{3, 'B', 6, "treasure", "boss:nm6-pandora"},
+		{3, 'B', 6, "treasure", "boss:nm6-man-eater,nm6-mimic,nm6-pandora"},
 		{3, 'D', 0, "none", "none"},
 		{3, 'E', 2, "boss:stage", "monster:stage"},
 		{3, 'F', 2, "rock", "none"},
 		{4, 'C', 0, "none", "none"},
 		{5, 'C', 3, "heal", "rock"},
 		{5, 'D', 3, "trap", "heal"},
-		{5, 'E', 5, "treasure", "boss:nm6-pandora"},
+		{5, 'E', 5, "treasure", "boss:nm6-man-eater,nm6-mimic,nm6-pandora"},
 		{5, 'F', 3, "none", "none"}, // gold pickup / loss: #2417
 	} {
 		for side, want := range []string{tc.first, tc.second} {
@@ -158,15 +158,15 @@ func map6Outcome(t *testing.T, variant int, cell byte, draw float64) string {
 	if !slices.ContainsFunc(exp.ConsumedEvents, func(k string) bool { return strings.ContainsRune(k, rune(cell)) }) {
 		t.Fatalf("variant %d %c flag missing: %v", variant, cell, exp.ConsumedEvents)
 	}
-	if res.Monster != nil {
+	if len(res.Monsters) != 0 {
 		kind := "monster"
 		if res.EventType == dungeon.EventBoss {
 			kind = "boss"
 		}
-		if !strings.HasPrefix(res.Monster.ID, "nm6-") {
+		if !strings.HasPrefix(res.Monsters[0].ID, "nm6-") {
 			return kind + ":stage"
 		}
-		return kind + ":" + res.Monster.ID
+		return kind + ":" + strings.Join(slices.Compact(monsterIDs(res.Monsters)), ",") // an ordinary group repeats its one source
 	}
 	if res.EventType == dungeon.EventTreasure {
 		return "treasure"
@@ -221,7 +221,7 @@ func pairOnce(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 		{dungeon.DirectionNorth, false}, {dungeon.DirectionEast, false}, {dungeon.DirectionEast, false}, {dungeon.DirectionSouth, true}} {
 		f.rng.intCalls, f.rng.floatCalls = 0, 0
 		res, err := f.svc.Move(ctx, id, step.d)
-		if err != nil || res.Monster != nil || res.EventType != dungeon.EventMove || step.event && f.rng.calls() != 0 {
+		if err != nil || len(res.Monsters) != 0 || res.EventType != dungeon.EventMove || step.event && f.rng.calls() != 0 {
 			t.Fatalf("after F, %s: %+v err=%v rng=%d", step.d, res, err, f.rng.calls())
 		}
 	}
@@ -270,7 +270,7 @@ func TestNativeMap6_SagesInEveryVariant(t *testing.T) {
 		f := newMap6Fixture(t, dungeon.NewMemoryExpeditionRepository(), map6Hero("sage", 500_000))
 		f.placeNative(t, dungeon.NativeMap6ID, "sage", v, 1, 2, 2)
 		res, err := f.svc.Move(ctx, "sage", dungeon.DirectionNorth)
-		if err != nil || res.EventType != dungeon.EventBoss || res.Monster == nil || res.Monster.ID != "nm6-sage-1" {
+		if err != nil || res.EventType != dungeon.EventBoss || len(res.Monsters) == 0 || !slices.Contains(monsterIDs(res.Monsters), "nm6-sage-1") {
 			t.Fatalf("variant %d X %+v err=%v", v, res, err)
 		}
 	}

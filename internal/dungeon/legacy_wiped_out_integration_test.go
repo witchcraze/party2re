@@ -545,10 +545,10 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 			Name:       "Contrast Fallen Dungeon",
 			RoundLimit: 20,
 			Variants: []dungeon.Floor{{
-				Width:    2,
-				Height:   1,
-				Grid:     []string{"S0"},
-				Monsters: []dungeon.DungeonMonster{{ID: "slime", Name: "Slime", HP: 30, Attack: 10, ExpReward: 15, GoldReward: 25}},
+				Width:  2,
+				Height: 1,
+				Grid:   []string{"S0"},
+				Pools:  []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{{ID: "slime", Name: "Slime", HP: 30, Attack: 10, ExpReward: 15, GoldReward: 25}}}},
 			}},
 		}
 		svc, err := dungeon.NewService(repo, chars, lossEngine, dungeon.WithActiveExpeditionStore(store), dungeon.WithInventoryProvider(invs), dungeon.WithCustomDungeons([]dungeon.Dungeon{custom}))
@@ -564,7 +564,7 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 		exp.AccumulatedGold = 125
 		exp.AccumulatedItems = []string{"potion"}
 		exp.Encounter = &dungeon.ActiveEncounter{
-			Monster:   custom.Variants[0].Monsters[0],
+			Monsters:  custom.Variants[0].Pools[0].Monsters[:1],
 			Enemies:   []corebattle.Participant{corebattle.MustNewParticipant("slime", 30, 10, 0)},
 			EventType: dungeon.EventBattle,
 			X:         1,

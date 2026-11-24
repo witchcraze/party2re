@@ -204,3 +204,19 @@ func (f *nativeFixture) startNativeParty(t *testing.T, mapID string, variant, x,
 	f.moveTo(t, "lead", x, y)
 	f.rng.ints, f.rng.intCalls, f.rng.floatCalls = nil, 0, 0
 }
+
+// monsterIDs lists a spawned group's source IDs in spawn order.
+func monsterIDs(ms []dungeon.DungeonMonster) []string {
+	ids := make([]string, len(ms))
+	for i, m := range ms {
+		ids[i] = m.ID
+	}
+	return ids
+}
+
+// zeroRNG draws 0: every passage spawns a one-member group, and a solo
+// party's roll scales stats by 0.8.
+type zeroRNG struct{}
+
+func (zeroRNG) Intn(int) int     { return 0 }
+func (zeroRNG) Float64() float64 { return 0 }

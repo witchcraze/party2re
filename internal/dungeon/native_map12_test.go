@@ -23,13 +23,13 @@ func TestNativeMap12_Catalog(t *testing.T) {
 		t.Fatalf("geometry %+v", fl)
 	}
 	for sym, stage := range map[byte]string{'C': "ordinary-13-", 'D': "ordinary-18-", 'E': "ordinary-12-", 'F': "ordinary-10-"} {
-		if !strings.HasPrefix(fl.Bosses[sym].ID, stage) {
-			t.Errorf("%c boss %q, want stage %s", sym, fl.Bosses[sym].ID, stage)
+		if !strings.HasPrefix(fl.Bosses[sym][0].ID, stage) {
+			t.Errorf("%c boss %q, want stage %s", sym, fl.Bosses[sym][0].ID, stage)
 		}
 	}
 	// A (get_boss_data2) and B (get_boss_data) have different groups.
-	if fl.Bosses['A'].ID != "nm12-diabolos-a" || fl.Bosses['B'].ID != "nm12-diabolos-b" {
-		t.Errorf("A %q B %q", fl.Bosses['A'].ID, fl.Bosses['B'].ID)
+	if !slices.Contains(monsterIDs(fl.Bosses['A']), "nm12-diabolos-a") || !slices.Contains(monsterIDs(fl.Bosses['B']), "nm12-diabolos-b") {
+		t.Errorf("A %v B %v", monsterIDs(fl.Bosses['A']), monsterIDs(fl.Bosses['B']))
 	}
 }
 
@@ -43,8 +43,8 @@ func TestNativeMap12_BossBindingsFireOnce(t *testing.T) {
 			f := newNativeFixture(t, map11Hero("boss", "job-01"))
 			f.placeNative(t, dungeon.NativeMap12ID, "boss", 1, 1, y+1, 1)
 			res, err := f.svc.Move(ctx, "boss", dungeon.DirectionNorth)
-			if err != nil || res.EventType != dungeon.EventBoss || res.Monster == nil || res.Monster.ID != fl.Bosses[byte(sym)].ID {
-				t.Fatalf("boss %+v err=%v", res.Monster, err)
+			if err != nil || res.EventType != dungeon.EventBoss || len(res.Monsters) == 0 || !slices.Equal(monsterIDs(res.Monsters), monsterIDs(fl.Bosses[byte(sym)])) {
+				t.Fatalf("boss %+v err=%v", res.Monsters, err)
 			}
 			exp := f.reload(t, "boss")
 			if !slices.Equal(exp.ConsumedEvents, []string{string(sym)}) {

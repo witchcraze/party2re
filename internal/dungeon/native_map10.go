@@ -107,9 +107,9 @@ var nm10Pool = EncounterPool{
 	Appears: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13},
 }
 
-// Each floor file defines its own boss group; the strongest stands in for it.
-var nm10Bosses = [3]DungeonMonster{
-	strongest([]DungeonMonster{
+// Each floor file defines its own boss group.
+var nm10Bosses = [3][]DungeonMonster{
+	{
 		{ID: "nm10-dark-sorcerer", Name: "闇の魔術士", HP: 8000, Attack: 300, Defense: 100, Agility: 400, ExpReward: 750, GoldReward: 250,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant:   corebattle.Participant{MP: 999, MaxMP: 9999},
@@ -130,8 +130,8 @@ var nm10Bosses = [3]DungeonMonster{
 				Jobs:        corebattle.BattleJobs{JobID: "job-19", SP: 999, OldJobID: "job-40", OldSP: 999},
 			}),
 		},
-	}),
-	strongest([]DungeonMonster{
+	},
+	{
 		{ID: "nm10-big-bomb-a", Name: "ビッグボムA", HP: 1200, Attack: 450, Defense: 120, Agility: 150, ExpReward: 255, GoldReward: 50,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant: corebattle.Participant{MP: 142},
@@ -153,8 +153,8 @@ var nm10Bosses = [3]DungeonMonster{
 				Jobs:        corebattle.BattleJobs{JobID: "job-31", SP: 20},
 			}),
 		},
-	}),
-	strongest([]DungeonMonster{
+	},
+	{
 		{ID: "nm10-spirit", Name: "精霊", HP: 5000, Attack: 300, Defense: 200, Agility: 800, ExpReward: 500, GoldReward: 700,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant:   corebattle.Participant{MP: 9999, MaxMP: 99999},
@@ -178,7 +178,7 @@ var nm10Bosses = [3]DungeonMonster{
 				CrystalReward: 5,
 			}),
 		},
-	}),
+	},
 }
 
 // Every event seals the party's attacks before its once guard, so a sealed
@@ -205,11 +205,11 @@ func nativeMap10() Dungeon {
 	pools := []EncounterPool{nm10Pool}
 	floors := [3]Floor{
 		{FloorNumber: 1, Name: name + "１階", Marks: map[byte]string{'F': "凸", 'A': "◎"},
-			Exits: map[byte]FloorExit{'F': {Variants: []int{2}}}, Bosses: map[byte]DungeonMonster{'A': nm10Bosses[0]}},
+			Exits: map[byte]FloorExit{'F': {Variants: []int{2}}}, Bosses: map[byte][]DungeonMonster{'A': nm10Bosses[0]}},
 		{FloorNumber: 2, Name: name + "２階", Marks: map[byte]string{'F': "凸", 'B': "◎"},
-			Exits: map[byte]FloorExit{'F': {Variants: []int{3}}}, Bosses: map[byte]DungeonMonster{'B': nm10Bosses[1]}},
+			Exits: map[byte]FloorExit{'F': {Variants: []int{3}}}, Bosses: map[byte][]DungeonMonster{'B': nm10Bosses[1]}},
 		{FloorNumber: 3, Name: name + "３階", Marks: map[byte]string{'2': "宝", '3': "宝", '4': "宝", 'C': "◎"},
-			Bosses: map[byte]DungeonMonster{'C': nm10Bosses[2]}},
+			Bosses: map[byte][]DungeonMonster{'C': nm10Bosses[2]}},
 	}
 	variants := make([]Floor, len(floors))
 	for i, f := range floors {

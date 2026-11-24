@@ -84,8 +84,8 @@ func sealedSpawn(t *testing.T, store dungeon.ActiveExpeditionStore, lead string)
 	f.rng.floats = []float64{0.5} // roll 1.0 <= 1 spawns
 	f.rng.ints = []int{8}
 	res, err := f.svc.Move(ctx, ally, dungeon.DirectionEast)
-	if err != nil || res.EventType != dungeon.EventBattle || res.Monster == nil || res.Monster.Name != "幻騎士" {
-		t.Fatalf("spawn %+v err=%v", res.Monster, err)
+	if err != nil || res.EventType != dungeon.EventBattle || len(res.Monsters) == 0 || res.Monsters[0].Name != "幻騎士A" {
+		t.Fatalf("spawn %+v err=%v", res.Monsters, err)
 	}
 	exp := f.reload(t, lead)
 	for _, id := range []string{lead, ally} {
@@ -125,10 +125,10 @@ func TestNativeMap9_BossesAreSealedAndOnce(t *testing.T) {
 		f.placeNative(t, dungeon.NativeMap9ID, "probe", 1, 1, 7, 1)
 		f.rng.ints = []int{draw}
 		res, err := f.svc.Move(ctx, "probe", dungeon.DirectionSouth)
-		if err != nil || res.Monster == nil {
+		if err != nil || len(res.Monsters) == 0 {
 			t.Fatalf("draw %d %+v err=%v", draw, res, err)
 		}
-		stageBoss[draw] = res.Monster.ID
+		stageBoss[draw] = res.Monsters[0].ID
 	}
 	if stageBoss[0] == stageBoss[4] {
 		t.Fatalf("stages 8 and 12 drew the same boss %v", stageBoss)
@@ -149,8 +149,8 @@ func TestNativeMap9_BossesAreSealedAndOnce(t *testing.T) {
 			f.placeNative(t, dungeon.NativeMap9ID, "boss", 1, tc.x, tc.y, 1)
 			f.rng.ints = []int{tc.draw}
 			res, err := f.svc.Move(ctx, "boss", tc.dir)
-			if err != nil || res.EventType != dungeon.EventBoss || res.Monster == nil || res.Monster.ID != tc.want {
-				t.Fatalf("boss %+v err=%v", res.Monster, err)
+			if err != nil || res.EventType != dungeon.EventBoss || len(res.Monsters) == 0 || !slices.Contains(monsterIDs(res.Monsters), tc.want) {
+				t.Fatalf("boss %+v err=%v", res.Monsters, err)
 			}
 			exp := f.reload(t, "boss")
 			if exp.Encounter.Statuses["boss"] != corebattle.StatusMagicSeal || !slices.Equal(exp.ConsumedEvents, []string{tc.name}) {

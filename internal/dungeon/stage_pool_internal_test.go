@@ -15,11 +15,7 @@ func TestStagePool_MirrorsSharedStageTable(t *testing.T) {
 	}
 	for n := 2; n <= 8; n++ {
 		p, st := stagePool(n), stages[fmt.Sprintf("stage-%02d", n)]
-		ids := make([]string, len(p.Monsters))
-		for i, m := range p.Monsters {
-			ids[i] = m.ID
-		}
-		if !slices.Equal(ids, st.MonsterIDs) || !slices.Equal(p.Appears, st.Appears) || !slices.Contains(st.BossRosters[0], p.Boss.ID) {
+		if !slices.Equal(monsterIDs(p.Monsters), st.MonsterIDs) || !slices.Equal(p.Appears, st.Appears) || !slices.Equal(monsterIDs(p.Bosses), st.BossRosters[0]) {
 			t.Errorf("stage %d pool %+v", n, p)
 		}
 	}
@@ -28,10 +24,11 @@ func TestStagePool_MirrorsSharedStageTable(t *testing.T) {
 // Each map draws the legacy stage range of its map file.
 func TestNativeMaps_DrawTheirLegacyStages(t *testing.T) {
 	stageOf := map[string]int{}
-	for n := 2; n <= 8; n++ {
-		stageOf[stagePool(n).Boss.ID] = n
+	for n := 0; n <= 8; n++ {
+		stageOf[fmt.Sprint(monsterIDs(stagePool(n).Bosses))] = n
 	}
 	want := map[string][]int{
+		NativeMap0ID: {0, 1},       // map/0/*.cgi int(rand(2))
 		NativeMap1ID: {2},          // map/1/*.cgi
 		NativeMap3ID: {5, 6, 7, 8}, // int(rand(4)+5)
 		NativeMap4ID: {4, 5, 6, 7, 8},
@@ -49,11 +46,19 @@ func TestNativeMaps_DrawTheirLegacyStages(t *testing.T) {
 			}
 			got := make([]int, len(f.Pools))
 			for j, p := range f.Pools {
-				got[j] = stageOf[p.Boss.ID]
+				got[j] = stageOf[fmt.Sprint(monsterIDs(p.Bosses))]
 			}
 			if !slices.Equal(got, exp) {
 				t.Errorf("%s variant %d stages %v, want %v", d.ID, i+1, got, exp)
 			}
 		}
 	}
+}
+
+func monsterIDs(ms []DungeonMonster) []string {
+	ids := make([]string, len(ms))
+	for i, m := range ms {
+		ids[i] = m.ID
+	}
+	return ids
 }

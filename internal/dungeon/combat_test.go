@@ -62,7 +62,7 @@ func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S0"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "glass-cannon-monster",
 						Name:       "Glass Cannon",
@@ -73,7 +73,7 @@ func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 						ExpReward:  100,
 						GoldReward: 50,
 					},
-				},
+				}}},
 			},
 		},
 	}
@@ -104,7 +104,7 @@ func TestDungeonSolo_FirstStrikeDefeatWinsWithoutWipeout(t *testing.T) {
 	if res.EventType != dungeon.EventBattle {
 		t.Fatalf("expected EventBattle, got %v", res.EventType)
 	}
-	if res.CombatOutcome != corebattle.OutcomeWin || res.Monster == nil || res.Monster.Name == "" {
+	if res.CombatOutcome != corebattle.OutcomeWin || len(res.Monsters) == 0 || res.Monsters[0].Name == "" {
 		t.Fatalf("missing combat outcome facts: %+v", res)
 	}
 
@@ -150,7 +150,7 @@ func TestDungeonSolo_ParticipantWithSkillsUsesSkills(t *testing.T) {
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S0"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "iron-turtle",
 						Name:       "Iron Turtle",
@@ -161,7 +161,7 @@ func TestDungeonSolo_ParticipantWithSkillsUsesSkills(t *testing.T) {
 						ExpReward:  50,
 						GoldReward: 20,
 					},
-				},
+				}}},
 			},
 		},
 	}
@@ -282,7 +282,7 @@ func TestDungeonSolo_CustomRNGWithoutIntN(t *testing.T) {
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S0"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "target-monster",
 						Name:       "Target",
@@ -293,7 +293,7 @@ func TestDungeonSolo_CustomRNGWithoutIntN(t *testing.T) {
 						ExpReward:  10,
 						GoldReward: 10,
 					},
-				},
+				}}},
 			},
 		},
 	}
@@ -333,15 +333,20 @@ func TestDungeonSolo_CustomRNGWithoutIntN(t *testing.T) {
 	}
 }
 
-// spawnNext forces the next passage roll to spawn and leaves battle draws to the inner source.
+// spawnNext forces the next passage roll to spawn a one-member group and
+// leaves stat rolls and battle draws to the inner source.
 type spawnNext struct {
 	dungeon.RandomSource
-	next bool
+	next  bool
+	zeros int
 }
 
 func (r *spawnNext) Float64() float64 {
 	if r.next {
-		r.next = false
+		r.next, r.zeros = false, 2
+	}
+	if r.zeros > 0 {
+		r.zeros--
 		return 0
 	}
 	return r.RandomSource.Float64()
@@ -376,7 +381,7 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S00"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "monster-1",
 						Name:       "Wolf",
@@ -397,7 +402,7 @@ func TestDungeonSolo_ConsecutiveCombatsPreserveHP(t *testing.T) {
 						ExpReward:  20,
 						GoldReward: 20,
 					},
-				},
+				}}},
 			},
 		},
 	}

@@ -80,17 +80,18 @@ func TestNativeMapNamesMatchAdventureCatalog(t *testing.T) {
 			t.Errorf("%s name %q, want %q (%s)", m.ID, m.Name, want, entry.ID)
 		}
 	}
-	assertName(*mapDef(t, dungeon.NativeMap0ID).Variants[0].Boss, 7, "")
+	assertName(mapDef(t, dungeon.NativeMap0ID).Variants[0].Pools[0].Bosses[0], 7, "")
 	// Stage order, including the shared Bomb Rock in stage 8 and the
 	// existing main boss of stage 7 (Firebird, between its two escorts).
 	stages := []struct {
 		monsters []int
 		boss     int
+		main     int // the boss's roster position
 	}{
-		{[]int{48, 49, 50, 51, 52, 53, 54, 55, 56, 57}, 58},
-		{[]int{61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72}, 73},
-		{[]int{74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84}, 86},
-		{[]int{88, 89, 90, 91, 76, 92, 93, 94, 95, 96}, 97},
+		{[]int{48, 49, 50, 51, 52, 53, 54, 55, 56, 57}, 58, 0},
+		{[]int{61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72}, 73, 0},
+		{[]int{74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84}, 86, 1},
+		{[]int{88, 89, 90, 91, 76, 92, 93, 94, 95, 96}, 97, 0},
 	}
 	approvedNames := map[int]string{54: "浮遊眼", 73: "一つ目の巨人"}
 	pools := mapDef(t, dungeon.NativeMap3ID).Variants[0].Pools
@@ -99,13 +100,13 @@ func TestNativeMapNamesMatchAdventureCatalog(t *testing.T) {
 	}
 	for i, stage := range stages {
 		pool := pools[i]
-		if len(pool.Monsters) != len(stage.monsters) || pool.Boss == nil {
+		if len(pool.Monsters) != len(stage.monsters) || len(pool.Bosses) <= stage.main {
 			t.Fatalf("stage %d monsters/boss do not match", i+5)
 		}
 		for j, id := range stage.monsters {
 			assertName(pool.Monsters[j], id, approvedNames[id])
 		}
-		assertName(*pool.Boss, stage.boss, approvedNames[stage.boss])
+		assertName(pool.Bosses[stage.main], stage.boss, approvedNames[stage.boss])
 	}
 }
 
@@ -193,7 +194,7 @@ func TestNativeMap3_MistConfusesTheEnsuingBattle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Monster == nil || res.Monster.Name != "ミミック" || res.BattleResult == nil || res.BattleResult.Outcome != corebattle.OutcomeDraw {
+	if len(res.Monsters) == 0 || res.Monsters[0].Name != "ミミックA" || res.BattleResult == nil || res.BattleResult.Outcome != corebattle.OutcomeDraw {
 		t.Fatalf("mist encounter %+v", res)
 	}
 	if confusedTurns(res, "mist") == 0 {
@@ -231,7 +232,7 @@ func TestNativeMap3_PassageEncounterUsesPoolWithoutConfusion(t *testing.T) {
 	f.placeNative(t, dungeon.NativeMap3ID, "walk", 1, 1, 0, 3)
 	f.rng.floats, f.rng.ints = []float64{0.5}, []int{2, 10} // spawn; pool c is uniform
 	res, err := f.svc.Move(ctx, "walk", dungeon.DirectionEast)
-	if err != nil || res.Monster == nil || res.Monster.Name != "炎の戦士" || confusedTurns(res, "walk") != 0 {
+	if err != nil || len(res.Monsters) == 0 || res.Monsters[0].Name != "炎の戦士A" || confusedTurns(res, "walk") != 0 {
 		t.Fatalf("passage %+v err=%v", res, err)
 	}
 }
@@ -245,7 +246,7 @@ func TestNativeMap3_TwoBossesEachTriggerOnce(t *testing.T) {
 	f.placeNative(t, dungeon.NativeMap3ID, "boss", 1, 1, 8, 4) // east of B at (0,8)
 	f.rng.ints = []int{3}
 	res, err := f.svc.Move(ctx, "boss", dungeon.DirectionWest)
-	if err != nil || res.EventType != dungeon.EventBoss || res.Monster.Name != "ベヒーモス" {
+	if err != nil || res.EventType != dungeon.EventBoss || res.Monsters[0].Name != "ベヒーモス" {
 		t.Fatalf("first boss %+v err=%v", res, err)
 	}
 	if _, err := f.svc.Move(ctx, "boss", dungeon.DirectionEast); err != nil {
@@ -260,7 +261,7 @@ func TestNativeMap3_TwoBossesEachTriggerOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.rng.ints = []int{0}
-	if res, err = f.svc.Move(ctx, "boss", dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventBoss || res.Monster.Name != "闇の魔術士" {
+	if res, err = f.svc.Move(ctx, "boss", dungeon.DirectionWest); err != nil || res.EventType != dungeon.EventBoss || !slices.Equal(monsterIDs(res.Monsters), []string{"ordinary-05-boss-10", "ordinary-05-boss-28", "ordinary-05-boss-42"}) { // 闇の魔術士 and escorts
 		t.Fatalf("second boss %+v err=%v", res, err)
 	}
 	if _, err := f.svc.Move(ctx, "boss", dungeon.DirectionEast); err != nil {
@@ -393,7 +394,7 @@ func TestNativeMap3_ConfusedContinuationStoreContract(t *testing.T) {
 		rev := got.Revision
 		enemy := corebattle.MustNewParticipant("nm3-b-02", 50, 1, 1)
 		enemy.TeamID = "enemies"
-		enc := &dungeon.ActiveEncounter{EventType: dungeon.EventBattle, X: 0, Y: 7, Enemies: []corebattle.Participant{enemy},
+		enc := &dungeon.ActiveEncounter{EventType: dungeon.EventBattle, X: 0, Y: 7, Monsters: []dungeon.DungeonMonster{{ID: "nm3-b-02", HP: 50}}, Enemies: []corebattle.Participant{enemy},
 			Statuses: map[string]string{charID: string(corebattle.StatusConfusion)}}
 		step := func(rev int, x int) error {
 			_, err := store.Step(ctx, charID, dungeon.StepParams{ExpectedExpeditionID: exp.ID, ExpectedRevision: &rev, Combat: true,

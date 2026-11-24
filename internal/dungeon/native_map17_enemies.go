@@ -95,8 +95,7 @@ var (
 )
 
 // nm17Pharaohs is ___data.cgi's @bosses, fought at Z.
-// shortcut: the strongest member stands in for the group until #1954 adds groups.
-var nm17Pharaohs = strongest([]DungeonMonster{
+var nm17Pharaohs = []DungeonMonster{
 	nm17Enemy("nm17-cobra-a", "ウァジェイダA", 1800, 500, 30, 500, 400, 10, nm17Cobra),
 	nm17Enemy("nm17-pharaoh", "ファラオ", 6000, 380, 380, 200, 7800, 15000, corebattle.LifetimeActor{
 		Participant: corebattle.Participant{MP: 10000, ItemDefinitionIDs: []string{"item-144"},
@@ -107,7 +106,7 @@ var nm17Pharaohs = strongest([]DungeonMonster{
 		Temporary:     corebattle.TemporaryNullMagic,
 	}),
 	nm17Enemy("nm17-cobra-b", "ウァジェイダB", 1800, 500, 30, 500, 400, 10, nm17Cobra),
-})
+}
 
 var nm17Cobra = corebattle.LifetimeActor{
 	Participant:   corebattle.Participant{MP: 2000, Abilities: []string{"poison1", "paralysis1", "sleep1", "sealed1", "confusion1"}},
@@ -128,8 +127,7 @@ var nm17Necro = nm17Enemy("nm17-necro-pharaoh", "ネクロファラオ", 6000, 7
 })
 
 // nm17Guardians is __data.cgi's @bosses, fought at B.
-// shortcut: the strongest member stands in for the group until #1954 adds groups.
-var nm17Guardians = strongest([]DungeonMonster{
+var nm17Guardians = []DungeonMonster{
 	nm17Enemy("nm17-golem-a", "サンドゴーレムA", 1300, 220, 400, 110, 250, 100, corebattle.LifetimeActor{
 		Participant: corebattle.Participant{MP: 700},
 		Jobs:        nm17Jobs("job-16", 999, "", 0),
@@ -156,4 +154,4 @@ var nm17Guardians = strongest([]DungeonMonster{
 		Hit:         150,
 		Temporary:   corebattle.TemporaryRevival,
 	}),
-})
+}

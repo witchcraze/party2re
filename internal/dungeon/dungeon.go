@@ -76,24 +76,22 @@ type DungeonMonster struct {
 type Floor struct {
 	FloorNumber int `json:"-"`
 	// Name overrides the dungeon's display name on this floor (legacy $d_name).
-	Name     string           `json:"-"`
-	Width    int              `json:"width"`
-	Height   int              `json:"height"`
-	StartX   int              `json:"start_x"`
-	StartY   int              `json:"start_y"`
-	Grid     []string         `json:"grid"`
-	Monsters []DungeonMonster `json:"monsters"`
-	Boss     *DungeonMonster  `json:"boss,omitempty"`
+	Name   string   `json:"-"`
+	Width  int      `json:"width"`
+	Height int      `json:"height"`
+	StartX int      `json:"start_x"`
+	StartY int      `json:"start_y"`
+	Grid   []string `json:"grid"`
 	// Warps send a party entering the keyed cell to (x, y) without dispatching the landing cell.
 	Warps map[byte][2]int `json:"-"`
-	// Pools, when set, replace Monsters/Boss: each event draws one pool, as legacy maps load one stage file per request.
+	// Pools are the floor's content: each event draws one, as legacy maps load one stage file per request.
 	Pools []EncounterPool `json:"-"`
 	// RoundLimit overrides the dungeon's limit on this floor (legacy $max_round per map file).
 	RoundLimit int `json:"-"`
 	// Exits switch floors: entering the keyed cell picks a uniform candidate variant.
 	Exits map[byte]FloorExit `json:"-"`
-	// Bosses are map-owned once bosses with fixed content, keyed by cell.
-	Bosses map[byte]DungeonMonster `json:"-"`
+	// Bosses are map-owned once boss rosters with fixed content, keyed by cell.
+	Bosses map[byte][]DungeonMonster `json:"-"`
 	// Marks show a cell's symbol in the map view until its once event is consumed, unless the event keeps it.
 	Marks map[byte]string `json:"-"`
 	// events bind this floor's symbols; see map_events.go.
@@ -107,11 +105,12 @@ type FloorExit struct {
 	Trap     int
 }
 
-// EncounterPool is one stage's content; Appears weights monster indices (empty: uniform).
+// EncounterPool is one stage's content; Appears weights monster indices (empty:
+// uniform) and Bosses is the roster add_boss spawns whole.
 type EncounterPool struct {
 	Monsters []DungeonMonster
 	Appears  []int
-	Boss     *DungeonMonster
+	Bosses   []DungeonMonster
 }
 
 type Dungeon struct {
@@ -193,7 +192,7 @@ type DungeonExpeditionHistory struct {
 type ExpeditionStepResult struct {
 	Expedition    ActiveExpedition   `json:"expedition"`
 	EventType     TileEventType      `json:"event_type"`
-	Monster       *DungeonMonster    `json:"monster,omitempty"`
+	Monsters      []DungeonMonster   `json:"monsters,omitempty"`
 	CombatOutcome corebattle.Outcome `json:"combat_outcome,omitempty"`
 	BattleResult  *corebattle.Result `json:"battle_result,omitempty"`
 	DamageTaken   int                `json:"damage_taken,omitempty"`

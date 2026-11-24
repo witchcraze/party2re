@@ -163,9 +163,9 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S0D"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{ID: "slime", Name: "Slime", HP: 10, Attack: 1, Defense: 1, Agility: 1, ExpReward: 10, GoldReward: 10},
-				},
+				}}},
 			},
 		},
 	}
@@ -535,9 +535,9 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 					StartX: 0,
 					StartY: 0,
 					Grid:   []string{"S0D"},
-					Monsters: []dungeon.DungeonMonster{
+					Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 						{ID: "slime", Name: "Slime", HP: 10, Attack: 1, Defense: 1, Agility: 1, ExpReward: 10, GoldReward: 10},
-					},
+					}}},
 				},
 			},
 		}
@@ -695,9 +695,9 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 					StartX: 0,
 					StartY: 0,
 					Grid:   []string{"S0D"},
-					Monsters: []dungeon.DungeonMonster{
+					Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 						{ID: "slime", Name: "Slime", HP: 10, Attack: 1, Defense: 1, Agility: 1, ExpReward: 10, GoldReward: 10},
-					},
+					}}},
 				},
 			},
 		}

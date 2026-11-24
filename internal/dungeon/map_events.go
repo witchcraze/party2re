@@ -108,7 +108,7 @@ type spawnEvent struct{ status corebattle.StatusEffect }
 func (ev spawnEvent) apply(n *nativeStep) error {
 	if 2*n.rng.Float64() <= 1 {
 		if pool := n.encounterPool(); len(pool.Monsters) > 0 {
-			n.fight(pool.monster(n.rng), EventBattle, "", ev.status)
+			n.fightGroup(pool, "", ev.status)
 		}
 	}
 	return nil
@@ -117,7 +117,7 @@ func (ev spawnEvent) apply(n *nativeStep) error {
 type mistEvent struct{ status corebattle.StatusEffect }
 
 func (ev mistEvent) apply(n *nativeStep) error {
-	n.fight(n.encounterPool().monster(n.rng), EventBattle, "", ev.status)
+	n.fightGroup(n.encounterPool(), "", ev.status)
 	return nil
 }
 
@@ -130,8 +130,8 @@ func (ev bossEvent) apply(n *nativeStep) error {
 	if n.consumed {
 		return nil
 	}
-	if boss, ok := n.floor.Bosses[n.cell]; ok {
-		n.fight(boss, EventBoss, n.key, ev.status)
+	if roster, ok := n.floor.Bosses[n.cell]; ok {
+		n.fightRoster(roster, n.key, ev.status)
 		return nil
 	}
 	var pool EncounterPool
@@ -140,8 +140,8 @@ func (ev bossEvent) apply(n *nativeStep) error {
 	} else {
 		pool = n.encounterPool()
 	}
-	if pool.Boss != nil {
-		n.fight(*pool.Boss, EventBoss, n.key, ev.status)
+	if len(pool.Bosses) > 0 {
+		n.fightRoster(pool.Bosses, n.key, ev.status)
 	}
 	return nil
 }
@@ -261,26 +261,29 @@ func (ev choiceEvent) apply(n *nativeStep) error {
 	return nil
 }
 
-type monsterOutcome struct{ monster *DungeonMonster }
+// monsterOutcome is _add_monster over a map-owned @monsters list, or over
+// the drawn pool when empty.
+type monsterOutcome struct{ monsters []DungeonMonster }
 
 func (o monsterOutcome) apply(n *nativeStep) error {
-	m := o.monster
-	if m == nil {
-		pm := n.encounterPool().monster(n.rng)
-		m = &pm
+	pool := EncounterPool{Monsters: o.monsters}
+	if len(o.monsters) == 0 {
+		pool = n.encounterPool()
 	}
-	n.fight(*m, EventBattle, n.key, "")
+	n.fightGroup(pool, n.key, "")
 	return nil
 }
 
-type bossOutcome struct{ monster *DungeonMonster }
+// bossOutcome is add_boss over a map-owned @bosses roster, or over the drawn
+// pool's when empty.
+type bossOutcome struct{ roster []DungeonMonster }
 
 func (o bossOutcome) apply(n *nativeStep) error {
-	m := o.monster
-	if m == nil {
-		m = n.encounterPool().Boss
+	roster := o.roster
+	if len(roster) == 0 {
+		roster = n.encounterPool().Bosses
 	}
-	n.fight(*m, EventBoss, n.key, "")
+	n.fightRoster(roster, n.key, "")
 	return nil
 }
 

@@ -2,6 +2,7 @@ package dungeon
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -13,7 +14,7 @@ func (s *Service) resolveEncounter(
 	ctx context.Context,
 	exp *ActiveExpedition,
 	char *corecharacter.Character,
-	monsterPart corebattle.Participant,
+	enemies []corebattle.Participant,
 	allyStatus string,
 ) (corebattle.Result, *corebattle.FieldState, bool, map[string]int, map[string]int, map[string][]corebattle.ConsumedItem, int, error) {
 	allies, err := s.buildCombatAllies(ctx, exp, char, allyStatus)
@@ -39,17 +40,17 @@ func (s *Service) resolveEncounter(
 		partyRes, err = partyResolver.ResolvePartyBattle(corebattle.PartyBattleRequest{
 			Allies:       allies,
 			InitialField: initialField,
-			Enemies:      []corebattle.Participant{monsterPart},
+			Enemies:      enemies,
 			RNG:          adaptRandomSource(s.rng),
 		})
 		if err != nil {
 			return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
 		}
-		winnerID := monsterPart.ID
+		winnerID := enemies[0].ID
 		loserID := char.ID
 		if partyRes.Outcome == corebattle.OutcomeWin && partyRes.WinnerSide == "allies" {
 			winnerID = char.ID
-			loserID = monsterPart.ID
+			loserID = enemies[0].ID
 		}
 		battleRes = corebattle.Result{
 			Outcome:         partyRes.Outcome,
@@ -64,11 +65,11 @@ func (s *Service) resolveEncounter(
 			Logs:            partyRes.Logs,
 		}
 	} else {
-		if len(allies) > 1 {
+		if len(allies) > 1 || len(enemies) > 1 {
 			return corebattle.Result{}, nil, false, nil, nil, nil, 0, corebattle.ErrInvalidRequest
 		}
 		battleRes, err = s.battleEngine.Resolve(corebattle.Request{
-			Participants: []corebattle.Participant{allies[0], monsterPart},
+			Participants: []corebattle.Participant{allies[0], enemies[0]},
 			RNG:          adaptRandomSource(s.rng),
 		})
 		if err != nil {
@@ -142,7 +143,7 @@ func (s *Service) resolveMonsterCombat(
 	ctx context.Context,
 	exp *ActiveExpedition,
 	char *corecharacter.Character,
-	monster DungeonMonster,
+	monsters []DungeonMonster,
 	eventType TileEventType,
 	newX, newY int,
 	eventKey string,
@@ -153,13 +154,14 @@ func (s *Service) resolveMonsterCombat(
 	memberDamages map[string]int,
 ) (ExpeditionStepResult, error) {
 	rounds, stayX, stayY := exp.combatProgress(newX, newY)
-	var enemy corebattle.Participant
+	var enemies []corebattle.Participant
 	if exp.Encounter != nil {
-		enemy = exp.Encounter.Enemies[0]
+		enemies = exp.Encounter.Enemies
 	} else {
-		enemy = monster.participant()
+		enemies = participants(monsters)
 	}
-	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, enemy, allyStatus)
+	living := slices.DeleteFunc(slices.Clone(enemies), func(e corebattle.Participant) bool { return e.HP <= 0 })
+	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, living, allyStatus)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
@@ -169,19 +171,25 @@ func (s *Service) resolveMonsterCombat(
 	leaderHPDelta += revived[char.ID]
 
 	if won {
+		// shortcut: the whole group's rewards land at victory until #1957 credits each defeat.
+		var expReward, goldReward int
+		for _, m := range monsters {
+			expReward += m.ExpReward
+			goldReward += m.GoldReward
+		}
 		memberExpDeltas := make(map[string]int, len(exp.Members))
 		memberGoldDeltas := make(map[string]int, len(exp.Members))
 		for _, m := range exp.Members {
 			if remHP, ok := battleRes.RemainingHP[m.CharacterID]; ok && remHP > 0 {
-				memberExpDeltas[m.CharacterID] = monster.ExpReward
-				memberGoldDeltas[m.CharacterID] = monster.GoldReward
+				memberExpDeltas[m.CharacterID] = expReward
+				memberGoldDeltas[m.CharacterID] = goldReward
 			}
 		}
 		leaderExpDelta := memberExpDeltas[char.ID]
 		leaderGoldDelta := memberGoldDeltas[char.ID]
 		if len(exp.Members) <= 1 && leaderHPDelta+exp.CurrentHP > 0 {
-			leaderExpDelta = monster.ExpReward
-			leaderGoldDelta = monster.GoldReward
+			leaderExpDelta = expReward
+			leaderGoldDelta = goldReward
 		}
 
 		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
@@ -203,7 +211,7 @@ func (s *Service) resolveMonsterCombat(
 			RoundLimit:           carry.RoundLimit,
 			ExpDelta:             leaderExpDelta,
 			GoldDelta:            leaderGoldDelta,
-			RewardItemID:         monster.DropItemID,
+			RewardItemID:         monsters[0].DropItemID, // shortcut: invented path kept as is until #2741 deletes it
 			Now:                  time.Now().UTC(),
 		})
 		if err != nil {
@@ -217,8 +225,8 @@ func (s *Service) resolveMonsterCombat(
 			MemberDamages: memberDamages,
 			ExpEarned:     leaderExpDelta,
 			GoldFound:     leaderGoldDelta,
-			ItemFound:     monster.DropItemID,
-			Monster:       &monster,
+			ItemFound:     monsters[0].DropItemID,
+			Monsters:      monsters,
 			CombatOutcome: corebattle.OutcomeWin,
 		}, nil
 	}
@@ -226,10 +234,7 @@ func (s *Service) resolveMonsterCombat(
 	// Draw or defeat: surviving enemies stay. An all-fallen party remains in the
 	// run, where only Escape is left (legacy never ends a quest because allies fell).
 	// After a mutual knockout no enemy survives, so no encounter is kept.
-	pending := pendingEncounter(exp, monster, enemy, eventType, newX, newY, battleRes, field)
-	if pending.Enemies[0].HP <= 0 {
-		pending = nil
-	}
+	pending := pendingEncounter(exp, monsters, enemies, eventType, newX, newY, battleRes, field)
 	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
@@ -256,7 +261,7 @@ func (s *Service) resolveMonsterCombat(
 		EventType:     eventType,
 		BattleResult:  &battleRes,
 		MemberDamages: memberDamages,
-		Monster:       &monster,
+		Monsters:      monsters,
 		CombatOutcome: battleRes.Outcome,
 	}, nil
 }

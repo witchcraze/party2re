@@ -46,7 +46,7 @@ var (
 			Temporary:   corebattle.TemporaryNullAttack,
 		}),
 	}
-	nm6Chests = strongest([]DungeonMonster{
+	nm6Chests = []DungeonMonster{
 		{ID: "nm6-man-eater", Name: "人食い箱", HP: 500, Attack: 250, Defense: 35, Agility: 400, ExpReward: 50, GoldReward: 100,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant: corebattle.Participant{MP: 42},
@@ -68,8 +68,8 @@ var (
 				Temporary:   corebattle.TemporaryDouble,
 			}),
 		},
-	})
-	nm6Hounds = strongest([]DungeonMonster{
+	}
+	nm6Hounds = []DungeonMonster{
 		{ID: "nm6-pup-a", Name: "チビベロスA", HP: 160, Attack: 160, Defense: 90, Agility: 260, ExpReward: 32, GoldReward: 15,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Jobs: corebattle.BattleJobs{OldSP: 20},
@@ -86,8 +86,8 @@ var (
 				Jobs: corebattle.BattleJobs{OldSP: 20},
 			}),
 		},
-	})
-	nm6Panthers = strongest([]DungeonMonster{
+	}
+	nm6Panthers = []DungeonMonster{
 		{ID: "nm6-cub-a", Name: "ベビーレオA", HP: 150, Attack: 180, Defense: 50, Agility: 300, ExpReward: 30, GoldReward: 18,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Jobs: corebattle.BattleJobs{OldSP: 20},
@@ -104,9 +104,9 @@ var (
 				Jobs: corebattle.BattleJobs{OldSP: 20},
 			}),
 		},
-	})
+	}
 	// _data.cgi redefines every variant's event_X after it is compiled.
-	nm6Sages = strongest([]DungeonMonster{
+	nm6Sages = []DungeonMonster{
 		{ID: "nm6-sage-1", Name: "一賢者", HP: 2000, Attack: 200, Defense: 60, Agility: 200, ExpReward: 600, GoldReward: 200,
 			combat: enemyCombat(corebattle.LifetimeActor{
 				Participant:   corebattle.Participant{MP: 999},
@@ -131,12 +131,12 @@ var (
 				Temporary:     corebattle.TemporaryReflectMagic,
 			}),
 		},
-	})
+	}
 )
 
-func fixedMonster(m DungeonMonster) monsterOutcome { return monsterOutcome{monster: &m} }
+func fixedMonster(monsters ...DungeonMonster) monsterOutcome { return monsterOutcome{monsters} }
 
-func fixedBoss(m DungeonMonster) bossOutcome { return bossOutcome{monster: &m} }
+func fixedBoss(roster ...DungeonMonster) bossOutcome { return bossOutcome{roster} }
 
 var (
 	stageBoss    = bossOutcome{}
@@ -168,23 +168,23 @@ var nativeMap6Choices = [5]map[byte]mapEvent{
 		'F': pair("EF", 3, rock, nil),
 	},
 	{
-		'A': pair("AB", 5, treasure, fixedBoss(nm6Chests)),
+		'A': pair("AB", 5, treasure, fixedBoss(nm6Chests...)),
 		'B': pair("AB", 3, stageBoss, stageMonster),
 		'C': pair("CD", 0, stageBoss, nil),
 		'D': pair("CD", 3, stageMonster, rock),
-		'E': pair("EF", 0, fixedBoss(nm6Hounds), nil),
-		'F': pair("EF", 0, fixedBoss(nm6Panthers), nil),
+		'E': pair("EF", 0, fixedBoss(nm6Hounds...), nil),
+		'F': pair("EF", 0, fixedBoss(nm6Panthers...), nil),
 	},
 	{
 		'A': pair("AB", 0, stageBoss, nil),
-		'B': pair("AB", 6, treasure, fixedBoss(nm6Chests)),
+		'B': pair("AB", 6, treasure, fixedBoss(nm6Chests...)),
 		'D': pair("CD", 0, nil, nil),
 		'E': pair("EF", 2, stageBoss, stageMonster),
 		'F': pair("EF", 2, rock, nil),
 	},
 	{
 		'A': pair("AB", 0, stageBoss, nil),
-		'B': pair("AB", 6, treasure, fixedBoss(nm6Chests)),
+		'B': pair("AB", 6, treasure, fixedBoss(nm6Chests...)),
 		'C': pair("CD", 0, nil, nil),
 		'E': pair("EF", 2, stageBoss, stageMonster),
 		'F': pair("EF", 2, rock, nil),
@@ -194,7 +194,7 @@ var nativeMap6Choices = [5]map[byte]mapEvent{
 		'B': pair("AB", 7, fixedMonster(nm6SilverKing), fixedMonster(nm6KingSlime)),
 		'C': pair("CD", 3, heal100, rock),
 		'D': pair("CD", 3, trap200, heal100),
-		'E': pair("EF", 5, treasure, fixedBoss(nm6Chests)),
+		'E': pair("EF", 5, treasure, fixedBoss(nm6Chests...)),
 		'F': pair("EF", 3, goldGain, goldLoss),
 	},
 }
@@ -223,7 +223,7 @@ func nativeMap6() Dungeon {
 		case 3:
 			marks['C'] = "■"
 		}
-		variants[i] = gridFloor(Floor{Pools: pools, Marks: marks, Bosses: map[byte]DungeonMonster{'X': nm6Sages}, events: events}, rows)
+		variants[i] = gridFloor(Floor{Pools: pools, Marks: marks, Bosses: map[byte][]DungeonMonster{'X': nm6Sages}, events: events}, rows)
 	}
 	return Dungeon{
 		ID:             nativeMap6ID,

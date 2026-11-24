@@ -64,7 +64,7 @@ func (nm17Spawn) apply(n *nativeStep) error {
 	if slices.Contains(n.exp.ConsumedEvents, "b") {
 		pool = nm17Inner
 	}
-	n.fight(pool.monster(n.rng), EventBattle, "", "")
+	n.fightGroup(pool, "", "")
 	return nil
 }
 
@@ -94,7 +94,7 @@ func (ev nm17Raisable) wallShown(exp *ActiveExpedition) (bool, error) { return e
 
 // nm17Gate is B: its boss once, then after b a wall that puts the party one
 // row north (--$py) with the round spent (1.cgi:117–131).
-type nm17Gate struct{ boss DungeonMonster }
+type nm17Gate struct{ roster []DungeonMonster }
 
 func (ev nm17Gate) apply(n *nativeStep) error {
 	if slices.Contains(n.exp.ConsumedEvents, "b") {
@@ -104,7 +104,7 @@ func (ev nm17Gate) apply(n *nativeStep) error {
 	if n.consumed {
 		return nil
 	}
-	return fixedBoss(ev.boss).apply(n)
+	return fixedBoss(ev.roster...).apply(n)
 }
 
 func (nm17Gate) wallShown(exp *ActiveExpedition) (bool, error) {
@@ -216,7 +216,7 @@ func (ev nm17Ambush) apply(n *nativeStep) error {
 	if ev.odds*n.rng.Float64() < 1 {
 		partyTrap(&n.step, n.exp, n.leader.ID, 100, n.rng)
 	}
-	n.fight(ev.boss, EventBoss, "", "")
+	n.fightRoster([]DungeonMonster{ev.boss}, "", "")
 	return nil
 }
 
@@ -268,7 +268,7 @@ func (nm17Ascent) apply(n *nativeStep) error {
 	}
 	n.step.MapVariant = 5
 	n.step.RoundLimit = n.dungeon.limitOf(n.dungeon.Variants[4])
-	n.fight(nm17Necro, EventBoss, "", "")
+	n.fightRoster([]DungeonMonster{nm17Necro}, "", "")
 	return nil
 }
 
@@ -315,12 +315,12 @@ func nativeMap17() Dungeon {
 		Marks: map[byte]string{'6': "◇", '7': "◇", '8': "◇", 'B': "◎", 'U': "凹", 'z': "扉", '2': "■", 'Z': "◎", 'w': "凸"},
 		events: map[byte]mapEvent{
 			'0': {action: nm17Spawn{}}, '9': {action: nm17Raisable{}},
-			'B': {action: nm17Gate{boss: nm17Guardians}, perSymbol: true}, 'b': {action: nm17Seal{}, perSymbol: true},
+			'B': {action: nm17Gate{roster: nm17Guardians}, perSymbol: true}, 'b': {action: nm17Seal{}, perSymbol: true},
 			'U': {action: nm17Stairs{}}, 'z': {action: doorEvent{key: 'Y'}, perSymbol: true},
 			'6': {action: nm17Switch{x: 6, y: 3}, perSymbol: true},
 			'7': {action: nm17Switch{x: 4, y: 10}, perSymbol: true},
 			'8': {action: nm17Switch{x: 8, y: 16}, perSymbol: true},
-			'Z': {action: onceEvent{fixedBoss(nm17Pharaohs)}, perSymbol: true}, 'w': {action: nm17Ascent{}},
+			'Z': {action: onceEvent{fixedBoss(nm17Pharaohs...)}, perSymbol: true}, 'w': {action: nm17Ascent{}},
 		},
 	}
 	// The three underground floors share their events, and their passages

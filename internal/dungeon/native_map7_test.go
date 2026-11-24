@@ -215,7 +215,7 @@ func TestNativeMap7_ParalysisPrecedesEncounter(t *testing.T) {
 	f := newNativeFixture(t, map7Hero("gas", "job-01", 1_000_000, 1))
 	f.placeNative(t, dungeon.NativeMap7ID, "gas", 1, 1, 1, 1) // east of T at (0,1)
 	res, err := f.svc.Move(ctx, "gas", dungeon.DirectionWest)
-	if err != nil || res.EventType != dungeon.EventBattle || res.Monster == nil {
+	if err != nil || res.EventType != dungeon.EventBattle || len(res.Monsters) == 0 {
 		t.Fatalf("gas %+v err=%v", res, err)
 	}
 	exp := f.reload(t, "gas")
@@ -259,8 +259,8 @@ func TestNativeMap7_BossDrawsTheFixedGroupOneInThree(t *testing.T) {
 			f.placeNative(t, dungeon.NativeMap7ID, "boss", 1, 4, 2, 1) // south of A at (4,1)
 			f.rng.ints = []int{tc.pool}
 			res, err := f.svc.Move(ctx, "boss", dungeon.DirectionNorth)
-			if err != nil || res.EventType != dungeon.EventBoss || res.Monster == nil || (res.Monster.ID == "nm7-ifrit") != tc.fixed {
-				t.Fatalf("boss %+v err=%v", res.Monster, err)
+			if err != nil || res.EventType != dungeon.EventBoss || len(res.Monsters) == 0 || slices.Contains(monsterIDs(res.Monsters), "nm7-ifrit") != tc.fixed {
+				t.Fatalf("boss %+v err=%v", res.Monsters, err)
 			}
 		})
 	}
@@ -294,7 +294,7 @@ func TestNativeMap7_BossesAndTreasureFireOnce(t *testing.T) {
 			if err := f.store.SaveActiveExpedition(ctx, exp); err != nil {
 				t.Fatal(err)
 			}
-			if res, err := f.svc.Move(ctx, "once", tc.dir); err != nil || res.EventType != dungeon.EventMove || res.Monster != nil {
+			if res, err := f.svc.Move(ctx, "once", tc.dir); err != nil || res.EventType != dungeon.EventMove || len(res.Monsters) != 0 {
 				t.Fatalf("repeat %+v err=%v", res, err)
 			}
 		})

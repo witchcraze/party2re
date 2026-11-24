@@ -847,7 +847,7 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S00"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "monster-v1",
 						Name:       "Wolf",
@@ -868,7 +868,7 @@ func TestDungeonCombat_ValkeyStore_ConsecutiveCombatsPreserveLeaderAndMemberHP(t
 						ExpReward:  20,
 						GoldReward: 20,
 					},
-				},
+				}}},
 			},
 		},
 	}

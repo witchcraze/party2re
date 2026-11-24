@@ -9777,7 +9777,7 @@
         "type": "object"
       },
       "DungeonActiveEncounter": {
-        "description": "Pending enemy state and destination, retained across unresolved battles. Each hostile encounter currently has one enemy. A treasure encounter has null enemies and one chest per generated chest; it blocks movement until every chest is opened.",
+        "description": "Pending enemy group and destination, retained across unresolved battles. monsters[i] is the rolled source of enemies[i]; defeated members stay until victory, and the encounter blocks movement while any enemy lives. A treasure encounter has null monsters and enemies and one chest per generated chest; it blocks movement until every chest is opened.",
         "properties": {
           "chests": {
             "description": "Native pending treasure chests; contents and inspection are not modeled yet.",
@@ -9830,7 +9830,7 @@
               ],
               "type": "object"
             },
-            "maxItems": 1,
+            "maxItems": 8,
             "minItems": 1,
             "type": [
               "array",
@@ -9860,10 +9860,16 @@
             },
             "type": "object"
           },
-          "monster": {
-            "additionalProperties": true,
-            "description": "Dungeon monster definition including encounter rewards.",
-            "type": "object"
+          "monsters": {
+            "items": {
+              "$ref": "#/components/schemas/DungeonMonster"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "statuses": {
             "additionalProperties": {
@@ -10231,8 +10237,12 @@
           "message": {
             "type": "string"
           },
-          "monster": {
-            "$ref": "#/components/schemas/DungeonMonster"
+          "monsters": {
+            "description": "Spawned group sources in spawn order; ordinary members carry their A..H name suffix.",
+            "items": {
+              "$ref": "#/components/schemas/DungeonMonster"
+            },
+            "type": "array"
           }
         },
         "required": [

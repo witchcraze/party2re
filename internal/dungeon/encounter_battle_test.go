@@ -16,12 +16,12 @@ func TestActiveEncounterSharedResolver(t *testing.T) {
 	ctx := context.Background()
 	char := createTestChar("hero", 10, 5000, 10, 0)
 	monster := dungeon.DungeonMonster{ID: "enemy", HP: 750, Attack: 0, ExpReward: 17, GoldReward: 23}
-	catalog := []dungeon.Dungeon{{ID: "real", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
-	expectedEnemyHP := 750
+	catalog := []dungeon.Dungeon{{ID: "real", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{monster}}}}}}}
+	expectedEnemyHP := -1 // the spawn roll sets the first value
 	calls := 0
 	engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 		calls++
-		if req.Enemies[0].HP != expectedEnemyHP {
+		if len(req.Enemies) != 1 || expectedEnemyHP >= 0 && req.Enemies[0].HP != expectedEnemyHP {
 			t.Fatalf("enemy restored: got %d want %d", req.Enemies[0].HP, expectedEnemyHP)
 		}
 		res, err := (corebattle.Engine{}).ResolvePartyBattle(req)
@@ -29,13 +29,13 @@ func TestActiveEncounterSharedResolver(t *testing.T) {
 			return res, err
 		}
 		hp := res.RemainingHP["enemy"]
-		if hp >= expectedEnemyHP {
+		if hp >= req.Enemies[0].HP {
 			t.Fatal("real engine made no combat progress")
 		}
 		expectedEnemyHP = hp
 		return res, nil
 	}}
-	svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine, dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(random.NewDeterministic(1711)), dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()))
+	svc, err := dungeon.NewService(newMockDungeonRepo(), &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine, dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(&spawnNext{RandomSource: random.NewDeterministic(1711), next: true}), dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestActiveEncounterSharedResolver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.CombatOutcome != corebattle.OutcomeDraw || res.Monster == nil {
+	if res.CombatOutcome != corebattle.OutcomeDraw || len(res.Monsters) == 0 {
 		t.Fatalf("missing continuing encounter facts: %+v", res)
 	}
 
@@ -78,7 +78,7 @@ func TestActiveEncounterPartyLeaderFallen(t *testing.T) {
 			repo := newMockDungeonRepo()
 			chars := &mockCharRepo{chars: map[string]corecharacter.Character{leader.ID: leader, ally.ID: ally}}
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23}
-			catalog := []dungeon.Dungeon{{ID: "party", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
+			catalog := []dungeon.Dungeon{{ID: "party", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{monster}}}}}}}
 			calls := 0
 			engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 				calls++
@@ -93,7 +93,7 @@ func TestActiveEncounterPartyLeaderFallen(t *testing.T) {
 				}
 				return corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, WinnerSide: "allies", RemainingHP: map[string]int{ally.ID: 50, "enemy": 0}, RemainingMP: map[string]int{ally.ID: 2}}, nil
 			}}
-			svc, err := dungeon.NewService(repo, chars, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithAdmission(approvedRoster{}), dungeon.WithRNG(&minimalRandomSource{}))
+			svc, err := dungeon.NewService(repo, chars, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithAdmission(approvedRoster{}), dungeon.WithRNG(zeroRNG{}))
 			if err != nil {
 				t.Fatal(err)
 			}

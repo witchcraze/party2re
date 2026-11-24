@@ -127,7 +127,7 @@ func TestNativeMap17_EncounterRate(t *testing.T) {
 				}
 				return
 			}
-			if enc == nil || enc.Monster.ID != tc.monster {
+			if enc == nil || !slices.Contains(monsterIDs(enc.Monsters), tc.monster) {
 				t.Fatalf("encounter %+v, want %s", enc, tc.monster)
 			}
 		})
@@ -154,7 +154,7 @@ func sealingGate(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 		t.Fatalf("B: event %s err=%v", res.EventType, err)
 	}
 	boss := f.reload(t, id)
-	if boss.Encounter == nil || boss.Encounter.Monster.ID != "nm17-sphinx-guard-a" || !slices.Contains(boss.ConsumedEvents, "B") {
+	if boss.Encounter == nil || !slices.Equal(monsterIDs(boss.Encounter.Monsters), []string{"nm17-golem-a", "nm17-sphinx-guard-a", "nm17-sphinx-guard-b", "nm17-golem-b"}) || !slices.Contains(boss.ConsumedEvents, "B") {
 		t.Fatalf("B encounter %+v consumed %v", boss.Encounter, boss.ConsumedEvents)
 	}
 	f.consume(t, id)
@@ -378,7 +378,7 @@ func treasurePairs(t *testing.T, store dungeon.ActiveExpeditionStore, id string)
 			t.Fatalf("j at r=%v: event %s err=%v", tc.r, res.EventType, err)
 		}
 		after := f.reload(t, id)
-		if !slices.Contains(after.ConsumedEvents, "j") || tc.want == dungeon.EventBoss && after.Encounter.Monster.ID != "nm17-calamity-box" {
+		if !slices.Contains(after.ConsumedEvents, "j") || tc.want == dungeon.EventBoss && !slices.Contains(monsterIDs(after.Encounter.Monsters), "nm17-calamity-box") {
 			t.Fatalf("j: consumed %v encounter %+v", after.ConsumedEvents, after.Encounter)
 		}
 		f.rejectStaleMap14Step(t, id, before, after)
@@ -402,7 +402,7 @@ func TestNativeMap17_RobberAmbushOnce(t *testing.T) {
 	if res, err := f.svc.Move(ctx, "rob", dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventBattle {
 		t.Fatalf("J: event %s err=%v", res.EventType, err)
 	}
-	if exp := f.reload(t, "rob"); exp.Encounter == nil || exp.Encounter.Monster.ID != "nm17-robber-chief" || !slices.Contains(exp.ConsumedEvents, "J") {
+	if exp := f.reload(t, "rob"); exp.Encounter == nil || !slices.Contains(monsterIDs(exp.Encounter.Monsters), "nm17-robber-chief") || !slices.Contains(exp.ConsumedEvents, "J") {
 		t.Fatalf("J encounter %+v consumed %v", exp.Encounter, exp.ConsumedEvents)
 	}
 	f.consume(t, "rob")
@@ -441,7 +441,7 @@ func TestNativeMap17_CorridorAmbush(t *testing.T) {
 			t.Fatalf("v skipped trap damages=%v, want empty", res.MemberDamages)
 		}
 		after := f.reload(t, "lead")
-		if after.Encounter == nil || after.Encounter.Monster.ID != "nm17-mask" || slices.Contains(after.ConsumedEvents, "v") {
+		if after.Encounter == nil || !slices.Contains(monsterIDs(after.Encounter.Monsters), "nm17-mask") || slices.Contains(after.ConsumedEvents, "v") {
 			t.Fatalf("v encounter %+v consumed %v", after.Encounter, after.ConsumedEvents)
 		}
 		losses[i] = before - memberOf(t, after, "lead").CurrentHP
@@ -495,7 +495,7 @@ func TestNativeMap17_KeyArmsCentre(t *testing.T) {
 			t.Fatalf("x skipped trap damages=%v, want empty", res.MemberDamages)
 		}
 		after := f.reload(t, "x")
-		if after.Encounter == nil || after.Encounter.Monster.ID != "nm17-great-mask" {
+		if after.Encounter == nil || !slices.Contains(monsterIDs(after.Encounter.Monsters), "nm17-great-mask") {
 			t.Fatalf("x encounter %+v", after.Encounter)
 		}
 		losses[i] = before - after.CurrentHP
@@ -545,7 +545,7 @@ func TestNativeMap17_AllFallenTrapPersistsAmbush(t *testing.T) {
 	}
 	partyAfter := party.reload(t, "lead")
 	if partyAfter.Status != dungeon.StatusExploring || partyAfter.CurrentHP != 0 ||
-		partyAfter.Encounter == nil || partyAfter.Encounter.Monster.ID != "nm17-mask" || partyAfter.Encounter.Enemies[0].HP != 800 {
+		partyAfter.Encounter == nil || !slices.Equal(monsterIDs(partyAfter.Encounter.Monsters), []string{"nm17-mask"}) || partyAfter.Encounter.Enemies[0].HP != partyAfter.Encounter.Enemies[0].MaxHP {
 		t.Fatalf("party v after: %+v", partyAfter)
 	}
 	if _, err := party.svc.Escape(ctx, "lead"); err != nil {
@@ -581,8 +581,8 @@ func allFallenTrapPersistsAmbush(t *testing.T, store dungeon.ActiveExpeditionSto
 		after.AccumulatedExp != 7 || after.AccumulatedGold != 9 || len(memberOf(t, after, id).ConsumedItems) != 0 {
 		t.Fatalf("after lethal ambush: %+v", after)
 	}
-	if after.Encounter == nil || after.Encounter.Monster.ID != "nm17-great-mask" ||
-		len(after.Encounter.Enemies) != 1 || after.Encounter.Enemies[0].HP != 1300 || after.Encounter.Enemies[0].MaxHP != 1300 {
+	if after.Encounter == nil || !slices.Contains(monsterIDs(after.Encounter.Monsters), "nm17-great-mask") ||
+		len(after.Encounter.Enemies) != 1 || after.Encounter.Enemies[0].HP != after.Encounter.Enemies[0].MaxHP {
 		t.Fatalf("after encounter: %+v", after.Encounter)
 	}
 	f.rejectStaleMap14Step(t, id, before, after)
@@ -733,7 +733,7 @@ func ascent(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	if res, err := f.svc.Move(ctx, id, dungeon.DirectionNorth); err != nil || res.EventType != dungeon.EventBoss {
 		t.Fatalf("Z: event %s err=%v", res.EventType, err)
 	}
-	if exp := f.reload(t, id); exp.Encounter.Monster.ID != "nm17-pharaoh" || !slices.Contains(exp.ConsumedEvents, "Z") {
+	if exp := f.reload(t, id); !slices.Equal(monsterIDs(exp.Encounter.Monsters), []string{"nm17-cobra-a", "nm17-pharaoh", "nm17-cobra-b"}) || !slices.Contains(exp.ConsumedEvents, "Z") {
 		t.Fatalf("Z encounter %+v consumed %v", exp.Encounter, exp.ConsumedEvents)
 	}
 	f.consume(t, id)
@@ -747,8 +747,8 @@ func ascent(t *testing.T, store dungeon.ActiveExpeditionStore, id string) {
 	}
 	after := f.reload(t, id)
 	enc := after.Encounter
-	if after.MapVariant != 5 || after.PosX != 9 || after.PosY != 9 || after.RoundLimit != 200 || enc == nil || enc.Monster.ID != "nm17-necro-pharaoh" ||
-		enc.Enemies[0].MaxHP != 12000 || enc.Enemies[0].HP > 6000 {
+	if after.MapVariant != 5 || after.PosX != 9 || after.PosY != 9 || after.RoundLimit != 200 || enc == nil || !slices.Contains(monsterIDs(enc.Monsters), "nm17-necro-pharaoh") ||
+		len(enc.Enemies) != 1 || enc.Enemies[0].MaxHP != 12000 || enc.Enemies[0].HP != 6582 { // 6000 × (0.9 + 0.3 × 0.99 − 0.1), solo
 		t.Fatalf("w: variant %d at (%d,%d) encounter %+v", after.MapVariant, after.PosX, after.PosY, enc)
 	}
 	f.rejectStaleMap14Step(t, id, before, after)

@@ -41,7 +41,7 @@ func TestPartyCombat_MultiMemberBattleAndVitalityTracking(t *testing.T) {
 					"000",
 					"00D",
 				},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "goblin-1",
 						Name:       "Goblin",
@@ -52,7 +52,7 @@ func TestPartyCombat_MultiMemberBattleAndVitalityTracking(t *testing.T) {
 						ExpReward:  50,
 						GoldReward: 30,
 					},
-				},
+				}}},
 			},
 		},
 	}
@@ -162,7 +162,7 @@ func TestPartyCombat_LeaderKilledAllySurvivesAndWins_ExplorationContinues(t *tes
 					"000",
 					"00D",
 				},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "brute",
 						Name:       "Brute",
@@ -173,7 +173,7 @@ func TestPartyCombat_LeaderKilledAllySurvivesAndWins_ExplorationContinues(t *tes
 						ExpReward:  50,
 						GoldReward: 30,
 					},
-				},
+				}}},
 			},
 		},
 	}
@@ -277,7 +277,7 @@ func TestPartyCombat_AllMembersKilled_WipesOut(t *testing.T) {
 					"000",
 					"00D",
 				},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "grim-reaper",
 						Name:       "Grim Reaper",
@@ -288,7 +288,7 @@ func TestPartyCombat_AllMembersKilled_WipesOut(t *testing.T) {
 						ExpReward:  10,
 						GoldReward: 10,
 					},
-				},
+				}}},
 			},
 		},
 	}

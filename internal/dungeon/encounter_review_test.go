@@ -49,7 +49,7 @@ func TestEncounterFightEscapeStaleSettlement(t *testing.T) {
 				repo := &errorInjectingDungeonRepo{mockDungeonRepo: newMockDungeonRepo()}
 				monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10, ExpReward: 17, GoldReward: 23, DropItemID: "potion"}
 				exp := sampleExpedition(id.New(), char.ID, "review")
-				exp.Encounter = &dungeon.ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: dungeon.EventBattle, X: 1}
+				exp.Encounter = &dungeon.ActiveEncounter{Monsters: []dungeon.DungeonMonster{monster}, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 30, 10, 0)}, EventType: dungeon.EventBattle, X: 1}
 				if err := underlying.SaveActiveExpedition(ctx, exp); err != nil {
 					t.Fatal(err)
 				}
@@ -108,7 +108,7 @@ func TestEncounterAlliedStatusAcrossDraws(t *testing.T) {
 			char := createTestChar(id.New(), 10, 100, 30, 20)
 			chars := &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 100, Attack: 10}
-			catalog := []dungeon.Dungeon{{ID: "status", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Monsters: []dungeon.DungeonMonster{monster}}}}}
+			catalog := []dungeon.Dungeon{{ID: "status", RoundLimit: 21, Variants: []dungeon.Floor{{Width: 2, Height: 1, Grid: []string{"S0"}, Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{monster}}}}}}}
 			calls := 0
 			engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 				calls++
@@ -199,7 +199,7 @@ func TestEncounterRestoredParalysisUsesSharedResolver(t *testing.T) {
 			exp := sampleExpedition(id.New(), char.ID, dungeon.NativeMap0ID)
 			exp.CurrentHP = 1000
 			monster := dungeon.DungeonMonster{ID: "enemy", HP: 1000, Attack: 0}
-			exp.Encounter = &dungeon.ActiveEncounter{Monster: monster, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 1000, 0, 0)}, Statuses: map[string]string{char.ID: corebattle.StatusParalyze}, EventType: dungeon.EventBattle, X: 1}
+			exp.Encounter = &dungeon.ActiveEncounter{Monsters: []dungeon.DungeonMonster{monster}, Enemies: []corebattle.Participant{corebattle.MustNewParticipant("enemy", 1000, 0, 0)}, Statuses: map[string]string{char.ID: corebattle.StatusParalyze}, EventType: dungeon.EventBattle, X: 1}
 			if err := store.SaveActiveExpedition(ctx, exp); err != nil {
 				t.Fatal(err)
 			}

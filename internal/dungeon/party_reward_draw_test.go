@@ -48,7 +48,7 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S000"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "mon-1",
 						Name:       "Monster 1",
@@ -65,7 +65,7 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 						ExpReward:  100,
 						GoldReward: 60,
 					},
-				},
+				}}},
 			},
 		},
 	}
@@ -131,7 +131,7 @@ func TestPartyCombat_FallenMemberDoesNotReceiveSubsequentDefeatRewards(t *testin
 		engine,
 		dungeon.WithCustomDungeons([]dungeon.Dungeon{customDungeon}),
 		dungeon.WithAdmission(approvedRoster{}),
-		dungeon.WithRNG(&minimalRandomSource{}), // passage spawn
+		dungeon.WithRNG(zeroRNG{}), // passage spawn of one enemy
 		dungeon.WithParticipantBuilder(builder),
 		dungeon.WithActiveExpeditionStore(dungeon.NewMemoryExpeditionRepository()),
 	)
@@ -241,7 +241,7 @@ func TestPartyCombat_OutcomeDraw_DoesNotWipeOut_PreventsMovement(t *testing.T) {
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S00"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:         "golem",
 						Name:       "Iron Golem",
@@ -250,7 +250,7 @@ func TestPartyCombat_OutcomeDraw_DoesNotWipeOut_PreventsMovement(t *testing.T) {
 						ExpReward:  100,
 						GoldReward: 50,
 					},
-				},
+				}}},
 			},
 		},
 	}
@@ -371,14 +371,14 @@ func TestPartyCombat_OutcomeDraw_MutualWipeout_WipesOut(t *testing.T) {
 				StartX: 0,
 				StartY: 0,
 				Grid:   []string{"S00"},
-				Monsters: []dungeon.DungeonMonster{
+				Pools: []dungeon.EncounterPool{{Monsters: []dungeon.DungeonMonster{
 					{
 						ID:     "bomb",
 						Name:   "Self-Destruct Bomb",
 						HP:     50,
 						Attack: 100,
 					},
-				},
+				}}},
 			},
 		},
 	}
