@@ -102,16 +102,23 @@ func (stageRoom) Record(context.Context, *Run, string, string) error { return ni
 
 func (stageRoom) Conditional(*Run) bool { return false }
 
-// Choices are add_battle_action's すすむ once no enemy remains
-// (vs_challenge.cgi:28–30); しらべる waits for treasure waves.
+// Choices are add_battle_action's しらべる while a box remains and すすむ once
+// no enemy or box remains (vs_challenge.cgi:21–30).
 func (stageRoom) Choices(r *Run, _ string) []runhost.Choice {
-	if r.LivingEnemies() {
-		return nil
+	var choices []runhost.Choice
+	if hasBoxes(r) {
+		choices = append(choices, runhost.Choice{Action: "chest", Source: "しらべる"})
 	}
-	return []runhost.Choice{{Action: "advance", Source: "すすむ"}}
+	if !r.LivingEnemies() {
+		choices = append(choices, runhost.Choice{Action: "advance", Source: "すすむ"})
+	}
+	return choices
 }
 
-func (stageRoom) Responds(*Run) bool { return true }
+// Responds is false while a box leads the enemies (vs_challenge.cgi:22–23).
+func (stageRoom) Responds(r *Run) bool { return !hasBoxes(r) }
+
+func hasBoxes(r *Run) bool { return slices.ContainsFunc(r.Boxes, runhost.TreasureBox.IsUnopened) }
 
 // Combat keeps the host's non-vs_monster branches; $win is the stage record.
 func (stageRoom) Combat(_ context.Context, r *Run, _ string, _ *corebattle.EquipmentResetContext, _ bool) (runhost.RoomCombat, error) {

@@ -134,7 +134,7 @@ func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, ac
 // createTreasureEncounter is shared by advance and job-driven room recreation.
 func (s *NormalRunService) createTreasureEncounter(r *NormalRun, actorID, blessing string) error {
 	count, _ := r.treasureCount(actorID, blessing, s.cfg.RNG.Intn)
-	r.Boxes = GenerateTreasureBoxesWithPools(count, StageTreasurePools{Weapons: r.Stage.TreasureWeapons, Armors: r.Stage.TreasureArmors, Items: r.Stage.TreasureItems}, s.cfg.Clock.Now(), s.cfg.RNG.Intn)
+	r.Boxes = runhost.GenerateTreasureBoxes(count, runhost.TreasurePools{Weapons: r.Stage.TreasureWeapons, Armors: r.Stage.TreasureArmors, Items: r.Stage.TreasureItems}, s.cfg.Clock.Now(), s.cfg.RNG.Intn)
 	if r.Mode == CrawlModeTry {
 		for _, id := range r.Roster {
 			p := r.Recipients[id]

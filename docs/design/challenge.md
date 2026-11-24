@@ -8,13 +8,12 @@ Endurance challenges (`vs_challenge.cgi`, `challenge.cgi`, stages 0–8) are con
 
 ## Rules
 
-- **Treasure:** at most once per actor's taken-treasure flag, at or after the stage's threshold round, a 10% roll replaces the monster spawn with treasure boxes that members open with `しらべる` (`vs_challenge.cgi:20–25,64–69`; `_npc_action.cgi:6–60,498`). The threshold is redrawn whenever the stage file loads.
+- **The treasure threshold is redrawn every wave, and only the advancing member's flag counts.** `$tresure_round` is drawn when the stage file loads, which `set_monster` does on each `すすむ`, so its range is not a fixed floor per run; the roll then reads only the advancing member's taken-treasure flag, so a member without it can still find boxes after another has opened one (`challenge/0.cgi:8`; `vs_challenge.cgi:60–64`).
 - **`$win` is the stage's world record.** Shared routines read `$win` as the arena's match count, but Challenge stores the record there at creation and raises it in `update_record` (`quest.cgi:732–740`; `vs_challenge.cgi:47,86`). So once a stage has any record, a strong kill counts as a PvP win, nothing is captured (`_battle.cgi:232–241`) and enemy summons do nothing (`_skill.cgi:9835`).
 - **Stage 5's `$stage > 20` branch is unreachable.** `$stage` is the Challenge number, so the `じばく` table never loads (`challenge/5.cgi:24–65`).
 
 ### Known gaps
 
-- Waves never spawn treasure, and Go awards one treasure item to the original leader instead of per-member box inspection ([#2651](https://github.com/witchcraze/party2re/issues/2651)).
 - While a stage has no record, an enemy summon loads the Adventure stage file with the same number (`_skill.cgi:9861`); the run host rejects that summon instead ([#2724](https://github.com/witchcraze/party2re/issues/2724)).
 
 ## Individual Exit

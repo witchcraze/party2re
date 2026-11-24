@@ -105,7 +105,7 @@ func (r *NormalRun) treasureCount(actorID, blessing string, rng func(int) int) (
 			real++
 		}
 	}
-	return CalculateTreasureCount(TreasureCalculationInput{TripleTreasure: r.Stage.TripleTreasure, AliveMembers: alive, DeadMembers: total - alive, TotalMembers: total, HasMerchant: a.Jobs.JobID == merchantJob, HasGambler: a.Jobs.JobID == gamblerJob, HasTreasureHunter: a.Jobs.JobID == treasureHunterJob, HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: IsTreasureBlessing(blessing), Rng: rng}), real
+	return CalculateTreasureCount(TreasureCalculationInput{TripleTreasure: r.Stage.TripleTreasure, AliveMembers: alive, DeadMembers: total - alive, TotalMembers: total, HasMerchant: a.Jobs.JobID == merchantJob, HasGambler: a.Jobs.JobID == gamblerJob, HasTreasureHunter: a.Jobs.JobID == treasureHunterJob, HasLuckyPendant: ParticipantHasLuckyPendant(a.Participant), HasTreasureBlessing: runhost.IsTreasureBlessing(blessing), Rng: rng}), real
 }
 
 var fixedBoxNames = []string{"煤けた宝箱", "金の宝箱"}
@@ -128,12 +128,12 @@ func (s *NormalRunService) createEXTreasure(r *NormalRun, actorID, blessing stri
 	}
 	r.Boxes = nil
 	for i := range count {
-		name := boxName(defaultBoxNames[s.cfg.RNG.Intn(len(defaultBoxNames))], i)
+		name := runhost.BoxName(runhost.OrdinaryBoxNames[s.cfg.RNG.Intn(len(runhost.OrdinaryBoxNames))], i)
 		r.Boxes = append(r.Boxes, runhost.TreasureBox{ID: fmt.Sprintf("box-%d", i+1), Name: name, ItemID: items[s.cfg.RNG.Intn(len(items))]})
 	}
 	if fixed := r.Stage.EX.FixedTreasure; fixed != "" {
 		for i := range real {
-			name := boxName(fixedBoxNames[s.cfg.RNG.Intn(len(fixedBoxNames))], i)
+			name := runhost.BoxName(fixedBoxNames[s.cfg.RNG.Intn(len(fixedBoxNames))], i)
 			r.Boxes = append(r.Boxes, runhost.TreasureBox{ID: fmt.Sprintf("box-%d", len(r.Boxes)+1), Name: name, ItemID: fixed, Fixed: true})
 		}
 	}

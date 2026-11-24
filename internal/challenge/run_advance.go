@@ -48,7 +48,7 @@ func (s *RunService) advance(ctx context.Context, r *Run, actorID string) (runho
 	r.Battle.Fields.ResetFloor()
 	r.DiscardEncounter()
 	r.Round++
-	return effects, s.spawn(r, a.TeamID)
+	return effects, s.spawn(ctx, r, actorID, a.TeamID)
 }
 
 // recordEntry is update_record's line for the advancing actor's party
@@ -71,24 +71,42 @@ func (s *RunService) recordEntry(r *Run, team string, requester corecharacter.Ch
 // fallenIcon is the record icon of a fallen member.
 const fallenIcon = "chr/099.gif"
 
-// spawn is set_monster's add_monster(0, 1 + 0.1 × round) (vs_challenge.cgi:57–70;
-// _npc_action.cgi:635–680). The treasure branch is not reachable yet.
-func (s *RunService) spawn(r *Run, team string) error {
+// spawn is set_monster (vs_challenge.cgi:57–70). Loading the stage file draws
+// the treasure threshold, then a random job once for the whole wave; the
+// treasure room needs the advancing actor's taken-treasure flag ($m{is_get})
+// unset, which a new run starts with (quest.cgi:1169).
+func (s *RunService) spawn(ctx context.Context, r *Run, actorID, team string) error {
 	tier := s.cfg.Tiers[r.Admission.StageID]
 	rng := s.cfg.RNG
-	party := 0
+	party, alive := 0, 0
 	for _, a := range r.Battle.Actors {
 		if a.TeamID == team && !a.Banished && !a.RosterDetached {
 			party++
+			if a.HP > 0 {
+				alive++
+			}
 		}
 	}
-	// Loading the stage file draws a random job once for the whole wave.
+	threshold := tier.TreasureRound + int(rng.Float64()*float64(max(tier.TreasureRoundMax-tier.TreasureRound+1, 1)))
 	jobs := make([]string, len(tier.Monsters))
 	for i, m := range tier.Monsters {
 		if m.RandomJob > 0 {
 			jobs[i] = legacyJobID(rng.Intn(m.RandomJob))
 		}
 	}
+	if r.Recipients[actorID].Inspected == 0 && r.Round >= threshold && rng.Float64()*10 < 1 {
+		blessing := ""
+		if s.cfg.Blessings != nil {
+			var err error
+			if blessing, err = s.cfg.Blessings.GetActiveBlessing(ctx, actorID); err != nil {
+				return fmt.Errorf("treasure blessing: %w", err)
+			}
+		}
+		count := runhost.TreasureCount(0, party, party-alive, runhost.IsTreasureBlessing(blessing), rng.Intn)
+		r.Boxes = runhost.GenerateTreasureBoxes(count, runhost.TreasurePools{Items: tier.TreasureItemPool}, s.cfg.Clock.Now(), rng.Intn)
+		return nil
+	}
+	// add_monster(0, 1 + 0.1 × round) (_npc_action.cgi:635–680).
 	strength := 1 + 0.1*float64(r.Round)
 	count := int(rng.Float64()*(2.5+float64(party)*0.6)) + 1
 	for i := range count {

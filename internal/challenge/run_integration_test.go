@@ -57,10 +57,10 @@ type runFixture struct {
 }
 
 // weakTier spawns one undodgeable, uncapturable HP-1 enemy per wave under the
-// zero RNG. A negative stage number passes the creator's job-change gate and
+// zero RNG and never reaches its treasure threshold. A negative stage number passes the creator's job-change gate and
 // keeps this test's record apart from the shared database's.
 func weakTier(tier string) map[string]challenge.ChallengeTier {
-	weak := challenge.ChallengeTier{ID: tier, MaxParticipants: 4, Monsters: []challenge.ChallengeMonster{{
+	weak := challenge.ChallengeTier{ID: tier, MaxParticipants: 4, TreasureRound: 1 << 20, Monsters: []challenge.ChallengeMonster{{
 		Name: "Test", HP: 2, ExperienceReward: 20, GoldReward: 5,
 		Combat: corebattle.LifetimeActor{Participant: corebattle.Participant{Status: corebattle.StatusKinju, Icon: "upload/test"}, Jobs: corebattle.BattleJobs{JobID: "starter", OldJobID: "starter"}},
 	}}}
