@@ -123,6 +123,24 @@ type Receipt struct {
 	Box          *TreasureBox               `json:"box,omitempty"`
 	Recipient    Recipient                  `json:"recipient"`
 	MonsterTames []battle.MonsterTameResult `json:"monster_tames,omitempty"`
+	Inspections  []Inspection               `json:"inspections,omitempty"`
+}
+
+// Inspection is one inspection body's facts in execution order: the
+// requester's operation, then a responding NPC's.
+type Inspection struct {
+	ActorID string                      `json:"actor_id"`
+	EntryID string                      `json:"entry_id"`
+	Facts   []corebattle.InspectionFact `json:"facts"`
+}
+
+func appendInspections(dst []Inspection, actor string, results []corebattle.OrdinaryToolResult) []Inspection {
+	for _, r := range results {
+		if len(r.Facts) > 0 {
+			dst = append(dst, Inspection{ActorID: actor, EntryID: r.ID, Facts: r.Facts})
+		}
+	}
+	return dst
 }
 
 type ActorRun struct {
@@ -248,6 +266,7 @@ type Effects struct {
 	ReleaseStock    bool
 	UnsealDemonKing bool
 	Defeats         []battle.ExplicitDefeat
+	Inspections     []Inspection
 	// Settled writes the room's own records after settlement (Rank 8).
 	Settled func(context.Context) error
 }

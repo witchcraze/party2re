@@ -204,6 +204,7 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 		return fx, ErrUnavailable
 	}
 	fx.Consumed = addConsumed(fx.Consumed, state, consumed)
+	fx.Inspections = appendInspections(nil, cmd.ActorID, contexts.Tools.Results)
 	if err := r.ReconcileCombat(state, result.Target); err != nil {
 		return fx, err
 	}
@@ -273,6 +274,7 @@ func (s *Service[R, P]) respond(run *R, npc, requesterID string, requester *core
 		// Encounter payloads store the NPC's hand as its accessory, including an empty slot.
 		actor.HeldToolID = new(actor.Gear.AccessoryID)
 	}
+	var tools *corebattle.OrdinaryToolContext
 	register := func(d *skill.BattleDefinitions, work *corebattle.LifetimeState, f *corebattle.CallbackContext) {
 		p := runPorts{damage: *f.Damage, defeat: f.Defeat, status: &corebattle.StatusContext{EffectContext: f.Damage.EffectContext, Defeat: f.Defeat}, requesterID: requesterID}
 		// Boxes are not projected into a response, so every member is empty.
@@ -281,6 +283,7 @@ func (s *Service[R, P]) respond(run *R, npc, requesterID string, requester *core
 			inspection[a.ID] = corebattle.InspectionContent{Empty: true}
 		}
 		callbacks := p.callbacks(room, work, requester, inspection)
+		tools = callbacks.Tools
 		callbacks.JobEncounters = s.npcEncounters(r, work, f, room.NormalStage)
 		if f.Assets != nil {
 			callbacks.JobAssets = &corebattle.JobAssetContext{DamageContext: p.damage, DefeatContext: p.defeat, Roster: callbacks.Roster}
@@ -292,6 +295,9 @@ func (s *Service[R, P]) respond(run *R, npc, requesterID string, requester *core
 		return err
 	}
 	r.Battle = saved
+	if tools != nil {
+		fx.Inspections = appendInspections(fx.Inspections, npc, tools.Results)
+	}
 	for id, items := range res.Consumed {
 		if fx.Consumed == nil {
 			fx.Consumed = make(map[string][]corebattle.ConsumedItem)

@@ -508,7 +508,8 @@ Player actions and NPC responses share the requester's economy transaction
 and one character update for wallet changes and action-tail growth. In a party,
 acquire all inventory locks in character ID order before the requester
 depot. The ambient transaction commits run state, assets, finalized recipient
-earnings, chest delivery, history and the receipt together. Rejected commands
+earnings, chest delivery, history and the receipt together. The receipt keeps
+the command's presentation-neutral inspection facts, so a retry never redraws them. Rejected commands
 change none of them or their clocks. A stored-tool selection message can still
 record tool history and a receipt without spending assets or renewing activity.
 
