@@ -186,6 +186,8 @@ type DungeonExpeditionHistory struct {
 	GoldReward       int              `json:"gold_reward"`
 	ItemsRewardCount int              `json:"items_reward_count"`
 	CreatedAt        time.Time        `json:"created_at"`
+	// ExitRound is the shared round at Escape, the settlement input for nigeru's exit effects; not persisted.
+	ExitRound int `json:"-"`
 }
 
 type ExpeditionStepResult struct {

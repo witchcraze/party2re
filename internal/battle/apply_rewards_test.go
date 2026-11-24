@@ -1032,4 +1032,30 @@ func TestApplyPostBattleResult_ExitBonusRounds(t *testing.T) {
 			t.Fatalf("round 0 gained = %d/%d, want 0/0", respZero.GainedGold[char.ID], respZero.GainedExperience[char.ID])
 		}
 	})
+
+	t.Run("item-106 draw bounds give 0 and round*77-1", func(t *testing.T) {
+		rng := &scriptedFloatRNG{values: []float64{0.0, 0.9999999}}
+		svc, charRepo, invRepo, _ := setupOrbSettlementService(t, true, rng, nil)
+		char := corecharacter.Character{ID: "char-106-bounds", Stats: corecharacter.Stats{MaxHP: 50, HP: 50}}
+		_ = charRepo.Update(ctx, char)
+		inv, _ := coreinventory.New(char.ID)
+		chicken, _ := coreitem.NewInstance("item-106", 1)
+		_ = inv.Add(chicken)
+		_ = invRepo.Save(ctx, inv)
+		for _, want := range []int{0, 5*77 - 1} {
+			resp, err := svc.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
+				CharacterIDs:          []string{char.ID},
+				PreserveEarnedRewards: true,
+				RecipientRewards:      map[string]corebattle.Reward{char.ID: {}},
+				ExitBonusRounds:       5,
+				BattleResult:          corebattle.PartyBattleResult{RemainingHP: map[string]int{char.ID: 50}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.GainedGold[char.ID] != want {
+				t.Fatalf("gained gold = %d, want %d", resp.GainedGold[char.ID], want)
+			}
+		}
+	})
 }

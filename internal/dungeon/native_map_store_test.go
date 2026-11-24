@@ -142,6 +142,9 @@ func TestNativeMap0_EscapeAtLimitThroughSQLFinalizer(t *testing.T) {
 	if after.Money != 1150 {
 		t.Fatalf("money=%d, want a single 150G grant", after.Money)
 	}
+	if want := char.Tired + exp.RoundLimit*3 + 1; after.Tired != want {
+		t.Fatalf("tired=%d, want one nigeru fatigue at the saved round (%d)", after.Tired, want)
+	}
 	h, err := svc.GetHistory(ctx, char.ID, 10)
 	if err != nil || len(h) != 1 || h[0].Outcome != dungeon.StatusEscaped || h[0].GoldReward != 150 {
 		t.Fatalf("history %+v err=%v", h, err)

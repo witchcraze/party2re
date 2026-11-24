@@ -124,6 +124,7 @@ func (s *Service) finalizeFrozenSettlement(
 		GoldReward:       goldFound,
 		ItemsRewardCount: len(rewardItems),
 		CreatedAt:        now,
+		ExitRound:        exp.Round,
 	}
 
 	// Two-Phase Settlement: commit durable state to MariaDB first

@@ -430,7 +430,7 @@ func TestNativeMap0_EscapeAtLimitSettlesStockOnce(t *testing.T) {
 		t.Fatalf("repeated escape err=%v", err)
 	}
 	h := f.repo.histories["exit"]
-	if len(h) != 1 || h[0].Outcome != dungeon.StatusEscaped || h[0].GoldReward != 120 || h[0].ExpReward != 40 {
+	if len(h) != 1 || h[0].Outcome != dungeon.StatusEscaped || h[0].GoldReward != 120 || h[0].ExpReward != 40 || h[0].ExitRound != 20 {
 		t.Fatalf("history %+v", h)
 	}
 }
