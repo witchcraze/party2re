@@ -8,31 +8,25 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 )
 
-// SaveHallOfFame persists or updates a Hall of Fame entry for the given tier.
-func (r *ChallengeRepository) SaveHallOfFame(ctx context.Context, entry challenge.HallOfFameEntry) error {
-	membersJSON := challenge.EncodeJSON(entry.Members)
-	query := `
-		INSERT INTO challenge_hall_of_fame (
-			tier_id, highest_round, party_name, party_color, cleared_at, members_json
-		) VALUES (?, ?, ?, ?, ?, ?)
+// RaiseHallOfFame replaces a tier's record only with a higher round, so a
+// concurrent lower record never overwrites it. It reports whether it wrote.
+func (r *ChallengeRepository) RaiseHallOfFame(ctx context.Context, entry challenge.HallOfFameEntry) (bool, error) {
+	// party_name etc. precede highest_round: MariaDB assigns left to right.
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT INTO challenge_hall_of_fame (tier_id, highest_round, party_name, party_color, cleared_at, members_json)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
-			highest_round = VALUES(highest_round),
-			party_name = VALUES(party_name),
-			party_color = VALUES(party_color),
-			cleared_at = VALUES(cleared_at),
-			members_json = VALUES(members_json)
-	`
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
-		ctx,
-		query,
-		entry.TierID,
-		entry.HighestRound,
-		entry.PartyName,
-		entry.PartyColor,
-		entry.ClearedAt,
-		membersJSON,
-	)
-	return err
+			party_name = IF(VALUES(highest_round) > highest_round, VALUES(party_name), party_name),
+			party_color = IF(VALUES(highest_round) > highest_round, VALUES(party_color), party_color),
+			cleared_at = IF(VALUES(highest_round) > highest_round, VALUES(cleared_at), cleared_at),
+			members_json = IF(VALUES(highest_round) > highest_round, VALUES(members_json), members_json),
+			highest_round = GREATEST(highest_round, VALUES(highest_round))`,
+		entry.TierID, entry.HighestRound, entry.PartyName, entry.PartyColor, entry.ClearedAt, challenge.EncodeJSON(entry.Members))
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 // GetHallOfFame retrieves the current record-holding party for a challenge tier.

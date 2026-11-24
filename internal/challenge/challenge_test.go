@@ -173,12 +173,15 @@ func (m *mockChallengeRepo) FinalizeSession(ctx context.Context, s challenge.Cha
 	return nil
 }
 
-func (m *mockChallengeRepo) SaveHallOfFame(ctx context.Context, entry challenge.HallOfFameEntry) error {
+func (m *mockChallengeRepo) RaiseHallOfFame(ctx context.Context, entry challenge.HallOfFameEntry) (bool, error) {
 	if m.saveHofErr != nil {
-		return m.saveHofErr
+		return false, m.saveHofErr
+	}
+	if old, ok := m.hof[entry.TierID]; ok && old.HighestRound >= entry.HighestRound {
+		return false, nil
 	}
 	m.hof[entry.TierID] = entry
-	return nil
+	return true, nil
 }
 
 func (m *mockChallengeRepo) GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error) {

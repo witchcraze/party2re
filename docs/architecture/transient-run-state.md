@@ -279,7 +279,7 @@ The SQL admission roster remains immutable authorization evidence; it is not the
 current leader or active roster. The legacy full-roster finalizer remains only for
 unmigrated storage compatibility and cannot mutate a coordinated run outside its
 accepted revision. [Individual exit](../design/challenge.md#individual-exit) owns
-fatigue, attempted-versus-cleared round counts and accessory bonuses.
+the exit effects.
 
 ### Challenge participant exit target
 

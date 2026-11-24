@@ -1,7 +1,7 @@
 {
   "module": "challenge",
   "tier": 2,
-  "description": "Valkey live Challenge runs with SQL coordination, participant settlement and recoverable publication (C1, C2, C3).",
+  "description": "Valkey live Challenge runs with SQL coordination, participant settlement and recoverable publication, and the run-host room library that replaces them (C1, C2, C3).",
   "package": "internal/challenge",
   "dependencies": [
     {
@@ -27,6 +27,12 @@
       "target_module": "battle",
       "relation_type": "contract_interface",
       "source_ref": "internal/challenge/challenge.go#ParticipantBuilder"
+    },
+    {
+      "name": "hall_of_fame",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/challenge/run.go#HallOfFame"
     }
   ],
   "transaction_boundaries": [
@@ -65,6 +71,20 @@
           "note": "Participant payout, bonuses, fullness and pending intent commit together. Publication acknowledgement releases only departed claims."
         }
       ]
+    },
+    {
+      "method": "advance",
+      "source_ref": "internal/challenge/run_advance.go#RunService.advance",
+      "transaction_type": "Delegated",
+      "lock_sequence": [
+        {
+          "table": "challenge_hall_of_fame",
+          "tier": 8,
+          "mode": "conditional upsert (Effects.Settled)",
+          "note": "Raised only by a higher round, after the run host's Settler."
+        }
+      ],
+      "note": "Room action inside the run host's Command transaction after its run and sorted character locks."
     }
   ]
 }

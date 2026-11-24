@@ -90,7 +90,7 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	c2.Stats.MaxMP = 100
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}), challenge.WithRNG(random.NewDeterministic(1)))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -195,12 +195,12 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	c1 := createPartyTestChar("p_lead", 15, 350, 450, 5)
+	c1 := createPartyTestChar("p_lead", 15, 350, 450, 300)
 	c1.Name = "勇者"
 	c1.JobID = "hero"
 	charRepo.chars[c1.ID] = c1
 
-	c2 := createPartyTestChar("p_mem", 15, 300, 420, 5)
+	c2 := createPartyTestChar("p_mem", 15, 300, 420, 300)
 	c2.Name = "戦士"
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2

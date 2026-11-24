@@ -24,7 +24,7 @@ var (
 	ErrSessionRoundMismatch = errors.New("ERR_SESSION_ROUND_MISMATCH: challenge round already changed")
 	ErrActiveSessionExists  = errors.New("active challenge session already exists")
 	ErrTierNotFound         = errors.New("challenge tier not found")
-	ErrLevelTooLow          = errors.New("character level is too low for this tier")
+	ErrJobLevelTooLow       = errors.New("character has not changed jobs enough for this tier")
 	ErrCharacterNotFound    = errors.New("character not found")
 	ErrForbidden            = errors.New("forbidden: character does not own this challenge session")
 )
@@ -37,29 +37,33 @@ const (
 	StatusDefeated SessionStatus = "defeated"
 )
 
+// ChallengeMonster is one @monsters entry of party2/challenge/<stage>.cgi.
 type ChallengeMonster struct {
-	Name        string `json:"name"`
-	BaseHP      int    `json:"base_hp"`
-	BaseAttack  int    `json:"base_attack"`
-	BaseDefense int    `json:"base_defense"`
-	BaseAgility int    `json:"base_agility,omitempty"`
-	BaseExp     int    `json:"base_exp"`
-	BaseGold    int    `json:"base_gold"`
+	Name             string `json:"name"`
+	HP               int    `json:"hp"`
+	MP               int    `json:"mp"`
+	Attack           int    `json:"attack"`
+	Defense          int    `json:"defense"`
+	Agility          int    `json:"agility"`
+	ExperienceReward int    `json:"exp_reward"`
+	GoldReward       int    `json:"gold_reward"`
+	// RandomJob draws the job as int(rand(RandomJob)) once per stage-file load.
+	RandomJob int                      `json:"random_job,omitempty"`
+	Combat    corebattle.LifetimeActor `json:"combat"`
 }
 
 type ChallengeTier struct {
-	ID               string             `json:"id"`
-	Name             string             `json:"name"`
-	Description      string             `json:"description"`
-	MinLevel         int                `json:"min_level"`
-	MaxParticipants  int                `json:"max_participants"`
-	NeedJoin         string             `json:"need_join,omitempty"`
-	NeedOverLv       bool               `json:"need_over_lv,omitempty"`
-	TreasureRound    int                `json:"treasure_round"`
-	TreasureRoundMax int                `json:"treasure_round_max,omitempty"`
-	TreasureItemPool []string           `json:"treasure_item_pool,omitempty"`
-	BaseMonster      ChallengeMonster   `json:"base_monster,omitempty"`
-	MonsterPool      []ChallengeMonster `json:"monster_pool,omitempty"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description"`
+	MaxParticipants  int      `json:"max_participants"`
+	NeedJoin         string   `json:"need_join,omitempty"`
+	NeedOverLv       bool     `json:"need_over_lv,omitempty"`
+	TreasureRound    int      `json:"treasure_round"`
+	TreasureRoundMax int      `json:"treasure_round_max,omitempty"`
+	TreasureItemPool []string `json:"treasure_item_pool,omitempty"`
+	// Monsters are internal spawn data, not part of the tier listing.
+	Monsters []ChallengeMonster `json:"-"`
 }
 
 type ChallengeMember struct {
@@ -212,7 +216,7 @@ type RecordRepository interface {
 }
 
 type HallOfFameRepository interface {
-	SaveHallOfFame(ctx context.Context, entry HallOfFameEntry) error
+	RaiseHallOfFame(ctx context.Context, entry HallOfFameEntry) (bool, error)
 	GetHallOfFame(ctx context.Context, tierID string) (*HallOfFameEntry, error)
 	ListHallOfFame(ctx context.Context) ([]HallOfFameEntry, error)
 }
@@ -325,16 +329,20 @@ func NewService(
 }
 
 func loadTiers() (map[string]ChallengeTier, error) {
-	var list []ChallengeTier
+	var list []struct {
+		ChallengeTier
+		Monsters []ChallengeMonster `json:"monsters"`
+	}
 	if err := json.Unmarshal(challengeTiersData, &list); err != nil {
 		return nil, fmt.Errorf("decode challenge tiers JSON: %w", err)
 	}
 	tiers := make(map[string]ChallengeTier, len(list))
 	for _, t := range list {
-		if t.ID == "" {
-			return nil, fmt.Errorf("challenge tier entry has empty id")
+		if t.ID == "" || len(t.Monsters) == 0 {
+			return nil, fmt.Errorf("challenge tier %q has no id or monsters", t.ID)
 		}
-		tiers[t.ID] = t
+		t.ChallengeTier.Monsters = t.Monsters
+		tiers[t.ID] = t.ChallengeTier
 	}
 	return tiers, nil
 }

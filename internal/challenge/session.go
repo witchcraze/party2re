@@ -59,7 +59,7 @@ func (s *Service) updateHallOfFameIfNeeded(ctx context.Context, session *Challen
 		for i, m := range session.Members {
 			icon := m.Icon
 			if m.CharacterCurrentHP <= 0 {
-				icon = "chr/099.gif"
+				icon = fallenIcon
 			}
 			hofMembers[i] = HallOfFameMember{
 				CharacterID:   m.CharacterID,
@@ -82,7 +82,7 @@ func (s *Service) updateHallOfFameIfNeeded(ctx context.Context, session *Challen
 		if pColor == "" {
 			pColor = "#FFFFFF"
 		}
-		if err := s.repo.SaveHallOfFame(ctx, HallOfFameEntry{
+		if _, err := s.repo.RaiseHallOfFame(ctx, HallOfFameEntry{
 			TierID:       session.TierID,
 			HighestRound: round,
 			PartyName:    pName,
@@ -157,11 +157,9 @@ func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (
 	var firstMonsterName string
 
 	for i := 0; i < monsterCount; i++ {
-		var baseM ChallengeMonster
-		if len(tier.MonsterPool) > 0 {
-			baseM = tier.MonsterPool[s.rng.Intn(len(tier.MonsterPool))]
-		} else {
-			baseM = tier.BaseMonster
+		baseM := tier.Monsters[0]
+		if len(tier.Monsters) > 1 {
+			baseM = tier.Monsters[s.rng.Intn(len(tier.Monsters))]
 		}
 		if i == 0 {
 			firstMonsterName = fmt.Sprintf("%s (Round %d)", baseM.Name, round)
@@ -170,10 +168,10 @@ func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (
 		statFactor := func() float64 {
 			return (0.9 + s.rng.Float64()*0.3 + float64(partyCount-2)*0.1) * scale
 		}
-		mHP := max(1, int(float64(baseM.BaseHP)*statFactor()))
-		mAtk := max(0, int(float64(baseM.BaseAttack)*statFactor()))
-		mDef := max(0, int(float64(baseM.BaseDefense)*statFactor()))
-		mAg := max(0, int(float64(baseM.BaseAgility)*statFactor()))
+		mHP := max(1, int(float64(baseM.HP)*statFactor()))
+		mAtk := max(0, int(float64(baseM.Attack)*statFactor()))
+		mDef := max(0, int(float64(baseM.Defense)*statFactor()))
+		mAg := max(0, int(float64(baseM.Agility)*statFactor()))
 
 		suffix := rune('A' + (i % 26))
 		enemyID := fmt.Sprintf("%s-%d-%c", baseM.Name, round, suffix)
@@ -181,12 +179,12 @@ func (s *Service) computeRound(ctx context.Context, session *ChallengeSession) (
 		p.Name = fmt.Sprintf("%s%c", baseM.Name, suffix)
 		p.MaxHP = mHP
 		p.Agility = mAg
-		p.ExperienceReward = baseM.BaseExp
-		p.GoldReward = baseM.BaseGold
+		p.ExperienceReward = baseM.ExperienceReward
+		p.GoldReward = baseM.GoldReward
 		enemies = append(enemies, p)
 
-		mExp += baseM.BaseExp
-		mGold += baseM.BaseGold
+		mExp += baseM.ExperienceReward
+		mGold += baseM.GoldReward
 	}
 
 	battleRes, won, err := s.resolveRound(ctx, session, char, enemies...)

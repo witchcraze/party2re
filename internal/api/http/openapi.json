@@ -2915,41 +2915,6 @@
         ],
         "type": "object"
       },
-      "ChallengeMonster": {
-        "additionalProperties": false,
-        "properties": {
-          "base_agility": {
-            "type": "integer"
-          },
-          "base_attack": {
-            "type": "integer"
-          },
-          "base_defense": {
-            "type": "integer"
-          },
-          "base_exp": {
-            "type": "integer"
-          },
-          "base_gold": {
-            "type": "integer"
-          },
-          "base_hp": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "base_hp",
-          "base_attack",
-          "base_defense",
-          "base_exp",
-          "base_gold"
-        ],
-        "type": "object"
-      },
       "ChallengeRecordsResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3166,9 +3131,6 @@
       "ChallengeTier": {
         "additionalProperties": false,
         "properties": {
-          "base_monster": {
-            "$ref": "#/components/schemas/ChallengeMonster"
-          },
           "description": {
             "type": "string"
           },
@@ -3177,18 +3139,6 @@
           },
           "max_participants": {
             "type": "integer"
-          },
-          "min_level": {
-            "type": "integer"
-          },
-          "monster_pool": {
-            "items": {
-              "$ref": "#/components/schemas/ChallengeMonster"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
           },
           "name": {
             "type": "string"
@@ -3219,7 +3169,6 @@
           "id",
           "name",
           "description",
-          "min_level",
           "max_participants",
           "treasure_round"
         ],

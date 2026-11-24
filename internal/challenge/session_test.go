@@ -448,13 +448,12 @@ func TestChallenge_IntTruncationUnscaledRewardsAndMonsterPool(t *testing.T) {
 			"pool-test": {
 				ID:              "pool-test",
 				Name:            "Pool Test",
-				MinLevel:        1,
 				MaxParticipants: 1,
 				TreasureRound:   10,
-				MonsterPool: []challenge.ChallengeMonster{
-					{Name: "Mon0", BaseHP: 100, BaseAttack: 50, BaseDefense: 20, BaseExp: 10, BaseGold: 3},
-					{Name: "Mon1", BaseHP: 120, BaseAttack: 60, BaseDefense: 30, BaseExp: 15, BaseGold: 7},
-					{Name: "Mon2", BaseHP: 140, BaseAttack: 70, BaseDefense: 40, BaseExp: 25, BaseGold: 11},
+				Monsters: []challenge.ChallengeMonster{
+					{Name: "Mon0", HP: 100, Attack: 50, Defense: 20, ExperienceReward: 10, GoldReward: 3},
+					{Name: "Mon1", HP: 120, Attack: 60, Defense: 30, ExperienceReward: 15, GoldReward: 7},
+					{Name: "Mon2", HP: 140, Attack: 70, Defense: 40, ExperienceReward: 25, GoldReward: 11},
 				},
 			},
 		}

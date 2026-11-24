@@ -82,6 +82,8 @@ type Admission struct {
 	Season       string                     `json:"season"`
 	Mode         string                     `json:"mode"`
 	Speed        int                        `json:"speed"`
+	// Name is the quest name players gave the room (legacy $p_name).
+	Name string `json:"name,omitempty"`
 }
 
 type Earnings struct {
@@ -246,6 +248,8 @@ type Effects struct {
 	ReleaseStock    bool
 	UnsealDemonKing bool
 	Defeats         []battle.ExplicitDefeat
+	// Settled writes the room's own records after settlement (Rank 8).
+	Settled func(context.Context) error
 }
 
 type Config[R any] struct {

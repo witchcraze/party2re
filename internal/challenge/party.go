@@ -115,9 +115,6 @@ func (s *Service) startRoster(
 		if level <= 0 {
 			level = 1
 		}
-		if level < tier.MinLevel {
-			return nil, ErrLevelTooLow
-		}
 		if level < progression.MaxLevel {
 			if nextExp, err := progression.ExperienceForNextLevel(level); err == nil && char.Experience >= nextExp {
 				return nil, ErrPendingLevelUp
