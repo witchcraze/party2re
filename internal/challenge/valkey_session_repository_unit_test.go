@@ -509,7 +509,7 @@ func TestChallengeService_OfflineServiceQueriesAndOptions(t *testing.T) {
 	engine := corebattle.Engine{}
 
 	tierMap := map[string]challenge.ChallengeTier{
-		"0": {ID: "0", Name: "最弱逆襲", MinLevel: 1},
+		"0": {ID: "0", Name: "最弱逆襲", Monsters: []challenge.ChallengeMonster{{Name: "スライム", HP: 150, Attack: 100, Defense: 50, Agility: 200, ExperienceReward: 20, GoldReward: 5}}},
 	}
 
 	service, err := challenge.NewService(

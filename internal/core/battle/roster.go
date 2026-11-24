@@ -19,6 +19,8 @@ type RosterContext struct {
 	EnemyPool           []LifetimeActor
 	AppearancePositions []int
 	Hard                bool
+	// NoEnemySummon is legacy $win: _add_enemy does nothing (_skill.cgi:9835).
+	NoEnemySummon bool
 	// EXPool and EXXPool are the current stage's @ex_bosses and @exx_bosses
 	// payloads; ReloadDraws and RebuildPool are the stage file's top-level
 	// effects that the request's first re-require consumes. StageLoaded shares

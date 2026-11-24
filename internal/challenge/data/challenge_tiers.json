@@ -3,7 +3,6 @@
     "id": "0",
     "name": "最弱逆襲",
     "description": "初心者向けの試練。モンスターの最弱種からの逆襲に立ち向かう。",
-    "min_level": 1,
     "max_participants": 1,
     "need_join": "hp_400_u",
     "treasure_round": 10,
@@ -28,98 +27,232 @@
       "item-102",
       "item-103"
     ],
-    "base_monster": {
-      "name": "スライム",
-      "base_hp": 150,
-      "base_attack": 100,
-      "base_defense": 50,
-      "base_agility": 200,
-      "base_exp": 20,
-      "base_gold": 5
-    }
+    "monsters": [
+      {
+        "name": "スライム",
+        "hp": 150,
+        "mp": 50,
+        "attack": 100,
+        "defense": 50,
+        "agility": 200,
+        "exp_reward": 20,
+        "gold_reward": 5,
+        "random_job": 59,
+        "combat": {
+          "jobs": {
+            "JobID": "starter",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          }
+        }
+      }
+    ]
   },
   {
     "id": "1",
     "name": "怒羊牧場",
     "description": "狂暴化した羊たちの牧場での生存戦。",
-    "min_level": 1,
     "max_participants": 2,
     "need_join": "hp_400_u",
     "treasure_round": 10,
-    "treasure_item_pool": ["item-001", "item-002", "item-003"],
-    "base_monster": {
-      "name": "ラースシープ",
-      "base_hp": 200,
-      "base_attack": 140,
-      "base_defense": 100,
-      "base_exp": 40,
-      "base_gold": 21
-    }
+    "treasure_round_max": 20,
+    "treasure_item_pool": [
+      "item-004",
+      "item-005",
+      "item-006",
+      "item-010",
+      "item-011",
+      "item-012",
+      "item-013",
+      "item-023",
+      "item-057",
+      "item-072",
+      "item-073",
+      "item-074",
+      "item-085",
+      "item-086",
+      "item-087",
+      "item-101",
+      "item-102",
+      "item-103"
+    ],
+    "monsters": [
+      {
+        "name": "ラースシープ",
+        "hp": 200,
+        "mp": 40,
+        "attack": 140,
+        "defense": 100,
+        "agility": 140,
+        "exp_reward": 40,
+        "gold_reward": 21,
+        "combat": {
+          "jobs": {
+            "JobID": "job-10",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          },
+          "MaxMP": 9999,
+          "tension": 3
+        }
+      }
+    ]
   },
   {
     "id": "2",
     "name": "恐怖肝試",
     "description": "死霊や悪霊が蠢く恐怖の試練。",
-    "min_level": 1,
     "max_participants": 2,
     "treasure_round": 10,
-    "treasure_item_pool": ["item-002", "item-003", "item-004"],
-    "monster_pool": [
+    "treasure_round_max": 20,
+    "treasure_item_pool": [
+      "item-004",
+      "item-005",
+      "item-006",
+      "item-010",
+      "item-011",
+      "item-012",
+      "item-013",
+      "item-023",
+      "item-057",
+      "item-072",
+      "item-073",
+      "item-074",
+      "item-085",
+      "item-086",
+      "item-087",
+      "item-101",
+      "item-102",
+      "item-103"
+    ],
+    "monsters": [
       {
         "name": "ゴースト",
-        "base_hp": 220,
-        "base_attack": 150,
-        "base_defense": 80,
-        "base_exp": 45,
-        "base_gold": 25
+        "hp": 340,
+        "mp": 40,
+        "attack": 200,
+        "defense": 150,
+        "agility": 200,
+        "exp_reward": 30,
+        "gold_reward": 20,
+        "combat": {
+          "jobs": {
+            "JobID": "job-93",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          }
+        }
       },
       {
         "name": "メイジゴースト",
-        "base_hp": 250,
-        "base_attack": 170,
-        "base_defense": 90,
-        "base_exp": 55,
-        "base_gold": 30
+        "hp": 360,
+        "mp": 70,
+        "attack": 210,
+        "defense": 160,
+        "agility": 220,
+        "exp_reward": 31,
+        "gold_reward": 22,
+        "combat": {
+          "jobs": {
+            "JobID": "job-06",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          }
+        }
       },
       {
         "name": "ミイラ男",
-        "base_hp": 300,
-        "base_attack": 180,
-        "base_defense": 120,
-        "base_exp": 65,
-        "base_gold": 35
+        "hp": 420,
+        "mp": 20,
+        "attack": 300,
+        "defense": 60,
+        "agility": 160,
+        "exp_reward": 40,
+        "gold_reward": 5,
+        "combat": {
+          "jobs": {
+            "JobID": "job-09",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          }
+        }
       },
       {
         "name": "マミー",
-        "base_hp": 320,
-        "base_attack": 190,
-        "base_defense": 130,
-        "base_exp": 70,
-        "base_gold": 40
+        "hp": 510,
+        "mp": 70,
+        "attack": 320,
+        "defense": 80,
+        "agility": 180,
+        "exp_reward": 45,
+        "gold_reward": 6,
+        "combat": {
+          "jobs": {
+            "JobID": "job-58",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          }
+        }
       },
       {
         "name": "ガイコツ剣士",
-        "base_hp": 350,
-        "base_attack": 210,
-        "base_defense": 150,
-        "base_exp": 80,
-        "base_gold": 50
+        "hp": 400,
+        "mp": 40,
+        "attack": 350,
+        "defense": 120,
+        "agility": 150,
+        "exp_reward": 40,
+        "gold_reward": 20,
+        "combat": {
+          "jobs": {
+            "JobID": "job-02",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          }
+        }
       },
       {
         "name": "血塗られた手",
-        "base_hp": 280,
-        "base_attack": 200,
-        "base_defense": 110,
-        "base_exp": 75,
-        "base_gold": 45
+        "hp": 380,
+        "mp": 62,
+        "attack": 280,
+        "defense": 150,
+        "agility": 200,
+        "exp_reward": 35,
+        "gold_reward": 25,
+        "combat": {
+          "jobs": {
+            "JobID": "job-61",
+            "SP": 10,
+            "OldJobID": "starter",
+            "OldSP": 20
+          }
+        }
       },
       {
         "name": "死霊",
-        "base_hp": 380,
-        "base_attack": 230,
-        "base_defense": 160,
-        "base_exp": 90,
-        "base_gold": 60
+        "hp": 299,
+        "mp": 66,
+        "attack": 229,
+        "defense": 199,
+        "agility": 229,
+        "exp_reward": 42,
+        "gold_reward": 30,
+        "combat": {
+          "jobs": {
+            "JobID": "job-31",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          }
+        }
       }
     ]
   },
@@ -127,34 +260,86 @@
     "id": "3",
     "name": "幻覚猛毒",
     "description": "猛毒を撒き散らすキノコたちの胞子迷宮。",
-    "min_level": 1,
     "max_participants": 3,
     "treasure_round": 10,
-    "treasure_item_pool": ["item-003", "item-004", "item-005"],
-    "monster_pool": [
+    "treasure_round_max": 20,
+    "treasure_item_pool": [
+      "item-004",
+      "item-005",
+      "item-006",
+      "item-010",
+      "item-011",
+      "item-012",
+      "item-013",
+      "item-023",
+      "item-057",
+      "item-072",
+      "item-073",
+      "item-074",
+      "item-085",
+      "item-086",
+      "item-087",
+      "item-101",
+      "item-102",
+      "item-103"
+    ],
+    "monsters": [
       {
         "name": "ゴーストマッシュ",
-        "base_hp": 300,
-        "base_attack": 160,
-        "base_defense": 100,
-        "base_exp": 60,
-        "base_gold": 30
+        "hp": 400,
+        "mp": 99,
+        "attack": 300,
+        "defense": 150,
+        "agility": 300,
+        "exp_reward": 30,
+        "gold_reward": 20,
+        "combat": {
+          "jobs": {
+            "JobID": "job-42",
+            "SP": 999,
+            "OldJobID": "job-91",
+            "OldSP": 999
+          },
+          "MaxMP": 9999
+        }
       },
       {
         "name": "ポイズンマッシュ",
-        "base_hp": 330,
-        "base_attack": 180,
-        "base_defense": 110,
-        "base_exp": 70,
-        "base_gold": 40
+        "hp": 400,
+        "mp": 99,
+        "attack": 300,
+        "defense": 150,
+        "agility": 300,
+        "exp_reward": 40,
+        "gold_reward": 30,
+        "combat": {
+          "jobs": {
+            "JobID": "job-90",
+            "SP": 999,
+            "OldJobID": "job-20",
+            "OldSP": 999
+          },
+          "MaxMP": 9999
+        }
       },
       {
         "name": "メイジマッシュ",
-        "base_hp": 380,
-        "base_attack": 200,
-        "base_defense": 130,
-        "base_exp": 85,
-        "base_gold": 50
+        "hp": 400,
+        "mp": 99,
+        "attack": 300,
+        "defense": 150,
+        "agility": 300,
+        "exp_reward": 50,
+        "gold_reward": 40,
+        "combat": {
+          "jobs": {
+            "JobID": "job-90",
+            "SP": 999,
+            "OldJobID": "job-19",
+            "OldSP": 999
+          },
+          "MaxMP": 9999
+        }
       }
     ]
   },
@@ -162,58 +347,140 @@
     "id": "4",
     "name": "即死博打",
     "description": "一撃必殺と不確実性が交錯する危険な賭け場。",
-    "min_level": 1,
-    "max_participants": 3,
+    "max_participants": 4,
     "treasure_round": 10,
-    "treasure_item_pool": ["item-004", "item-005", "item-006"],
-    "monster_pool": [
+    "treasure_round_max": 20,
+    "treasure_item_pool": [
+      "item-006",
+      "item-015",
+      "item-057",
+      "item-072",
+      "item-073",
+      "item-074",
+      "item-087",
+      "item-101",
+      "item-102",
+      "item-103"
+    ],
+    "monsters": [
       {
         "name": "イタズラ妖精",
-        "base_hp": 250,
-        "base_attack": 220,
-        "base_defense": 80,
-        "base_exp": 80,
-        "base_gold": 70
+        "hp": 320,
+        "mp": 100,
+        "attack": 240,
+        "defense": 100,
+        "agility": 300,
+        "exp_reward": 40,
+        "gold_reward": 50,
+        "combat": {
+          "jobs": {
+            "JobID": "job-31",
+            "SP": 44,
+            "OldJobID": "job-08",
+            "OldSP": 999
+          },
+          "MaxMP": 9999,
+          "tension": 3
+        }
       },
       {
         "name": "ギャンブル妖精",
-        "base_hp": 280,
-        "base_attack": 250,
-        "base_defense": 90,
-        "base_exp": 100,
-        "base_gold": 120
+        "hp": 320,
+        "mp": 100,
+        "attack": 240,
+        "defense": 100,
+        "agility": 300,
+        "exp_reward": 40,
+        "gold_reward": 50,
+        "combat": {
+          "jobs": {
+            "JobID": "job-31",
+            "SP": 44,
+            "OldJobID": "job-36",
+            "OldSP": 999
+          },
+          "MaxMP": 9999,
+          "tension": 3
+        }
       },
       {
         "name": "ブルーストーン",
-        "base_hp": 500,
-        "base_attack": 150,
-        "base_defense": 300,
-        "base_exp": 90,
-        "base_gold": 60
+        "hp": 5,
+        "mp": 100,
+        "attack": 200,
+        "defense": 2000,
+        "agility": 500,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-31",
+            "SP": 44,
+            "OldJobID": "job-31",
+            "OldSP": 44
+          },
+          "MaxMP": 9999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "あやしい影",
-        "base_hp": 300,
-        "base_attack": 240,
-        "base_defense": 100,
-        "base_exp": 110,
-        "base_gold": 80
+        "hp": 280,
+        "mp": 70,
+        "attack": 280,
+        "defense": 160,
+        "agility": 200,
+        "exp_reward": 45,
+        "gold_reward": 40,
+        "combat": {
+          "jobs": {
+            "JobID": "job-93",
+            "SP": 20,
+            "OldJobID": "job-93",
+            "OldSP": 20
+          },
+          "MaxMP": 9999
+        }
       },
       {
         "name": "ミミック",
-        "base_hp": 450,
-        "base_attack": 280,
-        "base_defense": 200,
-        "base_exp": 150,
-        "base_gold": 200
+        "hp": 420,
+        "mp": 120,
+        "attack": 280,
+        "defense": 70,
+        "agility": 400,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-93",
+            "SP": 20,
+            "OldJobID": "job-93",
+            "OldSP": 20
+          },
+          "MaxMP": 9999,
+          "temporary": "double"
+        }
       },
       {
         "name": "パンドラの魔箱",
-        "base_hp": 600,
-        "base_attack": 350,
-        "base_defense": 250,
-        "base_exp": 250,
-        "base_gold": 350
+        "hp": 450,
+        "mp": 120,
+        "attack": 300,
+        "defense": 75,
+        "agility": 600,
+        "exp_reward": 70,
+        "gold_reward": 120,
+        "combat": {
+          "jobs": {
+            "JobID": "job-93",
+            "SP": 20,
+            "OldJobID": "job-93",
+            "OldSP": 20
+          },
+          "MaxMP": 9999,
+          "temporary": "double"
+        }
       }
     ]
   },
@@ -221,18 +488,40 @@
     "id": "5",
     "name": "花火大会",
     "description": "大爆発を引き起こす岩石群との激闘。",
-    "min_level": 1,
     "max_participants": 4,
     "treasure_round": 20,
-    "treasure_item_pool": ["item-005", "item-006", "item-007"],
-    "monster_pool": [
+    "treasure_round_max": 30,
+    "treasure_item_pool": [
+      "item-006",
+      "item-015",
+      "item-057",
+      "item-072",
+      "item-073",
+      "item-074",
+      "item-087",
+      "item-101",
+      "item-102",
+      "item-103"
+    ],
+    "monsters": [
       {
         "name": "爆弾岩",
-        "base_hp": 800,
-        "base_attack": 300,
-        "base_defense": 200,
-        "base_exp": 180,
-        "base_gold": 150
+        "hp": 400,
+        "mp": 42,
+        "attack": 250,
+        "defense": 150,
+        "agility": 150,
+        "exp_reward": 30,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-94",
+            "SP": 20,
+            "OldJobID": "job-94",
+            "OldSP": 20
+          },
+          "MaxMP": 9999
+        }
       }
     ]
   },
@@ -240,82 +529,209 @@
     "id": "6",
     "name": "鉄壁要塞",
     "description": "強固な防御を誇る鉱石とメタルの要塞。",
-    "min_level": 1,
-    "max_participants": 4,
+    "max_participants": 3,
     "treasure_round": 20,
-    "treasure_item_pool": ["item-006", "item-007", "item-008"],
-    "monster_pool": [
+    "treasure_round_max": 30,
+    "treasure_item_pool": [
+      "item-004",
+      "item-005",
+      "item-006",
+      "item-010",
+      "item-011",
+      "item-012",
+      "item-013",
+      "item-023",
+      "item-057",
+      "item-072",
+      "item-073",
+      "item-074",
+      "item-085",
+      "item-086",
+      "item-087",
+      "item-101",
+      "item-102",
+      "item-103"
+    ],
+    "monsters": [
       {
         "name": "レッドストーン",
-        "base_hp": 600,
-        "base_attack": 280,
-        "base_defense": 400,
-        "base_exp": 200,
-        "base_gold": 150
+        "hp": 5,
+        "mp": 99,
+        "attack": 200,
+        "defense": 2000,
+        "agility": 500,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-26",
+            "SP": 999,
+            "OldJobID": "job-06",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "ブルーストーン",
-        "base_hp": 600,
-        "base_attack": 280,
-        "base_defense": 400,
-        "base_exp": 200,
-        "base_gold": 150
+        "hp": 5,
+        "mp": 99,
+        "attack": 200,
+        "defense": 2000,
+        "agility": 500,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-33",
+            "SP": 130,
+            "OldJobID": "job-31",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "イエローストーン",
-        "base_hp": 600,
-        "base_attack": 280,
-        "base_defense": 400,
-        "base_exp": 200,
-        "base_gold": 150
+        "hp": 5,
+        "mp": 99,
+        "attack": 200,
+        "defense": 2000,
+        "agility": 500,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-36",
+            "SP": 999,
+            "OldJobID": "job-37",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "グリーンストーン",
-        "base_hp": 600,
-        "base_attack": 280,
-        "base_defense": 400,
-        "base_exp": 200,
-        "base_gold": 150
+        "hp": 5,
+        "mp": 99,
+        "attack": 200,
+        "defense": 2000,
+        "agility": 500,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-90",
+            "SP": 999,
+            "OldJobID": "job-91",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "パープルストーン",
-        "base_hp": 600,
-        "base_attack": 280,
-        "base_defense": 400,
-        "base_exp": 200,
-        "base_gold": 150
+        "hp": 5,
+        "mp": 99,
+        "attack": 200,
+        "defense": 2000,
+        "agility": 500,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-35",
+            "SP": 999,
+            "OldJobID": "job-92",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "シルバーストーン",
-        "base_hp": 700,
-        "base_attack": 300,
-        "base_defense": 450,
-        "base_exp": 250,
-        "base_gold": 200
+        "hp": 5,
+        "mp": 99,
+        "attack": 200,
+        "defense": 2000,
+        "agility": 500,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-19",
+            "SP": 999,
+            "OldJobID": "job-20",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "ブラックストーン",
-        "base_hp": 800,
-        "base_attack": 320,
-        "base_defense": 500,
-        "base_exp": 300,
-        "base_gold": 250
+        "hp": 5,
+        "mp": 99,
+        "attack": 200,
+        "defense": 2000,
+        "agility": 500,
+        "exp_reward": 50,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-58",
+            "SP": 999,
+            "OldJobID": "job-53",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "銀滴スライム",
-        "base_hp": 20,
-        "base_attack": 100,
-        "base_defense": 999,
-        "base_exp": 1000,
-        "base_gold": 500
+        "hp": 6,
+        "mp": 180,
+        "attack": 200,
+        "defense": 1000,
+        "agility": 500,
+        "exp_reward": 200,
+        "gold_reward": 10,
+        "combat": {
+          "jobs": {
+            "JobID": "job-40",
+            "SP": 999,
+            "OldJobID": "job-40",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       },
       {
         "name": "流銀スライム",
-        "base_hp": 30,
-        "base_attack": 150,
-        "base_defense": 999,
-        "base_exp": 3000,
-        "base_gold": 1000
+        "hp": 10,
+        "mp": 180,
+        "attack": 210,
+        "defense": 2000,
+        "agility": 600,
+        "exp_reward": 500,
+        "gold_reward": 20,
+        "combat": {
+          "jobs": {
+            "JobID": "job-40",
+            "SP": 999,
+            "OldJobID": "job-40",
+            "OldSP": 999
+          },
+          "MaxMP": 99999,
+          "temporary": "null_magic"
+        }
       }
     ]
   },
@@ -323,122 +739,296 @@
     "id": "7",
     "name": "最強王者",
     "description": "伝説の魔物たちが勢揃いする頂上決戦。",
-    "min_level": 1,
-    "max_participants": 4,
+    "max_participants": 1,
     "treasure_round": 30,
-    "treasure_item_pool": ["item-008", "item-009", "item-010"],
-    "monster_pool": [
+    "treasure_round_max": 50,
+    "treasure_item_pool": [
+      "item-005",
+      "item-006",
+      "item-010",
+      "item-011",
+      "item-012",
+      "item-013",
+      "item-023",
+      "item-057",
+      "item-072",
+      "item-073",
+      "item-074",
+      "item-085",
+      "item-086",
+      "item-087",
+      "item-101",
+      "item-102",
+      "item-103"
+    ],
+    "monsters": [
       {
         "name": "トレント人面樹",
-        "base_hp": 1000,
-        "base_attack": 400,
-        "base_defense": 300,
-        "base_exp": 500,
-        "base_gold": 400
+        "hp": 400,
+        "mp": 123,
+        "attack": 350,
+        "defense": 140,
+        "agility": 200,
+        "exp_reward": 120,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-07",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          },
+          "temporary": "revival"
+        }
       },
       {
         "name": "亡霊剣士",
-        "base_hp": 1100,
-        "base_attack": 450,
-        "base_defense": 320,
-        "base_exp": 550,
-        "base_gold": 450
+        "hp": 460,
+        "mp": 93,
+        "attack": 400,
+        "defense": 200,
+        "agility": 160,
+        "exp_reward": 90,
+        "gold_reward": 40,
+        "combat": {
+          "jobs": {
+            "JobID": "job-02",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          },
+          "temporary": "reflect_attack"
+        }
       },
       {
         "name": "デビルシェル",
-        "base_hp": 1500,
-        "base_attack": 380,
-        "base_defense": 500,
-        "base_exp": 600,
-        "base_gold": 500
+        "hp": 300,
+        "mp": 240,
+        "attack": 300,
+        "defense": 450,
+        "agility": 100,
+        "exp_reward": 80,
+        "gold_reward": 200,
+        "combat": {
+          "jobs": {
+            "JobID": "job-05",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 30
+          },
+          "temporary": "reflect_magic"
+        }
       },
       {
         "name": "ゴーレム",
-        "base_hp": 1800,
-        "base_attack": 500,
-        "base_defense": 450,
-        "base_exp": 700,
-        "base_gold": 550
+        "hp": 500,
+        "mp": 150,
+        "attack": 350,
+        "defense": 350,
+        "agility": 100,
+        "exp_reward": 150,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-27",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 30
+          },
+          "temporary": "reduce_attack"
+        }
       },
       {
         "name": "闇の魔術士",
-        "base_hp": 1200,
-        "base_attack": 550,
-        "base_defense": 280,
-        "base_exp": 750,
-        "base_gold": 600
+        "hp": 350,
+        "mp": 150,
+        "attack": 250,
+        "defense": 120,
+        "agility": 250,
+        "exp_reward": 110,
+        "gold_reward": 180,
+        "combat": {
+          "jobs": {
+            "JobID": "job-40",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 0
+          },
+          "temporary": "absorb_magic"
+        }
       },
       {
         "name": "一つ目の巨人",
-        "base_hp": 2200,
-        "base_attack": 600,
-        "base_defense": 350,
-        "base_exp": 850,
-        "base_gold": 700
+        "hp": 700,
+        "mp": 80,
+        "attack": 500,
+        "defense": 100,
+        "agility": 100,
+        "exp_reward": 150,
+        "gold_reward": 5,
+        "combat": {
+          "jobs": {
+            "JobID": "job-21",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          },
+          "tension": 8
+        }
       },
       {
         "name": "火炎鳥",
-        "base_hp": 1400,
-        "base_attack": 520,
-        "base_defense": 300,
-        "base_exp": 800,
-        "base_gold": 650
+        "hp": 480,
+        "mp": 297,
+        "attack": 320,
+        "defense": 160,
+        "agility": 280,
+        "exp_reward": 100,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-26",
+            "SP": 999,
+            "OldJobID": "job-27",
+            "OldSP": 999
+          },
+          "temporary": "reduce_breath"
+        }
       },
       {
         "name": "ベヒーモス",
-        "base_hp": 2500,
-        "base_attack": 650,
-        "base_defense": 400,
-        "base_exp": 1000,
-        "base_gold": 800
+        "hp": 555,
+        "mp": 120,
+        "attack": 333,
+        "defense": 155,
+        "agility": 222,
+        "exp_reward": 133,
+        "gold_reward": 33,
+        "combat": {
+          "jobs": {
+            "JobID": "job-23",
+            "SP": 999,
+            "OldJobID": "job-25",
+            "OldSP": 999
+          },
+          "temporary": "strong_defense"
+        }
       },
       {
         "name": "キングスライム",
-        "base_hp": 2000,
-        "base_attack": 480,
-        "base_defense": 380,
-        "base_exp": 900,
-        "base_gold": 750
+        "hp": 500,
+        "mp": 300,
+        "attack": 250,
+        "defense": 100,
+        "agility": 250,
+        "exp_reward": 150,
+        "gold_reward": 20,
+        "combat": {
+          "jobs": {
+            "JobID": "job-21",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 20
+          },
+          "temporary": "regeneration"
+        }
       },
       {
         "name": "死霊の騎士",
-        "base_hp": 1600,
-        "base_attack": 580,
-        "base_defense": 360,
-        "base_exp": 950,
-        "base_gold": 800
+        "hp": 610,
+        "mp": 220,
+        "attack": 333,
+        "defense": 180,
+        "agility": 180,
+        "exp_reward": 190,
+        "gold_reward": 120,
+        "combat": {
+          "jobs": {
+            "JobID": "job-24",
+            "SP": 999,
+            "OldJobID": "job-02",
+            "OldSP": 999
+          },
+          "temporary": "deflect"
+        }
       },
       {
         "name": "竜王",
-        "base_hp": 3000,
-        "base_attack": 750,
-        "base_defense": 500,
-        "base_exp": 1500,
-        "base_gold": 1200
+        "hp": 650,
+        "mp": 200,
+        "attack": 300,
+        "defense": 200,
+        "agility": 100,
+        "exp_reward": 200,
+        "gold_reward": 50,
+        "combat": {
+          "jobs": {
+            "JobID": "job-41",
+            "SP": 999,
+            "OldJobID": "job-25",
+            "OldSP": 999
+          },
+          "tension": 3
+        }
       },
       {
         "name": "隻翼の堕天使",
-        "base_hp": 3200,
-        "base_attack": 800,
-        "base_defense": 480,
-        "base_exp": 1800,
-        "base_gold": 1500
+        "hp": 700,
+        "mp": 999,
+        "attack": 300,
+        "defense": 150,
+        "agility": 400,
+        "exp_reward": 300,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-98",
+            "SP": 999,
+            "OldJobID": "job-48",
+            "OldSP": 999
+          },
+          "tension": 3
+        }
       },
       {
         "name": "ディアボロス",
-        "base_hp": 3500,
-        "base_attack": 850,
-        "base_defense": 520,
-        "base_exp": 2000,
-        "base_gold": 1800
+        "hp": 750,
+        "mp": 999,
+        "attack": 400,
+        "defense": 200,
+        "agility": 200,
+        "exp_reward": 300,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-97",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 0
+          },
+          "tension": 3
+        }
       },
       {
         "name": "ボマー",
-        "base_hp": 1500,
-        "base_attack": 900,
-        "base_defense": 250,
-        "base_exp": 1200,
-        "base_gold": 1000
+        "hp": 600,
+        "mp": 999,
+        "attack": 200,
+        "defense": 250,
+        "agility": 250,
+        "exp_reward": 300,
+        "gold_reward": 0,
+        "combat": {
+          "jobs": {
+            "JobID": "job-94",
+            "SP": 20,
+            "OldJobID": "job-08",
+            "OldSP": 999
+          },
+          "temporary": "するぞ",
+          "Status": "大爆発",
+          "tension": 3
+        }
       }
     ]
   },
@@ -446,123 +1036,381 @@
     "id": "8",
     "name": "真・最強王者",
     "description": "レベル限界突破者（Lv100以上）のみが足を踏み入れることを許される、真の極限試練。",
-    "min_level": 1,
-    "max_participants": 4,
+    "max_participants": 1,
     "need_over_lv": true,
     "treasure_round": 30,
-    "treasure_item_pool": ["item-010", "item-011", "item-012"],
-    "monster_pool": [
+    "treasure_round_max": 50,
+    "treasure_item_pool": [
+      "item-005",
+      "item-006",
+      "item-010",
+      "item-011",
+      "item-012",
+      "item-013",
+      "item-023",
+      "item-057",
+      "item-072",
+      "item-073",
+      "item-074",
+      "item-085",
+      "item-086",
+      "item-087",
+      "item-101",
+      "item-102",
+      "item-103"
+    ],
+    "monsters": [
       {
         "name": "トレント人面樹",
-        "base_hp": 1200,
-        "base_attack": 450,
-        "base_defense": 350,
-        "base_exp": 600,
-        "base_gold": 500
+        "hp": 800,
+        "mp": 999,
+        "attack": 525,
+        "defense": 210,
+        "agility": 300,
+        "exp_reward": 180,
+        "gold_reward": 150,
+        "combat": {
+          "jobs": {
+            "JobID": "job-07",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 999
+          },
+          "temporary": "revival",
+          "Gear": {
+            "AccessoryID": "item-247"
+          },
+          "ItemDefinitionIDs": [
+            "item-247"
+          ]
+        }
       },
       {
         "name": "亡霊剣士",
-        "base_hp": 1300,
-        "base_attack": 500,
-        "base_defense": 360,
-        "base_exp": 650,
-        "base_gold": 550
+        "hp": 920,
+        "mp": 999,
+        "attack": 600,
+        "defense": 300,
+        "agility": 240,
+        "exp_reward": 135,
+        "gold_reward": 60,
+        "combat": {
+          "jobs": {
+            "JobID": "job-02",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 999
+          },
+          "temporary": "reflect_attack",
+          "Gear": {
+            "AccessoryID": "item-158"
+          },
+          "ItemDefinitionIDs": [
+            "item-158"
+          ]
+        }
       },
       {
         "name": "デビルシェル",
-        "base_hp": 1800,
-        "base_attack": 430,
-        "base_defense": 550,
-        "base_exp": 700,
-        "base_gold": 600
+        "hp": 600,
+        "mp": 999,
+        "attack": 450,
+        "defense": 675,
+        "agility": 150,
+        "exp_reward": 120,
+        "gold_reward": 300,
+        "combat": {
+          "jobs": {
+            "JobID": "job-05",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 999
+          },
+          "temporary": "reflect_magic",
+          "Gear": {
+            "AccessoryID": "item-162"
+          },
+          "ItemDefinitionIDs": [
+            "item-162"
+          ]
+        }
       },
       {
         "name": "ゴーレム",
-        "base_hp": 2200,
-        "base_attack": 580,
-        "base_defense": 500,
-        "base_exp": 800,
-        "base_gold": 650
+        "hp": 1000,
+        "mp": 999,
+        "attack": 525,
+        "defense": 525,
+        "agility": 150,
+        "exp_reward": 225,
+        "gold_reward": 150,
+        "combat": {
+          "jobs": {
+            "JobID": "job-27",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 999
+          },
+          "temporary": "reduce_attack",
+          "Gear": {
+            "AccessoryID": "item-185"
+          },
+          "ItemDefinitionIDs": [
+            "item-185"
+          ]
+        }
       },
       {
         "name": "闇の魔術士",
-        "base_hp": 1500,
-        "base_attack": 620,
-        "base_defense": 320,
-        "base_exp": 850,
-        "base_gold": 700
+        "hp": 700,
+        "mp": 999,
+        "attack": 375,
+        "defense": 180,
+        "agility": 375,
+        "exp_reward": 165,
+        "gold_reward": 270,
+        "combat": {
+          "jobs": {
+            "JobID": "job-40",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 0
+          },
+          "temporary": "absorb_magic",
+          "Gear": {
+            "AccessoryID": "item-144"
+          },
+          "ItemDefinitionIDs": [
+            "item-144"
+          ]
+        }
       },
       {
         "name": "一つ目の巨人",
-        "base_hp": 2600,
-        "base_attack": 680,
-        "base_defense": 400,
-        "base_exp": 950,
-        "base_gold": 800
+        "hp": 1400,
+        "mp": 999,
+        "attack": 750,
+        "defense": 150,
+        "agility": 150,
+        "exp_reward": 225,
+        "gold_reward": 8,
+        "combat": {
+          "jobs": {
+            "JobID": "job-21",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 999
+          },
+          "tension": 8,
+          "Gear": {
+            "AccessoryID": "item-161"
+          },
+          "ItemDefinitionIDs": [
+            "item-161"
+          ]
+        }
       },
       {
         "name": "火炎鳥",
-        "base_hp": 1700,
-        "base_attack": 600,
-        "base_defense": 350,
-        "base_exp": 900,
-        "base_gold": 750
+        "hp": 960,
+        "mp": 999,
+        "attack": 480,
+        "defense": 240,
+        "agility": 420,
+        "exp_reward": 150,
+        "gold_reward": 150,
+        "combat": {
+          "jobs": {
+            "JobID": "job-26",
+            "SP": 999,
+            "OldJobID": "job-27",
+            "OldSP": 999
+          },
+          "temporary": "reduce_breath",
+          "Gear": {
+            "AccessoryID": "item-195"
+          },
+          "ItemDefinitionIDs": [
+            "item-195"
+          ]
+        }
       },
       {
         "name": "ベヒーモス",
-        "base_hp": 3000,
-        "base_attack": 730,
-        "base_defense": 450,
-        "base_exp": 1200,
-        "base_gold": 900
+        "hp": 1110,
+        "mp": 999,
+        "attack": 500,
+        "defense": 233,
+        "agility": 333,
+        "exp_reward": 200,
+        "gold_reward": 50,
+        "combat": {
+          "jobs": {
+            "JobID": "job-23",
+            "SP": 999,
+            "OldJobID": "job-25",
+            "OldSP": 999
+          },
+          "temporary": "strong_defense",
+          "Gear": {
+            "AccessoryID": "item-164"
+          },
+          "ItemDefinitionIDs": [
+            "item-164"
+          ]
+        }
       },
       {
         "name": "キングスライム",
-        "base_hp": 2400,
-        "base_attack": 550,
-        "base_defense": 420,
-        "base_exp": 1000,
-        "base_gold": 850
+        "hp": 1000,
+        "mp": 999,
+        "attack": 375,
+        "defense": 150,
+        "agility": 375,
+        "exp_reward": 225,
+        "gold_reward": 30,
+        "combat": {
+          "jobs": {
+            "JobID": "job-21",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 999
+          },
+          "temporary": "regeneration",
+          "Gear": {
+            "AccessoryID": "item-149"
+          },
+          "ItemDefinitionIDs": [
+            "item-149"
+          ]
+        }
       },
       {
         "name": "死霊の騎士",
-        "base_hp": 1900,
-        "base_attack": 650,
-        "base_defense": 400,
-        "base_exp": 1100,
-        "base_gold": 900
+        "hp": 1220,
+        "mp": 999,
+        "attack": 500,
+        "defense": 270,
+        "agility": 270,
+        "exp_reward": 285,
+        "gold_reward": 180,
+        "combat": {
+          "jobs": {
+            "JobID": "job-24",
+            "SP": 999,
+            "OldJobID": "job-02",
+            "OldSP": 999
+          },
+          "temporary": "deflect",
+          "Gear": {
+            "AccessoryID": "item-149"
+          },
+          "ItemDefinitionIDs": [
+            "item-149"
+          ]
+        }
       },
       {
         "name": "竜王",
-        "base_hp": 3500,
-        "base_attack": 850,
-        "base_defense": 550,
-        "base_exp": 1800,
-        "base_gold": 1400
+        "hp": 1300,
+        "mp": 999,
+        "attack": 450,
+        "defense": 300,
+        "agility": 150,
+        "exp_reward": 300,
+        "gold_reward": 100,
+        "combat": {
+          "jobs": {
+            "JobID": "job-41",
+            "SP": 999,
+            "OldJobID": "job-25",
+            "OldSP": 999
+          },
+          "tension": 3,
+          "Gear": {
+            "AccessoryID": "item-240"
+          },
+          "ItemDefinitionIDs": [
+            "item-240"
+          ]
+        }
       },
       {
         "name": "隻翼の堕天使",
-        "base_hp": 3800,
-        "base_attack": 900,
-        "base_defense": 520,
-        "base_exp": 2000,
-        "base_gold": 1700
+        "hp": 1400,
+        "mp": 999,
+        "attack": 450,
+        "defense": 225,
+        "agility": 600,
+        "exp_reward": 450,
+        "gold_reward": 150,
+        "combat": {
+          "jobs": {
+            "JobID": "job-98",
+            "SP": 999,
+            "OldJobID": "job-48",
+            "OldSP": 999
+          },
+          "tension": 3,
+          "Gear": {
+            "AccessoryID": "item-246"
+          },
+          "ItemDefinitionIDs": [
+            "item-246"
+          ]
+        }
       },
       {
         "name": "ディアボロス",
-        "base_hp": 4000,
-        "base_attack": 950,
-        "base_defense": 580,
-        "base_exp": 2500,
-        "base_gold": 2000
+        "hp": 1500,
+        "mp": 999,
+        "attack": 600,
+        "defense": 300,
+        "agility": 300,
+        "exp_reward": 450,
+        "gold_reward": 150,
+        "combat": {
+          "jobs": {
+            "JobID": "job-97",
+            "SP": 999,
+            "OldJobID": "starter",
+            "OldSP": 0
+          },
+          "tension": 3,
+          "Gear": {
+            "AccessoryID": "item-160"
+          },
+          "ItemDefinitionIDs": [
+            "item-160"
+          ]
+        }
       },
       {
         "name": "ボマー",
-        "base_hp": 1800,
-        "base_attack": 1000,
-        "base_defense": 300,
-        "base_exp": 1500,
-        "base_gold": 1200
+        "hp": 1200,
+        "mp": 999,
+        "attack": 300,
+        "defense": 375,
+        "agility": 375,
+        "exp_reward": 450,
+        "gold_reward": 0,
+        "combat": {
+          "jobs": {
+            "JobID": "job-94",
+            "SP": 20,
+            "OldJobID": "job-08",
+            "OldSP": 999
+          },
+          "temporary": "するぞ",
+          "Status": "大爆発",
+          "tension": 3,
+          "Gear": {
+            "AccessoryID": "item-208"
+          },
+          "ItemDefinitionIDs": [
+            "item-208"
+          ]
+        }
       }
     ]
   }

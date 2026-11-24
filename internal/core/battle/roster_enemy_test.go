@@ -46,6 +46,24 @@ func TestEnemySummonScalingPayloadAndTwoSuffixAttempts(t *testing.T) {
 	}
 }
 
+// Legacy $win (arena, guild battle, a record-holding Challenge) makes the
+// summon a no-op even without a stage pool (_skill.cgi:9835).
+func TestEnemySummonDoesNothingUnderWin(t *testing.T) {
+	s, c := rosterFixture()
+	c.NoEnemySummon = true
+	before := len(s.Actors)
+	if err := s.ValidateRoster(&c, "gem_summon_sky", "", &targetRNG{t: t}); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.ApplyRoster(&c, "gem_summon_sky", "", &targetRNG{t: t}); err != nil || r.Applied || len(s.Actors) != before {
+		t.Fatal(r, err)
+	}
+	frame := &CallbackContext{TargetContext: c.TargetContext}
+	if branches, err := s.ProjectEnemySummon(&c, frame); err != nil || len(branches) != 1 {
+		t.Fatal(branches, err)
+	}
+}
+
 func TestEnemySummonSizeGemGuardAndNPCSide(t *testing.T) {
 	s, c := rosterFixture()
 	c.EnemyPool = []LifetimeActor{enemySummonPayload()}

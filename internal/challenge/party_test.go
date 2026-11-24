@@ -195,12 +195,12 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	c1 := createPartyTestChar("p_lead", 15, 350, 450, 5)
+	c1 := createPartyTestChar("p_lead", 15, 350, 450, 300)
 	c1.Name = "勇者"
 	c1.JobID = "hero"
 	charRepo.chars[c1.ID] = c1
 
-	c2 := createPartyTestChar("p_mem", 15, 300, 420, 5)
+	c2 := createPartyTestChar("p_mem", 15, 300, 420, 300)
 	c2.Name = "戦士"
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2

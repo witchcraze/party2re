@@ -135,6 +135,22 @@ func TestRunDefeatCaptureAndCrystalIdentity(t *testing.T) {
 	}
 }
 
+// Legacy $win makes a strong kill a PvP win and skips the capture draw.
+func TestRunDefeatWinCountsPvPWithoutCapture(t *testing.T) {
+	r, role, requester := runRewardFixture()
+	r.Actor("enemy").Status = "capture"
+	rng := &rewardDraws{values: []int{1}}
+	var effects Effects
+	port := defeatRewards(&r, RoomCombat{Win: true}, requester, "", rng, &effects)
+	ctx := &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: role}, Rewards: port}
+	if _, err := r.Battle.ApplyDefeat(ctx, "enemy", rng); err != nil {
+		t.Fatal(err)
+	}
+	if d := effects.Defeats; len(d) != 1 || !d[0].PvP || !d[0].StrongKill || d[0].Capture || !slices.Equal(rng.calls, []int{50}) {
+		t.Fatal(d, rng.calls)
+	}
+}
+
 func TestRunDefeatSelfAndNPCGrantNothing(t *testing.T) {
 	for _, npc := range []bool{false, true} {
 		r, role, requester := runRewardFixture()

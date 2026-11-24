@@ -57,6 +57,9 @@ type RoomCombat struct {
 	// Settle records the room's facts once the operation succeeded; defeated
 	// reports that this operation felled the whole encounter.
 	Settle func(defeated bool) (unseal bool, err error)
+	// Win is legacy $win (_battle.cgi:232–241, _skill.cgi:9835): defeats count
+	// as PvP wins, nothing is captured and enemy summons do nothing.
+	Win bool
 }
 
 // Summons are the encounter pool, appearance positions and Hard flag that

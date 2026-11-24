@@ -191,6 +191,11 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 					return err
 				}
 			}
+			if effects.Settled != nil {
+				if err := effects.Settled(ctx); err != nil {
+					return err
+				}
+			}
 			if cmd.Action == "exit" {
 				if err := s.finishExit(ctx, run, cmd.ActorID); err != nil {
 					return err

@@ -92,7 +92,7 @@ func defeatRewards(r *State, room RoomCombat, requester corecharacter.Character,
 			if room.Habitat != nil {
 				habitat = room.Habitat()
 			}
-			effects.Defeats = append(effects.Defeats, defeatFact(actor, target, c.DefeatedStatus, identity, habitat, strength, strong, wish, rng))
+			effects.Defeats = append(effects.Defeats, defeatFact(actor, target, c.DefeatedStatus, identity, habitat, strength, strong, wish, room.Win, rng))
 			if room.Credited != nil {
 				room.Credited(identity, rng)
 			}
@@ -156,13 +156,15 @@ func ScaleCooperativeEarnings(e Earnings, bonusPercent int) (Earnings, error) {
 	return e, nil
 }
 
-func defeatFact(actor, target *corebattle.LifetimeActor, status, identity, habitat string, strength int, strong bool, wish string, rng random.Generator) battle.ExplicitDefeat {
+// win is legacy $win: a strong kill counts as a PvP win and capture never
+// rolls (_battle.cgi:232–241).
+func defeatFact(actor, target *corebattle.LifetimeActor, status, identity, habitat string, strength int, strong bool, wish string, win bool, rng random.Generator) battle.ExplicitDefeat {
 	fact := battle.ExplicitDefeat{Monster: battle.DefeatedMonsterRecord{
 		MonsterID: battle.ParseDefeatedMonsterID(strings.TrimRight(identity, "ABCDEFGH")), MonsterName: battle.CleanMonsterName(target.Name),
 		Habitat: habitat, Icon: target.Icon, Strong: strength, HP: target.MaxHP, MP: target.MaxMP,
 		Attack: target.Attack, Defense: target.Defense, Agility: target.Agility, ExperienceReward: target.ExperienceReward, GoldReward: target.GoldReward,
-	}, StrongKill: strong && actor.HP > 0}
-	if actor.HP > 0 && target.NPC {
+	}, StrongKill: strong && actor.HP > 0, PvP: win}
+	if actor.HP > 0 && target.NPC && !win {
 		foodID := ""
 		if actor.Gear != nil {
 			foodID = actor.Gear.AccessoryID

@@ -84,7 +84,7 @@ graph TD
 - [`stages-and-monsters.md`](stages-and-monsters.md) — 28-stage adventure catalog and 286 clean-room monsters.
 - [`adventure.md`](adventure.md) — Sequential 10-floor dungeon crawl, Floor 11 treasure room, adventure chronicle history and its on-view unlocks.
 - [`dungeon.md`](dungeon.md) — 2D grid tile matrix exploration, hazard traps, `@ちず` scouting jobs, and escape portals.
-- [`challenge.md`](challenge.md) — Wave entry, carry-over, rewards, treasure and individual exit.
+- [`challenge.md`](challenge.md) — Treasure, the stage record as legacy `$win`, and individual exit.
 - [`boss.md`](boss.md) — 6-player king1–10 / 4-player king99 sealing battles, eligibility, Dejon banishment, and victory celebration crowds.
 - [`party-system.md`](party-system.md) — 1–4 player co-op adventure lobbies, speed configuration, `need_join` condition gates, and synergy bonuses.
 - [`pvp.md`](pvp.md) — Colosseum real-time 2..8 player Bet & Split arena, 9 team colors, and multi-round combat resolution.

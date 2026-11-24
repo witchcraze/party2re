@@ -130,7 +130,7 @@ func newProtocolFixture(t *testing.T, n int) *protocolFixture {
 		t.Fatal(err)
 	}
 	f.fullness, f.adapter = fullness, adapter
-	f.svc, err = challenge.NewService(f.repo, f.chars, f.engine, challenge.WithActiveSessionStore(f.store), challenge.WithAdmission(approvedRoster{}), challenge.WithParticipantBuilder(adapter), challenge.WithFullnessResetter(fullness), challenge.WithRNG(zeroRNG{}), challenge.WithCustomTiers(map[string]challenge.ChallengeTier{"test": {ID: "test", MaxParticipants: 4, BaseMonster: challenge.ChallengeMonster{Name: "Test", BaseHP: 1, BaseExp: 20, BaseGold: 5}}}))
+	f.svc, err = challenge.NewService(f.repo, f.chars, f.engine, challenge.WithActiveSessionStore(f.store), challenge.WithAdmission(approvedRoster{}), challenge.WithParticipantBuilder(adapter), challenge.WithFullnessResetter(fullness), challenge.WithRNG(zeroRNG{}), challenge.WithCustomTiers(map[string]challenge.ChallengeTier{"test": {ID: "test", MaxParticipants: 4, Monsters: []challenge.ChallengeMonster{{Name: "Test", HP: 1, ExperienceReward: 20, GoldReward: 5}}}}))
 	if err != nil {
 		t.Fatal(err)
 	}

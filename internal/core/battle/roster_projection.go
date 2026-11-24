@@ -13,7 +13,7 @@ func (s *LifetimeState) ProjectEnemySummon(c *RosterContext, frame *CallbackCont
 	if err := s.ValidateRoster(&child, "gem_summon_sky", "", random.Default()); err != nil {
 		return nil, err
 	}
-	if len(s.Actors) >= 10 || len(frame.EnemyIDs) > 1 {
+	if child.NoEnemySummon || len(s.Actors) >= 10 || len(frame.EnemyIDs) > 1 {
 		return []CallbackContinuation{{State: s.callbackCopy(), Context: cloneCallbackContext(*frame)}}, nil
 	}
 	positions := child.AppearancePositions
