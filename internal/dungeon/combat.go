@@ -10,49 +10,56 @@ import (
 	corerandom "github.com/witchcraze/party2re/internal/core/random"
 )
 
+// encounterOutcome is one battle's effect on the run: per-member HP/MP deltas,
+// consumed items and the leader's HP delta mirrored by the run-level HP.
+type encounterOutcome struct {
+	result   corebattle.Result
+	field    *corebattle.FieldState
+	won      bool
+	memberHP map[string]int
+	memberMP map[string]int
+	consumed map[string][]corebattle.ConsumedItem
+	leaderHP int
+}
+
 func (s *Service) resolveEncounter(
 	ctx context.Context,
 	exp *ActiveExpedition,
 	char *corecharacter.Character,
 	enemies []corebattle.Participant,
 	allyStatus string,
-) (corebattle.Result, *corebattle.FieldState, bool, map[string]int, map[string]int, map[string][]corebattle.ConsumedItem, int, error) {
+) (encounterOutcome, error) {
 	allies, err := s.buildCombatAllies(ctx, exp, char, allyStatus)
 	if err != nil {
-		return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
+		return encounterOutcome{}, err
 	}
 	if len(allies) == 0 {
-		return corebattle.Result{Outcome: corebattle.OutcomeDefeat}, nil, false, make(map[string]int), nil, nil, -exp.CurrentHP, nil
+		return encounterOutcome{result: corebattle.Result{Outcome: corebattle.OutcomeDefeat}, memberHP: make(map[string]int), leaderHP: -exp.CurrentHP}, nil
 	}
 	initialMP := make(map[string]int, len(allies))
 	for _, a := range allies {
 		initialMP[a.ID] = a.MP
 	}
-
 	var initialField *corebattle.FieldState
 	if exp.Encounter != nil {
 		initialField = exp.Encounter.Field
 	}
-	var partyRes corebattle.PartyBattleResult
-	var battleRes corebattle.Result
-
-	if partyResolver, ok := s.battleEngine.(corebattle.PartyBattleResolver); ok {
-		partyRes, err = partyResolver.ResolvePartyBattle(corebattle.PartyBattleRequest{
-			Allies:       allies,
-			InitialField: initialField,
-			Enemies:      enemies,
-			RNG:          adaptRandomSource(s.rng),
-		})
-		if err != nil {
-			return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
-		}
-		winnerID := enemies[0].ID
-		loserID := char.ID
-		if partyRes.Outcome == corebattle.OutcomeWin && partyRes.WinnerSide == "allies" {
-			winnerID = char.ID
-			loserID = enemies[0].ID
-		}
-		battleRes = corebattle.Result{
+	partyRes, err := s.battleEngine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+		Allies:       allies,
+		InitialField: initialField,
+		Enemies:      enemies,
+		RNG:          adaptRandomSource(s.rng),
+	})
+	if err != nil {
+		return encounterOutcome{}, err
+	}
+	won := partyRes.Outcome == corebattle.OutcomeWin && partyRes.WinnerSide == "allies"
+	winnerID, loserID := enemies[0].ID, char.ID
+	if won {
+		winnerID, loserID = char.ID, enemies[0].ID
+	}
+	out := encounterOutcome{
+		result: corebattle.Result{
 			Outcome:         partyRes.Outcome,
 			WinnerID:        winnerID,
 			LoserID:         loserID,
@@ -63,37 +70,13 @@ func (s *Service) resolveEncounter(
 			RemainingStatus: partyRes.RemainingStatus,
 			ConsumedItems:   partyRes.ConsumedItems,
 			Logs:            partyRes.Logs,
-		}
-	} else {
-		if len(allies) > 1 || len(enemies) > 1 {
-			return corebattle.Result{}, nil, false, nil, nil, nil, 0, corebattle.ErrInvalidRequest
-		}
-		battleRes, err = s.battleEngine.Resolve(corebattle.Request{
-			Participants: []corebattle.Participant{allies[0], enemies[0]},
-			RNG:          adaptRandomSource(s.rng),
-		})
-		if err != nil {
-			return corebattle.Result{}, nil, false, nil, nil, nil, 0, err
-		}
-		partyRes = corebattle.PartyBattleResult{
-			Outcome:         battleRes.Outcome,
-			WinnerSide:      "enemies",
-			RemainingHP:     battleRes.RemainingHP,
-			RemainingMP:     battleRes.RemainingMP,
-			RemainingCMP:    battleRes.RemainingCMP,
-			RemainingStatus: battleRes.RemainingStatus,
-			ConsumedItems:   battleRes.ConsumedItems,
-			Logs:            battleRes.Logs,
-		}
-		if battleRes.Outcome == corebattle.OutcomeWin && battleRes.WinnerID == allies[0].ID {
-			partyRes.WinnerSide = "allies"
-		}
+		},
+		field:    partyRes.FinalField,
+		won:      won,
+		memberHP: make(map[string]int),
+		memberMP: make(map[string]int),
+		consumed: make(map[string][]corebattle.ConsumedItem),
 	}
-
-	won := partyRes.Outcome == corebattle.OutcomeWin && partyRes.WinnerSide == "allies"
-	memberHPDeltas := make(map[string]int)
-	memberMPDeltas := make(map[string]int)
-	consumedItems := make(map[string][]corebattle.ConsumedItem)
 
 	if len(exp.Members) > 0 {
 		for _, m := range exp.Members {
@@ -101,42 +84,39 @@ func (s *Service) resolveEncounter(
 				continue
 			}
 			if remHP, ok := partyRes.RemainingHP[m.CharacterID]; ok {
-				memberHPDeltas[m.CharacterID] = remHP - m.CurrentHP
+				out.memberHP[m.CharacterID] = remHP - m.CurrentHP
 			} else if !won {
-				memberHPDeltas[m.CharacterID] = -m.CurrentHP
+				out.memberHP[m.CharacterID] = -m.CurrentHP
 			}
 			if remMP, ok := partyRes.RemainingMP[m.CharacterID]; ok {
-				memberMPDeltas[m.CharacterID] = remMP - m.CurrentMP
+				out.memberMP[m.CharacterID] = remMP - m.CurrentMP
 			} else if initMP, ok := initialMP[m.CharacterID]; ok && !m.HasCurrentMP() {
-				memberMPDeltas[m.CharacterID] = initMP - m.CurrentMP
+				out.memberMP[m.CharacterID] = initMP - m.CurrentMP
 			}
-			if items, ok := partyRes.ConsumedItems[m.CharacterID]; ok && len(items) > 0 {
-				consumedItems[m.CharacterID] = items
+			if items := partyRes.ConsumedItems[m.CharacterID]; len(items) > 0 {
+				out.consumed[m.CharacterID] = items
 			}
 		}
 	} else {
 		hpDelta := 0
-		if remHP, ok := battleRes.RemainingHP[char.ID]; ok {
+		if remHP, ok := partyRes.RemainingHP[char.ID]; ok {
 			hpDelta = remHP - exp.CurrentHP
-		} else if len(battleRes.Logs) > 0 {
-			lastLog := battleRes.Logs[len(battleRes.Logs)-1]
-			if remHP, ok := lastLog.RemainingHP[char.ID]; ok {
+		} else if len(partyRes.Logs) > 0 {
+			if remHP, ok := partyRes.Logs[len(partyRes.Logs)-1].RemainingHP[char.ID]; ok {
 				hpDelta = remHP - exp.CurrentHP
 			}
 		} else if !won {
 			hpDelta = -exp.CurrentHP
 		}
-		memberHPDeltas[char.ID] = hpDelta
+		out.memberHP[char.ID] = hpDelta
 	}
 
-	leaderHPDelta := 0
-	if d, ok := memberHPDeltas[char.ID]; ok {
-		leaderHPDelta = d
+	if d, ok := out.memberHP[char.ID]; ok {
+		out.leaderHP = d
 	} else if !won {
-		leaderHPDelta = -exp.CurrentHP
+		out.leaderHP = -exp.CurrentHP
 	}
-
-	return battleRes, partyRes.FinalField, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, nil
+	return out, nil
 }
 
 func (s *Service) resolveMonsterCombat(
@@ -161,16 +141,16 @@ func (s *Service) resolveMonsterCombat(
 		enemies = participants(monsters)
 	}
 	living := slices.DeleteFunc(slices.Clone(enemies), func(e corebattle.Participant) bool { return e.HP <= 0 })
-	battleRes, field, won, memberHPDeltas, memberMPDeltas, consumedItems, leaderHPDelta, err := s.resolveEncounter(ctx, exp, char, living, allyStatus)
+	out, err := s.resolveEncounter(ctx, exp, char, living, allyStatus)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
 	for id, d := range revived {
-		memberHPDeltas[id] += d
+		out.memberHP[id] += d
 	}
-	leaderHPDelta += revived[char.ID]
+	out.leaderHP += revived[char.ID]
 
-	if won {
+	if out.won {
 		// shortcut: the whole group's rewards land at victory until #1957 credits each defeat.
 		var expReward, goldReward int
 		for _, m := range monsters {
@@ -180,14 +160,14 @@ func (s *Service) resolveMonsterCombat(
 		memberExpDeltas := make(map[string]int, len(exp.Members))
 		memberGoldDeltas := make(map[string]int, len(exp.Members))
 		for _, m := range exp.Members {
-			if remHP, ok := battleRes.RemainingHP[m.CharacterID]; ok && remHP > 0 {
+			if remHP, ok := out.result.RemainingHP[m.CharacterID]; ok && remHP > 0 {
 				memberExpDeltas[m.CharacterID] = expReward
 				memberGoldDeltas[m.CharacterID] = goldReward
 			}
 		}
 		leaderExpDelta := memberExpDeltas[char.ID]
 		leaderGoldDelta := memberGoldDeltas[char.ID]
-		if len(exp.Members) <= 1 && leaderHPDelta+exp.CurrentHP > 0 {
+		if len(exp.Members) <= 1 && out.leaderHP+exp.CurrentHP > 0 {
 			leaderExpDelta = expReward
 			leaderGoldDelta = goldReward
 		}
@@ -198,12 +178,12 @@ func (s *Service) resolveMonsterCombat(
 			Combat:               true,
 			NewX:                 newX,
 			NewY:                 newY,
-			HPDelta:              leaderHPDelta,
-			MemberHPDeltas:       memberHPDeltas,
-			MemberMPDeltas:       memberMPDeltas,
+			HPDelta:              out.leaderHP,
+			MemberHPDeltas:       out.memberHP,
+			MemberMPDeltas:       out.memberMP,
 			MemberExpDeltas:      memberExpDeltas,
 			MemberGoldDeltas:     memberGoldDeltas,
-			ConsumedItems:        consumedItems,
+			ConsumedItems:        out.consumed,
 			RoundDelta:           rounds,
 			EventKey:             eventKey,
 			MapState:             carry.MapState,
@@ -221,7 +201,7 @@ func (s *Service) resolveMonsterCombat(
 		return ExpeditionStepResult{
 			Expedition:    stepRes.Expedition,
 			EventType:     eventType,
-			BattleResult:  &battleRes,
+			BattleResult:  &out.result,
 			MemberDamages: memberDamages,
 			ExpEarned:     leaderExpDelta,
 			GoldFound:     leaderGoldDelta,
@@ -234,7 +214,7 @@ func (s *Service) resolveMonsterCombat(
 	// Draw or defeat: surviving enemies stay. An all-fallen party remains in the
 	// run, where only Escape is left (legacy never ends a quest because allies fell).
 	// After a mutual knockout no enemy survives, so no encounter is kept.
-	pending := pendingEncounter(exp, monsters, enemies, eventType, newX, newY, battleRes, field)
+	pending := pendingEncounter(exp, monsters, enemies, eventType, newX, newY, out.result, out.field)
 	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
@@ -242,10 +222,10 @@ func (s *Service) resolveMonsterCombat(
 		NewX:                 stayX,
 		NewY:                 stayY,
 		Encounter:            pending,
-		HPDelta:              leaderHPDelta,
-		MemberHPDeltas:       memberHPDeltas,
-		MemberMPDeltas:       memberMPDeltas,
-		ConsumedItems:        consumedItems,
+		HPDelta:              out.leaderHP,
+		MemberHPDeltas:       out.memberHP,
+		MemberMPDeltas:       out.memberMP,
+		ConsumedItems:        out.consumed,
 		RoundDelta:           rounds,
 		EventKey:             eventKey,
 		MapState:             carry.MapState,
@@ -259,10 +239,10 @@ func (s *Service) resolveMonsterCombat(
 	return ExpeditionStepResult{
 		Expedition:    stepRes.Expedition,
 		EventType:     eventType,
-		BattleResult:  &battleRes,
+		BattleResult:  &out.result,
 		MemberDamages: memberDamages,
 		Monsters:      monsters,
-		CombatOutcome: battleRes.Outcome,
+		CombatOutcome: out.result.Outcome,
 	}, nil
 }
 
