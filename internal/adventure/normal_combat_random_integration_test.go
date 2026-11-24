@@ -1,6 +1,8 @@
 package adventure_test
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -288,21 +290,88 @@ func TestRunCombatLaterSlotRejectsAfterRandomPredecessor(t *testing.T) {
 	}
 }
 
-// Tool151's inspection consumes the held instance once
-// and changes no participant; the receipt replays without re-inspecting.
+// Tool151's inspection consumes the held instance once and changes no
+// participant; its facts for the first ten ordered enemies (_skill.cgi:1306–1323
+// per member) return in the receipt, which replays without re-inspecting.
 func TestRunCombatTool151ConsumesHeldInstanceOnce(t *testing.T) {
 	f := randomFixture(t)
 	grantHeldTo(t, f, 0, "item-151")
-	cmd := customRoom(t, f, 0, nil, encounterEnemy("foe", 900), encounterEnemy("other", 900))
+	var enemies []corebattle.LifetimeActor
+	for i := range 11 {
+		enemies = append(enemies, encounterEnemy(fmt.Sprintf("foe-%02d", i), 900))
+	}
+	cmd := customRoom(t, f, 0, nil, enemies...)
 	before := readStockRoom(t, f, cmd.RunID)
-	r := accepted(t, f, combatCommand(cmd, "inspect", "tool", "", ""))
+	inspect := combatCommand(cmd, "inspect", "tool", "", "")
+	r := accepted(t, f, inspect)
 	a := runActorByID(r, cmd.ActorID)
 	if a.HeldToolID == nil || *a.HeldToolID != "" || len(heldItems(t, f, 0)) != 0 || len(a.ConsumedItems) != len(runActorByID(before, cmd.ActorID).ConsumedItems)+1 {
 		t.Fatalf("held=%v items=%+v consumed=%+v", a.HeldToolID, heldItems(t, f, 0), a.ConsumedItems)
 	}
-	for _, id := range []string{"foe", "other"} {
-		if got, want := runActorByID(r, id), runActorByID(before, id); got.HP != want.HP || got.Status != want.Status {
-			t.Fatalf("%s changed: %+v", id, got)
+	var want []corebattle.InspectionFact
+	for _, e := range enemies {
+		if got, was := runActorByID(r, e.ID), runActorByID(before, e.ID); got.HP != was.HP || got.Status != was.Status {
+			t.Fatalf("%s changed: %+v", e.ID, got)
+		}
+		if len(want) < 10 {
+			want = append(want, corebattle.InspectionFact{Kind: "scent", TargetID: e.ID, Flavor: 4})
 		}
 	}
+	if receipt := replayReceipt(t, f, inspect); !reflect.DeepEqual(receipt.Inspections, []runhost.Inspection{{ActorID: cmd.ActorID, EntryID: "tool-151", Facts: want}}) {
+		t.Fatalf("inspections: %+v", receipt.Inspections)
+	}
+}
+
+// A job inspection returns its single fact the same way: job16.1's stats
+// (_skill.cgi:1818–1824) and job78.1's member valuation, whose flavor draw
+// (_skill.cgi:6018–6114) is frozen in the receipt. Without MP the command is
+// rejected with no receipt.
+func TestRunCombatJobInspectionReturnsFact(t *testing.T) {
+	for _, tc := range []struct {
+		job, name string
+		self      bool
+		mp        int
+		want      func(corebattle.LifetimeActor) corebattle.InspectionFact
+	}{
+		{"job-16", "ライブラ", false, 2, func(foe corebattle.LifetimeActor) corebattle.InspectionFact {
+			return corebattle.InspectionFact{Kind: "stats", TargetID: foe.ID, HP: foe.HP, MaxHP: foe.MaxHP, MP: foe.MP, MaxMP: foe.MaxMP, BaseStats: foe.BaseStats}
+		}},
+		{"job-78", "トレハンのかん", true, 0, nil},
+		{"job-16", "ライブラ", false, 1, nil},
+	} {
+		f := randomFixture(t)
+		foe := encounterEnemy("foe", 900)
+		cmd := customRoom(t, f, 0, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
+			a.Jobs = corebattle.BattleJobs{JobID: tc.job, SP: 20}
+			a.MP, a.MaxMP = tc.mp, 50
+		}, foe)
+		target := foe.ID
+		if tc.self {
+			target = cmd.ActorID
+		}
+		inspect := combatCommand(cmd, "inspect", "", "", "＠"+tc.name+">"+target)
+		if tc.job == "job-16" && tc.mp < 2 {
+			rejected(t, f, inspect)
+			continue
+		}
+		accepted(t, f, inspect)
+		want := corebattle.InspectionFact{Kind: "character", TargetID: cmd.ActorID, Flavor: 4}
+		if tc.want != nil {
+			want = tc.want(foe)
+		}
+		entry := tc.job + "-entry-1"
+		if got := replayReceipt(t, f, inspect).Inspections; !reflect.DeepEqual(got, []runhost.Inspection{{ActorID: cmd.ActorID, EntryID: entry, Facts: []corebattle.InspectionFact{want}}}) {
+			t.Fatalf("%s: %+v", entry, got)
+		}
+	}
+}
+
+// replayReceipt returns the saved receipt of an already accepted command.
+func replayReceipt(t *testing.T, f *normalFixture, cmd runhost.Command) runhost.Receipt {
+	t.Helper()
+	receipt, err := f.svc.Command(t.Context(), cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return receipt
 }

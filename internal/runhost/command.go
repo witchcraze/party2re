@@ -223,7 +223,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		if err := s.cfg.Store.SaveRun(ctx, *run, cmd.Version); err != nil {
 			return err
 		}
-		result = Receipt{Command: cmd, Version: r.Version, Round: r.Round, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition, MonsterTames: tames}
+		result = Receipt{Command: cmd, Version: r.Version, Round: r.Round, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition, MonsterTames: tames, Inspections: effects.Inspections}
 		return s.cfg.Store.SaveRunReceipt(ctx, result)
 	})
 	result, err = s.resolveReceipt(ctx, cmd, result, err)
