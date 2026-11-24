@@ -60,6 +60,10 @@ type State struct {
 	StartedAt    time.Time                `json:"started_at"`
 	LastActivity time.Time                `json:"last_activity"`
 	TimedOut     bool                     `json:"timed_out"`
+	// Teams builds every combat frame from colors as legacy read_member does:
+	// each other team's living member is the requester's enemy. A room with
+	// no encounter (PvP) sets it; Enemies then never decides a frame.
+	Teams bool `json:"teams,omitempty"`
 }
 
 // Snapshot is a room library's run type: a pointer exposing its embedded State.
@@ -243,8 +247,8 @@ type Room[R any] interface {
 	Prepare(*Admission) error
 	// AdmitMember checks one locked member against the room's entry rules.
 	AdmitMember(ctx context.Context, r *R, id string) error
-	// Open fixes the room after member checks. release undoes an entry claim
-	// when the enrollment does not commit.
+	// Open fixes the room after member checks, once every member's actor is
+	// built. release undoes an entry claim when the enrollment does not commit.
 	Open(ctx context.Context, r *R) (release func(context.Context) error, err error)
 	// Actions are the room's own commands (add_battle_action), run by Act.
 	Actions() []string
@@ -273,7 +277,9 @@ type Effects struct {
 
 type Config[R any] struct {
 	// Kind namespaces run identities derived from admission generations.
-	Kind        string
+	Kind string
+	// MaxMembers caps an admitted roster; zero is legacy $max_party (4).
+	MaxMembers  int
 	Store       Store[R]
 	Characters  Characters
 	Inventories Inventories
@@ -310,6 +316,13 @@ func NewService[R any, P Snapshot[R]](cfg Config[R]) (*Service[R, P], error) {
 		cfg.RNG = random.Default()
 	}
 	return &Service[R, P]{cfg: cfg}, nil
+}
+
+func (s *Service[R, P]) maxMembers() int {
+	if s.cfg.MaxMembers > 0 {
+		return s.cfg.MaxMembers
+	}
+	return 4
 }
 
 func (s *Service[R, P]) SetExitEffects(apply func(context.Context, string) error) {

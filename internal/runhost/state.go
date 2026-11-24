@@ -19,6 +19,21 @@ func (r *State) Ready(actor string, now time.Time) error {
 	return nil
 }
 
+// frameEnemies are the candidates for team's enemy frame: the encounter, or
+// every other team's member in member order under Teams.
+func (r *State) frameEnemies(team string) []string {
+	if !r.Teams {
+		return r.Enemies
+	}
+	var ids []string
+	for _, a := range r.Battle.Actors {
+		if a.TeamID != team {
+			ids = append(ids, a.ID)
+		}
+	}
+	return ids
+}
+
 // LivingEnemies uses persisted encounter membership, never coordinate-derived IDs.
 func (r *State) LivingEnemies() bool {
 	for _, box := range r.Boxes {

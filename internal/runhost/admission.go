@@ -106,7 +106,7 @@ func (s *Service[R, P]) enter(ctx context.Context, player string, a Admission) (
 	if a.Speed != 3 && a.Speed != 18 && a.Speed != 25 {
 		return Receipt{}, ErrConflict
 	}
-	if len(a.CharacterIDs) < 1 || len(a.CharacterIDs) > 4 || a.CharacterIDs[0] != a.ActorID {
+	if len(a.CharacterIDs) < 1 || len(a.CharacterIDs) > s.maxMembers() || a.CharacterIDs[0] != a.ActorID {
 		return Receipt{}, ErrNoParticipants
 	}
 	if len(a.Actors) != 0 && len(a.Actors) != len(a.CharacterIDs) {
@@ -186,9 +186,6 @@ func (s *Service[R, P]) enter(ctx context.Context, player string, a Admission) (
 				return err
 			}
 		}
-		if release, err = s.cfg.Room.Open(ctx, &run); err != nil {
-			return err
-		}
 		for i, id := range a.CharacterIDs {
 			var actor corebattle.LifetimeActor
 			if i < len(a.Actors) && a.Actors[i].ID != "" {
@@ -205,6 +202,9 @@ func (s *Service[R, P]) enter(ctx context.Context, player string, a Admission) (
 			}
 			actor.TeamID = "allies"
 			r.Battle.Actors = append(r.Battle.Actors, actor)
+		}
+		if release, err = s.cfg.Room.Open(ctx, &run); err != nil {
+			return err
 		}
 		if err := s.cfg.Store.EnrollRun(ctx, *r); err != nil {
 			return err

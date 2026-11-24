@@ -5,15 +5,18 @@ The Colosseum PvP module (`internal/pvp`) reconstructs `party2/lib/vs_player.cgi
 ## Rules, Departures, and Open Gaps
 
 - **Live-room departure (`@にげる`, `_battle.cgi:1184–1248,1330–1375`):**
-  - Pre-start (`recruiting`, round 0) refunds only the departing participant's bet and promotes leadership if members remain; once started (`in_progress` or `completed`), bets are never refunded (`prize_pool` closes as forfeited escrow when the last participant exits).
+  - Pre-start (`recruiting`, round 0) refunds only the departing participant's bet and promotes leadership if members remain.
 - **Lobby preparation actions (`vs_player.cgi:33–38`, `_skill.cgi:161–164,769–837`):**
   - `@きっく` (`pvp_kick`, leader-only before match start) removes the target and imposes a 60-second `ActionWait` without bet refund or `@にげる` exit side-effects (fatigue, vitality copyback, item bonuses, or bar delivery); the kicked member's bet remains in `prize_pool` as in `_skill.cgi:796–837` (revisiting bet refund is tracked in [#2586](https://github.com/witchcraze/party2re/issues/2586)).
-  - `@しらべる` (`vs_player.cgi:34,36` → `system.cgi:322`) maps to `player_inspect` during pre-start `recruiting` (`round == 0`).
   - `@さそう` (`_skill.cgi:769–791`, quest-lobby whisper) awaits the quest-lobby place log ([#2585](https://github.com/witchcraze/party2re/issues/2585)).
 - **Recovery and inactivity (`quest.cgi:86–91,172–184`, `_battle.cgi:453–461`):**
   - Missing live state clears membership without refunding bets or inferring an inactivity penalty.
   - Genuine inactivity (`now > last_activity + 1800s`) forfeits remaining escrow without refund and sets a 3600-second sleep penalty while preserving longer sleep. **Non-obvious legacy behavior:** `quest.cgi:928–1079` (`add_member`) writes join messages to `$logdir/quest.cgi` rather than the room's `log.cgi`, so joining does not refresh the inactivity clock (only creation, team selection, kick, start, round advance, and non-final departures refresh it). Because GET stays read-only, cleanup runs lazily on mutating PvP accesses; periodic background cleanup is tracked in [#2343](https://github.com/witchcraze/party2re/issues/2343).
-- **Settlement and combat parity:**
-  - Mid-match departures leaving one team award the round win without combat; integer-division remainders and 10-round undecided draws (`vs_player.cgi:101–104,148–151,208`) close remaining `prize_pool` as forfeited escrow without refund.
-  - Match victory (`give_bet`, `vs_player.cgi:186–216`) awards prize gold only; `characters.pvp_wins` (`kill_p`) is credited per surviving character who inflicts a non-revived stronger-opponent combat defeat (`_battle.cgi:231–232`, `battle.IsStrongEnemy`) and flushed atomically at settlement or inactivity closure.
-  - Open: restoring per-actor player-command combat instead of single-request round resolution is tracked in [#1867](https://github.com/witchcraze/party2re/issues/1867), and non-final round retry identity in [#2532](https://github.com/witchcraze/party2re/issues/2532).
+- **Rounds on the run host (`vs_player.cgi:73–216`):**
+  - Rounds 1 and later run as a room library on the [run host](../architecture/transient-run-state.md#run-host-durable-command-boundary-1325). The leader's first `かいし` hands the lobby off and moves the whole bet pool into the run. After that, bets are never refunded, and the pool is lost if the last member leaves or the round limit is reached.
+  - Combat frames are color-relative, as in `read_member`: every other color is the enemy, and NPCs never respond (`vs_player.cgi:219`).
+  - **Non-obvious legacy behavior:** the `$round > 10` check (`vs_player.cgi:101`) runs before the tally and the round counter increments only at the end (`:181`). Round 11 is therefore played, but its result is never counted.
+  - **Non-obvious legacy behavior:** the waits `かいし` gives other members and the starter's doubled `$act_time` (`vs_player.cgi:175–179`) only drive the client countdown. The action gate stays `$ms{$m}{time}` plus `$speed` (`_battle.cgi:641`).
+  - **Non-obvious legacy behavior:** `give_bet` divides the pool by every member of the winning color in `@members` (`vs_player.cgi:190–208`), allied summons included. Only players receive a share because `send_money` skips names without a user file (`system.cgi:847`). The remainder is lost.
+  - `characters.pvp_wins` (`kill_p`) is credited for a stronger opponent through the shared defeat routine (`_battle.cgi:231–232`).
+  - Gap: HTTP still resolves each round in one request until the Gateway cutover ([#2736](https://github.com/witchcraze/party2re/issues/2736)), which also deletes the round engine behind [#2532](https://github.com/witchcraze/party2re/issues/2532).
