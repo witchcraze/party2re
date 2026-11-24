@@ -53,7 +53,7 @@ func (s *LifetimeState) ValidateNPCJob405(c *NPCJob405Context, id string, rng ra
 		// covers and reflections for earlier hits.
 		for _, target := range child.EnemyIDs {
 			npc405Cleave(p.actor(target))
-			if err := p.admitNPC405Hit(&damage, child.Death, dualAgilityEffect(target, 799, CategoryUntyped, true), rng); err != nil {
+			if err := p.admitNPC405Hit(&damage, child.Death, dualAgilityEffect(target, 799, CategoryUntyped, true), 799, rng); err != nil {
 				return err
 			}
 		}
@@ -81,7 +81,7 @@ func (s *LifetimeState) ValidateNPCJob405(c *NPCJob405Context, id string, rng ra
 				return nil
 			}
 			tension := p.actor(child.ActorID).Tension
-			if err := p.admitNPC405Hit(&damage, child.Death, dualAgilityEffect("", power, CategoryUntyped, false), rng); err != nil {
+			if err := p.admitNPC405Hit(&damage, child.Death, dualAgilityEffect("", power, CategoryUntyped, false), power, rng); err != nil {
 				return err
 			}
 			power = float64(int(power * tension * .8))
@@ -132,9 +132,10 @@ func (p *LifetimeState) validateNPC405Renewal(c *NPCJob405Context, damage Damage
 // admitNPC405Hit checks the hit's defeat/reset descendants with the shared
 // projection and records it on the lightweight sequence. Instead of carrying
 // branches, the projection keeps each actor's lowest reachable HP and highest
-// tension, so later hits see cumulative damage at linear cost.
-func (p *LifetimeState) admitNPC405Hit(damage *DamageContext, death *DefeatContext, e TargetEffect, rng random.Generator) error {
-	states, err := p.projectCallbackDamage(damage, death, e, e.Payload.Number, true, rng)
+// tension, so later hits see cumulative damage at linear cost. e carries the
+// lowest raw power and upper its ceiling.
+func (p *LifetimeState) admitNPC405Hit(damage *DamageContext, death *DefeatContext, e TargetEffect, upper float64, rng random.Generator) error {
+	states, err := p.projectCallbackDamage(damage, death, e, upper, true, rng)
 	if err != nil {
 		return err
 	}
@@ -161,7 +162,7 @@ func (p *LifetimeState) admitNPC405Area(damage *DamageContext, death *DefeatCont
 		if p.actor(damage.ActorID).HP <= 0 {
 			return nil
 		}
-		if err := p.admitNPC405Hit(damage, death, hit, rng); err != nil {
+		if err := p.admitNPC405Hit(damage, death, hit, hit.Payload.Number, rng); err != nil {
 			return err
 		}
 	}

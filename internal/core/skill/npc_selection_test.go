@@ -279,9 +279,9 @@ func TestNPCCustomNameOverridesPriorBindingsWithoutLosingWeight(t *testing.T) {
 	}
 }
 
-func TestNPC406RemainsWholeActionGate(t *testing.T) {
+func TestNPCJobWithoutTableRemainsWholeActionGate(t *testing.T) {
 	s, _, f, d := npcSelectionFixture()
-	s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-406", SP: 1000, OldJobID: "starter"}
+	s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-404", SP: 1000, OldJobID: "starter"}
 	before, _ := json.Marshal(s)
 	rng := &npcSelectionRNG{}
 	if _, err := d.NPCChoices(&s, &f, NPCDefaultSeed(), rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) {

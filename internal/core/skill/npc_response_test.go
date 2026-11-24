@@ -50,7 +50,7 @@ func TestNPCOperationCureOnlyReachesTails(t *testing.T) {
 func TestNPCOperationWholePoolRejectionIsPure(t *testing.T) {
 	s, op := runNPCFixture(t)
 	s.Actors[0].Status = battle.StatusConfusion
-	s.Actors[0].Jobs = battle.BattleJobs{JobID: "job-406", SP: 1000, OldJobID: "starter"}
+	s.Actors[0].Jobs = battle.BattleJobs{JobID: "job-404", SP: 1000, OldJobID: "starter"}
 	before, err := json.Marshal(s)
 	if err != nil {
 		t.Fatal(err)

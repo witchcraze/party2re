@@ -26,10 +26,12 @@ func (d *BattleDefinitions) RegisterNPCCallbacks(shared PlayerCallbackContexts, 
 	d.RegisterNPCJob402(&corebattle.NPCJob402Context{DamageContext: damage, Death: death})
 	d.RegisterNPCJob405(&corebattle.NPCJob405Context{DamageContext: damage, Death: death})
 	d.RegisterNPCJob407(shared.Roster)
-	entries := corebattle.NPCJobEntries(408)
-	d.Invocations.JobTables[408] = corebattle.CallbackTable{Variants: [][]corebattle.CallbackEntry{entries}}
-	for _, entry := range entries {
-		d.Invocations.Entries[entry.ID] = corebattle.NPCJob408Definition(entry.ID)
+	for job, definition := range map[int]func(string) corebattle.CallbackDefinition{406: corebattle.NPCJob406Definition, 408: corebattle.NPCJob408Definition} {
+		entries := corebattle.NPCJobEntries(job)
+		d.Invocations.JobTables[job] = corebattle.CallbackTable{Variants: [][]corebattle.CallbackEntry{entries}}
+		for _, entry := range entries {
+			d.Invocations.Entries[entry.ID] = definition(entry.ID)
+		}
 	}
 	d.RegisterNPCOrderedReset(&corebattle.NPCOrderedResetContext{DamageContext: damage, EquipmentReset: reset})
 	d.RegisterGemCallbacks(shared, frame.Damage)
