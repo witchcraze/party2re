@@ -90,7 +90,7 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	c2.Stats.MaxMP = 100
 	charRepo.chars[c2.ID] = c2
 
-	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}))
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{}, challenge.WithAdmission(approvedRoster{}), challenge.WithRNG(random.NewDeterministic(1)))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
