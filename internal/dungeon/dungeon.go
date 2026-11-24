@@ -12,7 +12,6 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 )
 
 var (
@@ -69,7 +68,6 @@ type DungeonMonster struct {
 	Agility    int    `json:"agility"`
 	ExpReward  int    `json:"exp_reward"`
 	GoldReward int    `json:"gold_reward"`
-	DropItemID string `json:"drop_item_id,omitempty"`
 	combat     *corebattle.LifetimeActor
 }
 
@@ -150,24 +148,23 @@ func (d Dungeon) floorName(f Floor) string {
 }
 
 type ActiveExpedition struct {
-	Revision         int                `json:"revision"`
-	Encounter        *ActiveEncounter   `json:"encounter,omitempty"`
-	ID               string             `json:"id"`
-	CharacterID      string             `json:"character_id"`
-	PartyID          string             `json:"party_id,omitempty"`
-	PartyName        string             `json:"party_name,omitempty"`
-	Members          []ExpeditionMember `json:"members,omitempty"`
-	DungeonID        string             `json:"dungeon_id"`
-	MapVariant       int                `json:"-"` // 1-based native layout; 0 for catalog floors
-	PosX             int                `json:"pos_x"`
-	PosY             int                `json:"pos_y"`
-	CurrentHP        int                `json:"current_hp"`
-	Round            int                `json:"round"`
-	RoundLimit       int                `json:"round_limit"` // the current floor's limit
-	AccumulatedExp   int                `json:"accumulated_exp"`
-	AccumulatedGold  int                `json:"accumulated_gold"`
-	AccumulatedItems []string           `json:"accumulated_items"`
-	ConsumedEvents   []string           `json:"consumed_events,omitempty"`
+	Revision        int                `json:"revision"`
+	Encounter       *ActiveEncounter   `json:"encounter,omitempty"`
+	ID              string             `json:"id"`
+	CharacterID     string             `json:"character_id"`
+	PartyID         string             `json:"party_id,omitempty"`
+	PartyName       string             `json:"party_name,omitempty"`
+	Members         []ExpeditionMember `json:"members,omitempty"`
+	DungeonID       string             `json:"dungeon_id"`
+	MapVariant      int                `json:"-"` // 1-based native layout; 0 for catalog floors
+	PosX            int                `json:"pos_x"`
+	PosY            int                `json:"pos_y"`
+	CurrentHP       int                `json:"current_hp"`
+	Round           int                `json:"round"`
+	RoundLimit      int                `json:"round_limit"` // the current floor's limit
+	AccumulatedExp  int                `json:"accumulated_exp"`
+	AccumulatedGold int                `json:"accumulated_gold"`
+	ConsumedEvents  []string           `json:"consumed_events,omitempty"`
 	// MapState is the map's own typed run state (e.g. map14 routes), JSON
 	// encoded by that map and private to it.
 	MapState  json.RawMessage  `json:"-"`
@@ -177,14 +174,13 @@ type ActiveExpedition struct {
 }
 
 type DungeonExpeditionHistory struct {
-	ID               string           `json:"id"`
-	CharacterID      string           `json:"character_id"`
-	DungeonID        string           `json:"dungeon_id"`
-	Outcome          ExpeditionStatus `json:"outcome"`
-	ExpReward        int              `json:"exp_reward"`
-	GoldReward       int              `json:"gold_reward"`
-	ItemsRewardCount int              `json:"items_reward_count"`
-	CreatedAt        time.Time        `json:"created_at"`
+	ID          string           `json:"id"`
+	CharacterID string           `json:"character_id"`
+	DungeonID   string           `json:"dungeon_id"`
+	Outcome     ExpeditionStatus `json:"outcome"`
+	ExpReward   int              `json:"exp_reward"`
+	GoldReward  int              `json:"gold_reward"`
+	CreatedAt   time.Time        `json:"created_at"`
 	// ExitRound is the shared round at Escape, the settlement input for nigeru's exit effects; not persisted.
 	ExitRound int `json:"-"`
 }
@@ -198,7 +194,6 @@ type ExpeditionStepResult struct {
 	DamageTaken   int                `json:"damage_taken,omitempty"`
 	MemberDamages map[string]int     `json:"member_damages,omitempty"`
 	GoldFound     int                `json:"gold_found,omitempty"`
-	ItemFound     string             `json:"item_found,omitempty"`
 	ChestsOpened  int                `json:"chests_opened,omitempty"`
 	ExpEarned     int                `json:"exp_earned,omitempty"`
 	IsFinished    bool               `json:"is_finished"`
@@ -221,12 +216,11 @@ type StepParams struct {
 	ConsumedItems        map[string][]corebattle.ConsumedItem
 	RoundDelta           int
 	// MapVariant, when nonzero, moves the run to that floor with its RoundLimit.
-	MapVariant   int
-	RoundLimit   int
-	ExpDelta     int
-	GoldDelta    int
-	RewardItemID string
-	EventKey     string
+	MapVariant int
+	RoundLimit int
+	ExpDelta   int
+	GoldDelta  int
+	EventKey   string
 	// MapState, when non-nil, replaces the run's map state.
 	MapState json.RawMessage
 	Now      time.Time
@@ -256,7 +250,6 @@ type Repository interface {
 		ctx context.Context,
 		history DungeonExpeditionHistory,
 		character *corecharacter.Character,
-		rewardItems []coreitem.Instance,
 		members ...ExpeditionMember,
 	) error
 	GetHistory(ctx context.Context, characterID string, limit int) ([]DungeonExpeditionHistory, error)
@@ -426,11 +419,6 @@ func EncodeItems(items []string) string {
 	}
 	b, _ := json.Marshal(items)
 	return string(b)
-}
-
-func DecodeItems(data string) []string {
-	items, _ := decodeItems(data)
-	return items
 }
 
 func decodeItems(data string) ([]string, error) {

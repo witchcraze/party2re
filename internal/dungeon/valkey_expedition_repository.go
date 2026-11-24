@@ -134,9 +134,9 @@ func parseOptionalTime(field, raw string) (time.Time, error) {
 }
 
 type rawValkeyExpedition struct {
-	id, charID, partyID, partyName, dungeonID, status                 string
-	posX, posY, hp, round, limit, variant, revision, exp, gold        string
-	items, members, consumedEvents, encounter, mapState, start, updAt string
+	id, charID, partyID, partyName, dungeonID, status          string
+	posX, posY, hp, round, limit, variant, revision, exp, gold string
+	members, consumedEvents, encounter, mapState, start, updAt string
 }
 
 func (raw rawValkeyExpedition) decode() (ActiveExpedition, error) {
@@ -176,10 +176,6 @@ func (raw rawValkeyExpedition) decode() (ActiveExpedition, error) {
 	if err != nil {
 		return ActiveExpedition{}, err
 	}
-	items, err := decodeItems(raw.items)
-	if err != nil {
-		return ActiveExpedition{}, fmt.Errorf("%w: invalid items: %w", ErrExpeditionCorrupted, err)
-	}
 	startedAt, err := parseOptionalTime("started_at", raw.start)
 	if err != nil {
 		return ActiveExpedition{}, err
@@ -204,28 +200,27 @@ func (raw rawValkeyExpedition) decode() (ActiveExpedition, error) {
 		return ActiveExpedition{}, fmt.Errorf("%w: invalid encounter: %w", ErrExpeditionCorrupted, err)
 	}
 	return ActiveExpedition{
-		Encounter:        encounter,
-		Revision:         revision,
-		ID:               raw.id,
-		CharacterID:      raw.charID,
-		PartyID:          raw.partyID,
-		PartyName:        raw.partyName,
-		Members:          members,
-		DungeonID:        raw.dungeonID,
-		MapVariant:       variant,
-		PosX:             posX,
-		PosY:             posY,
-		CurrentHP:        hp,
-		Round:            round,
-		RoundLimit:       limit,
-		AccumulatedExp:   exp,
-		AccumulatedGold:  gold,
-		AccumulatedItems: items,
-		ConsumedEvents:   consumedEvents,
-		MapState:         rawState(raw.mapState),
-		Status:           ExpeditionStatus(raw.status),
-		StartedAt:        startedAt,
-		UpdatedAt:        updatedAt,
+		Encounter:       encounter,
+		Revision:        revision,
+		ID:              raw.id,
+		CharacterID:     raw.charID,
+		PartyID:         raw.partyID,
+		PartyName:       raw.partyName,
+		Members:         members,
+		DungeonID:       raw.dungeonID,
+		MapVariant:      variant,
+		PosX:            posX,
+		PosY:            posY,
+		CurrentHP:       hp,
+		Round:           round,
+		RoundLimit:      limit,
+		AccumulatedExp:  exp,
+		AccumulatedGold: gold,
+		ConsumedEvents:  consumedEvents,
+		MapState:        rawState(raw.mapState),
+		Status:          ExpeditionStatus(raw.status),
+		StartedAt:       startedAt,
+		UpdatedAt:       updatedAt,
 	}, nil
 }
 
@@ -266,7 +261,7 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 		dungeonID: sMap["dungeon_id"], status: sMap["status"],
 		posX: sMap["pos_x"], posY: sMap["pos_y"], hp: sMap["current_hp"], round: sMap["round"],
 		limit: sMap["round_limit"], variant: sMap["map_variant"], revision: sMap["revision"],
-		exp: rMap["exp"], gold: rMap["gold"], items: rMap["items"],
+		exp: rMap["exp"], gold: rMap["gold"],
 		members: sMap["members"], consumedEvents: sMap["consumed_events"], encounter: sMap["encounter"],
 		mapState: sMap["map_state"], start: sMap["started_at"], updAt: sMap["updated_at"],
 	}).decode()
@@ -287,7 +282,6 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	sKey := r.stateKey(exp.CharacterID)
 	rKey := r.rewardsKey(exp.CharacterID)
 
-	itemsJSON := EncodeItems(exp.AccumulatedItems)
 	eventsJSON := EncodeItems(exp.ConsumedEvents)
 	membersJSON := EncodeMembers(exp.Members)
 	ttlSec := int64(r.ttl.Seconds())
@@ -317,7 +311,6 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 		r.client.B().Hset().Key(rKey).FieldValue().
 			FieldValue("exp", strconv.Itoa(exp.AccumulatedExp)).
 			FieldValue("gold", strconv.Itoa(exp.AccumulatedGold)).
-			FieldValue("items", itemsJSON).
 			Build(),
 		r.client.B().Expire().Key(sKey).Seconds(ttlSec).Build(),
 		r.client.B().Expire().Key(rKey).Seconds(ttlSec).Build(),
@@ -393,7 +386,6 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		strconv.Itoa(params.RoundDelta),
 		strconv.Itoa(params.ExpDelta),
 		strconv.Itoa(params.GoldDelta),
-		params.RewardItemID,
 		params.Now.Format(time.RFC3339Nano),
 		strconv.FormatInt(int64(r.ttl.Seconds()), 10),
 		params.EventKey,
@@ -417,18 +409,18 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 21 {
+	if err != nil || len(vals) < 20 {
 		return StepOutcome{}, fmt.Errorf("unexpected lua step response format: %v", err)
 	}
 
 	exp, err := (rawValkeyExpedition{
-		id: params.ExpectedExpeditionID, charID: characterID, partyID: vals[11], partyName: vals[12],
-		dungeonID: vals[9], status: vals[0],
+		id: params.ExpectedExpeditionID, charID: characterID, partyID: vals[10], partyName: vals[11],
+		dungeonID: vals[8], status: vals[0],
 		posX: vals[1], posY: vals[2], hp: vals[3], round: vals[4],
-		limit: vals[19], variant: vals[18], revision: vals[17],
-		exp: vals[5], gold: vals[6], items: vals[7],
-		members: vals[13], consumedEvents: vals[14], encounter: vals[16],
-		mapState: vals[20], start: vals[10], updAt: vals[8],
+		limit: vals[18], variant: vals[17], revision: vals[16],
+		exp: vals[5], gold: vals[6],
+		members: vals[12], consumedEvents: vals[13], encounter: vals[15],
+		mapState: vals[19], start: vals[9], updAt: vals[7],
 	}).decode()
 	if err != nil {
 		return StepOutcome{}, err
@@ -437,7 +429,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	return StepOutcome{
 		Expedition:    exp,
 		Status:        exp.Status,
-		EventConsumed: vals[15] != "0",
+		EventConsumed: vals[14] != "0",
 	}, nil
 }
 

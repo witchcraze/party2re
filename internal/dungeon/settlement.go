@@ -7,7 +7,6 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/id"
 )
@@ -59,17 +58,7 @@ func (s *Service) handleEscape(
 		return ExpeditionStepResult{}, fmt.Errorf("adding gold: %w", err)
 	}
 
-	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
-	for _, defID := range exp.AccumulatedItems {
-		rewardItems = append(rewardItems, coreitem.Instance{
-			ID:               id.New(),
-			DefinitionID:     defID,
-			Quantity:         1,
-			EnhancementLevel: 0,
-		})
-	}
-
-	return s.finalizeFrozenSettlement(ctx, exp, char, StatusEscaped, EventEscape, rewardItems, exp.AccumulatedExp, exp.AccumulatedGold)
+	return s.finalizeFrozenSettlement(ctx, exp, char, StatusEscaped, EventEscape, exp.AccumulatedExp, exp.AccumulatedGold)
 }
 
 // handleWipeout settles a carried-over pre-update frozen wiped_out buffer without creating new wiped_out runs.
@@ -81,7 +70,7 @@ func (s *Service) handleWipeout(
 	if exp.Status != StatusWipedOut {
 		return ExpeditionStepResult{}, ErrExpeditionStateChanged
 	}
-	return s.finalizeFrozenSettlement(ctx, exp, char, StatusWipedOut, EventWipeout, nil, 0, 0)
+	return s.finalizeFrozenSettlement(ctx, exp, char, StatusWipedOut, EventWipeout, 0, 0)
 }
 
 func (s *Service) finalizeFrozenSettlement(
@@ -90,7 +79,6 @@ func (s *Service) finalizeFrozenSettlement(
 	char *corecharacter.Character,
 	status ExpeditionStatus,
 	eventType TileEventType,
-	rewardItems []coreitem.Instance,
 	expEarned int,
 	goldFound int,
 ) (ExpeditionStepResult, error) {
@@ -116,19 +104,18 @@ func (s *Service) finalizeFrozenSettlement(
 		histID = id.New()
 	}
 	history := DungeonExpeditionHistory{
-		ID:               histID,
-		CharacterID:      char.ID,
-		DungeonID:        exp.DungeonID,
-		Outcome:          status,
-		ExpReward:        expEarned,
-		GoldReward:       goldFound,
-		ItemsRewardCount: len(rewardItems),
-		CreatedAt:        now,
-		ExitRound:        exp.Round,
+		ID:          histID,
+		CharacterID: char.ID,
+		DungeonID:   exp.DungeonID,
+		Outcome:     status,
+		ExpReward:   expEarned,
+		GoldReward:  goldFound,
+		CreatedAt:   now,
+		ExitRound:   exp.Round,
 	}
 
 	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeExpedition(ctx, history, char, rewardItems, exp.Members...); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
+	if err := s.repo.FinalizeExpedition(ctx, history, char, exp.Members...); err != nil && !errors.Is(err, ErrExpeditionAlreadyFinished) {
 		return ExpeditionStepResult{}, err
 	}
 

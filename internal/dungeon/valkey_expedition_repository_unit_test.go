@@ -33,12 +33,11 @@ func TestMemoryExpeditionRepository_Lifecycle(t *testing.T) {
 		PosY:        0,
 		CurrentHP:   100,
 		Round:       0, RoundLimit: 50,
-		AccumulatedExp:   10,
-		AccumulatedGold:  20,
-		AccumulatedItems: []string{"item-1"},
-		Status:           dungeon.StatusExploring,
-		StartedAt:        time.Now().UTC(),
-		UpdatedAt:        time.Now().UTC(),
+		AccumulatedExp:  10,
+		AccumulatedGold: 20,
+		Status:          dungeon.StatusExploring,
+		StartedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
 	}
 
 	// 1. SaveActiveExpedition
@@ -64,7 +63,6 @@ func TestMemoryExpeditionRepository_Lifecycle(t *testing.T) {
 		RoundDelta:           1,
 		ExpDelta:             20,
 		GoldDelta:            50,
-		RewardItemID:         "item-2",
 		Now:                  time.Now().UTC(),
 	})
 	if err != nil {
@@ -116,12 +114,11 @@ func TestValkeyExpeditionRepository_SaveActiveExpedition(t *testing.T) {
 		PosY:      4,
 		CurrentHP: 110,
 		Round:     5, RoundLimit: 50,
-		AccumulatedExp:   150,
-		AccumulatedGold:  300,
-		AccumulatedItems: []string{"item-1", "item-2"},
-		Status:           dungeon.StatusExploring,
-		StartedAt:        now,
-		UpdatedAt:        now,
+		AccumulatedExp:  150,
+		AccumulatedGold: 300,
+		Status:          dungeon.StatusExploring,
+		StartedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	// 1. Success case: DoMulti executes HSET (state), HSET (rewards), EXPIRE (state), EXPIRE (rewards)
@@ -206,7 +203,6 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 			MaxHP:       150,
 		},
 	})
-	itemsJSON := dungeon.EncodeItems([]string{"item-alpha", "item-beta"})
 
 	stateMap := map[string]string{
 		"expedition_id": "exp-get-1",
@@ -224,9 +220,8 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 		"updated_at":    now.Format(time.RFC3339Nano),
 	}
 	rewardsMap := map[string]string{
-		"exp":   "500",
-		"gold":  "1200",
-		"items": itemsJSON,
+		"exp":  "500",
+		"gold": "1200",
 	}
 
 	// 1. Success case
@@ -254,9 +249,6 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 	}
 	if active.AccumulatedExp != 500 || active.AccumulatedGold != 1200 {
 		t.Errorf("unexpected rewards: %+v", active)
-	}
-	if len(active.AccumulatedItems) != 2 || active.AccumulatedItems[0] != "item-alpha" {
-		t.Errorf("unexpected items: %+v", active.AccumulatedItems)
 	}
 	if len(active.Members) != 1 || active.Members[0].Name != "SoloHero" {
 		t.Errorf("unexpected members: %+v", active.Members)
@@ -313,7 +305,6 @@ func TestValkeyExpeditionRepository_GetActiveExpedition(t *testing.T) {
 		{"bad revision", map[string]string{"revision": "abc"}, nil},
 		{"bad started_at", map[string]string{"started_at": "not-a-time"}, nil},
 		{"bad consumed_events", map[string]string{"consumed_events": "{bad"}, nil},
-		{"bad items", nil, map[string]string{"items": "{bad"}},
 		{"bad exp", nil, map[string]string{"exp": "nan"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -376,7 +367,6 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
-	itemsJSON := dungeon.EncodeItems([]string{"reward-potion"})
 
 	validStepVals := []string{
 		string(dungeon.StatusExploring), // [0] status
@@ -386,10 +376,9 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 		"10",                            // [4] round
 		"120",                           // [5] exp
 		"250",                           // [6] gold
-		itemsJSON,                       // [7] items
-		now.Format(time.RFC3339Nano),    // [8] updated_at
-		"dungeon-cave",                  // [9] dungeon_id
-		now.Format(time.RFC3339Nano),    // [10] started_at
+		now.Format(time.RFC3339Nano),    // [7] updated_at
+		"dungeon-cave",                  // [8] dungeon_id
+		now.Format(time.RFC3339Nano),    // [9] started_at
 		"party-live", "Live Party", "[]",
 		"[]", "1", "", "1", // consumed events, event consumed, encounter, revision
 		"", "", // map variant and round limit (catalog run)
@@ -404,7 +393,6 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 		RoundDelta:           1,
 		ExpDelta:             50,
 		GoldDelta:            100,
-		RewardItemID:         "reward-potion",
 		Now:                  now,
 	}
 
@@ -430,9 +418,6 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 	}
 	if outcome.Expedition.AccumulatedExp != 120 || outcome.Expedition.AccumulatedGold != 250 {
 		t.Errorf("unexpected rewards: %+v", outcome.Expedition)
-	}
-	if len(outcome.Expedition.AccumulatedItems) != 1 || outcome.Expedition.AccumulatedItems[0] != "reward-potion" {
-		t.Errorf("unexpected items: %+v", outcome.Expedition.AccumulatedItems)
 	}
 
 	// 2. Error mapping: ERR_EXPEDITION_NOT_FOUND
@@ -488,10 +473,9 @@ func TestValkeyExpeditionRepository_Step(t *testing.T) {
 		val  string
 	}{
 		{"bad pos_x", 1, "nan"},
-		{"bad items", 7, "{bad"},
-		{"bad updated_at", 8, "not-a-time"},
-		{"bad consumed_events", 14, "{bad"},
-		{"bad revision", 17, "xyz"},
+		{"bad updated_at", 7, "not-a-time"},
+		{"bad consumed_events", 13, "{bad"},
+		{"bad revision", 16, "xyz"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			badVals := append([]string(nil), validStepVals...)

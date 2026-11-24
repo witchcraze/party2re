@@ -217,7 +217,7 @@ func TestNativeMap0_TreasureBlocksMovementUntilEveryChestIsOpened(t *testing.T) 
 	}
 	exp := f.reload(t, "chest")
 	if res.EventType != dungeon.EventTreasure || exp.Encounter == nil || len(exp.Encounter.Chests) != 1 ||
-		exp.AccumulatedGold != start.AccumulatedGold || len(exp.AccumulatedItems) != 0 ||
+		exp.AccumulatedGold != start.AccumulatedGold ||
 		len(exp.ConsumedEvents) != 1 || exp.ConsumedEvents[0] != "C:4:0" || exp.Round != 4 {
 		t.Fatalf("treasure trigger %+v", exp)
 	}

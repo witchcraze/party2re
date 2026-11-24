@@ -46,22 +46,21 @@ func TestLegacyWipedOutBuffer_ContinuationAndRetry(t *testing.T) {
 				repo.savedChars[ally.ID] = ally
 				now := time.Now().UTC().Truncate(time.Millisecond)
 				exp := dungeon.ActiveExpedition{
-					ID:               id.New(),
-					CharacterID:      lead.ID,
-					PartyID:          id.New(),
-					DungeonID:        dungeon.NativeMap0ID,
-					Revision:         4,
-					PosX:             2,
-					PosY:             3,
-					CurrentHP:        0,
-					Round:            7,
-					RoundLimit:       20,
-					AccumulatedExp:   90,
-					AccumulatedGold:  150,
-					AccumulatedItems: []string{"item-101"},
-					Status:           dungeon.StatusWipedOut,
-					StartedAt:        now,
-					UpdatedAt:        now,
+					ID:              id.New(),
+					CharacterID:     lead.ID,
+					PartyID:         id.New(),
+					DungeonID:       dungeon.NativeMap0ID,
+					Revision:        4,
+					PosX:            2,
+					PosY:            3,
+					CurrentHP:       0,
+					Round:           7,
+					RoundLimit:      20,
+					AccumulatedExp:  90,
+					AccumulatedGold: 150,
+					Status:          dungeon.StatusWipedOut,
+					StartedAt:       now,
+					UpdatedAt:       now,
 					Members: []dungeon.ExpeditionMember{
 						{CharacterID: lead.ID, Name: lead.Name, CurrentHP: 0, MaxHP: 100, AccumulatedExp: 90, AccumulatedGold: 150},
 						{CharacterID: ally.ID, Name: ally.Name, CurrentHP: 0, MaxHP: 80, AccumulatedExp: 90, AccumulatedGold: 150},
@@ -154,11 +153,11 @@ func TestLegacyWipedOutBuffer_ContinuationAndRetry(t *testing.T) {
 					}
 				}
 				h := repo.histories[lead.ID]
-				if len(h) != 1 || h[0].ID != exp.ID || h[0].Outcome != dungeon.StatusWipedOut || h[0].ExpReward != 0 || h[0].GoldReward != 0 || h[0].ItemsRewardCount != 0 {
+				if len(h) != 1 || h[0].ID != exp.ID || h[0].Outcome != dungeon.StatusWipedOut || h[0].ExpReward != 0 || h[0].GoldReward != 0 {
 					t.Fatalf("wrong/duplicate history: %+v", h)
 				}
-				if len(repo.awardedItems[lead.ID]) != 0 || repo.savedChars[lead.ID].Money != lead.Money || repo.savedChars[ally.ID].Money != ally.Money {
-					t.Fatalf("unbanked rewards must be forfeited: items=%v lead=%+v ally=%+v", repo.awardedItems[lead.ID], repo.savedChars[lead.ID], repo.savedChars[ally.ID])
+				if repo.savedChars[lead.ID].Money != lead.Money || repo.savedChars[ally.ID].Money != ally.Money {
+					t.Fatalf("unbanked rewards must be forfeited: lead=%+v ally=%+v", repo.savedChars[lead.ID], repo.savedChars[ally.ID])
 				}
 			})
 		}
@@ -262,22 +261,21 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 
 		now := time.Now().UTC().Truncate(time.Millisecond)
 		oldRun := dungeon.ActiveExpedition{
-			ID:               id.New(),
-			CharacterID:      lead.ID,
-			PartyID:          id.New(),
-			DungeonID:        dungeon.NativeMap0ID,
-			Revision:         5,
-			PosX:             1,
-			PosY:             2,
-			CurrentHP:        0,
-			Round:            8,
-			RoundLimit:       20,
-			AccumulatedExp:   120,
-			AccumulatedGold:  250,
-			AccumulatedItems: []string{"potion"},
-			Status:           dungeon.StatusWipedOut,
-			StartedAt:        now,
-			UpdatedAt:        now,
+			ID:              id.New(),
+			CharacterID:     lead.ID,
+			PartyID:         id.New(),
+			DungeonID:       dungeon.NativeMap0ID,
+			Revision:        5,
+			PosX:            1,
+			PosY:            2,
+			CurrentHP:       0,
+			Round:           8,
+			RoundLimit:      20,
+			AccumulatedExp:  120,
+			AccumulatedGold: 250,
+			Status:          dungeon.StatusWipedOut,
+			StartedAt:       now,
+			UpdatedAt:       now,
 			Members: []dungeon.ExpeditionMember{
 				{
 					CharacterID:     lead.ID,
@@ -365,7 +363,7 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 
 		histories, err := repo.GetHistory(ctx, lead.ID, 10)
 		if err != nil || len(histories) != 1 || histories[0].ID != oldRun.ID || histories[0].Outcome != dungeon.StatusWipedOut ||
-			histories[0].ExpReward != 0 || histories[0].GoldReward != 0 || histories[0].ItemsRewardCount != 0 {
+			histories[0].ExpReward != 0 || histories[0].GoldReward != 0 {
 			t.Fatalf("unexpected history: %+v err=%v", histories, err)
 		}
 
@@ -400,18 +398,17 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 
 		now := time.Now().UTC().Truncate(time.Millisecond)
 		oldRun := dungeon.ActiveExpedition{
-			ID:               id.New(),
-			CharacterID:      lead.ID,
-			PartyID:          id.New(),
-			DungeonID:        dungeon.NativeMap0ID,
-			Revision:         3,
-			CurrentHP:        0,
-			AccumulatedExp:   55,
-			AccumulatedGold:  88,
-			AccumulatedItems: []string{"potion"},
-			Status:           dungeon.StatusWipedOut,
-			StartedAt:        now,
-			UpdatedAt:        now,
+			ID:              id.New(),
+			CharacterID:     lead.ID,
+			PartyID:         id.New(),
+			DungeonID:       dungeon.NativeMap0ID,
+			Revision:        3,
+			CurrentHP:       0,
+			AccumulatedExp:  55,
+			AccumulatedGold: 88,
+			Status:          dungeon.StatusWipedOut,
+			StartedAt:       now,
+			UpdatedAt:       now,
 			Members: []dungeon.ExpeditionMember{
 				{
 					CharacterID:   lead.ID,
@@ -441,7 +438,7 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 			Outcome:     dungeon.StatusWipedOut,
 			CreatedAt:   now,
 		}
-		if err := repo.FinalizeExpedition(ctx, preHistory, &lead, nil, oldRun.Members...); err != nil {
+		if err := repo.FinalizeExpedition(ctx, preHistory, &lead, oldRun.Members...); err != nil {
 			t.Fatal(err)
 		}
 		// Simulate subsequent character healing/wallet change after SQL claim already committed.
@@ -562,7 +559,6 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 		}
 		exp.AccumulatedExp = 40
 		exp.AccumulatedGold = 125
-		exp.AccumulatedItems = []string{"potion"}
 		exp.Encounter = &dungeon.ActiveEncounter{
 			Monsters:  custom.Variants[0].Pools[0].Monsters[:1],
 			Enemies:   []corebattle.Participant{corebattle.MustNewParticipant("slime", 30, 10, 0)},
@@ -596,7 +592,7 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 			t.Fatalf("expected stock earned once, got %+v", escRes)
 		}
 		histories, err := repo.GetHistory(ctx, lead.ID, 10)
-		if err != nil || len(histories) != 1 || histories[0].Outcome != dungeon.StatusEscaped || histories[0].ExpReward != 40 || histories[0].GoldReward != 125 || histories[0].ItemsRewardCount != 1 {
+		if err != nil || len(histories) != 1 || histories[0].Outcome != dungeon.StatusEscaped || histories[0].ExpReward != 40 || histories[0].GoldReward != 125 {
 			t.Fatalf("unexpected history: %+v err=%v", histories, err)
 		}
 		reloaded, err := chars.FindByID(ctx, lead.ID)
@@ -618,11 +614,10 @@ func (r *errorInjectingDungeonRepoCompat) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
 	character *corecharacter.Character,
-	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
 ) error {
 	if r.errFinalize != nil {
 		return r.errFinalize
 	}
-	return r.Repository.FinalizeExpedition(ctx, history, character, rewardItems, members...)
+	return r.Repository.FinalizeExpedition(ctx, history, character, members...)
 }

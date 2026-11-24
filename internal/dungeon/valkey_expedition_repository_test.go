@@ -13,7 +13,6 @@ import (
 	valkeygo "github.com/valkey-io/valkey-go"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corerandom "github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -40,12 +39,11 @@ func sampleExpedition(id, charID, dungeonID string) dungeon.ActiveExpedition {
 		PosY:        0,
 		CurrentHP:   100,
 		Round:       0, RoundLimit: 50,
-		AccumulatedExp:   0,
-		AccumulatedGold:  0,
-		AccumulatedItems: []string{},
-		Status:           dungeon.StatusExploring,
-		StartedAt:        now,
-		UpdatedAt:        now,
+		AccumulatedExp:  0,
+		AccumulatedGold: 0,
+		Status:          dungeon.StatusExploring,
+		StartedAt:       now,
+		UpdatedAt:       now,
 	}
 }
 
@@ -89,7 +87,6 @@ func TestMemoryExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 		RoundDelta:           1,
 		ExpDelta:             25,
 		GoldDelta:            50,
-		RewardItemID:         "herb",
 		Now:                  time.Now().UTC(),
 	}
 	outcome, err := repo.Step(ctx, charID, stepParams)
@@ -107,9 +104,6 @@ func TestMemoryExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	}
 	if outcome.Expedition.AccumulatedExp != 25 || outcome.Expedition.AccumulatedGold != 50 {
 		t.Errorf("unexpected rewards: exp=%d, gold=%d", outcome.Expedition.AccumulatedExp, outcome.Expedition.AccumulatedGold)
-	}
-	if len(outcome.Expedition.AccumulatedItems) != 1 || outcome.Expedition.AccumulatedItems[0] != "herb" {
-		t.Errorf("unexpected items: %v", outcome.Expedition.AccumulatedItems)
 	}
 
 	// 5. Error: Mismatch Expedition ID
@@ -257,7 +251,6 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 		RoundDelta:           1,
 		ExpDelta:             40,
 		GoldDelta:            80,
-		RewardItemID:         "potion",
 		Now:                  time.Now().UTC(),
 	}
 	outcome, err := repo.Step(ctx, charID, stepParams)
@@ -276,11 +269,8 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	if outcome.Expedition.AccumulatedExp != 40 || outcome.Expedition.AccumulatedGold != 80 {
 		t.Errorf("unexpected accumulated rewards: %#v", outcome.Expedition)
 	}
-	if len(outcome.Expedition.AccumulatedItems) != 1 || outcome.Expedition.AccumulatedItems[0] != "potion" {
-		t.Errorf("unexpected accumulated items: %v", outcome.Expedition.AccumulatedItems)
-	}
 
-	// 6. Step appending another item
+	// 6. Second Step accumulating exp/gold
 	stepParams2 := dungeon.StepParams{
 		ExpectedExpeditionID: expID,
 		NewX:                 2,
@@ -289,7 +279,6 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 		RoundDelta:           1,
 		ExpDelta:             10,
 		GoldDelta:            20,
-		RewardItemID:         "magic_key",
 		Now:                  time.Now().UTC(),
 	}
 	outcome2, err := repo.Step(ctx, charID, stepParams2)
@@ -298,9 +287,6 @@ func TestValkeyExpeditionRepository_LifecycleAndErrors(t *testing.T) {
 	}
 	if outcome2.Expedition.AccumulatedExp != 50 || outcome2.Expedition.AccumulatedGold != 100 {
 		t.Errorf("unexpected cumulative rewards: exp=%d, gold=%d", outcome2.Expedition.AccumulatedExp, outcome2.Expedition.AccumulatedGold)
-	}
-	if len(outcome2.Expedition.AccumulatedItems) != 2 || outcome2.Expedition.AccumulatedItems[1] != "magic_key" {
-		t.Errorf("unexpected items after second step: %v", outcome2.Expedition.AccumulatedItems)
 	}
 
 	// 7. Test Mismatch Expedition ID Error
@@ -451,13 +437,12 @@ func (m *failFinalizeMockDungeonRepo) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
 	character *corecharacter.Character,
-	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
 ) error {
 	if m.failFinalize {
 		return errors.New("simulated MariaDB commit failure")
 	}
-	return m.mockDungeonRepo.FinalizeExpedition(ctx, history, character, rewardItems, members...)
+	return m.mockDungeonRepo.FinalizeExpedition(ctx, history, character, members...)
 }
 
 func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
@@ -582,7 +567,6 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 				NewY:                 0,
 				RoundDelta:           1,
 				GoldDelta:            100,
-				RewardItemID:         "potion",
 				EventKey:             "T:1:3:0",
 				Now:                  time.Now().UTC(),
 			})
@@ -609,9 +593,9 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	if err != nil || got == nil {
 		t.Fatalf("GetActiveExpedition failed: %v", err)
 	}
-	if got.AccumulatedGold != 100 || len(got.AccumulatedItems) != 1 {
-		t.Fatalf("expected single reward grant in Valkey, got gold=%d items=%v",
-			got.AccumulatedGold, got.AccumulatedItems)
+	if got.AccumulatedGold != 100 {
+		t.Fatalf("expected single reward grant in Valkey, got gold=%d",
+			got.AccumulatedGold)
 	}
 	if len(got.ConsumedEvents) != 1 || got.ConsumedEvents[0] != "T:1:3:0" {
 		t.Fatalf("expected ConsumedEvents=[T:1:3:0], got %v", got.ConsumedEvents)
@@ -627,7 +611,6 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 		NewY:                 0,
 		RoundDelta:           1,
 		GoldDelta:            100,
-		RewardItemID:         "potion",
 		EventKey:             "T:1:3:0",
 		Now:                  time.Now().UTC(),
 	})
@@ -637,7 +620,7 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	if revisit.EventConsumed {
 		t.Fatalf("expected EventConsumed=false on revisit after save/load")
 	}
-	if revisit.Expedition.AccumulatedGold != 100 || len(revisit.Expedition.AccumulatedItems) != 1 {
+	if revisit.Expedition.AccumulatedGold != 100 {
 		t.Fatalf("expected rewards unchanged after revisit, got %+v", revisit.Expedition)
 	}
 
@@ -648,7 +631,6 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 		NewY:                 2,
 		RoundDelta:           1,
 		GoldDelta:            200,
-		RewardItemID:         "high-potion",
 		EventKey:             "T:2:2:2",
 		Now:                  time.Now().UTC(),
 	})
@@ -658,7 +640,7 @@ func TestValkeyExpeditionRepository_ConsumeTreasureOnce(t *testing.T) {
 	if !floor2Out.EventConsumed {
 		t.Fatalf("expected EventConsumed=true for distinct floor treasure T:2:2:2")
 	}
-	if floor2Out.Expedition.AccumulatedGold != 300 || len(floor2Out.Expedition.AccumulatedItems) != 2 {
+	if floor2Out.Expedition.AccumulatedGold != 300 {
 		t.Fatalf("expected cumulative rewards after floor 2 treasure, got %+v", floor2Out.Expedition)
 	}
 }
@@ -980,9 +962,6 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 		{"lowercase t started_at", "state", "started_at", "2026-11-21t16:00:00Z"},
 		{"lowercase z started_at", "state", "started_at", "2026-11-21T16:00:00z"},
 		{"impossible calendar started_at", "state", "started_at", "2026-02-30T12:00:00Z"},
-		{"corrupted rewards items", "rewards", "items", "{bad-json"},
-		{"object rewards items", "rewards", "items", `{"bad":1}`},
-		{"non-string element rewards items", "rewards", "items", `[123]`},
 		{"corrupted rewards exp", "rewards", "exp", "nan"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -997,7 +976,6 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 			exp := sampleExpedition("exp-corrupt", charID, dungeon.NativeMap0ID)
 			exp.Round = 2
 			exp.ConsumedEvents = []string{"C:1:1"}
-			exp.AccumulatedItems = []string{"item-01"}
 			exp.Members = []dungeon.ExpeditionMember{{CharacterID: charID, Name: "Hero", CurrentHP: 100, MaxHP: 100}}
 			if err := repo.SaveActiveExpedition(ctx, exp); err != nil {
 				t.Fatal(err)
@@ -1075,7 +1053,6 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 			t.Fatal(err)
 		}
 		sKey := fmt.Sprintf("party2:dungeon:{char:%s}:state", charID)
-		rKey := fmt.Sprintf("party2:dungeon:{char:%s}:rewards", charID)
 		if err := client.Do(ctx, client.B().Hset().Key(sKey).FieldValue().
 			FieldValue("consumed_events", "null").
 			FieldValue("map_variant", "").
@@ -1084,10 +1061,7 @@ func TestValkeyExpeditionRepository_CorruptedStateFailsClosed(t *testing.T) {
 			Build()).Error(); err != nil {
 			t.Fatal(err)
 		}
-		if err := client.Do(ctx, client.B().Hset().Key(rKey).FieldValue().FieldValue("items", "null").Build()).Error(); err != nil {
-			t.Fatal(err)
-		}
-		if got, err := repo.GetActiveExpedition(ctx, charID); err != nil || got == nil || len(got.ConsumedEvents) != 0 || len(got.AccumulatedItems) != 0 {
+		if got, err := repo.GetActiveExpedition(ctx, charID); err != nil || got == nil || len(got.ConsumedEvents) != 0 {
 			t.Fatalf("GetActiveExpedition compat failed: %+v err=%v", got, err)
 		}
 		out, err := repo.Step(ctx, charID, dungeon.StepParams{
@@ -1113,25 +1087,25 @@ func TestValkeyExpeditionRepository_CorruptedARGVArgsFailClosed(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		idx  int // 0-based ARGV index (11..15 correspond to ARGV[12]..ARGV[16])
+		idx  int // 0-based ARGV index (10..14 correspond to ARGV[11]..ARGV[15])
 		val  string
 	}{
-		{"bad member_hp_deltas json", 11, "{bad-json"},
-		{"array member_hp_deltas", 11, "[1,2]"},
-		{"non-int member_hp_deltas", 11, `{"char-argv":"oops"}`},
-		{"float member_hp_deltas", 11, `{"char-argv":1.5}`},
-		{"bad member_mp_deltas json", 12, "{bad-json"},
-		{"non-int member_mp_deltas", 12, `{"char-argv":"oops"}`},
-		{"bad consumed_items json", 13, "{bad-json"},
-		{"array consumed_items", 13, `["bad"]`},
-		{"non-array consumed_items value", 13, `{"char-argv":"bad"}`},
-		{"bad consumed_items element quantity", 13, `{"char-argv":[{"id":"item-1","quantity":"oops"}]}`},
-		{"array element consumed_items", 13, `{"char-argv":[[1,2]]}`},
-		{"empty array element consumed_items", 13, `{"char-argv":[[]]}`},
-		{"bad member_exp_deltas json", 14, "{bad-json"},
-		{"non-int member_exp_deltas", 14, `{"char-argv":"oops"}`},
-		{"bad member_gold_deltas json", 15, "{bad-json"},
-		{"non-int member_gold_deltas", 15, `{"char-argv":"oops"}`},
+		{"bad member_hp_deltas json", 10, "{bad-json"},
+		{"array member_hp_deltas", 10, "[1,2]"},
+		{"non-int member_hp_deltas", 10, `{"char-argv":"oops"}`},
+		{"float member_hp_deltas", 10, `{"char-argv":1.5}`},
+		{"bad member_mp_deltas json", 11, "{bad-json"},
+		{"non-int member_mp_deltas", 11, `{"char-argv":"oops"}`},
+		{"bad consumed_items json", 12, "{bad-json"},
+		{"array consumed_items", 12, `["bad"]`},
+		{"non-array consumed_items value", 12, `{"char-argv":"bad"}`},
+		{"bad consumed_items element quantity", 12, `{"char-argv":[{"id":"item-1","quantity":"oops"}]}`},
+		{"array element consumed_items", 12, `{"char-argv":[[1,2]]}`},
+		{"empty array element consumed_items", 12, `{"char-argv":[[]]}`},
+		{"bad member_exp_deltas json", 13, "{bad-json"},
+		{"non-int member_exp_deltas", 13, `{"char-argv":"oops"}`},
+		{"bad member_gold_deltas json", 14, "{bad-json"},
+		{"non-int member_gold_deltas", 14, `{"char-argv":"oops"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			charID := "char-argv-" + strings.ReplaceAll(tc.name, " ", "-")
@@ -1160,7 +1134,7 @@ func TestValkeyExpeditionRepository_CorruptedARGVArgsFailClosed(t *testing.T) {
 			}
 
 			args := []string{
-				exp.ID, "1", "0", "0", "1", "10", "20", "",
+				exp.ID, "1", "0", "0", "1", "10", "20",
 				time.Now().UTC().Format(time.RFC3339Nano), "7200", "C:1:1",
 				"{}", "{}", "{}", "{}", "{}", "", "false", "", "", "0", "0", "", "false",
 			}

@@ -8,9 +8,7 @@ import (
 	"testing"
 	"time"
 
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -41,12 +39,11 @@ func TestDungeonRepository(t *testing.T) {
 		PosY:        0,
 		CurrentHP:   char.Stats.HP,
 		Round:       30, RoundLimit: 50,
-		AccumulatedExp:   150,
-		AccumulatedGold:  300,
-		AccumulatedItems: []string{"potion", "ether"},
-		Status:           dungeon.StatusExploring,
-		StartedAt:        now,
-		UpdatedAt:        now,
+		AccumulatedExp:  150,
+		AccumulatedGold: 300,
+		Status:          dungeon.StatusExploring,
+		StartedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	if err := dungeonRepo.SaveActiveExpedition(ctx, exp); err != nil {
@@ -57,7 +54,7 @@ func TestDungeonRepository(t *testing.T) {
 	if err != nil || fetchedExp == nil {
 		t.Fatalf("GetActiveExpedition failed: %v", err)
 	}
-	if fetchedExp.ID != expID || fetchedExp.AccumulatedGold != 300 || len(fetchedExp.AccumulatedItems) != 2 {
+	if fetchedExp.ID != expID || fetchedExp.AccumulatedGold != 300 {
 		t.Errorf("unexpected fetched expedition: %#v", fetchedExp)
 	}
 
@@ -65,26 +62,16 @@ func TestDungeonRepository(t *testing.T) {
 
 	histID := expID
 	history := dungeon.DungeonExpeditionHistory{
-		ID:               histID,
-		CharacterID:      char.ID,
-		DungeonID:        "dungeon-01",
-		Outcome:          dungeon.StatusEscaped,
-		ExpReward:        450,
-		GoldReward:       800,
-		ItemsRewardCount: 2,
-		CreatedAt:        now,
+		ID:          histID,
+		CharacterID: char.ID,
+		DungeonID:   "dungeon-01",
+		Outcome:     dungeon.StatusEscaped,
+		ExpReward:   450,
+		GoldReward:  800,
+		CreatedAt:   now,
 	}
 
-	rewardItems := []coreitem.Instance{
-		{
-			ID:               fmt.Sprintf("item_%016x", now.UnixNano()),
-			DefinitionID:     "potion",
-			Quantity:         1,
-			EnhancementLevel: 0,
-		},
-	}
-
-	err = dungeonRepo.FinalizeExpedition(ctx, history, &char, rewardItems)
+	err = dungeonRepo.FinalizeExpedition(ctx, history, &char)
 	if err != nil {
 		t.Fatalf("FinalizeExpedition failed: %v", err)
 	}
@@ -105,138 +92,6 @@ func TestDungeonRepository(t *testing.T) {
 	}
 }
 
-func TestDungeonRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
-	db := database.OpenTestDB(t)
-
-	ctx := context.Background()
-	dungeonRepo, err := database.NewDungeonRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	invRepo, err := database.NewInventoryRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	depotRepo, err := database.NewDepotRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	char, err := database.CreateTestCharacter(ctx, db, "Dungeon Overflow Hero")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	now := time.Now().UTC()
-
-	// 1. Finalize with first item -> goes into inventory
-	hist1 := dungeon.DungeonExpeditionHistory{
-		ID:               fmt.Sprintf("hist_%016x", now.UnixNano()),
-		CharacterID:      char.ID,
-		DungeonID:        "dungeon-01",
-		Outcome:          dungeon.StatusEscaped,
-		ExpReward:        100,
-		GoldReward:       200,
-		ItemsRewardCount: 1,
-		CreatedAt:        now,
-	}
-	item1 := []coreitem.Instance{
-		{
-			ID:           fmt.Sprintf("item_%016x", now.UnixNano()),
-			DefinitionID: "potion",
-			Quantity:     1,
-		},
-	}
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist1, &char, item1); err != nil {
-		t.Fatalf("FinalizeExpedition item1 failed: %v", err)
-	}
-
-	inv, err := invRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("FindByCharacterID failed: %v", err)
-	}
-	if len(inv.Items) != 1 || inv.Items[0].DefinitionID != "potion" {
-		t.Fatalf("expected 1 item in inventory, got: %#v", inv.Items)
-	}
-
-	// 2. Finalize with second item -> inventory full, overflows to depot
-	hist2 := dungeon.DungeonExpeditionHistory{
-		ID:               fmt.Sprintf("hist_%016x", now.UnixNano()+1),
-		CharacterID:      char.ID,
-		DungeonID:        "dungeon-01",
-		Outcome:          dungeon.StatusEscaped,
-		ExpReward:        100,
-		GoldReward:       200,
-		ItemsRewardCount: 1,
-		CreatedAt:        now,
-	}
-	item2 := []coreitem.Instance{
-		{
-			ID:           fmt.Sprintf("item_%016x", now.UnixNano()+1),
-			DefinitionID: "ether",
-			Quantity:     1,
-		},
-	}
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist2, &char, item2); err != nil {
-		t.Fatalf("FinalizeExpedition item2 overflow failed: %v", err)
-	}
-
-	invAfter2, err := invRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("FindByCharacterID after 2 failed: %v", err)
-	}
-	if len(invAfter2.Items) != 1 {
-		t.Fatalf("inventory must remain at capacity 1, got %d items", len(invAfter2.Items))
-	}
-
-	var dep depot.Depot
-	dep, err = depotRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("FindByCharacterID depot failed: %v", err)
-	}
-	if len(dep.Items) != 1 || dep.Items[0].DefinitionID != "ether" {
-		t.Fatalf("expected 1 overflow item in depot, got: %#v", dep.Items)
-	}
-
-	// 3. Fill depot to capacity, then deliver third item -> treated as lost drop
-	for i := len(dep.Items); i < dep.Capacity; i++ {
-		fillItem, _ := coreitem.NewInstance(fmt.Sprintf("filler_%d", i), 1)
-		_ = dep.AddItem(fillItem, false)
-	}
-	if err := depotRepo.Save(ctx, dep); err != nil {
-		t.Fatalf("failed to fill depot: %v", err)
-	}
-
-	hist3 := dungeon.DungeonExpeditionHistory{
-		ID:               fmt.Sprintf("hist_%016x", now.UnixNano()+2),
-		CharacterID:      char.ID,
-		DungeonID:        "dungeon-01",
-		Outcome:          dungeon.StatusEscaped,
-		ExpReward:        100,
-		GoldReward:       200,
-		ItemsRewardCount: 1,
-		CreatedAt:        now,
-	}
-	item3 := []coreitem.Instance{
-		{
-			ID:           fmt.Sprintf("item_%016x", now.UnixNano()+2),
-			DefinitionID: "elixir",
-			Quantity:     1,
-		},
-	}
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist3, &char, item3); err != nil {
-		t.Fatalf("FinalizeExpedition with full depot should succeed as lost drop: %v", err)
-	}
-
-	depAfter3, err := depotRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("FindByCharacterID depot after 3 failed: %v", err)
-	}
-	if len(depAfter3.Items) != dep.Capacity {
-		t.Fatalf("depot item count changed, expected %d, got %d", dep.Capacity, len(depAfter3.Items))
-	}
-}
-
 func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 	db := database.OpenTestDB(t)
 
@@ -246,14 +101,6 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 		t.Fatal(err)
 	}
 	charRepo, err := database.NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	invRepo, err := database.NewInventoryRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	depotRepo, err := database.NewDepotRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,21 +121,13 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 	now := time.Now().UTC()
 
 	hist := dungeon.DungeonExpeditionHistory{
-		ID:               runID,
-		CharacterID:      char.ID,
-		DungeonID:        "dungeon-02",
-		Outcome:          dungeon.StatusEscaped,
-		ExpReward:        200,
-		GoldReward:       400,
-		ItemsRewardCount: 1,
-		CreatedAt:        now,
-	}
-	rewardItems := []coreitem.Instance{
-		{
-			ID:           id.New(),
-			DefinitionID: "potion",
-			Quantity:     1,
-		},
+		ID:          runID,
+		CharacterID: char.ID,
+		DungeonID:   "dungeon-02",
+		Outcome:     dungeon.StatusEscaped,
+		ExpReward:   200,
+		GoldReward:  400,
+		CreatedAt:   now,
 	}
 
 	// Simulate stale caller snapshot that already added rewards onto stale money (1000 + 400 = 1400).
@@ -296,19 +135,12 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 	staleChar.Money += 400
 	staleChar.SmallMedals += 2
 
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar, rewardItems); err != nil {
+	if err := dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar); err != nil {
 		t.Fatalf("first FinalizeExpedition failed: %v", err)
 	}
 
 	// Duplicate claim with the same run ID must return ErrExpeditionAlreadyFinished and roll back / skip duplicate grants
-	dupItems := []coreitem.Instance{
-		{
-			ID:           id.New(),
-			DefinitionID: "ether",
-			Quantity:     1,
-		},
-	}
-	err = dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar, dupItems)
+	err = dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar)
 	if !errors.Is(err, dungeon.ErrExpeditionAlreadyFinished) {
 		t.Fatalf("expected ErrExpeditionAlreadyFinished on duplicate run ID, got %v", err)
 	}
@@ -325,86 +157,10 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 		t.Errorf("expected small medals 3 (preserving concurrent +3), got %d", updatedChar.SmallMedals)
 	}
 
-	// Verify only 1 item delivered across inventory and depot
-	inv, err := invRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dep, err := depotRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(inv.Items)+len(dep.Items) != 1 {
-		t.Errorf("expected exactly 1 item delivered, got inv=%d depot=%d", len(inv.Items), len(dep.Items))
-	}
-
 	// Verify 1 history and 1 expedition count in record
 	histories, err := dungeonRepo.GetHistory(ctx, char.ID, 10)
 	if err != nil || len(histories) != 1 {
 		t.Fatalf("expected 1 history record, got %d (err: %v)", len(histories), err)
-	}
-}
-
-func TestDungeonRepository_RollbackOnRewardFailure(t *testing.T) {
-	db := database.OpenTestDB(t)
-
-	ctx := context.Background()
-	dungeonRepo, err := database.NewDungeonRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	charRepo, err := database.NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create character and trigger failure inside deliverRewardItems after history insert & character update
-	char, err := database.CreateTestCharacterWithFunds(ctx, db, "Dungeon Rollback Hero", 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	runID := "exp_rb_" + id.New()
-	now := time.Now().UTC()
-	hist := dungeon.DungeonExpeditionHistory{
-		ID:               runID,
-		CharacterID:      char.ID,
-		DungeonID:        "dungeon-01",
-		Outcome:          dungeon.StatusEscaped,
-		ExpReward:        50,
-		GoldReward:       250,
-		ItemsRewardCount: 1,
-		CreatedAt:        now,
-	}
-	invalidRewardItems := []coreitem.Instance{
-		{
-			ID:           id.New(),
-			DefinitionID: "potion",
-			Quantity:     0, // triggers ErrInvalidQuantity during deliverRewardItems after history & character writes
-		},
-	}
-
-	err = dungeonRepo.FinalizeExpedition(ctx, hist, &char, invalidRewardItems)
-	if err == nil {
-		t.Fatal("expected FinalizeExpedition to fail on invalid reward item delivery")
-	}
-
-	// Verify history was rolled back
-	histories, err := dungeonRepo.GetHistory(ctx, char.ID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(histories) != 0 {
-		t.Errorf("expected 0 histories after rollback, got %d", len(histories))
-	}
-
-	// Verify character money and medals unchanged
-	afterChar, err := charRepo.FindByID(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if afterChar.Money != 1000 || afterChar.SmallMedals != 0 {
-		t.Errorf("expected money=1000 and medals=0 after rollback, got money=%d medals=%d", afterChar.Money, afterChar.SmallMedals)
 	}
 }
 
@@ -417,14 +173,6 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	charRepo, err := database.NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	invRepo, err := database.NewInventoryRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	depotRepo, err := database.NewDepotRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,11 +189,6 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Allow ample depot capacity
-	if _, err := db.ExecContext(ctx, "UPDATE character_depots SET capacity = 50 WHERE character_id = ?", char.ID); err != nil {
-		t.Fatal(err)
-	}
-
 	runID := "exp_race_" + id.New()
 	now := time.Now().UTC()
 
@@ -458,30 +201,21 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 
 	ops := make([]func() error, 0, finalizeWorkers+bankWorkers)
 	for i := 0; i < finalizeWorkers; i++ {
-		workerIdx := i
 		ops = append(ops, func() error {
 			ready.Done()
 			<-start
 			staleSnapshot := char
 			staleSnapshot.Money += 300
 			h := dungeon.DungeonExpeditionHistory{
-				ID:               runID,
-				CharacterID:      char.ID,
-				DungeonID:        "dungeon-01",
-				Outcome:          dungeon.StatusEscaped,
-				ExpReward:        50,
-				GoldReward:       300,
-				ItemsRewardCount: 1,
-				CreatedAt:        now,
+				ID:          runID,
+				CharacterID: char.ID,
+				DungeonID:   "dungeon-01",
+				Outcome:     dungeon.StatusEscaped,
+				ExpReward:   50,
+				GoldReward:  300,
+				CreatedAt:   now,
 			}
-			items := []coreitem.Instance{
-				{
-					ID:           fmt.Sprintf("item_race_%s_%d", id.New()[:8], workerIdx),
-					DefinitionID: "potion",
-					Quantity:     1,
-				},
-			}
-			return dungeonRepo.FinalizeExpedition(ctx, h, &staleSnapshot, items)
+			return dungeonRepo.FinalizeExpedition(ctx, h, &staleSnapshot)
 		})
 	}
 
@@ -544,20 +278,9 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 		t.Errorf("expected deposit 5100, got %d", finalChar.Deposit)
 	}
 
-	// Verify 1 history entry, 1 item delivered, 1 expedition recorded
+	// Verify 1 history entry, 1 expedition recorded
 	histories, err := dungeonRepo.GetHistory(ctx, char.ID, 10)
 	if err != nil || len(histories) != 1 {
 		t.Fatalf("expected 1 history record, got %d (err: %v)", len(histories), err)
-	}
-	inv, err := invRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dep, err := depotRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(inv.Items)+len(dep.Items) != 1 {
-		t.Errorf("expected 1 total reward item delivered, got inv=%d depot=%d", len(inv.Items), len(dep.Items))
 	}
 }

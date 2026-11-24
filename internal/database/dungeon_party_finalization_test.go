@@ -113,7 +113,7 @@ func TestDungeonRepository_FinalizeExpedition_MultiMemberVitalityAndRewards(t *t
 	}
 
 	// FinalizeExpedition
-	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, nil, members...)
+	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, members...)
 	if err != nil {
 		t.Fatalf("FinalizeExpedition failed: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestDungeonRepository_FinalizeExpedition_PreservesConcurrentWalletUpdates(t
 	}
 
 	// FinalizeExpedition with 500 GoldReward
-	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, nil, members...)
+	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, members...)
 	if err != nil {
 		t.Fatalf("FinalizeExpedition failed: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestDungeonRepository_FinalizeExpedition_RollbackOnMemberFailure(t *testing
 		{CharacterID: invalidMemberID, CurrentHP: 50, MaxHP: 100},
 	}
 
-	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, nil, members...)
+	err = dungeonRepo.FinalizeExpedition(ctx, history, &c1, members...)
 	if err == nil {
 		t.Fatal("expected FinalizeExpedition to fail with invalid member")
 	}

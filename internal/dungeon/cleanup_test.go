@@ -9,7 +9,6 @@ import (
 	valkey "github.com/valkey-io/valkey-go"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/testutil"
@@ -51,7 +50,6 @@ func TestExpeditionCleanup_RunIdentity(t *testing.T) {
 			old.Members = []dungeon.ExpeditionMember{{CharacterID: owner}, {CharacterID: follower}}
 			next := old
 			next.ID = id.New()
-			next.AccumulatedItems = []string{"potion"}
 			next.ConsumedEvents = []string{"T:1:2:0"}
 			next.PosX, next.Round, next.AccumulatedGold = 2, 33, 77
 			if err := store.SaveActiveExpedition(ctx, old); err != nil {
@@ -117,8 +115,8 @@ type replacingFinalizeRepository struct {
 	replace func()
 }
 
-func (r *replacingFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, c *corecharacter.Character, items []coreitem.Instance, members ...dungeon.ExpeditionMember) error {
-	err := r.mockDungeonRepo.FinalizeExpedition(ctx, h, c, items, members...)
+func (r *replacingFinalizeRepository) FinalizeExpedition(ctx context.Context, h dungeon.DungeonExpeditionHistory, c *corecharacter.Character, members ...dungeon.ExpeditionMember) error {
+	err := r.mockDungeonRepo.FinalizeExpedition(ctx, h, c, members...)
 	r.replace()
 	return err
 }
@@ -149,7 +147,6 @@ func TestSettlementCleanup_PreservesReplacement(t *testing.T) {
 				}
 				next := *old
 				next.ID, next.AccumulatedGold = id.New(), 77
-				next.AccumulatedItems = nil
 				next.ConsumedEvents = nil
 				repo.replace = func() {
 					if err := store.SaveActiveExpedition(ctx, next); err != nil {

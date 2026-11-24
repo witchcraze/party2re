@@ -51,7 +51,7 @@
       "caller_method": "internal/database/dungeon_repository.go#DungeonRepository.FinalizeExpedition",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
-      "purpose": "Lock inventory after Rank 2 character lock to deliver expedition reward items before falling back to depot"
+      "purpose": "Lock each member's inventory via shared post-battle settlement to clear consumed items"
     }
   ]
 }

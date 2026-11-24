@@ -8,16 +8,14 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreprogression "github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/dungeon"
 )
 
 type mockDungeonRepo struct {
-	active       map[string]*dungeon.ActiveExpedition
-	histories    map[string][]dungeon.DungeonExpeditionHistory
-	savedChars   map[string]corecharacter.Character
-	awardedItems map[string][]coreitem.Instance
+	active     map[string]*dungeon.ActiveExpedition
+	histories  map[string][]dungeon.DungeonExpeditionHistory
+	savedChars map[string]corecharacter.Character
 }
 
 func TestNewService_RequiresActiveExpeditionStore(t *testing.T) {
@@ -28,10 +26,9 @@ func TestNewService_RequiresActiveExpeditionStore(t *testing.T) {
 
 func newMockDungeonRepo() *mockDungeonRepo {
 	return &mockDungeonRepo{
-		active:       make(map[string]*dungeon.ActiveExpedition),
-		histories:    make(map[string][]dungeon.DungeonExpeditionHistory),
-		savedChars:   make(map[string]corecharacter.Character),
-		awardedItems: make(map[string][]coreitem.Instance),
+		active:     make(map[string]*dungeon.ActiveExpedition),
+		histories:  make(map[string][]dungeon.DungeonExpeditionHistory),
+		savedChars: make(map[string]corecharacter.Character),
 	}
 }
 
@@ -55,7 +52,6 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 	ctx context.Context,
 	history dungeon.DungeonExpeditionHistory,
 	character *corecharacter.Character,
-	rewardItems []coreitem.Instance,
 	members ...dungeon.ExpeditionMember,
 ) error {
 	owner := history.CharacterID
@@ -95,9 +91,6 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 			}
 		}
 		m.savedChars[mem.CharacterID] = c
-	}
-	if len(rewardItems) > 0 {
-		m.awardedItems[owner] = append(m.awardedItems[owner], rewardItems...)
 	}
 	return nil
 }
@@ -327,8 +320,7 @@ func TestMove_ValidationErrors(t *testing.T) {
 
 func TestService_ItemEncoding(t *testing.T) {
 	encoded := dungeon.EncodeItems([]string{"item-1", "item-2"})
-	decoded := dungeon.DecodeItems(encoded)
-	if len(decoded) != 2 || decoded[0] != "item-1" || decoded[1] != "item-2" {
-		t.Errorf("unexpected decoded items: %v", decoded)
+	if encoded != `["item-1","item-2"]` {
+		t.Errorf("unexpected encoded items: %s", encoded)
 	}
 }
