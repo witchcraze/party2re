@@ -9,7 +9,7 @@ The King Sealing Battle Feature Module (`internal/boss`) provides high-tier endg
 ## Rules and decisions
 
 - `king1`–`king10` admit up to 6 players and `king99` 4: the legacy boss NPC takes one extra slot (`p_join+1`, counted from 1).
-- Settlement commits rewards, Dejon fatigue, records, the monster book, server news and boss medal progress together; the celebration crowd (Valkey) is best effort ([#2033](https://github.com/witchcraze/party2re/issues/2033)). Persistence boundary: [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery).
+- Settlement commits rewards, Dejon fatigue, the monster book and server news together; the celebration crowd (Valkey) is best effort. Persistence boundary: [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery).
 
 ## Authentic King Stages
 

@@ -25,7 +25,7 @@ its actual transitions against the original CGI.
 
 Party sealing locks the SQL `boss_room_settlements` row (Rank 0) before ascending
 character locks (Rank 2). Its room identity, roster and battle result commit with
-all participant rewards, history and mandatory Collection records. Valkey's
+all participant rewards and mandatory Collection records. Valkey's
 `in_progress` status excludes ordinary lobby activity; the SQL receipt prevents
 repeat settlement even after the short party lock expires. An interrupted room
 without a committed receipt can resume under that SQL lock.

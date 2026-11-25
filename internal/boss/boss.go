@@ -35,9 +35,6 @@ type BossStage struct {
 	TreasureItemIDs []string      `json:"treasure_item_ids"`
 }
 
-// Boss is an alias for BossStage for compatibility.
-type Boss = BossStage
-
 // BossMonster represents a combatant in a King sealing battle.
 type BossMonster struct {
 	Name       string `json:"name"`
@@ -60,45 +57,6 @@ type BossMonster struct {
 	GetCrystal int    `json:"get_crystal"`
 }
 
-// CharacterBossRecord tracks boss defeat progress in MariaDB.
-type CharacterBossRecord struct {
-	CharacterID        string
-	HighestTierCleared int
-	TotalBossDefeats   int
-	FirstClearedAt     *time.Time
-	LastChallengedAt   *time.Time
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-}
-
-// BossChallengeHistory records a completed sealing battle.
-type BossChallengeHistory struct {
-	ID           string
-	CharacterID  string
-	BossID       string
-	Tier         int
-	Outcome      corebattle.Outcome
-	Turns        int
-	RewardExp    int
-	RewardGold   int
-	RewardItemID string
-	IsFirstClear bool
-	CreatedAt    time.Time
-}
-
-// BossStageStatus represents the availability of a King stage for a character.
-type BossStageStatus struct {
-	Boss             BossStage `json:"boss"`
-	IsEligible       bool      `json:"is_eligible"`
-	IsUnlocked       bool      `json:"is_unlocked"`
-	IsCleared        bool      `json:"is_cleared"`
-	IneligibleReason string    `json:"ineligible_reason,omitempty"`
-	LockReason       string    `json:"lock_reason,omitempty"`
-}
-
-// BossEncounterStatus is an alias for BossStageStatus.
-type BossEncounterStatus = BossStageStatus
-
 // SealingBattleResult captures the outcome of an authentic Sealing Battle (vs_king.cgi).
 type SealingBattleResult struct {
 	StageID           string                       `json:"stage_id"`
@@ -116,28 +74,12 @@ type SealingBattleResult struct {
 	BattleResult      corebattle.PartyBattleResult `json:"battle_result"`
 }
 
-// BossLeaderboardEntry tracks top boss slayers.
-type BossLeaderboardEntry struct {
-	CharacterID        string     `json:"character_id"`
-	CharacterName      string     `json:"character_name"`
-	CharacterLevel     int        `json:"character_level"`
-	JobID              string     `json:"job_id"`
-	HighestTierCleared int        `json:"highest_tier_cleared"`
-	TotalBossDefeats   int        `json:"total_boss_defeats"`
-	FirstClearedAt     *time.Time `json:"first_cleared_at,omitempty"`
-}
-
 type Repository interface {
-	GetOrCreateRecord(ctx context.Context, characterID string) (CharacterBossRecord, error)
-	RecordChallenge(
+	SettleMember(
 		ctx context.Context,
-		history BossChallengeHistory,
-		record CharacterBossRecord,
 		character corecharacter.Character,
 		rewardItem *coreitem.Instance,
 	) error
-	GetHistory(ctx context.Context, characterID string, limit int) ([]BossChallengeHistory, error)
-	GetLeaderboard(ctx context.Context, limit int) ([]BossLeaderboardEntry, error)
 }
 
 type CharacterRepository interface {
@@ -332,55 +274,6 @@ func (s *Service) Configure(opts ...ServiceOption) {
 	for _, opt := range opts {
 		opt(s)
 	}
-}
-
-func (s *Service) ListStages(ctx context.Context, characterID string) ([]BossStageStatus, error) {
-	if characterID == "" {
-		return nil, ErrCharacterNotFound
-	}
-	char, err := s.characterRepo.FindByID(ctx, characterID)
-	if err != nil {
-		return nil, ErrCharacterNotFound
-	}
-	rec, err := s.repo.GetOrCreateRecord(ctx, characterID)
-	if err != nil {
-		return nil, err
-	}
-
-	statuses := make([]BossStageStatus, 0, len(s.stages))
-	for _, stage := range s.stages {
-		isEligible := true
-		ineligibleReason := ""
-
-		if char.Stats.HP <= 0 {
-			isEligible = false
-			ineligibleReason = "Character is unconscious"
-		} else if char.Tired >= 100 {
-			isEligible = false
-			ineligibleReason = "Character is exhausted (Tired >= 100)"
-		} else if err := party.ValidateNeedJoin(stage.NeedJoin, char); err != nil {
-			isEligible = false
-			ineligibleReason = err.Error()
-		}
-
-		isCleared := rec.TotalBossDefeats > 0
-
-		statuses = append(statuses, BossStageStatus{
-			Boss:             stage,
-			IsEligible:       isEligible,
-			IsUnlocked:       isEligible,
-			IsCleared:        isCleared,
-			IneligibleReason: ineligibleReason,
-			LockReason:       ineligibleReason,
-		})
-	}
-
-	return statuses, nil
-}
-
-// ListBosses is an alias for ListStages.
-func (s *Service) ListBosses(ctx context.Context, characterID string) ([]BossStageStatus, error) {
-	return s.ListStages(ctx, characterID)
 }
 
 func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) error) error {

@@ -25,14 +25,6 @@ func (t snapshotTx) RunInTx(ctx context.Context, fn func(context.Context) error)
 	for k, v := range t.f.charRepo.chars {
 		chars[k] = v
 	}
-	records := make(map[string]boss.CharacterBossRecord, len(t.f.bossRepo.records))
-	for k, v := range t.f.bossRepo.records {
-		records[k] = v
-	}
-	histories := make(map[string][]boss.BossChallengeHistory, len(t.f.bossRepo.histories))
-	for k, v := range t.f.bossRepo.histories {
-		histories[k] = v
-	}
 	items := make(map[string][]coreitem.Instance, len(t.f.bossRepo.awardedItems))
 	for k, v := range t.f.bossRepo.awardedItems {
 		items[k] = v
@@ -44,27 +36,25 @@ func (t snapshotTx) RunInTx(ctx context.Context, fn func(context.Context) error)
 	err := fn(ctx)
 	if err != nil {
 		t.f.charRepo.chars = chars
-		t.f.bossRepo.records = records
-		t.f.bossRepo.histories = histories
 		t.f.bossRepo.awardedItems = items
 		t.f.bossRepo.settlements = settlements
 	}
 	return err
 }
 
-// failingBossRepo fails the failOn-th RecordChallenge call.
+// failingBossRepo fails the failOn-th SettleMember call.
 type failingBossRepo struct {
 	*mockBossRepo
 	failOn int
 	calls  int
 }
 
-func (r *failingBossRepo) RecordChallenge(ctx context.Context, h boss.BossChallengeHistory, rec boss.CharacterBossRecord, c corecharacter.Character, item *coreitem.Instance) error {
+func (r *failingBossRepo) SettleMember(ctx context.Context, c corecharacter.Character, item *coreitem.Instance) error {
 	r.calls++
 	if r.calls == r.failOn {
 		return errInjected
 	}
-	return r.mockBossRepo.RecordChallenge(ctx, h, rec, c, item)
+	return r.mockBossRepo.SettleMember(ctx, c, item)
 }
 
 // failingRecorder fails the failOn-th mandatory Collection/Hall of Fame record.
@@ -131,11 +121,8 @@ func (f *sealFixture) requireNothingSettled(t *testing.T) {
 		if got := f.charRepo.chars[id]; got != want {
 			t.Errorf("character %s partially settled: got %+v, want %+v", id, got, want)
 		}
-		if n := len(f.bossRepo.histories[id]); n != 0 {
-			t.Errorf("character %s has %d committed challenge histories", id, n)
-		}
-		if rec := f.bossRepo.records[id]; rec.TotalBossDefeats != 0 {
-			t.Errorf("character %s boss record partially committed: %+v", id, rec)
+		if n := len(f.bossRepo.awardedItems[id]); n != 0 {
+			t.Errorf("character %s received %d reward items", id, n)
 		}
 	}
 }
@@ -148,7 +135,7 @@ func TestStartSealingBattle_RequiredFailureRollsBackWholeSettlement(t *testing.T
 		{"collection record failure after earlier rewards", func(f *sealFixture, t *testing.T) *boss.Service {
 			return f.service(t, f.bossRepo, f.partyRepo, boss.WithMonsterDefeatRecorder(&failingRecorder{failOn: 9}))
 		}},
-		{"boss record failure for second member", func(f *sealFixture, t *testing.T) *boss.Service {
+		{"member settlement failure for second member", func(f *sealFixture, t *testing.T) *boss.Service {
 			return f.service(t, &failingBossRepo{mockBossRepo: f.bossRepo, failOn: 2}, f.partyRepo)
 		}},
 	}
@@ -264,8 +251,8 @@ func TestStartSealingBattle_ConcurrentStartSettlesOnce(t *testing.T) {
 		if got := f.charRepo.chars[id].HeroCount; got != 1 {
 			t.Errorf("%s HeroCount=%d, want exactly 1", id, got)
 		}
-		if got := len(f.bossRepo.histories[id]); got != 1 {
-			t.Errorf("%s histories=%d, want exactly 1", id, got)
+		if got := len(f.bossRepo.awardedItems[id]); got != 1 {
+			t.Errorf("%s awardedItems=%d, want exactly 1", id, got)
 		}
 	}
 }

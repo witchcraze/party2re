@@ -123,13 +123,12 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 		return n
 	}
 	type snapshot struct {
-		book, legends, histories, completions int
+		book, legends, completions int
 	}
 	take := func() snapshot {
 		return snapshot{
 			book:        count(`SELECT COUNT(*) FROM character_monster_book WHERE character_id = ?`),
 			legends:     count(`SELECT COUNT(*) FROM legend_records WHERE character_id = ?`),
-			histories:   count(`SELECT COUNT(*) FROM boss_challenge_history WHERE character_id = ?`),
 			completions: count(`SELECT COUNT(*) FROM character_collection_completions WHERE character_id = ?`),
 		}
 	}
@@ -164,7 +163,7 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 		t.Fatalf("retry did not settle a victory: %+v", res)
 	}
 	after := take()
-	if after.legends != 1 || after.histories != 1 || after.completions != 1 {
+	if after.legends != 1 || after.completions != 1 {
 		t.Fatalf("retry state: %+v", after)
 	}
 	assertTrajectoryKind(t, db, char.ID, corecharacter.MemoryCompletion)

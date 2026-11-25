@@ -23,8 +23,6 @@ type mockBossRepo struct {
 	settlements  map[string]*boss.SealingSettlement
 	unsealedAt   *time.Time
 	unsealErr    error
-	records      map[string]boss.CharacterBossRecord
-	histories    map[string][]boss.BossChallengeHistory
 	savedChars   map[string]corecharacter.Character
 	awardedItems map[string][]coreitem.Instance
 	charRepo     *mockCharRepo
@@ -32,8 +30,6 @@ type mockBossRepo struct {
 
 func newMockBossRepo() *mockBossRepo {
 	return &mockBossRepo{
-		records:      make(map[string]boss.CharacterBossRecord),
-		histories:    make(map[string][]boss.BossChallengeHistory),
 		savedChars:   make(map[string]corecharacter.Character),
 		awardedItems: make(map[string][]coreitem.Instance),
 	}
@@ -67,31 +63,11 @@ func (m *mockBossRepo) SaveUnsealedAt(_ context.Context, unsealedAt time.Time) e
 	return nil
 }
 
-func (m *mockBossRepo) GetOrCreateRecord(ctx context.Context, characterID string) (boss.CharacterBossRecord, error) {
-	rec, ok := m.records[characterID]
-	if !ok {
-		now := time.Now().UTC()
-		rec = boss.CharacterBossRecord{
-			CharacterID:        characterID,
-			HighestTierCleared: 0,
-			TotalBossDefeats:   0,
-			CreatedAt:          now,
-			UpdatedAt:          now,
-		}
-		m.records[characterID] = rec
-	}
-	return rec, nil
-}
-
-func (m *mockBossRepo) RecordChallenge(
+func (m *mockBossRepo) SettleMember(
 	ctx context.Context,
-	history boss.BossChallengeHistory,
-	record boss.CharacterBossRecord,
 	character corecharacter.Character,
 	rewardItem *coreitem.Instance,
 ) error {
-	m.records[record.CharacterID] = record
-	m.histories[record.CharacterID] = append([]boss.BossChallengeHistory{history}, m.histories[record.CharacterID]...)
 	m.savedChars[character.ID] = character
 	if m.charRepo != nil {
 		m.charRepo.chars[character.ID] = character
@@ -100,27 +76,6 @@ func (m *mockBossRepo) RecordChallenge(
 		m.awardedItems[character.ID] = append(m.awardedItems[character.ID], *rewardItem)
 	}
 	return nil
-}
-
-func (m *mockBossRepo) GetHistory(ctx context.Context, characterID string, limit int) ([]boss.BossChallengeHistory, error) {
-	list := m.histories[characterID]
-	if len(list) > limit {
-		list = list[:limit]
-	}
-	return list, nil
-}
-
-func (m *mockBossRepo) GetLeaderboard(ctx context.Context, limit int) ([]boss.BossLeaderboardEntry, error) {
-	entries := make([]boss.BossLeaderboardEntry, 0)
-	for _, rec := range m.records {
-		entries = append(entries, boss.BossLeaderboardEntry{
-			CharacterID:        rec.CharacterID,
-			HighestTierCleared: rec.HighestTierCleared,
-			TotalBossDefeats:   rec.TotalBossDefeats,
-			FirstClearedAt:     rec.FirstClearedAt,
-		})
-	}
-	return entries, nil
 }
 
 type mockCharRepo struct {
@@ -233,81 +188,6 @@ func createTestChar(id string, level, hp, attack, defense int) corecharacter.Cha
 // Tests
 // ---------------------------------------------------------------------------
 
-// TestListBosses_LockUnlock verifies that stages are locked/unlocked per
-// the authentic need_join conditions (level gate) from the king*.cgi catalog.
-func TestListBosses_LockUnlock(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	charRepo := &mockCharRepo{
-		chars: map[string]corecharacter.Character{
-			"low_level":  createTestChar("low_level", 10, 100, 20, 20),
-			"mid_level":  createTestChar("mid_level", 30, 500, 70, 50),
-			"high_level": createTestChar("high_level", 99, 1000, 300, 200),
-		},
-	}
-	battleEngine := corebattle.Engine{}
-
-	service, err := boss.NewService(bossRepo, charRepo, battleEngine)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Level 10 character — king1 requires MaxHP >= 400, should be locked.
-	statuses, err := service.ListBosses(ctx, "low_level")
-	if err != nil {
-		t.Fatalf("ListBosses error = %v", err)
-	}
-	if len(statuses) != 11 {
-		t.Errorf("expected 11 boss encounters (king1-10 + king99), got %d", len(statuses))
-	}
-	if statuses[0].IsUnlocked {
-		t.Errorf("expected king1 to be locked for lv 10 character (MaxHP too low)")
-	}
-
-	// Level 30 character (hp=500, MaxHP>=400) — king1 should be unlocked; king2 locked (prereq: clear king1).
-	statuses, err = service.ListBosses(ctx, "mid_level")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !statuses[0].IsUnlocked {
-		t.Errorf("expected king1 to be unlocked for lv 30 character with MaxHP=500")
-	}
-	// king2 also has hp_400_o condition; a character with MaxHP=500 satisfies it.
-	// The legacy vs_king system has no inter-stage prerequisite — each stage's access
-	// is governed solely by its own need_join condition.
-	if !statuses[1].IsUnlocked {
-		t.Errorf("expected king2 to be unlocked for character meeting hp_400_o condition")
-	}
-}
-
-// TestService_GetCharacterRecord verifies empty-ID guard and record creation.
-func TestService_GetCharacterRecord(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
-	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Run("empty character ID returns error", func(t *testing.T) {
-		_, err := service.GetCharacterRecord(ctx, "")
-		if !errors.Is(err, boss.ErrCharacterNotFound) {
-			t.Errorf("expected ErrCharacterNotFound, got %v", err)
-		}
-	})
-
-	t.Run("valid character retrieves or creates record", func(t *testing.T) {
-		rec, err := service.GetCharacterRecord(ctx, "char-rec-1")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if rec.CharacterID != "char-rec-1" {
-			t.Errorf("expected character ID char-rec-1, got %s", rec.CharacterID)
-		}
-	})
-}
-
 type stubPartyBattleEngine struct {
 	resolveFn func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
 }
@@ -329,7 +209,7 @@ func (e stubPartyBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequ
 }
 
 // TestStartSealingBattle_PartyVictoryAndResealing verifies authentic 4-player party
-// sealing battle (vs_king.cgi): all members gain +1 HeroCount and a boss record,
+// sealing battle (vs_king.cgi): all members gain +1 HeroCount and the chest reward,
 // server news announcement, celebration banquet hook, and party disbandment.
 func TestStartSealingBattle_PartyVictoryAndResealing(t *testing.T) {
 	ctx := context.Background()
@@ -425,19 +305,16 @@ func TestStartSealingBattle_PartyVictoryAndResealing(t *testing.T) {
 		t.Errorf("expected party to be deleted after sealing battle")
 	}
 
-	// 5. Every member records the clear and one winning history entry
+	// 5. Every member receives the chest item
 	for _, cID := range []string{"leader", "m1", "m2", "m3"} {
-		if rec := bossRepo.records[cID]; rec.TotalBossDefeats != 1 || rec.HighestTierCleared != 1 || rec.FirstClearedAt == nil {
-			t.Errorf("character %s boss record = %+v", cID, rec)
-		}
-		if h := bossRepo.histories[cID]; len(h) != 1 || h[0].Outcome != corebattle.OutcomeWin || !h[0].IsFirstClear || h[0].RewardExp != res.RewardExp {
-			t.Errorf("character %s history = %+v", cID, h)
+		if items := bossRepo.awardedItems[cID]; len(items) != 1 || items[0].DefinitionID != res.RewardItemID {
+			t.Errorf("character %s awardedItems = %+v, want %q", cID, items, res.RewardItemID)
 		}
 	}
 }
 
 // TestStartSealingBattle_DefeatSettlesNoRewards verifies that a lost sealing battle
-// records the attempt and the fallen members' HP but grants no reward or clear.
+// records the fallen members' HP but grants no reward or clear.
 func TestStartSealingBattle_DefeatSettlesNoRewards(t *testing.T) {
 	f := newSealFixture("leader", "m1")
 	engine := stubPartyBattleEngine{resolveFn: func(corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
@@ -469,12 +346,6 @@ func TestStartSealingBattle_DefeatSettlesNoRewards(t *testing.T) {
 		c := f.charRepo.chars[id]
 		if c.Stats.HP != 0 || c.HeroCount != before.HeroCount || c.Money != before.Money || c.Experience != before.Experience || c.Crystal != before.Crystal {
 			t.Errorf("character %s settled a defeat as a win: %+v", id, c)
-		}
-		if rec := f.bossRepo.records[id]; rec.TotalBossDefeats != 0 || rec.HighestTierCleared != 0 || rec.LastChallengedAt == nil {
-			t.Errorf("character %s boss record = %+v", id, rec)
-		}
-		if h := f.bossRepo.histories[id]; len(h) != 1 || h[0].Outcome != corebattle.OutcomeDefeat || h[0].IsFirstClear {
-			t.Errorf("character %s history = %+v", id, h)
 		}
 		if len(f.bossRepo.awardedItems[id]) != 0 {
 			t.Errorf("character %s received loot on defeat", id)

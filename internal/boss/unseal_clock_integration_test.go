@@ -128,7 +128,6 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		"adventures", "party_adventure_logs",
 		"runs", "run_enrollments",
 		"run_recipients", "run_receipts",
-		"character_boss_records", "boss_challenge_history",
 		"boss_room_settlements", "boss_unseal_clock",
 	)
 
