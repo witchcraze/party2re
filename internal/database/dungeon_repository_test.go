@@ -135,12 +135,13 @@ func TestDungeonRepository_IdempotentClaimAndWalletPreservation(t *testing.T) {
 	staleChar.Money += 400
 	staleChar.SmallMedals += 2
 
-	if err := dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar); err != nil {
+	stock := dungeon.ExpeditionMember{CharacterID: char.ID, CurrentHP: char.Stats.HP, AccumulatedExp: 200, AccumulatedGold: 400}
+	if err := dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar, stock); err != nil {
 		t.Fatalf("first FinalizeExpedition failed: %v", err)
 	}
 
 	// Duplicate claim with the same run ID must return ErrExpeditionAlreadyFinished and roll back / skip duplicate grants
-	err = dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar)
+	err = dungeonRepo.FinalizeExpedition(ctx, hist, &staleChar, stock)
 	if !errors.Is(err, dungeon.ErrExpeditionAlreadyFinished) {
 		t.Fatalf("expected ErrExpeditionAlreadyFinished on duplicate run ID, got %v", err)
 	}
@@ -215,7 +216,7 @@ func TestDungeonRepository_ConcurrentEscapeAndWalletUpdate(t *testing.T) {
 				GoldReward:  300,
 				CreatedAt:   now,
 			}
-			return dungeonRepo.FinalizeExpedition(ctx, h, &staleSnapshot)
+			return dungeonRepo.FinalizeExpedition(ctx, h, &staleSnapshot, dungeon.ExpeditionMember{CharacterID: char.ID, CurrentHP: char.Stats.HP, AccumulatedExp: 50, AccumulatedGold: 300})
 		})
 	}
 

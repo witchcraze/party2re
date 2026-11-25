@@ -177,8 +177,9 @@ func (ctx *battleContext) recordDefeatEarnings(actor, target Participant, crysta
 		return
 	}
 	e := DefeatEarnings{
-		ActorID: actor.ID,
-		Reward:  Reward{Experience: target.ExperienceReward, Currency: target.GoldReward, Crystals: crystals},
+		ActorID:  actor.ID,
+		TargetID: target.ID,
+		Reward:   Reward{Experience: target.ExperienceReward, Currency: target.GoldReward, Crystals: crystals},
 	}
 	for _, ally := range ctx.req.Allies {
 		if ctx.hpMap[ally.ID] > 0 {

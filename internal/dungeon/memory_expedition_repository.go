@@ -3,6 +3,7 @@ package dungeon
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sync"
 	"time"
 )
@@ -65,6 +66,7 @@ func (m *MemoryExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
+	cp.Credits = slices.Clone(exp.Credits)
 	return &cp, nil
 }
 
@@ -77,6 +79,7 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
+	cp.Credits = slices.Clone(exp.Credits)
 	m.expeditions[exp.CharacterID] = cp
 	for _, member := range cp.Members {
 		if member.CharacterID != cp.CharacterID {
@@ -108,6 +111,22 @@ func (m *MemoryExpeditionRepository) DeleteActiveExpedition(ctx context.Context,
 	}
 	delete(m.expeditions, characterID)
 	delete(m.expirations, characterID)
+	return nil
+}
+
+func (m *MemoryExpeditionRepository) AckCredits(ctx context.Context, characterID, expeditionID string, ids []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	run, ok := m.expeditions[characterID]
+	if !ok || run.ID != expeditionID {
+		return nil
+	}
+	run.Credits = slices.DeleteFunc(slices.Clone(run.Credits), func(c DefeatCredit) bool { return slices.Contains(ids, c.ID) })
+	if len(run.Credits) == 0 {
+		run.Credits = nil // as the script deletes the field
+	}
+	m.expeditions[characterID] = run
 	return nil
 }
 
@@ -233,25 +252,16 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 		exp.AccumulatedExp += params.ExpDelta
 		exp.AccumulatedGold += params.GoldDelta
 
-		if len(params.MemberExpDeltas) > 0 {
-			for i := range exp.Members {
-				if delta, ok := params.MemberExpDeltas[exp.Members[i].CharacterID]; ok && delta > 0 {
-					exp.Members[i].AccumulatedExp += delta
-				}
+		for i := range exp.Members {
+			mem := &exp.Members[i]
+			if mem.CharacterID == params.StockDrain {
+				mem.AccumulatedExp, mem.AccumulatedGold, mem.AccumulatedCrystals = 0, 0, 0
 			}
-		} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.ExpDelta > 0 {
-			exp.Members[0].AccumulatedExp += params.ExpDelta
+			mem.AccumulatedExp += max(0, params.MemberExpDeltas[mem.CharacterID])
+			mem.AccumulatedGold += max(0, params.MemberGoldDeltas[mem.CharacterID])
+			mem.AccumulatedCrystals += max(0, params.MemberCrystalDeltas[mem.CharacterID])
 		}
-
-		if len(params.MemberGoldDeltas) > 0 {
-			for i := range exp.Members {
-				if delta, ok := params.MemberGoldDeltas[exp.Members[i].CharacterID]; ok && delta > 0 {
-					exp.Members[i].AccumulatedGold += delta
-				}
-			}
-		} else if len(exp.Members) == 1 && exp.Members[0].CharacterID == characterID && params.GoldDelta > 0 {
-			exp.Members[0].AccumulatedGold += params.GoldDelta
-		}
+		exp.Credits = append(slices.Clone(exp.Credits), params.Credits...)
 	}
 	exp.UpdatedAt = params.Now
 
@@ -263,6 +273,7 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	cp.ConsumedEvents = append([]string(nil), exp.ConsumedEvents...)
 	cp.MapState = bytes.Clone(exp.MapState)
 	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
+	cp.Credits = slices.Clone(exp.Credits)
 	return StepOutcome{
 		Expedition:    cp,
 		Status:        finalStatus,

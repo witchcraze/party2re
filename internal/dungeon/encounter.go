@@ -95,6 +95,9 @@ func (s *Service) Fight(ctx context.Context, characterID string) (ExpeditionStep
 	if exp.CharacterID != characterID {
 		return ExpeditionStepResult{}, ErrForbidden
 	}
+	if err := s.settleCredits(ctx, exp); err != nil {
+		return ExpeditionStepResult{}, err
+	}
 	if exp.Status != StatusExploring {
 		return s.resumeSettlement(ctx, exp)
 	}
@@ -109,7 +112,12 @@ func (s *Service) Fight(ctx context.Context, characterID string) (ExpeditionStep
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
-	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monsters, enc.EventType, enc.X, enc.Y, "", "", nil, StepParams{}, nil)
+	// A fallen leader's command never applies its stock (_battle.cgi:654–664).
+	var carry StepParams
+	if exp.isAlive(characterID) {
+		carry.StockDrain = characterID
+	}
+	return s.resolveMonsterCombat(ctx, exp, &char, enc.Monsters, enc.EventType, enc.X, enc.Y, "", "", nil, carry, nil)
 }
 
 // encounterRecord adds each enemy's private combat data, by index, only to

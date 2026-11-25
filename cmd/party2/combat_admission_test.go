@@ -187,6 +187,14 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		})
 	}
 	// A solo start and the other owner's party start share one character lock.
+	// Earlier moves may have committed defeat credits, so the baseline is taken here.
+	baseline := make([]corecharacter.Character, len(chars))
+	for i, c := range chars {
+		var err error
+		if baseline[i], err = core.charRepo.FindByID(ctx, c.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
 	first, second := testutil.RunRace2(
 		func() error {
 			_, err := combat.dungeon.StartPartyExpedition(ctx, leader.ID, nil, dungeon.NativeMap0ID, lobby.Party.ID)
@@ -197,7 +205,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	if (first == nil) == (second == nil) || testutil.IsDeadlockError(first) || testutil.IsDeadlockError(second) {
 		t.Fatalf("starts did not exclude each other: %v / %v", first, second)
 	}
-	for _, before := range chars {
+	for _, before := range baseline {
 		after, err := core.charRepo.FindByID(ctx, before.ID)
 		if err != nil {
 			t.Fatal(err)
@@ -248,6 +256,10 @@ func TestCombatAdmissionProduction(t *testing.T) {
 			t.Fatal("deletion orphaned an enrolled actor", err)
 		}
 		// Incoming peer credits remain valid and must survive later native exit.
+		start, err := core.charRepo.FindByID(ctx, member.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if err := core.txProvider.RunInTx(ctx, func(ctx context.Context) error {
 			c, err := core.charRepo.FindByIDForUpdate(ctx, member.ID)
 			if err != nil {
@@ -265,7 +277,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		if _, err := combat.normal.Command(ctx, runhost.Command{PlayerID: member.PlayerID, ActorID: member.ID, RunID: entry.Command.RunID, ID: "exit", Version: 1, Action: "exit"}); err != nil {
 			t.Fatal(err)
 		}
-		if after, err := core.charRepo.FindByID(ctx, member.ID); err != nil || after.Money != member.Money+7 {
+		if after, err := core.charRepo.FindByID(ctx, member.ID); err != nil || after.Money != start.Money+7 {
 			t.Fatal("exit overwrote a peer credit", after, err)
 		}
 	})

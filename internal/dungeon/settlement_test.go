@@ -113,46 +113,6 @@ func TestEscape_InputAndStatusValidations(t *testing.T) {
 func TestEscape_ErrorPropagation(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("experience application error propagates", func(t *testing.T) {
-		_, charRepo, activeStore, service := setupSettlementTest(t)
-		now := time.Now().UTC()
-		badChar := createTestChar("invalid_char", 0, 100, 50, 30)
-		charRepo.chars["invalid_char"] = badChar
-
-		_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-			CharacterID:    "invalid_char",
-			DungeonID:      "test-dg-01",
-			Status:         dungeon.StatusExploring,
-			AccumulatedExp: 50,
-			StartedAt:      now,
-			UpdatedAt:      now,
-		})
-
-		_, err := service.Escape(ctx, "invalid_char")
-		if err == nil || !strings.Contains(err.Error(), "applying experience") {
-			t.Fatalf("expected applying experience error, got: %v", err)
-		}
-	})
-
-	t.Run("currency addition error propagates", func(t *testing.T) {
-		_, _, activeStore, service := setupSettlementTest(t)
-		now := time.Now().UTC()
-
-		_ = activeStore.SaveActiveExpedition(ctx, dungeon.ActiveExpedition{
-			CharacterID:     "hero",
-			DungeonID:       "test-dg-01",
-			Status:          dungeon.StatusExploring,
-			AccumulatedGold: -1,
-			StartedAt:       now,
-			UpdatedAt:       now,
-		})
-
-		_, err := service.Escape(ctx, "hero")
-		if err == nil || !strings.Contains(err.Error(), "adding gold") {
-			t.Fatalf("expected adding gold error, got: %v", err)
-		}
-	})
-
 	t.Run("finalize expedition repository error propagates", func(t *testing.T) {
 		repo, _, activeStore, service := setupSettlementTest(t)
 		now := time.Now().UTC()
@@ -182,6 +142,7 @@ func TestEscape_ErrorPropagation(t *testing.T) {
 			Status:          dungeon.StatusExploring,
 			AccumulatedExp:  120,
 			AccumulatedGold: 350,
+			Members:         []dungeon.ExpeditionMember{{CharacterID: "hero", CurrentHP: 100, AccumulatedExp: 120, AccumulatedGold: 350}},
 			StartedAt:       now,
 			UpdatedAt:       now,
 		})

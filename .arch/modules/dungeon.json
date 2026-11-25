@@ -1,7 +1,7 @@
 {
   "module": "dungeon",
   "tier": 2,
-  "description": "Valkey-owned expedition and active-enemy buffers with revision-checked combat continuation, immutable terminal settlement snapshots, movement admission, run-qualified cleanup and SQL reward/history settlement (C1, C2).",
+  "description": "Valkey-owned expedition and active-enemy buffers with revision-checked combat continuation, immutable terminal settlement snapshots, movement admission, run-qualified cleanup, receipt-protected in-run defeat credits and SQL reward/history settlement (C1, C2).",
   "package": "internal/dungeon",
   "dependencies": [
     {"name": "settlement", "target_module": "database", "relation_type": "consumer_interface", "source_ref": "internal/dungeon/dungeon.go#Repository"},
@@ -17,7 +17,18 @@
         {"table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE via shared post-battle settlement", "note": "Every member's inventory for consumption."},
         {"table": "tavern_character_status", "tier": 8, "mode": "UPSERT via TavernRepository.ResetFullness", "note": "Escape only: clears each member's meal flag after the character and inventory writes."}
       ],
-      "note": "The run-ID history INSERT claims settlement once after the character lock; record updates and owner/run-qualified SQL fallback deletion share that transaction. Live-store/member cleanup runs separately after commit."
+      "note": "The run-ID history INSERT claims settlement once after the character lock; record updates, deletion of the run's credit receipts and owner/run-qualified SQL fallback deletion share that transaction. Live-store/member cleanup runs separately after commit."
+    },
+    {
+      "method": "SettleDefeatCredits",
+      "source_ref": "internal/database/dungeon_defeat_credits.go#DungeonRepository.SettleDefeatCredits",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {"table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE", "note": "Lock every credited character in ascending ID order before reading the run's settlement claim and inserting receipts."},
+        {"table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE via shared post-battle settlement", "note": "The credited character's inventory."},
+        {"table": "character_monsters", "tier": 8, "mode": "INSERT via the configured MonsterTamer", "note": "Recruitment from the killer's defeat facts, within box capacity."}
+      ],
+      "note": "Receipts in dungeon_defeat_credits (unique per run and credit ID) are inserted after the character locks; only newly receipted credits reach battle.Service.ApplyPostBattleResult in the same transaction. A run already claimed in dungeon_expedition_history settles nothing. Dungeon acknowledges the credits in Valkey after commit."
     }
   ]
 }

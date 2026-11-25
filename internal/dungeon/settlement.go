@@ -3,11 +3,9 @@ package dungeon
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -24,6 +22,10 @@ func (s *Service) Escape(ctx context.Context, characterID string) (ExpeditionSte
 	}
 	if exp.CharacterID != characterID {
 		return ExpeditionStepResult{}, ErrForbidden
+	}
+	// Accepted credits precede nigeru's stock and exit effects.
+	if err := s.settleCredits(ctx, exp); err != nil {
+		return ExpeditionStepResult{}, err
 	}
 
 	if exp.Status != StatusExploring {
@@ -46,16 +48,6 @@ func (s *Service) handleEscape(
 ) (ExpeditionStepResult, error) {
 	if err := s.freezeExpedition(ctx, exp, StatusEscaped); err != nil {
 		return ExpeditionStepResult{}, err
-	}
-
-	// Transfer accumulated EXP & Gold to character
-	if exp.AccumulatedExp > 0 {
-		if _, err := progression.ApplyExperience(char, exp.AccumulatedExp); err != nil {
-			return ExpeditionStepResult{}, fmt.Errorf("applying experience: %w", err)
-		}
-	}
-	if err := char.AddMoney(exp.AccumulatedGold); err != nil {
-		return ExpeditionStepResult{}, fmt.Errorf("adding gold: %w", err)
 	}
 
 	return s.finalizeFrozenSettlement(ctx, exp, char, StatusEscaped, EventEscape, exp.AccumulatedExp, exp.AccumulatedGold)

@@ -23,8 +23,8 @@ func TestPartyBattle_DefeatEarningsCaptureLivingRecipients(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []DefeatEarnings{
-		{ActorID: "a", Reward: Reward{Experience: 7, Currency: 11, Crystals: 1}, RecipientIDs: []string{"a", "b"}},
-		{ActorID: "a", Reward: Reward{Experience: 13, Currency: 19, Crystals: 1}, RecipientIDs: []string{"a"}},
+		{ActorID: "a", TargetID: "e1", Reward: Reward{Experience: 7, Currency: 11, Crystals: 1}, RecipientIDs: []string{"a", "b"}},
+		{ActorID: "a", TargetID: "e2", Reward: Reward{Experience: 13, Currency: 19, Crystals: 1}, RecipientIDs: []string{"a"}},
 	}
 	if r.Outcome != OutcomeWin || r.RemainingHP["b"] != 0 || !reflect.DeepEqual(r.DefeatEarnings, want) {
 		t.Fatalf("outcome=%s HP=%v earnings=%+v, want %+v", r.Outcome, r.RemainingHP, r.DefeatEarnings, want)
@@ -175,7 +175,7 @@ func TestPartyBattle_DefeatEarningsCaptureActingPlayer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []DefeatEarnings{{ActorID: "b", Reward: Reward{Experience: 100, Currency: 50, Crystals: 1}, RecipientIDs: []string{"a", "b"}}}
+	want := []DefeatEarnings{{ActorID: "b", TargetID: "e", Reward: Reward{Experience: 100, Currency: 50, Crystals: 1}, RecipientIDs: []string{"a", "b"}}}
 	if !reflect.DeepEqual(r.DefeatEarnings, want) {
 		t.Fatalf("got %+v, want %+v", r.DefeatEarnings, want)
 	}

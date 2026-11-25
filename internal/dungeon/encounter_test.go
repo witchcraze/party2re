@@ -64,7 +64,11 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 						hp[char.ID] = 0
 						hp["enemy"] = 40
 					}
-					return corebattle.PartyBattleResult{Outcome: outcome, WinnerSide: side, RemainingHP: hp, RemainingMP: map[string]int{"enemy": 4}, RemainingStatus: map[string]string{"enemy": "poison"}}, nil
+					var defeats []corebattle.DefeatEarnings
+					if hp["enemy"] == 0 {
+						defeats = []corebattle.DefeatEarnings{{ActorID: char.ID, TargetID: "enemy", RecipientIDs: []string{char.ID}}}
+					}
+					return corebattle.PartyBattleResult{Outcome: outcome, WinnerSide: side, RemainingHP: hp, RemainingMP: map[string]int{"enemy": 4}, RemainingStatus: map[string]string{"enemy": "poison"}, DefeatEarnings: defeats}, nil
 				}}
 				newService := func() *dungeon.Service {
 					svc, err := dungeon.NewService(repo, charRepo, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithRNG(zeroRNG{}))
@@ -134,7 +138,9 @@ func TestActiveEncounterLifecycle(t *testing.T) {
 					t.Fatal(err)
 				}
 				if ending == "win" {
-					if final.Expedition.Encounter != nil || final.Expedition.PosX != 2 || final.Expedition.AccumulatedExp != 17 || final.Expedition.AccumulatedGold != 23 {
+					// The killer's share commits at once; the run only records it.
+					if final.Expedition.Encounter != nil || final.Expedition.PosX != 2 || final.Expedition.AccumulatedExp != 17 || final.Expedition.AccumulatedGold != 23 ||
+						final.Expedition.Members[0].AccumulatedGold != 0 || len(final.Expedition.Credits) != 0 || repo.savedChars[char.ID].Money != 23 {
 						t.Fatalf("victory: %+v", final)
 					}
 					if _, err = svc.Fight(ctx, char.ID); !errors.Is(err, dungeon.ErrNoActiveCombat) {

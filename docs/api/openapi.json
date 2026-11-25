@@ -9886,9 +9886,11 @@
         "additionalProperties": false,
         "properties": {
           "accumulated_exp": {
+            "description": "Defeat EXP the leader has earned in this run, whether credited or still in stock.",
             "type": "integer"
           },
           "accumulated_gold": {
+            "description": "Defeat gold the leader has earned in this run, whether credited or still in stock.",
             "type": "integer"
           },
           "character_id": {
@@ -10025,10 +10027,16 @@
       "DungeonExpeditionMember": {
         "additionalProperties": false,
         "properties": {
+          "accumulated_crystals": {
+            "description": "Stock: defeat crystals awaiting this member's next action while alive, or Escape.",
+            "type": "integer"
+          },
           "accumulated_exp": {
+            "description": "Stock: defeat EXP awaiting this member's next action while alive, or Escape.",
             "type": "integer"
           },
           "accumulated_gold": {
+            "description": "Stock: defeat gold awaiting this member's next action while alive, or Escape.",
             "type": "integer"
           },
           "character_id": {

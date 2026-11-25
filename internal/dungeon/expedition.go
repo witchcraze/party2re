@@ -64,6 +64,9 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	if exp.Encounter.blocking() {
 		return ExpeditionStepResult{}, ErrCombatActive
 	}
+	if err := s.settleCredits(ctx, exp); err != nil {
+		return ExpeditionStepResult{}, err
+	}
 
 	if _, ok := s.dungeonMap[exp.DungeonID]; !ok {
 		return ExpeditionStepResult{}, ErrDungeonNotFound
@@ -105,13 +108,13 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	}
 
 	if newX < 0 || newX >= floor.Width || newY < 0 || newY >= floor.Height || floor.Grid[newY][newX] == cellWall {
-		return s.hitWall(ctx, exp, owner.ID, floor)
+		return s.hitWall(ctx, exp, owner.ID, characterID, floor)
 	}
 	if w, ok := floor.event(floor.Grid[newY][newX]).action.(conditionalWall); ok {
 		if closed, err := w.closed(exp); err != nil {
 			return ExpeditionStepResult{}, err
 		} else if closed {
-			return s.hitWall(ctx, exp, owner.ID, floor)
+			return s.hitWall(ctx, exp, owner.ID, characterID, floor)
 		}
 	}
 	return s.moveNative(ctx, exp, &owner, &actor, d, floor, newX, newY)
@@ -119,18 +122,19 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 
 // hitWall runs the floor's wall event without spending a round or resetting
 // statuses (vs_dungeon.cgi _susumu); the base wall rejects the move.
-func (s *Service) hitWall(ctx context.Context, exp *ActiveExpedition, ownerID string, floor Floor) (ExpeditionStepResult, error) {
+func (s *Service) hitWall(ctx context.Context, exp *ActiveExpedition, ownerID, actorID string, floor Floor) (ExpeditionStepResult, error) {
 	ev, ok := floor.event(cellWall).action.(scatterEvent)
 	if !ok {
 		return ExpeditionStepResult{}, ErrImpassableWall
 	}
 	x, y := ev.landing(s.rng)
-	out, err := s.activeStore.Step(ctx, ownerID, StepParams{
+	out, err := s.commitStep(ctx, exp, ownerID, StepParams{
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
 		Combat:               exp.Encounter != nil, // only opened chests remain; the step drops them
 		NewX:                 x,
 		NewY:                 y,
+		StockDrain:           actorID,
 		Now:                  time.Now().UTC(),
 	})
 	if err != nil {

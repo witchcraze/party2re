@@ -354,6 +354,7 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dungeonRepo.SetPostBattleSettler(sqlPostBattle(t, db))
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

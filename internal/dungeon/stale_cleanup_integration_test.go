@@ -49,6 +49,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			repo.SetPostBattleSettler(sqlPostBattle(t, db))
 			chars, err := database.NewCharacterRepository(db)
 			if err != nil {
 				t.Fatal(err)
@@ -103,6 +104,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 				t.Fatal(err)
 			}
 			old.AccumulatedGold = 100
+			old.Members[0].AccumulatedGold = 100 // stock is per member
 			if err := store.SaveActiveExpedition(ctx, *old); err != nil {
 				t.Fatal(err)
 			}
@@ -134,6 +136,7 @@ func TestDungeonIntegration_StaleEscapePreservesReplacement(t *testing.T) {
 					return err
 				}
 				next.PosX, next.Round, next.AccumulatedGold = 2, 33, 77
+				next.Members[0].AccumulatedGold = 77
 				replacementID = next.ID
 				next.Members = append(next.Members, dungeon.ExpeditionMember{CharacterID: member, Name: follower.Name, Level: follower.Level, CurrentHP: follower.Stats.HP, MaxHP: follower.Stats.MaxHP, JobID: follower.JobID})
 				if err := store.SaveActiveExpedition(ctx, *next); err != nil {
