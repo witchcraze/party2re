@@ -88,16 +88,17 @@ func (s *Service) shareDefeats(ctx context.Context, exp *ActiveExpedition, reque
 			}
 			crystals[d.TargetID] = got
 		}
-		reward := corebattle.Reward{Experience: m.ExpReward, Currency: m.GoldReward, Crystals: got}
+		xp, gold := m.ExpReward, m.GoldReward
 		if battle.IsGoldBlessing(k.wish) && s.rng.Intn(4) < 1 {
-			reward.Currency += reward.Currency / 2
+			gold += gold / 2
 		}
 		if battle.IsExpBlessing(k.wish) && s.rng.Intn(4) < 1 {
-			reward.Experience += reward.Experience / 2
+			xp += xp / 2
 		}
 		if k.gear != nil && k.gear.WeaponID == "weapon-01" && k.gear.ArmorID == "armor-01" && s.rng.Intn(4) < 1 {
-			reward.Experience += 5
+			xp += 5
 		}
+		reward := corebattle.Reward{Experience: xp, Currency: gold, Crystals: got}
 
 		for _, id := range d.RecipientIDs {
 			if !exp.ContainsCharacter(id) {
@@ -185,15 +186,16 @@ func enemyIndex(enemies []corebattle.Participant, id string) int {
 }
 
 func addReward(a, b corebattle.Reward) (corebattle.Reward, error) {
-	var err error
-	if a.Experience, err = economy.SafeAdd(a.Experience, b.Experience); err != nil {
+	exp, err := economy.SafeAdd(a.Experience, b.Experience)
+	if err != nil {
 		return a, err
 	}
-	if a.Currency, err = economy.SafeAdd(a.Currency, b.Currency); err != nil {
+	gold, err := economy.SafeAdd(a.Currency, b.Currency)
+	if err != nil {
 		return a, err
 	}
-	a.Crystals, err = economy.SafeAdd(a.Crystals, b.Crystals)
-	return a, err
+	crystals, err := economy.SafeAdd(a.Crystals, b.Crystals)
+	return corebattle.Reward{Experience: exp, Currency: gold, Crystals: crystals}, err
 }
 
 // mergeCredit keeps one credit per character and step.
