@@ -15,6 +15,9 @@ func (d *BattleDefinitions) RegisterNamedFields(c *corebattle.NamedFieldContext)
 		id := entry.ID
 		context := func(f *corebattle.CallbackContext) corebattle.NamedFieldContext {
 			child := *c
+			if f.Damage != nil {
+				child.DamageContext = *f.Damage
+			}
 			child.TargetContext, child.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			child.Catalog = d.Invocations
 			return child
@@ -36,6 +39,9 @@ func (d *BattleDefinitions) RegisterNamedFields(c *corebattle.NamedFieldContext)
 				child := context(f)
 				err := s.ApplyNamedField(&child, id, rng)
 				*c = child
+				if f.Damage != nil {
+					*f.Damage = child.DamageContext
+				}
 				f.TargetContext, f.Arguments = child.TargetContext, child.Arguments
 				return err
 			},

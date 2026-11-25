@@ -568,6 +568,23 @@ func TestPlayerOperationLeavesCallerContextUnchanged(t *testing.T) {
 	}
 }
 
+func TestPlayerOperationCarriesGuaranteedHitPerOperation(t *testing.T) {
+	s, op, _ := playerOperationFixture()
+	hit := true
+	op.First.Execute = func(*LifetimeState, random.Generator) (PlayerActionFacts, error) {
+		return PlayerActionFacts{GuaranteedHit: hit}, nil
+	}
+	res, err := s.ApplyPlayerOperation(op, &playerOperationRNG{})
+	if err != nil || !res.Accepted || !res.GuaranteedHit || op.Tail.GuaranteedHit {
+		t.Fatalf("first result=%+v op.Tail.GuaranteedHit=%v err=%v", res, op.Tail.GuaranteedHit, err)
+	}
+	hit = false
+	res, err = s.ApplyPlayerOperation(op, &playerOperationRNG{})
+	if err != nil || !res.Accepted || res.GuaranteedHit {
+		t.Fatalf("second result=%+v err=%v", res, err)
+	}
+}
+
 // _battle.cgi:1039–1069: CMP recharge or charge increment applies before
 // frenzy, crown and incense healing, once per eligible tail.
 func TestPlayerOperationAppliesCMPRechargeBeforeFrenzy(t *testing.T) {
