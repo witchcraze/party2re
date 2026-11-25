@@ -161,6 +161,7 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
+	dungeonRepo.SetPostBattleSettler(battleAdapter)
 	valkeyExpeditionStore, err := dungeon.NewValkeyExpeditionRepository(valkeyClient)
 	if err != nil {
 		return nil, err

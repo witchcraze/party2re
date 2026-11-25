@@ -176,6 +176,7 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	repo.SetPostBattleSettler(sqlPostBattle(t, db))
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -559,6 +560,7 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 		}
 		exp.AccumulatedExp = 40
 		exp.AccumulatedGold = 125
+		exp.Members[0].AccumulatedGold, exp.Members[0].AccumulatedExp = exp.AccumulatedGold, exp.AccumulatedExp // stock is per member
 		exp.Encounter = &dungeon.ActiveEncounter{
 			Monsters:  custom.Variants[0].Pools[0].Monsters[:1],
 			Enemies:   []corebattle.Participant{corebattle.MustNewParticipant("slime", 30, 10, 0)},

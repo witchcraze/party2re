@@ -32,6 +32,11 @@ var deleteExpeditionLua string
 
 var deleteExpeditionScript = valkeygo.NewLuaScript(deleteExpeditionLua)
 
+//go:embed lua/ack_credits.lua
+var ackCreditsLua string
+
+var ackCreditsScript = valkeygo.NewLuaScript(ackCreditsLua)
+
 type valkeyConfig struct {
 	ttl time.Duration
 }
@@ -137,6 +142,7 @@ type rawValkeyExpedition struct {
 	id, charID, partyID, partyName, dungeonID, status          string
 	posX, posY, hp, round, limit, variant, revision, exp, gold string
 	members, consumedEvents, encounter, mapState, start, updAt string
+	credits                                                    string
 }
 
 func (raw rawValkeyExpedition) decode() (ActiveExpedition, error) {
@@ -199,7 +205,14 @@ func (raw rawValkeyExpedition) decode() (ActiveExpedition, error) {
 	if err != nil {
 		return ActiveExpedition{}, fmt.Errorf("%w: invalid encounter: %w", ErrExpeditionCorrupted, err)
 	}
+	var credits []DefeatCredit
+	if raw.credits != "" {
+		if err := json.Unmarshal([]byte(raw.credits), &credits); err != nil {
+			return ActiveExpedition{}, fmt.Errorf("%w: invalid credits: %w", ErrExpeditionCorrupted, err)
+		}
+	}
 	return ActiveExpedition{
+		Credits:         credits,
 		Encounter:       encounter,
 		Revision:        revision,
 		ID:              raw.id,
@@ -264,6 +277,7 @@ func (r *ValkeyExpeditionRepository) getActiveExpedition(ctx context.Context, ch
 		exp: rMap["exp"], gold: rMap["gold"],
 		members: sMap["members"], consumedEvents: sMap["consumed_events"], encounter: sMap["encounter"],
 		mapState: sMap["map_state"], start: sMap["started_at"], updAt: sMap["updated_at"],
+		credits: sMap["credits"],
 	}).decode()
 	if err != nil {
 		return nil, err
@@ -284,6 +298,10 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 
 	eventsJSON := EncodeItems(exp.ConsumedEvents)
 	membersJSON := EncodeMembers(exp.Members)
+	creditsJSON, err := encodeCredits(exp.Credits)
+	if err != nil {
+		return err
+	}
 	ttlSec := int64(r.ttl.Seconds())
 
 	cmds := r.client.DoMulti(ctx,
@@ -305,6 +323,7 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 			FieldValue("status", string(exp.Status)).
 			FieldValue("consumed_events", eventsJSON).
 			FieldValue("map_state", string(exp.MapState)).
+			FieldValue("credits", creditsJSON).
 			FieldValue("started_at", exp.StartedAt.Format(time.RFC3339Nano)).
 			FieldValue("updated_at", exp.UpdatedAt.Format(time.RFC3339Nano)).
 			Build(),
@@ -369,6 +388,14 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	if err != nil {
 		return StepOutcome{}, err
 	}
+	memberCrystalDeltasJSON, err := encodeJSONMap(params.MemberCrystalDeltas)
+	if err != nil {
+		return StepOutcome{}, err
+	}
+	creditsJSON, err := encodeCredits(params.Credits)
+	if err != nil {
+		return StepOutcome{}, err
+	}
 
 	encounterJSON, err := encodeEncounter(params.Encounter)
 	if err != nil {
@@ -402,6 +429,9 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		strconv.Itoa(params.RoundLimit),
 		string(params.MapState),
 		strconv.FormatBool(params.MapState != nil),
+		creditsJSON,
+		params.StockDrain,
+		memberCrystalDeltasJSON,
 	})
 
 	if err := res.Error(); err != nil {
@@ -409,7 +439,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 	}
 
 	vals, err := res.AsStrSlice()
-	if err != nil || len(vals) < 20 {
+	if err != nil || len(vals) < 21 {
 		return StepOutcome{}, fmt.Errorf("unexpected lua step response format: %v", err)
 	}
 
@@ -420,7 +450,7 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		limit: vals[18], variant: vals[17], revision: vals[16],
 		exp: vals[5], gold: vals[6],
 		members: vals[12], consumedEvents: vals[13], encounter: vals[15],
-		mapState: vals[19], start: vals[9], updAt: vals[7],
+		mapState: vals[19], start: vals[9], updAt: vals[7], credits: vals[20],
 	}).decode()
 	if err != nil {
 		return StepOutcome{}, err
@@ -431,6 +461,22 @@ func (r *ValkeyExpeditionRepository) Step(ctx context.Context, characterID strin
 		Status:        exp.Status,
 		EventConsumed: vals[14] != "0",
 	}, nil
+}
+
+func (r *ValkeyExpeditionRepository) AckCredits(ctx context.Context, characterID, expeditionID string, ids []string) error {
+	b, err := json.Marshal(ids)
+	if err != nil {
+		return err
+	}
+	return ackCreditsScript.Exec(ctx, r.client, []string{r.stateKey(characterID)}, []string{expeditionID, string(b)}).Error()
+}
+
+func encodeCredits(credits []DefeatCredit) (string, error) {
+	if len(credits) == 0 {
+		return "", nil
+	}
+	b, err := json.Marshal(credits)
+	return string(b), err
 }
 
 // rawState maps an absent or empty map_state field to no state.

@@ -16,6 +16,8 @@ type mockDungeonRepo struct {
 	active     map[string]*dungeon.ActiveExpedition
 	histories  map[string][]dungeon.DungeonExpeditionHistory
 	savedChars map[string]corecharacter.Character
+	receipts   map[string]bool
+	credited   []dungeon.DefeatCredit
 }
 
 func TestNewService_RequiresActiveExpeditionStore(t *testing.T) {
@@ -29,7 +31,30 @@ func newMockDungeonRepo() *mockDungeonRepo {
 		active:     make(map[string]*dungeon.ActiveExpedition),
 		histories:  make(map[string][]dungeon.DungeonExpeditionHistory),
 		savedChars: make(map[string]corecharacter.Character),
+		receipts:   make(map[string]bool),
 	}
+}
+
+func (m *mockDungeonRepo) SettleDefeatCredits(ctx context.Context, runID string, credits []dungeon.DefeatCredit) error {
+	for _, credit := range credits {
+		key := runID + "/" + credit.ID
+		if m.receipts[key] {
+			continue
+		}
+		m.receipts[key] = true
+		m.credited = append(m.credited, credit)
+		c, ok := m.savedChars[credit.CharacterID]
+		if !ok {
+			c = corecharacter.Character{ID: credit.CharacterID}
+		}
+		if credit.Reward.Experience > 0 {
+			_, _ = coreprogression.ApplyExperience(&c, credit.Reward.Experience)
+		}
+		_ = c.AddMoney(credit.Reward.Currency)
+		_ = c.AddCrystal(credit.Reward.Crystals)
+		m.savedChars[credit.CharacterID] = c
+	}
+	return nil
 }
 
 func (m *mockDungeonRepo) GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error) {
@@ -61,15 +86,15 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 		}
 	}
 	m.histories[owner] = append([]dungeon.DungeonExpeditionHistory{history}, m.histories[owner]...)
-	if character != nil {
+	if character != nil && len(members) == 0 {
 		m.savedChars[character.ID] = *character
 	}
+	// Like SQL, each member settles from its saved row: credits already applied stay.
 	for _, mem := range members {
-		if character != nil && mem.CharacterID == character.ID {
-			continue
-		}
 		c, ok := m.savedChars[mem.CharacterID]
-		if !ok {
+		if !ok && character != nil && mem.CharacterID == character.ID {
+			c = *character
+		} else if !ok {
 			c = corecharacter.Character{ID: mem.CharacterID}
 		}
 		c.Stats.HP = mem.CurrentHP
@@ -77,20 +102,16 @@ func (m *mockDungeonRepo) FinalizeExpedition(
 			c.Stats.MP = mem.CurrentMP
 		}
 		if history.Outcome == dungeon.StatusEscaped {
-			earnedExp := mem.AccumulatedExp
-			earnedGold := mem.AccumulatedGold
-			if earnedExp == 0 && earnedGold == 0 && len(members) <= 1 {
-				earnedExp = history.ExpReward
-				earnedGold = history.GoldReward
+			if mem.AccumulatedExp > 0 {
+				_, _ = coreprogression.ApplyExperience(&c, mem.AccumulatedExp)
 			}
-			if earnedExp > 0 {
-				_, _ = coreprogression.ApplyExperience(&c, earnedExp)
-			}
-			if earnedGold > 0 {
-				_ = c.AddMoney(earnedGold)
-			}
+			_ = c.AddMoney(mem.AccumulatedGold)
+			_ = c.AddCrystal(mem.AccumulatedCrystals)
 		}
 		m.savedChars[mem.CharacterID] = c
+		if character != nil && mem.CharacterID == character.ID {
+			*character = c
+		}
 	}
 	return nil
 }

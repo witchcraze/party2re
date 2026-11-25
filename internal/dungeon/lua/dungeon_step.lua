@@ -36,7 +36,7 @@ local function decode_array_field(hash_key, field, elem_type)
 end
 
 local member_str_fields = {'character_id', 'name', 'job_id'}
-local member_int_fields = {'level', 'current_hp', 'max_hp', 'current_mp', 'max_mp', 'accumulated_exp', 'accumulated_gold'}
+local member_int_fields = {'level', 'current_hp', 'max_hp', 'current_mp', 'max_mp', 'accumulated_exp', 'accumulated_gold', 'accumulated_crystals'}
 
 local function is_int_number(v)
     return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge and math.floor(v) == v
@@ -402,29 +402,36 @@ if #consumed_events > 0 then
     new_events_str = cjson.encode(consumed_events)
 end
 
--- Apply member rewards only if event was consumed (one-time event idempotency)
+-- Apply member stock and credits only if event was consumed (one-time event idempotency).
+-- The drained member's stock moves into the appended credits (ARGV[25], ARGV[24]).
+local decoded_crystal, has_crystal_deltas, crystal_deltas_err = decode_object_arg(ARGV[26] or '{}', 'member_crystal_deltas', 'int')
+if crystal_deltas_err then
+    return redis.error_reply(crystal_deltas_err)
+end
+local stock = {{'accumulated_exp', has_exp_deltas, decoded_exp}, {'accumulated_gold', has_gold_deltas, decoded_gold}, {'accumulated_crystals', has_crystal_deltas, decoded_crystal}}
 if has_members and event_consumed == 1 then
-    if has_exp_deltas then
-        for _, m in ipairs(members) do
-            local cid = m['character_id']
-            if cid and decoded_exp[cid] and decoded_exp[cid] > 0 then
-                m['accumulated_exp'] = (tonumber(m['accumulated_exp']) or 0) + decoded_exp[cid]
+    for _, m in ipairs(members) do
+        local cid = m['character_id']
+        for _, f in ipairs(stock) do
+            if cid and cid == ARGV[25] then
+                m[f[1]] = 0
+            end
+            if f[2] and cid and f[3][cid] and f[3][cid] > 0 then
+                m[f[1]] = (tonumber(m[f[1]]) or 0) + f[3][cid]
             end
         end
-    elseif #members == 1 and exp_delta > 0 then
-        members[1]['accumulated_exp'] = (tonumber(members[1]['accumulated_exp']) or 0) + exp_delta
     end
-
-    if has_gold_deltas then
-        for _, m in ipairs(members) do
-            local cid = m['character_id']
-            if cid and decoded_gold[cid] and decoded_gold[cid] > 0 then
-                m['accumulated_gold'] = (tonumber(m['accumulated_gold']) or 0) + decoded_gold[cid]
-            end
-        end
-    elseif #members == 1 and gold_delta > 0 then
-        members[1]['accumulated_gold'] = (tonumber(members[1]['accumulated_gold']) or 0) + gold_delta
+end
+if event_consumed == 1 and ARGV[24] and ARGV[24] ~= '' then
+    local credits = {}
+    local existing = redis.call('HGET', state_key, 'credits')
+    if existing and existing ~= '' then
+        credits = cjson.decode(existing)
     end
+    for _, c in ipairs(cjson.decode(ARGV[24])) do
+        table.insert(credits, c)
+    end
+    redis.call('HSET', state_key, 'credits', cjson.encode(credits))
 end
 if has_members then
     members_str = cjson.encode(members)
@@ -491,5 +498,6 @@ return {
     tostring(revision),
     redis.call('HGET', state_key, 'map_variant') or '',
     redis.call('HGET', state_key, 'round_limit') or '',
-    redis.call('HGET', state_key, 'map_state') or ''
+    redis.call('HGET', state_key, 'map_state') or '',
+    redis.call('HGET', state_key, 'credits') or ''
 }

@@ -20,20 +20,22 @@ var (
 )
 
 type ExpeditionMember struct {
-	CharacterID     string                    `json:"character_id"`
-	Name            string                    `json:"name"`
-	JobID           string                    `json:"job_id"`
-	Level           int                       `json:"level"`
-	CurrentHP       int                       `json:"current_hp"`
-	MaxHP           int                       `json:"max_hp"`
-	CurrentMP       int                       `json:"current_mp"`
-	MaxMP           int                       `json:"max_mp"`
-	AccumulatedExp  int                       `json:"accumulated_exp"`
-	AccumulatedGold int                       `json:"accumulated_gold"`
-	ItemIDs         []string                  `json:"item_ids,omitempty"`
-	ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
-	mpKnown         bool
-	itemsKnown      bool
+	CharacterID     string `json:"character_id"`
+	Name            string `json:"name"`
+	JobID           string `json:"job_id"`
+	Level           int    `json:"level"`
+	CurrentHP       int    `json:"current_hp"`
+	MaxHP           int    `json:"max_hp"`
+	CurrentMP       int    `json:"current_mp"`
+	MaxMP           int    `json:"max_mp"`
+	AccumulatedExp  int    `json:"accumulated_exp"`
+	AccumulatedGold int    `json:"accumulated_gold"`
+	// AccumulatedCrystals completes the member's stock with AccumulatedExp/Gold.
+	AccumulatedCrystals int                       `json:"accumulated_crystals,omitempty"`
+	ItemIDs             []string                  `json:"item_ids,omitempty"`
+	ConsumedItems       []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	mpKnown             bool
+	itemsKnown          bool
 }
 
 // HasCurrentMP reports whether the member carries an explicit MP snapshot rather than a pre-MP legacy payload.
@@ -47,18 +49,20 @@ func (m ExpeditionMember) HasInventorySnapshot() bool {
 }
 
 type rawExpeditionMember struct {
-	CharacterID     string                    `json:"character_id"`
-	Name            string                    `json:"name"`
-	JobID           string                    `json:"job_id"`
-	Level           int                       `json:"level"`
-	CurrentHP       int                       `json:"current_hp"`
-	MaxHP           int                       `json:"max_hp"`
-	CurrentMP       *int                      `json:"current_mp,omitempty"`
-	MaxMP           *int                      `json:"max_mp,omitempty"`
-	AccumulatedExp  int                       `json:"accumulated_exp"`
-	AccumulatedGold int                       `json:"accumulated_gold"`
-	ItemIDs         json.RawMessage           `json:"item_ids,omitempty"`
-	ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+	CharacterID     string `json:"character_id"`
+	Name            string `json:"name"`
+	JobID           string `json:"job_id"`
+	Level           int    `json:"level"`
+	CurrentHP       int    `json:"current_hp"`
+	MaxHP           int    `json:"max_hp"`
+	CurrentMP       *int   `json:"current_mp,omitempty"`
+	MaxMP           *int   `json:"max_mp,omitempty"`
+	AccumulatedExp  int    `json:"accumulated_exp"`
+	AccumulatedGold int    `json:"accumulated_gold"`
+	// AccumulatedCrystals completes the member's stock with AccumulatedExp/Gold.
+	AccumulatedCrystals int                       `json:"accumulated_crystals,omitempty"`
+	ItemIDs             json.RawMessage           `json:"item_ids,omitempty"`
+	ConsumedItems       []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
 }
 
 func (m *ExpeditionMember) UnmarshalJSON(data []byte) error {
@@ -67,15 +71,16 @@ func (m *ExpeditionMember) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*m = ExpeditionMember{
-		CharacterID:     raw.CharacterID,
-		Name:            raw.Name,
-		JobID:           raw.JobID,
-		Level:           raw.Level,
-		CurrentHP:       raw.CurrentHP,
-		MaxHP:           raw.MaxHP,
-		AccumulatedExp:  raw.AccumulatedExp,
-		AccumulatedGold: raw.AccumulatedGold,
-		ConsumedItems:   raw.ConsumedItems,
+		CharacterID:         raw.CharacterID,
+		Name:                raw.Name,
+		JobID:               raw.JobID,
+		Level:               raw.Level,
+		CurrentHP:           raw.CurrentHP,
+		MaxHP:               raw.MaxHP,
+		AccumulatedExp:      raw.AccumulatedExp,
+		AccumulatedGold:     raw.AccumulatedGold,
+		AccumulatedCrystals: raw.AccumulatedCrystals,
+		ConsumedItems:       raw.ConsumedItems,
 	}
 	if trimmed := bytes.TrimSpace(raw.ItemIDs); len(trimmed) > 0 {
 		// Valkey Lua cjson encodes an empty nested array as "{}".
@@ -105,31 +110,34 @@ func (m *ExpeditionMember) UnmarshalJSON(data []byte) error {
 
 func EncodeMembers(members []ExpeditionMember) string {
 	type encodedMember struct {
-		CharacterID     string                    `json:"character_id"`
-		Name            string                    `json:"name"`
-		JobID           string                    `json:"job_id"`
-		Level           int                       `json:"level"`
-		CurrentHP       int                       `json:"current_hp"`
-		MaxHP           int                       `json:"max_hp"`
-		CurrentMP       *int                      `json:"current_mp,omitempty"`
-		MaxMP           *int                      `json:"max_mp,omitempty"`
-		AccumulatedExp  int                       `json:"accumulated_exp"`
-		AccumulatedGold int                       `json:"accumulated_gold"`
-		ItemIDs         *[]string                 `json:"item_ids,omitempty"`
-		ConsumedItems   []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
+		CharacterID     string `json:"character_id"`
+		Name            string `json:"name"`
+		JobID           string `json:"job_id"`
+		Level           int    `json:"level"`
+		CurrentHP       int    `json:"current_hp"`
+		MaxHP           int    `json:"max_hp"`
+		CurrentMP       *int   `json:"current_mp,omitempty"`
+		MaxMP           *int   `json:"max_mp,omitempty"`
+		AccumulatedExp  int    `json:"accumulated_exp"`
+		AccumulatedGold int    `json:"accumulated_gold"`
+		// AccumulatedCrystals completes the member's stock with AccumulatedExp/Gold.
+		AccumulatedCrystals int                       `json:"accumulated_crystals,omitempty"`
+		ItemIDs             *[]string                 `json:"item_ids,omitempty"`
+		ConsumedItems       []corebattle.ConsumedItem `json:"consumed_items,omitempty"`
 	}
 	raw := make([]encodedMember, len(members))
 	for i, m := range members {
 		entry := encodedMember{
-			CharacterID:     m.CharacterID,
-			Name:            m.Name,
-			JobID:           m.JobID,
-			Level:           m.Level,
-			CurrentHP:       m.CurrentHP,
-			MaxHP:           m.MaxHP,
-			AccumulatedExp:  m.AccumulatedExp,
-			AccumulatedGold: m.AccumulatedGold,
-			ConsumedItems:   m.ConsumedItems,
+			CharacterID:         m.CharacterID,
+			Name:                m.Name,
+			JobID:               m.JobID,
+			Level:               m.Level,
+			CurrentHP:           m.CurrentHP,
+			MaxHP:               m.MaxHP,
+			AccumulatedExp:      m.AccumulatedExp,
+			AccumulatedGold:     m.AccumulatedGold,
+			AccumulatedCrystals: m.AccumulatedCrystals,
+			ConsumedItems:       m.ConsumedItems,
 		}
 		if m.HasInventorySnapshot() {
 			ids := m.ItemIDs

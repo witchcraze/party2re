@@ -59,7 +59,8 @@ func TestEncounterFightEscapeStaleSettlement(t *testing.T) {
 					}
 				})
 				engine := &customPartyBattleEngine{resolvePartyFn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
-					return corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, WinnerSide: "allies", RemainingHP: map[string]int{char.ID: 80, "enemy": 0}}, nil
+					return corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, WinnerSide: "allies", RemainingHP: map[string]int{char.ID: 80, "enemy": 0},
+						DefeatEarnings: []corebattle.DefeatEarnings{{ActorID: char.ID, TargetID: "enemy", RecipientIDs: []string{char.ID}}}}, nil
 				}}
 				svc, err := dungeon.NewService(repo, &mockCharRepo{chars: map[string]corecharacter.Character{char.ID: char}}, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons([]dungeon.Dungeon{{ID: "review"}}))
 				if err != nil {

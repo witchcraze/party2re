@@ -164,7 +164,8 @@ encounter keeps its combat state and original destination in that buffer until
 combat finishes; these facts are not durable character ailments. Moves reject
 while an encounter remains, and the leader resumes through `Service.Fight` or
 escapes. Step revisions reject stale combat results and movement updates.
-Victory clears the encounter and grants its rewards once. Escape is the only
+Victory clears the encounter; each defeat's earnings are recorded once by
+the step that reached it ([defeat credits](#dungeon-defeat-credits)). Escape is the only
 terminal outcome; an all-fallen party stays in the run until it escapes.
 Before SQL settlement, a revision-checked step freezes
 the escape snapshot, rejecting further battle updates. Concurrent Escapes reuse
@@ -232,7 +233,7 @@ changing this boundary. Durable records include `dungeon_expedition_history` and
 
 `DungeonRepository.FinalizeExpedition` claims settlement once per run by inserting
 `dungeon_expedition_history` keyed by the run ID. The same transaction settles
-every member's vitality, consumption, Escape exit effects, rewards
+every member's vitality, consumption, Escape exit effects, remaining stock
 and meal flag through the shared post-battle settlement. Unreadable
 member or run state aborts settlement before the run is frozen or deleted. A
 duplicate claim (`ErrExpeditionAlreadyFinished`) is idempotent completion, so
@@ -243,6 +244,22 @@ owner and run ID; a missing or replaced run is a successful no-op, and member
 references are released only while they still name that run. Delayed
 finalization or cleanup retries therefore cannot remove a later run or its
 unsettled rewards. SQL commit and Valkey cleanup remain separate boundaries.
+
+### Dungeon defeat credits
+
+Defeat earnings that legacy writes to a character during the run
+([gameplay](../design/dungeon.md#defeat-rewards)) cannot wait for Escape. The
+revision-checked step that resolves a battle appends them to the run's pending
+credits, each with an ID unique in the run, and moves the acting member's stock
+into them. Other shares stay in member stock. After the step, one SQL
+transaction locks the credited characters (Rank 2), inserts a receipt per run
+and credit ID and applies only unreceipted credits through the shared
+post-battle settlement; the credits are then acknowledged out of the run by
+ID. A failure leaves them pending: every later Dungeon mutation, Escape
+included, settles them first, and the receipt prevents a second grant. Escape
+settles them before freezing, so the settlement claim deletes the run's
+receipts, and a stale credit for a claimed run is ignored. The battle outcome
+stays single-sourced in Valkey; a party wipe never reverts a committed credit.
 
 ### Dungeon treasure claims
 

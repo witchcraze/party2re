@@ -61,7 +61,7 @@ func TestDungeonRepository_RunQualifiedCleanup(t *testing.T) {
 	}
 	history := dungeon.DungeonExpeditionHistory{ID: old.ID, CharacterID: char.ID, DungeonID: old.DungeonID, Outcome: dungeon.StatusEscaped, GoldReward: 100, CreatedAt: time.Now().UTC()}
 	for i := 0; i < 2; i++ {
-		err := repo.FinalizeExpedition(ctx, history, &char)
+		err := repo.FinalizeExpedition(ctx, history, &char, dungeon.ExpeditionMember{CharacterID: char.ID, CurrentHP: char.Stats.HP, AccumulatedGold: 100})
 		if (i == 0 && err != nil) || (i == 1 && !errors.Is(err, dungeon.ErrExpeditionAlreadyFinished)) {
 			t.Fatalf("finalization %d: %v", i, err)
 		}

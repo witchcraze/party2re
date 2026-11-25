@@ -131,6 +131,9 @@ func wireHooks(
 			if cmbt.party != nil {
 				cmbt.party.SetBlessingProvider(chapelBlessingAdapter{misc.chapel})
 			}
+			if cmbt.dungeon != nil {
+				cmbt.dungeon.SetBlessingProvider(chapelBlessingAdapter{misc.chapel})
+			}
 		}
 		if misc.collection != nil {
 			cmbt.battle.SetMonsterDefeatRecorder(battleMonsterDefeatAdapter{svc: misc.collection})

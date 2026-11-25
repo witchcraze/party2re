@@ -23,6 +23,10 @@ func (f *failOnceDeleteStore) GetActiveExpedition(ctx context.Context, charID st
 	return f.inner.GetActiveExpedition(ctx, charID)
 }
 
+func (f *failOnceDeleteStore) AckCredits(ctx context.Context, charID, expeditionID string, ids []string) error {
+	return f.inner.AckCredits(ctx, charID, expeditionID, ids)
+}
+
 func (f *failOnceDeleteStore) SaveActiveExpedition(ctx context.Context, exp dungeon.ActiveExpedition) error {
 	return f.inner.SaveActiveExpedition(ctx, exp)
 }
@@ -64,6 +68,7 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dungeonRepo.SetPostBattleSettler(sqlPostBattle(t, db))
 	bankRepo, err := database.NewBankRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +97,7 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		}
 		exp.AccumulatedGold = 250
 		exp.AccumulatedExp = 80
+		exp.Members[0].AccumulatedGold, exp.Members[0].AccumulatedExp = exp.AccumulatedGold, exp.AccumulatedExp // stock is per member
 		if err := vStore.SaveActiveExpedition(ctx, *exp); err != nil {
 			t.Fatalf("SaveActiveExpedition failed: %v", err)
 		}
@@ -146,6 +152,7 @@ func TestDungeonIntegration_ConcurrentEscapeAndCleanupRetry(t *testing.T) {
 		}
 		exp.AccumulatedGold = 300
 		exp.AccumulatedExp = 60
+		exp.Members[0].AccumulatedGold, exp.Members[0].AccumulatedExp = exp.AccumulatedGold, exp.AccumulatedExp // stock is per member
 		if err := vStore.SaveActiveExpedition(ctx, *exp); err != nil {
 			t.Fatalf("SaveActiveExpedition failed: %v", err)
 		}

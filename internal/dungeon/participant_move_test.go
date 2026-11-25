@@ -407,7 +407,7 @@ func TestMove_Item188RevivalPrecedesDestinationEvent(t *testing.T) {
 		exp := f.reload(t, "lead")
 		leadMem := memberOf(t, exp, "lead")
 		if exp.Revision != before.Revision+1 || leadMem.CurrentHP != wantLeadHP || exp.CurrentHP != wantLeadHP ||
-			leadMem.AccumulatedExp != boss.ExpReward || leadMem.AccumulatedGold != boss.GoldReward {
+			exp.AccumulatedExp != boss.ExpReward || exp.AccumulatedGold != boss.GoldReward {
 			t.Fatalf("reloaded boss win %+v (revision before=%d)", exp, before.Revision)
 		}
 	})

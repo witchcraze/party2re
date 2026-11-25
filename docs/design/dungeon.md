@@ -151,9 +151,27 @@ Not yet implemented ([#2119](https://github.com/witchcraze/party2re/issues/2119)
   allowance and any item 215. Delivered items survive the later Escape;
   exit never awards unopened chests.
 - **Gap.** Chests are also attackable enemies, and some skills reveal contents.
-  A destroyed chest is empty. Native has neither path until [#1865](https://github.com/witchcraze/party2re/issues/1865)
-  (defeat rewards: [#1957](https://github.com/witchcraze/party2re/issues/1957)),
+  A destroyed chest is empty. Native has neither path until [#1865](https://github.com/witchcraze/party2re/issues/1865),
   so chests nobody may open, such as a solo job 78's extras, leave only Escape.
+
+### Defeat rewards
+
+**Decision (#1957).** Every defeat a native battle reaches runs the shared
+`defeat` routine (`_battle.cgi:140–277`): the enemy's earnings, after the
+killer's modifiers, go to each member alive at that defeat. The killer's share
+commits at once. Legacy applies everyone else's share from stock at that
+member's next action while alive (`get_stock`, `_battle.cgi:912`), or at
+`nigeru`. Native battles resolve within one request, so the killer need not be
+the requester; the requester's share therefore commits at once as well. Credits
+use the [credit boundary](../architecture/transient-run-state.md#dungeon-defeat-credits).
+
+- **Finding:** Dungeon never sets `$win`; the quest header's field stays 0
+  (`quest.cgi:639`). A strong kill therefore always counts as a monster kill
+  (`kill_m`), and recruitment always rolls.
+- **Finding:** `is_strong` compares against `%m`, the killer's record, whose
+  stats exclude equipment (`depot.cgi:87` adds the weapon separately).
+- The captured-target recruitment bonus (`_battle.cgi:94,239`) needs explicit
+  combat ([#1865](https://github.com/witchcraze/party2re/issues/1865)).
 
 ## Map events and restoration units
 
@@ -163,8 +181,7 @@ tracked by their own Issues. Numeric and letter identifiers here are evidence
 pointers, not native enums.
 
 Every restored map shares these gaps: applying enemy accuracy, job skills and
-temporary effects in explicit combat ([#1865](https://github.com/witchcraze/party2re/issues/1865)), defeat rewards and
-crystals ([#1957](https://github.com/witchcraze/party2re/issues/1957)), chest
+temporary effects in explicit combat ([#1865](https://github.com/witchcraze/party2re/issues/1865)), chest
 contents and inspection ([treasure contract](#treasure-inspection-and-delivery);
 per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428),
 map15 [#2451](https://github.com/witchcraze/party2re/issues/2451),

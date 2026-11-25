@@ -91,7 +91,8 @@ func TestActiveEncounterPartyLeaderFallen(t *testing.T) {
 				if len(req.Allies) != 1 || req.Allies[0].ID != ally.ID || req.Allies[0].HP != 60 || req.Allies[0].MP != 4 || req.Enemies[0].HP != 30 {
 					t.Fatalf("party continuation reset: %+v", req)
 				}
-				return corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, WinnerSide: "allies", RemainingHP: map[string]int{ally.ID: 50, "enemy": 0}, RemainingMP: map[string]int{ally.ID: 2}}, nil
+				return corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, WinnerSide: "allies", RemainingHP: map[string]int{ally.ID: 50, "enemy": 0}, RemainingMP: map[string]int{ally.ID: 2},
+					DefeatEarnings: []corebattle.DefeatEarnings{{ActorID: ally.ID, TargetID: "enemy", RecipientIDs: []string{ally.ID}}}}, nil
 			}}
 			svc, err := dungeon.NewService(repo, chars, engine, dungeon.WithActiveExpeditionStore(store), dungeon.WithCustomDungeons(catalog), dungeon.WithAdmission(approvedRoster{}), dungeon.WithRNG(zeroRNG{}))
 			if err != nil {
@@ -123,8 +124,10 @@ func TestActiveEncounterPartyLeaderFallen(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.Expedition.Encounter != nil || res.Expedition.Members[0].AccumulatedGold != 0 || res.Expedition.Members[1].AccumulatedGold != 23 {
-				t.Fatalf("party reward eligibility: %+v", res.Expedition)
+			// The surviving killer is credited at once; the fallen leader gets nothing.
+			if res.Expedition.Encounter != nil || res.Expedition.Members[0].AccumulatedGold != 0 || res.Expedition.Members[1].AccumulatedGold != 0 ||
+				repo.savedChars[ally.ID].Money != 23 || repo.savedChars[leader.ID].Money != 0 {
+				t.Fatalf("party reward eligibility: %+v %+v", res.Expedition, repo.savedChars)
 			}
 			if _, err = svc.Escape(ctx, leader.ID); err != nil {
 				t.Fatal(err)

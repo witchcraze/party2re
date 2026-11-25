@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -14,14 +13,14 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
 type DungeonRepository struct {
-	db *sql.DB
+	db         *sql.DB
+	postBattle PostBattleSettler
 }
 
 func NewDungeonRepository(db *sql.DB) (*DungeonRepository, error) {
@@ -269,9 +268,10 @@ func (r *DungeonRepository) FinalizeExpedition(
 			}
 			req.ExitFatigue = fatigue + 1
 			req.ExitBonusRounds = history.ExitRound
+			// nigeru applies each member's stock first (get_stock, _battle.cgi:1459–1473).
 			req.RecipientRewards = make(map[string]corebattle.Reward, len(ids))
-			for _, cid := range ids {
-				req.RecipientRewards[cid] = corebattle.Reward{}
+			for _, m := range sortedMembers {
+				req.RecipientRewards[m.CharacterID] = corebattle.Reward{Experience: m.AccumulatedExp, Currency: m.AccumulatedGold, Crystals: m.AccumulatedCrystals}
 			}
 		}
 		applied, err := adapter.ApplyPostBattleResult(txCtx, req)
@@ -279,34 +279,9 @@ func (r *DungeonRepository) FinalizeExpedition(
 			return err
 		}
 
-		// 4. Apply rewards onto updated characters and save (Rank 2)
-		totalMemberRewards := 0
+		// 4. Save updated characters (Rank 2)
 		for _, m := range sortedMembers {
-			totalMemberRewards += m.AccumulatedExp + m.AccumulatedGold
-		}
-		legacyFallback := totalMemberRewards == 0 && (history.ExpReward > 0 || history.GoldReward > 0)
-
-		for i := range sortedMembers {
-			m := &sortedMembers[i]
 			c := applied.UpdatedCharacters[m.CharacterID]
-			if history.Outcome == dungeon.StatusEscaped {
-				earnedExp := m.AccumulatedExp
-				earnedGold := m.AccumulatedGold
-				if legacyFallback {
-					earnedExp = history.ExpReward
-					earnedGold = history.GoldReward
-				}
-				if earnedExp > 0 {
-					if _, err := progression.ApplyExperience(&c, earnedExp); err != nil {
-						return fmt.Errorf("applying experience: %w", err)
-					}
-				}
-				if earnedGold > 0 {
-					if err := c.AddMoney(earnedGold); err != nil {
-						return fmt.Errorf("adding gold: %w", err)
-					}
-				}
-			}
 			if err := updateCharacter(txCtx, executor, c); err != nil {
 				return err
 			}
@@ -323,6 +298,12 @@ func (r *DungeonRepository) FinalizeExpedition(
 					return err
 				}
 			}
+		}
+
+		// The claimed run has no unsettled credits left (Escape settles them before
+		// freezing), so its credit receipts are no longer needed.
+		if _, err := executor.ExecContext(txCtx, `DELETE FROM dungeon_defeat_credits WHERE run_id = ?`, history.ID); err != nil {
+			return err
 		}
 
 		// 5. Delete only this owner's finalized run, preserving any replacement.

@@ -136,6 +136,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader,
 			NewX:                 x,
 			NewY:                 y,
 			RoundDelta:           1,
+			StockDrain:           actor.ID,
 			Now:                  time.Now().UTC(),
 		},
 	}
@@ -152,7 +153,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader,
 	}
 	addHPDeltas(&n.step, leader.ID, revived)
 
-	out, err := s.activeStore.Step(ctx, leader.ID, n.step)
+	out, err := s.commitStep(ctx, exp, leader.ID, n.step)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}

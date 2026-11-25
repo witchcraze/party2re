@@ -176,9 +176,10 @@ type PartyBattleResult struct {
 	FinalField      *FieldState               `json:"final_field,omitempty"`
 }
 
-// DefeatEarnings records unscaled earnings, acting player, and allies alive at a reached defeat.
+// DefeatEarnings records unscaled earnings, acting player, defeated target and allies alive at a reached defeat.
 type DefeatEarnings struct {
 	ActorID      string   `json:"actor_id,omitempty"`
+	TargetID     string   `json:"target_id,omitempty"`
 	Reward       Reward   `json:"reward"`
 	RecipientIDs []string `json:"recipient_ids"`
 }

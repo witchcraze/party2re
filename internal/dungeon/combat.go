@@ -16,6 +16,8 @@ type encounterOutcome struct {
 	result   corebattle.Result
 	field    *corebattle.FieldState
 	won      bool
+	allies   []corebattle.Participant
+	defeats  []corebattle.DefeatEarnings
 	memberHP map[string]int
 	memberMP map[string]int
 	consumed map[string][]corebattle.ConsumedItem
@@ -73,6 +75,8 @@ func (s *Service) resolveEncounter(
 		},
 		field:    partyRes.FinalField,
 		won:      won,
+		allies:   allies,
+		defeats:  partyRes.DefeatEarnings,
 		memberHP: make(map[string]int),
 		memberMP: make(map[string]int),
 		consumed: make(map[string][]corebattle.ConsumedItem),
@@ -150,76 +154,16 @@ func (s *Service) resolveMonsterCombat(
 	}
 	out.leaderHP += revived[char.ID]
 
-	if out.won {
-		// shortcut: the whole group's rewards land at victory until #1957 credits each defeat.
-		var expReward, goldReward int
-		for _, m := range monsters {
-			expReward += m.ExpReward
-			goldReward += m.GoldReward
-		}
-		memberExpDeltas := make(map[string]int, len(exp.Members))
-		memberGoldDeltas := make(map[string]int, len(exp.Members))
-		for _, m := range exp.Members {
-			if remHP, ok := out.result.RemainingHP[m.CharacterID]; ok && remHP > 0 {
-				memberExpDeltas[m.CharacterID] = expReward
-				memberGoldDeltas[m.CharacterID] = goldReward
-			}
-		}
-		leaderExpDelta := memberExpDeltas[char.ID]
-		leaderGoldDelta := memberGoldDeltas[char.ID]
-		if len(exp.Members) <= 1 && out.leaderHP+exp.CurrentHP > 0 {
-			leaderExpDelta = expReward
-			leaderGoldDelta = goldReward
-		}
-
-		stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
-			ExpectedExpeditionID: exp.ID,
-			ExpectedRevision:     &exp.Revision,
-			Combat:               true,
-			NewX:                 newX,
-			NewY:                 newY,
-			HPDelta:              out.leaderHP,
-			MemberHPDeltas:       out.memberHP,
-			MemberMPDeltas:       out.memberMP,
-			MemberExpDeltas:      memberExpDeltas,
-			MemberGoldDeltas:     memberGoldDeltas,
-			ConsumedItems:        out.consumed,
-			RoundDelta:           rounds,
-			EventKey:             eventKey,
-			MapState:             carry.MapState,
-			MapVariant:           carry.MapVariant,
-			RoundLimit:           carry.RoundLimit,
-			ExpDelta:             leaderExpDelta,
-			GoldDelta:            leaderGoldDelta,
-			Now:                  time.Now().UTC(),
-		})
-		if err != nil {
-			return ExpeditionStepResult{}, err
-		}
-
-		return ExpeditionStepResult{
-			Expedition:    stepRes.Expedition,
-			EventType:     eventType,
-			BattleResult:  &out.result,
-			MemberDamages: memberDamages,
-			ExpEarned:     leaderExpDelta,
-			GoldFound:     leaderGoldDelta,
-			Monsters:      monsters,
-			CombatOutcome: corebattle.OutcomeWin,
-		}, nil
+	shares, err := s.shareDefeats(ctx, exp, carry.StockDrain, out, enemies, monsters)
+	if err != nil {
+		return ExpeditionStepResult{}, err
 	}
-
-	// Draw or defeat: surviving enemies stay. An all-fallen party remains in the
-	// run, where only Escape is left (legacy never ends a quest because allies fell).
-	// After a mutual knockout no enemy survives, so no encounter is kept.
-	pending := pendingEncounter(exp, monsters, enemies, eventType, newX, newY, out.result, out.field)
-	stepRes, err := s.activeStore.Step(ctx, char.ID, StepParams{
+	step := StepParams{
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
 		Combat:               true,
 		NewX:                 stayX,
 		NewY:                 stayY,
-		Encounter:            pending,
 		HPDelta:              out.leaderHP,
 		MemberHPDeltas:       out.memberHP,
 		MemberMPDeltas:       out.memberMP,
@@ -229,19 +173,50 @@ func (s *Service) resolveMonsterCombat(
 		MapState:             carry.MapState,
 		MapVariant:           carry.MapVariant,
 		RoundLimit:           carry.RoundLimit,
+		Credits:              shares.credits,
+		StockDrain:           carry.StockDrain,
+		ExpDelta:             shares.leader.Experience,
+		GoldDelta:            shares.leader.Currency,
 		Now:                  time.Now().UTC(),
-	})
-	if err != nil {
-		return ExpeditionStepResult{}, err
 	}
-	return ExpeditionStepResult{
-		Expedition:    stepRes.Expedition,
+	for id, r := range shares.stock {
+		addDelta(&step.MemberExpDeltas, id, r.Experience)
+		addDelta(&step.MemberGoldDeltas, id, r.Currency)
+		addDelta(&step.MemberCrystalDeltas, id, r.Crystals)
+	}
+	res := ExpeditionStepResult{
 		EventType:     eventType,
 		BattleResult:  &out.result,
 		MemberDamages: memberDamages,
+		ExpEarned:     shares.leader.Experience,
+		GoldFound:     shares.leader.Currency,
 		Monsters:      monsters,
 		CombatOutcome: out.result.Outcome,
-	}, nil
+	}
+	if out.won {
+		res.CombatOutcome = corebattle.OutcomeWin
+	} else {
+		// Draw or defeat: surviving enemies stay. An all-fallen party remains in the
+		// run, where only Escape is left (legacy never ends a quest because allies fell).
+		// After a mutual knockout no enemy survives, so no encounter is kept.
+		step.Encounter = pendingEncounter(exp, monsters, enemies, eventType, newX, newY, out.result, out.field)
+	}
+	stepRes, err := s.commitStep(ctx, exp, char.ID, step)
+	if err != nil {
+		return ExpeditionStepResult{}, err
+	}
+	res.Expedition = stepRes.Expedition
+	return res, nil
+}
+
+func addDelta(m *map[string]int, id string, d int) {
+	if d == 0 {
+		return
+	}
+	if *m == nil {
+		*m = make(map[string]int)
+	}
+	(*m)[id] += d
 }
 
 // combatProgress: the round advances only on the move itself, and the party

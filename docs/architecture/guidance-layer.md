@@ -43,7 +43,7 @@ selection rule. These tiers are documentation priorities, not SQL lock ranks.
 | [blacksmith](../../.arch/modules/blacksmith.json) | Crystal seals and weapon storage |
 | [casino](../../.arch/modules/casino.json) | SQL wagers/wins and staged Valkey room publication under room coordination |
 | [depot](../../.arch/modules/depot.json) | Character/storage sales and ascending-character direct transfers |
-| [dungeon](../../.arch/modules/dungeon.json) | Run-ID settlement claim, character rewards and conditional live-run cleanup |
+| [dungeon](../../.arch/modules/dungeon.json) | Run-ID settlement claim, in-run defeat credit receipts, character rewards and conditional live-run cleanup |
 | [fleamarket](../../.arch/modules/fleamarket.json) | Shared listing then characters and depot |
 | [gemstore](../../.arch/modules/gemstore.json) | Gem box and dual-source item operations |
 | [guild](../../.arch/modules/guild.json) | Membership and GP; no donation leveling |

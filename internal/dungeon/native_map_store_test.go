@@ -104,6 +104,7 @@ func TestNativeMap0_EscapeAtLimitThroughSQLFinalizer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dungeonRepo.SetPostBattleSettler(sqlPostBattle(t, db))
 	svc, err := dungeon.NewService(dungeonRepo, charRepo, corebattle.Engine{}, dungeon.WithActiveExpeditionStore(store))
 	if err != nil {
 		t.Fatal(err)

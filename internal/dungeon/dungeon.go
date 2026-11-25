@@ -166,7 +166,9 @@ type ActiveExpedition struct {
 	RoundLimit      int                `json:"round_limit"` // the current floor's limit
 	AccumulatedExp  int                `json:"accumulated_exp"`
 	AccumulatedGold int                `json:"accumulated_gold"`
-	ConsumedEvents  []string           `json:"consumed_events,omitempty"`
+	// Credits are accepted defeat credits not yet acknowledged as settled in SQL.
+	Credits        []DefeatCredit `json:"-"`
+	ConsumedEvents []string       `json:"consumed_events,omitempty"`
 	// MapState is the map's own typed run state (e.g. map14 routes), JSON
 	// encoded by that map and private to it.
 	MapState  json.RawMessage  `json:"-"`
@@ -213,16 +215,23 @@ type StepParams struct {
 	HPDelta              int
 	MemberHPDeltas       map[string]int
 	MemberMPDeltas       map[string]int
-	MemberExpDeltas      map[string]int
-	MemberGoldDeltas     map[string]int
-	ConsumedItems        map[string][]corebattle.ConsumedItem
-	RoundDelta           int
+	// Member deltas add to each member's stock, applied at their next action or Escape.
+	MemberExpDeltas     map[string]int
+	MemberGoldDeltas    map[string]int
+	MemberCrystalDeltas map[string]int
+	// Credits are appended to the run's pending credits for SQL.
+	Credits []DefeatCredit
+	// StockDrain names the acting member whose stock moves into Credits.
+	StockDrain    string
+	ConsumedItems map[string][]corebattle.ConsumedItem
+	RoundDelta    int
 	// MapVariant, when nonzero, moves the run to that floor with its RoundLimit.
 	MapVariant int
 	RoundLimit int
-	ExpDelta   int
-	GoldDelta  int
-	EventKey   string
+	// ExpDelta/GoldDelta record the leader's earnings on the run; they are not stock.
+	ExpDelta  int
+	GoldDelta int
+	EventKey  string
 	// MapState, when non-nil, replaces the run's map state.
 	MapState json.RawMessage
 	Now      time.Time
@@ -242,6 +251,8 @@ type ActiveExpeditionStore interface {
 	// DeleteActiveExpedition atomically removes only the owner's matching run; absent/replaced runs are a no-op.
 	DeleteActiveExpedition(ctx context.Context, characterID, expeditionID string) error
 	Step(ctx context.Context, characterID string, params StepParams) (StepOutcome, error)
+	// AckCredits drops the named settled credits from the owner's matching run; absent runs are a no-op.
+	AckCredits(ctx context.Context, characterID, expeditionID string, ids []string) error
 }
 
 type Repository interface {
@@ -255,6 +266,8 @@ type Repository interface {
 		members ...ExpeditionMember,
 	) error
 	GetHistory(ctx context.Context, characterID string, limit int) ([]DungeonExpeditionHistory, error)
+	// SettleDefeatCredits commits pending credits to their characters exactly once per run and credit ID.
+	SettleDefeatCredits(ctx context.Context, runID string, credits []DefeatCredit) error
 }
 
 type CharacterRepository interface {
@@ -306,6 +319,7 @@ type Service struct {
 	dungeonMap         map[string]Dungeon
 	rng                RandomSource
 	participantBuilder ParticipantBuilder
+	blessings          BlessingProvider
 }
 
 // Option configures optional parameters on Service.
