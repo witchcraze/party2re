@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/witchcraze/party2re/internal/core/timer"
 )
 
 var ErrForbidden = errors.New("character is not authorized for this expedition")
@@ -37,7 +39,7 @@ const startReconcileTimeout = 5 * time.Second
 // Dungeon admission performs no SQL writes, so such an error (e.g. a failed
 // commit that only releases character locks) cannot undo the Valkey-owned run.
 // The identity-verified run is therefore the start result; anything else is
-// reported as unknown without deleting state.
+// reported as unknown without deleting state or releasing a once quota.
 func (s *Service) reconcileStart(ctx context.Context, run *ActiveExpedition, admissionErr error) (*ActiveExpedition, error) {
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startReconcileTimeout)
 	defer cancel()
@@ -80,4 +82,51 @@ func (run ActiveExpedition) anyAlive() bool {
 		}
 	}
 	return len(run.Members) == 0 && run.CurrentHP > 0
+}
+
+// ErrOnceQuotaUsed rejects a once-quota map while the leader's quota is consumed.
+var ErrOnceQuotaUsed = errors.New("the leader has already used today's limited dungeon; sleep at home to enter again")
+
+var errOnceQuotaUnavailable = errors.New("once quota is not configured")
+
+// OnceQuota is the leader's once quota shared with Adventure
+// (timer.CategoryDungeonOnce); Home wake resets it.
+type OnceQuota interface {
+	IsLocked(ctx context.Context, category, targetID string) (bool, error)
+	TryLockWithToken(ctx context.Context, category, targetID, token string, duration time.Duration) (bool, error)
+	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
+}
+
+func WithOnceQuota(quota OnceQuota) Option {
+	return func(s *Service) { s.quota = quota }
+}
+
+// acquireOnce consumes the leader's quota for run, tokened by the run ID.
+func (s *Service) acquireOnce(ctx context.Context, leaderID, runID string) error {
+	if s.quota == nil {
+		return errOnceQuotaUnavailable
+	}
+	ok, err := s.quota.TryLockWithToken(ctx, timer.CategoryDungeonOnce, leaderID, runID, 0)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrOnceQuotaUsed
+	}
+	return nil
+}
+
+// releaseOnce returns the quota of a start that published no run.
+func (s *Service) releaseOnce(ctx context.Context, leaderID, runID string) {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), startReconcileTimeout)
+	defer cancel()
+	//lint:ignore error-swallow compensatory release of an unpublished start; Home wake resets a stuck quota
+	_, _ = s.quota.ReleaseLockWithToken(rctx, timer.CategoryDungeonOnce, leaderID, runID)
+}
+
+func (s *Service) onceUsed(ctx context.Context, leaderID string) (bool, error) {
+	if s.quota == nil {
+		return true, nil
+	}
+	return s.quota.IsLocked(ctx, timer.CategoryDungeonOnce, leaderID)
 }

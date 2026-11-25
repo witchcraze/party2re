@@ -130,9 +130,9 @@ type stubDungeonService struct {
 	listedJobLevel         int
 }
 
-func (s *stubDungeonService) ListDungeons(jobLevel int) []dungeon.Dungeon {
-	s.listedJobLevel = jobLevel
-	return []dungeon.Dungeon{{ID: "d1", Name: "Cave"}}
+func (s *stubDungeonService) ListDungeons(_ context.Context, viewer corecharacter.Character) ([]dungeon.Dungeon, error) {
+	s.listedJobLevel = viewer.JobLevel
+	return []dungeon.Dungeon{{ID: "d1", Name: "Cave"}}, nil
 }
 func (s *stubDungeonService) StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error) {
 	if s.startExpeditionFn != nil {

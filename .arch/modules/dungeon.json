@@ -5,7 +5,8 @@
   "package": "internal/dungeon",
   "dependencies": [
     {"name": "settlement", "target_module": "database", "relation_type": "consumer_interface", "source_ref": "internal/dungeon/dungeon.go#Repository"},
-    {"name": "live_run", "target_module": "dungeon", "relation_type": "consumer_interface", "source_ref": "internal/dungeon/dungeon.go#ActiveExpeditionStore"}
+    {"name": "live_run", "target_module": "dungeon", "relation_type": "consumer_interface", "source_ref": "internal/dungeon/dungeon.go#ActiveExpeditionStore"},
+    {"name": "once_quota", "target_module": "core/timer", "relation_type": "consumer_interface", "source_ref": "internal/dungeon/admission.go#OnceQuota"}
   ],
   "transaction_boundaries": [
     {

@@ -208,7 +208,7 @@ func (s *Service) startRoster(
 	memberIDs []string,
 	dungeonID string,
 	partyID string,
-) (*ActiveExpedition, error) {
+) (_ *ActiveExpedition, err error) {
 	if strings.TrimSpace(leaderCharID) == "" {
 		return nil, ErrCharacterNotFound
 	}
@@ -249,6 +249,17 @@ func (s *Service) startRoster(
 		if leader.JobLevel < dungeon.LeaderJobLevel {
 			return nil, ErrJobLevelRequired
 		}
+	}
+	runID := id.New()
+	if dungeon.Once {
+		if err := s.acquireOnce(ctx, leaderCharID, runID); err != nil {
+			return nil, err
+		}
+		defer func() {
+			if err != nil {
+				s.releaseOnce(ctx, leaderCharID, runID)
+			}
+		}()
 	}
 	// Legacy picks one initial layout; accepted start is the leader's
 	// initial advance from round 0 to 1 without a tile event.
@@ -337,7 +348,7 @@ func (s *Service) startRoster(
 
 	now := time.Now().UTC()
 	exp := ActiveExpedition{
-		ID:              id.New(),
+		ID:              runID,
 		CharacterID:     leaderCharID,
 		PartyID:         partyID,
 		Members:         members,

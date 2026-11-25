@@ -35,19 +35,15 @@ a separate action; letting movement abandon chests would be a departure.
 ## Start admission
 
 **Decision (#1774, #1955).** Original players saw the selection menu, so its
-thresholds apply rather than the looser server formula (`quest.cgi:526–537`).
-Only the leader is checked; joiners are not gated by job level
+thresholds (`quest.cgi:209,233–241`) apply rather than the looser server
+formula (`quest.cgi:526–537`). Only the leader is checked; joiners are not gated
 (`add_member`, `quest.cgi:928–1079`). The listing shows only maps the viewer may
-start as leader, and a start below the threshold is rejected.
+start as leader, and a start the listing would hide is rejected.
 
-| Dungeon | Leader job level | Menu evidence (`quest.cgi`) |
-|---|---|---|
-| 0 | any | always listed |
-| 1–12 (i) | ≥ 2i + 1 | `233–236` |
-| 13 / 14 / 15 / 17 | ≥ 80 / 30 / 50 / 40 | `@ex_dungeon`, `209,237–241` |
-| 16 | any, while the once quota is free | `get_limited_dungeons`, `1224–1228` |
-
-Open: dungeon 16's once quota (#1955).
+Dungeon 16 (not native yet, #1777) is listed at any job level while the leader's
+once quota is free (`get_limited_dungeons`). The quota is shared with Adventure
+stage 26 (`quest.cgi:597,654`): a start consumes it, and Home wake resets it
+(`home.cgi:192`).
 
 ## Retired synthetic catalog
 

@@ -12,7 +12,7 @@ import (
 
 // DungeonService defines dungeon explorations operations exposed over HTTP.
 type DungeonService interface {
-	ListDungeons(jobLevel int) []dungeon.Dungeon
+	ListDungeons(ctx context.Context, viewer corecharacter.Character) ([]dungeon.Dungeon, error)
 	StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
 	StartPartyExpedition(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
 	Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
@@ -66,7 +66,12 @@ func (h *Handler) handleListDungeons(w http.ResponseWriter, r *http.Request) {
 
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		writeJSON(w, http.StatusOK, dungeonListResponse{Dungeons: h.dungeons.ListDungeons(char.JobLevel)})
+		ds, err := h.dungeons.ListDungeons(r.Context(), char)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, dungeonListResponse{Dungeons: ds})
 	})
 }
 
@@ -101,7 +106,7 @@ func (h *Handler) handleStartDungeon(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusForbidden, err)
 				return
 			}
-			if errors.Is(err, dungeon.ErrActiveExpeditionExists) {
+			if errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, dungeon.ErrOnceQuotaUsed) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -146,7 +151,7 @@ func (h *Handler) handleStartPartyDungeon(w http.ResponseWriter, r *http.Request
 				writeError(w, http.StatusForbidden, err)
 				return
 			}
-			if errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, dungeon.ErrTooManyPartyMembers) {
+			if errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, dungeon.ErrTooManyPartyMembers) || errors.Is(err, dungeon.ErrOnceQuotaUsed) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

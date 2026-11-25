@@ -70,7 +70,7 @@ func TestNativeMap14_CatalogAndLeaderAdmission(t *testing.T) {
 		t.Fatal("treasure ship does not use the main floor encounter pool")
 	}
 	for _, level := range []int{29, 30} {
-		listed := slices.ContainsFunc(f.svc.ListDungeons(level), func(d dungeon.Dungeon) bool { return d.ID == dungeon.NativeMap14ID })
+		listed := slices.ContainsFunc(listAt(t, f.svc, level), func(d dungeon.Dungeon) bool { return d.ID == dungeon.NativeMap14ID })
 		if listed != (level == 30) {
 			t.Fatalf("job level %d: listed=%t", level, listed)
 		}
