@@ -116,13 +116,7 @@ func (s *LifetimeState) ApplyRanged(c *RangedContext, id string, rng random.Gene
 		a.Extended, a.ExtendedTurns = ExtendedBow, 10
 		return s.statTension(&c.EffectContext, a, false, rng)
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	c.Status.EffectContext = c.EffectContext
 	switch id {
 	case "job-11-entry-1", "job-54-entry-0", "job-42-entry-0", "job-42-entry-1":
@@ -150,7 +144,7 @@ func (s *LifetimeState) ApplyRanged(c *RangedContext, id string, rng random.Gene
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}

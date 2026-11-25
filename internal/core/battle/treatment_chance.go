@@ -37,13 +37,7 @@ func (s *LifetimeState) ApplyTreatmentChance(c *TreatmentChanceContext, id strin
 	if err := s.ValidateTreatmentChance(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	c.Status.EffectContext = c.EffectContext
 	defer func() { c.Status.EffectContext = c.EffectContext }()
 	if symbol, category := treatmentChanceCure(id); symbol != "" {
@@ -64,7 +58,7 @@ func (s *LifetimeState) ApplyTreatmentChance(c *TreatmentChanceContext, id strin
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}

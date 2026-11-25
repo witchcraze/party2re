@@ -111,13 +111,7 @@ func (s *LifetimeState) ApplyOrdinaryTool(c *OrdinaryToolContext, id string, rng
 	if err := s.ValidateOrdinaryTool(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	result := OrdinaryToolResult{ID: id, Consume: true}
 	if power := ordinaryToolMP(id); power != 0 {
 		if _, err := s.ApplyMPHealing(&c.EffectContext, controlEffect(c.toolTarget(), power, CategoryTool), rng); err != nil {
@@ -143,7 +137,7 @@ func (s *LifetimeState) ApplyOrdinaryTool(c *OrdinaryToolContext, id string, rng
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved && (!(id == "tool-80" || id == "tool-81") || s.actor(r.TargetID).HP > 0) {
 			s.actor(r.TargetID).Temporary = tmp
 		}
@@ -160,7 +154,7 @@ func (s *LifetimeState) ApplyOrdinaryTool(c *OrdinaryToolContext, id string, rng
 				if err != nil {
 					return err
 				}
-				resources(r)
+				c.targetResources(r)
 				if r.Resolved {
 					e.TargetID, e.Payload.Symbol = r.TargetID, s.actor(r.TargetID).Status
 				}
@@ -189,7 +183,7 @@ func (s *LifetimeState) ApplyOrdinaryTool(c *OrdinaryToolContext, id string, rng
 			if err != nil {
 				return err
 			}
-			resources(r)
+			c.targetResources(r)
 			if id == "tool-75" {
 				if r.Resolved {
 					s.actor(r.TargetID).Tension = 1
@@ -234,7 +228,7 @@ func (s *LifetimeState) ApplyOrdinaryTool(c *OrdinaryToolContext, id string, rng
 			if err != nil {
 				return err
 			}
-			resources(r)
+			c.targetResources(r)
 			if r.Resolved {
 				t := s.actor(r.TargetID)
 				if *c.RequesterMaxHP > t.HP || float64(t.MaxHP)*.2 > float64(t.HP) {

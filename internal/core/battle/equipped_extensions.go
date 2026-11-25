@@ -148,13 +148,7 @@ func (s *LifetimeState) ApplyEquippedExtension(c *EquippedExtensionContext, id s
 	if _, err := s.ValidateEquippedExtension(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	defer s.bindNativeDamage(&c.DamageContext, c.Death, rng)()
 	a := s.actor(c.ActorID)
 	switch id {
@@ -199,7 +193,7 @@ func (s *LifetimeState) ApplyEquippedExtension(c *EquippedExtensionContext, id s
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}

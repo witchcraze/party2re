@@ -72,13 +72,7 @@ func (s *LifetimeState) ApplyIncidentalJob(c *IncidentalJobContext, id string, r
 		c.DamageContext, c.Arguments, c.Status = child.DamageContext, child.Arguments, child.Status
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	defer func() { c.Status.EffectContext = c.EffectContext }()
 	if id == "job-7-entry-5" || id == "job-9-entry-7" || id == "job-9-entry-9" {
 		previousReset, previousDefeat := c.Reset, c.Defeat
@@ -116,7 +110,7 @@ func (s *LifetimeState) ApplyIncidentalJob(c *IncidentalJobContext, id string, r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}
@@ -166,7 +160,7 @@ func (s *LifetimeState) ApplyIncidentalJob(c *IncidentalJobContext, id string, r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}
@@ -175,7 +169,7 @@ func (s *LifetimeState) ApplyIncidentalJob(c *IncidentalJobContext, id string, r
 		_, err = s.ApplyStatDown(&c.EffectContext, controlEffect(t.ID, .1, CategoryPhysical), StatDefense, rng)
 		return err
 	case "job-9-entry-9":
-		return s.applyIncidentalDrain(c, resources, rng)
+		return s.applyIncidentalDrain(c, rng)
 	}
 	return nil
 }
@@ -200,12 +194,12 @@ func (s *LifetimeState) incidentalDrainRestore(c *IncidentalJobContext, target s
 	s.actor(c.ActorID).Hit = hit
 }
 
-func (s *LifetimeState) applyIncidentalDrain(c *IncidentalJobContext, resources func(TargetResolution), rng random.Generator) error {
+func (s *LifetimeState) applyIncidentalDrain(c *IncidentalJobContext, rng random.Generator) error {
 	r, err := s.ResolveEnemyTarget(c.TargetContext, controlSymbol(c.shift(), "drain", CategoryUntyped), rng)
 	if err != nil {
 		return err
 	}
-	resources(r)
+	c.targetResources(r)
 	target := ""
 	if r.Resolved {
 		target = r.TargetID

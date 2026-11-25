@@ -157,6 +157,7 @@ func (s *LifetimeState) equipmentTailHit(c *EquipmentTailContext, power float64,
 	damage := s.nativeDamageContext(c.DamageContext, c.Defeat, rng)
 	damage.targetResources = func(r TargetResolution) { applyStatusResources(s, r) }
 	_, err := s.ApplyDamage(&damage, dualAgilityEffect("", power, CategoryUntyped, true), rng)
+	damage.targetResources = c.targetResources // the status-only hook stays local
 	c.EffectContext, c.End = damage.EffectContext, damage.End
 	if c.Defeat != nil {
 		c.Cursor = c.Defeat.Cursor

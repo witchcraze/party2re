@@ -36,20 +36,13 @@ func (s *LifetimeState) ApplyTimeMixedMagic(c *TimeMixedMagicContext, id string,
 	if err := s.ValidateTimeMixedMagic(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	if tmp := timeMagicTemporary(id); tmp != "" {
 		r, err := s.ResolvePartyTarget(c.TargetContext, controlSymbol(c.shift(), string(tmp), CategoryMagic), rng)
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved && (id != "job-30-entry-2" || s.actor(r.TargetID).HP > 0) {
 			s.actor(r.TargetID).Temporary = tmp
 		}

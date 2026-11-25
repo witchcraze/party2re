@@ -24,14 +24,7 @@ func (s *LifetimeState) ApplyNPCJob97(c *NPCJob97Context, id string, rng random.
 	if err := s.ValidateNPCJob97(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	switch id {
 	case "npc-job-97-position-0", "npc-job-97-position-1":
 		width, coefficient := 2, .85
@@ -99,7 +92,7 @@ func (s *LifetimeState) ApplyNPCJob97(c *NPCJob97Context, id string, rng random.
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			t := s.actor(r.TargetID)
 			if t.MaxHP <= 999 && t.BaseStats.Defense <= 999 {

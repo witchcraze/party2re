@@ -84,14 +84,7 @@ func (s *LifetimeState) ApplyBasicMagic(c *BasicMagicContext, id string, rng ran
 	if err := s.ValidateBasicMagic(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	switch id {
 	case "job-5-entry-1":
 		_, err := s.ApplyStatUp(&c.EffectContext, controlEffect(c.shift(), .4, CategoryMagic), StatDefense, rng)

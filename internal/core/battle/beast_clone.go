@@ -112,14 +112,7 @@ func (s *LifetimeState) ApplyBeastClone(c *BeastCloneContext, id string, rng ran
 	if err := s.ValidateBeastClone(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	if power := beastBreathPower(id); power != 0 {
 		_, err := s.ApplyAreaDamage(&c.DamageContext, power, CategoryBreath, true, rng)
 		return err

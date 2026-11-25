@@ -302,14 +302,7 @@ func (s *LifetimeState) ApplyBook(c *BookContext, id string, rng random.Generato
 	if err := s.ValidateBook(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	b, _ := bookSpec(id)
 	power := s.bookPower(id, b)
 	var err error
@@ -336,7 +329,7 @@ func (s *LifetimeState) ApplyBook(c *BookContext, id string, rng random.Generato
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			s.actor(r.TargetID).Temporary = TemporaryReflectMagic
 		}
@@ -354,7 +347,7 @@ func (s *LifetimeState) ApplyBook(c *BookContext, id string, rng random.Generato
 			var r TargetResolution
 			r, err = s.ResolvePartyTarget(c.TargetContext, controlSymbol(c.shift(), "current_status_cure", CategoryUntyped), rng)
 			if err == nil {
-				resources(r)
+				c.targetResources(r)
 				if r.Resolved {
 					e.TargetID, e.Payload.Symbol = r.TargetID, s.actor(r.TargetID).Status
 					_, err = s.ApplyCure(sc, e, rng)

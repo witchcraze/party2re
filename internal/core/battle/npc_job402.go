@@ -48,15 +48,9 @@ func (s *LifetimeState) ApplyNPCJob402(c *NPCJob402Context, id string, rng rando
 	previous := c.DamageContext
 	native := s.nativeDamageContext(c.DamageContext, c.Death, rng)
 	c.Reset, c.Defeat = native.Reset, native.Defeat
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
+	defer s.ownTargetResources(&c.EffectContext)()
 	defer func() {
 		c.Reset, c.Defeat = previous.Reset, previous.Defeat
-		c.targetResources, c.EffectContext.targetResources = previous.targetResources, previous.EffectContext.targetResources
 	}()
 	switch id {
 	case "npc-job-402-position-0":
@@ -97,7 +91,7 @@ func (s *LifetimeState) ApplyNPCJob402(c *NPCJob402Context, id string, rng rando
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		target := ""
 		if r.Resolved {
 			target = r.TargetID

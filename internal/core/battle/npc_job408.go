@@ -99,15 +99,9 @@ func (s *LifetimeState) applyNPC408(f *CallbackContext, id string, rng random.Ge
 	previous := *damage
 	native := s.nativeDamageContext(*damage, f.Defeat, rng)
 	damage.Reset, damage.Defeat, damage.responseDefeat = native.Reset, native.Defeat, f.Defeat
-	resources := func(r TargetResolution) {
-		a := s.actor(f.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	damage.targetResources, damage.EffectContext.targetResources = resources, resources
+	defer s.ownTargetResources(&damage.EffectContext)()
 	defer func() {
 		damage.Reset, damage.Defeat, damage.responseDefeat = previous.Reset, previous.Defeat, previous.responseDefeat
-		damage.targetResources, damage.EffectContext.targetResources = previous.targetResources, previous.EffectContext.targetResources
 	}()
 	wounded := npc408Wounded(s.actor(f.ActorID))
 	switch id {

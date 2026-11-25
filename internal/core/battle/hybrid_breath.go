@@ -113,14 +113,7 @@ func (s *LifetimeState) ApplyHybridBreath(c *HybridBreathContext, id string, rng
 	if err := s.ValidateHybridBreath(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	if e, area, ok := hybridBreathDamage(id, s.actor(c.ActorID)); ok {
 		if area {
 			_, err := s.ApplyAreaDamage(&c.DamageContext, e.Payload.Number, e.Category, true, rng)
@@ -161,7 +154,7 @@ func (s *LifetimeState) ApplyHybridBreath(c *HybridBreathContext, id string, rng
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		_, err = s.ApplyDamage(&c.DamageContext, s.hybridAssault(r.TargetID, c.ActorID), rng)
 		return err
 	case "job-44-entry-1":

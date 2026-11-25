@@ -63,14 +63,7 @@ func (s *LifetimeState) applyCallingFairy(c *RosterContext, helperID string, rng
 
 func (s *LifetimeState) applyCallingDrain(c *RosterContext, helperID string, rng random.Generator) (RosterResult, error) {
 	r := RosterResult{HelperID: helperID}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(v TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-v.MPDebit)
-		applyStatusResources(s, v)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	hits := 2 + int(rng.Float64()*3)
 	for range hits {
 		if s.actor(c.ActorID).HP <= 0 {

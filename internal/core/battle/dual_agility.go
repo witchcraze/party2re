@@ -89,12 +89,7 @@ func (s *LifetimeState) ApplyDualAgility(c *DualAgilityContext, id string, rng r
 	if applyDualAgilityInline(s, c, id) {
 		return nil
 	}
-	previous := c.targetResources
-	c.targetResources = func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	defer func() { c.targetResources = previous }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-77-entry-0", "job-83-entry-0":
@@ -142,11 +137,10 @@ func (s *LifetimeState) ApplyDualAgility(c *DualAgilityContext, id string, rng r
 	case "job-83-entry-2":
 		child := *c.Status
 		child.EffectContext = c.EffectContext
-		child.targetResources = c.targetResources
 		_, err := s.ApplyStatus(&child, TargetEffect{TargetID: c.shift(), Category: CategoryPhysical, Payload: CallbackPayload{Symbol: "death"}}, 19, false, true, rng)
+		c.EffectContext = child.EffectContext
 		child.targetResources = c.Status.targetResources
 		*c.Status = child
-		c.EffectContext = child.EffectContext
 		return err
 	}
 	count := 1

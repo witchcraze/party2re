@@ -44,13 +44,7 @@ func (s *LifetimeState) ApplyAdvancedMagic(c *AdvancedMagicContext, id string, r
 		c.Reset, c.Defeat = damage.Reset, damage.Defeat
 		defer func() { c.Reset, c.Defeat = previousReset, previousDefeat }()
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	c.Status.EffectContext = c.EffectContext
 	defer func() { c.Status.EffectContext = c.EffectContext }()
 	if tmp := advancedMagicTemporary(id); tmp != "" {
@@ -58,7 +52,7 @@ func (s *LifetimeState) ApplyAdvancedMagic(c *AdvancedMagicContext, id string, r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			s.actor(r.TargetID).Temporary = tmp
 		}

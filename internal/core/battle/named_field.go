@@ -120,15 +120,7 @@ func (s *LifetimeState) ApplyNamedField(c *NamedFieldContext, id string, rng ran
 	if err := s.ValidateNamedField(c, id, rng); err != nil {
 		return err
 	}
-	previous := c.targetResources
-	previousEffect := c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previous, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	if id == "job-56-entry-3" {
 		s.applyFiniteChaos(rng)
 		return nil
@@ -185,7 +177,7 @@ func (s *LifetimeState) ApplyNamedField(c *NamedFieldContext, id string, rng ran
 			if err != nil {
 				return err
 			}
-			resources(r)
+			c.targetResources(r)
 			if !r.Resolved {
 				return ErrUnsupportedEffect
 			}
