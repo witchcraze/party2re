@@ -208,7 +208,7 @@ func (s *Service) startRoster(
 	memberIDs []string,
 	dungeonID string,
 	partyID string,
-) (*ActiveExpedition, error) {
+) (_ *ActiveExpedition, err error) {
 	if strings.TrimSpace(leaderCharID) == "" {
 		return nil, ErrCharacterNotFound
 	}
@@ -249,6 +249,19 @@ func (s *Service) startRoster(
 		if leader.JobLevel < dungeon.LeaderJobLevel {
 			return nil, ErrJobLevelRequired
 		}
+	}
+	runID := id.New()
+	saving := false
+	if dungeon.Once {
+		if err := s.acquireOnce(ctx, leaderCharID, runID); err != nil {
+			return nil, err
+		}
+		defer func() {
+			// A failed save may still have published the run; reconcileStart owns that outcome.
+			if err != nil && !saving {
+				s.releaseOnce(ctx, leaderCharID, runID)
+			}
+		}()
 	}
 	// Legacy picks one initial layout; accepted start is the leader's
 	// initial advance from round 0 to 1 without a tile event.
@@ -337,7 +350,7 @@ func (s *Service) startRoster(
 
 	now := time.Now().UTC()
 	exp := ActiveExpedition{
-		ID:              id.New(),
+		ID:              runID,
 		CharacterID:     leaderCharID,
 		PartyID:         partyID,
 		Members:         members,
@@ -359,8 +372,10 @@ func (s *Service) startRoster(
 	if dungeon.newState != nil {
 		exp.MapState = dungeon.newState(s.rng)
 	}
+	saving = true
 	if err := s.activeStore.SaveActiveExpedition(ctx, exp); err != nil {
-		return nil, err
+		// The multi-key save can fail after writing; callers reconcile the run.
+		return &exp, err
 	}
 
 	return &exp, nil

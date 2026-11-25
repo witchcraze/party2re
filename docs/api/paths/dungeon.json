@@ -22,7 +22,7 @@
               }
             }
           },
-          "description": "Dungeon overviews this character may start as leader (filtered by job level)"
+          "description": "Dungeon overviews this character may start as leader (filtered by job level and once quota)"
         },
         "400": {
           "content": {
@@ -494,7 +494,7 @@
               }
             }
           },
-          "description": "Party is not ready, a member is busy, or an entry condition is unmet"
+          "description": "Party is not ready, a member is busy, the leader's once quota is already used, or an entry condition is unmet"
         },
         "500": {
           "content": {
@@ -609,7 +609,7 @@
         },
         "422": {
           "$ref": "#/components/responses/Error",
-          "description": "Unprocessable Content"
+          "description": "An active expedition exists or the once quota is already used"
         },
         "500": {
           "content": {

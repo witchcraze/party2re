@@ -352,16 +352,16 @@ func TestNativeMap3_LeaderJobLevelAdmission(t *testing.T) {
 		}
 		return out
 	}
-	if got := ids(f.svc.ListDungeons(2)); !slices.Equal(got, []string{dungeon.NativeMap0ID}) {
+	if got := ids(listAt(t, f.svc, 2)); !slices.Equal(got, []string{dungeon.NativeMap0ID}) {
 		t.Fatalf("job level 2 listing %v", got)
 	}
-	if got := ids(f.svc.ListDungeons(4)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID}) {
+	if got := ids(listAt(t, f.svc, 4)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID}) {
 		t.Fatalf("job level 4 listing %v", got)
 	}
-	if got := ids(f.svc.ListDungeons(6)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID, dungeon.NativeMap2ID}) {
+	if got := ids(listAt(t, f.svc, 6)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID, dungeon.NativeMap2ID}) {
 		t.Fatalf("job level 6 listing %v", got)
 	}
-	if got := ids(f.svc.ListDungeons(7)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID, dungeon.NativeMap2ID, dungeon.NativeMap3ID}) {
+	if got := ids(listAt(t, f.svc, 7)); !slices.Equal(got, []string{dungeon.NativeMap0ID, dungeon.NativeMap1ID, dungeon.NativeMap2ID, dungeon.NativeMap3ID}) {
 		t.Fatalf("job level 7 listing %v", got)
 	}
 

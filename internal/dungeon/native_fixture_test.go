@@ -220,3 +220,13 @@ type zeroRNG struct{}
 
 func (zeroRNG) Intn(int) int     { return 0 }
 func (zeroRNG) Float64() float64 { return 0 }
+
+// listAt lists the maps a quota-free leader of jobLevel may start.
+func listAt(t *testing.T, svc *dungeon.Service, jobLevel int) []dungeon.Dungeon {
+	t.Helper()
+	ds, err := svc.ListDungeons(context.Background(), corecharacter.Character{ID: "viewer", JobLevel: jobLevel})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ds
+}

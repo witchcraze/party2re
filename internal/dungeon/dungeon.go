@@ -118,6 +118,9 @@ type Dungeon struct {
 	RoundLimit  int    `json:"round_limit"`
 	// LeaderJobLevel is the leader's minimum job level to start; joiners are not gated.
 	LeaderJobLevel int `json:"-"`
+	// Once consumes the leader's once quota at start and hides the map while
+	// it is consumed (legacy dungeon 16); joiners are not checked.
+	Once bool `json:"-"`
 	// Variants stay private because their grids disclose hidden passages.
 	Variants []Floor `json:"-"`
 	// Initial counts the leading variants a run may start on; 0 means all.
@@ -320,6 +323,7 @@ type Service struct {
 	rng                RandomSource
 	participantBuilder ParticipantBuilder
 	blessings          BlessingProvider
+	quota              OnceQuota
 }
 
 // Option configures optional parameters on Service.
@@ -408,15 +412,25 @@ func NewService(
 	return s, nil
 }
 
-// ListDungeons returns the maps a leader of jobLevel may start, like the legacy menu.
-func (s *Service) ListDungeons(jobLevel int) []Dungeon {
+// ListDungeons returns the maps viewer may start as leader, like the legacy menu.
+func (s *Service) ListDungeons(ctx context.Context, viewer corecharacter.Character) ([]Dungeon, error) {
 	out := make([]Dungeon, 0, len(s.dungeons))
 	for _, d := range s.dungeons {
-		if jobLevel >= d.LeaderJobLevel {
-			out = append(out, d)
+		if viewer.JobLevel < d.LeaderJobLevel {
+			continue
 		}
+		if d.Once {
+			used, err := s.onceUsed(ctx, viewer.ID)
+			if err != nil {
+				return nil, err
+			}
+			if used {
+				continue
+			}
+		}
+		out = append(out, d)
 	}
-	return out
+	return out, nil
 }
 
 func (s *Service) GetHistory(ctx context.Context, characterID string, limit int) ([]DungeonExpeditionHistory, error) {

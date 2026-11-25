@@ -47,7 +47,7 @@ func TestNativeMap15_CatalogAndFloorLimits(t *testing.T) {
 	hero.JobLevel = 49
 	f := newNativeFixture(t, hero)
 	for _, level := range []int{49, 50} {
-		listed := slices.ContainsFunc(f.svc.ListDungeons(level), func(d dungeon.Dungeon) bool { return d.ID == dungeon.NativeMap15ID })
+		listed := slices.ContainsFunc(listAt(t, f.svc, level), func(d dungeon.Dungeon) bool { return d.ID == dungeon.NativeMap15ID })
 		if listed != (level == 50) {
 			t.Fatalf("job level %d: listed=%t", level, listed)
 		}
