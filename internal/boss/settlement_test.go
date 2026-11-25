@@ -190,79 +190,23 @@ func failingNews(context.Context, string, string, string, string, time.Time) err
 }
 
 func TestBossSettlement_HookFailureRollsBackWholeSettlement(t *testing.T) {
-	cases := []struct {
-		name  string
-		build func(f *sealFixture, t *testing.T) *boss.Service
-	}{
-		{"news publisher", func(f *sealFixture, t *testing.T) *boss.Service {
-			return f.service(t, f.bossRepo, f.partyRepo, boss.WithNewsPublisher(boss.NewsPublisherFunc(failingNews)))
-		}},
+	f := newSealFixture("leader", "m1")
+	svc := f.service(t, f.bossRepo, f.partyRepo, boss.WithNewsPublisher(boss.NewsPublisherFunc(failingNews)))
+	_, err := svc.StartSealingBattle(context.Background(), f.pID, "leader")
+	if !errors.Is(err, errInjected) {
+		t.Fatalf("expected news failure to propagate, got %v", err)
 	}
-	for _, tc := range cases {
-		t.Run("party/"+tc.name, func(t *testing.T) {
-			f := newSealFixture("leader", "m1")
-			_, err := tc.build(f, t).StartSealingBattle(context.Background(), f.pID, "leader")
-			if !errors.Is(err, errInjected) {
-				t.Fatalf("expected hook failure to propagate, got %v", err)
-			}
-			f.requireSealRolledBack(t)
-		})
-		t.Run("solo/"+tc.name, func(t *testing.T) {
-			f := newSealFixture("solo")
-			_, err := tc.build(f, t).ChallengeBoss(context.Background(), "solo", "king1")
-			if !errors.Is(err, errInjected) {
-				t.Fatalf("expected hook failure to propagate, got %v", err)
-			}
-			f.requireNothingSettled(t)
-		})
-	}
+	f.requireSealRolledBack(t)
 }
 
 func TestBossSettlement_ExperienceFailureRollsBackWholeSettlement(t *testing.T) {
-	t.Run("party", func(t *testing.T) {
-		f := newSealFixture("leader", "m1")
-		f.setLevel("m1", 0)
-		_, err := f.service(t, f.bossRepo, f.partyRepo).StartSealingBattle(context.Background(), f.pID, "leader")
-		if !errors.Is(err, progression.ErrInvalidCharacterLevel) {
-			t.Fatalf("expected experience failure to propagate, got %v", err)
-		}
-		f.requireSealRolledBack(t)
-	})
-	t.Run("solo", func(t *testing.T) {
-		f := newSealFixture("solo")
-		f.setLevel("solo", 0)
-		_, err := f.service(t, f.bossRepo, f.partyRepo).ChallengeBoss(context.Background(), "solo", "king1")
-		if !errors.Is(err, progression.ErrInvalidCharacterLevel) {
-			t.Fatalf("expected experience failure to propagate, got %v", err)
-		}
-		f.requireNothingSettled(t)
-	})
-}
-
-func TestChallengeBoss_RequiredFailureRollsBackWholeSettlement(t *testing.T) {
-	cases := []struct {
-		name  string
-		build func(f *sealFixture, t *testing.T) *boss.Service
-	}{
-		{"collection record failure", func(f *sealFixture, t *testing.T) *boss.Service {
-			return f.service(t, f.bossRepo, f.partyRepo, boss.WithMonsterDefeatRecorder(&failingRecorder{failOn: 1}))
-		}},
-		{"boss record failure", func(f *sealFixture, t *testing.T) *boss.Service {
-			return f.service(t, &failingBossRepo{mockBossRepo: f.bossRepo, failOn: 1}, f.partyRepo)
-		}},
+	f := newSealFixture("leader", "m1")
+	f.setLevel("m1", 0)
+	_, err := f.service(t, f.bossRepo, f.partyRepo).StartSealingBattle(context.Background(), f.pID, "leader")
+	if !errors.Is(err, progression.ErrInvalidCharacterLevel) {
+		t.Fatalf("expected experience failure to propagate, got %v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newSealFixture("solo")
-			svc := tc.build(f, t)
-
-			_, err := svc.ChallengeBoss(context.Background(), "solo", "king1")
-			if !errors.Is(err, errInjected) {
-				t.Fatalf("expected injected failure to propagate, got %v", err)
-			}
-			f.requireNothingSettled(t)
-		})
-	}
+	f.requireSealRolledBack(t)
 }
 
 // TestStartSealingBattle_ConcurrentStartSettlesOnce overlaps two starts for the same

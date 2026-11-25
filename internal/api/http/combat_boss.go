@@ -13,7 +13,6 @@ import (
 // BossService defines boss encounters operations exposed over HTTP.
 type BossService interface {
 	ListBosses(ctx context.Context, characterID string) ([]boss.BossEncounterStatus, error)
-	ChallengeBoss(ctx context.Context, characterID, bossID string) (boss.ChallengeResult, error)
 	StartSealingBattle(ctx context.Context, partyID, leaderCharID string) (boss.SealingBattleResult, error)
 	GetCharacterRecord(ctx context.Context, characterID string) (boss.CharacterBossRecord, error)
 }
@@ -29,16 +28,8 @@ func WithBoss(b BossService) Option {
 // Boss Handlers
 // -------------------------------------------------------------------
 
-type challengeBossRequest struct {
-	BossID string `json:"boss_id"`
-}
-
 type bossListResponse struct {
 	Bosses []boss.BossEncounterStatus `json:"bosses"`
-}
-
-type bossChallengeResponse struct {
-	Result bossBattleResultResponse `json:"result"`
 }
 
 func (h *Handler) handleListBosses(w http.ResponseWriter, r *http.Request) {
@@ -57,44 +48,6 @@ func (h *Handler) handleListBosses(w http.ResponseWriter, r *http.Request) {
 
 		writeJSON(w, http.StatusOK, bossListResponse{
 			Bosses: statuses,
-		})
-	})
-}
-
-func (h *Handler) handleChallengeBoss(w http.ResponseWriter, r *http.Request) {
-	if h.bosses == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("boss service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req challengeBossRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.BossID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("boss_id is required"))
-			return
-		}
-
-		res, err := h.bosses.ChallengeBoss(r.Context(), char.ID, req.BossID)
-		if err != nil {
-			if errors.Is(err, boss.ErrBossNotFound) || errors.Is(err, boss.ErrInvalidBossID) || errors.Is(err, boss.ErrCharacterNotFound) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			if errors.Is(err, boss.ErrNeedJoinNotMet) || errors.Is(err, boss.ErrCharacterExhausted) || errors.Is(err, boss.ErrCharacterUnconscious) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, bossChallengeResponse{
-			Result: toBossBattleResult(res),
 		})
 	})
 }

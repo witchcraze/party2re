@@ -4,15 +4,11 @@
 
 The King Sealing Battle Feature Module (`internal/boss`) provides high-tier endgame cooperative sealing battles (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`) using the shared Multi-Participant Core Battle engine (`internal/core/battle`).
 
-Up to 6 players (4 for `king99`) join a system-opened sealing room (quest type 6; see [§6](#6-unseal-to-sealing-room-lifecycle)) to challenge ancient sealed kings and calamitous deities. Characters face devastating enemy skills like **Dejon** (デジョン; dimensional banishment of unconscious members with severe fatigue penalties). Victorious adventurers achieve resealing via **`@ふういん`**, gaining Hero Count (勇者カウント / `$m{hero_c}`), rare treasures, crystals (刻印晶) scaled by time since the unseal, worldwide server news broadcasts, and adding a temporary celebration crowd in the town Event Plaza (`internal/eventplaza`).
-
 ---
 
 ## Rules and decisions
 
 - `king1`–`king10` admit up to 6 players and `king99` 4: the legacy boss NPC takes one extra slot (`p_join+1`, counted from 1).
-- Legacy enters `vs_king` only by joining a sealing room (`quest.cgi:1071`). **Decision (#1199):** the Go solo operation has no counterpart and is removed (#1928).
-- There is no daily attempt cap; entry is governed by fatigue (<100) and the stage's `need_join`.
 - Settlement commits rewards, Dejon fatigue, records, the monster book, server news and boss medal progress together; the celebration crowd (Valkey) is best effort ([#2033](https://github.com/witchcraze/party2re/issues/2033)). Persistence boundary: [Boss completion recovery](../architecture/transient-run-state.md#boss-completion-recovery).
 
 ## Authentic King Stages
@@ -33,24 +29,10 @@ The CGI exposes `＠ふういん` after enemies are defeated; Go currently combi
 - Dejon banishes a fallen character for the rest of the battle (no revival) and adds **+30% fatigue**. Legacy `vs_king.cgi:dejon` applies it at banishment; Go settlement applies it upon battle conclusion.
 
 ### 5. Victory, Resealing (`@ふういん`), & Rewards
-Upon defeating all enemy boss participants:
-1. **Hero Count**: All party members receive **+1 Hero Count** (`characters.hero_count` / `$m{hero_c}`).
-2. **Crystals (刻印晶)**:
-   - Base crystals: Sum of `GetCrystal` for defeated enemies; in `king99`, 20 per defeated clone.
-   - **Unseal-Clock Multiplier** (per defeated enemy, `_battle.cgi:145–173`): elapsed time since the [unseal clock](#6-unseal-to-sealing-room-lifecycle), not since the battle or room start:
-     - $\le 10$ minutes (600s): **3.0×**
-     - $\le 30$ minutes (1800s): **2.0×**
-     - $\le 60$ minutes (3600s): **1.5×** (truncated)
-     - $> 60$ minutes: **1.0×**
-   - The legacy solo entry still measures from request start pending removal in [#1928](https://github.com/witchcraze/party2re/issues/1928).
-   - Directly credited to each member's crystal balance (`characters.crystal`).
-3. **Experience & Gold**:
-   - For `king1`..`king10`: Sum of boss definitions.
-   - For `king99`: Sum over defeated clones of the values fixed at unseal ([§3](#3-boss-skills--clones)).
-4. **Treasure**: a random stage treasure plus the JST weekday orb (`_npc_action.cgi:541–543`). Legacy loads the stage's `@treasures` before the battle acts (`lib/vs_king.cgi:19–23`), so job78's treasure retry (`lib/_skill.cgi:6200`) regenerates sealing chests from the same table; that retry is unreachable while the battle resolves in one request (#1862). A treasure found with the Depot full is lost, even with a matching stack (`_npc_action.cgi:73–75`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
-5. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
-6. **Victory Celebration**: Adds a temporary crowd to Event Plaza (`_win_vs_king.cgi`). [Event Plaza design §3](eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) owns generation, presence retention, merchant-selection order and runtime boundaries; there is no independent fixed two-hour banquet window.
-7. **Room after sealing**: The room becomes watch-only and is deleted when its last member exits ([§6](#6-unseal-to-sealing-room-lifecycle)). Go currently deletes the lobby at settlement.
+- **Crystals (刻印晶)**: each defeated enemy's multiplier measures the time since the [unseal clock](#6-unseal-to-sealing-room-lifecycle), not since the battle or room start (`_battle.cgi:145–173`).
+- **Treasure**: a random stage treasure plus the JST weekday orb (`_npc_action.cgi:541–543`). Legacy loads the stage's `@treasures` before the battle acts (`lib/vs_king.cgi:19–23`), so job78's treasure retry (`lib/_skill.cgi:6200`) regenerates sealing chests from the same table; that retry is unreachable while the battle resolves in one request (#1862). A treasure found with the Depot full is lost, even with a matching stack (`_npc_action.cgi:73–75`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
+- **Victory Celebration**: Adds a temporary crowd to Event Plaza (`_win_vs_king.cgi`). [Event Plaza design §3](eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) owns generation, presence retention, merchant-selection order and runtime boundaries; there is no independent fixed two-hour banquet window.
+- **Room after sealing**: The room becomes watch-only and is deleted when its last member exits ([§6](#6-unseal-to-sealing-room-lifecycle)). Go currently deletes the lobby at settlement.
 
 ---
 
@@ -123,5 +105,4 @@ world-boss HP ([transient-boss-hp.md](../architecture/transient-boss-hp.md)).
 
 **Current gaps:**
 
-- The solo entry exists ([#1928](https://github.com/witchcraze/party2re/issues/1928)).
 - The battle resolves at start against the room's initial roster, keeps no per-room enemy state and has no leader-defeat exit check; until then any room member may start it ([#1864](https://github.com/witchcraze/party2re/issues/1864)).

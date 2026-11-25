@@ -128,7 +128,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 118 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 117 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -211,7 +211,7 @@ func TestEvaluate_DeadNonCombatActions(t *testing.T) {
 
 func TestEvaluate_LivingVsDeadCombatContrast(t *testing.T) {
 	combatActions := []string{
-		"adventure_start", "challenge_start", "dungeon_start", "boss_fight", "pvp_room_create",
+		"adventure_start", "challenge_start", "dungeon_start", "pvp_room_create",
 	}
 	sampleNonCombatActions := []string{
 		"bank_withdraw", "bank_deposit", "shop_purchase", "shop_sell",

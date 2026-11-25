@@ -111,14 +111,6 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
-		ID:             "boss_fight",
-		Label:          "ボス討伐",
-		Category:       "adventure",
-		OperationID:    "fightBoss",
-		RequiredParams: []string{"boss_id"},
-		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
 		ID:             "pvp_room_create",
 		Label:          "対戦部屋作成",
 		Category:       "adventure",
