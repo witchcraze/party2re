@@ -39,7 +39,7 @@
           "table": "characters",
           "tier": 2,
           "mode": "SELECT ... FOR UPDATE (ascending character ID)",
-          "note": "Lock the whole roster before participant assets, Collection, boss records, history and loot delivery."
+          "note": "Lock the whole roster before participant assets, Collection and loot delivery."
         }
       ]
     }

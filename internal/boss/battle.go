@@ -246,41 +246,8 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, actorID st
 			}
 		}
 
-		// 12. Record challenge history & records
-		now := s.now()
-
-		stageTier := stageTierFromID(stage.ID)
+		// 12. Deliver winning treasure and sync character state
 		for _, cID := range charIDs {
-			rec, err := s.repo.GetOrCreateRecord(txCtx, cID)
-			if err != nil {
-				return fmt.Errorf("get or create boss record: %w", err)
-			}
-			isFirstClear := false
-			if isWin {
-				rec.TotalBossDefeats++
-				if rec.FirstClearedAt == nil {
-					rec.FirstClearedAt = &now
-				}
-				if stageTier > rec.HighestTierCleared {
-					rec.HighestTierCleared = stageTier
-					isFirstClear = true
-				}
-			}
-			rec.LastChallengedAt = &now
-
-			hist := BossChallengeHistory{
-				ID:           id.New(),
-				CharacterID:  cID,
-				BossID:       stage.ID,
-				Tier:         stageTier,
-				Outcome:      outcome,
-				Turns:        battleRes.Turns,
-				RewardExp:    battleRes.TotalReward.Experience,
-				RewardGold:   battleRes.TotalReward.Currency,
-				RewardItemID: rewardItemID,
-				IsFirstClear: isFirstClear,
-				CreatedAt:    now,
-			}
 			var rewardItemInst *coreitem.Instance
 			if rewardItemID != "" {
 				rewardItemInst = &coreitem.Instance{
@@ -289,8 +256,8 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, actorID st
 					Quantity:     1,
 				}
 			}
-			if err := s.repo.RecordChallenge(txCtx, hist, rec, chars[cID], rewardItemInst); err != nil {
-				return fmt.Errorf("failed to record challenge for %s: %w", cID, err)
+			if err := s.repo.SettleMember(txCtx, chars[cID], rewardItemInst); err != nil {
+				return fmt.Errorf("failed to settle member %s: %w", cID, err)
 			}
 		}
 

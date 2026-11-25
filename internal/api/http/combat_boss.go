@@ -12,9 +12,7 @@ import (
 
 // BossService defines boss encounters operations exposed over HTTP.
 type BossService interface {
-	ListBosses(ctx context.Context, characterID string) ([]boss.BossEncounterStatus, error)
 	StartSealingBattle(ctx context.Context, partyID, leaderCharID string) (boss.SealingBattleResult, error)
-	GetCharacterRecord(ctx context.Context, characterID string) (boss.CharacterBossRecord, error)
 }
 
 // WithBoss configures the boss service for the Handler.
@@ -22,34 +20,6 @@ func WithBoss(b BossService) Option {
 	return func(h *Handler) {
 		h.bosses = b
 	}
-}
-
-// -------------------------------------------------------------------
-// Boss Handlers
-// -------------------------------------------------------------------
-
-type bossListResponse struct {
-	Bosses []boss.BossEncounterStatus `json:"bosses"`
-}
-
-func (h *Handler) handleListBosses(w http.ResponseWriter, r *http.Request) {
-	if h.bosses == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("boss service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		statuses, err := h.bosses.ListBosses(r.Context(), char.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, bossListResponse{
-			Bosses: statuses,
-		})
-	})
 }
 
 // -------------------------------------------------------------------

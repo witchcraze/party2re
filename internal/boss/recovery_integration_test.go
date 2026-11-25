@@ -174,47 +174,45 @@ func (f *sealingStorageFixture) start(s *boss.Service) (boss.SealingBattleResult
 
 func (f *sealingStorageFixture) assertAssets(t *testing.T, committed bool) {
 	t.Helper()
+	var receipt *boss.SealingSettlement
+	if err := database.RunInTx(context.Background(), f.db, func(ctx context.Context) error {
+		var err error
+		receipt, err = f.repo.LockSealingSettlement(ctx, f.state.Party.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !committed && receipt != nil {
+		t.Fatalf("rollback left settlement receipt: %+v", receipt)
+	}
+	if committed && (receipt == nil || receipt.Lobby.Party.ID != f.state.Party.ID) {
+		t.Fatalf("missing or mismatched settlement receipt: %+v", receipt)
+	}
+
 	for charID, before := range f.before {
 		c, err := f.chars.FindByID(context.Background(), charID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		history, err := f.repo.GetHistory(context.Background(), charID, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
 		if !committed {
-			if c != before || len(history) != 0 {
-				t.Fatalf("rollback lost assets/history for %s: %+v histories=%d", charID, c, len(history))
+			var loot int
+			if err := f.db.QueryRow(`SELECT COALESCE(SUM(quantity),0) FROM inventory_items WHERE character_id = ?`, charID).Scan(&loot); err != nil {
+				t.Fatal(err)
+			}
+			if c != before || loot != 0 {
+				t.Fatalf("rollback lost/leaked assets for %s: %+v loot=%d", charID, c, loot)
 			}
 			continue
 		}
-		if len(history) != 1 || c.HeroCount != before.HeroCount+1 || c.Money != before.Money+history[0].RewardGold || c.Tired != before.Tired || c.Experience != before.Experience+history[0].RewardExp || c.Stats.HP != before.Stats.HP || c.Stats.MP != before.Stats.MP {
-			t.Fatalf("settlement not exactly once: %+v history=%+v", c, history)
-		}
-		var receipt boss.SealingSettlement
-		if err := database.RunInTx(context.Background(), f.db, func(ctx context.Context) error {
-			r, err := f.repo.LockSealingSettlement(ctx, f.state.Party.ID)
-			if err == nil && r != nil {
-				receipt = *r
-			}
-			return err
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if receipt.Lobby.Party.ID != f.state.Party.ID || c.Crystal != before.Crystal+receipt.Result.RewardCrystals {
-			t.Fatal("crystals/receipt lost")
+		if c.HeroCount != before.HeroCount+1 || c.Money != before.Money+receipt.Result.RewardGold || c.Tired != before.Tired || c.Experience != before.Experience+receipt.Result.RewardExp || c.Crystal != before.Crystal+receipt.Result.RewardCrystals || c.Stats.HP != before.Stats.HP || c.Stats.MP != before.Stats.MP {
+			t.Fatalf("settlement not exactly once: %+v result=%+v", c, receipt.Result)
 		}
 		var loot int
-		if err := f.db.QueryRow(`SELECT COALESCE(SUM(quantity),0) FROM inventory_items WHERE character_id = ? AND definition_id = ?`, charID, history[0].RewardItemID).Scan(&loot); err != nil {
+		if err := f.db.QueryRow(`SELECT COALESCE(SUM(quantity),0) FROM inventory_items WHERE character_id = ? AND definition_id = ?`, charID, receipt.Result.RewardItemID).Scan(&loot); err != nil {
 			t.Fatal(err)
 		}
 		if loot != 1 {
 			t.Fatalf("reward loot=%d, want 1", loot)
-		}
-		rec, err := f.repo.GetOrCreateRecord(context.Background(), charID)
-		if err != nil || rec.TotalBossDefeats != 1 {
-			t.Fatalf("boss record=%+v err=%v", rec, err)
 		}
 	}
 }
