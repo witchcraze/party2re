@@ -16691,6 +16691,33 @@
           },
           "controls": {
             "$ref": "#/components/schemas/DungeonContinuationControls"
+          },
+          "channel_target": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Map13 main floor only: the channel combination the altar last disclosed, shared by every member. Absent before any disclosure; a later reroll's target stays hidden.",
+            "properties": {
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "blue",
+                    "yellow",
+                    "red",
+                    "white"
+                  ]
+                }
+              },
+              "rerolled_since": {
+                "type": "boolean",
+                "description": "A reroll changed the target after this disclosure."
+              }
+            },
+            "required": [
+              "channels",
+              "rerolled_since"
+            ]
           }
         },
         "required": [

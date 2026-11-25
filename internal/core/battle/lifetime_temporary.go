@@ -26,6 +26,8 @@ const (
 	TemporaryNullMagic     TemporaryEffect = "null_magic"
 	TemporaryPhantom       TemporaryEffect = "phantom"
 	TemporaryRage          TemporaryEffect = "rage"
+	// TemporaryNullBreath (息無効) has no legacy tmp handler; only its presence counts.
+	TemporaryNullBreath TemporaryEffect = "null_breath"
 )
 
 func (e TemporaryEffect) reflection() bool {

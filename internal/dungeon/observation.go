@@ -42,6 +42,14 @@ type ExpeditionObservation struct {
 	Map        *MapView             `json:"map"`
 	Directions []Direction          `json:"directions"`
 	Controls   ContinuationControls `json:"controls"`
+	// ChannelTarget is shared by every member, as the legacy party log was.
+	ChannelTarget *ChannelTarget `json:"channel_target,omitempty"`
+}
+
+// ChannelTarget is the channel combination the altar last disclosed (map13).
+type ChannelTarget struct {
+	Channels      []string `json:"channels"`
+	RerolledSince bool     `json:"rerolled_since"`
 }
 
 // ObserveExpedition reads one authoritative run, including terminal settlement buffers.
@@ -64,6 +72,11 @@ func (s *Service) ObserveExpedition(ctx context.Context, actor string) (*Expedit
 		return nil, err
 	}
 	view.Map = &m
+	if d.disclosure != nil {
+		if view.ChannelTarget, err = d.disclosure(exp); err != nil {
+			return nil, err
+		}
+	}
 	// A pitfall to a floor with a lower limit can leave the round above it.
 	view.Round, view.RoundLimit, view.Floor, view.FloorName = exp.Round, exp.RoundLimit, floor.floorNumber(), d.floorName(floor)
 	// Legacy registers all four directions; walls are rejected on use, so

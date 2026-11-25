@@ -63,6 +63,11 @@ func (ev mapEvent) tileSymbol(exp *ActiveExpedition, cell byte, x, y int, mark, 
 			return wall, err
 		}
 	}
+	if dynamic, ok := ev.action.(interface {
+		mark(*ActiveExpedition, byte) (string, error)
+	}); ok {
+		return dynamic.mark(exp, cell)
+	}
 	if gated, ok := ev.action.(interface {
 		visible(*ActiveExpedition, byte) (bool, error)
 	}); ok {
