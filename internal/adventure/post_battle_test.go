@@ -333,6 +333,22 @@ func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
 
 	settler := &mockPostBattleSettler{}
 	svc, _ := setupTestAdventureService(t, char, settler)
+	var unseals [][]corebattle.LifetimeActor
+	svc.SetUnsealHook(func(_ context.Context, name string, unsealers []corebattle.LifetimeActor) {
+		if name != "" {
+			t.Errorf("the batch crawl has no quest name, got %q", name)
+		}
+		unseals = append(unseals, unsealers)
+	})
+
+	// A settlement that rolls back opens no rooms.
+	settler.respFn = func(battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error) {
+		return battle.ApplyPostBattleResponse{}, errors.New("settlement failed")
+	}
+	if _, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{CharacterIDs: []string{char.ID}, StageID: "stage-19"}); err == nil || len(unseals) != 0 {
+		t.Fatalf("failed settlement: err=%v unseals=%d", err, len(unseals))
+	}
+	settler.respFn = nil
 
 	// 1. Clear Stage-19 (封印の地): Floor 11 treasure creation generates UnsealDemonKing = true
 	crawlRes19, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
@@ -354,6 +370,10 @@ func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
 	if !settler.lastReq.UnsealDemonKing {
 		t.Errorf("expected settler.lastReq.UnsealDemonKing = true for stage-19 treasure event, got false")
 	}
+	if len(unseals) != 1 || len(unseals[0]) != 1 || unseals[0][0].ID != char.ID || unseals[0][0].ExperienceReward != 99+20 ||
+		unseals[0][0].GoldReward != 49 || unseals[0][0].Jobs.JobID != char.JobID || unseals[0][0].MaxHP == 0 {
+		t.Fatalf("expected one post-commit unseal with the crawler's battle row, got %+v", unseals)
+	}
 
 	// 2. Clear Stage-20 (天空城 victory): must NOT set UnsealDemonKing
 	crawlRes20, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
@@ -366,8 +386,8 @@ func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
 	if !crawlRes20.StageCleared {
 		t.Fatalf("expected stage-20 to be cleared, outcome: %v", crawlRes20.Outcome)
 	}
-	if crawlRes20.UnsealDemonKing {
-		t.Errorf("expected crawlRes20.UnsealDemonKing = false for stage-20 victory, got true")
+	if crawlRes20.UnsealDemonKing || len(unseals) != 1 {
+		t.Errorf("expected stage-20 victory to open no rooms, got unseal=%v hooks=%d", crawlRes20.UnsealDemonKing, len(unseals))
 	}
 	if settler.lastReq.UnsealDemonKing {
 		t.Errorf("expected settler.lastReq.UnsealDemonKing = false for stage-20 victory, got true")

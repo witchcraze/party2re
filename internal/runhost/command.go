@@ -25,6 +25,8 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		return Receipt{}, ErrConflict
 	}
 	var result Receipt
+	var unsealers []corebattle.LifetimeActor
+	var runName string
 	err := s.cfg.Store.WithRunForUpdate(ctx, cmd.RunID, false, func(ctx context.Context) error {
 		old, err := s.cfg.Store.FindRunReceipt(ctx, cmd.RunID, cmd.ID)
 		if err != nil {
@@ -62,6 +64,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		}
 		var ids []string
 		var requester corecharacter.Character
+		chars := make(map[string]corecharacter.Character, len(r.Roster))
 		ctx = commandContext(ctx, r.ID)
 		if err := economy.LockInOrder(ctx, r.Roster, func(ctx context.Context, id string) error {
 			c, err := s.cfg.Characters.FindByIDForUpdate(ctx, id)
@@ -74,6 +77,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 			if id == cmd.ActorID {
 				requester = c
 			}
+			chars[id] = c
 			ids = append(ids, id)
 			return nil
 		}); err != nil {
@@ -207,6 +211,9 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 			}
 		}
 		r.PruneFallenNPCs(cmd.ActorID)
+		if effects.UnsealDemonKing {
+			unsealers, runName = r.unsealingParty(chars), r.Admission.Name
+		}
 		if effects.RoomActivity && len(r.Roster) > 0 {
 			r.LastActivity = now
 		}
@@ -230,6 +237,9 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		result = Receipt{Command: cmd, Version: r.Version, Round: r.Round, Box: box, Recipient: r.Recipients[cmd.ActorID], Disposition: r.Recipients[cmd.ActorID].Disposition, MonsterTames: tames, Inspections: effects.Inspections}
 		return s.cfg.Store.SaveRunReceipt(ctx, result)
 	})
+	if err == nil && len(unsealers) > 0 && s.cfg.Unsealed != nil {
+		s.cfg.Unsealed(ctx, runName, unsealers)
+	}
 	result, err = s.resolveReceipt(ctx, cmd, result, err)
 	if err == nil && cmd.Action == "cleanup" {
 		err = s.RecoverTimeout(ctx, cmd.PlayerID, cmd.ActorID, cmd.RunID)

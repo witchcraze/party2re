@@ -141,7 +141,12 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		}
 	}
 
+	var unsealers []corebattle.LifetimeActor
+	if s.UnsealDemonKing {
+		unsealers = s.unsealers()
+	}
 	return DungeonCrawlResult{
+		Unsealers:        unsealers,
 		AdventureIDs:     make(map[string]string),
 		StageID:          s.StageID,
 		StageName:        s.StageName,

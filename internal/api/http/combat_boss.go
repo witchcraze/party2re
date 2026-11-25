@@ -111,8 +111,7 @@ type sealingBattleResponse struct {
 	Result bossBattleResultResponse `json:"result"`
 }
 
-// handleStartSealingBattle starts an authentic Party Sealing Battle (封印戦).
-// Only the party leader may trigger this; all members must be ready.
+// handleStartSealingBattle starts a sealing room's battle (封印戦); any room member may trigger it.
 // POST /parties/{id}/sealing-battle
 func (h *Handler) handleStartSealingBattle(w http.ResponseWriter, r *http.Request) {
 	if h.bosses == nil {
@@ -132,9 +131,9 @@ func (h *Handler) handleStartSealingBattle(w http.ResponseWriter, r *http.Reques
 		res, err := h.bosses.StartSealingBattle(r.Context(), partyID, char.ID)
 		if err != nil {
 			switch {
-			case errors.Is(err, boss.ErrPartyNotFound):
+			case errors.Is(err, boss.ErrPartyNotFound), errors.Is(err, boss.ErrBossNotFound):
 				writeError(w, http.StatusNotFound, err)
-			case errors.Is(err, boss.ErrNotPartyLeader), errors.Is(err, boss.ErrPartyNotReady):
+			case errors.Is(err, boss.ErrNotRoomMember), errors.Is(err, boss.ErrPartyNotReady):
 				writeError(w, http.StatusForbidden, err)
 			case errors.Is(err, boss.ErrNeedJoinNotMet), errors.Is(err, boss.ErrCharacterExhausted), errors.Is(err, boss.ErrCharacterUnconscious), errors.Is(err, boss.ErrPartyNotRecruiting):
 				writeError(w, http.StatusUnprocessableEntity, err)

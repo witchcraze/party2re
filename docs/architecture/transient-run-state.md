@@ -37,7 +37,7 @@ receipt leads only to cleanup. If outcome confirmation or release fails, the
 error is returned and the room is preserved for another attempt; an unknown
 commit is never treated as permission to repeat rewards.
 
-A retry of the same sealing request by the saved leader returns the recorded
+A retry of the same sealing request by a saved member returns the recorded
 result and retries cleanup using the saved roster, even if the lobby is already
 missing. Cleanup failures propagate with the committed result retained in SQL.
 Reverse mappings are removed only if they still name that room, preserving new

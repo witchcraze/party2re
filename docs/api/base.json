@@ -1166,7 +1166,15 @@
           "id": {
             "type": "string"
           },
+          "kind": {
+            "description": "\"sealing\" for a system-owned sealing room led by an NPC (no character leader); omitted for ordinary lobbies.",
+            "type": "string"
+          },
           "leader_character_id": {
+            "type": "string"
+          },
+          "leader_name": {
+            "description": "NPC leader of a system-owned room.",
             "type": "string"
           },
           "max_level": {
@@ -11205,6 +11213,10 @@
             "type": "boolean"
           },
           "id": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "\"sealing\" for a system-owned sealing room led by an NPC (no character leader); omitted for ordinary lobbies.",
             "type": "string"
           },
           "leader_character_id": {

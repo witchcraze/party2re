@@ -114,7 +114,7 @@ func newSealingStorageFixture(t *testing.T) *sealingStorageFixture {
 	}
 	f := &sealingStorageFixture{db: db, client: client, repo: repo, chars: chars, before: map[string]corecharacter.Character{}, indexKey: "party2:test:boss:rooms:" + id.New()}
 	f.rooms = f.roomRepository(client)
-	f.state.Party = party.Party{ID: id.New(), StageID: "king1", Status: party.StatusRecruiting, MaxMembers: 6, CreatedAt: time.Now().UTC()}
+	f.state.Party = party.Party{ID: id.New(), Kind: party.KindSealing, StageID: "king1", Enemies: catalogRoster("king1"), Status: party.StatusRecruiting, MaxMembers: 6, CreatedAt: time.Now().UTC()}
 	ctx := context.Background()
 	for i := 0; i < 2; i++ {
 		c, err := database.CreateTestCharacterWithFunds(ctx, db, "SealRecovery", 1000)
@@ -131,10 +131,7 @@ func newSealingStorageFixture(t *testing.T) *sealingStorageFixture {
 			t.Fatal(err)
 		}
 		f.before[c.ID] = c
-		f.state.Members = append(f.state.Members, party.Member{PartyID: f.state.Party.ID, CharacterID: c.ID, CharacterName: c.Name, ReadyState: true, IsLeader: i == 0})
-		if i == 0 {
-			f.state.Party.LeaderCharacterID = c.ID
-		}
+		f.state.Members = append(f.state.Members, party.Member{PartyID: f.state.Party.ID, CharacterID: c.ID, CharacterName: c.Name, ReadyState: true})
 	}
 	if err := f.rooms.SaveParty(ctx, f.state.Party); err != nil {
 		t.Fatal(err)
@@ -172,7 +169,7 @@ func (f *sealingStorageFixture) service(t *testing.T, rooms boss.PartyRepository
 }
 
 func (f *sealingStorageFixture) start(s *boss.Service) (boss.SealingBattleResult, error) {
-	return s.StartSealingBattle(context.Background(), f.state.Party.ID, f.state.Party.LeaderCharacterID)
+	return s.StartSealingBattle(context.Background(), f.state.Party.ID, f.state.Members[0].CharacterID)
 }
 
 func (f *sealingStorageFixture) assertAssets(t *testing.T, committed bool) {
@@ -192,7 +189,7 @@ func (f *sealingStorageFixture) assertAssets(t *testing.T, committed bool) {
 			}
 			continue
 		}
-		if len(history) != 1 || c.HeroCount != before.HeroCount+1 || c.Money != before.Money+history[0].RewardGold || c.Tired != before.Tired+20 || c.Experience != before.Experience+history[0].RewardExp || c.Stats.HP != before.Stats.HP || c.Stats.MP != before.Stats.MP {
+		if len(history) != 1 || c.HeroCount != before.HeroCount+1 || c.Money != before.Money+history[0].RewardGold || c.Tired != before.Tired || c.Experience != before.Experience+history[0].RewardExp || c.Stats.HP != before.Stats.HP || c.Stats.MP != before.Stats.MP {
 			t.Fatalf("settlement not exactly once: %+v history=%+v", c, history)
 		}
 		var receipt boss.SealingSettlement
@@ -351,7 +348,7 @@ func TestSealingCommitBoundaryRecoveryIntegration(t *testing.T) {
 			if mode == "cancel" {
 				tx.cancel = cancel
 			}
-			_, err := s.StartSealingBattle(ctx, f.state.Party.ID, f.state.Party.LeaderCharacterID)
+			_, err := s.StartSealingBattle(ctx, f.state.Party.ID, f.state.Members[0].CharacterID)
 			if mode == "commit-response-lost" || mode == "probe-response-lost" {
 				if err != nil {
 					t.Fatalf("known committed result lost: %v", err)
@@ -428,10 +425,10 @@ func TestSealingCleanupPreservesNewMembershipIntegration(t *testing.T) {
 	if _, err := f.start(s); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.StartSealingBattle(ctx, f.state.Party.ID, f.state.Members[1].CharacterID); !errors.Is(err, boss.ErrNotPartyLeader) {
+	if _, err := s.StartSealingBattle(ctx, f.state.Party.ID, id.New()); !errors.Is(err, boss.ErrNotRoomMember) {
 		t.Fatalf("receipt authorization: %v", err)
 	}
-	p, m, err := f.rooms.GetActivePartyByCharacter(ctx, newState.Party.LeaderCharacterID)
+	p, m, err := f.rooms.GetActivePartyByCharacter(ctx, newState.Members[0].CharacterID)
 	if err != nil || p.ID != newState.Party.ID || !m.ReadyState {
 		t.Fatalf("cleanup erased successor membership: %+v %+v %v", p, m, err)
 	}

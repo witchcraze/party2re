@@ -99,7 +99,7 @@ func newSealFixture(ids ...string) *sealFixture {
 	}
 	f.bossRepo.charRepo = f.charRepo
 	f.partyRepo.parties[f.pID] = party.Party{
-		ID: f.pID, LeaderCharacterID: ids[0], StageID: "king1",
+		ID: f.pID, Kind: party.KindSealing, StageID: "king1", Enemies: catalogRoster("king1"),
 		Status: party.StatusRecruiting, CreatedAt: time.Now().UTC(),
 	}
 	for i, id := range ids {

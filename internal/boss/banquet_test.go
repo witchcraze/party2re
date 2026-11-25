@@ -82,14 +82,3 @@ func TestBossBanquet_CommitAndFailureBoundary(t *testing.T) {
 		}
 	}
 }
-
-func TestUnsealDemonKing_NewsFailureIsBestEffort(t *testing.T) {
-	f := newSealFixture("hero")
-	s := f.service(t, f.bossRepo, f.partyRepo, boss.WithNewsPublisher(boss.NewsPublisherFunc(failingNews)))
-	if err := s.UnsealDemonKing(context.Background(), []string{"hero"}); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.charRepo.chars["hero"].MaoCount; got != f.original["hero"].MaoCount+1 {
-		t.Fatalf("news failure lost unseal count: %d", got)
-	}
-}

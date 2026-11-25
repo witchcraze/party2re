@@ -5,10 +5,32 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 func (r *State) Actor(id string) *corebattle.LifetimeActor {
 	return findActor(r.Battle.Actors, id)
+}
+
+// unsealingParty is the run's party at a treasure creation (legacy @partys):
+// every non-enemy actor, leader first, players with their battle-row rewards.
+func (r *State) unsealingParty(chars map[string]corecharacter.Character) []corebattle.LifetimeActor {
+	var party []corebattle.LifetimeActor
+	for _, a := range r.Battle.Actors {
+		if slices.Contains(r.Enemies, a.ID) {
+			continue
+		}
+		a = a.Clone()
+		if c, ok := chars[a.ID]; ok {
+			a.ExperienceReward, a.GoldReward = c.BattleRowRewards()
+		}
+		if a.ID == r.LeaderID {
+			party = slices.Insert(party, 0, a)
+		} else {
+			party = append(party, a)
+		}
+	}
+	return party
 }
 
 // Ready rejects an actor whose action interval has not elapsed at now.

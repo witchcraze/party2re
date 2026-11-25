@@ -6,7 +6,6 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/id"
@@ -62,20 +61,12 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			p = buildFallbackParticipant(char)
 		}
 		allies := []corebattle.Participant{p}
-		orderedChars := []corecharacter.Character{char}
-		bossParticipants := s.buildBossParticipants(stage, orderedChars)
-		var cloneRecords map[string]DefeatedMonsterRecord
-		if stage.ID == "king99" {
-			cloneRecords = buildKing99CloneRecords(orderedChars)
-		}
-
+		roster := stageRoster(stage, []corebattle.LifetimeActor{unsealerFromCharacter(char)})
+		exp, gold := rosterRewards(roster)
 		req := corebattle.PartyBattleRequest{
-			Allies:  allies,
-			Enemies: bossParticipants,
-			VictoryReward: corebattle.Reward{
-				Experience: s.calculateTotalExp(stage, orderedChars),
-				Currency:   s.calculateTotalGold(stage, orderedChars),
-			},
+			Allies:        allies,
+			Enemies:       rosterParticipants(roster),
+			VictoryReward: corebattle.Reward{Experience: exp, Currency: gold},
 		}
 
 		partyEngine, ok := s.battleEngine.(corebattle.PartyBattleResolver)
@@ -127,7 +118,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			candidates = append(candidates, orb)
 			rewardItemID = s.pickTreasure(candidates)
 
-			rewardCrystals = calculateTotalCrystals(stage, []corecharacter.Character{char}, &startTime, s.now())
+			rewardCrystals = rosterCrystals(roster, &startTime, s.now())
 
 			char.HeroCount++
 			if err := char.AddMoney(battleRes.TotalReward.Currency); err != nil {
@@ -151,7 +142,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 				}
 			}
 
-			if err := s.recordBossDefeats(txCtx, stage, char.ID, cloneRecords); err != nil {
+			if err := s.recordBossDefeats(txCtx, stage.ID, char.ID, roster); err != nil {
 				return err
 			}
 		}

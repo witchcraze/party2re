@@ -51,6 +51,8 @@ type NormalRunConfig struct {
 	CheckEntry  func(context.Context, string) error
 	ExitEffects func(context.Context, string) error
 	EntryLocks  TimerService
+	// Unsealed runs after a command's stage19 treasure creation commits.
+	Unsealed UnsealHook
 
 	JobAssetRunner    economy.TransactionRunner
 	JobAssetHelpers   func(context.Context) ([]int, error)
@@ -80,7 +82,7 @@ func NewNormalRunService(cfg NormalRunConfig) (*NormalRunService, error) {
 		Builder: cfg.Builder, Settler: cfg.Settler, Jobs: cfg.Jobs, Lobby: cfg.Admission, Penalty: cfg.Penalty,
 		Clock: cfg.Clock, RNG: cfg.RNG, CheckEntry: cfg.CheckEntry, ExitEffects: cfg.ExitEffects, Room: room, CombatRoom: room,
 		Blessings: cfg.Blessings, JobAssetRunner: cfg.JobAssetRunner, JobAssetHelpers: cfg.JobAssetHelpers,
-		JobAssetDepots: cfg.JobAssetDepots, JobAssetEquipment: cfg.JobAssetEquipment,
+		JobAssetDepots: cfg.JobAssetDepots, JobAssetEquipment: cfg.JobAssetEquipment, Unsealed: cfg.Unsealed,
 	})
 	if err != nil {
 		return nil, err

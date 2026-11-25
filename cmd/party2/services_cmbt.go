@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -290,6 +292,14 @@ func newCmbtServices(
 			return err
 		})),
 	)
+	// Every stage19 unseal opens the missing sealing rooms after its settlement commits.
+	unseal := adventure.UnsealHook(func(ctx context.Context, name string, unsealers []corebattle.LifetimeActor) {
+		if err := bossService.OpenSealingRooms(ctx, name, unsealers); err != nil {
+			slog.WarnContext(ctx, "sealing room opening failed", "error_type", reflect.TypeOf(err).String())
+		}
+	})
+	advService.SetUnsealHook(unseal)
+	partyService.SetUnsealHook(unseal)
 
 	admission := combatAdmission{party: partyService, characters: core.charRepo, tx: core.txProvider,
 		busy: func(ctx context.Context, actor string) error {
@@ -351,7 +361,7 @@ func newCmbtServices(
 		Stages: adventureStages, Monsters: adventureMonsters, Admission: normalAdmissionAdapter{service: partyService, store: partyRepo},
 		Jobs:    core.jobCatalog,
 		Penalty: normalPenaltyAdapter{timers: soc.timer}, Clock: adventure.RealClock{}, CheckEntry: admission.busy,
-		EntryLocks:     soc.timer,
+		EntryLocks: soc.timer, Unsealed: unseal,
 		JobAssetRunner: core.economy, JobAssetHelpers: helperToolNumbers(helperRepo), JobAssetDepots: econ.depotRepo, JobAssetEquipment: econ.equipRepo,
 	})
 	if err != nil {

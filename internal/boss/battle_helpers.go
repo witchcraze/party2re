@@ -10,127 +10,6 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-func buildKing99CloneRecord(a corecharacter.Character) DefeatedMonsterRecord {
-	hp := a.Stats.MaxHP * 50
-	if hp <= 0 {
-		hp = 5000
-	}
-	mp := a.Stats.MaxMP * 50
-	if mp <= 0 {
-		mp = 500
-	}
-	at := a.Stats.Attack * 2
-	df := a.Stats.Defense * 2
-	ag := a.Stats.Agility * 2
-	strong := int(float64(hp) + float64(mp) + float64(at) + float64(df)*0.5 + float64(ag))
-	exp := (a.Level + a.JobLevel) * 30
-	gold := int(float64(a.Level)*0.5) * 30
-	return DefeatedMonsterRecord{
-		MonsterID:        "king99-clone",
-		MonsterName:      "影",
-		Habitat:          "封印戦",
-		Icon:             "king99-clone",
-		Strong:           strong,
-		HP:               hp,
-		MP:               mp,
-		Attack:           at,
-		Defense:          df,
-		Agility:          ag,
-		ExperienceReward: exp,
-		GoldReward:       gold,
-	}
-}
-
-func buildKing99CloneRecords(allies []corecharacter.Character) map[string]DefeatedMonsterRecord {
-	records := make(map[string]DefeatedMonsterRecord, len(allies))
-	for _, a := range allies {
-		records[a.ID] = buildKing99CloneRecord(a)
-	}
-	return records
-}
-
-func (s *Service) buildBossParticipants(stage BossStage, allies []corecharacter.Character) []corebattle.Participant {
-	if stage.ID == "king99" {
-		participants := make([]corebattle.Participant, 0, len(allies))
-		for i, a := range allies {
-			rec := buildKing99CloneRecord(a)
-
-			skills := []corebattle.ActionSkill{
-				{
-					ID:     "dejon",
-					Name:   "デジョン",
-					Kind:   corebattle.ActionKindDejon,
-					MPCost: 0,
-				},
-			}
-			jobIDNum := parseJobID(a.JobID)
-			oldJobIDNum := parseJobID(a.OldJobID)
-			skills = append(skills, bossSkillsForJob(jobIDNum, a.SP)...)
-			skills = append(skills, bossSkillsForJob(oldJobIDNum, a.OldSP)...)
-
-			p := corebattle.Participant{
-				ID:        fmt.Sprintf("king99-clone-%d", i),
-				Name:      "@" + a.Name,
-				HP:        rec.HP,
-				MaxHP:     rec.HP,
-				MP:        rec.MP,
-				MaxMP:     rec.MP,
-				Attack:    rec.Attack,
-				Defense:   rec.Defense,
-				Agility:   rec.Agility,
-				Abilities: []string{"大防御"},
-				Skills:    skills,
-			}
-			participants = append(participants, p)
-		}
-		return participants
-	}
-
-	participants := make([]corebattle.Participant, 0, len(stage.Bosses))
-	for i, b := range stage.Bosses {
-		var abilities []string
-		if b.TMP != "" {
-			abilities = []string{b.TMP}
-		}
-
-		sp := b.SP
-		if sp <= 0 && b.Job > 0 {
-			sp = 999
-		}
-		oldSP := b.OldSP
-		if oldSP <= 0 && b.OldJob > 0 {
-			oldSP = 999
-		}
-
-		skills := []corebattle.ActionSkill{
-			{
-				ID:     "dejon",
-				Name:   "デジョン",
-				Kind:   corebattle.ActionKindDejon,
-				MPCost: 0,
-			},
-		}
-		skills = append(skills, bossSkillsForJob(b.Job, sp)...)
-		skills = append(skills, bossSkillsForJob(b.OldJob, oldSP)...)
-
-		p := corebattle.Participant{
-			ID:        fmt.Sprintf("%s-boss-%d", stage.ID, i),
-			Name:      b.Name,
-			HP:        b.HP,
-			MaxHP:     b.MaxHP,
-			MP:        b.MP,
-			MaxMP:     b.MaxMP,
-			Attack:    b.Attack,
-			Defense:   b.Defense,
-			Agility:   b.Agility,
-			Abilities: abilities,
-			Skills:    skills,
-		}
-		participants = append(participants, p)
-	}
-	return participants
-}
-
 func (s *Service) pickTreasure(treasures []string) string {
 	if len(treasures) == 0 {
 		return ""
@@ -146,34 +25,21 @@ func (s *Service) pickTreasure(treasures []string) string {
 	return treasures[idx]
 }
 
-func (s *Service) calculateTotalExp(stage BossStage, allies []corecharacter.Character) int {
-	if stage.ID == "king99" {
-		total := 0
-		for _, a := range allies {
-			total += buildKing99CloneRecord(a).ExperienceReward
-		}
-		return total
+// rosterRewards sums the EXP and gold the roster's enemies carry.
+func rosterRewards(roster []corebattle.LifetimeActor) (exp, gold int) {
+	for _, e := range roster {
+		exp += e.ExperienceReward
+		gold += e.GoldReward
 	}
-	total := 0
-	for _, b := range stage.Bosses {
-		total += b.GetExp
-	}
-	return total
+	return exp, gold
 }
 
-func (s *Service) calculateTotalGold(stage BossStage, allies []corecharacter.Character) int {
-	if stage.ID == "king99" {
-		total := 0
-		for _, a := range allies {
-			total += buildKing99CloneRecord(a).GoldReward
-		}
-		return total
+func rosterParticipants(roster []corebattle.LifetimeActor) []corebattle.Participant {
+	participants := make([]corebattle.Participant, len(roster))
+	for i, e := range roster {
+		participants[i] = e.Participant
 	}
-	total := 0
-	for _, b := range stage.Bosses {
-		total += b.GetMoney
-	}
-	return total
+	return participants
 }
 
 func calculateCrystalMultiplier(elapsed time.Duration) float64 {
@@ -190,20 +56,15 @@ func calculateCrystalMultiplier(elapsed time.Duration) float64 {
 	return 1.0
 }
 
-func calculateTotalCrystals(stage BossStage, allies []corecharacter.Character, unsealedAt *time.Time, now time.Time) int {
+// rosterCrystals applies the unseal-clock multiplier to each enemy's crystals.
+func rosterCrystals(roster []corebattle.LifetimeActor, unsealedAt *time.Time, now time.Time) int {
 	mult := 1.0
 	if unsealedAt != nil {
-		elapsed := max(now.Sub(*unsealedAt), 0)
-		mult = calculateCrystalMultiplier(elapsed)
-	}
-
-	if stage.ID == "king99" {
-		perClone := int(float64(20) * mult)
-		return len(allies) * perClone
+		mult = calculateCrystalMultiplier(max(now.Sub(*unsealedAt), 0))
 	}
 	total := 0
-	for _, b := range stage.Bosses {
-		total += int(float64(b.GetCrystal) * mult)
+	for _, e := range roster {
+		total += int(float64(e.CrystalReward) * mult)
 	}
 	return total
 }

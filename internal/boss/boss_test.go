@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -193,6 +192,16 @@ func (m *mockPartyRepo) DeleteParty(_ context.Context, id string) error {
 func (m *mockPartyRepo) UpdateParty(_ context.Context, p party.Party) error {
 	m.parties[p.ID] = p
 	return nil
+}
+
+func (m *mockPartyRepo) OpenSystemRoom(_ context.Context, p party.Party) (bool, error) {
+	for id, other := range m.parties {
+		if other.StageID == p.StageID && !m.deleted[id] {
+			return false, nil
+		}
+	}
+	m.parties[p.ID] = p
+	return true, nil
 }
 
 type mockNewsPublisher struct {
@@ -551,6 +560,8 @@ func TestStartSealingBattle_PartyVictoryAndResealing(t *testing.T) {
 		ID:                pID,
 		LeaderCharacterID: "leader",
 		StageID:           "king1",
+		Kind:              party.KindSealing,
+		Enemies:           catalogRoster("king1"),
 		Status:            party.StatusRecruiting,
 	}
 	partyRepo.members[pID] = []party.Member{
@@ -599,8 +610,8 @@ func TestStartSealingBattle_PartyVictoryAndResealing(t *testing.T) {
 		if c.HeroCount != 1 {
 			t.Errorf("expected character %s HeroCount=1, got %d", cID, c.HeroCount)
 		}
-		if c.Tired < 20 {
-			t.Errorf("expected character %s Tired >= 20, got %d", cID, c.Tired)
+		if c.Tired != 0 {
+			t.Errorf("sealing settlement charged %s entry fatigue: Tired=%d", cID, c.Tired)
 		}
 	}
 
@@ -672,6 +683,9 @@ func TestStartSealingBattle_WithNowFunc_WeekdayOrb(t *testing.T) {
 	// 2026-09-27 23:00:00 UTC = 2026-09-28 08:00:00 JST (Monday) -> item-060
 	jstMonday := time.Date(2026, 9, 27, 23, 0, 0, 0, time.UTC)
 
+	room := partyRepo.parties[pID]
+	room.Kind, room.Enemies = party.KindSealing, boss.RosterForTest(customStage)
+	partyRepo.parties[pID] = room
 	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{}, customStage)
 	if err != nil {
 		t.Fatal(err)
@@ -715,6 +729,8 @@ func TestStartSealingBattle_DejonBanishmentInParty(t *testing.T) {
 		ID:                pID,
 		LeaderCharacterID: "leader",
 		StageID:           "king1",
+		Kind:              party.KindSealing,
+		Enemies:           catalogRoster("king1"),
 		Status:            party.StatusRecruiting,
 	}
 	partyRepo.members[pID] = []party.Member{
@@ -758,44 +774,41 @@ func TestStartSealingBattle_DejonBanishmentInParty(t *testing.T) {
 
 	// victim: entry cost +20 + dejon banishment +30 = 50 Tired, HP = 0
 	victim := charRepo.chars["victim"]
-	if victim.Tired != 50 {
-		t.Errorf("expected victim Tired=50 (20 entry + 30 dejon), got %d", victim.Tired)
+	if victim.Tired != 30 {
+		t.Errorf("expected victim Tired=30 (dejon only; entry is charged at join), got %d", victim.Tired)
 	}
 	if victim.Stats.HP != 0 {
 		t.Errorf("expected fallen victim HP=0, got %d", victim.Stats.HP)
 	}
 
-	// leader: entry cost only +20 Tired
-	leader := charRepo.chars["leader"]
-	if leader.Tired != 20 {
-		t.Errorf("expected leader Tired=20, got %d", leader.Tired)
+	if leader := charRepo.chars["leader"]; leader.Tired != 0 {
+		t.Errorf("settlement charged the survivor entry fatigue: Tired=%d", leader.Tired)
 	}
 }
 
-// TestStartSealingBattle_Validations verifies guard conditions:
-// non-leader cannot start, and all members must be ready.
+// TestStartSealingBattle_Validations verifies that any room member, ready or
+// not, may start a sealing room's battle, while outsiders and ordinary lobbies cannot.
 func TestStartSealingBattle_Validations(t *testing.T) {
 	ctx := context.Background()
 	bossRepo := newMockBossRepo()
 
 	chars := map[string]corecharacter.Character{
-		"leader": createTestChar("leader", 50, 600, 300, 200),
-		"member": createTestChar("member", 50, 600, 300, 200),
+		"joiner":   createTestChar("joiner", 50, 600, 300, 200),
+		"other":    createTestChar("other", 50, 600, 300, 200),
+		"outsider": createTestChar("outsider", 50, 600, 300, 200),
 	}
 	charRepo := &mockCharRepo{chars: chars}
+	bossRepo.charRepo = charRepo
 
 	partyRepo := newMockPartyRepo()
 	pID := "party-val-1"
-	partyRepo.parties[pID] = party.Party{
-		ID:                pID,
-		LeaderCharacterID: "leader",
-		StageID:           "king1",
-		Status:            party.StatusRecruiting,
-	}
+	partyRepo.parties[pID] = party.Party{ID: pID, Kind: party.KindSealing, StageID: "king1", Enemies: catalogRoster("king1"), Status: party.StatusRecruiting}
 	partyRepo.members[pID] = []party.Member{
-		{PartyID: pID, CharacterID: "leader", CharacterName: "Hero_leader", ReadyState: true, IsLeader: true},
-		{PartyID: pID, CharacterID: "member", CharacterName: "Hero_member", ReadyState: false},
+		{PartyID: pID, CharacterID: "joiner", CharacterName: "Hero_joiner"},
+		{PartyID: pID, CharacterID: "other", CharacterName: "Hero_other"},
 	}
+	partyRepo.parties["ordinary"] = party.Party{ID: "ordinary", LeaderCharacterID: "outsider", StageID: "king1", Status: party.StatusRecruiting}
+	partyRepo.members["ordinary"] = []party.Member{{PartyID: "ordinary", CharacterID: "outsider", IsLeader: true, ReadyState: true}}
 
 	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
 	if err != nil {
@@ -803,16 +816,14 @@ func TestStartSealingBattle_Validations(t *testing.T) {
 	}
 	service.Configure(boss.WithPartyRepository(partyRepo))
 
-	// 1. Non-leader cannot start sealing battle
-	_, err = service.StartSealingBattle(ctx, pID, "member")
-	if !errors.Is(err, boss.ErrNotPartyLeader) {
-		t.Errorf("expected ErrNotPartyLeader, got %v", err)
+	if _, err := service.StartSealingBattle(ctx, "ordinary", "outsider"); !errors.Is(err, boss.ErrBossNotFound) {
+		t.Errorf("ordinary lobby started a sealing battle: %v", err)
 	}
-
-	// 2. Member not ready
-	_, err = service.StartSealingBattle(ctx, pID, "leader")
-	if !errors.Is(err, boss.ErrPartyNotReady) {
-		t.Errorf("expected ErrPartyNotReady, got %v", err)
+	if _, err := service.StartSealingBattle(ctx, pID, "outsider"); !errors.Is(err, boss.ErrNotRoomMember) {
+		t.Errorf("expected ErrNotRoomMember for an outsider, got %v", err)
+	}
+	if _, err := service.StartSealingBattle(ctx, pID, "other"); err != nil {
+		t.Errorf("a room member who is not ready could not start: %v", err)
 	}
 }
 
@@ -900,6 +911,8 @@ func TestStartSealingBattle_CapacityEnforcement(t *testing.T) {
 		ID:                pID6,
 		LeaderCharacterID: "hero-0",
 		StageID:           "king1",
+		Kind:              party.KindSealing,
+		Enemies:           catalogRoster("king1"),
 		Status:            party.StatusRecruiting,
 	}
 	partyRepo.members[pID6] = members6
@@ -928,6 +941,8 @@ func TestStartSealingBattle_CapacityEnforcement(t *testing.T) {
 		ID:                pID5,
 		LeaderCharacterID: "hero-0",
 		StageID:           "king99",
+		Kind:              party.KindSealing,
+		Enemies:           catalogRoster("king99", boss.UnsealerForTest(chars["hero-0"])),
 		Status:            party.StatusRecruiting,
 	}
 	partyRepo.members[pID5] = members5
@@ -965,6 +980,8 @@ func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
 			ID:                pID,
 			LeaderCharacterID: "c1",
 			StageID:           "king1",
+			Kind:              party.KindSealing,
+			Enemies:           catalogRoster("king1"),
 			Status:            party.StatusRecruiting,
 			CreatedAt:         partyCreatedAt,
 		}
@@ -1042,7 +1059,7 @@ func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
 		charRepo := &mockCharRepo{chars: chars}
 		partyRepo := newMockPartyRepo()
 		partyRepo.parties["p-re"] = party.Party{
-			ID: "p-re", LeaderCharacterID: "c1", StageID: "king1",
+			ID: "p-re", LeaderCharacterID: "c1", StageID: "king1", Kind: party.KindSealing, Enemies: catalogRoster("king1"),
 			Status: party.StatusRecruiting, CreatedAt: expired,
 		}
 		partyRepo.members["p-re"] = []party.Member{
@@ -1074,7 +1091,7 @@ func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
 		charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"c1": createTestChar("c1", 50, 600, 300, 200)}}
 		partyRepo := newMockPartyRepo()
 		partyRepo.parties["p-alt"] = party.Party{
-			ID: "p-alt", LeaderCharacterID: "c1", StageID: "king1",
+			ID: "p-alt", LeaderCharacterID: "c1", StageID: "king1", Kind: party.KindSealing, Enemies: catalogRoster("king1"),
 			Status: party.StatusRecruiting, CreatedAt: fakeNow,
 		}
 		partyRepo.members["p-alt"] = []party.Member{
@@ -1099,7 +1116,7 @@ func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
 
 		altClock.unsealErr = errors.New("clock db failure")
 		partyRepo.parties["p-err"] = party.Party{
-			ID: "p-err", LeaderCharacterID: "c1", StageID: "king1",
+			ID: "p-err", LeaderCharacterID: "c1", StageID: "king1", Kind: party.KindSealing, Enemies: catalogRoster("king1"),
 			Status: party.StatusRecruiting, CreatedAt: fakeNow,
 		}
 		partyRepo.members["p-err"] = []party.Member{
@@ -1143,6 +1160,8 @@ func TestStartSealingBattle_RecordMonsterDefeat(t *testing.T) {
 		ID:                pID,
 		LeaderCharacterID: "c1",
 		StageID:           "king1",
+		Kind:              party.KindSealing,
+		Enemies:           catalogRoster("king1"),
 		Status:            party.StatusRecruiting,
 		CreatedAt:         time.Now().UTC(),
 	}
@@ -1227,76 +1246,6 @@ func TestChallengeBoss_RecordMonsterDefeat(t *testing.T) {
 	}
 }
 
-func TestUnsealDemonKing_Success(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-
-	char1 := createTestChar("c1", 50, 600, 300, 200)
-	char1.MaoCount = 0
-	char2 := createTestChar("c2", 50, 600, 300, 200)
-	char2.MaoCount = 2
-
-	chars := map[string]corecharacter.Character{
-		"c1": char1,
-		"c2": char2,
-	}
-	charRepo := &mockCharRepo{chars: chars}
-	newsPub := &mockNewsPublisher{}
-
-	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.Configure(boss.WithNewsPublisher(newsPub))
-
-	// Normalized duplicates must increment and publish each hero only once.
-	err = service.UnsealDemonKing(ctx, []string{"c2", "@summoned_pet", "c1", " c2 ", "", " c1"})
-	if err != nil {
-		t.Fatalf("UnsealDemonKing failed: %v", err)
-	}
-
-	updated1 := charRepo.chars["c1"]
-	if updated1.MaoCount != 1 {
-		t.Errorf("expected c1 MaoCount = 1, got %d", updated1.MaoCount)
-	}
-	updated2 := charRepo.chars["c2"]
-	if updated2.MaoCount != 3 {
-		t.Errorf("expected c2 MaoCount = 3, got %d", updated2.MaoCount)
-	}
-
-	// Verify news publication
-	if len(newsPub.published) == 0 {
-		t.Fatal("expected news to be published on unsealing demon king")
-	}
-	lastNews := newsPub.published[len(newsPub.published)-1]
-	if !strings.Contains(lastNews, "封印が解かれました") {
-		t.Errorf("expected news message to mention 封印が解かれました, got %q", lastNews)
-	}
-}
-
-func TestUnsealDemonKing_Validation(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
-
-	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Empty list returns error
-	err = service.UnsealDemonKing(ctx, nil)
-	if err == nil {
-		t.Error("expected error for empty character list")
-	}
-
-	// Only NPCs -> no error, nothing updated
-	err = service.UnsealDemonKing(ctx, []string{"@npc1", "@npc2"})
-	if err != nil {
-		t.Errorf("expected nil error for NPC-only list, got %v", err)
-	}
-}
-
 func TestChallengeBoss_King99_EncounterSnapshot_LevelUp(t *testing.T) {
 	ctx := context.Background()
 	bossRepo := newMockBossRepo()
@@ -1337,7 +1286,8 @@ func TestChallengeBoss_King99_EncounterSnapshot_LevelUp(t *testing.T) {
 		t.Fatalf("expected 1 record, got %d", len(recorder.records))
 	}
 	r0 := recorder.records[0]
-	expectedStrong := int(float64(600*50) + 500 + float64(300*2) + float64(200*2)*0.5 + float64(50*2))
+	// Max MP 0 clones to MP 0 (stage/king99.cgi); there is no fallback pool.
+	expectedStrong := int(float64(600*50) + float64(300*2) + float64(200*2)*0.5 + float64(50*2))
 	if r0.MonsterID != "king99-clone" || r0.MonsterName != "影" || r0.Habitat != "封印戦" ||
 		r0.HP != 600*50 || r0.Attack != 300*2 || r0.Defense != 200*2 || r0.Agility != 50*2 ||
 		r0.ExperienceReward != 1500 || r0.GoldReward != 750 || r0.Strong != expectedStrong {
@@ -1346,7 +1296,10 @@ func TestChallengeBoss_King99_EncounterSnapshot_LevelUp(t *testing.T) {
 	}
 }
 
-func TestStartSealingBattle_King99_PartyEncounterSnapshot_DifferentLevels(t *testing.T) {
+// TestStartSealingBattle_King99_FightsTheUnsealingPartysClones verifies that a
+// king99 room fights the clones stored at unseal (NPC companions included), not
+// its joiners, and pays their EXP, gold, crystals and records (stage/king99.cgi).
+func TestStartSealingBattle_King99_FightsTheUnsealingPartysClones(t *testing.T) {
 	ctx := context.Background()
 	bossRepo := newMockBossRepo()
 
@@ -1354,37 +1307,24 @@ func TestStartSealingBattle_King99_PartyEncounterSnapshot_DifferentLevels(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	nextExp30, err := progression.ExperienceForNextLevel(30)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	c1 := createTestChar("c1", 50, 600, 300, 200)
 	c1.JobLevel = 10
 	c1.Experience = nextExp50 - 1
+	c2 := createTestChar("c2", 30, 400, 150, 100) // joined later; never cloned
+	unsealer := createTestChar("u3", 40, 500, 200, 100)
+	npc := corebattle.LifetimeActor{Participant: corebattle.Participant{ID: "npc", Name: "@スライム", MaxHP: 100, Attack: 10, Defense: 5, Agility: 3, ExperienceReward: 4, GoldReward: 2}, NPC: true}
 
-	c2 := createTestChar("c2", 30, 400, 150, 100)
-	c2.JobLevel = 5
-	c2.Experience = nextExp30 - 1
-
-	chars := map[string]corecharacter.Character{
-		"c1": c1,
-		"c2": c2,
-	}
-	charRepo := &mockCharRepo{chars: chars}
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"c1": c1, "c2": c2}}
+	bossRepo.charRepo = charRepo
 	partyRepo := newMockPartyRepo()
-
 	pID := "party-king99-test"
 	partyRepo.parties[pID] = party.Party{
-		ID:                pID,
-		LeaderCharacterID: "c1",
-		StageID:           "king99",
-		Status:            party.StatusRecruiting,
-		CreatedAt:         time.Now().UTC(),
+		ID: pID, Kind: party.KindSealing, StageID: "king99", Status: party.StatusRecruiting, CreatedAt: time.Now().UTC(),
+		Enemies: catalogRoster("king99", boss.UnsealerForTest(unsealer), boss.UnsealerForTest(c1), npc),
 	}
 	partyRepo.members[pID] = []party.Member{
-		{PartyID: pID, CharacterID: "c1", CharacterName: "Hero_c1", ReadyState: true, IsLeader: true},
-		{PartyID: pID, CharacterID: "c2", CharacterName: "Hero_c2", ReadyState: true},
+		{PartyID: pID, CharacterID: "c1", CharacterName: "Hero_c1"},
+		{PartyID: pID, CharacterID: "c2", CharacterName: "Hero_c2"},
 	}
 
 	recorder := &mockBossMonsterDefeatRecorder{}
@@ -1392,50 +1332,31 @@ func TestStartSealingBattle_King99_PartyEncounterSnapshot_DifferentLevels(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	service.Configure(
-		boss.WithPartyRepository(partyRepo),
-		boss.WithMonsterDefeatRecorder(recorder),
-	)
+	service.Configure(boss.WithPartyRepository(partyRepo), boss.WithMonsterDefeatRecorder(recorder))
 
-	_, err = service.StartSealingBattle(ctx, pID, "c1")
+	res, err := service.StartSealingBattle(ctx, pID, "c2")
 	if err != nil {
 		t.Fatalf("StartSealingBattle failed: %v", err)
 	}
-
-	// Verify both characters leveled up
+	// EXP (lv+job_lv)*30 per clone: 40*30 + 60*30 + 4*30; gold int(lv/2)*30: 20*30 + 25*30 + 2*30.
+	if res.RewardExp != 1200+1800+120 || res.RewardGold != 600+750+60 || res.RewardCrystals != 3*20 {
+		t.Errorf("rewards = %d EXP, %d gold, %d crystals; want 3120, 1410, 60", res.RewardExp, res.RewardGold, res.RewardCrystals)
+	}
 	if charRepo.chars["c1"].Level <= 50 {
 		t.Fatalf("expected c1 to level up beyond 50, got %d", charRepo.chars["c1"].Level)
 	}
-	if charRepo.chars["c2"].Level <= 30 {
-		t.Fatalf("expected c2 to level up beyond 30, got %d", charRepo.chars["c2"].Level)
-	}
-
-	if len(recorder.calls) != 2 {
-		t.Fatalf("expected 2 recorder calls, got %d", len(recorder.calls))
-	}
-
-	c1Records := recorder.recordsByCharID["c1"]
-	if len(c1Records) != 1 {
-		t.Fatalf("expected 1 record for c1, got %d", len(c1Records))
-	}
-	r1 := c1Records[0]
-	expectedStrong1 := int(float64(600*50) + 500 + float64(300*2) + float64(200*2)*0.5 + float64(50*2))
-	if r1.MonsterID != "king99-clone" || r1.HP != 600*50 || r1.Attack != 300*2 || r1.Defense != 200*2 ||
-		r1.ExperienceReward != 1800 || r1.GoldReward != 750 || r1.Strong != expectedStrong1 {
-		t.Errorf("c1 record mismatch: got %+v, expected HP=%d Atk=%d Def=%d Exp=1800 Gold=750 Strong=%d",
-			r1, 600*50, 300*2, 200*2, expectedStrong1)
-	}
-
-	c2Records := recorder.recordsByCharID["c2"]
-	if len(c2Records) != 1 {
-		t.Fatalf("expected 1 record for c2, got %d", len(c2Records))
-	}
-	r2 := c2Records[0]
-	expectedStrong2 := int(float64(400*50) + 500 + float64(150*2) + float64(100*2)*0.5 + float64(50*2))
-	if r2.MonsterID != "king99-clone" || r2.HP != 400*50 || r2.Attack != 150*2 || r2.Defense != 100*2 ||
-		r2.ExperienceReward != 1050 || r2.GoldReward != 450 || r2.Strong != expectedStrong2 {
-		t.Errorf("c2 record mismatch: got %+v, expected HP=%d Atk=%d Def=%d Exp=1050 Gold=450 Strong=%d",
-			r2, 400*50, 150*2, 100*2, expectedStrong2)
+	for _, id := range []string{"c1", "c2"} {
+		records := recorder.recordsByCharID[id]
+		if len(records) != 3 {
+			t.Fatalf("expected a record per clone for %s, got %+v", id, records)
+		}
+		if r := records[0]; r.MonsterID != "king99-clone" || r.HP != 500*50 || r.Attack != 200*2 || r.ExperienceReward != 1200 ||
+			r.Strong != int(float64(500*50)+float64(200*2)+float64(100*2)*0.5+float64(50*2)) {
+			t.Errorf("%s: first clone record should copy the unsealer u3, got %+v", id, r)
+		}
+		if r := records[2]; r.HP != 100*50 || r.GoldReward != 60 {
+			t.Errorf("%s: NPC companion clone record mismatch: %+v", id, r)
+		}
 	}
 }
 
@@ -1459,6 +1380,8 @@ func TestBoss_RealEngine_SynergyMultiplier(t *testing.T) {
 		ID:                pID,
 		LeaderCharacterID: "lead",
 		StageID:           "king1",
+		Kind:              party.KindSealing,
+		Enemies:           catalogRoster("king1"),
 		Status:            party.StatusRecruiting,
 	}
 	partyRepo.members[pID] = []party.Member{
@@ -1521,4 +1444,13 @@ func TestBoss_RealEngine_SynergyMultiplier(t *testing.T) {
 		t.Errorf("solo boss battle TotalReward.Experience (%d) != BaseReward (%d)",
 			soloRes.BattleResult.TotalReward.Experience, soloRes.BattleResult.BaseReward.Experience)
 	}
+}
+
+func catalogRoster(stageID string, unsealers ...corebattle.LifetimeActor) []corebattle.LifetimeActor {
+	for _, st := range boss.DefaultBossCatalog() {
+		if st.ID == stageID {
+			return boss.RosterForTest(st, unsealers...)
+		}
+	}
+	panic("unknown stage " + stageID)
 }
