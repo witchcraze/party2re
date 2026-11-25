@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -195,6 +198,7 @@ func (a *scenarioApp) registerAccount(autoCleanup bool) (playerID, name, token, 
 	a.call("", http.MethodPost, "/sessions", credentials, http.StatusCreated, &session)
 	if autoCleanup {
 		a.t.Cleanup(func() {
+			a.resetRateLimits(session.ID) // a failed journey may have spent the window
 			a.call(session.ID, http.MethodDelete, "/players/me", `{"password":"scenario-pass-1"}`, http.StatusOK, nil)
 		})
 	}
@@ -349,6 +353,26 @@ func (a *scenarioApp) elapseActionWait(characterID string) {
 	a.t.Helper()
 	if err := timer.NewService(a.valkey).ReleaseLock(context.Background(), timer.CategoryActionWait, characterID); err != nil {
 		a.t.Fatal(err)
+	}
+}
+
+// resetRateLimits expires the client IP's and the sessions' HTTP rate-limit
+// buckets, so a journey spanning several windows needs no wall-clock wait.
+func (a *scenarioApp) resetRateLimits(tokens ...string) {
+	a.t.Helper()
+	ip, _, err := net.SplitHostPort(a.remoteAddr)
+	if err != nil {
+		a.t.Fatal(err)
+	}
+	keys := []string{"http:ip:" + ip}
+	for _, token := range tokens {
+		sum := sha256.Sum256([]byte(token))
+		keys = append(keys, "http:auth:"+hex.EncodeToString(sum[:]))
+	}
+	for _, key := range keys {
+		if err := a.valkey.Do(context.Background(), a.valkey.B().Expire().Key("party2:ratelimit:"+key).Seconds(0).Build()).Error(); err != nil {
+			a.t.Fatal(err)
+		}
 	}
 }
 
