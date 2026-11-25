@@ -200,3 +200,109 @@ func TestSystemRoomJoin_ConcurrentJoinsFillCapacityAndChargeOnce(t *testing.T) {
 		}
 	}
 }
+
+// The membership check must follow the character row lock: joins to different
+// rooms hold different lobby locks and only meet on that row.
+func TestJoin_SameCharacterRacingTwoRoomsJoinsOnce(t *testing.T) {
+	ctx := context.Background()
+	repo := liveSystemRoomRepo(t)
+	db := database.OpenTestDB(t)
+	chars, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := party.NewService(repo, chars, nil, stages, monsters, nil, party.WithTransactionProvider(database.NewTransactionProvider(db)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	racer, err := database.CreateTestCharacter(ctx, db, "Racer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	leader, err := database.CreateTestCharacter(ctx, db, "Leader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	database.RegisterCharacterCleanup(t, db, racer, leader)
+	sealing := sealingRoom("king1", 6)
+	if ok, err := repo.OpenSystemRoom(ctx, sealing); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	lobby, err := svc.CreateParty(ctx, leader.ID, party.CreatePartyRequest{Name: "race", StageID: adventure.StarterAdventure})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, p := range []party.Party{sealing, lobby.Party} {
+			state := party.LobbyState{Party: p, Members: []party.Member{{CharacterID: racer.ID}, {CharacterID: leader.ID}}}
+			if err := repo.CleanupParty(context.Background(), state); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+
+	join := func(id string) func() error {
+		return func() error {
+			for {
+				_, err := svc.JoinParty(ctx, id, racer.ID, "")
+				if !errors.Is(err, party.ErrPartyNotRecruiting) { // the lobby lock is busy; retry
+					return err
+				}
+			}
+		}
+	}
+	for round := range 10 {
+		base, err := chars.FindByID(ctx, racer.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		errs := testutil.RunRace(join(sealing.ID), join(lobby.Party.ID))
+		var won []string
+		for i, err := range errs {
+			switch {
+			case err == nil:
+				won = append(won, []string{sealing.ID, lobby.Party.ID}[i])
+			case !errors.Is(err, party.ErrAlreadyInParty):
+				t.Fatalf("round %d: unexpected join error %v", round, err)
+			}
+		}
+		if len(won) != 1 {
+			t.Fatalf("round %d: %d joins succeeded", round, len(won))
+		}
+		active, _, err := repo.GetActivePartyByCharacter(ctx, racer.ID)
+		if err != nil || active.ID != won[0] {
+			t.Fatalf("round %d: membership index %q, want %q (%v)", round, active.ID, won[0], err)
+		}
+		for _, id := range []string{sealing.ID, lobby.Party.ID} {
+			if _, err := repo.GetMember(ctx, id, racer.ID); (err == nil) != (id == won[0]) {
+				t.Fatalf("round %d: room %s membership disagrees with the index: %v", round, id, err)
+			}
+		}
+		got, err := chars.FindByID(ctx, racer.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := base.Tired
+		if won[0] == sealing.ID {
+			want += 20
+		}
+		if got.Tired != want {
+			t.Fatalf("round %d: Tired %d -> %d, want %d", round, base.Tired, got.Tired, want)
+		}
+		if err := svc.LeaveParty(ctx, won[0], racer.ID); err != nil {
+			t.Fatal(err)
+		}
+		got.Tired = 0
+		if err := chars.Update(ctx, got); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

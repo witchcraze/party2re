@@ -185,15 +185,13 @@ func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, 
 		}
 	}
 
-	// Check if already in party
-	_, _, err = s.repo.GetActivePartyByCharacter(txCtx, characterID)
-	if err == nil {
-		return ErrAlreadyInParty
-	}
-
 	char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 	if err != nil {
 		return err
+	}
+	// Membership is read under the character row lock (see joinSealingRoom).
+	if _, _, err := s.repo.GetActivePartyByCharacter(txCtx, characterID); err == nil {
+		return ErrAlreadyInParty
 	}
 	if s.activityCheck != nil {
 		if err := s.activityCheck(txCtx, characterID); err != nil {

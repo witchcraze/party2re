@@ -78,15 +78,13 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 	}()
 
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
-		// Check if leader already belongs to an active party
-		_, _, err := s.repo.GetActivePartyByCharacter(txCtx, leaderCharID)
-		if err == nil {
-			return ErrAlreadyInParty
-		}
-
 		leaderChar, err := s.charRepo.FindByIDForUpdate(txCtx, leaderCharID)
 		if err != nil {
 			return err
+		}
+		// Membership is read under the character row lock (see joinSealingRoom).
+		if _, _, err := s.repo.GetActivePartyByCharacter(txCtx, leaderCharID); err == nil {
+			return ErrAlreadyInParty
 		}
 		if s.activityCheck != nil {
 			if err := s.activityCheck(txCtx, leaderCharID); err != nil {

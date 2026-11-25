@@ -94,12 +94,14 @@ func (s *Service) joinSealingRoom(ctx context.Context, p Party, characterID stri
 	if count >= p.MaxMembers {
 		return ErrPartyFull
 	}
-	if _, _, err := s.repo.GetActivePartyByCharacter(ctx, characterID); err == nil {
-		return ErrAlreadyInParty
-	}
+	// Joins to different rooms hold different lobby locks; the character row
+	// lock serializes them, so membership is read only after taking it.
 	char, err := s.charRepo.FindByIDForUpdate(ctx, characterID)
 	if err != nil {
 		return err
+	}
+	if _, _, err := s.repo.GetActivePartyByCharacter(ctx, characterID); err == nil {
+		return ErrAlreadyInParty
 	}
 	if s.activityCheck != nil {
 		if err := s.activityCheck(ctx, characterID); err != nil {
