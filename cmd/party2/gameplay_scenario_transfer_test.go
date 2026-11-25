@@ -1,10 +1,6 @@
 package main
 
 import (
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"net"
 	"net/http"
 	"testing"
 )
@@ -24,10 +20,6 @@ func TestGameplayScenario_TwoAccountTransfers(t *testing.T) {
 	type assets struct{ gold, deposit, held, stored, hand, listed int }
 	want := [2]assets{{gold: startingGold}, {gold: startingGold}}
 	wantGold, wantItems := 2*startingGold, 0
-	ip, _, err := net.SplitHostPort(a.remoteAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	visit := func(actor int, destination string) scenarioContext {
 		t.Helper()
@@ -48,15 +40,7 @@ func TestGameplayScenario_TwoAccountTransfers(t *testing.T) {
 	check := func(step string) [2]scenarioContext {
 		t.Helper()
 		// A journey spans HTTP rate-limit windows; expire only its own buckets.
-		authBucketKey := func(tok string) string {
-			sum := sha256.Sum256([]byte(tok))
-			return "http:auth:" + hex.EncodeToString(sum[:])
-		}
-		for _, key := range []string{"http:ip:" + ip, authBucketKey(senderToken), authBucketKey(recipientToken)} {
-			if err := a.valkey.Do(context.Background(), a.valkey.B().Expire().Key("party2:ratelimit:"+key).Seconds(0).Build()).Error(); err != nil {
-				t.Fatal(err)
-			}
-		}
+		a.resetRateLimits(senderToken, recipientToken)
 		var depots [2]scenarioContext
 		gold, items := 0, 0
 		for actor := range heroes {
