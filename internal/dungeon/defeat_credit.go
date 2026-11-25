@@ -38,7 +38,7 @@ type killerFacts struct {
 	jobID    string
 	wish     string
 	gear     *corebattle.BattleGearStats
-	food     bool
+	held     string // the tool hand ($ms{$m}{ite})
 	resolved bool
 }
 
@@ -58,6 +58,7 @@ func (s *Service) shareDefeats(ctx context.Context, exp *ActiveExpedition, reque
 	}
 	killers := make(map[string]*killerFacts)
 	crystals := make(map[string]int)
+	exps := make(map[string]int) // _add_exp rewrites the enemy's own EXP
 	creditID := func(id string) string { return fmt.Sprintf("r%d:%s", exp.Revision, id) }
 	for _, d := range out.defeats {
 		i := enemyIndex(enemies, d.TargetID)
@@ -88,7 +89,15 @@ func (s *Service) shareDefeats(ctx context.Context, exp *ActiveExpedition, reque
 			}
 			crystals[d.TargetID] = got
 		}
-		xp, gold := m.ExpReward, m.GoldReward
+		xp, ok := exps[d.TargetID]
+		if !ok {
+			xp = m.ExpReward
+		}
+		if k.held == "item-167" {
+			xp += xp / 5 // int(×1.2) in _add_exp (_battle.cgi:90,1793–1802)
+		}
+		exps[d.TargetID] = xp
+		gold := m.GoldReward
 		if battle.IsGoldBlessing(k.wish) && s.rng.Intn(4) < 1 {
 			gold += gold / 2
 		}
@@ -132,7 +141,7 @@ func (s *Service) shareDefeats(ctx context.Context, exp *ActiveExpedition, reque
 func (s *Service) defeatFact(k *killerFacts, target corebattle.Participant, m DungeonMonster, habitat string, strength int, strong bool) battle.ExplicitDefeat {
 	dragonSet := k.gear != nil && k.gear.WeaponID == "weapon-36" && k.gear.ArmorID == "armor-39"
 	// The capture-status bonus needs explicit combat (#1865); the auto-resolved battle never captures.
-	chance := battle.CalculateTamePar(strong, k.jobID, k.food, battle.IsMonsterBlessing(k.wish), dragonSet, false)
+	chance := battle.CalculateTamePar(strong, k.jobID, k.held == "item-077", battle.IsMonsterBlessing(k.wish), dragonSet, false)
 	return battle.ExplicitDefeat{
 		Monster: battle.DefeatedMonsterRecord{
 			MonsterID: m.ID, MonsterName: battle.CleanMonsterName(m.Name), Habitat: habitat, Icon: target.Icon,
@@ -170,7 +179,9 @@ func (s *Service) killer(ctx context.Context, cache map[string]*killerFacts, all
 			return nil, err
 		}
 		held, ok := inv.HeldTool()
-		k.food = ok && held.DefinitionID == "item-077"
+		if ok {
+			k.held = held.DefinitionID
+		}
 	}
 	cache[id] = k
 	return k, nil

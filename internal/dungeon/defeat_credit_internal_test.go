@@ -164,19 +164,29 @@ func TestShareDefeats_WishAndGearModifiers(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		wish string
+		hand string
 		gear *corebattle.BattleGearStats
 		draw int
 		want corebattle.Reward
 	}{
-		{"gold wish hit", "1", nil, 0, corebattle.Reward{Experience: 31, Currency: 31}},
-		{"gold wish miss", "1", nil, 1, corebattle.Reward{Experience: 31, Currency: 21}},
-		{"exp wish hit", "2", nil, 0, corebattle.Reward{Experience: 46, Currency: 21}},
-		{"exp wish miss", "2", nil, 1, corebattle.Reward{Experience: 31, Currency: 21}},
-		{"equipment 1/1 hit", "", gear11, 0, corebattle.Reward{Experience: 36, Currency: 21}},
-		{"equipment 1/1 miss", "", gear11, 1, corebattle.Reward{Experience: 31, Currency: 21}},
+		{"gold wish hit", "1", "", nil, 0, corebattle.Reward{Experience: 31, Currency: 31}},
+		{"gold wish miss", "1", "", nil, 1, corebattle.Reward{Experience: 31, Currency: 21}},
+		{"exp wish hit", "2", "", nil, 0, corebattle.Reward{Experience: 46, Currency: 21}},
+		{"exp wish miss", "2", "", nil, 1, corebattle.Reward{Experience: 31, Currency: 21}},
+		{"equipment 1/1 hit", "", "", gear11, 0, corebattle.Reward{Experience: 36, Currency: 21}},
+		{"equipment 1/1 miss", "", "", gear11, 1, corebattle.Reward{Experience: 31, Currency: 21}},
+		// Item 167 rewrites the enemy's EXP first (_add_exp): 31 → 37, then ×1.5 → 55, then +5.
+		{"item 167", "", "item-167", nil, 1, corebattle.Reward{Experience: 37, Currency: 21}},
+		{"item 167 before wish and equipment", "2", "item-167", gear11, 0, corebattle.Reward{Experience: 60, Currency: 21}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			res := shareOne(t, defeatSetup{wish: tc.wish, gear: tc.gear, rng: &strictRNG{t: t, ints: []int{1, tc.draw}, floats: []float64{0.99}}})
+			ints := []int{1, tc.draw}
+			if tc.wish != "" && tc.gear != nil {
+				ints = append(ints, tc.draw)
+			} else if tc.wish == "" && tc.gear == nil {
+				ints = ints[:1]
+			}
+			res := shareOne(t, defeatSetup{wish: tc.wish, hand: tc.hand, gear: tc.gear, rng: &strictRNG{t: t, ints: ints, floats: []float64{0.99}}})
 			// Every living member receives the killer-modified earnings.
 			for _, r := range []corebattle.Reward{res.stock["c"], res.credits[0].Reward, res.credits[1].Reward} {
 				if r != tc.want {
