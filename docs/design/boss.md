@@ -25,17 +25,9 @@ Each stage's name, leader, capacity and gate come from lines 3–7 of `stage/kin
 
 The CGI exposes `＠ふういん` after enemies are defeated; Go currently combines resolution and settlement in one operation (#1864).
 
-### 1. Entry & Fatigue Cost
-- Each participating character incurs **+20% Tired** when joining the room (`quest.cgi:add_member`, `$m{tired} += 20`, written immediately and independently of the battle outcome). Watching charges nothing. The charge commits with the join, exactly once per successful join; a rejected join charges nothing; battle settlement does not charge it again.
-- Go currently charges it at the start of the sealing battle. [#1927](https://github.com/witchcraze/party2re/issues/1927) moves it to the join and removes the settlement charge in the same change, so there is no period with a double charge or no charge.
-- Characters with `tired >= 100` or `hp <= 0` cannot enter.
-
 ### 3. Boss Skills & Clones
-- **`king99` Player Clones**:
-  - Clones are created **at unseal time** from every member of the unsealing party (`@partys`, NPC companions included) and stored in the room (`stage/king99.cgi` is loaded by `make_vs_king`). Later joiners do not change them; the room leader is the clone of the unsealing party's leader. If a king99 room already exists, a new unseal does not replace its clones.
-  - Each clone takes the member's battle state at that treasure creation (after the per-advance status reset): 50× Max HP and Max MP, 2× AT/DF/AG, icon, Job/SP and OldJob/SP; EXP = (Level + JobLevel) × 30, gold = ⌊Level × 0.5⌋ × 30 (`quest.cgi:1177–1178`), 20 crystals.
-  - Go currently builds clones from the sealing battle participants ([#1927](https://github.com/witchcraze/party2re/issues/1927)).
-  - Clones possess the **`大防御`** defensive trait.
+- **`king99` Player Clones**: `make_vs_king` loads `stage/king99.cgi` at unseal, so the clones copy every member of the unsealing party (`@partys`, NPC companions included) from their battle rows at that treasure creation, never the room's later joiners.
+  - A player's row carries EXP `lv + job_lv` and gold `int(lv × 0.5)` (`quest.cgi:1177–1178`), written when the row is created at join. Go player actors carry no such values, so the unseal reads the character's level at the unseal instead ([#2756](https://github.com/witchcraze/party2re/issues/2756)).
 
 ### 4. Dejon (デジョン) Banishment
 - Dejon banishes a fallen character for the rest of the battle (no revival) and adds **+30% fatigue**. Legacy `vs_king.cgi:dejon` applies it at banishment; Go settlement applies it upon battle conclusion.
@@ -44,7 +36,7 @@ The CGI exposes `＠ふういん` after enemies are defeated; Go currently combi
 Upon defeating all enemy boss participants:
 1. **Hero Count**: All party members receive **+1 Hero Count** (`characters.hero_count` / `$m{hero_c}`).
 2. **Crystals (刻印晶)**:
-   - Base crystals: Sum of `GetCrystal` for defeated enemies; in `king99`, 20 per defeated clone (Go currently uses 20 × the number of participants).
+   - Base crystals: Sum of `GetCrystal` for defeated enemies; in `king99`, 20 per defeated clone.
    - **Unseal-Clock Multiplier** (per defeated enemy, `_battle.cgi:145–173`): elapsed time since the [unseal clock](#6-unseal-to-sealing-room-lifecycle), not since the battle or room start:
      - $\le 10$ minutes (600s): **3.0×**
      - $\le 30$ minutes (1800s): **2.0×**
@@ -54,7 +46,7 @@ Upon defeating all enemy boss participants:
    - Directly credited to each member's crystal balance (`characters.crystal`).
 3. **Experience & Gold**:
    - For `king1`..`king10`: Sum of boss definitions.
-   - For `king99`: Sum over defeated clones of the values fixed at unseal ([§3](#3-boss-skills--clones)). Go currently computes them from the participants' levels.
+   - For `king99`: Sum over defeated clones of the values fixed at unseal ([§3](#3-boss-skills--clones)).
 4. **Treasure**: a random stage treasure plus the JST weekday orb (`_npc_action.cgi:541–543`). Legacy loads the stage's `@treasures` before the battle acts (`lib/vs_king.cgi:19–23`), so job78's treasure retry (`lib/_skill.cgi:6200`) regenerates sealing chests from the same table; that retry is unreachable while the battle resolves in one request (#1862). A treasure found with the Depot full is lost, even with a matching stack (`_npc_action.cgi:73–75`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
 5. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
 6. **Victory Celebration**: Adds a temporary crowd to Event Plaza (`_win_vs_king.cgi`). [Event Plaza design §3](eventplaza.md#3-victory-celebrations-legacy-contract-and-implementation-gaps) owns generation, presence retention, merchant-selection order and runtime boundaries; there is no independent fixed two-hour banquet window.
@@ -76,16 +68,16 @@ a new trigger. Nothing else is inferred (stage 20, habitat, monster defeat).
 
 **In the settlement transaction** (commit or roll back together with rewards):
 
-- Battle settlement adds MaoCount +1 for each real participant (`mao_c`, line 218). It is
-  the only counter owner; never also call `boss.Service.UnsealDemonKing`, which writes the
-  counter too and has no production caller.
+- Battle settlement adds MaoCount +1 for each real participant (`mao_c`, line 218); it is
+  the only counter owner.
 - The unseal clock is a single SQL row (`unsealed_at`), overwritten with the settlement time
   on **every** trigger, even when all rooms already exist (legacy rewrites `king_start.cgi`
   each time, line 224). A battle already in progress therefore sees the restarted clock.
   With no row, the multiplier is 1×.
 
 **After commit** (best effort; failure keeps the committed state, and replay never repeats
-the counter):
+the counter). Only the request that confirms its own commit runs this step; a lost commit
+acknowledgement or a receipt replay opens nothing:
 
 - For each king stage (`king1`–`king10`, `king99`) without an existing room, open one
   system-owned sealing room with its initial enemy roster. A stage never has two rooms
@@ -93,7 +85,8 @@ the counter):
   snapshot of the unsealing party ([§3](#3-boss-skills--clones)), so settlement passes the
   participants' battle state to this step; the other stages use their catalog bosses.
 - Publish news: `<party name>(<participant names>) によって封印されし者達の封印が解かれました！`
-  (line 221).
+  (line 221). Legacy quests always have a name (`quest.cgi:561`); Go entries without one
+  (the batch crawl, solo normal runs) leave it empty ([#2757](https://github.com/witchcraze/party2re/issues/2757)).
 
 **Room.** A party-lobby kind owned by the system. The boss NPC is the leader, so there is
 no character leader. Name = stage name, no password, speed 12, `need_join` and capacity
@@ -128,17 +121,7 @@ Deletion (any state):
 The room's enemy state belongs to that room's encounter. It is not the withdrawn shared
 world-boss HP ([transient-boss-hp.md](../architecture/transient-boss-hp.md)).
 
-**Validation matrix for the implementation Issues:** before/after unseal, 6/7 and 4/5
-capacity, repeated unseal (clock restart, no duplicate room, king99 clones kept), king99
-clones from the unsealing party unaffected by joiners, join fatigue charged once (none on
-rejection or at settlement), last exit with leader alive/defeated before sealing and after
-sealing, Dejon emptying, sealing, party crawl and normal-run triggers, clock origin, and
-rollback of a failed settlement.
-
 **Current gaps:**
 
-- No sealing room is opened, no unseal news is published, the party lobby has no
-  system-owned kind, king99 clones come from the participants and join fatigue is charged
-  at battle start ([#1927](https://github.com/witchcraze/party2re/issues/1927)).
 - The solo entry exists ([#1928](https://github.com/witchcraze/party2re/issues/1928)).
-- The battle resolves at start, keeps no per-room enemy state, has no leader-defeat exit check and needs a character leader ([#1864](https://github.com/witchcraze/party2re/issues/1864)).
+- The battle resolves at start against the room's initial roster, keeps no per-room enemy state and has no leader-defeat exit check; until then any room member may start it ([#1864](https://github.com/witchcraze/party2re/issues/1864)).

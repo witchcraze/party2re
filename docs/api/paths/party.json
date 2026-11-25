@@ -269,7 +269,7 @@
   },
   "/parties/{id}/join": {
     "post": {
-      "description": "Joins an existing recruiting party.",
+      "description": "Joins an existing recruiting party. Joining a sealing room ignores the password and adds 20 Tired with the join.",
       "operationId": "joinParty",
       "parameters": [
         {
@@ -603,7 +603,7 @@
   },
   "/parties/{id}/sealing-battle": {
     "post": {
-      "description": "Resolve a ready sealing room. Retrying the same room as its saved leader returns the committed result and retries remaining lobby cleanup without repeating combat or rewards. Cleanup failures return an error while retaining the committed result for retry.",
+      "description": "Resolve a sealing room's battle against its stored enemy roster; any room member may start it. Retrying the same room as one of its saved members returns the committed result and retries remaining lobby cleanup without repeating combat or rewards. Cleanup failures return an error while retaining the committed result for retry.",
       "operationId": "postPartiesIdSealingBattle",
       "parameters": [
         {

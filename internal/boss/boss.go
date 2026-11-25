@@ -16,7 +16,7 @@ var (
 	ErrCharacterNotFound    = errors.New("character not found")
 	ErrInvalidBossID        = errors.New("invalid boss id")
 	ErrPartyNotFound        = errors.New("party not found")
-	ErrNotPartyLeader       = errors.New("only party leader can start sealing battle")
+	ErrNotRoomMember        = party.ErrCharacterNotInParty
 	ErrPartyNotReady        = errors.New("all party members must be ready before starting")
 	ErrPartyNotRecruiting   = party.ErrPartyNotRecruiting
 	ErrNeedJoinNotMet       = errors.New("character does not meet party join condition")
@@ -156,6 +156,7 @@ type PartyRepository interface {
 	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
 	CleanupParty(ctx context.Context, state party.LobbyState) error
 	UpdateParty(ctx context.Context, p party.Party) error
+	OpenSystemRoom(ctx context.Context, p party.Party) (bool, error)
 }
 
 type NewsPublisher interface {

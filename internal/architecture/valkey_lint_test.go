@@ -54,6 +54,7 @@ var requiredDocumentedKeys = []string{
 	"party2:party:lobbies",
 	"party2:party:character:",
 	"party2:party:ready:",
+	"party2:party:sealing:",
 	"party2:boss:",
 	"party2:timer:",
 	"party2:daily:",

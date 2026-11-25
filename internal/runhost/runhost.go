@@ -296,6 +296,9 @@ type Config[R any] struct {
 	// CombatRoom is Room's part of explicit combat; nil keeps the host defaults.
 	CombatRoom CombatRoom[R]
 	Blessings  Blessings
+	// Unsealed runs after a command's stage19 treasure creation commits, never
+	// on receipt replay; it receives the run name and the party, leader first.
+	Unsealed func(ctx context.Context, name string, unsealers []corebattle.LifetimeActor)
 
 	// The requester's asset session for combat callbacks (job50/job78/job86);
 	// without a runner, combat runs without one. JobAssetEquipment keeps

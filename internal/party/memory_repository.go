@@ -39,6 +39,11 @@ func NewMemoryRepository(opts ...ValkeyRepositoryOption) *MemoryRepository {
 func (r *MemoryRepository) SaveParty(_ context.Context, p Party) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.saveLocked(p)
+	return nil
+}
+
+func (r *MemoryRepository) saveLocked(p Party) {
 	now := time.Now().UTC()
 	r.memLobbies[p.ID] = p
 	r.memLobbyExp[p.ID] = now.Add(r.lobbyTTL)
@@ -51,7 +56,6 @@ func (r *MemoryRepository) SaveParty(_ context.Context, p Party) error {
 	if _, exists := r.memReadyExp[p.ID]; !exists {
 		r.memReadyExp[p.ID] = make(map[string]time.Time)
 	}
-	return nil
 }
 
 func (r *MemoryRepository) GetParty(_ context.Context, id string) (Party, error) {
@@ -92,23 +96,7 @@ func (r *MemoryRepository) ListParties(_ context.Context, status string, limit, 
 				break
 			}
 		}
-		activeList = append(activeList, PartySummary{
-			ID:                p.ID,
-			Name:              p.Name,
-			LeaderCharacterID: p.LeaderCharacterID,
-			LeaderName:        leaderName,
-			StageID:           p.StageID,
-			Speed:             p.Speed,
-			CurrentMembers:    memCount,
-			MaxMembers:        p.MaxMembers,
-			HasPassword:       p.PasswordHash != "",
-			MinLevel:          p.MinLevel,
-			MaxLevel:          p.MaxLevel,
-			MinHP:             p.MinHP,
-			NeedJoin:          p.NeedJoin,
-			Status:            p.Status,
-			CreatedAt:         p.CreatedAt,
-		})
+		activeList = append(activeList, newSummary(p, leaderName, memCount))
 	}
 
 	// Sort newest first

@@ -41,3 +41,10 @@ func TestValidateNeedJoin(t *testing.T) {
 		})
 	}
 }
+
+func TestBattleRowRewards(t *testing.T) {
+	exp, gold := Character{Level: 25, JobLevel: 3}.BattleRowRewards()
+	if exp != 28 || gold != 12 {
+		t.Fatalf("BattleRowRewards() = %d, %d; want 28, 12", exp, gold)
+	}
+}

@@ -95,6 +95,7 @@ type Service struct {
 	clock              Clock
 	nowFunc            func() time.Time
 	postAdventureHook  PostAdventureHook
+	unsealHook         UnsealHook
 	participantBuilder ParticipantBuilder
 	battleSettler      PostBattleSettler
 	blessingProvider   BlessingProvider

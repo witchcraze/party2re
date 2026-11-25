@@ -83,6 +83,7 @@ type DungeonCrawlResult struct {
 	LostDrops             map[string][]string                   `json:"lost_drops,omitempty"`
 	MonsterTames          map[string][]battle.MonsterTameResult `json:"monster_tames,omitempty"`
 	UnsealDemonKing       bool                                  `json:"unseal_demon_king,omitempty"`
+	Unsealers             []corebattle.LifetimeActor            `json:"-"`
 }
 
 // CrawlSession tracks step-by-step state across the 10-floor dungeon crawl and Floor 11 treasure room.

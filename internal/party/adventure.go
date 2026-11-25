@@ -29,6 +29,8 @@ import (
 //  6. Reset party status to StatusRecruiting and member ready states to false.
 func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID string) (PartyAdventureResult, error) {
 	var result PartyAdventureResult
+	var partyName string
+	var unsealers []battle.LifetimeActor
 
 	err := s.repo.WithPartyAdventureLock(ctx, partyID, func(lockedCtx context.Context) error {
 		return s.withWaitingLobbyTx(lockedCtx, partyID, func(txCtx context.Context) error {
@@ -183,6 +185,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			}
 
 			crawlResult := session.Result()
+			partyName, unsealers = p.Name, crawlResult.Unsealers
 
 			synergyBonus := (len(members) - 1) * 10
 			if synergyBonus < 0 {
@@ -310,6 +313,11 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 		return PartyAdventureResult{}, err
 	}
 
+	if len(unsealers) > 0 && s.unsealHook != nil {
+		//lint:ignore error-swallow best-effort room opening after commit returns nothing to propagate
+		s.unsealHook(ctx, partyName, unsealers)
+	}
+
 	if s.postAdventureHook != nil {
 		for _, r := range result.Rewards {
 			//lint:ignore error-swallow best-effort tavern effects must not fail a committed adventure or skip later members
@@ -330,6 +338,11 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 // SetPostAdventureHook sets the PostAdventureHook on an existing service.
 func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
 	s.postAdventureHook = hook
+}
+
+// SetUnsealHook sets the hook called after a party crawl's unseal commits.
+func (s *Service) SetUnsealHook(hook adventure.UnsealHook) {
+	s.unsealHook = hook
 }
 
 // SetBlessingProvider sets the BlessingProvider on an existing service.

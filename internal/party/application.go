@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/pagination"
 )
@@ -22,6 +23,7 @@ type Service struct {
 	news                 NewsPublisher
 	txProvider           TransactionProvider
 	postAdventureHook    PostAdventureHook
+	unsealHook           adventure.UnsealHook
 	participantBuilder   ParticipantBuilder
 	lifetimeActorBuilder LifetimeActorBuilder
 	battleSettler        PostBattleSettler
@@ -138,83 +140,12 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 		if err != nil {
 			return err
 		}
-		if p.Status != StatusRecruiting {
-			return ErrPartyNotRecruiting
+		if p.Kind == KindSealing {
+			err = s.joinSealingRoom(txCtx, p, characterID)
+		} else {
+			err = s.joinWaitingLobby(txCtx, p, characterID, password)
 		}
-
-		count, err := s.repo.CountMembers(txCtx, partyID)
 		if err != nil {
-			return err
-		}
-		if count >= p.MaxMembers {
-			return ErrPartyFull
-		}
-
-		if p.PasswordHash != "" {
-			if hashPassword(password) != p.PasswordHash {
-				return ErrInvalidPassword
-			}
-		}
-
-		// Check if already in party
-		_, _, err = s.repo.GetActivePartyByCharacter(txCtx, characterID)
-		if err == nil {
-			return ErrAlreadyInParty
-		}
-
-		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-		if s.activityCheck != nil {
-			if err := s.activityCheck(txCtx, characterID); err != nil {
-				return err
-			}
-		}
-		if char.Stats.HP <= 0 {
-			return ErrCharacterUnconscious
-		}
-		if char.Tired >= 100 {
-			return ErrCharacterExhausted
-		}
-		if err := s.stages.CanAccessStage(char, p.StageID); err != nil {
-			return err
-		}
-		if p.NeedJoin != "" {
-			if err := ValidateNeedJoin(p.NeedJoin, char); err != nil {
-				return err
-			}
-		}
-		if char.Level < p.MinLevel || char.Level > p.MaxLevel {
-			return ErrLevelRequirementNotMet
-		}
-		if char.Stats.MaxHP < p.MinHP {
-			return ErrHPRequirementNotMet
-		}
-
-		battleActor, err := s.buildBattleActor(txCtx, char.ID)
-		if err != nil {
-			return err
-		}
-		maxHP := char.Stats.MaxHP
-		if battleActor != nil {
-			maxHP = battleActor.MaxHP
-		}
-
-		newMember := Member{
-			PartyID:       partyID,
-			CharacterID:   char.ID,
-			CharacterName: char.Name,
-			JobID:         char.JobID,
-			Level:         char.Level,
-			HP:            char.Stats.HP,
-			MaxHP:         maxHP,
-			IsLeader:      false,
-			ReadyState:    false,
-			JoinedAt:      time.Now().UTC(),
-			BattleActor:   battleActor,
-		}
-		if err := s.repo.AddMember(txCtx, newMember); err != nil {
 			return err
 		}
 
@@ -233,6 +164,85 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 	}
 
 	return detail, nil
+}
+
+func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, password string) error {
+	if p.Status != StatusRecruiting {
+		return ErrPartyNotRecruiting
+	}
+
+	count, err := s.repo.CountMembers(txCtx, p.ID)
+	if err != nil {
+		return err
+	}
+	if count >= p.MaxMembers {
+		return ErrPartyFull
+	}
+
+	if p.PasswordHash != "" {
+		if hashPassword(password) != p.PasswordHash {
+			return ErrInvalidPassword
+		}
+	}
+
+	// Check if already in party
+	_, _, err = s.repo.GetActivePartyByCharacter(txCtx, characterID)
+	if err == nil {
+		return ErrAlreadyInParty
+	}
+
+	char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
+	if err != nil {
+		return err
+	}
+	if s.activityCheck != nil {
+		if err := s.activityCheck(txCtx, characterID); err != nil {
+			return err
+		}
+	}
+	if char.Stats.HP <= 0 {
+		return ErrCharacterUnconscious
+	}
+	if char.Tired >= 100 {
+		return ErrCharacterExhausted
+	}
+	if err := s.stages.CanAccessStage(char, p.StageID); err != nil {
+		return err
+	}
+	if p.NeedJoin != "" {
+		if err := ValidateNeedJoin(p.NeedJoin, char); err != nil {
+			return err
+		}
+	}
+	if char.Level < p.MinLevel || char.Level > p.MaxLevel {
+		return ErrLevelRequirementNotMet
+	}
+	if char.Stats.MaxHP < p.MinHP {
+		return ErrHPRequirementNotMet
+	}
+
+	battleActor, err := s.buildBattleActor(txCtx, char.ID)
+	if err != nil {
+		return err
+	}
+	maxHP := char.Stats.MaxHP
+	if battleActor != nil {
+		maxHP = battleActor.MaxHP
+	}
+
+	return s.repo.AddMember(txCtx, Member{
+		PartyID:       p.ID,
+		CharacterID:   char.ID,
+		CharacterName: char.Name,
+		JobID:         char.JobID,
+		Level:         char.Level,
+		HP:            char.Stats.HP,
+		MaxHP:         maxHP,
+		IsLeader:      false,
+		ReadyState:    false,
+		JoinedAt:      time.Now().UTC(),
+		BattleActor:   battleActor,
+	})
 }
 
 // LeaveParty leaves the party. If the leader leaves, the party is disbanded.

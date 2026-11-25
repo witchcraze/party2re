@@ -65,20 +65,18 @@ func stageByID(id string) BossStage {
 	return BossStage{}
 }
 
-func TestBuildBossParticipants_NormalBoss(t *testing.T) {
-	svc := &Service{}
-	stage := stageByID("king1") // 破壊神 + 6 stones
-	participants := svc.buildBossParticipants(stage, nil)
-	if len(participants) != 7 {
-		t.Fatalf("expected 7 participants, got %d", len(participants))
+func TestStageRoster_CatalogBosses(t *testing.T) {
+	roster := stageRoster(stageByID("king1"), nil) // 破壊神 + 6 stones
+	if len(roster) != 7 {
+		t.Fatalf("expected 7 enemies, got %d", len(roster))
 	}
-	var hakai, redStone corebattle.Participant
-	for _, p := range participants {
-		if p.Name == "破壊神" {
-			hakai = p
+	var hakai, redStone corebattle.LifetimeActor
+	for _, e := range roster {
+		if e.Name == "破壊神" {
+			hakai = e
 		}
-		if p.Name == "レッドストーン" {
-			redStone = p
+		if e.Name == "レッドストーン" {
+			redStone = e
 		}
 	}
 
@@ -92,6 +90,9 @@ func TestBuildBossParticipants_NormalBoss(t *testing.T) {
 	if hakai.Skills[0].ID != "dejon" {
 		t.Errorf("expected first skill to be dejon, got %s", hakai.Skills[0].ID)
 	}
+	if hakai.CrystalReward != 40 || !hakai.NPC {
+		t.Errorf("expected an NPC carrying 40 crystals, got %+v", hakai)
+	}
 
 	// レッドストーン has TMP "魔無効" and Job 26 + OldJob 6 skills
 	if len(redStone.Abilities) != 1 || redStone.Abilities[0] != "魔無効" {
@@ -100,43 +101,33 @@ func TestBuildBossParticipants_NormalBoss(t *testing.T) {
 	if len(redStone.Skills) != 9 { // dejon + 3 ninja skills + 5 mage skills
 		t.Errorf("expected 9 skills for レッドストーン, got %d", len(redStone.Skills))
 	}
+	if redStone.ExperienceReward != 1000 || redStone.GoldReward != 2000 || redStone.Icon != "mon/190.gif" {
+		t.Errorf("unexpected catalog rewards: %+v", redStone.Participant)
+	}
 }
 
-func TestBuildBossParticipants_King99Clones(t *testing.T) {
-	svc := &Service{}
-	stage := stageByID("king99")
-	allies := []corecharacter.Character{
-		{
-			ID:       "ally-1",
-			Name:     "HeroA",
-			JobID:    "job-26", // 忍者
-			OldJobID: "job-6",  // 魔法使い
-			SP:       100,
-			OldSP:    100,
-			Stats: corecharacter.Stats{
-				HP:      200,
-				MaxHP:   200,
-				MP:      50,
-				MaxMP:   50,
-				Attack:  100,
-				Defense: 80,
-				Agility: 60,
-			},
+func TestStageRoster_King99ClonesUnsealers(t *testing.T) {
+	unsealer := corebattle.LifetimeActor{
+		Participant: corebattle.Participant{
+			ID: "ally-1", Name: "HeroA", HP: 1, MaxHP: 200, MaxMP: 50, Attack: 100, Defense: 80, Agility: 60,
+			Icon: "hero.png", ExperienceReward: 60, GoldReward: 25,
 		},
+		Jobs: corebattle.BattleJobs{JobID: "job-26", SP: 100, OldJobID: "job-6", OldSP: 100}, // 忍者 / 魔法使い
 	}
-	participants := svc.buildBossParticipants(stage, allies)
-	if len(participants) != 1 {
-		t.Fatalf("expected 1 clone participant, got %d", len(participants))
+	roster := stageRoster(stageByID("king99"), []corebattle.LifetimeActor{unsealer})
+	if len(roster) != 1 {
+		t.Fatalf("expected 1 clone, got %d", len(roster))
 	}
-	clone := participants[0]
-	if clone.Name != "@HeroA" {
-		t.Errorf("expected clone name '@HeroA', got %s", clone.Name)
+	clone := roster[0]
+	if clone.Name != "@HeroA" || clone.Icon != "hero.png" {
+		t.Errorf("expected clone '@HeroA' with the unsealer's icon, got %s %s", clone.Name, clone.Icon)
 	}
 	if len(clone.Abilities) != 1 || clone.Abilities[0] != "大防御" {
 		t.Errorf("expected clone ability '大防御', got %v", clone.Abilities)
 	}
-	if clone.HP != 200*50 {
-		t.Errorf("expected clone HP 10000, got %d", clone.HP)
+	// Max HP/MP, not the current HP, scale by 50 (stage/king99.cgi).
+	if clone.HP != 200*50 || clone.MaxHP != 200*50 || clone.MP != 50*50 {
+		t.Errorf("expected clone HP 10000 and MP 2500, got %d/%d", clone.HP, clone.MP)
 	}
 	if clone.Attack != 200 || clone.Defense != 160 || clone.Agility != 120 {
 		t.Errorf("expected 2x stats, got Atk=%d Def=%d Agi=%d", clone.Attack, clone.Defense, clone.Agility)
@@ -148,96 +139,26 @@ func TestBuildBossParticipants_King99Clones(t *testing.T) {
 	if len(clone.Skills) != 9 {
 		t.Errorf("expected 9 skills for clone, got %d", len(clone.Skills))
 	}
-}
-
-func TestBuildKing99CloneRecord(t *testing.T) {
-	// Normal character
-	hero := corecharacter.Character{
-		ID:       "c1",
-		Name:     "Hero",
-		Level:    50,
-		JobLevel: 10,
-		Stats: corecharacter.Stats{
-			MaxHP:   600,
-			MaxMP:   100,
-			Attack:  300,
-			Defense: 200,
-			Agility: 50,
-		},
-	}
-	rec := buildKing99CloneRecord(hero)
-	if rec.MonsterID != "king99-clone" || rec.MonsterName != "影" || rec.Habitat != "封印戦" || rec.Icon != "king99-clone" {
-		t.Errorf("unexpected metadata: %+v", rec)
-	}
-	if rec.HP != 600*50 || rec.MP != 100*50 || rec.Attack != 300*2 || rec.Defense != 200*2 || rec.Agility != 50*2 {
-		t.Errorf("unexpected combat stats: HP=%d MP=%d Atk=%d Def=%d Agi=%d", rec.HP, rec.MP, rec.Attack, rec.Defense, rec.Agility)
-	}
-	expectedStrong := int(float64(600*50) + float64(100*50) + float64(300*2) + float64(200*2)*0.5 + float64(50*2))
-	if rec.Strong != expectedStrong {
-		t.Errorf("expected Strong %d, got %d", expectedStrong, rec.Strong)
-	}
-	if rec.ExperienceReward != (50+10)*30 {
-		t.Errorf("expected ExperienceReward %d, got %d", (50+10)*30, rec.ExperienceReward)
-	}
-	if rec.GoldReward != int(50*0.5)*30 {
-		t.Errorf("expected GoldReward %d, got %d", int(50*0.5)*30, rec.GoldReward)
-	}
-
-	// Zero/negative HP/MP fallback
-	zeroHero := corecharacter.Character{
-		ID:    "zero",
-		Level: 1,
-	}
-	zeroRec := buildKing99CloneRecord(zeroHero)
-	if zeroRec.HP != 5000 {
-		t.Errorf("expected fallback HP 5000, got %d", zeroRec.HP)
-	}
-	if zeroRec.MP != 500 {
-		t.Errorf("expected fallback MP 500, got %d", zeroRec.MP)
+	if clone.ExperienceReward != 60*30 || clone.GoldReward != 25*30 || clone.CrystalReward != 20 {
+		t.Errorf("expected rewards 1800/750/20, got %d/%d/%d", clone.ExperienceReward, clone.GoldReward, clone.CrystalReward)
 	}
 }
 
-func TestBuildKing99CloneRecords(t *testing.T) {
-	allies := []corecharacter.Character{
-		{ID: "c1", Level: 50, JobLevel: 10},
-		{ID: "c2", Level: 30, JobLevel: 5},
-	}
-	records := buildKing99CloneRecords(allies)
-	if len(records) != 2 {
-		t.Fatalf("expected 2 records, got %d", len(records))
-	}
-	if records["c1"].ExperienceReward != (50+10)*30 {
-		t.Errorf("expected c1 exp %d, got %d", (50+10)*30, records["c1"].ExperienceReward)
-	}
-	if records["c2"].ExperienceReward != (30+5)*30 {
-		t.Errorf("expected c2 exp %d, got %d", (30+5)*30, records["c2"].ExperienceReward)
+func TestUnsealerFromCharacterUsesBattleRowRewards(t *testing.T) {
+	unsealer := unsealerFromCharacter(corecharacter.Character{ID: "c1", Name: "Hero", Level: 50, JobLevel: 10, Stats: corecharacter.Stats{MaxHP: 600, MaxMP: 100, Attack: 300}})
+	if unsealer.ExperienceReward != 60 || unsealer.GoldReward != 25 || unsealer.MaxHP != 600 || unsealer.Attack != 300 {
+		t.Errorf("unexpected battle row: %+v", unsealer.Participant)
 	}
 }
 
-func TestCalculateTotalExpAndGold_King99(t *testing.T) {
-	svc := &Service{}
-	stage := stageByID("king99")
-	allies := []corecharacter.Character{
-		{
-			Level:    50,
-			JobLevel: 30,
-		},
-		{
-			Level:    70,
-			JobLevel: 50,
-		},
-	}
-
-	// EXP: (50 + 30)*30 + (70 + 50)*30 = 2400 + 3600 = 6000
-	totalExp := svc.calculateTotalExp(stage, allies)
-	if totalExp != 6000 {
-		t.Errorf("expected 6000 EXP, got %d", totalExp)
-	}
-
-	// Gold: int(50*0.5)*30 + int(70*0.5)*30 = 25*30 + 35*30 = 750 + 1050 = 1800
-	totalGold := svc.calculateTotalGold(stage, allies)
-	if totalGold != 1800 {
-		t.Errorf("expected 1800 Gold, got %d", totalGold)
+func TestRosterRewards_King99(t *testing.T) {
+	roster := stageRoster(stageByID("king99"), []corebattle.LifetimeActor{
+		unsealerFromCharacter(corecharacter.Character{Level: 50, JobLevel: 30}),
+		unsealerFromCharacter(corecharacter.Character{Level: 70, JobLevel: 50}),
+	})
+	// EXP: (50 + 30)*30 + (70 + 50)*30 = 6000; Gold: int(50*0.5)*30 + int(70*0.5)*30 = 1800
+	if exp, gold := rosterRewards(roster); exp != 6000 || gold != 1800 {
+		t.Errorf("expected 6000 EXP and 1800 Gold, got %d and %d", exp, gold)
 	}
 }
 
@@ -266,7 +187,7 @@ func TestClearTimeCrystalMultipliers(t *testing.T) {
 	}
 }
 
-func TestCalculateTotalCrystals(t *testing.T) {
+func TestRosterCrystals(t *testing.T) {
 	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
 	atElapsed := func(d time.Duration) *time.Time {
 		ts := now.Add(-d)
@@ -275,8 +196,7 @@ func TestCalculateTotalCrystals(t *testing.T) {
 
 	// Normal stage: king1 has 6 stones (GetCrystal=5 each) + 1 boss (GetCrystal=40), sum=70.
 	// Note the 1.5x bracket truncates per enemy: 6*int(5*1.5) + int(40*1.5) = 6*7 + 60 = 102 (NOT int(70*1.5)=105).
-	stage := stageByID("king1")
-	allies := []corecharacter.Character{{ID: "a"}}
+	roster := stageRoster(stageByID("king1"), nil)
 
 	tests := []struct {
 		name       string
@@ -293,15 +213,14 @@ func TestCalculateTotalCrystals(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run("king1/"+tt.name, func(t *testing.T) {
-			if got := calculateTotalCrystals(stage, allies, tt.unsealedAt, now); got != tt.expected {
+			if got := rosterCrystals(roster, tt.unsealedAt, now); got != tt.expected {
 				t.Errorf("got %d crystals, want %d", got, tt.expected)
 			}
 		})
 	}
 
 	// King 99: 20 crystals per defeated clone, multiplier applied per clone before summing
-	stage99 := stageByID("king99")
-	allies3 := []corecharacter.Character{{ID: "a"}, {ID: "b"}, {ID: "c"}}
+	roster99 := stageRoster(stageByID("king99"), make([]corebattle.LifetimeActor, 3))
 	king99Tests := []struct {
 		name       string
 		unsealedAt *time.Time
@@ -314,7 +233,7 @@ func TestCalculateTotalCrystals(t *testing.T) {
 	}
 	for _, tt := range king99Tests {
 		t.Run("king99/"+tt.name, func(t *testing.T) {
-			if got := calculateTotalCrystals(stage99, allies3, tt.unsealedAt, now); got != tt.expected {
+			if got := rosterCrystals(roster99, tt.unsealedAt, now); got != tt.expected {
 				t.Errorf("got %d crystals, want %d", got, tt.expected)
 			}
 		})

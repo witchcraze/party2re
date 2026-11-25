@@ -16,13 +16,14 @@ import (
 	"github.com/witchcraze/party2re/internal/party"
 )
 
-// StartSealingBattle starts and resolves a party sealing battle (vs_king.cgi).
+// StartSealingBattle starts and resolves a sealing room's battle (vs_king.cgi)
+// against its stored enemy roster. Any room member may start it.
 //
 // SQL room receipts serialize settlement and retain the committed result/roster.
 // Valkey cleanup runs after commit and is retried without resolving battle again.
 // Transaction: RunInTx (SQL settlement only; cleanup follows commit)
 // Lock Order: boss_room_settlements(0) -> characters(2, ascending ID) -> inventory_items(3) -> depot_items(5)
-func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID string) (SealingBattleResult, error) {
+func (s *Service) StartSealingBattle(ctx context.Context, partyID, actorID string) (SealingBattleResult, error) {
 	if s.partyRepo == nil {
 		return SealingBattleResult{}, errors.New("party repository not configured")
 	}
@@ -30,13 +31,13 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 	var result SealingBattleResult
 	err := s.partyRepo.WithPartyAdventureLock(ctx, partyID, func(lockedCtx context.Context) error {
 		var err error
-		result, err = s.completeSealingBattle(lockedCtx, partyID, leaderCharID)
+		result, err = s.completeSealingBattle(lockedCtx, partyID, actorID)
 		return err
 	})
 	return result, err
 }
 
-func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderCharID string, original **party.Party) (*SealingSettlement, string, error) {
+func (s *Service) settleSealingBattle(txCtx context.Context, partyID, actorID string, original **party.Party) (*SealingSettlement, string, error) {
 	var receipt *SealingSettlement
 	var slayerName string
 	err := func() error {
@@ -45,8 +46,8 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 		if err != nil {
 			return ErrPartyNotFound
 		}
-		if p.LeaderCharacterID != leaderCharID {
-			return ErrNotPartyLeader
+		if p.Kind != party.KindSealing || len(p.Enemies) == 0 {
+			return ErrBossNotFound
 		}
 		if p.Status != party.StatusRecruiting && p.Status != party.StatusInProgress {
 			return ErrPartyNotRecruiting
@@ -60,10 +61,8 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 		if err != nil || len(members) == 0 {
 			return ErrPartyNotReady
 		}
-		for _, m := range members {
-			if !m.ReadyState {
-				return ErrPartyNotReady
-			}
+		if !hasMember(members, actorID) {
+			return ErrNotRoomMember
 		}
 
 		// 3. Resolve stage
@@ -111,16 +110,8 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 			return err
 		}
 
-		// 5. Entry fatigue cost: each participant gets +20% Tired ($m{tired} += 20)
-		for _, cID := range charIDs {
-			c := chars[cID]
-			c.AddTired(20)
-			chars[cID] = c
-		}
-
 		// 6. Build ally participants
 		allies := make([]corebattle.Participant, 0, len(members))
-		orderedChars := make([]corecharacter.Character, 0, len(members))
 		for _, m := range members {
 			c := chars[m.CharacterID]
 			var p corebattle.Participant
@@ -134,24 +125,14 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 				p = buildFallbackParticipant(c)
 			}
 			allies = append(allies, p)
-			orderedChars = append(orderedChars, c)
 		}
 
-		// 7. Build boss participants
-		bossParticipants := s.buildBossParticipants(stage, orderedChars)
-		var cloneRecords map[string]DefeatedMonsterRecord
-		if stage.ID == "king99" {
-			cloneRecords = buildKing99CloneRecords(orderedChars)
-		}
-
-		// 8. Resolve Battle
+		// 7. Resolve the battle against the room's stored roster
+		exp, gold := rosterRewards(p.Enemies)
 		req := corebattle.PartyBattleRequest{
-			Allies:  allies,
-			Enemies: bossParticipants,
-			VictoryReward: corebattle.Reward{
-				Experience: s.calculateTotalExp(stage, orderedChars),
-				Currency:   s.calculateTotalGold(stage, orderedChars),
-			},
+			Allies:        allies,
+			Enemies:       rosterParticipants(p.Enemies),
+			VictoryReward: corebattle.Reward{Experience: exp, Currency: gold},
 		}
 
 		partyEngine, ok := s.battleEngine.(corebattle.PartyBattleResolver)
@@ -219,7 +200,7 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 					return fmt.Errorf("failed to read unseal clock: %w", err)
 				}
 			}
-			rewardCrystals = calculateTotalCrystals(stage, orderedChars, unsealedAt, s.now())
+			rewardCrystals = rosterCrystals(p.Enemies, unsealedAt, s.now())
 
 			heroNames := make([]string, 0, len(members))
 			for _, m := range members {
@@ -250,13 +231,12 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 			}
 
 			for _, m := range members {
-				if err := s.recordBossDefeats(txCtx, stage, m.CharacterID, cloneRecords); err != nil {
+				if err := s.recordBossDefeats(txCtx, stage.ID, m.CharacterID, p.Enemies); err != nil {
 					return err
 				}
 			}
 
-			leaderChar := chars[leaderCharID]
-			slayerName = leaderChar.Name
+			slayerName = chars[actorID].Name
 		}
 
 		// 11. Persist updated characters in DB
@@ -333,4 +313,13 @@ func (s *Service) settleSealingBattle(txCtx context.Context, partyID, leaderChar
 	}()
 
 	return receipt, slayerName, err
+}
+
+func hasMember(members []party.Member, characterID string) bool {
+	for _, m := range members {
+		if m.CharacterID == characterID {
+			return true
+		}
+	}
+	return false
 }

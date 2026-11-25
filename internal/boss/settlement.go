@@ -24,7 +24,7 @@ type SealingSettlementRepository interface {
 	SaveSealingSettlement(ctx context.Context, settlement SealingSettlement) error
 }
 
-func (s *Service) completeSealingBattle(ctx context.Context, partyID, leaderID string) (SealingBattleResult, error) {
+func (s *Service) completeSealingBattle(ctx context.Context, partyID, actorID string) (SealingBattleResult, error) {
 	if s.settlementRepo == nil {
 		return SealingBattleResult{}, errors.New("sealing settlement repository not configured")
 	}
@@ -39,7 +39,7 @@ func (s *Service) completeSealingBattle(ctx context.Context, partyID, leaderID s
 		if err != nil || receipt != nil {
 			return err
 		}
-		receipt, slayerName, err = s.settleSealingBattle(txCtx, partyID, leaderID, &original)
+		receipt, slayerName, err = s.settleSealingBattle(txCtx, partyID, actorID, &original)
 		return err
 	})
 	if err != nil && !known {
@@ -66,13 +66,13 @@ func (s *Service) completeSealingBattle(ctx context.Context, partyID, leaderID s
 			return SealingBattleResult{}, err
 		}
 	}
-	if receipt.Lobby.Party.LeaderCharacterID != leaderID {
-		return SealingBattleResult{}, ErrNotPartyLeader
+	if !hasMember(receipt.Lobby.Members, actorID) {
+		return SealingBattleResult{}, ErrNotRoomMember
 	}
 	result := receipt.Result
 	result.BanquetHeld = false
 	if !known {
-		s.holdVictoryBanquet(ctx, &result, leaderID, slayerName)
+		s.holdVictoryBanquet(ctx, &result, actorID, slayerName)
 	}
 	if err := s.partyRepo.CleanupParty(ctx, receipt.Lobby); err != nil {
 		return result, fmt.Errorf("sealing committed; cleanup pending: %w", err)
