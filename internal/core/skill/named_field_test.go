@@ -57,6 +57,7 @@ func TestNamedFieldDarknessUsesSubmittedDiscoveredBindingAndSharesFacts(t *testi
 		{"job-22-entry-0", "dark-strike", true, false}, {"job-22-entry-0", "＠＠dark-strike", true, false},
 	} {
 		s, base, _ := dualAgilityFixture()
+		base.GuaranteedHit = false
 		s.Actors[1].HP = 10000
 		s.Actors[0].HP, s.Actors[0].BaseStats.Attack = 500, 100
 		c := &corebattle.NamedFieldContext{DamageContext: base.DamageContext, SubmittedCommand: row.command, SubmittedTarget: "enemy", Discovered: []corebattle.CallbackEntry{{ID: "missing", Name: "dark-strike"}, {ID: row.selected, Name: "dark-strike"}}}
@@ -67,7 +68,8 @@ func TestNamedFieldDarknessUsesSubmittedDiscoveredBindingAndSharesFacts(t *testi
 		var d BattleDefinitions
 		d.RegisterRecoilDarkState(dark)
 		d.RegisterNamedFields(c)
-		f := corebattle.CallbackContext{TargetContext: c.TargetContext}
+		fDamage := c.DamageContext
+		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Damage: &fDamage}
 		old, _ := json.Marshal(s)
 		ops, err := d.InvocationAction(&s, &f, []string{"job-22-entry-5"}, noArithmeticDraws{t})
 		if row.reject {
@@ -78,8 +80,8 @@ func TestNamedFieldDarknessUsesSubmittedDiscoveredBindingAndSharesFacts(t *testi
 				t.Fatal(err)
 			}
 			current, _ := json.Marshal(s)
-			if string(current) != string(old) || c.DamageCalls != 0 || dark.DamageCalls != 0 {
-				t.Fatal(s, c, dark)
+			if string(current) != string(old) || c.DamageCalls != 0 || dark.DamageCalls != 0 || fDamage.GuaranteedHit {
+				t.Fatal(s, c, dark, fDamage)
 			}
 			continue
 		}
@@ -97,11 +99,11 @@ func TestNamedFieldDarknessUsesSubmittedDiscoveredBindingAndSharesFacts(t *testi
 		if s.Fields.Temporary != "darkness" || s.Actors[0].Attack != 150 || s.Actors[1].Attack != s.Actors[1].BaseStats.Attack {
 			t.Fatal(s)
 		}
-		if !row.excluded && (c.DamageCalls != 1 || dark.DamageCalls != 1 || c.End.DarknessDebit == nil || c.End.ImmediateRiskCalls != 1 || s.Actors[0].HP != 250 || !c.GuaranteedHit) {
-			t.Fatal(c, dark, s)
+		if !row.excluded && (c.DamageCalls != 1 || dark.DamageCalls != 1 || c.End.DarknessDebit == nil || c.End.ImmediateRiskCalls != 1 || s.Actors[0].HP != 250 || !c.GuaranteedHit || !fDamage.GuaranteedHit || fDamage.DamageCalls != 1) {
+			t.Fatal(c, dark, s, fDamage)
 		}
-		if row.excluded && (c.DamageCalls != 0 || s.Actors[0].HP != 500) {
-			t.Fatal(c, s)
+		if row.excluded && (c.DamageCalls != 0 || s.Actors[0].HP != 500 || fDamage.GuaranteedHit) {
+			t.Fatal(c, s, fDamage)
 		}
 	}
 }

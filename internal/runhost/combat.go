@@ -229,7 +229,7 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 			respond = room.Respond
 		}
 		if npc := respond(now); npc != "" {
-			if err := s.respond(run, npc, cmd.ActorID, requester, &level, &seals, rewards, assets, result.ArithmeticDivisor, room, &fx); err != nil {
+			if err := s.respond(run, npc, cmd.ActorID, requester, &level, &seals, rewards, assets, result.ArithmeticDivisor, result.GuaranteedHit, room, &fx); err != nil {
 				return fx, err
 			}
 			if err := r.RecordNPCResponse(npc, now); err != nil {
@@ -253,7 +253,7 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 
 // respond runs the selected NPC's response on the saved state. Its opponents
 // are the living members of other teams in member order.
-func (s *Service[R, P]) respond(run *R, npc, requesterID string, requester *corecharacter.Character, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, divisor int, room RoomCombat, fx *Effects) error {
+func (s *Service[R, P]) respond(run *R, npc, requesterID string, requester *corecharacter.Character, level *int, seals *corebattle.WeaponSealTable, rewards *corebattle.DefeatRewards, assets *corebattle.JobAssets, divisor int, guaranteedHit bool, room RoomCombat, fx *Effects) error {
 	r := P(run).Host()
 	team := r.Actor(npc).TeamID
 	frame := corebattle.TargetContext{ActorID: npc}
@@ -270,6 +270,7 @@ func (s *Service[R, P]) respond(run *R, npc, requesterID string, requester *core
 		}
 	}
 	ports := newRunPorts(frame, level, seals, r.Battle.Fields.Current(), rewards, true)
+	ports.damage.GuaranteedHit = guaranteedHit
 	op := corebattle.NPCOperation{Damage: ports.damage, Defeat: ports.defeat, Field: corebattle.NamedFieldContext{DamageContext: ports.damage, Death: ports.defeat}, Assets: assets, ArithmeticDivisor: divisor}
 	saved := cloneBattle(r.Battle)
 	actor := findActor(saved.Actors, npc)

@@ -541,6 +541,36 @@ func TestNPCOperationKinjuPreflightsFatalAndDeathPreventionContinuations(t *test
 	}
 }
 
+func TestNPCOperationGuaranteedHitAndOneHitDefense(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		guaranteedHit bool
+		oneHitDefense bool
+		wantHit       bool
+	}{
+		{"normal_miss", false, false, false},
+		{"guaranteed_hit", true, false, true},
+		{"one_hit_defense_precedes_guaranteed_hit", true, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, op := runNPCFixture(t)
+			s.Actors[0].Attack, s.Actors[0].Hit = 100, 1
+			s.Actors[1].HP, s.Actors[1].MaxHP = 500, 500
+			if tc.oneHitDefense {
+				s.Actors[1].Temporary = battle.TemporaryOneHitDefense
+			}
+			op.Damage.GuaranteedHit = tc.guaranteedHit
+			got, err := ApplyNPCOperation(&s, op, NPCDefaultSeed(), registerNPCFixture, &npcSelectionRNG{value: .95})
+			if err != nil || !got.NormalAction {
+				t.Fatalf("result %+v error %v", got, err)
+			}
+			if (s.Actors[1].HP < 500) != tc.wantHit || s.Actors[1].Temporary != "" {
+				t.Fatalf("enemy HP=%d tmp=%q", s.Actors[1].HP, s.Actors[1].Temporary)
+			}
+		})
+	}
+}
+
 func responseBinding(id string) battle.CallbackBinding {
 	return battle.CallbackBinding{CallbackEntry: battle.CallbackEntry{ID: id, Name: id}, Invocation: battle.CallbackInvocation{Kind: "entry", EntryID: id}}
 }

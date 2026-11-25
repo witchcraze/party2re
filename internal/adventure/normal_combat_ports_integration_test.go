@@ -234,3 +234,93 @@ func TestRunCombatDarknessContinuation(t *testing.T) {
 		rejected(t, f, combatCommand(room(t, f), "dark", "", "", "＠インヴァイトダーク&gt;＠あんこくけん foe"))
 	})
 }
+
+// _skill.cgi:2189–2229,8839–8859; _battle.cgi:1169–1171: executing a darkness
+// continuation sets the request-global hit flag so the same command's NPC
+// physical response skips hit/evasion checks while still honoring one-hit
+// defense; field-only, existing-darkness, and subsequent commands use normal hit
+// checks.
+func TestRunCombatDarknessGuaranteedHitReachesSameCommandResponse(t *testing.T) {
+	darknessRoom := func(t *testing.T, f *normalFixture, edit func(*adventure.NormalRun)) runhost.Command {
+		t.Helper()
+		foe := runEnemy("foe", 900)
+		foe.Attack, foe.BaseStats.Attack, foe.Hit = 60, 60, 1
+		return combatRoom(t, f, f.actors[0], func(r *adventure.NormalRun) {
+			a := runActorByID(r, f.actors[0].ID)
+			a.Jobs = corebattle.BattleJobs{JobID: "job-22", SP: 140}
+			a.MP, a.MaxMP, a.ItemDefinitionIDs = 39, 39, []string{"item-240"}
+			if edit != nil {
+				edit(r)
+			}
+		}, foe)
+	}
+
+	t.Run("continues and expires next command", func(t *testing.T) {
+		f := combatFixture(t, 1)
+		cmd := darknessRoom(t, f, nil)
+		r := accepted(t, f, combatCommand(cmd, "dark", "", "", "＠インヴァイトダーク&gt;＠めいやく foe"))
+		a := runActorByID(r, cmd.ActorID)
+		if r.Battle.Fields.Current() != "darkness" || a.HP >= 250 || a.MP != 32 || !r.LastActions["foe"].Equal(f.clock.Now()) {
+			t.Fatalf("continues: field=%q hp=%d mp=%d foeLast=%v", r.Battle.Fields.Current(), a.HP, a.MP, r.LastActions["foe"])
+		}
+		afterHitHP := a.HP
+		f.clock.add(time.Hour)
+		cmd.Version = r.Version
+		r = accepted(t, f, combatCommand(cmd, "defend", "defend", "", ""))
+		if a := runActorByID(r, cmd.ActorID); a.HP != afterHitHP || !r.LastActions["foe"].Equal(f.clock.Now()) {
+			t.Fatalf("next command: hp=%d want=%d foeLast=%v", a.HP, afterHitHP, r.LastActions["foe"])
+		}
+	})
+
+	for _, tc := range []struct {
+		name, input string
+		existing    bool
+	}{
+		{"field only", "＠インヴァイトダーク&gt;foe", false},
+		{"existing darkness", "＠インヴァイトダーク&gt;＠めいやく foe", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := combatFixture(t, 1)
+			cmd := darknessRoom(t, f, func(r *adventure.NormalRun) {
+				if tc.existing {
+					r.Battle.Fields = corebattle.LifetimeFields{Temporary: "darkness", Turns: 3}
+				}
+			})
+			r := accepted(t, f, combatCommand(cmd, "dark", "", "", tc.input))
+			a := runActorByID(r, cmd.ActorID)
+			if r.Battle.Fields.Current() != "darkness" || a.HP != 500 || a.MP != 32 || !r.LastActions["foe"].Equal(f.clock.Now()) {
+				t.Fatalf("%s: field=%q hp=%d mp=%d foeLast=%v", tc.name, r.Battle.Fields.Current(), a.HP, a.MP, r.LastActions["foe"])
+			}
+		})
+	}
+
+	t.Run("one hit defense", func(t *testing.T) {
+		f := combatFixture(t, 2)
+		_, lobby := f.waitingParty(t, "normal")
+		leader, ally := f.actors[0], f.actors[1]
+		entry, err := f.svc.EnterParty(t.Context(), leader.PlayerID, leader.ID, lobby)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := runhost.Command{PlayerID: leader.PlayerID, ActorID: leader.ID, RunID: entry.Command.RunID, Version: entry.Version}
+		foe := runEnemy("foe", 900)
+		foe.Attack, foe.BaseStats.Attack, foe.Hit = 60, 60, 1
+		editStockRoom(t, f, &cmd, func(r *adventure.NormalRun) {
+			r.Round, r.EncounterFloor, r.EncounterStageID = 1, 1, r.Stage.ID
+			r.Battle.Actors = append(r.Battle.Actors, foe)
+			r.Enemies = append(r.Enemies, foe.ID)
+			p0, p1 := runActorByID(r, leader.ID), runActorByID(r, ally.ID)
+			p0.HP, p0.MaxHP = 500, 500
+			p0.Jobs = corebattle.BattleJobs{JobID: "job-22", SP: 140}
+			p0.MP, p0.MaxMP, p0.ItemDefinitionIDs = 39, 39, []string{"item-240"}
+			p1.HP, p1.MaxHP, p1.Temporary = 500, 500, corebattle.TemporaryOneHitDefense
+			r.LastActions[leader.ID] = f.clock.Now()
+		})
+		f.clock.add(3 * time.Second)
+		r := accepted(t, f, combatCommand(cmd, "dark", "", "", "＠インヴァイトダーク&gt;＠めいやく foe"))
+		p0, p1 := runActorByID(r, leader.ID), runActorByID(r, ally.ID)
+		if p0.HP != 250 || p1.HP != 500 || p1.Temporary != "" || !r.LastActions["foe"].Equal(f.clock.Now()) {
+			t.Fatalf("one hit defense: p0.HP=%d p1.HP=%d p1.Temporary=%q foeLast=%v", p0.HP, p1.HP, p1.Temporary, r.LastActions["foe"])
+		}
+	})
+}

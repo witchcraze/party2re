@@ -37,6 +37,7 @@ type PlayerActionFacts struct {
 	Target TargetContext
 	// ArithmeticDivisor is the callback frame's final job72 divisor.
 	ArithmeticDivisor int
+	GuaranteedHit     bool
 }
 
 // PlayerOperation is rebuilt per request. Tail carries the actor's target
@@ -66,6 +67,9 @@ type PlayerOperationResult struct {
 	// ArithmeticDivisor is request-global in the source (`$_mp_num`), so the
 	// same command's NPC response continues from it.
 	ArithmeticDivisor int
+	// GuaranteedHit is request-global in the source (`$is_hit`), so the same
+	// command's NPC response shares it.
+	GuaranteedHit bool
 	LifetimeResult
 }
 
@@ -134,7 +138,7 @@ func (s *LifetimeState) ApplyPlayerOperation(op *PlayerOperation, rng random.Gen
 	if outerRollbacks != nil {
 		*outerRollbacks = append(*outerRollbacks, opRollbacks...)
 	}
-	result.Target, result.ArithmeticDivisor = work.Tail.TargetContext, work.Tail.ArithmeticDivisor
+	result.Target, result.ArithmeticDivisor, result.GuaranteedHit = work.Tail.TargetContext, work.Tail.ArithmeticDivisor, work.Tail.GuaranteedHit
 	return result, nil
 }
 
@@ -279,6 +283,9 @@ func (s *LifetimeState) recordPlayerFacts(c *PlayerTailContext, f PlayerActionFa
 	c.End.SkipPrefilter = c.End.SkipPrefilter || f.End.SkipPrefilter
 	if f.ArithmeticDivisor != 0 {
 		c.ArithmeticDivisor = f.ArithmeticDivisor
+	}
+	if f.GuaranteedHit {
+		c.GuaranteedHit = true
 	}
 }
 
