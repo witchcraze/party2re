@@ -11837,18 +11837,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "BossChallengeResponse": {
-        "properties": {
-          "result": {
-            "$ref": "#/components/schemas/BossSealingBattleResult"
-          }
-        },
-        "required": [
-          "result"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "BossSealingBattleResult": {
         "properties": {
           "banished_member_ids": {

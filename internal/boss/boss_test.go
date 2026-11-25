@@ -280,187 +280,6 @@ func TestListBosses_LockUnlock(t *testing.T) {
 	}
 }
 
-// TestChallengeBoss_NeedJoinNotMet verifies that ChallengeBoss returns
-// ErrNeedJoinNotMet when the character's level is too low.
-func TestChallengeBoss_NeedJoinNotMet(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	charRepo := &mockCharRepo{
-		chars: map[string]corecharacter.Character{
-			"low": createTestChar("low", 10, 100, 20, 20),
-		},
-	}
-	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = service.ChallengeBoss(ctx, "low", "king1")
-	if !errors.Is(err, boss.ErrNeedJoinNotMet) {
-		t.Errorf("expected ErrNeedJoinNotMet, got %v", err)
-	}
-}
-
-// TestChallengeBoss_ExhaustedCharacter verifies that a character with
-// Tired >= 100 cannot enter a sealing battle.
-func TestChallengeBoss_ExhaustedCharacter(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	char := createTestChar("tired", 30, 300, 70, 50)
-	char.Tired = 100
-	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"tired": char}}
-
-	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = service.ChallengeBoss(ctx, "tired", "king1")
-	if !errors.Is(err, boss.ErrCharacterExhausted) {
-		t.Errorf("expected ErrCharacterExhausted, got %v", err)
-	}
-}
-
-// TestChallengeBoss_Victory verifies that a strong character wins against
-// king-01, gains HeroCount, and accumulates history.
-func TestChallengeBoss_Victory(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	charRepo := &mockCharRepo{
-		chars: map[string]corecharacter.Character{
-			// king1 boss (破壊神) has HP=150000, Attack=600, Defense=300.
-			// Use a supremely powerful character to guarantee victory.
-			"hero": createTestChar("hero", 99, 500000, 999999, 99999),
-		},
-	}
-	bossRepo.charRepo = charRepo
-
-	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	res, err := service.ChallengeBoss(ctx, "hero", "king1")
-	if err != nil {
-		t.Fatalf("ChallengeBoss failed: %v", err)
-	}
-
-	if res.Outcome != corebattle.OutcomeWin {
-		t.Fatalf("expected victory, got outcome %v", res.Outcome)
-	}
-	if res.HeroCountGained != 1 {
-		t.Errorf("expected HeroCountGained=1, got %d", res.HeroCountGained)
-	}
-	if res.RewardExp <= 0 {
-		t.Errorf("expected positive RewardExp, got %d", res.RewardExp)
-	}
-
-	// Second win accumulates TotalBossDefeats.
-	_, err = service.ChallengeBoss(ctx, "hero", "king1")
-	if err != nil {
-		t.Fatalf("second ChallengeBoss failed: %v", err)
-	}
-
-	history, err := service.GetHistory(ctx, "hero", 10)
-	if err != nil || len(history) != 2 {
-		t.Errorf("expected 2 history entries, got %d (err: %v)", len(history), err)
-	}
-
-	leaderboard, err := service.GetLeaderboard(ctx, 10)
-	if err != nil || len(leaderboard) != 1 {
-		t.Errorf("expected 1 leaderboard entry, got %d", len(leaderboard))
-	}
-}
-
-// TestChallengeBoss_WithNowFunc_WeekdayOrb verifies that injecting WithNowFunc
-// correctly determines the day-of-week orb based on JST time during boss victory.
-func TestChallengeBoss_WithNowFunc_WeekdayOrb(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	charRepo := &mockCharRepo{
-		chars: map[string]corecharacter.Character{
-			"hero": createTestChar("hero", 99, 500000, 999999, 99999),
-		},
-	}
-	bossRepo.charRepo = charRepo
-
-	// Custom boss stage with empty TreasureItemIDs so the day-of-week orb is the only candidate.
-	customStage := boss.BossStage{
-		ID:         "test-king-orb",
-		Name:       "Test Orb Boss",
-		LeaderName: "Orb Master",
-		Speed:      10,
-		MaxMembers: 1,
-		Bosses: []boss.BossMonster{
-			{
-				Name:    "Boss Minion",
-				HP:      10,
-				MaxHP:   10,
-				Attack:  1,
-				Defense: 1,
-			},
-		},
-		TreasureItemIDs: nil, // Only the day-of-week orb will be in candidates
-	}
-
-	// 2026-09-27 23:00:00 UTC is Monday 08:00:00 JST -> should drop item-060
-	jstMonday := time.Date(2026, 9, 27, 23, 0, 0, 0, time.UTC)
-
-	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{}, customStage)
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.Configure(boss.WithNowFunc(func() time.Time {
-		return jstMonday
-	}))
-
-	res, err := service.ChallengeBoss(ctx, "hero", "test-king-orb")
-	if err != nil {
-		t.Fatalf("ChallengeBoss failed: %v", err)
-	}
-
-	if res.Outcome != corebattle.OutcomeWin {
-		t.Fatalf("expected victory, got %v", res.Outcome)
-	}
-	if res.RewardItemID != "item-060" {
-		t.Errorf("expected JST Monday orb 'item-060', got '%s'", res.RewardItemID)
-	}
-}
-
-// TestChallengeBoss_Defeat verifies that a weak character loses without gaining rewards.
-func TestChallengeBoss_Defeat(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	charRepo := &mockCharRepo{
-		chars: map[string]corecharacter.Character{
-			// MaxHP=500 satisfies king1's hp_400_o condition; attack=1 ensures defeat.
-			"weakling": createTestChar("weakling", 20, 500, 1, 1),
-		},
-	}
-	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	res, err := service.ChallengeBoss(ctx, "weakling", "king1")
-	if err != nil {
-		t.Fatalf("ChallengeBoss failed: %v", err)
-	}
-
-	if res.Outcome == corebattle.OutcomeWin {
-		t.Fatal("expected defeat, got victory")
-	}
-	if res.HeroCountGained != 0 {
-		t.Errorf("expected HeroCountGained=0 on defeat, got %d", res.HeroCountGained)
-	}
-	if res.RewardExp != 0 || res.RewardGold != 0 {
-		t.Errorf("expected zero rewards on defeat, got EXP=%d Gold=%d", res.RewardExp, res.RewardGold)
-	}
-	if got := charRepo.chars["weakling"]; got.Stats.HP != 0 {
-		t.Errorf("expected defeated weakling HP=0, got %d", got.Stats.HP)
-	}
-}
-
 // TestService_GetCharacterRecord verifies empty-ID guard and record creation.
 func TestService_GetCharacterRecord(t *testing.T) {
 	ctx := context.Background()
@@ -489,35 +308,6 @@ func TestService_GetCharacterRecord(t *testing.T) {
 	})
 }
 
-// TestChallengeBoss_TiredPenalty verifies that entry costs +20 Tired.
-func TestChallengeBoss_TiredPenalty(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	charInitial := createTestChar("hero2", 30, 1000, 300, 100)
-	charInitial.Tired = 0
-	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"hero2": charInitial}}
-	bossRepo.charRepo = charRepo
-
-	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = service.ChallengeBoss(ctx, "hero2", "king1")
-	if err != nil {
-		t.Fatalf("ChallengeBoss failed: %v", err)
-	}
-
-	saved, ok := charRepo.chars["hero2"]
-	if !ok {
-		t.Fatal("saved character not found")
-	}
-	// Entry cost is +20; a win may also have additional changes, but Tired should be at least 20.
-	if saved.Tired < 20 {
-		t.Errorf("expected Tired >= 20 after battle, got %d", saved.Tired)
-	}
-}
-
 type stubPartyBattleEngine struct {
 	resolveFn func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
 }
@@ -539,7 +329,7 @@ func (e stubPartyBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequ
 }
 
 // TestStartSealingBattle_PartyVictoryAndResealing verifies authentic 4-player party
-// sealing battle (vs_king.cgi): all members gain +1 HeroCount, entry fatigue +20%,
+// sealing battle (vs_king.cgi): all members gain +1 HeroCount and a boss record,
 // server news announcement, celebration banquet hook, and party disbandment.
 func TestStartSealingBattle_PartyVictoryAndResealing(t *testing.T) {
 	ctx := context.Background()
@@ -633,6 +423,62 @@ func TestStartSealingBattle_PartyVictoryAndResealing(t *testing.T) {
 	// 4. Party deleted/disbanded after sealing
 	if !partyRepo.deleted[pID] {
 		t.Errorf("expected party to be deleted after sealing battle")
+	}
+
+	// 5. Every member records the clear and one winning history entry
+	for _, cID := range []string{"leader", "m1", "m2", "m3"} {
+		if rec := bossRepo.records[cID]; rec.TotalBossDefeats != 1 || rec.HighestTierCleared != 1 || rec.FirstClearedAt == nil {
+			t.Errorf("character %s boss record = %+v", cID, rec)
+		}
+		if h := bossRepo.histories[cID]; len(h) != 1 || h[0].Outcome != corebattle.OutcomeWin || !h[0].IsFirstClear || h[0].RewardExp != res.RewardExp {
+			t.Errorf("character %s history = %+v", cID, h)
+		}
+	}
+}
+
+// TestStartSealingBattle_DefeatSettlesNoRewards verifies that a lost sealing battle
+// records the attempt and the fallen members' HP but grants no reward or clear.
+func TestStartSealingBattle_DefeatSettlesNoRewards(t *testing.T) {
+	f := newSealFixture("leader", "m1")
+	engine := stubPartyBattleEngine{resolveFn: func(corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+		return corebattle.PartyBattleResult{
+			Outcome: corebattle.OutcomeDefeat, WinnerSide: "enemies", Turns: 4,
+			RemainingHP: map[string]int{"leader": 0, "m1": 0},
+		}, nil
+	}}
+	svc, err := boss.NewService(f.bossRepo, f.charRepo, engine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.Configure(boss.WithPartyRepository(f.partyRepo))
+	banquets := 0
+	svc.SetVictoryBanquetHook(func(context.Context, string, string, string, string, int) error {
+		banquets++
+		return nil
+	})
+
+	res, err := svc.StartSealingBattle(context.Background(), f.pID, "leader")
+	if err != nil {
+		t.Fatalf("StartSealingBattle failed: %v", err)
+	}
+	if res.Outcome != corebattle.OutcomeDefeat || res.HeroCountGained != 0 || res.RewardExp != 0 || res.RewardGold != 0 ||
+		res.RewardCrystals != 0 || res.RewardItemID != "" || res.NewsMessage != "" || res.BanquetHeld || banquets != 0 {
+		t.Fatalf("defeat granted rewards: %+v banquets=%d", res, banquets)
+	}
+	for id, before := range f.original {
+		c := f.charRepo.chars[id]
+		if c.Stats.HP != 0 || c.HeroCount != before.HeroCount || c.Money != before.Money || c.Experience != before.Experience || c.Crystal != before.Crystal {
+			t.Errorf("character %s settled a defeat as a win: %+v", id, c)
+		}
+		if rec := f.bossRepo.records[id]; rec.TotalBossDefeats != 0 || rec.HighestTierCleared != 0 || rec.LastChallengedAt == nil {
+			t.Errorf("character %s boss record = %+v", id, rec)
+		}
+		if h := f.bossRepo.histories[id]; len(h) != 1 || h[0].Outcome != corebattle.OutcomeDefeat || h[0].IsFirstClear {
+			t.Errorf("character %s history = %+v", id, h)
+		}
+		if len(f.bossRepo.awardedItems[id]) != 0 {
+			t.Errorf("character %s received loot on defeat", id)
+		}
 	}
 }
 
@@ -824,46 +670,6 @@ func TestStartSealingBattle_Validations(t *testing.T) {
 	}
 	if _, err := service.StartSealingBattle(ctx, pID, "other"); err != nil {
 		t.Errorf("a room member who is not ready could not start: %v", err)
-	}
-}
-
-// TestNoDailyAttemptsRestriction verifies that the fictional daily 3-entry solo raid
-// limit has been completely removed: a character can challenge the boss multiple times
-// without being blocked by daily attempt counters.
-func TestNoDailyAttemptsRestriction(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-	char := createTestChar("repeater", 99, 500000, 999999, 99999)
-	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{"repeater": char}}
-	bossRepo.charRepo = charRepo
-
-	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Execute 5 consecutive challenges (previously blocked at 4th attempt with ErrDailyAttemptsExhausted)
-	for i := 0; i < 5; i++ {
-		// Reset Tired to allow next entry (entry cost is 20)
-		c := charRepo.chars["repeater"]
-		c.Tired = 0
-		charRepo.chars["repeater"] = c
-
-		res, err := service.ChallengeBoss(ctx, "repeater", "king1")
-		if err != nil {
-			t.Fatalf("challenge %d failed unexpectedly: %v", i+1, err)
-		}
-		if res.Outcome != corebattle.OutcomeWin {
-			t.Fatalf("challenge %d expected win, got %v", i+1, res.Outcome)
-		}
-	}
-
-	rec, err := bossRepo.GetOrCreateRecord(ctx, "repeater")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec.TotalBossDefeats != 5 {
-		t.Errorf("expected 5 boss defeats, got %d", rec.TotalBossDefeats)
 	}
 }
 
@@ -1206,96 +1012,6 @@ func TestStartSealingBattle_RecordMonsterDefeat(t *testing.T) {
 	}
 }
 
-func TestChallengeBoss_RecordMonsterDefeat(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-
-	chars := map[string]corecharacter.Character{
-		"hero-solo": createTestChar("hero-solo", 50, 600, 300, 200),
-	}
-	charRepo := &mockCharRepo{chars: chars}
-
-	recorder := &mockBossMonsterDefeatRecorder{}
-	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.Configure(boss.WithMonsterDefeatRecorder(recorder))
-
-	_, err = service.ChallengeBoss(ctx, "hero-solo", "king99")
-	if err != nil {
-		t.Fatalf("ChallengeBoss failed: %v", err)
-	}
-
-	// king99 clone defeat should record clone defeat
-	if len(recorder.calls) != 1 {
-		t.Fatalf("expected 1 recorder call for king99, got %d: %v", len(recorder.calls), recorder.calls)
-	}
-	expected := "hero-solo:king99-clone:影:封印戦"
-	if recorder.calls[0] != expected {
-		t.Errorf("expected %q, got %q", expected, recorder.calls[0])
-	}
-	if len(recorder.records) != 1 {
-		t.Fatalf("expected 1 record, got %d", len(recorder.records))
-	}
-	r0 := recorder.records[0]
-	if r0.MonsterID != "king99-clone" || r0.MonsterName != "影" || r0.Habitat != "封印戦" ||
-		r0.Icon != "king99-clone" || r0.HP != 600*50 || r0.Attack != 300*2 || r0.Defense != 200*2 ||
-		r0.ExperienceReward != 1500 || r0.GoldReward != 750 {
-		t.Errorf("unexpected king99 record snapshot: %+v", r0)
-	}
-}
-
-func TestChallengeBoss_King99_EncounterSnapshot_LevelUp(t *testing.T) {
-	ctx := context.Background()
-	bossRepo := newMockBossRepo()
-
-	// Hero starts at Level 50, HP 600, Attack 300, Defense 200, Agility 50, JobLevel 0.
-	// Set Experience such that gaining 1500 EXP triggers a level up.
-	hero := createTestChar("hero-lvlup", 50, 600, 300, 200)
-	nextExp50, err := progression.ExperienceForNextLevel(50)
-	if err != nil {
-		t.Fatal(err)
-	}
-	hero.Experience = nextExp50 - 1
-
-	chars := map[string]corecharacter.Character{
-		"hero-lvlup": hero,
-	}
-	charRepo := &mockCharRepo{chars: chars}
-
-	recorder := &mockBossMonsterDefeatRecorder{}
-	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.Configure(boss.WithMonsterDefeatRecorder(recorder))
-
-	_, err = service.ChallengeBoss(ctx, "hero-lvlup", "king99")
-	if err != nil {
-		t.Fatalf("ChallengeBoss failed: %v", err)
-	}
-
-	// Verify hero leveled up after battle
-	savedHero := charRepo.chars["hero-lvlup"]
-	if savedHero.Level <= 50 {
-		t.Fatalf("expected hero to level up beyond 50, got level %d", savedHero.Level)
-	}
-
-	if len(recorder.records) != 1 {
-		t.Fatalf("expected 1 record, got %d", len(recorder.records))
-	}
-	r0 := recorder.records[0]
-	// Max MP 0 clones to MP 0 (stage/king99.cgi); there is no fallback pool.
-	expectedStrong := int(float64(600*50) + float64(300*2) + float64(200*2)*0.5 + float64(50*2))
-	if r0.MonsterID != "king99-clone" || r0.MonsterName != "影" || r0.Habitat != "封印戦" ||
-		r0.HP != 600*50 || r0.Attack != 300*2 || r0.Defense != 200*2 || r0.Agility != 50*2 ||
-		r0.ExperienceReward != 1500 || r0.GoldReward != 750 || r0.Strong != expectedStrong {
-		t.Errorf("king99 record mismatch: got %+v, expected HP=%d Atk=%d Def=%d Agi=%d Exp=1500 Gold=750 Strong=%d",
-			r0, 600*50, 300*2, 200*2, 50*2, expectedStrong)
-	}
-}
-
 // TestStartSealingBattle_King99_FightsTheUnsealingPartysClones verifies that a
 // king99 room fights the clones stored at unseal (NPC companions included), not
 // its joiners, and pays their EXP, gold, crystals and records (stage/king99.cgi).
@@ -1417,33 +1133,6 @@ func TestBoss_RealEngine_SynergyMultiplier(t *testing.T) {
 		t.Errorf("expected TotalReward.Currency=%d, got %d", expectedGold, res.BattleResult.TotalReward.Currency)
 	}
 
-	// 2. Solo Boss Challenge with 1 player using real corebattle.Engine{}
-	soloChars := map[string]corecharacter.Character{
-		"solo": createTestChar("solo", 99, 500000, 999999, 99999),
-	}
-	soloCharRepo := &mockCharRepo{chars: soloChars}
-	soloBossRepo := newMockBossRepo()
-	soloBossRepo.charRepo = soloCharRepo
-
-	soloService, err := boss.NewService(soloBossRepo, soloCharRepo, corebattle.Engine{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	soloRes, err := soloService.ChallengeBoss(ctx, "solo", "king1")
-	if err != nil {
-		t.Fatalf("ChallengeBoss with real engine failed: %v", err)
-	}
-	if soloRes.Outcome != corebattle.OutcomeWin {
-		t.Fatalf("expected victory, got %v", soloRes.Outcome)
-	}
-	if soloRes.BattleResult.BonusPercent != 0 {
-		t.Errorf("solo boss battle expected BonusPercent=0, got %d", soloRes.BattleResult.BonusPercent)
-	}
-	if soloRes.BattleResult.TotalReward.Experience != soloRes.BattleResult.BaseReward.Experience {
-		t.Errorf("solo boss battle TotalReward.Experience (%d) != BaseReward (%d)",
-			soloRes.BattleResult.TotalReward.Experience, soloRes.BattleResult.BaseReward.Experience)
-	}
 }
 
 func catalogRoster(stageID string, unsealers ...corebattle.LifetimeActor) []corebattle.LifetimeActor {

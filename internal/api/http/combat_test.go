@@ -96,7 +96,6 @@ func (s *stubChallengeService) ListHallOfFame(ctx context.Context) ([]challenge.
 
 type stubBossService struct {
 	listBossesFn         func(ctx context.Context, characterID string) ([]boss.BossEncounterStatus, error)
-	challengeBossFn      func(ctx context.Context, characterID, bossID string) (boss.ChallengeResult, error)
 	startSealingBattleFn func(ctx context.Context, partyID, leaderCharID string) (boss.SealingBattleResult, error)
 	getCharacterRecordFn func(ctx context.Context, characterID string) (boss.CharacterBossRecord, error)
 }
@@ -106,12 +105,6 @@ func (s *stubBossService) ListBosses(ctx context.Context, characterID string) ([
 		return s.listBossesFn(ctx, characterID)
 	}
 	return []boss.BossEncounterStatus{{Boss: boss.Boss{ID: "boss-1", Name: "Dragon"}, IsUnlocked: true}}, nil
-}
-func (s *stubBossService) ChallengeBoss(ctx context.Context, characterID, bossID string) (boss.ChallengeResult, error) {
-	if s.challengeBossFn != nil {
-		return s.challengeBossFn(ctx, characterID, bossID)
-	}
-	return boss.ChallengeResult{Outcome: "win"}, nil
 }
 func (s *stubBossService) StartSealingBattle(ctx context.Context, partyID, leaderCharID string) (boss.SealingBattleResult, error) {
 	if s.startSealingBattleFn != nil {
@@ -309,8 +302,8 @@ func TestCombatEndpoints(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected removed solo sealing route 404, got %d", rec.Code)
 		}
 	})
 

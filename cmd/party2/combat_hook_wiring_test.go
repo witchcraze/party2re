@@ -50,7 +50,8 @@ func TestMonsterTamerProductionHook(t *testing.T) {
 }
 
 func TestBossVictoryBanquetProductionHook(t *testing.T) {
-	f := newHookWiringFixture(t, testutil.OpenValkey(t))
+	client := testutil.OpenValkey(t)
+	f := newHookWiringFixture(t, client)
 	tracker := &victoryCrowdTracker{}
 	plaza, err := eventplaza.NewService(
 		tracker, &struct{ eventplaza.CharacterRepository }{}, &struct{ eventplaza.InventoryRepository }{})
@@ -67,7 +68,7 @@ func TestBossVictoryBanquetProductionHook(t *testing.T) {
 	if err := f.core.charRepo.Update(ctx, f.char); err != nil {
 		t.Fatal(err)
 	}
-	result, err := f.cmbt.boss.ChallengeBoss(ctx, f.char.ID, "king1")
+	result, err := f.cmbt.boss.StartSealingBattle(ctx, openTestSealingRoom(t, client, f.char), f.char.ID)
 	if err != nil || result.Outcome != corebattle.OutcomeWin {
 		t.Fatalf("boss victory = %+v, %v", result, err)
 	}

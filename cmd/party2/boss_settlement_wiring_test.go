@@ -6,15 +6,47 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
+	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/collection"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
+
+// openTestSealingRoom stores a king1 sealing room with one weak boss for the given
+// members where the production boss service reads it. A private lobby index keeps
+// the room out of shared listings.
+func openTestSealingRoom(t *testing.T, client valkeygo.Client, chars ...corecharacter.Character) string {
+	t.Helper()
+	ctx := context.Background()
+	rooms := party.NewValkeyRepository(client, party.WithLobbiesIndexKey("party2:test:boss-wiring:"+id.New()))
+	state := party.LobbyState{Party: party.Party{
+		ID: id.New(), Kind: party.KindSealing, StageID: "king1", Status: party.StatusRecruiting, MaxMembers: 6, CreatedAt: time.Now().UTC(),
+		Enemies: []corebattle.LifetimeActor{{Participant: corebattle.Participant{ID: "king1-boss-0", Name: "レッドストーン", HP: 1, MaxHP: 1, Icon: "mon/190.gif"}, NPC: true}},
+	}}
+	if err := rooms.SaveParty(ctx, state.Party); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range chars {
+		m := party.Member{PartyID: state.Party.ID, CharacterID: c.ID, CharacterName: c.Name, ReadyState: true}
+		if err := rooms.AddMember(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+		state.Members = append(state.Members, m)
+	}
+	t.Cleanup(func() {
+		if err := rooms.CleanupParty(context.Background(), state); err != nil {
+			t.Error(err)
+		}
+	})
+	return state.Party.ID
+}
 
 var errBossLegendInjected = errors.New("legend induction failed after write")
 
@@ -107,8 +139,9 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 	}
 	before := take()
 
+	roomID := openTestSealingRoom(t, client, char)
 	misc.collection.SetLegendInductor(writeThenFailLegend{legendInductorAdapter{ranking: soc.ranking}})
-	if _, err := cmbt.boss.ChallengeBoss(ctx, char.ID, "king1"); !errors.Is(err, errBossLegendInjected) {
+	if _, err := cmbt.boss.StartSealingBattle(ctx, roomID, char.ID); !errors.Is(err, errBossLegendInjected) {
 		t.Fatalf("mandatory Hall of Fame failure must fail the settlement, got %v", err)
 	}
 	afterChar, err := core.charRepo.FindByID(ctx, char.ID)
@@ -123,7 +156,7 @@ func TestBossProductionSettlementRollsBackMandatoryCollectionFailure(t *testing.
 	}
 
 	misc.collection.SetLegendInductor(legendInductorAdapter{ranking: soc.ranking})
-	res, err := cmbt.boss.ChallengeBoss(ctx, char.ID, "king1")
+	res, err := cmbt.boss.StartSealingBattle(ctx, roomID, char.ID)
 	if err != nil {
 		t.Fatalf("retry after failure: %v", err)
 	}

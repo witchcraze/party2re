@@ -36,9 +36,6 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 		escapeFn: func(context.Context, string) (dungeon.ExpeditionStepResult, error) { return dungeonResult, nil },
 	}
 	bs := &stubBossService{
-		challengeBossFn: func(context.Context, string, string) (boss.ChallengeResult, error) {
-			return boss.ChallengeResult{BattleResult: group}, nil
-		},
 		startSealingBattleFn: func(context.Context, string, string) (boss.SealingBattleResult, error) {
 			return boss.SealingBattleResult{BattleResult: group}, nil
 		},
@@ -66,7 +63,6 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 		{"dungeon move", "/characters/c1/dungeons/move", `{"direction":"north"}`, []string{"result", "battle_result", "logs"}},
 		{"dungeon fight", "/characters/c1/dungeons/fight", "", []string{"result", "battle_result", "logs"}},
 		{"dungeon escape", "/characters/c1/dungeons/escape", "", []string{"result", "battle_result", "logs"}},
-		{"boss", "/characters/c1/bosses/fight", `{"boss_id":"boss"}`, []string{"result", "battle_result", "logs"}},
 		{"sealing", "/parties/team/sealing-battle", `{"character_id":"c1"}`, []string{"result", "battle_result", "logs"}},
 		{"challenge", "/characters/c1/challenges/advance", `{"session_id":"run","expected_revision":1}`, []string{"round_result", "battle_result", "logs"}},
 		{"pvp", "/characters/c1/pvp/rooms/room/advance", "", []string{"battle_log"}},

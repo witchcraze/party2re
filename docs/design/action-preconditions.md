@@ -9,7 +9,7 @@ Gateway entry eligibility uses six gates evaluated in order: dead → fatigue �
 ## Legacy gate evidence
 
 1. **Dead Gate (`$m{hp} <= 0`)**:
-   - In legacy Party2 (`lib/quest.cgi:479, 902`), characters with HP <= 0 are prohibited from creating or joining combat quests and expeditions (`adventure_start`, `challenge_start`, `dungeon_start`, `boss_fight`, `pvp_room_create`).
+   - In legacy Party2 (`lib/quest.cgi:479, 902`), characters with HP <= 0 are prohibited from creating or joining combat quests and expeditions (`adventure_start`, `challenge_start`, `dungeon_start`, `pvp_room_create`).
    - Noncombat town and facility actions (banking `lib/bank.cgi:77–103`, commerce `lib/weapon.cgi:53–85`, crafting, casino, progression, social chat `lib/system.cgi:639–676`, and recovery) do NOT require living HP in legacy dispatch.
    - Deceased characters in town can freely access noncombat facilities, deposit/withdraw, trade, or rest at `home_sleep` to restore full HP and MP (`lib/sleep.cgi:32`).
 2. **Fatigue Gate (`$m{tired} >= 100`)**:

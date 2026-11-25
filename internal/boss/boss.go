@@ -14,7 +14,6 @@ import (
 var (
 	ErrBossNotFound         = errors.New("boss stage not found")
 	ErrCharacterNotFound    = errors.New("character not found")
-	ErrInvalidBossID        = errors.New("invalid boss id")
 	ErrPartyNotFound        = errors.New("party not found")
 	ErrNotRoomMember        = party.ErrCharacterNotInParty
 	ErrPartyNotReady        = errors.New("all party members must be ready before starting")
@@ -116,9 +115,6 @@ type SealingBattleResult struct {
 	BanquetHeld       bool                         `json:"banquet_held"`
 	BattleResult      corebattle.PartyBattleResult `json:"battle_result"`
 }
-
-// ChallengeResult is an alias for SealingBattleResult for backward compatibility.
-type ChallengeResult = SealingBattleResult
 
 // BossLeaderboardEntry tracks top boss slayers.
 type BossLeaderboardEntry struct {

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/party"
 )
@@ -108,16 +107,4 @@ func enemySkills(job, sp, oldJob, oldSP int) []corebattle.ActionSkill {
 	skills := []corebattle.ActionSkill{{ID: "dejon", Name: "デジョン", Kind: corebattle.ActionKindDejon}}
 	skills = append(skills, bossSkillsForJob(job, sp)...)
 	return append(skills, bossSkillsForJob(oldJob, oldSP)...)
-}
-
-// unsealerFromCharacter is a character's battle row built from its base stats.
-func unsealerFromCharacter(c corecharacter.Character) corebattle.LifetimeActor {
-	exp, gold := c.BattleRowRewards()
-	return corebattle.LifetimeActor{
-		Participant: corebattle.Participant{
-			ID: c.ID, Name: c.Name, MaxHP: c.Stats.MaxHP, MaxMP: c.Stats.MaxMP,
-			Attack: c.Stats.Attack, Defense: c.Stats.Defense, Agility: c.Stats.Agility, ExperienceReward: exp, GoldReward: gold,
-		},
-		Jobs: corebattle.BattleJobs{JobID: c.JobID, SP: c.SP, OldJobID: c.OldJobID, OldSP: c.OldSP},
-	}
 }
