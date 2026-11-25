@@ -138,20 +138,13 @@ func (s *LifetimeState) ApplyBaseGuard(c *BaseGuardContext, id string, rng rando
 		a.Temporary = tmp
 		return nil
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	if baseGuardCover(id) {
 		r, err := s.ResolvePartyTarget(c.TargetContext, controlSymbol(c.shift(), "cover", CategoryPhysical), rng)
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved && r.TargetID != c.ActorID {
 			a.Temporary, s.actor(r.TargetID).Temporary = TemporaryCovering, TemporaryCover
 		}

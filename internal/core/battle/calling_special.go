@@ -56,14 +56,7 @@ func (s *LifetimeState) applyCallingStatus(c *RosterContext, e TargetEffect, cha
 
 func (s *LifetimeState) applyCallingBody(c *RosterContext, job int, helperID, targetID string, rng random.Generator) (RosterResult, error) {
 	r := RosterResult{HelperID: helperID}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(v TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-v.MPDebit)
-		applyStatusResources(s, v)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	status := func(value string, category CallbackCategory, chance float64, area, death bool) error {
 		r.TargetConsumed = !area
 		applied, err := s.applyCallingStatus(c, controlSymbol(targetID, value, category), chance, area, death, rng)

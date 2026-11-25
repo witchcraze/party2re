@@ -17,8 +17,22 @@ type EffectContext struct {
 	// Damage's owner updates this context's DamageCalls after target/zero gates
 	// (_damage:8826–8831), including misses. The caller must not count again.
 	Damage func(TargetContext, TargetEffect, random.Generator) error
-	// Complete native bodies apply target resource facts before effect tails.
+	// Native enclosing callbacks own resource writes at target resolution, before
+	// effect tails; primitive callers otherwise consume the returned facts.
+	// Embedding contexts (damage, status) share this single hook.
 	targetResources func(TargetResolution)
+}
+
+// ownTargetResources installs the standard native write (caster MP debit floored
+// at 0, then status resources) and returns the restore of the previous hook.
+func (s *LifetimeState) ownTargetResources(c *EffectContext) func() {
+	previous := c.targetResources
+	c.targetResources = func(r TargetResolution) {
+		a := s.actor(c.ActorID)
+		a.MP = max(0, a.MP-r.MPDebit)
+		applyStatusResources(s, r)
+	}
+	return func() { c.targetResources = previous }
 }
 
 type ModifierKind string

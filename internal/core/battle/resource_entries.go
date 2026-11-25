@@ -105,14 +105,7 @@ func (s *LifetimeState) ApplyResource(c *DamageContext, id, targetID string, rng
 	if c.Custom && s.actor(targetID) == nil {
 		targetID = c.ActorID
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	e := controlEffect(targetID, 50, CategoryMagic)
 	switch entry.SourceID {
 	case 0, 24, 25:

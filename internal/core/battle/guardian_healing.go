@@ -51,14 +51,7 @@ func (s *LifetimeState) ApplyGuardianHealing(c *GuardianHealingContext, id strin
 	if err := s.ValidateGuardianHealing(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-17-entry-0", "job-18-entry-3":
@@ -70,7 +63,7 @@ func (s *LifetimeState) ApplyGuardianHealing(c *GuardianHealingContext, id strin
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			if id == "job-18-entry-3" {
 				s.actor(r.TargetID).Temporary = TemporaryReflectMagic

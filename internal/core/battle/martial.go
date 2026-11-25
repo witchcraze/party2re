@@ -88,14 +88,7 @@ func (s *LifetimeState) ApplyMartial(c *MartialContext, id string, rng random.Ge
 	if applyMartialInline(s, c, id) {
 		return nil
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-4-entry-0", "job-25-entry-0", "job-25-entry-5":
@@ -130,10 +123,9 @@ func (s *LifetimeState) ApplyMartial(c *MartialContext, id string, rng random.Ge
 			status, chance, death = "death", 19, true
 		}
 		_, err := s.ApplyStatus(&child, controlSymbol(c.shift(), status, CategoryPhysical), chance, false, death, rng)
+		c.EffectContext = child.EffectContext
 		child.targetResources = c.Status.targetResources
 		*c.Status = child
-		c.EffectContext = child.EffectContext
-		c.EffectContext.targetResources = resources
 		return err
 	case "job-25-entry-1":
 		_, err := s.ApplyHealing(&c.EffectContext, controlEffect(c.ActorID, 100, CategoryPhysical), rng)

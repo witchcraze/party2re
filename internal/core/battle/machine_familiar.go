@@ -36,14 +36,7 @@ func (s *LifetimeState) ApplyMachineFamiliar(c *MachineFamiliarContext, id strin
 	if err := s.ValidateMachineFamiliar(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-79-entry-0":
@@ -107,7 +100,7 @@ func (s *LifetimeState) ApplyMachineFamiliar(c *MachineFamiliarContext, id strin
 		if err != nil || !r.Resolved {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if _, err := s.ApplyHealing(&c.EffectContext, controlEffect(r.TargetID, 150, CategoryMagic), rng); err != nil {
 			return err
 		}

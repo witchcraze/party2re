@@ -152,12 +152,7 @@ func (s *LifetimeState) ApplyStatusEntry(c *StatusContext, reset *EquipmentReset
 	if c.Custom && s.actor(targetID) == nil {
 		targetID = c.ActorID
 	}
-	previous := c.targetResources
-	c.targetResources = func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	defer func() { c.targetResources = previous }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	for _, entry := range StatusEntries() {
 		if entry.ID != id {
 			continue

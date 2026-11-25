@@ -75,13 +75,7 @@ func (s *LifetimeState) ApplyJobAssets(c *JobAssetContext, id string, rng random
 		return err
 	}
 	c.ActorNPC = s.actor(c.ActorID).NPC
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	// Match admission: without a native closure the supplied Defeat stays bound.
 	if c.DefeatContext != nil {
 		previousReset, previousDefeat := c.Reset, c.Defeat

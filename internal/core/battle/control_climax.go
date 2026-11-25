@@ -91,14 +91,7 @@ func (s *LifetimeState) ApplyControlClimax(c *ControlClimaxContext, id string, r
 	if err := s.ValidateControlClimax(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-53-entry-0", "job-53-entry-1", "job-53-entry-4":
@@ -125,7 +118,7 @@ func (s *LifetimeState) ApplyControlClimax(c *ControlClimaxContext, id string, r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			s.actor(r.TargetID).Temporary = TemporaryReflectAttack
 		}
@@ -134,7 +127,7 @@ func (s *LifetimeState) ApplyControlClimax(c *ControlClimaxContext, id string, r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}
@@ -149,7 +142,7 @@ func (s *LifetimeState) ApplyControlClimax(c *ControlClimaxContext, id string, r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved && rng.Float64()*5 > 1 {
 			_, err = s.ApplyStatDown(&c.EffectContext, controlEffect(r.TargetID, .7, CategoryMagic), StatHP, rng)
 		}
@@ -187,7 +180,7 @@ func (s *LifetimeState) ApplyControlClimax(c *ControlClimaxContext, id string, r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		target := ""
 		if r.Resolved {
 			target = r.TargetID

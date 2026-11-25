@@ -49,14 +49,7 @@ func (s *LifetimeState) ApplyDuelCrown(c *DuelCrownContext, id string, rng rando
 	if err := s.ValidateDuelCrown(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-74-entry-0":

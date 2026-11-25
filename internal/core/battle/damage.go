@@ -13,9 +13,6 @@ type DamageContext struct {
 	Cursor                 TargetCursor
 	ToolCategory           ToolCategoryContext
 	responseDefeat         *DefeatContext
-	// Native enclosing callbacks can own resource writes at target resolution;
-	// primitive callers otherwise consume the returned TargetResolution facts.
-	targetResources func(TargetResolution)
 }
 
 // ToolCategoryContext records the only checked package-category producers.

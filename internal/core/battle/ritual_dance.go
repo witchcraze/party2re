@@ -51,14 +51,7 @@ func (s *LifetimeState) ApplyRitualDance(c *RitualDanceContext, id string, rng r
 	if err := s.ValidateRitualDance(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-75-entry-0", "job-76-entry-1":
@@ -81,7 +74,7 @@ func (s *LifetimeState) ApplyRitualDance(c *RitualDanceContext, id string, rng r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			t := s.actor(r.TargetID)
 			if t.Temporary != "" {
@@ -102,7 +95,7 @@ func (s *LifetimeState) ApplyRitualDance(c *RitualDanceContext, id string, rng r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}
@@ -140,7 +133,7 @@ func (s *LifetimeState) ApplyRitualDance(c *RitualDanceContext, id string, rng r
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}

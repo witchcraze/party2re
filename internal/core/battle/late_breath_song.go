@@ -136,14 +136,7 @@ func (s *LifetimeState) ApplyLateBreathSong(c *LateBreathSongContext, id string,
 	if s.ProjectLateBreathSong(c, id) {
 		return nil
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	switch id {
 	case "job-84-entry-1", "job-84-entry-2", "job-86-entry-4":
@@ -163,7 +156,7 @@ func (s *LifetimeState) ApplyLateBreathSong(c *LateBreathSongContext, id string,
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if err := s.statTension(&c.EffectContext, a, false, rng); err != nil {
 			return err
 		}
@@ -188,7 +181,7 @@ func (s *LifetimeState) ApplyLateBreathSong(c *LateBreathSongContext, id string,
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if id == "job-85-entry-3" {
 			if r.Resolved && rng.Float64()*5 < 3 {
 				s.actor(r.TargetID).Status, s.actor(r.TargetID).Tension = StatusSabaku, 1

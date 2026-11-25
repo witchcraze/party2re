@@ -81,14 +81,7 @@ func (s *LifetimeState) ApplyCounterReset(c *CounterResetContext, id string, rng
 	if err := s.ValidateCounterReset(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	if tmp := counterResetTemporary(id); tmp != "" {
 		a.Temporary = tmp
@@ -121,7 +114,7 @@ func (s *LifetimeState) ApplyCounterReset(c *CounterResetContext, id string, rng
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			s.actor(r.TargetID).Temporary = TemporaryReflectMagic
 		}
@@ -130,7 +123,7 @@ func (s *LifetimeState) ApplyCounterReset(c *CounterResetContext, id string, rng
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			t := s.actor(r.TargetID)
 			t.Temporary, t.Tension, t.Attack, t.Defense = "", 1, t.BaseStats.Attack, t.BaseStats.Defense

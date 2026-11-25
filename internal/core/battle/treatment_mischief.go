@@ -73,13 +73,7 @@ func (s *LifetimeState) ApplyTreatmentMischief(c *TreatmentMischiefContext, id s
 	if s.ProjectTreatmentMischief(c, id) {
 		return nil
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		s.actor(c.ActorID).MP = max(0, s.actor(c.ActorID).MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	if power := treatmentHealing(id); power != 0 {
 		_, err := s.ApplyHealing(&c.EffectContext, controlEffect(c.shift(), power, CategoryMagic), rng)
@@ -95,7 +89,7 @@ func (s *LifetimeState) ApplyTreatmentMischief(c *TreatmentMischiefContext, id s
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			s.actor(r.TargetID).Hit = 95
 		}
@@ -171,7 +165,7 @@ func (s *LifetimeState) ApplyTreatmentMischief(c *TreatmentMischiefContext, id s
 			if err != nil {
 				return err
 			}
-			resources(r)
+			c.targetResources(r)
 			target = r.TargetID
 			if !r.Resolved {
 				target = ""

@@ -208,6 +208,7 @@ func (s *LifetimeState) applyResetTail(c *PlayerTailContext, rng random.Generato
 		damage := s.nativeDamageContext(c.DamageContext, c.DefeatContext, rng)
 		damage.targetResources = func(r TargetResolution) { applyStatusResources(s, r) }
 		_, err := s.ApplyDamage(&damage, dualAgilityEffect("", float64(difference)*.5, CategoryUntyped, true), rng)
+		damage.targetResources = c.targetResources // the status-only hook stays local
 		c.EffectContext, c.End = damage.EffectContext, damage.End
 		c.Cursor = c.DefeatContext.Cursor
 		return err

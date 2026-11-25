@@ -36,14 +36,7 @@ func (s *LifetimeState) ApplyNPCOrderedReset(c *NPCOrderedResetContext, id strin
 	if err := s.ValidateNPCOrderedReset(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	switch id {
 	case "npc-job-403-position-0":
 		_, err := s.ApplyAreaDamage(&c.DamageContext, float64(s.actor(c.ActorID).Attack)*.6, CategoryUntyped, true, rng)
@@ -59,7 +52,7 @@ func (s *LifetimeState) ApplyNPCOrderedReset(c *NPCOrderedResetContext, id strin
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		target := ""
 		if r.Resolved {
 			target = r.TargetID

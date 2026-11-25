@@ -128,8 +128,8 @@ func (s *LifetimeState) ApplyDamageGem(sourceID int, c *DamageContext, targetID 
 	if c.Custom && s.actor(targetID) == nil {
 		targetID = c.ActorID
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
+	previous := c.targetResources
+	c.targetResources = func(r TargetResolution) {
 		if r.MPDebit != 0 {
 			a := s.actor(c.ActorID)
 			a.MP = max(0, a.MP-r.MPDebit)
@@ -139,8 +139,7 @@ func (s *LifetimeState) ApplyDamageGem(sourceID int, c *DamageContext, targetID 
 			t.MP = min(t.MaxMP, t.MP+r.MPRecovery)
 		}
 	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer func() { c.targetResources = previous }()
 	a := s.actor(c.ActorID)
 	e, area := damageGemBase(a, sourceID)
 	e.TargetID = targetID
@@ -171,7 +170,7 @@ func (s *LifetimeState) ApplyDamageGem(sourceID int, c *DamageContext, targetID 
 	case 26:
 		target, err := s.ResolveEnemyTarget(c.TargetContext, TargetEffect{TargetID: targetID, Category: CategoryMagic, Payload: CallbackPayload{Symbol: "drain"}}, rng)
 		if err == nil {
-			resources(target)
+			c.targetResources(target)
 		}
 		prefix = append(prefix, EffectApplication{TargetResolution: target})
 		if err != nil || !target.Resolved {

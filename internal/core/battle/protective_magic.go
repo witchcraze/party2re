@@ -103,14 +103,7 @@ func (s *LifetimeState) ApplyProtectiveMagic(c *ProtectiveMagicContext, id strin
 	if err := s.ValidateProtectiveMagic(c, id, rng); err != nil {
 		return err
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	a := s.actor(c.ActorID)
 	if tmp := protectiveMagicTemporary(id); tmp != "" {
 		allowed, err := a.CheckCategorySeal(CategoryMagic, rng)
@@ -169,7 +162,7 @@ func (s *LifetimeState) ApplyProtectiveMagic(c *ProtectiveMagicContext, id strin
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved && r.TargetID != c.ActorID {
 			a.Temporary, s.actor(r.TargetID).Temporary = TemporaryCovering, TemporaryCover
 		}
@@ -181,7 +174,7 @@ func (s *LifetimeState) ApplyProtectiveMagic(c *ProtectiveMagicContext, id strin
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if r.Resolved {
 			power := s.protectiveGroupPower(c)
 			_, err = s.ApplyDamage(&c.DamageContext, dualAgilityEffect(r.TargetID, power, CategoryMagic, true), rng)

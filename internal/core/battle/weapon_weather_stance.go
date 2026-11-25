@@ -81,14 +81,7 @@ func (s *LifetimeState) ApplyWeaponWeatherStance(c *WeaponWeatherStanceContext, 
 	if s.applyWeaponStanceRaw(c, id) {
 		return nil
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	if e, area, ok := weaponWeatherDamage(id, s.actor(c.ActorID)); ok {
 		if area {
 			_, err := s.ApplyAreaDamage(&c.DamageContext, e.Payload.Number, e.Category, true, rng)
@@ -114,7 +107,7 @@ func (s *LifetimeState) ApplyWeaponWeatherStance(c *WeaponWeatherStanceContext, 
 		if err != nil {
 			return err
 		}
-		resources(r)
+		c.targetResources(r)
 		if !r.Resolved {
 			return nil
 		}

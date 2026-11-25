@@ -84,14 +84,7 @@ func (s *LifetimeState) ApplySongDanceDrain(c *SongDanceDrainContext, id string,
 	if s.ProjectSongDanceDrain(c, id) {
 		return nil
 	}
-	previousDamage, previousEffect := c.targetResources, c.EffectContext.targetResources
-	resources := func(r TargetResolution) {
-		a := s.actor(c.ActorID)
-		a.MP = max(0, a.MP-r.MPDebit)
-		applyStatusResources(s, r)
-	}
-	c.targetResources, c.EffectContext.targetResources = resources, resources
-	defer func() { c.targetResources, c.EffectContext.targetResources = previousDamage, previousEffect }()
+	defer s.ownTargetResources(&c.EffectContext)()
 	switch id {
 	case "job-13-entry-0":
 		_, err := s.ApplyPartyStat(&c.EffectContext, .25, CategorySong, StatMP, true, rng)
