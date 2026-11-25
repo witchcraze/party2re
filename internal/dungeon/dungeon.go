@@ -124,6 +124,8 @@ type Dungeon struct {
 	Initial int `json:"-"`
 	// newState draws the map's run state in the accepted start (map14 points).
 	newState func(RandomSource) json.RawMessage
+	// disclosure projects the map's disclosed puzzle target (map13 altar).
+	disclosure func(*ActiveExpedition) (*ChannelTarget, error)
 }
 
 func (f Floor) floorNumber() int {

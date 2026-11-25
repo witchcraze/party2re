@@ -10093,6 +10093,33 @@
         "additionalProperties": false,
         "description": "Owned single-run projection. Actor-only scouting; member roles have no leader controls. Terminal buffers have a null map and settlement retry eligibility. All four directions are listed while movement is allowed (walls reject on use), so hidden passages stay undisclosed. No private roster inventory, layout identity, event flags or provisional rewards.",
         "properties": {
+          "channel_target": {
+            "additionalProperties": false,
+            "description": "Map13 main floor only: the channel combination the altar last disclosed, shared by every member. Absent before any disclosure; a later reroll's target stays hidden.",
+            "properties": {
+              "channels": {
+                "items": {
+                  "enum": [
+                    "blue",
+                    "yellow",
+                    "red",
+                    "white"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rerolled_since": {
+                "description": "A reroll changed the target after this disclosure.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "channels",
+              "rerolled_since"
+            ],
+            "type": "object"
+          },
           "controls": {
             "$ref": "#/components/schemas/DungeonContinuationControls"
           },

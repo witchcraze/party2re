@@ -261,13 +261,8 @@ are relative to `party2/map/13/` at the legacy revision above.
 - **Disclosure persists for every member,** matching the shared party log. The run
   keeps the last disclosed target and whether a reroll happened since. Observation
   never shows an undisclosed target or route odds.
-- **A reroll before activation is wasted.** The altar's first draw supersedes it,
-  because the last digit run is the target (`1.cgi:48–49`).
-- **The altar's removal and return branches are unreachable,** because a match
-  leaves the floor and no path returns (`1.cgi:47–58`).
-- **The n ≥ 5 EX rule needs allied NPCs,** which native rosters lack. Players are
-  capped at 4 (`quest.cgi:21`), but the roster counts allied NPC members
-  (`_battle.cgi:482–490`).
+- **Colors become names.** Legacy marks an active channel only by coloring its
+  star. The tile projection has no color, so it shows the color's name instead.
 - **L counts non-digit flags at request start** (`$len`, `_1.cgi:21–25`): 3 + k plus
   the destination events already consumed. It is 3 + k at the alternate boss, and
   4 + k (normal) or 3 + k (EX) at recovery.
