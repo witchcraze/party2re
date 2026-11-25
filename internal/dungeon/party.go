@@ -251,12 +251,14 @@ func (s *Service) startRoster(
 		}
 	}
 	runID := id.New()
+	saving := false
 	if dungeon.Once {
 		if err := s.acquireOnce(ctx, leaderCharID, runID); err != nil {
 			return nil, err
 		}
 		defer func() {
-			if err != nil {
+			// A failed save may still have published the run; reconcileStart owns that outcome.
+			if err != nil && !saving {
 				s.releaseOnce(ctx, leaderCharID, runID)
 			}
 		}()
@@ -370,8 +372,10 @@ func (s *Service) startRoster(
 	if dungeon.newState != nil {
 		exp.MapState = dungeon.newState(s.rng)
 	}
+	saving = true
 	if err := s.activeStore.SaveActiveExpedition(ctx, exp); err != nil {
-		return nil, err
+		// The multi-key save can fail after writing; callers reconcile the run.
+		return &exp, err
 	}
 
 	return &exp, nil

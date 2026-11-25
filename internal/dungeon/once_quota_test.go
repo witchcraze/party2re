@@ -89,3 +89,42 @@ func TestOnceQuota_StartListingAndJoiners(t *testing.T) {
 		t.Fatal("unconfigured quota admitted a start")
 	}
 }
+
+// saveAckLostStore fails every save, after writing it when written is set.
+type saveAckLostStore struct {
+	dungeon.ActiveExpeditionStore
+	written bool
+}
+
+func (s *saveAckLostStore) SaveActiveExpedition(ctx context.Context, exp dungeon.ActiveExpedition) error {
+	if s.written {
+		if err := s.ActiveExpeditionStore.SaveActiveExpedition(ctx, exp); err != nil {
+			return err
+		}
+	}
+	return errors.New("save acknowledgement lost")
+}
+
+// A failed save may have published the run, so it never returns the quota:
+// a verified run is the start result, and an absent one is an unknown outcome.
+func TestOnceQuota_FailedSaveKeepsQuota(t *testing.T) {
+	ctx := context.Background()
+	quotaMap := mapDef(t, dungeon.NativeMap0ID)
+	quotaMap.ID, quotaMap.Once = "quota-map", true
+	for _, written := range []bool{true, false} {
+		quota := timer.NewService(nil)
+		store := &saveAckLostStore{ActiveExpeditionStore: dungeon.NewMemoryExpeditionRepository(), written: written}
+		f := newNativeFixtureOn(t, store, createTestChar("lead", 1, 100, 10, 10),
+			dungeon.WithCustomDungeons([]dungeon.Dungeon{quotaMap}), dungeon.WithOnceQuota(quota))
+		run, err := f.svc.StartExpedition(ctx, "lead", quotaMap.ID)
+		if written && (err != nil || run == nil) {
+			t.Fatalf("written save: run must be returned: %+v %v", run, err)
+		}
+		if !written && !errors.Is(err, dungeon.ErrStartOutcomeUnknown) {
+			t.Fatalf("unwritten save err=%v", err)
+		}
+		if locked, err := quota.IsLocked(ctx, timer.CategoryDungeonOnce, "lead"); err != nil || !locked {
+			t.Fatalf("written=%v: quota released after a failed save: %v %v", written, locked, err)
+		}
+	}
+}

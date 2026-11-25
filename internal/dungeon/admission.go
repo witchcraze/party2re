@@ -35,7 +35,8 @@ var ErrStartOutcomeUnknown = errors.New("expedition start outcome could not be c
 
 const startReconcileTimeout = 5 * time.Second
 
-// reconcileStart resolves an admission error raised after run was published.
+// reconcileStart resolves a save or admission error raised once run may have
+// been published.
 // Dungeon admission performs no SQL writes, so such an error (e.g. a failed
 // commit that only releases character locks) cannot undo the Valkey-owned run.
 // The identity-verified run is therefore the start result; anything else is
