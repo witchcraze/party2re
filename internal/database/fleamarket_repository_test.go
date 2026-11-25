@@ -3,7 +3,6 @@ package database_test
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -12,12 +11,9 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
+// Requires a dedicated DB: CountTotalActiveListings and ListActiveListings assert market-wide counts.
 func TestFleaMarketRepository_Database(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not set")
-	}
-
-	db := database.OpenTestDB(t)
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "fleamarket_listings")
 
 	ctx := context.Background()
 
@@ -77,8 +73,8 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CountTotalActiveListings failed: %v", err)
 	}
-	if totalActiveBefore < 1 {
-		t.Errorf("expected at least 1 total active listing, got %d", totalActiveBefore)
+	if totalActiveBefore != 1 {
+		t.Errorf("expected 1 total active listing, got %d", totalActiveBefore)
 	}
 
 	// 4. ListActiveListings
@@ -86,8 +82,8 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListActiveListings failed: %v", err)
 	}
-	if total < 1 || len(activeList) < 1 {
-		t.Errorf("expected at least 1 active listing, got total %d, count %d", total, len(activeList))
+	if total != 1 || len(activeList) != 1 || activeList[0].ID != listingID {
+		t.Errorf("expected listing %s (total 1), got total %d, list %+v", listingID, total, activeList)
 	}
 
 	// 5. GetActiveListingsBySeller
