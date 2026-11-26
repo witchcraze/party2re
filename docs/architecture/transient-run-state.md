@@ -567,7 +567,10 @@ A room library may open a run with no members and no character leader, as legacy
 unique live identity: a concurrent or repeated opening returns the live run, and an
 opening after disposal is a new run identity that inherits no receipts or recipients.
 Characters join the running battle by their own idempotent request; the room applies
-its join rules and effects in that transaction, and joining is not room activity.
+its join rules and effects in that transaction, and joining is not room activity. A
+failed join rolls back with no partial membership or join effects, a lost commit
+acknowledgement resolves from the join receipt without repeating them, and an
+unreadable receipt reports `ErrRecovery`.
 At the last personal exit the room decides whether the run survives with its enemy
 state (`_battle.cgi:1331`). A surviving empty run has no member to request cleanup,
 so a member-less disposal removes it after the same idle timeout; member cleanup
