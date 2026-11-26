@@ -43,7 +43,7 @@ func TestWakeEnforcesDurablePenaltyWithoutTimer(t *testing.T) {
 		t.Fatal(status, err)
 	}
 	result, err := svc.Wake(ctx, "actor")
-	if err != nil || !result.Success || result.Character.PendingWake || result.Character.Stats.HP != 50 {
+	if err != nil || !result.Recovered || result.Character.PendingWake || result.Character.Stats.HP != 50 {
 		t.Fatal(result, err)
 	}
 	readError := errors.New("penalty authority unavailable")

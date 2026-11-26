@@ -421,7 +421,7 @@ func TestWake_RealTavernFullnessReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected successful Wake on healthy retry: %v", err)
 	}
-	if !res.Success {
+	if !res.Recovered {
 		t.Errorf("expected Wake success = true")
 	}
 
@@ -597,7 +597,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			t.Fatalf("status after 2nd Sleep expiry = %+v, err = %v; want CanWake=true", status, err)
 		}
 		res, err := svc.Wake(ctx, char.ID)
-		if err != nil || !res.Success {
+		if err != nil || !res.Recovered {
 			t.Fatalf("second Wake = %+v, %v", res, err)
 		}
 		finalChar, err := charRepo.FindByID(ctx, char.ID)
@@ -1146,7 +1146,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 
 		// 1. Successor Wake runs and completes successfully
 		res2, err := svc2.Wake(ctx, char.ID)
-		if err != nil || !res2.Success {
+		if err != nil || !res2.Recovered {
 			t.Fatalf("successor Wake failed: %+v, %v", res2, err)
 		}
 
@@ -1471,7 +1471,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 
 				// 1. Successor Wake acquires a new waking claim and completes recovery in MariaDB + Valkey.
 				wakeRes, err := svc2.Wake(ctx, char.ID)
-				if err != nil || !wakeRes.Success {
+				if err != nil || !wakeRes.Recovered {
 					t.Fatalf("successor Wake failed: %+v, %v", wakeRes, err)
 				}
 
@@ -1558,7 +1558,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 					t.Fatalf("GetSleepStatus after 2nd Sleep expiry = %+v, err=%v; want CanWake=true", statusAfterExpiry, err)
 				}
 				secondWakeRes, err := svc2.Wake(ctx, char.ID)
-				if err != nil || !secondWakeRes.Success {
+				if err != nil || !secondWakeRes.Recovered {
 					t.Fatalf("second Wake failed: %+v, %v", secondWakeRes, err)
 				}
 				finalChar, err := charRepo.FindByID(ctx, char.ID)

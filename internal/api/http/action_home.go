@@ -15,12 +15,6 @@ type sleepRequest struct {
 	TargetHomeID string `json:"target_home_id"`
 }
 
-type wakeResponse struct {
-	Success   bool              `json:"success"`
-	Message   string            `json:"message"`
-	Character characterResponse `json:"character"`
-}
-
 type houseBuildRequest struct {
 	TownID     string `json:"town_id"`
 	HouseStyle string `json:"house_style"`
@@ -96,14 +90,18 @@ func WithHome(service HomeService) Option {
 			return
 		}
 		withActionCommand("home_sleep", func(ctx context.Context, actor string, p sleepRequest) (any, error) {
-			return service.Sleep(ctx, actor, p.TargetHomeID)
+			value, err := service.Sleep(ctx, actor, p.TargetHomeID)
+			if err != nil {
+				return nil, err
+			}
+			return newHomeSleepResponse(value), nil
 		}, homeActionRejection)(h)
 		withActionCommand("home_wake", func(ctx context.Context, actor string, _ struct{}) (any, error) {
 			value, err := service.Wake(ctx, actor)
 			if err != nil {
 				return nil, err
 			}
-			return wakeResponse{Success: value.Success, Message: value.Message, Character: toCharacterResponse(value.Character)}, nil
+			return newWakeResponse(value), nil
 		}, homeActionRejection)(h)
 		withActionCommand("house_build", func(ctx context.Context, actor string, p houseBuildRequest) (any, error) {
 			return service.BuildHouse(ctx, actor, p.TownID, p.HouseStyle)
@@ -115,7 +113,11 @@ func WithHome(service HomeService) Option {
 			return HomeColorResult{Color: p.Color}, nil
 		}, homeActionRejection)(h)
 		withActionCommand("home_item_use", func(ctx context.Context, actor string, p homeItemUseRequest) (any, error) {
-			return service.UseHomeItem(ctx, actor, p.InstanceID, p.Source)
+			value, err := service.UseHomeItem(ctx, actor, p.InstanceID, p.Source)
+			if err != nil {
+				return nil, err
+			}
+			return newHomeItemUseResponse(value), nil
 		}, homeActionRejection)(h)
 		withActionCommand("home_phrase_teach", func(ctx context.Context, actor string, p homePhraseTeachRequest) (any, error) {
 			return service.TeachCompanionPhrase(ctx, actor, p.Phrase)
@@ -192,7 +194,10 @@ func homeActionRejection(err error) (int, ErrorDetail) {
 	if status, detail := speechRejection(err); status != 0 {
 		return status, detail
 	}
+	var refusal home.ItemRefusal
 	switch {
+	case errors.As(err, &refusal):
+		return http.StatusBadRequest, ErrorDetail{Code: "HOME_ITEM_CANNOT_USE", Message: itemRefusalMessage(refusal)}
 	case errors.Is(err, home.ErrAlreadySleeping):
 		return http.StatusConflict, ErrorDetail{Code: "HOME_ALREADY_SLEEPING", Message: "Character is already sleeping."}
 	case errors.Is(err, home.ErrStillSleeping):

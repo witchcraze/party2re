@@ -33,6 +33,18 @@ var (
 	ErrNoPetsAtHome              = errors.New("no pets at home")
 )
 
+// ItemRefusal is a legacy ＠つかう refusal; it matches ErrCannotUseHere.
+// CombatOnly is the held combat-only case, which legacy words differently.
+type ItemRefusal struct {
+	ItemName   string
+	CombatOnly bool
+}
+
+func (e ItemRefusal) Error() string { return "cannot use item here: " + e.ItemName }
+
+// Is lets errors.Is match ErrCannotUseHere.
+func (e ItemRefusal) Is(target error) bool { return target == ErrCannotUseHere }
+
 // HomePet represents a resident monster pet staying at character home.
 type HomePet struct {
 	ID         string `json:"id"`
@@ -178,12 +190,71 @@ type HomeUsableItem struct {
 
 // UseHomeItemResult represents the outcome of using or inspecting an item from home.
 type UseHomeItemResult struct {
-	Action    string                   `json:"action"` // "inspect" or "consumed"
-	Message   string                   `json:"message"`
-	ItemName  string                   `json:"item_name"`
-	Kind      int                      `json:"kind"`
-	Consumed  bool                     `json:"consumed"`
-	Character *corecharacter.Character `json:"character,omitempty"`
+	Action   string `json:"action"` // "inspect", "consumed" or "no_effect"
+	ItemName string `json:"item_name"`
+	Kind     int    `json:"kind"`
+	Consumed bool   `json:"consumed"`
+	// Deferred marks a Depot category-4 callback, which legacy runs after the
+	// Depot rewrite instead of as an announced use (lib/home.cgi:329–333,350).
+	Deferred   bool                     `json:"deferred"`
+	Inspection *HomeItemInspection      `json:"inspection,omitempty"`
+	Outcome    *HomeItemOutcome         `json:"outcome,omitempty"`
+	Character  *corecharacter.Character `json:"character,omitempty"`
+}
+
+// HomeItemInspection is the weapon or armor line ＠つかう shows instead of using it.
+type HomeItemInspection struct {
+	Power  int `json:"power"`
+	Weight int `json:"weight"`
+	Price  int `json:"price"`
+}
+
+// HomeItemEffect names what one Home item callback did.
+type HomeItemEffect string
+
+const (
+	HomeItemEffectNone              HomeItemEffect = "none" // items 113/114
+	HomeItemEffectNoEffect          HomeItemEffect = "no_effect"
+	HomeItemEffectStatGain          HomeItemEffect = "stat_gain" // Stat, Amount
+	HomeItemEffectLevelUpReserved   HomeItemEffect = "level_up_reserved"
+	HomeItemEffectTiredReset        HomeItemEffect = "tired_reset"
+	HomeItemEffectGodVisit          HomeItemEffect = "god_visit" // GodVisit
+	HomeItemEffectOrbOffered        HomeItemEffect = "orb_offered"
+	HomeItemEffectOrbAlreadyOffered HomeItemEffect = "orb_already_offered"
+	HomeItemEffectSmallMedal        HomeItemEffect = "small_medal"
+	HomeItemEffectSealRemoved       HomeItemEffect = "seal_removed" // Amount crystals
+	HomeItemEffectFutureMemory      HomeItemEffect = "future_memory_saved"
+	HomeItemEffectFutureMemoryFull  HomeItemEffect = "future_memory_full"
+	HomeItemEffectVeteranReward     HomeItemEffect = "veteran_reward" // Amount gold
+	HomeItemEffectPersonality       HomeItemEffect = "personality_changed"
+	HomeItemEffectCostume           HomeItemEffect = "costume_worn"
+	HomeItemEffectTransformScroll   HomeItemEffect = "transform_scroll_read"
+	HomeItemEffectRecipeLearned     HomeItemEffect = "recipe_learned" // Recipe
+	HomeItemEffectRecipeExhausted   HomeItemEffect = "recipe_exhausted"
+	HomeItemEffectRewardItems       HomeItemEffect = "reward_items"      // Items
+	HomeItemEffectSealedBoxOpened   HomeItemEffect = "sealed_box_opened" // Items
+	HomeItemEffectNoSealedBox       HomeItemEffect = "no_sealed_box"
+)
+
+// Stat keys reported by HomeItemEffectStatGain.
+const (
+	HomeStatMaxHP   = "max_hp"
+	HomeStatMaxMP   = "max_mp"
+	HomeStatAttack  = "attack"
+	HomeStatDefense = "defense"
+	HomeStatAgility = "agility"
+	HomeStatSP      = "sp"
+)
+
+// HomeItemOutcome is the structured result of one Home item callback.
+type HomeItemOutcome struct {
+	Effect      HomeItemEffect `json:"effect"`
+	Stat        string         `json:"stat,omitempty"`
+	Amount      int            `json:"amount"`
+	Items       []string       `json:"items,omitempty"` // reward names in delivery order
+	Recipe      *LearnedRecipe `json:"recipe,omitempty"`
+	GodVisit    string         `json:"god_visit,omitempty"`
+	Personality string         `json:"personality,omitempty"`
 }
 
 // ValidateLetter validates sender, recipient, and message content for a letter, returning the normalized content.

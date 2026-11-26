@@ -95,10 +95,6 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 // Each entry maps pkg.Struct.Field to the issue tracking its decoupling.
 // No new fields may be added. When a field is decoupled, it MUST be removed from this map to ratchet down.
 var whitelistedLegacyPresentationFields = map[string]string{
-	"home.SleepResult.Message":         "#2306",
-	"home.SleepStatus.Message":         "#2306",
-	"home.WakeResult.Message":          "#2306",
-	"home.UseHomeItemResult.Message":   "#2306",
 	"contest.SettlementResult.Message": "#2308",
 }
 

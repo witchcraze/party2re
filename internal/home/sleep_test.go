@@ -235,7 +235,7 @@ func TestSleepAndWake_Lifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to wake: %v", err)
 	}
-	if !wakeRes.Success {
+	if !wakeRes.Recovered {
 		t.Fatalf("expected wake success, got %+v", wakeRes)
 	}
 	if wakeRes.Character.Stats.HP != 100 || wakeRes.Character.Stats.MP != 50 {
@@ -253,7 +253,7 @@ func TestSleepAndWake_Lifecycle(t *testing.T) {
 
 	// 8. Subsequent Wake is idempotent
 	wakeAgain, err := svc.Wake(ctx, "c1")
-	if err != nil || !wakeAgain.Success {
+	if err != nil || wakeAgain.Recovered {
 		t.Fatalf("expected idempotent wake, got %+v, err=%v", wakeAgain, err)
 	}
 }
@@ -898,8 +898,8 @@ func TestWake_PropagatesHookErrors_AndDoesNotFinalizeRecovery(t *testing.T) {
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("expected error %v, got %v", tc.wantErr, err)
 			}
-			if res.Success {
-				t.Errorf("expected WakeResult.Success to be false on error")
+			if res.Recovered {
+				t.Errorf("expected WakeResult.Recovered to be false on error")
 			}
 
 			// In all failure cases except IsLocked error (where timer read itself failed),
@@ -924,8 +924,8 @@ func TestWake_PropagatesHookErrors_AndDoesNotFinalizeRecovery(t *testing.T) {
 					t.Errorf("expected no recovery writes on IsLocked failure, got HP=%d, MP=%d, Tired=%d",
 						unchangedChar.Stats.HP, unchangedChar.Stats.MP, unchangedChar.Tired)
 				}
-				if strings.Contains(res.Message, "すでに目覚めています") {
-					t.Errorf("expected no false awake message on IsLocked failure, got: %s", res.Message)
+				if res.Character.ID != "" {
+					t.Errorf("expected no false awake result on IsLocked failure, got: %+v", res)
 				}
 			}
 		})
@@ -966,8 +966,8 @@ func TestWake_HealthyContrast_CompletesAllHooksAndClearsRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Wake failed: %v", err)
 	}
-	if !res.Success {
-		t.Fatalf("expected WakeResult.Success = true")
+	if !res.Recovered {
+		t.Fatalf("expected WakeResult.Recovered = true")
 	}
 	if fullness.calledFor != "c1" {
 		t.Errorf("expected fullness reset for c1")
@@ -997,8 +997,8 @@ func TestWake_HealthyContrast_CompletesAllHooksAndClearsRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Wake failed: %v", err)
 	}
-	if !wake2.Success || !strings.Contains(wake2.Message, "すでに目覚めています") {
-		t.Errorf("expected already awake message on second Wake, got: %+v", wake2)
+	if wake2.Recovered || wake2.Character.ID != "c1" {
+		t.Errorf("expected already awake result on second Wake, got: %+v", wake2)
 	}
 }
 
@@ -1042,8 +1042,8 @@ func TestWake_RetryAfterHookFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success on attempt 2, got: %v", err)
 	}
-	if !res2.Success {
-		t.Fatalf("expected WakeResult.Success = true on attempt 2")
+	if !res2.Recovered {
+		t.Fatalf("expected WakeResult.Recovered = true on attempt 2")
 	}
 	asleep2, _ := mt.IsLocked(ctx, timer.CategoryAsleep, "c1")
 	if asleep2 {
@@ -1143,7 +1143,7 @@ func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
 		if !errors.Is(err, dbReadErr) {
 			t.Fatalf("expected %v, got status=%+v err=%v", dbReadErr, status, err)
 		}
-		if status.Sleeping || status.CanWake || status.Message != "" {
+		if status != (SleepStatus{}) {
 			t.Errorf("expected empty SleepStatus on read error, got: %+v", status)
 		}
 	})
@@ -1283,8 +1283,8 @@ func TestWake_PostClaimRecheckReadFailures(t *testing.T) {
 		if !errors.Is(err, dbErr) {
 			t.Fatalf("expected error %v, got res=%+v err=%v", dbErr, res, err)
 		}
-		if res.Success {
-			t.Errorf("expected WakeResult.Success = false")
+		if res.Recovered {
+			t.Errorf("expected WakeResult.Recovered = false")
 		}
 		if fullness.calledFor != "" || blessing.calledFor != "" || alchemy.calledFor != "" || costume.calledFor != "" {
 			t.Errorf("expected 0 recovery hooks executed, got fullness=%q blessing=%q alchemy=%q costume=%q",
@@ -1351,7 +1351,7 @@ func TestWake_PostClaimRecheckReadFailures(t *testing.T) {
 		if !errors.Is(err, asleepErr) {
 			t.Fatalf("expected error %v, got res=%+v err=%v", asleepErr, res, err)
 		}
-		if res.Success || strings.Contains(res.Message, "すでに目覚めています") {
+		if res.Recovered || res.Character.ID != "" {
 			t.Errorf("expected no false awake success, got %+v", res)
 		}
 		if fullness.calledFor != "" || blessing.calledFor != "" || alchemy.calledFor != "" || costume.calledFor != "" {

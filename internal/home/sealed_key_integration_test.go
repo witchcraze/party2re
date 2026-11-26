@@ -9,6 +9,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -78,8 +79,8 @@ func TestSealedKey_SourcesAndBoxes(t *testing.T) {
 		if tc.wantOpened != (len(rewards) > 0) {
 			t.Fatalf("%s: rewards %+v", tc.name, rewards)
 		}
-		if !tc.wantOpened && res.Message != "何かの箱を開けるための鍵みたいだ" {
-			t.Fatalf("%s: message %q", tc.name, res.Message)
+		if !tc.wantOpened && (res.Outcome == nil || res.Outcome.Effect != home.HomeItemEffectNoSealedBox) {
+			t.Fatalf("%s: outcome %+v", tc.name, res.Outcome)
 		}
 		if tc.boxSource != "" && f.held(t, c, tc.boxSource, boxes[0]) {
 			t.Fatalf("%s: box not removed", tc.name)

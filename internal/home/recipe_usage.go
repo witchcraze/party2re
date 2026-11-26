@@ -3,7 +3,6 @@ package home
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -15,8 +14,8 @@ var (
 
 // LearnedRecipe represents recipe combination discovery metadata.
 type LearnedRecipe struct {
-	BaseName     string
-	MaterialName string
+	BaseName     string `json:"base_name"`
+	MaterialName string `json:"material_name"`
 }
 
 // RecipeLearner provides character recipe discovery matching allowed base material pools.
@@ -62,9 +61,9 @@ func isRecipeScrollItem(name string) bool {
 	}
 }
 
-func (s *Service) applyRecipeScrollConsumable(ctx context.Context, char *corecharacter.Character, itemName string) (string, error) {
+func (s *Service) applyRecipeScrollConsumable(ctx context.Context, char *corecharacter.Character, itemName string) (HomeItemOutcome, error) {
 	if s.recipeLearner == nil {
-		return "", ErrRecipeLearnerUnavailable
+		return HomeItemOutcome{}, ErrRecipeLearnerUnavailable
 	}
 
 	var pool []string
@@ -76,16 +75,16 @@ func (s *Service) applyRecipeScrollConsumable(ctx context.Context, char *corecha
 	case "神の錬金レシピ":
 		pool = nil
 	default:
-		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, itemName)
+		return HomeItemOutcome{}, ItemRefusal{ItemName: itemName}
 	}
 
 	res, err := s.recipeLearner.LearnRecipe(ctx, char.ID, pool)
 	if err != nil {
 		if errors.Is(err, ErrNoRecipesToLearn) {
-			return "この錬金レシピからこれ以上習得できる錬金方法はないようだ…", nil
+			return HomeItemOutcome{Effect: HomeItemEffectRecipeExhausted}, nil
 		}
-		return "", err
+		return HomeItemOutcome{}, err
 	}
 
-	return fmt.Sprintf("%s は錬金レシピを読んだ！【%s × %s ＝ ？？？】の錬金方法を習得した！", char.Name, res.BaseName, res.MaterialName), nil
+	return HomeItemOutcome{Effect: HomeItemEffectRecipeLearned, Recipe: &res}, nil
 }

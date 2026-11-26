@@ -222,7 +222,7 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			if err := json.Unmarshal(got["result"], &wake); err != nil {
 				t.Fatal(err)
 			}
-			if !wake.Success || wake.Character != toCharacterResponse(f.char) || f.updates <= 1 {
+			if !wake.Recovered || wake.Character != toCharacterResponse(f.char) || f.updates <= 1 {
 				t.Fatalf("wake lost outcome or did not persist: %+v", wake)
 			}
 			locked, err := f.timers.IsLocked(f.expectedContext, timer.CategoryAsleep, "hero")

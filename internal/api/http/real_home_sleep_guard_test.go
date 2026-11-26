@@ -316,11 +316,8 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error from Wake on asleep lookup error, got nil: %+v", wakeRes)
 			}
-			if wakeRes.Success {
-				t.Errorf("expected WakeResult.Success = false on asleep lookup error")
-			}
-			if strings.Contains(wakeRes.Message, "すでに目覚めています") {
-				t.Errorf("expected no false awake message on asleep lookup error, got: %s", wakeRes.Message)
+			if wakeRes.Recovered || wakeRes.Character.ID != "" {
+				t.Errorf("expected no false awake result on asleep lookup error, got: %+v", wakeRes)
 			}
 			if charRepo.updateCount != 0 {
 				t.Errorf("expected 0 character updates on wake failure, got %d", charRepo.updateCount)

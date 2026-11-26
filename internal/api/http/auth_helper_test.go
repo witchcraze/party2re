@@ -306,7 +306,6 @@ func TestGuardSleepingCharacter(t *testing.T) {
 				return home.SleepStatus{
 					Sleeping:         true,
 					RemainingSeconds: 300,
-					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
 				}, nil
 			},
 		}
@@ -331,7 +330,6 @@ func TestGuardSleepingCharacter(t *testing.T) {
 					Sleeping:         false,
 					CanWake:          true,
 					RemainingSeconds: 0,
-					Message:          "目を覚ます準備ができました",
 				}, nil
 			},
 		}
@@ -355,7 +353,6 @@ func TestGuardSleepingCharacter(t *testing.T) {
 				return home.SleepStatus{
 					Sleeping: false,
 					CanWake:  false,
-					Message:  "起きています",
 				}, nil
 			},
 		}
@@ -379,7 +376,6 @@ func TestGuardSleepingCharacter(t *testing.T) {
 				return home.SleepStatus{
 					Sleeping:         true,
 					RemainingSeconds: 300,
-					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
 				}, nil
 			},
 		}
@@ -403,7 +399,6 @@ func TestGuardSleepingCharacter(t *testing.T) {
 				return home.SleepStatus{
 					Sleeping:         true,
 					RemainingSeconds: 300,
-					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
 				}, nil
 			},
 		}

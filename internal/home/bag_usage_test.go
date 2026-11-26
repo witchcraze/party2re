@@ -142,7 +142,7 @@ func TestUseHomeItem_RewardBag_BothSourcesDeliverAboveCapacity(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !res.Consumed || res.Message != "なんと、福袋の中身は 福袋 だった！" {
+			if got := outcomeOf(res); !res.Consumed || !reflect.DeepEqual(got, HomeItemOutcome{Effect: HomeItemEffectRewardItems, Items: []string{"福袋"}}) {
 				t.Fatalf("unexpected result %+v", res)
 			}
 			got := depots.depots[charID]

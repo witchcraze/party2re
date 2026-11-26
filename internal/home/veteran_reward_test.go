@@ -3,6 +3,7 @@ package home
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -29,17 +30,17 @@ func TestUseHomeItem_VeteranReward_Boundaries(t *testing.T) {
 		rng                 float64
 		wantExp, wantGold   int
 		wantConsumed, noEff bool
-		wantMsg             string
+		wantOutcome         HomeItemOutcome
 	}{
-		{name: "Lv98 unchanged", level: 98, exp: 98020, gold: 100, wantExp: 98020, wantGold: 100, noEff: true, wantMsg: noEffectMessage},
-		{name: "Lv99 EXP98000 low", level: 99, exp: 98000, gold: 100, wantExp: 98010, wantGold: 90, noEff: true, wantMsg: noEffectMessage},
-		{name: "Lv99 EXP98000 high", level: 99, exp: 98000, gold: 100, rng: rngTop, wantExp: 98010, wantGold: 86, noEff: true, wantMsg: noEffectMessage},
-		{name: "Lv99 EXP98010", level: 99, exp: 98010, gold: 100, rng: rngTop, wantExp: 98010, wantGold: 100, noEff: true, wantMsg: noEffectMessage},
-		{name: "Lv99 EXP98020 low", level: 99, exp: 98020, gold: 100, wantExp: 98010, wantGold: 110, wantConsumed: true, wantMsg: "これまでの戦いの報酬として 10 Gもらった!"},
-		{name: "Lv99 EXP98020 high", level: 99, exp: 98020, gold: 100, rng: rngTop, wantExp: 98010, wantGold: 114, wantConsumed: true, wantMsg: "これまでの戦いの報酬として 14 Gもらった!"},
-		{name: "gold cap still consumes", level: 99, exp: 98020, gold: 999999, wantExp: 98010, wantGold: 999999, wantConsumed: true, wantMsg: "これまでの戦いの報酬として 10 Gもらった!"},
-		{name: "insufficient gold goes negative", level: 99, exp: 96040, gold: 100, rng: rngTop, wantExp: 98010, wantGold: 100 - 2954, noEff: true, wantMsg: noEffectMessage},
-		{name: "over-level", level: 120, exp: 144000, gold: 0, wantExp: 98010, wantGold: 45990, wantConsumed: true, wantMsg: "これまでの戦いの報酬として 45990 Gもらった!"},
+		{name: "Lv98 unchanged", level: 98, exp: 98020, gold: 100, wantExp: 98020, wantGold: 100, noEff: true, wantOutcome: noEffect},
+		{name: "Lv99 EXP98000 low", level: 99, exp: 98000, gold: 100, wantExp: 98010, wantGold: 90, noEff: true, wantOutcome: noEffect},
+		{name: "Lv99 EXP98000 high", level: 99, exp: 98000, gold: 100, rng: rngTop, wantExp: 98010, wantGold: 86, noEff: true, wantOutcome: noEffect},
+		{name: "Lv99 EXP98010", level: 99, exp: 98010, gold: 100, rng: rngTop, wantExp: 98010, wantGold: 100, noEff: true, wantOutcome: noEffect},
+		{name: "Lv99 EXP98020 low", level: 99, exp: 98020, gold: 100, wantExp: 98010, wantGold: 110, wantConsumed: true, wantOutcome: HomeItemOutcome{Effect: HomeItemEffectVeteranReward, Amount: 10}},
+		{name: "Lv99 EXP98020 high", level: 99, exp: 98020, gold: 100, rng: rngTop, wantExp: 98010, wantGold: 114, wantConsumed: true, wantOutcome: HomeItemOutcome{Effect: HomeItemEffectVeteranReward, Amount: 14}},
+		{name: "gold cap still consumes", level: 99, exp: 98020, gold: 999999, wantExp: 98010, wantGold: 999999, wantConsumed: true, wantOutcome: HomeItemOutcome{Effect: HomeItemEffectVeteranReward, Amount: 10}},
+		{name: "insufficient gold goes negative", level: 99, exp: 96040, gold: 100, rng: rngTop, wantExp: 98010, wantGold: 100 - 2954, noEff: true, wantOutcome: noEffect},
+		{name: "over-level", level: 120, exp: 144000, gold: 0, wantExp: 98010, wantGold: 45990, wantConsumed: true, wantOutcome: HomeItemOutcome{Effect: HomeItemEffectVeteranReward, Amount: 45990}},
 	}
 	for _, tc := range cases {
 		for _, source := range []string{"inventory", "depot"} {
@@ -49,7 +50,7 @@ func TestUseHomeItem_VeteranReward_Boundaries(t *testing.T) {
 				if err != nil {
 					t.Fatalf("UseHomeItem: %v", err)
 				}
-				if res.Consumed != tc.wantConsumed || (res.Action == "no_effect") != tc.noEff || res.Message != tc.wantMsg {
+				if res.Consumed != tc.wantConsumed || (res.Action == "no_effect") != tc.noEff || !reflect.DeepEqual(outcomeOf(res), tc.wantOutcome) {
 					t.Fatalf("result = %+v", res)
 				}
 				got := runner.chars["vet"]

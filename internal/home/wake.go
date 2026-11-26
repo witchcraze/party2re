@@ -3,7 +3,6 @@ package home
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,10 +14,10 @@ import (
 
 const defaultWakeClaimTTL = 30 * time.Second
 
-// WakeResult represents the outcome of waking up from sleep.
+// WakeResult represents the outcome of waking up from sleep. Recovered is
+// false when the character was already awake and nothing changed.
 type WakeResult struct {
-	Success   bool                    `json:"success"`
-	Message   string                  `json:"message"`
+	Recovered bool                    `json:"recovered"`
 	Character corecharacter.Character `json:"character"`
 }
 
@@ -210,11 +209,7 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		}
 	}
 	if !isPendingWake {
-		return WakeResult{
-			Success:   true,
-			Message:   fmt.Sprintf("%sはすでに目覚めています", char.Name),
-			Character: char,
-		}, nil
+		return WakeResult{Character: char}, nil
 	}
 
 	// Serialize recovery per character: a concurrent Wake must not repeat side effects
@@ -254,11 +249,7 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 				return WakeResult{}, err
 			}
 			if !asleep {
-				return WakeResult{
-					Success:   true,
-					Message:   fmt.Sprintf("%sはすでに目覚めています", c.Name),
-					Character: c,
-				}, nil
+				return WakeResult{Character: c}, nil
 			}
 		}
 	}
@@ -372,11 +363,7 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		return WakeResult{}, ErrWakeInProgress
 	}
 
-	return WakeResult{
-		Success:   true,
-		Message:   fmt.Sprintf("%sのHP・MP・疲労度が回復した！", char.Name),
-		Character: char,
-	}, nil
+	return WakeResult{Recovered: true, Character: char}, nil
 }
 
 func (s *Service) recoverVitality(ctx context.Context, characterID string, char corecharacter.Character, keeper *wakeClaimKeeper) (corecharacter.Character, error) {
