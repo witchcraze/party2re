@@ -12,3 +12,5 @@
 Hall-of-fame induction is mandatory; completion is marked only after induction succeeds, so a failed induction is retried on the next defeat or discovery, once and without duplicates. News is best effort and published only on the first completion. Characters who completed before this rule and lost their induction are repaired through the collection service's recovery operation, not ad hoc SQL.
 
 Discovery and induction failures propagate out of the enclosing acquisition or battle settlement and roll it back as a whole; adding a discovery caller must keep this.
+
+Hand items are not registered by every Go acquisition path: combat stored-tool exchange (`job50`/`job86`, matching `party2/lib/_skill.cgi:10457–10461,10505–10509`) and direct-to-hand treasure drops ([#2879](https://github.com/witchcraze/party2re/issues/2879), gap vs `party2/lib/_npc_action.cgi:70–71`) do not record discovery, and `home_collection` is read-only (unlike `collection.cgi:37`). Listing-time `add_collection` in Flea Market and Player Store therefore actively checks held hand items (`inventory_items`).

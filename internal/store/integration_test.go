@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -64,9 +65,11 @@ type storeDBFixture struct {
 	repo        *database.StoreRepository
 	chars       *database.CharacterRepository
 	depots      *database.DepotRepository
+	invs        *database.InventoryRepository
 	catalog     *item.Catalog
 	guildPoints *testStoreGuildPoints
 	delivery    *testStoreDelivery
+	collection  *mockCollectionRecorder
 }
 
 func isolatedStoreDB(t *testing.T) *sql.DB {
@@ -74,6 +77,7 @@ func isolatedStoreDB(t *testing.T) *sql.DB {
 	return database.CreateTestDatabase(t, []string{
 		"players",
 		"characters",
+		"inventory_items",
 		"character_depots",
 		"depot_items",
 		"character_stores",
@@ -100,6 +104,10 @@ func newStoreDBFixture(t *testing.T) *storeDBFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	invs, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	catalog, err := item.DefaultCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -109,9 +117,11 @@ func newStoreDBFixture(t *testing.T) *storeDBFixture {
 		repo:        repo,
 		chars:       chars,
 		depots:      depots,
+		invs:        invs,
 		catalog:     catalog,
 		guildPoints: &testStoreGuildPoints{},
 		delivery:    &testStoreDelivery{depots: depots},
+		collection:  &mockCollectionRecorder{},
 	}
 }
 
@@ -122,6 +132,8 @@ func (f *storeDBFixture) service() *store.Service {
 		f.depots,
 		f.catalog,
 		database.NewTransactionProvider(f.db),
+		store.WithInventoryRepository(f.invs),
+		store.WithCollectionRecorder(f.collection),
 		store.WithGuildPoints(f.guildPoints),
 		store.WithDeliveryService(f.delivery),
 	)
@@ -153,6 +165,27 @@ func TestStoreBuildBuyAndTrade_Integration(t *testing.T) {
 	}
 	barterWeapon.EnhancementLevel = 5
 	if _, err := database.CreateTestDepot(ctx, f.db, owner.ID, 0, []item.Instance{goldWeapon, barterWeapon}); err != nil {
+		t.Fatal(err)
+	}
+	heldArmor, err := item.NewInstance("armor-01", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	heldShield, err := item.NewInstance("item-071", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerInv, err := inventory.New(owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerInv.Add(heldShield); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.invs.Save(ctx, ownerInv); err != nil {
 		t.Fatal(err)
 	}
 
@@ -189,6 +222,24 @@ func TestStoreBuildBuyAndTrade_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListBarterItem failed: %v", err)
 	}
+	if len(f.collection.calls) != 4 {
+		t.Fatalf("expected 4 listing collection calls (2 listings × 2 held items), got %+v", f.collection.calls)
+	}
+	var seenArmor, seenShield bool
+	for _, call := range f.collection.calls {
+		switch {
+		case call.CharacterID == owner.ID && call.ItemID == "armor-01" && call.Category == "armor":
+			seenArmor = true
+		case call.CharacterID == owner.ID && call.ItemID == "item-071" && call.Category == "item":
+			seenShield = true
+		default:
+			t.Fatalf("unexpected listing collection call: %+v (listed weapon-01 must not be registered; shield must be item)", call)
+		}
+	}
+	if !seenArmor || !seenShield {
+		t.Fatalf("expected both armor and shield recorded, got %+v", f.collection.calls)
+	}
+	f.collection.calls = nil
 
 	if err := svc.BuyItem(ctx, buyer.ID, goldSale.ID); err != nil {
 		t.Fatalf("BuyItem failed: %v", err)
@@ -248,6 +299,81 @@ func TestStoreBuildBuyAndTrade_Integration(t *testing.T) {
 	}
 	if len(f.delivery.notices) == 0 {
 		t.Fatal("expected trade item notification recorded")
+	}
+	if len(f.collection.calls) != 0 {
+		t.Fatalf("expected no collection calls on buyer purchase/barter, got %+v", f.collection.calls)
+	}
+}
+
+func TestStoreFailedListingRollsBackDepot_Integration(t *testing.T) {
+	f := newStoreDBFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	owner, err := database.CreateTestCharacterWithFunds(ctx, f.db, "StoreListRbk", store.StorePrice+5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wpn, err := item.NewInstance("weapon-01", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateTestDepot(ctx, f.db, owner.ID, 0, []item.Instance{wpn}); err != nil {
+		t.Fatal(err)
+	}
+	heldArmor, err := item.NewInstance("armor-01", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	heldShield, err := item.NewInstance("item-071", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerInv, err := inventory.New(owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerInv.Add(heldShield); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.invs.Save(ctx, ownerInv); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := f.service()
+	st, err := svc.BuildStore(ctx, owner.ID, "town1", "001")
+	if err != nil {
+		t.Fatalf("BuildStore failed: %v", err)
+	}
+	storeRow, err := f.repo.GetStoreByCharacterID(ctx, st.CharacterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f.collection.err = errors.New("simulated collection failure")
+	if _, err := svc.ListGoldItem(ctx, owner.ID, wpn.ID, 400); err == nil {
+		t.Fatal("expected ListGoldItem to fail when collection fails")
+	}
+	if _, err := svc.ListBarterItem(ctx, owner.ID, wpn.ID, "薬草"); err == nil {
+		t.Fatal("expected ListBarterItem to fail when collection fails")
+	}
+
+	ownerDepot, err := f.depots.FindByCharacterID(ctx, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ownerDepot.Items) != 1 || ownerDepot.Items[0].ID != wpn.ID {
+		t.Fatalf("depot item lost on rollback: %+v", ownerDepot.Items)
+	}
+	sales, err := f.repo.GetSalesByStoreID(ctx, storeRow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sales) != 0 {
+		t.Fatalf("sales persisted after rollback: %+v", sales)
 	}
 }
 

@@ -4,11 +4,14 @@ import (
 	"context"
 	"strings"
 
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
 // ListGoldItem lists an item from the character's depot for gold sale.
+// Transaction: RunInTx.
+// Lock Order: characters(2) -> inventory_items(3) -> character_depots/depot_items(5).
 func (s *Service) ListGoldItem(ctx context.Context, characterID, depotItemInstanceID string, price int) (*Sale, error) {
 	if price < 1 || price > 999999 {
 		return nil, ErrInvalidPrice
@@ -24,6 +27,14 @@ func (s *Service) ListGoldItem(ctx context.Context, characterID, depotItemInstan
 		}
 		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
+		}
+
+		var inv coreinventory.Inventory
+		if s.collection != nil && s.invRepo != nil {
+			inv, err = s.invRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+			if err != nil {
+				return err
+			}
 		}
 
 		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
@@ -91,6 +102,9 @@ func (s *Service) ListGoldItem(ctx context.Context, characterID, depotItemInstan
 		if err := s.repo.SaveSale(txCtx, saleObj); err != nil {
 			return err
 		}
+		if err := s.recordHeldCollection(txCtx, characterID, inv); err != nil {
+			return err
+		}
 
 		createdSale = &saleObj
 		return nil
@@ -102,6 +116,8 @@ func (s *Service) ListGoldItem(ctx context.Context, characterID, depotItemInstan
 }
 
 // ListBarterItem lists an item from the character's depot for barter exchange with a desired item.
+// Transaction: RunInTx.
+// Lock Order: characters(2) -> inventory_items(3) -> character_depots/depot_items(5).
 func (s *Service) ListBarterItem(ctx context.Context, characterID, depotItemInstanceID, wishItemName string) (*Sale, error) {
 	cleanWish := strings.TrimSpace(wishItemName)
 	if cleanWish == "" {
@@ -128,6 +144,14 @@ func (s *Service) ListBarterItem(ctx context.Context, characterID, depotItemInst
 		}
 		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
+		}
+
+		var inv coreinventory.Inventory
+		if s.collection != nil && s.invRepo != nil {
+			inv, err = s.invRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+			if err != nil {
+				return err
+			}
 		}
 
 		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
@@ -194,6 +218,9 @@ func (s *Service) ListBarterItem(ctx context.Context, characterID, depotItemInst
 		if err := s.repo.SaveSale(txCtx, saleObj); err != nil {
 			return err
 		}
+		if err := s.recordHeldCollection(txCtx, characterID, inv); err != nil {
+			return err
+		}
 
 		createdSale = &saleObj
 		return nil
@@ -202,6 +229,39 @@ func (s *Service) ListBarterItem(ctx context.Context, characterID, depotItemInst
 		return nil, err
 	}
 	return createdSale, nil
+}
+
+// recordHeldCollection mirrors legacy add_collection on store listings
+// (store.cgi:175-176, 276-277): registers held hand items, not the listed Depot item.
+func (s *Service) recordHeldCollection(ctx context.Context, characterID string, inv coreinventory.Inventory) error {
+	if s.collection == nil {
+		return nil
+	}
+	for _, held := range inv.Items {
+		itemName := held.DefinitionID
+		handKind := coreitem.LegacyHandKindByID(held.DefinitionID)
+		if s.itemCatalog != nil {
+			if def, err := s.itemCatalog.FindByID(held.DefinitionID); err == nil {
+				itemName = def.Name
+				handKind = def.LegacyHandKind()
+			}
+		}
+		if err := s.collection.RecordItemDiscovered(ctx, characterID, held.DefinitionID, itemName, collectionCategoryForHandKind(handKind)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func collectionCategoryForHandKind(kind int) string {
+	switch kind {
+	case 1:
+		return "weapon"
+	case 2:
+		return "armor"
+	default:
+		return "item"
+	}
 }
 
 // WithdrawListing withdraws a listed item back to the owner's depot.

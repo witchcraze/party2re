@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/store"
@@ -1011,6 +1012,128 @@ func TestStoreService_BuyAndTradeDoNotRecordCollection(t *testing.T) {
 	}
 	if len(collector.calls) != 0 {
 		t.Fatalf("collection calls = %+v, want none", collector.calls)
+	}
+}
+
+func TestStoreService_ListingCollectionDiscovery(t *testing.T) {
+	ctx := context.Background()
+	storeRepo := newMockStoreRepo()
+	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	depotRepo := &mockDepotRepo{depots: make(map[string]depot.Depot)}
+	invRepo := &mockInvRepo{inventories: make(map[string]coreinventory.Inventory)}
+	collector := &mockCollectionRecorder{}
+	catalog := &mockCatalog{items: map[string]coreitem.Definition{
+		"wpn_001":   {ID: "wpn_001", Name: "ひのきのぼう", Price: 100, Slot: coreitem.SlotMainHand},
+		"weapon-02": {ID: "weapon-02", Name: "どうのつるぎ", Price: 500, Slot: coreitem.SlotMainHand},
+		"item-001":  {ID: "item-001", Name: "やくそう", Price: 10},
+		"item-071":  {ID: "item-071", Name: "天上の盾と兜", Price: 5000, Slot: coreitem.SlotOffHand},
+		"item-012":  {ID: "item-012", Name: "祈りの指輪", Price: 2000, Slot: coreitem.SlotAccessory},
+	}}
+
+	c1, _ := corecharacter.New("Seller")
+	c1.ID = "c1"
+	_ = c1.AddMoney(100000)
+	charRepo.chars["c1"] = c1
+
+	svc := store.NewService(
+		storeRepo,
+		charRepo,
+		depotRepo,
+		catalog,
+		&mockTxProvider{},
+		store.WithInventoryRepository(invRepo),
+		store.WithCollectionRecorder(collector),
+		store.WithNowFunc(func() time.Time { return time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC) }),
+	)
+	if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+		t.Fatalf("BuildStore failed: %v", err)
+	}
+
+	_ = depotRepo.Save(ctx, depot.Depot{
+		CharacterID: "c1",
+		Capacity:    10,
+		Items: []coreitem.Instance{
+			{ID: "dep_1", DefinitionID: "wpn_001", Quantity: 1},
+			{ID: "dep_2", DefinitionID: "wpn_001", Quantity: 1},
+		},
+	})
+
+	// 1. Listing registers held hand items, never the listed Depot item;
+	// shields (SlotOffHand) and accessories (SlotAccessory) in $m{ite} classify as "item".
+	heldInv, _ := coreinventory.New("c1")
+	if err := heldInv.Add(coreitem.Instance{ID: "hand_w", DefinitionID: "weapon-02", Quantity: 1}); err != nil {
+		t.Fatalf("add weapon-02: %v", err)
+	}
+	if err := heldInv.Add(coreitem.Instance{ID: "hand_s", DefinitionID: "item-071", Quantity: 1}); err != nil {
+		t.Fatalf("add item-071: %v", err)
+	}
+	invRepo.inventories["c1"] = heldInv
+
+	if _, err := svc.ListGoldItem(ctx, "c1", "dep_1", 500); err != nil {
+		t.Fatalf("ListGoldItem failed: %v", err)
+	}
+	if len(collector.calls) != 2 {
+		t.Fatalf("gold listing collection calls = %+v, want 2 held items", collector.calls)
+	}
+	if collector.calls[0] != (collectionRecordCall{CharacterID: "c1", ItemID: "weapon-02", ItemName: "どうのつるぎ", Category: "weapon"}) ||
+		collector.calls[1] != (collectionRecordCall{CharacterID: "c1", ItemID: "item-071", ItemName: "天上の盾と兜", Category: "item"}) {
+		t.Fatalf("unexpected gold listing collection calls: %+v", collector.calls)
+	}
+
+	accInv, _ := coreinventory.New("c1")
+	if err := accInv.Add(coreitem.Instance{ID: "hand_w2", DefinitionID: "weapon-02", Quantity: 1}); err != nil {
+		t.Fatalf("add weapon-02: %v", err)
+	}
+	if err := accInv.Add(coreitem.Instance{ID: "hand_a", DefinitionID: "item-012", Quantity: 1}); err != nil {
+		t.Fatalf("add item-012: %v", err)
+	}
+	invRepo.inventories["c1"] = accInv
+
+	collector.calls = nil
+	if _, err := svc.ListBarterItem(ctx, "c1", "dep_2", "やくそう"); err != nil {
+		t.Fatalf("ListBarterItem failed: %v", err)
+	}
+	if len(collector.calls) != 2 {
+		t.Fatalf("barter listing collection calls = %+v, want 2 held items", collector.calls)
+	}
+	if collector.calls[0] != (collectionRecordCall{CharacterID: "c1", ItemID: "weapon-02", ItemName: "どうのつるぎ", Category: "weapon"}) ||
+		collector.calls[1] != (collectionRecordCall{CharacterID: "c1", ItemID: "item-012", ItemName: "祈りの指輪", Category: "item"}) {
+		t.Fatalf("unexpected barter listing collection calls: %+v", collector.calls)
+	}
+
+	// 2. Empty hand records nothing
+	collector.calls = nil
+	emptyInv, _ := coreinventory.New("c1")
+	invRepo.inventories["c1"] = emptyInv
+	_ = depotRepo.Save(ctx, depot.Depot{
+		CharacterID: "c1",
+		Capacity:    10,
+		Items:       []coreitem.Instance{{ID: "dep_3", DefinitionID: "wpn_001", Quantity: 1}},
+	})
+	if _, err := svc.ListGoldItem(ctx, "c1", "dep_3", 500); err != nil {
+		t.Fatalf("ListGoldItem empty hand failed: %v", err)
+	}
+	if len(collector.calls) != 0 {
+		t.Fatalf("expected 0 calls for empty hand, got %+v", collector.calls)
+	}
+
+	// 3. Collection failure propagates
+	colErr := errors.New("store collection failure")
+	collector.err = colErr
+	invRepo.inventories["c1"] = heldInv
+	_ = depotRepo.Save(ctx, depot.Depot{
+		CharacterID: "c1",
+		Capacity:    10,
+		Items: []coreitem.Instance{
+			{ID: "dep_4", DefinitionID: "wpn_001", Quantity: 1},
+			{ID: "dep_5", DefinitionID: "wpn_001", Quantity: 1},
+		},
+	})
+	if _, err := svc.ListGoldItem(ctx, "c1", "dep_4", 500); !errors.Is(err, colErr) {
+		t.Fatalf("ListGoldItem expected %v, got %v", colErr, err)
+	}
+	if _, err := svc.ListBarterItem(ctx, "c1", "dep_5", "やくそう"); !errors.Is(err, colErr) {
+		t.Fatalf("ListBarterItem expected %v, got %v", colErr, err)
 	}
 }
 
