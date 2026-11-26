@@ -112,7 +112,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, id := range []string{member.ID, leader.ID} {
-			if err := combat.party.LeaveParty(ctx, lobby.Party.ID, id); err != nil {
+			if _, err := combat.party.LeaveParty(ctx, lobby.Party.ID, id); err != nil {
 				t.Error(err)
 			}
 		}

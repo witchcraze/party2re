@@ -88,7 +88,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	t.Cleanup(func() {
 		// Run exits may already have removed members; only the lobby must go.
 		for _, id := range []string{member.ID, leader.ID} {
-			if err := combat.party.LeaveParty(ctx, lobby.Party.ID, id); err != nil && !errors.Is(err, party.ErrCharacterNotInParty) && !errors.Is(err, party.ErrNotFound) {
+			if _, err := combat.party.LeaveParty(ctx, lobby.Party.ID, id); err != nil && !errors.Is(err, party.ErrCharacterNotInParty) && !errors.Is(err, party.ErrNotFound) {
 				t.Error(err)
 			}
 		}
@@ -217,7 +217,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if err := combat.party.LeaveParty(ctx, lobby.Party.ID, member.ID); err != nil {
+		if _, err := combat.party.LeaveParty(ctx, lobby.Party.ID, member.ID); err != nil {
 			t.Fatal(err)
 		}
 		entry, err := combat.normal.EnterSolo(ctx, member.PlayerID, member.ID, "normal-owned", "normal-owned-run", adventure.StarterAdventure, "normal", 3)
@@ -374,7 +374,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 
 	// 2. Both leave and the leader attempts to re-create stage-26 party -> rejected with ErrDailyOnceAlreadyUsed
 	for _, id := range []string{char2.ID, char1.ID} {
-		if err := combat.party.LeaveParty(ctx, partyDetail.Party.ID, id); err != nil {
+		if _, err := combat.party.LeaveParty(ctx, partyDetail.Party.ID, id); err != nil {
 			t.Fatalf("LeaveParty failed: %v", err)
 		}
 	}
@@ -405,7 +405,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("member should be allowed to create stage-26 party: %v", err)
 	}
-	_ = combat.party.LeaveParty(ctx, memberParty.Party.ID, char2.ID)
+	_, _ = combat.party.LeaveParty(ctx, memberParty.Party.ID, char2.ID)
 
 	// 3. Releasing lock (wake reset) allows leader entry again
 	if err := soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char1.ID); err != nil {
@@ -419,7 +419,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("leader should be allowed to create stage-26 party after wake: %v", err)
 	}
-	_ = combat.party.LeaveParty(ctx, p2.Party.ID, char1.ID)
+	_, _ = combat.party.LeaveParty(ctx, p2.Party.ID, char1.ID)
 }
 
 func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
@@ -536,7 +536,7 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 
 	partyMu.Lock()
 	for _, pid := range createdPartyIDs {
-		_ = combat.party.LeaveParty(ctx, pid, char.ID)
+		_, _ = combat.party.LeaveParty(ctx, pid, char.ID)
 	}
 	partyMu.Unlock()
 

@@ -161,6 +161,7 @@ func wireHooks(
 		}
 		if cmbt.party != nil {
 			cmbt.party.SetPostAdventureHook(postAdventureHook)
+			cmbt.party.SetTavernExitSettler(partyTavernExitAdapter{tavern: misc.tavern})
 		}
 		if cmbt.gvg != nil {
 			cmbt.gvg.SetPostExitHook(postAdventureHook)

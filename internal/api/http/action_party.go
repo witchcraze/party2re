@@ -18,7 +18,7 @@ type PartyService interface {
 	ListParties(ctx context.Context, status string, limit, offset int) (pagination.Page[party.PartySummary], error)
 	GetPartySummary(ctx context.Context, partyID string) (party.PartySummary, error)
 	JoinParty(ctx context.Context, partyID, characterID, password string) (party.PartyDetail, error)
-	LeaveParty(ctx context.Context, partyID, characterID string) error
+	LeaveParty(ctx context.Context, partyID, characterID string) (party.LeaveResult, error)
 	KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) (party.KickResult, error)
 }
 
@@ -61,6 +61,11 @@ type partyMessageResponse struct {
 	Message string `json:"message"`
 }
 
+type partyLeaveResponse struct {
+	Message        string `json:"message"`
+	DeliveryNotice string `json:"delivery_notice,omitempty"`
+}
+
 func partyCreateCommand(service PartyService) Option {
 	if service == nil {
 		return withActionCommand[partyCreateParams]("party_create", nil, nil)
@@ -86,11 +91,26 @@ func partyLeaveCommand(service PartyService) Option {
 		return withActionCommand[partyLeaveParams]("party_leave", nil, nil)
 	}
 	return withActionCommand("party_leave", func(ctx context.Context, actor string, p partyLeaveParams) (any, error) {
-		if err := service.LeaveParty(ctx, p.PartyID, actor); err != nil {
+		res, err := service.LeaveParty(ctx, p.PartyID, actor)
+		if err != nil {
 			return nil, err
 		}
-		return partyMessageResponse{Message: "パーティーから離れました"}, nil
+		return partyLeaveResponse{
+			Message:        "パーティーから離れました",
+			DeliveryNotice: deliveryNoticeText(res.Delivery),
+		}, nil
 	}, partyLobbyRejection)
+}
+
+// Battle-end delivery notices from _battle.cgi:1367,1372.
+func deliveryNoticeText(delivery *party.DeliveryOutcome) string {
+	if delivery == nil || delivery.ItemName == "" {
+		return ""
+	}
+	if delivery.Paid {
+		return "酒場から" + delivery.ItemName + "が届きました！"
+	}
+	return "酒場から" + delivery.ItemName + "が届きましたが、お金が足りませんでした"
 }
 
 func partyKickCommand(service PartyService) Option {

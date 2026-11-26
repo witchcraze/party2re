@@ -118,7 +118,7 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if err == nil || entry.Version != 1 {
 		t.Fatal(entry, err)
 	}
-	if err := a.service.LeaveParty(context.Background(), lobby, leader.ID); !errors.Is(err, runhost.ErrBusy) {
+	if _, err := a.service.LeaveParty(context.Background(), lobby, leader.ID); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
 	if _, err := a.service.KickMember(context.Background(), lobby, leader.ID, f.actors[1].ID); !errors.Is(err, runhost.ErrBusy) {

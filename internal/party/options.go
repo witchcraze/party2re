@@ -127,3 +127,21 @@ func WithAdventureRepository(repo AdventureRepository) Option {
 		s.advRepo = repo
 	}
 }
+
+// TavernExitSettler resets Tavern fullness and settles any standing delivery on lobby exit.
+type TavernExitSettler interface {
+	ResetFullness(ctx context.Context, characterID string) error
+	SettleDelivery(ctx context.Context, characterID string) (*DeliveryOutcome, error)
+}
+
+// WithTavernExitSettler configures the TavernExitSettler for waiting-lobby exits.
+func WithTavernExitSettler(settler TavernExitSettler) Option {
+	return func(s *Service) {
+		s.tavernExit = settler
+	}
+}
+
+// SetTavernExitSettler configures the TavernExitSettler on an existing service.
+func (s *Service) SetTavernExitSettler(settler TavernExitSettler) {
+	s.tavernExit = settler
+}

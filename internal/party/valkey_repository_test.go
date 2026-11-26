@@ -946,7 +946,7 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 	}
 
 	// 6. LeaveParty via remove_member.lua preserves PasswordHash
-	if err := svc.LeaveParty(ctx, createdPartyID, memberID); err != nil {
+	if _, err := svc.LeaveParty(ctx, createdPartyID, memberID); err != nil {
 		t.Fatalf("LeaveParty failed: %v", err)
 	}
 	gotParty, err = repo.GetParty(ctx, createdPartyID)

@@ -23,6 +23,7 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -271,6 +272,98 @@ func TestWirePostAdventureHook_Messages(t *testing.T) {
 				t.Fatalf("fullness reset or delivery claim missing: %+v", tavernMock)
 			}
 		})
+	}
+}
+
+func TestWirePartyTavernExitAdapter(t *testing.T) {
+	claimErr := errors.New("delivery storage unavailable")
+	for _, tt := range []struct {
+		name    string
+		result  tavern.OrderResult
+		err     error
+		want    *party.DeliveryOutcome
+		wantErr error
+	}{
+		{"delivered", tavern.OrderResult{Item: tavern.MenuItem{Name: "スープ"}}, nil, &party.DeliveryOutcome{ItemName: "スープ", Paid: true}, nil},
+		{"insufficient funds", tavern.OrderResult{}, fmt.Errorf("claim: %w", tavern.UnaffordableDeliveryError{ItemName: "スープ"}), &party.DeliveryOutcome{ItemName: "スープ", Paid: false}, nil},
+		{"no reservation", tavern.OrderResult{}, tavern.ErrNoActiveDelivery, nil, nil},
+		{"storage failure", tavern.OrderResult{}, claimErr, nil, claimErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tavernMock := &mockTavernService{claimResult: tt.result, claimErr: tt.err}
+			adapter := partyTavernExitAdapter{tavern: tavernMock}
+			if err := adapter.ResetFullness(context.Background(), "hero"); err != nil {
+				t.Fatalf("ResetFullness err=%v", err)
+			}
+			got, err := adapter.SettleDelivery(context.Background(), "hero")
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err=%v, want %v", err, tt.wantErr)
+			}
+			if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
+				t.Fatalf("outcome=%+v, want %+v", got, tt.want)
+			}
+			if !tavernMock.resetFullnessCalled || tavernMock.claimedCharID != "hero" {
+				t.Fatalf("fullness reset or delivery claim missing: %+v", tavernMock)
+			}
+		})
+	}
+}
+
+func TestWirePartyLeaveTavernIntegration(t *testing.T) {
+	db, char := newHomePetCharacter(t)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	econ, err := newEconServices(db, core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	misc, err := newMiscServices(db, core, soc, econ, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmbt, err := newCmbtServices(db, core, soc, econ, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	char.Money = 200
+	char.Stats.HP = 50
+	char.Stats.MaxHP = 100
+	if err := core.charRepo.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := misc.tavern.OrderMeal(ctx, char.ID, "tavern_water"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := misc.tavern.ReserveDelivery(ctx, char.ID, "tavern_water"); err != nil {
+		t.Fatal(err)
+	}
+	created, err := cmbt.party.CreateParty(ctx, char.ID, party.CreatePartyRequest{
+		Name: "WireLeave", StageID: "stage-00", Speed: 18,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := cmbt.party.LeaveParty(ctx, created.Party.ID, char.ID)
+	if err != nil {
+		t.Fatalf("LeaveParty failed: %v", err)
+	}
+	if res.Delivery == nil || !res.Delivery.Paid || res.Delivery.ItemName != "癒しの湧き水" {
+		t.Fatalf("unexpected wired delivery outcome: %+v", res.Delivery)
+	}
+	st, err := misc.tavern.GetStatus(ctx, char.ID)
+	if err != nil || st.IsFull {
+		t.Fatalf("expected is_full=false after wired LeaveParty, got %+v err=%v", st, err)
 	}
 }
 

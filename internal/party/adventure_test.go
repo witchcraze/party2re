@@ -1226,7 +1226,7 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 		if detail.Party.Mode != adventure.CrawlModeNormal {
 			t.Errorf("expected Mode %q, got %q", adventure.CrawlModeNormal, detail.Party.Mode)
 		}
-		_ = svc.LeaveParty(ctx, detail.Party.ID, leader.ID)
+		_, _ = svc.LeaveParty(ctx, detail.Party.ID, leader.ID)
 	})
 
 	t.Run("normal mode accepted case-insensitively", func(t *testing.T) {
@@ -1242,7 +1242,7 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 		if detail.Party.Mode != adventure.CrawlModeNormal {
 			t.Errorf("expected Mode %q, got %q", adventure.CrawlModeNormal, detail.Party.Mode)
 		}
-		_ = svc.LeaveParty(ctx, detail.Party.ID, leader.ID)
+		_, _ = svc.LeaveParty(ctx, detail.Party.ID, leader.ID)
 	})
 
 	t.Run("unimplemented modes return ErrUnsupportedMode", func(t *testing.T) {
@@ -2295,7 +2295,7 @@ func TestParty_Stage26SeasonLifecycleAcrossAdventuresAndDisbandment(t *testing.T
 	}
 
 	// 4. Disband party
-	if err := svc.LeaveParty(ctx, partyID, leader.ID); err != nil {
+	if _, err := svc.LeaveParty(ctx, partyID, leader.ID); err != nil {
 		t.Fatalf("LeaveParty failed: %v", err)
 	}
 
