@@ -3,7 +3,6 @@ package runhost_test
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -342,8 +341,7 @@ func TestSystemRunIdleDisposalIntegration(t *testing.T) {
 }
 
 // TestSystemRunJoinStressIntegration races every worker's character for a
-// two-slot room, and a pair of rooms for one character: capacity and single
-// enrollment hold, and only admitted joiners pay the join fatigue.
+// two-slot room: capacity holds, and only admitted joiners pay the join fatigue.
 func TestSystemRunJoinStressIntegration(t *testing.T) {
 	const capacity = 2
 	f := newSysFixture(t, capacity)
@@ -351,19 +349,14 @@ func TestSystemRunJoinStressIntegration(t *testing.T) {
 	cfg := testutil.GetStressConfig()
 	slot := "test:" + id.New()
 	runID := f.open(t, slot)
-	rival := f.open(t, "test:"+id.New())
 	chars := make([]corecharacter.Character, cfg.Workers)
 	for i := range chars {
 		chars[i] = f.character(t)
 	}
 	result := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
 		c := chars[worker]
-		target, key := runID, fmt.Sprintf("join-%d", worker)
-		if worker == 0 && op%2 == 1 {
-			target, key = rival, "rival"
-		}
-		_, err := f.svc.Join(ctx, c.PlayerID, c.ID, target, key)
-		if err == nil || errors.Is(err, runhost.ErrRoomFull) || errors.Is(err, runhost.ErrBusy) {
+		_, err := f.svc.Join(ctx, c.PlayerID, c.ID, runID, fmt.Sprintf("join-%d", worker))
+		if err == nil || errors.Is(err, runhost.ErrRoomFull) {
 			return nil
 		}
 		return err
@@ -390,29 +383,47 @@ func TestSystemRunJoinStressIntegration(t *testing.T) {
 			t.Fatalf("character %s: runs=%d tired=%d want %d", c.ID, runs, f.tired(t, c.ID), want)
 		}
 	}
-	if want := capacity + boolInt(slices.Contains(f.roster(t, rival), chars[0].ID)); enrolled != want {
-		t.Fatalf("enrolled = %d, want %d", enrolled, want)
+	if enrolled != capacity {
+		t.Fatalf("enrolled = %d, want %d", enrolled, capacity)
 	}
 }
 
-func (f *sysFixture) roster(t *testing.T, runID string) []string {
-	t.Helper()
-	var data []byte
-	if err := f.db.QueryRowContext(context.Background(), `SELECT state_json FROM runs WHERE run_id=?`, runID).Scan(&data); err != nil {
-		t.Fatal(err)
+// TestSystemRunJoinTwoRoomsRaceIntegration races one character into two rooms
+// with free slots: exactly one join commits, with one enrollment and one +20 Tired.
+func TestSystemRunJoinTwoRoomsRaceIntegration(t *testing.T) {
+	f := newSysFixture(t, 6)
+	ctx := context.Background()
+	slots := []string{"test:" + id.New(), "test:" + id.New()}
+	rooms := []string{f.open(t, slots[0]), f.open(t, slots[1])}
+	for round := range 5 {
+		c := f.character(t)
+		join := func(i int) func() error {
+			return func() error {
+				_, err := f.svc.Join(ctx, c.PlayerID, c.ID, rooms[i], fmt.Sprintf("race-%d", round))
+				return err
+			}
+		}
+		err0, err1 := testutil.RunRace2(join(0), join(1))
+		if (err0 == nil) == (err1 == nil) {
+			t.Fatalf("round %d: errs = %v, %v; want exactly one join", round, err0, err1)
+		}
+		if lost := errors.Join(err0, err1); !errors.Is(lost, runhost.ErrBusy) {
+			t.Fatalf("round %d: losing join = %v, want ErrBusy", round, lost)
+		}
+		var runs int
+		if err := f.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM run_enrollments WHERE character_id=?`, c.ID).Scan(&runs); err != nil {
+			t.Fatal(err)
+		}
+		members := 0
+		for _, slot := range slots {
+			if slices.Contains(f.room(t, slot).Roster, c.ID) {
+				members++
+			}
+		}
+		if runs != 1 || members != 1 || f.tired(t, c.ID) != c.Tired+20 {
+			t.Fatalf("round %d: enrollments=%d memberships=%d tired=%d, want 1/1/%d", round, runs, members, f.tired(t, c.ID), c.Tired+20)
+		}
 	}
-	var r runhost.State
-	if err := json.Unmarshal(data, &r); err != nil {
-		t.Fatal(err)
-	}
-	return r.Roster
-}
-
-func boolInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 func TestSystemRunConcurrentOpenIntegration(t *testing.T) {
