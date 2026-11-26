@@ -95,14 +95,16 @@ func (r *RunRepository[R, P]) SaveRun(ctx context.Context, value R, expected int
 		return err
 	}
 	var state any = data
-	if len(run.Roster) == 0 {
+	disposed := len(run.Roster) == 0 && !run.Retained
+	if disposed {
 		state = nil
 	}
 	admission, err := json.Marshal(run.Admission)
 	if err != nil {
 		return err
 	}
-	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `UPDATE runs SET version=?,admission_json=?,state_json=? WHERE run_id=? AND version=? AND (admission_json IS NULL OR BINARY admission_json=BINARY ?)`, run.Version, admission, state, run.ID, expected, admission)
+	// Disposal releases a system run's slot for the room's next opening.
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `UPDATE runs SET version=?,admission_json=?,state_json=?,slot=IF(?,NULL,slot) WHERE run_id=? AND version=? AND (admission_json IS NULL OR BINARY admission_json=BINARY ?)`, run.Version, admission, state, disposed, run.ID, expected, admission)
 	if err != nil {
 		return err
 	}
@@ -114,6 +116,70 @@ func (r *RunRepository[R, P]) SaveRun(ctx context.Context, value R, expected int
 		return runhost.ErrConflict
 	}
 	return nil
+}
+
+// OpenRun fills the row WithRunForUpdate created; a slot held by another live
+// run is a duplicate key, reported as ErrConflict.
+func (r *RunRepository[R, P]) OpenRun(ctx context.Context, value R, slot string) error {
+	run := P(&value).Host()
+	if ctx.Value(runLock{}) != run.ID || run.Version != 1 || run.Encoding != 1 {
+		return runhost.ErrConflict
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	admission, err := json.Marshal(run.Admission)
+	if err != nil {
+		return err
+	}
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `UPDATE runs SET version=1,admission_json=?,state_json=?,slot=? WHERE run_id=? AND version=0 AND admission_json IS NULL`, admission, data, slot, run.ID)
+	var duplicate *mysql.MySQLError
+	if errors.As(err, &duplicate) && duplicate.Number == 1062 {
+		return runhost.ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return runhost.ErrConflict
+	}
+	return nil
+}
+
+func (r *RunRepository[R, P]) FindSlot(ctx context.Context, slot string) (string, error) {
+	var id string
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `SELECT run_id FROM runs WHERE slot=?`, slot).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
+}
+
+// JoinRun pairs the enrollment and recipient writes for one joiner.
+func (r *RunRepository[R, P]) JoinRun(ctx context.Context, id, actor string, order int, recipient runhost.Recipient) error {
+	if ctx.Value(runLock{}) != id {
+		return runhost.ErrConflict
+	}
+	e := ExecutorFromContext(ctx, r.db)
+	if _, err := e.ExecContext(ctx, `INSERT INTO run_enrollments (character_id,run_id) VALUES (?,?)`, actor, id); err != nil {
+		var duplicate *mysql.MySQLError
+		if errors.As(err, &duplicate) && duplicate.Number == 1062 {
+			return runhost.ErrBusy
+		}
+		return err
+	}
+	data, err := json.Marshal(recipient)
+	if err != nil {
+		return err
+	}
+	_, err = e.ExecContext(ctx, `INSERT INTO run_recipients (run_id,character_id,roster_order,recipient_json) VALUES (?,?,?,?)
+		ON DUPLICATE KEY UPDATE roster_order=VALUES(roster_order),disposition='',penalty_until=NULL,recipient_json=VALUES(recipient_json)`, id, actor, order, data)
+	return err
 }
 
 func (r *RunRepository[R, P]) EnrollRun(ctx context.Context, run runhost.State) error {

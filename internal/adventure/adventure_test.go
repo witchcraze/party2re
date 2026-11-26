@@ -616,6 +616,7 @@ func TestExecuteCrawl_HookErrorHandling(t *testing.T) {
 	res, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
 		CharacterIDs: []string{characters.value.ID},
 		StageID:      "stage-01",
+		Rng:          func(int) int { return 0 },
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl should not fail when hooks fail, got: %v", err)
