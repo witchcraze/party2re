@@ -83,13 +83,13 @@ func TestMonsterService_SQL_LocationAndOwnershipMatrix(t *testing.T) {
 	}
 
 	// 2. Home pet must be rejected by Rename, SendMonster, and ReleaseMonster (cannot bypass full box)
-	if _, err := svc.Rename(ctx, c1.ID, homePet.ID, "改名不可"); !errors.Is(err, monster.ErrInvalidLocation) {
+	if _, _, err := svc.Rename(ctx, c1.ID, homePet.ID, "改名不可"); !errors.Is(err, monster.ErrInvalidLocation) {
 		t.Fatalf("Rename home pet: got %v, want %v", err, monster.ErrInvalidLocation)
 	}
-	if err := svc.SendMonster(ctx, c1.ID, c2.ID, homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
+	if _, err := svc.SendMonster(ctx, c1.ID, c2.ID, homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
 		t.Fatalf("SendMonster home pet: got %v, want %v", err, monster.ErrInvalidLocation)
 	}
-	if err := svc.ReleaseMonster(ctx, c1.ID, homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
+	if _, err := svc.ReleaseMonster(ctx, c1.ID, homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
 		t.Fatalf("ReleaseMonster home pet: got %v, want %v", err, monster.ErrInvalidLocation)
 	}
 
@@ -102,21 +102,21 @@ func TestMonsterService_SQL_LocationAndOwnershipMatrix(t *testing.T) {
 	}
 
 	// 3. Unowned monsters (both home and box) must be rejected with ErrForbidden
-	if _, err := svc.Rename(ctx, c2.ID, homePet.ID, "他家"); !errors.Is(err, monster.ErrForbidden) {
+	if _, _, err := svc.Rename(ctx, c2.ID, homePet.ID, "他家"); !errors.Is(err, monster.ErrForbidden) {
 		t.Fatalf("Rename unowned home pet: got %v, want %v", err, monster.ErrForbidden)
 	}
-	if _, err := svc.Rename(ctx, c2.ID, c1BoxMonster.ID, "他箱"); !errors.Is(err, monster.ErrForbidden) {
+	if _, _, err := svc.Rename(ctx, c2.ID, c1BoxMonster.ID, "他箱"); !errors.Is(err, monster.ErrForbidden) {
 		t.Fatalf("Rename unowned box monster: got %v, want %v", err, monster.ErrForbidden)
 	}
-	if err := svc.SendMonster(ctx, c2.ID, c1.ID, c1BoxMonster.ID); !errors.Is(err, monster.ErrForbidden) {
+	if _, err := svc.SendMonster(ctx, c2.ID, c1.ID, c1BoxMonster.ID); !errors.Is(err, monster.ErrForbidden) {
 		t.Fatalf("SendMonster unowned box monster: got %v, want %v", err, monster.ErrForbidden)
 	}
-	if err := svc.ReleaseMonster(ctx, c2.ID, c1BoxMonster.ID); !errors.Is(err, monster.ErrForbidden) {
+	if _, err := svc.ReleaseMonster(ctx, c2.ID, c1BoxMonster.ID); !errors.Is(err, monster.ErrForbidden) {
 		t.Fatalf("ReleaseMonster unowned box monster: got %v, want %v", err, monster.ErrForbidden)
 	}
 
 	// 4. Boxed monster succeeds for Rename, SendMonster (c1 -> c2 and c2 -> c1 after freeing a slot), and ReleaseMonster
-	renamed, err := svc.Rename(ctx, c1.ID, c1BoxMonster.ID, "改名成功")
+	renamed, _, err := svc.Rename(ctx, c1.ID, c1BoxMonster.ID, "改名成功")
 	if err != nil {
 		t.Fatalf("Rename box monster: %v", err)
 	}
@@ -125,15 +125,15 @@ func TestMonsterService_SQL_LocationAndOwnershipMatrix(t *testing.T) {
 	}
 
 	// Send c1 -> c2 (now c1 box has 49, c2 box has 1)
-	if err := svc.SendMonster(ctx, c1.ID, c2.ID, c1BoxMonster.ID); err != nil {
+	if _, err := svc.SendMonster(ctx, c1.ID, c2.ID, c1BoxMonster.ID); err != nil {
 		t.Fatalf("SendMonster c1 -> c2: %v", err)
 	}
 	// Send back c2 -> c1 (covers reverse character lock order)
-	if err := svc.SendMonster(ctx, c2.ID, c1.ID, c1BoxMonster.ID); err != nil {
+	if _, err := svc.SendMonster(ctx, c2.ID, c1.ID, c1BoxMonster.ID); err != nil {
 		t.Fatalf("SendMonster c2 -> c1: %v", err)
 	}
 	// Release from c1 box
-	if err := svc.ReleaseMonster(ctx, c1.ID, c1BoxMonster.ID); err != nil {
+	if _, err := svc.ReleaseMonster(ctx, c1.ID, c1BoxMonster.ID); err != nil {
 		t.Fatalf("ReleaseMonster box monster: %v", err)
 	}
 	if _, err := monRepo.FindByID(ctx, c1BoxMonster.ID); !errors.Is(err, monster.ErrMonsterNotFound) {
@@ -219,7 +219,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 			instID := monsters[idx].ID
 
 			if (workerID+op)%2 == 0 {
-				err := svc.SendMonster(ctx, c1.ID, c2.ID, instID)
+				_, err := svc.SendMonster(ctx, c1.ID, c2.ID, instID)
 				if err == nil {
 					sentToC2[idx].Add(1)
 					return nil
@@ -231,7 +231,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 				return err
 			}
 
-			err := svc.SendMonster(ctx, c1.ID, c3.ID, instID)
+			_, err := svc.SendMonster(ctx, c1.ID, c3.ID, instID)
 			if err == nil {
 				sentToC3[idx].Add(1)
 				return nil
@@ -333,7 +333,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 			instID := monsters[idx].ID
 
 			if (workerID+op)%2 == 0 {
-				err := svc.SendMonster(ctx, sender.ID, recipient.ID, instID)
+				_, err := svc.SendMonster(ctx, sender.ID, recipient.ID, instID)
 				if err == nil {
 					sentFlags[idx].Add(1)
 					return nil
@@ -344,7 +344,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 				return err
 			}
 
-			err := svc.ReleaseMonster(ctx, sender.ID, instID)
+			_, err := svc.ReleaseMonster(ctx, sender.ID, instID)
 			if err == nil {
 				releasedFlags[idx].Add(1)
 				return nil
@@ -461,7 +461,7 @@ func TestMonsterService_SQL_ConcurrencyStress(t *testing.T) {
 		var rejectedFull atomic.Int32
 
 		res := RunConcurrentStressTest(t, cfg, func(workerID, op int) error {
-			err := svc.SendMonster(ctx, senders[workerID].ID, recipient.ID, contenderMonsters[workerID][op].ID)
+			_, err := svc.SendMonster(ctx, senders[workerID].ID, recipient.ID, contenderMonsters[workerID][op].ID)
 			if err == nil {
 				accepted.Add(1)
 				return nil
@@ -571,7 +571,7 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 	}
 
 	// 1. Only is_npc=true members are counted as Home pets or depositable
-	summary, err := svc.GetSummary(ctx, c1.ID, "")
+	summary, err := svc.GetSummary(ctx, c1.ID)
 	if err != nil {
 		t.Fatalf("GetSummary: %v", err)
 	}
@@ -658,7 +658,7 @@ func TestMonsterService_SQL_GodHomeCompanionsAndRollback(t *testing.T) {
 	if len(companionsAfterBoxFull) != 1 || companionsAfterBoxFull[0].ID != ortegaID {
 		t.Fatalf("expected ortega still in home_members after ErrBoxFull, got %+v", companionsAfterBoxFull)
 	}
-	if err := svc.ReleaseMonster(ctx, c1.ID, extraBoxIDs[0]); err != nil {
+	if _, err := svc.ReleaseMonster(ctx, c1.ID, extraBoxIDs[0]); err != nil {
 		t.Fatalf("ReleaseMonster to free box slot: %v", err)
 	}
 

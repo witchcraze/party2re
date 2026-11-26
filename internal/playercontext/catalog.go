@@ -372,6 +372,12 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "plantation_sow", Label: "種をまく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"seed_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "plantation_fertilize", Label: "肥料をまく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"fertilizer_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "plantation_harvest", Label: "収穫する", Category: "growth", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	// Monster Grandpa (farm.cgi): instance IDs come from the farm scene.
+	{ID: "farm_bring_home", Label: "つれてく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "farm_rename", Label: "なづける", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"instance_id", "custom_name"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "farm_deposit", Label: "あずける", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "farm_send", Label: "おくる", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"instance_id", "recipient_name"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "farm_release", Label: "わかれる", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 
 	// =========================================================================
 	// Category: entertainment (Casino, Lottery & Tavern)

@@ -425,13 +425,6 @@ func (h *Handler) Router() http.Handler {
 	// Oracle Shop (Town Boutique & Costumes)
 
 	// Monster Grandpa & Pet Companions
-	mux.HandleFunc("GET /monster/dialogue", h.handleGetMonsterDialogue)
-	mux.HandleFunc("GET /characters/{id}/monsters", h.handleGetCharacterMonsters)
-	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/bring-home", h.handleBringMonsterToHome)
-	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/deposit", h.handleDepositMonsterToBox)
-	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/rename", h.handleRenameMonster)
-	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/send", h.handleSendMonster)
-	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/release", h.handleReleaseMonster)
 
 	// Photo Contest & Gallery
 	mux.HandleFunc("GET /contest/venue", h.handleGetContestVenue)

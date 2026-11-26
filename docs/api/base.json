@@ -1641,6 +1641,9 @@
                       "$ref": "#/components/schemas/PlantationSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/FarmSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/OracleSceneData"
                     },
                     {
@@ -2880,6 +2883,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/PlantationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "farm"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/FarmSceneData"
                 },
                 "support": {
                   "properties": {
@@ -4366,6 +4399,7 @@
                         "lottery",
                         "takarakuji",
                         "plantation",
+                        "farm",
                         "oracle",
                         "contest",
                         "medal",
@@ -4495,6 +4529,7 @@
                         "lottery",
                         "takarakuji",
                         "plantation",
+                        "farm",
                         "oracle",
                         "contest",
                         "medal",
@@ -8416,6 +8451,196 @@
               "properties": {
                 "action": {
                   "type": "string",
+                  "const": "farm_bring_home"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "instance_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "A boxed monster ID from the farm scene."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "instance_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "farm_rename"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "instance_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "A boxed monster ID from the farm scene."
+                    },
+                    "custom_name": {
+                      "type": "string",
+                      "description": "New name: at most 8 characters, without whitespace or any of , ; \" ' & < > ＠."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "instance_id",
+                    "custom_name"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "farm_deposit"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "instance_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "A home monster or companion ID from the farm scene."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "instance_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "farm_send"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "instance_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "A boxed monster ID from the farm scene."
+                    },
+                    "recipient_name": {
+                      "type": "string",
+                      "description": "Exact recipient character name, as legacy addresses gifts. The recipient's box is measured against the sender's capacity."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "instance_id",
+                    "recipient_name"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "farm_release"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "instance_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "A boxed monster ID from the farm scene."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "instance_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
                   "const": "oracle_buy"
                 }
               },
@@ -9025,6 +9250,7 @@
               "lottery",
               "takarakuji",
               "plantation",
+              "farm",
               "oracle",
               "contest",
               "medal",
@@ -9180,6 +9406,7 @@
                   "lottery",
                   "takarakuji",
                   "plantation",
+                  "farm",
                   "oracle",
                   "contest",
                   "medal",
@@ -14902,40 +15129,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "MonsterMonsterBoxSummary": {
-        "properties": {
-          "box_capacity": {
-            "type": "integer"
-          },
-          "box_count": {
-            "type": "integer"
-          },
-          "home_capacity": {
-            "type": "integer"
-          },
-          "home_count": {
-            "type": "integer"
-          },
-          "monsters": {
-            "items": {
-              "$ref": "#/components/schemas/MonsterMonsterInstance"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "box_count",
-          "box_capacity",
-          "home_count",
-          "home_capacity",
-          "monsters"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "MonsterMonsterInstance": {
         "properties": {
           "character_id": {
@@ -14970,36 +15163,6 @@
           "location",
           "created_at",
           "updated_at"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "MonsterDialogue": {
-        "properties": {
-          "greeting": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          },
-          "phrases": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "npc_name",
-          "title",
-          "greeting",
-          "phrases"
         ],
         "type": "object",
         "additionalProperties": false
@@ -17529,6 +17692,46 @@
           "status",
           "seeds",
           "fertilizers"
+        ]
+      },
+      "FarmSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's boxed monsters, home monsters and home companions (location box or home) with their counts. Home capacity equals the box capacity (docs/design/monster.md). NPC dialogue comes from npc_talk/npc_inspect.",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "box_count": {
+            "type": "integer"
+          },
+          "box_capacity": {
+            "type": "integer"
+          },
+          "home_count": {
+            "type": "integer"
+          },
+          "home_capacity": {
+            "type": "integer"
+          },
+          "monsters": {
+            "items": {
+              "$ref": "#/components/schemas/MonsterMonsterInstance"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "parent",
+          "box_count",
+          "box_capacity",
+          "home_count",
+          "home_capacity",
+          "monsters"
         ]
       },
       "OracleSceneData": {

@@ -106,7 +106,6 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /gvg/leaderboard$`),
 		regexp.MustCompile(`^GET /replays/\{id\}$`),
 		regexp.MustCompile(`^GET /replays/recent$`),
-		regexp.MustCompile(`^GET /monster/dialogue$`),
 		regexp.MustCompile(`^GET /naming-hall/dialogue$`),
 		regexp.MustCompile(`^GET /characters/\{id\}/profile$`),
 		regexp.MustCompile(`^GET /characters/\{id\}/trajectory$`),
@@ -361,12 +360,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Event Plaza
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",
-		// Monster
-		"handleBringMonsterToHome":  "monster.go",
-		"handleDepositMonsterToBox": "monster.go",
-		"handleRenameMonster":       "monster.go",
-		"handleSendMonster":         "monster.go",
-		"handleReleaseMonster":      "monster.go",
 	}
 
 	for handlerName, sourceFile := range requiredActionGuardHandlers {

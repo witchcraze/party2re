@@ -142,8 +142,8 @@ func ValidateMonsterName(name string) error {
 	return nil
 }
 
-// GetSummary retrieves current box and home monster statistics.
-func (s *Service) GetSummary(ctx context.Context, characterID, locationFilter string) (MonsterBoxSummary, error) {
+// GetSummary retrieves the box and home monsters with their counts.
+func (s *Service) GetSummary(ctx context.Context, characterID string) (MonsterBoxSummary, error) {
 	char, err := s.characters.FindByID(ctx, characterID)
 	if err != nil {
 		if errors.Is(err, corecharacter.ErrNotFound) {
@@ -171,32 +171,20 @@ func (s *Service) GetSummary(ctx context.Context, characterID, locationFilter st
 		homeCount += len(companions)
 	}
 
-	var instances []MonsterInstance
-	if locationFilter != "" {
-		if locationFilter != LocationBox && locationFilter != LocationHome {
-			return MonsterBoxSummary{}, ErrInvalidLocation
-		}
-		instances, err = s.monsters.ListByCharacterIDAndLocation(ctx, characterID, locationFilter)
-	} else {
-		instances, err = s.monsters.ListByCharacterID(ctx, characterID)
-	}
+	instances, err := s.monsters.ListByCharacterID(ctx, characterID)
 	if err != nil {
 		return MonsterBoxSummary{}, err
 	}
-
-	if locationFilter == "" || locationFilter == LocationHome {
-		for _, c := range companions {
-			createdAt := c.CreatedAt
-			instances = append(instances, MonsterInstance{
-				ID:          c.ID,
-				CharacterID: c.CharacterID,
-				MonsterID:   c.MonsterID,
-				CustomName:  c.CustomName,
-				Location:    LocationHome,
-				CreatedAt:   createdAt,
-				UpdatedAt:   createdAt,
-			})
-		}
+	for _, c := range companions {
+		instances = append(instances, MonsterInstance{
+			ID:          c.ID,
+			CharacterID: c.CharacterID,
+			MonsterID:   c.MonsterID,
+			CustomName:  c.CustomName,
+			Location:    LocationHome,
+			CreatedAt:   c.CreatedAt,
+			UpdatedAt:   c.CreatedAt,
+		})
 	}
 
 	return MonsterBoxSummary{
@@ -269,13 +257,14 @@ func (s *Service) TameMonster(ctx context.Context, characterID, monsterID, custo
 	return created, nil
 }
 
-// Rename updates a monster's custom nickname.
-func (s *Service) Rename(ctx context.Context, characterID, instanceID, newName string) (MonsterInstance, error) {
+// Rename updates a boxed monster's custom nickname and returns its former name.
+func (s *Service) Rename(ctx context.Context, characterID, instanceID, newName string) (MonsterInstance, string, error) {
 	if err := ValidateMonsterName(newName); err != nil {
-		return MonsterInstance{}, err
+		return MonsterInstance{}, "", err
 	}
 
 	var updated MonsterInstance
+	var former string
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		_, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
@@ -299,6 +288,7 @@ func (s *Service) Rename(ctx context.Context, characterID, instanceID, newName s
 			return ErrInvalidLocation
 		}
 
+		former = inst.CustomName
 		inst.CustomName = newName
 		inst.UpdatedAt = time.Now().UTC()
 		if err := s.monsters.Save(txCtx, inst); err != nil {
@@ -309,23 +299,24 @@ func (s *Service) Rename(ctx context.Context, characterID, instanceID, newName s
 	})
 
 	if err != nil {
-		return MonsterInstance{}, err
+		return MonsterInstance{}, "", err
 	}
-	return updated, nil
+	return updated, former, nil
 }
 
-// SendMonster gifts a monster to another character's storage box.
-func (s *Service) SendMonster(ctx context.Context, senderCharID, recipientCharID, instanceID string) error {
+// SendMonster gifts a monster to another character's storage box and returns it.
+func (s *Service) SendMonster(ctx context.Context, senderCharID, recipientCharID, instanceID string) (MonsterInstance, error) {
 	senderCharID = strings.TrimSpace(senderCharID)
 	recipientCharID = strings.TrimSpace(recipientCharID)
 	if senderCharID == "" || recipientCharID == "" {
-		return errors.New("sender and recipient IDs cannot be empty")
+		return MonsterInstance{}, errors.New("sender and recipient IDs cannot be empty")
 	}
 	if senderCharID == recipientCharID {
-		return ErrCannotSendToSelf
+		return MonsterInstance{}, ErrCannotSendToSelf
 	}
 
-	return s.runInTx(ctx, func(txCtx context.Context) error {
+	var sent MonsterInstance
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// Acquire character locks in deterministic order
 		firstID, secondID := id.Sort2(senderCharID, recipientCharID)
 
@@ -383,13 +374,19 @@ func (s *Service) SendMonster(ctx context.Context, senderCharID, recipientCharID
 		inst.CharacterID = recipientCharID
 		inst.Location = LocationBox
 		inst.UpdatedAt = time.Now().UTC()
+		sent = inst
 		return s.monsters.Save(txCtx, inst)
 	})
+	if err != nil {
+		return MonsterInstance{}, err
+	}
+	return sent, nil
 }
 
-// ReleaseMonster releases a monster back into the wild.
-func (s *Service) ReleaseMonster(ctx context.Context, characterID, instanceID string) error {
-	return s.runInTx(ctx, func(txCtx context.Context) error {
+// ReleaseMonster releases a boxed monster back into the wild and returns it.
+func (s *Service) ReleaseMonster(ctx context.Context, characterID, instanceID string) (MonsterInstance, error) {
+	var released MonsterInstance
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		_, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
 			if errors.Is(err, corecharacter.ErrNotFound) {
@@ -412,8 +409,13 @@ func (s *Service) ReleaseMonster(ctx context.Context, characterID, instanceID st
 			return ErrInvalidLocation
 		}
 
+		released = inst
 		return s.monsters.Delete(txCtx, instanceID)
 	})
+	if err != nil {
+		return MonsterInstance{}, err
+	}
+	return released, nil
 }
 
 func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) error) error {
