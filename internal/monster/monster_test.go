@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -245,7 +244,7 @@ func TestMonsterService_Rename_Validation(t *testing.T) {
 
 	for _, tc := range invalidCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := svc.Rename(ctx, "c1", inst.ID, tc.newName)
+			_, _, err := svc.Rename(ctx, "c1", inst.ID, tc.newName)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("Rename(%q) error = %v, want %v", tc.newName, err, tc.wantErr)
 			}
@@ -262,9 +261,13 @@ func TestMonsterService_Rename_Validation(t *testing.T) {
 	}
 
 	// Valid rename with ASCII @
-	updated, err := svc.Rename(ctx, "c1", inst.ID, "@スラりん")
+	formerName := inst.CustomName
+	updated, former, err := svc.Rename(ctx, "c1", inst.ID, "@スラりん")
 	if err != nil {
 		t.Fatalf("Rename with ASCII @ failed: %v", err)
+	}
+	if former != formerName {
+		t.Fatalf("former name = %q, want %q", former, formerName)
 	}
 	if updated.CustomName != "@スラりん" {
 		t.Fatalf("updated CustomName = %q, want %q", updated.CustomName, "@スラりん")
@@ -327,7 +330,7 @@ func TestMonsterService_TameAndSummary(t *testing.T) {
 	svc := monster.NewService(charRepo, monRepo, monster.WithTransactionProvider(&mockTxProvider{}))
 
 	// Initial summary
-	summary, err := svc.GetSummary(ctx, "c1", "")
+	summary, err := svc.GetSummary(ctx, "c1")
 	if err != nil {
 		t.Fatalf("GetSummary failed: %v", err)
 	}
@@ -353,9 +356,9 @@ func TestMonsterService_TameAndSummary(t *testing.T) {
 		t.Errorf("expected default custom name 'goblin', got %q", inst2.CustomName)
 	}
 
-	summary, err = svc.GetSummary(ctx, "c1", monster.LocationBox)
+	summary, err = svc.GetSummary(ctx, "c1")
 	if err != nil {
-		t.Fatalf("GetSummary box filter failed: %v", err)
+		t.Fatalf("GetSummary after second tame failed: %v", err)
 	}
 	if summary.BoxCount != 2 || len(summary.Monsters) != 2 {
 		t.Errorf("expected 2 monsters in box, got %d (list len %d)", summary.BoxCount, len(summary.Monsters))
@@ -381,9 +384,16 @@ func TestMonsterService_BringToHomeAndDeposit(t *testing.T) {
 	if homeInst.Location != monster.LocationHome {
 		t.Errorf("expected location home, got %s", homeInst.Location)
 	}
+	// Legacy only matches boxed monsters for つれてく and home ones for あずける.
+	if _, err := svc.BringToHome(ctx, "c1", inst1.ID); !errors.Is(err, monster.ErrInvalidLocation) {
+		t.Errorf("bring home an at-home monster: %v", err)
+	}
+	if _, err := svc.DepositToBox(ctx, "c1", inst2.ID); !errors.Is(err, monster.ErrInvalidLocation) {
+		t.Errorf("deposit a boxed monster: %v", err)
+	}
 
 	// Duplicate name check at home: rename inst2 to "スラりん" and try to bring to home
-	_, err = svc.Rename(ctx, "c1", inst2.ID, "スラりん")
+	_, _, err = svc.Rename(ctx, "c1", inst2.ID, "スラりん")
 	if err != nil {
 		t.Fatalf("Rename failed: %v", err)
 	}
@@ -393,7 +403,7 @@ func TestMonsterService_BringToHomeAndDeposit(t *testing.T) {
 	}
 
 	// Rename back and bring to home
-	_, err = svc.Rename(ctx, "c1", inst2.ID, "スラきち")
+	_, _, err = svc.Rename(ctx, "c1", inst2.ID, "スラきち")
 	if err != nil {
 		t.Fatalf("Rename failed: %v", err)
 	}
@@ -403,7 +413,7 @@ func TestMonsterService_BringToHomeAndDeposit(t *testing.T) {
 	}
 
 	// Summary check
-	summary, err := svc.GetSummary(ctx, "c1", "")
+	summary, err := svc.GetSummary(ctx, "c1")
 	if err != nil {
 		t.Fatalf("GetSummary failed: %v", err)
 	}
@@ -463,6 +473,10 @@ func TestMonsterService_MaxCapacityLimits(t *testing.T) {
 	if err != monster.ErrBoxFull {
 		t.Errorf("expected ErrBoxFull, got %v", err)
 	}
+	// あずける rejects a full box before looking at the target (farm.cgi azukeru).
+	if _, err := svc.DepositToBox(ctx, "c1", inst9.ID); !errors.Is(err, monster.ErrBoxFull) {
+		t.Errorf("deposit into a full box: %v", err)
+	}
 }
 
 func TestMonsterService_SendAndRelease(t *testing.T) {
@@ -480,25 +494,25 @@ func TestMonsterService_SendAndRelease(t *testing.T) {
 	}
 
 	// Cannot send to self
-	err = svc.SendMonster(ctx, "c1", "c1", inst.ID)
+	_, err = svc.SendMonster(ctx, "c1", "c1", inst.ID)
 	if err != monster.ErrCannotSendToSelf {
 		t.Errorf("expected ErrCannotSendToSelf, got %v", err)
 	}
 
 	// Cannot send to non-existent recipient
-	err = svc.SendMonster(ctx, "c1", "c999", inst.ID)
+	_, err = svc.SendMonster(ctx, "c1", "c999", inst.ID)
 	if err != monster.ErrRecipientNotFound {
 		t.Errorf("expected ErrRecipientNotFound, got %v", err)
 	}
 
 	// Send to Bob
-	err = svc.SendMonster(ctx, "c1", "c2", inst.ID)
-	if err != nil {
-		t.Fatalf("SendMonster failed: %v", err)
+	sent, err := svc.SendMonster(ctx, "c1", "c2", inst.ID)
+	if err != nil || sent.ID != inst.ID || sent.CharacterID != "c2" {
+		t.Fatalf("SendMonster = %+v, %v", sent, err)
 	}
 
 	// Verify Bob owns the dragon in box
-	bobSummary, err := svc.GetSummary(ctx, "c2", "")
+	bobSummary, err := svc.GetSummary(ctx, "c2")
 	if err != nil {
 		t.Fatalf("GetSummary for Bob failed: %v", err)
 	}
@@ -507,18 +521,18 @@ func TestMonsterService_SendAndRelease(t *testing.T) {
 	}
 
 	// Alice summary is empty
-	aliceSummary, _ := svc.GetSummary(ctx, "c1", "")
+	aliceSummary, _ := svc.GetSummary(ctx, "c1")
 	if aliceSummary.BoxCount != 0 {
 		t.Errorf("expected Alice box 0, got %d", aliceSummary.BoxCount)
 	}
 
 	// Bob releases the dragon
-	err = svc.ReleaseMonster(ctx, "c2", inst.ID)
-	if err != nil {
-		t.Fatalf("ReleaseMonster failed: %v", err)
+	released, err := svc.ReleaseMonster(ctx, "c2", inst.ID)
+	if err != nil || released.ID != inst.ID {
+		t.Fatalf("ReleaseMonster = %+v, %v", released, err)
 	}
 
-	bobSummary, _ = svc.GetSummary(ctx, "c2", "")
+	bobSummary, _ = svc.GetSummary(ctx, "c2")
 	if bobSummary.BoxCount != 0 {
 		t.Errorf("expected Bob box 0 after release, got %d", bobSummary.BoxCount)
 	}
@@ -561,7 +575,7 @@ func TestMonsterService_SendCapacityUsesSenderLimit(t *testing.T) {
 					monRepo.monsters["gift"] = monster.MonsterInstance{ID: "gift", CharacterID: "s", MonsterID: "slime", CustomName: "gift", Location: monster.LocationBox}
 					svc := monster.NewService(charRepo, monRepo, monster.WithTransactionProvider(&mockTxProvider{}))
 
-					if err := svc.SendMonster(ctx, "s", "r", "gift"); !errors.Is(err, tc.wantErr) {
+					if _, err := svc.SendMonster(ctx, "s", "r", "gift"); !errors.Is(err, tc.wantErr) {
 						t.Fatalf("SendMonster: got %v, want %v", err, tc.wantErr)
 					}
 					wantOwner := "r"
@@ -612,13 +626,13 @@ func TestMonsterService_LocationAndOwnershipMatrix(t *testing.T) {
 	}
 
 	// 1. Owned LocationHome is rejected with ErrInvalidLocation across Rename, SendMonster, ReleaseMonster
-	if _, err := svc.Rename(ctx, "c1", homePet.ID, "改名不可"); !errors.Is(err, monster.ErrInvalidLocation) {
+	if _, _, err := svc.Rename(ctx, "c1", homePet.ID, "改名不可"); !errors.Is(err, monster.ErrInvalidLocation) {
 		t.Fatalf("Rename on home pet: got %v, want %v", err, monster.ErrInvalidLocation)
 	}
-	if err := svc.SendMonster(ctx, "c1", "c2", homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
+	if _, err := svc.SendMonster(ctx, "c1", "c2", homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
 		t.Fatalf("SendMonster on home pet: got %v, want %v", err, monster.ErrInvalidLocation)
 	}
-	if err := svc.ReleaseMonster(ctx, "c1", homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
+	if _, err := svc.ReleaseMonster(ctx, "c1", homePet.ID); !errors.Is(err, monster.ErrInvalidLocation) {
 		t.Fatalf("ReleaseMonster on home pet: got %v, want %v", err, monster.ErrInvalidLocation)
 	}
 
@@ -632,16 +646,16 @@ func TestMonsterService_LocationAndOwnershipMatrix(t *testing.T) {
 	}
 
 	// 2. Unowned monster (both LocationHome and LocationBox) is rejected with ErrForbidden
-	if _, err := svc.Rename(ctx, "c2", homePet.ID, "乗っ取り"); !errors.Is(err, monster.ErrForbidden) {
+	if _, _, err := svc.Rename(ctx, "c2", homePet.ID, "乗っ取り"); !errors.Is(err, monster.ErrForbidden) {
 		t.Fatalf("Rename unowned home pet: got %v, want %v", err, monster.ErrForbidden)
 	}
-	if _, err := svc.Rename(ctx, "c1", otherBoxMon.ID, "乗っ取り"); !errors.Is(err, monster.ErrForbidden) {
+	if _, _, err := svc.Rename(ctx, "c1", otherBoxMon.ID, "乗っ取り"); !errors.Is(err, monster.ErrForbidden) {
 		t.Fatalf("Rename unowned box monster: got %v, want %v", err, monster.ErrForbidden)
 	}
-	if err := svc.SendMonster(ctx, "c1", "c2", otherBoxMon.ID); !errors.Is(err, monster.ErrForbidden) {
+	if _, err := svc.SendMonster(ctx, "c1", "c2", otherBoxMon.ID); !errors.Is(err, monster.ErrForbidden) {
 		t.Fatalf("SendMonster unowned box monster: got %v, want %v", err, monster.ErrForbidden)
 	}
-	if err := svc.ReleaseMonster(ctx, "c1", otherBoxMon.ID); !errors.Is(err, monster.ErrForbidden) {
+	if _, err := svc.ReleaseMonster(ctx, "c1", otherBoxMon.ID); !errors.Is(err, monster.ErrForbidden) {
 		t.Fatalf("ReleaseMonster unowned box monster: got %v, want %v", err, monster.ErrForbidden)
 	}
 
@@ -651,25 +665,6 @@ func TestMonsterService_LocationAndOwnershipMatrix(t *testing.T) {
 	}
 	if storedOther.CharacterID != "c2" || storedOther.Location != monster.LocationBox || storedOther.CustomName != "他箱ゴブ" {
 		t.Fatalf("otherBoxMon state mutated after rejected ops: %+v", storedOther)
-	}
-}
-
-func TestMonsterService_GetDialogue(t *testing.T) {
-	svc := monster.NewService(newMockCharacterRepo(), newMockMonsterRepo())
-	d := svc.GetDialogue()
-	if d.NPCName != "@モンジィ" || d.Title != "モンスターじいさん" || len(d.Phrases) == 0 {
-		t.Errorf("unexpected dialogue: %+v", d)
-	}
-
-	foundCapacityPhrase := false
-	for _, phrase := range d.Phrases {
-		if strings.Contains(phrase, "転職100回以上で100匹") && strings.Contains(phrase, "最大350匹") {
-			foundCapacityPhrase = true
-			break
-		}
-	}
-	if !foundCapacityPhrase {
-		t.Errorf("expected dialogue phrase explaining 100+ reclass and 350 max capacity, got: %+v", d.Phrases)
 	}
 }
 
@@ -705,26 +700,17 @@ func TestMonsterService_GodHomeCompanions(t *testing.T) {
 	}
 
 	// 1. GetSummary reflects God companions in HomeCount and Monsters
-	summaryAll, err := svc.GetSummary(ctx, "c1", "")
+	summaryAll, err := svc.GetSummary(ctx, "c1")
 	if err != nil {
 		t.Fatalf("GetSummary all failed: %v", err)
 	}
 	if summaryAll.HomeCount != 2 || summaryAll.BoxCount != 0 || len(summaryAll.Monsters) != 2 {
 		t.Fatalf("unexpected GetSummary all: %+v", summaryAll)
 	}
-	summaryHome, err := svc.GetSummary(ctx, "c1", monster.LocationHome)
-	if err != nil {
-		t.Fatalf("GetSummary home failed: %v", err)
-	}
-	if summaryHome.HomeCount != 2 || len(summaryHome.Monsters) != 2 {
-		t.Fatalf("unexpected GetSummary home: %+v", summaryHome)
-	}
-	summaryBox, err := svc.GetSummary(ctx, "c1", monster.LocationBox)
-	if err != nil {
-		t.Fatalf("GetSummary box failed: %v", err)
-	}
-	if summaryBox.HomeCount != 2 || len(summaryBox.Monsters) != 0 {
-		t.Fatalf("unexpected GetSummary box: %+v", summaryBox)
+	for _, m := range summaryAll.Monsters {
+		if m.Location != monster.LocationHome {
+			t.Fatalf("companion listed outside the home: %+v", m)
+		}
 	}
 
 	// 2. Duplicate name collision against God companion at home is rejected
@@ -780,7 +766,7 @@ func TestMonsterService_GodHomeCompanions(t *testing.T) {
 	}
 
 	// Free one box slot
-	if err := svc.ReleaseMonster(ctx, "c1", tempBoxIDs[0]); err != nil {
+	if _, err := svc.ReleaseMonster(ctx, "c1", tempBoxIDs[0]); err != nil {
 		t.Fatalf("ReleaseMonster failed: %v", err)
 	}
 

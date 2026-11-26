@@ -46,9 +46,9 @@ func (s *Service) BringToHome(ctx context.Context, characterID, instanceID strin
 		if inst.CharacterID != characterID {
 			return ErrForbidden
 		}
-		if inst.Location == LocationHome {
-			updated = inst
-			return nil // already at home
+		// Legacy つれてく only matches boxed monsters (farm.cgi tureteku).
+		if inst.Location != LocationBox {
+			return ErrInvalidLocation
 		}
 
 		homeMonsters, err := s.monsters.ListByCharacterIDAndLocation(txCtx, characterID, LocationHome)
@@ -108,23 +108,22 @@ func (s *Service) DepositToBox(ctx context.Context, characterID, instanceID stri
 		if err := s.checkMutation(txCtx, characterID); err != nil {
 			return err
 		}
+		// Legacy あずける rejects a full box before looking at the target (farm.cgi azukeru).
+		boxCount, err := s.monsters.CountByLocation(txCtx, characterID, LocationBox)
+		if err != nil {
+			return err
+		}
+		if boxCount >= BoxCapacityForCharacter(char) {
+			return ErrBoxFull
+		}
 
 		inst, err := s.monsters.FindByIDForUpdate(txCtx, instanceID)
 		if err == nil {
 			if inst.CharacterID != characterID {
 				return ErrForbidden
 			}
-			if inst.Location == LocationBox {
-				updated = inst
-				return nil // already in box
-			}
-
-			boxCount, err := s.monsters.CountByLocation(txCtx, characterID, LocationBox)
-			if err != nil {
-				return err
-			}
-			if boxCount >= BoxCapacityForCharacter(char) {
-				return ErrBoxFull
+			if inst.Location != LocationHome {
+				return ErrInvalidLocation
 			}
 
 			inst.Location = LocationBox
@@ -149,14 +148,6 @@ func (s *Service) DepositToBox(ctx context.Context, characterID, instanceID stri
 		}
 		if comp.CharacterID != characterID {
 			return ErrForbidden
-		}
-
-		boxCount, err := s.monsters.CountByLocation(txCtx, characterID, LocationBox)
-		if err != nil {
-			return err
-		}
-		if boxCount >= BoxCapacityForCharacter(char) {
-			return ErrBoxFull
 		}
 
 		now := time.Now().UTC()

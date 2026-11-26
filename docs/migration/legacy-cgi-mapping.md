@@ -10,7 +10,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 
 | Misnomer Trap | Authentic Legacy Specification | Go Implementation Guideline |
 |---|---|---|
-| **`farm.cgi` (Monster Ranch)** | **モンスター牧場 (@モンジィ)**: 仲間モンスター保管（50〜350匹、転職100回以上の恩恵含む）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡、野生への解放。**作物・畑の要素は一切存在しない**。 | Dedicated to `internal/monster`. Fictional crop logic purged. |
+| **`farm.cgi` (Monster Ranch)** | **モンスター牧場 (@モンジィ)**: 仲間モンスター保管（50〜350匹、転職100回以上の恩恵含む）、自宅ペット連携、改名（8文字）、P2P譲渡、野生への解放。**作物・畑の要素は一切存在しない**。 | Dedicated to `internal/monster`. Fictional crop logic purged. |
 | **`plantation.cgi` (Seed Cultivation)** | **種菜園 (@ロータス)**: 6種の種（赤/青/黄/緑/銀/金）、14種の特殊肥料、枯れ率計算、翌朝タイマー、預かり所（depot）への収穫物直送。 | Dedicated to `internal/plantation`. |
 | **`reborn.cgi` / `altar.cgi` (No Rebirth)** | **復活の祭壇**: 6オーブ奉納・不死鳥復活・旅行アイテムの願い。レベル1リセットは存在しない。Lv99→150限界突破は別施設の天界 (`god.cgi`)。 | Purge fictional Rebirth system; restore OverLevel cap in celestial god facility (`god.cgi`). |
 | **`guild.cgi` (No Donation Leveling)** | **ギルド拠点**: ゴールド寄付によるギルドLv1〜10上げは存在しない。**活動による動的GP**、自由役職命名（6文字）、申請承認制、HEXカラー。 | Purge fictional donation levels; restore activity GP & custom roles. |
@@ -189,7 +189,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | `lib/alchemy.cgi`, `lib/_alchemy_recipe.cgi` | 錬金堂 (@トロデ) | `internal/alchemy/` | [design/alchemy.md](../design/alchemy.md)<br/>[api/openapi.json](../api/openapi.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
-| `lib/farm.cgi` | モンスター牧場 (@モンジィ) | `internal/monster/` | [design/monster.md](../design/monster.md)<br/>[api/openapi.json](../api/openapi.json) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
+| `lib/farm.cgi` | モンスター牧場 (@モンジィ) | `internal/monster/`<br/>`internal/api/http/farm.go` | [design/monster.md](../design/monster.md) | Review against source | `farm` シーン。`つれてく`/`なづける`/`あずける`/`おくる`/`わかれる` → `farm_bring_home`/`farm_rename`/`farm_deposit`/`farm_send`/`farm_release`。捕獲は戦闘サービス内の効果でコマンドなし。 |
 | `lib/plantation.cgi` | 種菜園 (@ロータス) | `internal/plantation/`<br/>`internal/api/http/plantation.go` | [design/plantation.md](../design/plantation.md) | Review against source | `plantation` シーン。`たねをまく`/`ひりょう`/`しゅうかく` → `plantation_sow`/`plantation_fertilize`/`plantation_harvest`。 |
 
 ---

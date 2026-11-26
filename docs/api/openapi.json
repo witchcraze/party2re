@@ -3882,6 +3882,7 @@
                         "lottery",
                         "takarakuji",
                         "plantation",
+                        "farm",
                         "oracle",
                         "contest",
                         "medal",
@@ -4039,6 +4040,7 @@
                         "lottery",
                         "takarakuji",
                         "plantation",
+                        "farm",
                         "oracle",
                         "contest",
                         "medal",
@@ -7932,6 +7934,196 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "farm_bring_home",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "instance_id": {
+                      "description": "A boxed monster ID from the farm scene.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "instance_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "farm_rename",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "custom_name": {
+                      "description": "New name: at most 8 characters, without whitespace or any of , ; \" ' \u0026 \u003c \u003e ＠.",
+                      "type": "string"
+                    },
+                    "instance_id": {
+                      "description": "A boxed monster ID from the farm scene.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "instance_id",
+                    "custom_name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "farm_deposit",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "instance_id": {
+                      "description": "A home monster or companion ID from the farm scene.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "instance_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "farm_send",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "instance_id": {
+                      "description": "A boxed monster ID from the farm scene.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "recipient_name": {
+                      "description": "Exact recipient character name, as legacy addresses gifts. The recipient's box is measured against the sender's capacity.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "instance_id",
+                    "recipient_name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "farm_release",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "instance_id": {
+                      "description": "A boxed monster ID from the farm scene.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "instance_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "oracle_buy",
                   "type": "string"
                 }
@@ -10335,6 +10527,46 @@
         ],
         "type": "object"
       },
+      "FarmSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's boxed monsters, home monsters and home companions (location box or home) with their counts. Home capacity equals the box capacity (docs/design/monster.md). NPC dialogue comes from npc_talk/npc_inspect.",
+        "properties": {
+          "box_capacity": {
+            "type": "integer"
+          },
+          "box_count": {
+            "type": "integer"
+          },
+          "home_capacity": {
+            "type": "integer"
+          },
+          "home_count": {
+            "type": "integer"
+          },
+          "monsters": {
+            "items": {
+              "$ref": "#/components/schemas/MonsterMonsterInstance"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "box_count",
+          "box_capacity",
+          "home_count",
+          "home_capacity",
+          "monsters"
+        ],
+        "type": "object"
+      },
       "FleaMarketListing": {
         "properties": {
           "buyer_character_id": {
@@ -12665,70 +12897,6 @@
           "parent",
           "small_medals",
           "rewards"
-        ],
-        "type": "object"
-      },
-      "MonsterDialogue": {
-        "additionalProperties": false,
-        "properties": {
-          "greeting": {
-            "type": "string"
-          },
-          "npc_name": {
-            "type": "string"
-          },
-          "phrases": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "npc_name",
-          "title",
-          "greeting",
-          "phrases"
-        ],
-        "type": "object"
-      },
-      "MonsterMonsterBoxSummary": {
-        "additionalProperties": false,
-        "properties": {
-          "box_capacity": {
-            "type": "integer"
-          },
-          "box_count": {
-            "type": "integer"
-          },
-          "home_capacity": {
-            "type": "integer"
-          },
-          "home_count": {
-            "type": "integer"
-          },
-          "monsters": {
-            "items": {
-              "$ref": "#/components/schemas/MonsterMonsterInstance"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "box_count",
-          "box_capacity",
-          "home_count",
-          "home_capacity",
-          "monsters"
         ],
         "type": "object"
       },
@@ -15435,6 +15603,7 @@
                   "lottery",
                   "takarakuji",
                   "plantation",
+                  "farm",
                   "oracle",
                   "contest",
                   "medal",
@@ -15650,6 +15819,7 @@
               "lottery",
               "takarakuji",
               "plantation",
+              "farm",
               "oracle",
               "contest",
               "medal",
@@ -15822,6 +15992,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/PlantationSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FarmSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/OracleSceneData"
@@ -17058,6 +17231,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/PlantationSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "farm"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/FarmSceneData"
                 },
                 "support": {
                   "properties": {
@@ -22172,714 +22375,6 @@
         ]
       }
     },
-    "/characters/{id}/monsters": {
-      "get": {
-        "operationId": "getCharacterMonsters",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Location filter (box or home)",
-            "in": "query",
-            "name": "location",
-            "required": false,
-            "schema": {
-              "enum": [
-                "box",
-                "home"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MonsterMonsterBoxSummary"
-                }
-              }
-            },
-            "description": "Character monster box and home pet summary"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid location filter"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - character not owned by player"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List character stored monsters and pets",
-        "tags": [
-          "Monster"
-        ]
-      }
-    },
-    "/characters/{id}/monsters/{instance_id}/bring-home": {
-      "post": {
-        "operationId": "bringMonsterToHome",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Monster instance ID",
-            "in": "path",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MonsterMonsterInstance"
-                }
-              }
-            },
-            "description": "Monster brought to home as pet"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Home pet capacity reached or duplicate pet name"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - monster belongs to another character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Monster not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping or awaiting wake-up"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Bring a stored monster into player's home as a pet",
-        "tags": [
-          "Monster"
-        ]
-      }
-    },
-    "/characters/{id}/monsters/{instance_id}/deposit": {
-      "post": {
-        "operationId": "depositMonsterToBox",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Monster instance ID",
-            "in": "path",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MonsterMonsterInstance"
-                }
-              }
-            },
-            "description": "Pet deposited back to box"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Monster box capacity reached"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - monster belongs to another character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Monster not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping or awaiting wake-up"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Deposit a home pet back to Monster Grandpa box",
-        "tags": [
-          "Monster"
-        ]
-      }
-    },
-    "/characters/{id}/monsters/{instance_id}/release": {
-      "post": {
-        "operationId": "releaseMonster",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Monster instance ID",
-            "in": "path",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Monster released successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - monster belongs to another character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Monster not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping, awaiting wake-up, or monster is not in the storage box"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Release a boxed monster into the wild",
-        "tags": [
-          "Monster"
-        ]
-      }
-    },
-    "/characters/{id}/monsters/{instance_id}/rename": {
-      "post": {
-        "operationId": "renameMonster",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Monster instance ID",
-            "in": "path",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "custom_name": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "custom_name"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MonsterMonsterInstance"
-                }
-              }
-            },
-            "description": "Monster renamed"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid custom name"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - monster belongs to another character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Monster not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping, awaiting wake-up, or monster is not in the storage box"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Rename a boxed monster",
-        "tags": [
-          "Monster"
-        ]
-      }
-    },
-    "/characters/{id}/monsters/{instance_id}/send": {
-      "post": {
-        "operationId": "sendMonster",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Monster instance ID",
-            "in": "path",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "recipient_character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "recipient_character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Monster sent successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Cannot send to self or recipient box is full"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - monster belongs to another character"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Recipient or monster not found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict - character is currently sleeping, awaiting wake-up, or monster is not in the storage box"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Send a boxed monster to another player",
-        "tags": [
-          "Monster"
-        ]
-      }
-    },
     "/characters/{id}/name": {
       "post": {
         "description": "Renames a character at the Naming Hall for 500,000 G. Requires character ownership and validates guild and market constraints.",
@@ -24891,42 +24386,6 @@
         "summary": "Get system maintenance status",
         "tags": [
           "System"
-        ]
-      }
-    },
-    "/monster/dialogue": {
-      "get": {
-        "operationId": "getMonsterDialogue",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MonsterDialogue"
-                }
-              }
-            },
-            "description": "Monster Grandpa NPC dialogue"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get Monster Grandpa NPC dialogue",
-        "tags": [
-          "Monster"
         ]
       }
     },

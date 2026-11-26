@@ -1,7 +1,7 @@
 {
   "module": "monster",
   "domain": "モンスターじいさん (@モンジィ)",
-  "description": "Monster Ranch stabling facility and home pet companion management. Stables captured monsters (base 50 up to 300 via OverMonster), links with Home pet estate (up to 8 pets), validates custom nicknames, handles P2P monster gifting, and wild releases.",
+  "description": "Monster Ranch stabling facility and home pet companion management. Stables captured monsters (base 50 up to 350 via JobLevel and OverMonster), links with Home pets (home capacity equals box capacity), validates custom nicknames, handles P2P monster gifting, and wild releases.",
   "entrypoint": "internal/monster/monster.go",
   "dependencies": [
     {
