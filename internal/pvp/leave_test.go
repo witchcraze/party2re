@@ -321,18 +321,22 @@ func TestPvPKickMember(t *testing.T) {
 		room, _ := svc.CreateRoom(ctx, leader.ID, pvp.CreateRoomRequest{Name: "Lobby", Bet: 100})
 		_, _ = svc.JoinRoom(ctx, peer.ID, room.Room.ID, "")
 
-		if err := svc.KickMember(ctx, room.Room.ID, peer.ID, leader.ID); !errors.Is(err, pvp.ErrNotRoomLeader) {
+		if _, err := svc.KickMember(ctx, room.Room.ID, peer.ID, leader.ID); !errors.Is(err, pvp.ErrNotRoomLeader) {
 			t.Fatalf("non-leader kick = %v, want ErrNotRoomLeader", err)
 		}
-		if err := svc.KickMember(ctx, room.Room.ID, leader.ID, leader.ID); !errors.Is(err, pvp.ErrCannotKickSelf) {
+		if _, err := svc.KickMember(ctx, room.Room.ID, leader.ID, leader.ID); !errors.Is(err, pvp.ErrCannotKickSelf) {
 			t.Fatalf("self-kick = %v, want ErrCannotKickSelf", err)
 		}
-		if err := svc.KickMember(ctx, room.Room.ID, leader.ID, outsider.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+		if _, err := svc.KickMember(ctx, room.Room.ID, leader.ID, outsider.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 			t.Fatalf("outsider kick = %v, want ErrCharacterNotInRoom", err)
 		}
 
-		if err := svc.KickMember(ctx, room.Room.ID, leader.ID, peer.ID); err != nil {
+		res, err := svc.KickMember(ctx, room.Room.ID, leader.ID, peer.ID)
+		if err != nil {
 			t.Fatalf("KickMember: %v", err)
+		}
+		if res.RoomName != "Lobby" || res.LeaderName != "Alice" {
+			t.Fatalf("KickResult = %+v, want RoomName=Lobby LeaderName=Alice", res)
 		}
 
 		gotPeer, _ := charRepo.FindByID(ctx, peer.ID)
@@ -374,7 +378,7 @@ func TestPvPKickMember(t *testing.T) {
 		_, _ = svc.SelectTeam(ctx, c2.ID, room.Room.ID, pvp.ColorBlue)
 		_, _ = svc.StartMatch(ctx, c1.ID, room.Room.ID)
 
-		if err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID); !errors.Is(err, pvp.ErrMatchAlreadyStarted) {
+		if _, err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID); !errors.Is(err, pvp.ErrMatchAlreadyStarted) {
 			t.Fatalf("post-start kick = %v, want ErrMatchAlreadyStarted", err)
 		}
 	})
@@ -398,7 +402,7 @@ func TestPvPKickMember(t *testing.T) {
 		room, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Recover", Bet: 50})
 		_, _ = svc.JoinRoom(ctx, c2.ID, room.Room.ID, "")
 
-		if err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID); err == nil {
+		if _, err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID); err == nil {
 			t.Fatal("expected KickMember error when wait write fails")
 		}
 		if claim, err := svc.GetCharacterClaim(ctx, c2.ID); err != nil || claim != room.Room.ID {

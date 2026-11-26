@@ -72,48 +72,67 @@ func (s *Service) publishDeparture(ctx context.Context, d Departure) error {
 	return nil
 }
 
+type recoveredPendingContextKey struct{}
+
+func recoveredPendingFromContext(ctx context.Context) bool {
+	recovered, _ := ctx.Value(recoveredPendingContextKey{}).(bool)
+	return recovered
+}
+
 // RecoverCharacterDeparture finishes any pending room departure and kick wait
 // owned by a prior committed mutation for characterID.
 func (s *Service) RecoverCharacterDeparture(ctx context.Context, characterID string) error {
-	return s.recoverCharacterDeparture(ctx, characterID)
+	_, _, err := s.recoverCharacterDeparture(ctx, characterID)
+	return err
 }
 
 // Recover through commands only; owned observations must never publish or acknowledge.
-func (s *Service) recoverCharacterDeparture(ctx context.Context, characterID string) error {
+func (s *Service) recoverCharacterDeparture(ctx context.Context, characterID string) (string, bool, error) {
 	if s.departures == nil || s.roomRepo == nil {
-		return nil
+		return "", false, nil
 	}
 	roomID, err := s.departures.FindPendingDeparture(ctx, characterID)
 	if err != nil || roomID == "" {
-		return err
+		return "", false, err
 	}
-	return s.roomRepo.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		return s.recoverRoomDeparture(lockedCtx, roomID)
+	var recovered bool
+	err = s.roomRepo.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		var recErr error
+		recovered, recErr = s.recoverRoomDeparture(lockedCtx, roomID)
+		return recErr
 	})
+	return roomID, recovered, err
 }
 
-func (s *Service) recoverRoomDeparture(ctx context.Context, roomID string) error {
+func (s *Service) recoverRoomDeparture(ctx context.Context, roomID string) (bool, error) {
 	if s.departures == nil {
-		return nil
+		return false, nil
 	}
 	d, err := s.departures.FindDeparture(ctx, roomID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if d.Pending {
-		return s.publishDeparture(ctx, d)
+		if err := s.publishDeparture(ctx, d); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 func (s *Service) withRoomMutationLock(ctx context.Context, roomID, characterID string, fn func(context.Context) error) error {
-	if err := s.recoverCharacterDeparture(ctx, characterID); err != nil {
+	recoveredRoomID, charRecovered, err := s.recoverCharacterDeparture(ctx, characterID)
+	if err != nil {
 		return err
 	}
 	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		if err := s.recoverRoomDeparture(lockedCtx, roomID); err != nil {
+		roomRecovered, err := s.recoverRoomDeparture(lockedCtx, roomID)
+		if err != nil {
 			return err
 		}
+		recovered := roomRecovered || (charRecovered && recoveredRoomID == roomID)
+		lockedCtx = context.WithValue(lockedCtx, recoveredPendingContextKey{}, recovered)
 		return fn(lockedCtx)
 	})
 }

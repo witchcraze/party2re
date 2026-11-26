@@ -21,6 +21,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/testutil"
 	vk "github.com/witchcraze/party2re/internal/valkey"
@@ -909,4 +910,160 @@ func TestCasinoRoomRuleRejections(t *testing.T) {
 	if status, d := casinoActionRejection(casino.ErrAlreadyActed); status != 409 || d.Code != "CASINO_ALREADY_ACTED" {
 		t.Fatalf("waiting entrant rejection: %d %+v", status, d)
 	}
+}
+
+type casinoKickLogGateway struct {
+	*multiActorGateway
+	other corecharacter.Character
+}
+
+func (g *casinoKickLogGateway) Authenticate(ctx context.Context, token string) (coreplayer.Player, error) {
+	if token == "other-session" {
+		return coreplayer.Player{ID: g.other.PlayerID}, nil
+	}
+	return g.multiActorGateway.Authenticate(ctx, token)
+}
+
+func (g *casinoKickLogGateway) Get(ctx context.Context, id string) (corecharacter.Character, error) {
+	if id == g.other.ID {
+		return g.other, nil
+	}
+	return g.multiActorGateway.Get(ctx, id)
+}
+
+func (g *casinoKickLogGateway) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	if id == g.other.ID {
+		return g.other, nil
+	}
+	return g.multiActorGateway.FindByID(ctx, id)
+}
+
+func (g *casinoKickLogGateway) GetProfile(ctx context.Context, id string) (character.ProfileView, error) {
+	c, err := g.Get(ctx, id)
+	if err != nil {
+		return character.ProfileView{}, err
+	}
+	return character.ProfileView{Character: c}, nil
+}
+
+func (g *casinoKickLogGateway) FindPendingByActorID(ctx context.Context, id string) ([]scheduling.ScheduledAction, error) {
+	if id == g.other.ID {
+		return nil, nil
+	}
+	return g.multiActorGateway.FindPendingByActorID(ctx, id)
+}
+
+func TestCasinoKickPlaceLog(t *testing.T) {
+	ctx := context.Background()
+	setup := func(t *testing.T) (*casinoSceneFixture, *faultyKickWaitService, *fakePlaceLog, http.Handler, string) {
+		t.Helper()
+		f := newCasinoSceneFixture(t)
+		f.char.Name = "Hero"
+		departures := casino.NewMemoryDepartureRepository()
+		peer := corecharacter.Character{ID: "peer", PlayerID: "peer-owner", Name: "Peer", Money: 100, Stats: corecharacter.Stats{HP: 50}}
+		peer2 := corecharacter.Character{ID: "peer2", PlayerID: "peer-owner", Name: "Peer2", Money: 100, Stats: corecharacter.Stats{HP: 50}}
+		other := corecharacter.Character{ID: "other", PlayerID: "peer-owner", Name: "Other", Money: 100, Stats: corecharacter.Stats{HP: 50}}
+		chars := &multiActorCasinoChars{casinoSceneCharacters: f.characters, peer: peer, peer2: peer2}
+		var err error
+		f.service, err = casino.NewService(f.accounts, casino.WithDepartureRepository(departures), casino.WithRoomRepository(f.rooms), casino.WithCharacterRepository(chars))
+		if err != nil {
+			t.Fatal(err)
+		}
+		waits := &faultyKickWaitService{Service: timer.NewService(nil), target: "peer"}
+		gw := &casinoKickLogGateway{multiActorGateway: &multiActorGateway{gatewayFixture: f.gatewayFixture, peer: peer}, other: other}
+		scene := playercontext.SceneDefinition{ID: "casino", Parent: "town", Pageable: true, SubjectKind: "room", SubjectAvailable: func(ctx context.Context, _, id string) (bool, error) {
+			rows, err := f.service.ListRooms(ctx)
+			return slices.ContainsFunc(rows, func(r casino.RoomSummary) bool { return r.ID == id }), err
+		}}
+		pc := playercontext.NewService(gw, gw, waits, playercontext.WithNavigation(f.store, playercontext.SceneDefinition{ID: "town"}, scene), playercontext.WithActivities(f.readActivities), playercontext.WithActionWait(waits, playercontext.DefaultActionWait))
+		f.service.SetActionWait(pc)
+		placeLog := &fakePlaceLog{byPlace: map[placelog.Place][]placelog.Entry{}}
+		h, err := NewHandler(gw, gw, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithPlayerContext(pc), WithCasino(f.service), WithPlaceLog(placeLog))
+		if err != nil {
+			t.Fatal(err)
+		}
+		room, err := f.service.CreateRoom(ctx, "hero", casino.CreateRoomRequest{
+			Name: "CasinoHall", GameType: casino.GameTypeIndian, Speed: casino.SpeedNormal, MaxPlayers: 4, Rate: 10,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.service.JoinRoom(ctx, room.Room.ID, "peer", "", 0); err != nil {
+			t.Fatal(err)
+		}
+		return f, waits, placeLog, h.Router(), room.Room.ID
+	}
+
+	casinoPlace := placelog.Place{Kind: placelog.KindFacility, ID: "casino"}
+
+	t.Run("posts private notice to casino lobby only and ignores append failures", func(t *testing.T) {
+		f, waits, placeLog, router, roomID := setup(t)
+		roomPlace := placelog.Place{Kind: placeKindCasinoRoom, ID: roomID}
+
+		// Rejected self-kick writes no log row.
+		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"hero"}}`, nil); status != http.StatusForbidden {
+			t.Fatalf("expected 403 self-kick, got %d", status)
+		}
+		if len(placeLog.byPlace) != 0 {
+			t.Fatalf("rejected kick wrote log %+v", placeLog.byPlace)
+		}
+
+		// Valid kick appends private NPC notice to the casino lobby place log only.
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"peer"}}`, nil)
+		if status != http.StatusOK {
+			t.Fatalf("kick failed: %d %s", status, raw)
+		}
+		peerStatus, peerCtx := contextGET(t, router, "peer", "peer-session")
+		if peerStatus != http.StatusOK || len(peerCtx.Scene.PlaceLog) != 1 ||
+			!peerCtx.Scene.PlaceLog[0].Private ||
+			peerCtx.Scene.PlaceLog[0].SpeakerKind != string(placelog.SpeakerNPC) ||
+			peerCtx.Scene.PlaceLog[0].Name != "＠" ||
+			peerCtx.Scene.PlaceLog[0].Color != npcColor ||
+			peerCtx.Scene.PlaceLog[0].Text != "CasinoHallのリーダーHeroからきっくされました" {
+			t.Fatalf("kicked peer place_log = (%d) %+v", peerStatus, peerCtx.Scene.PlaceLog)
+		}
+		if otherStatus, otherCtx := contextGET(t, router, "other", "other-session"); otherStatus != http.StatusOK || len(otherCtx.Scene.PlaceLog) != 0 {
+			t.Fatalf("kick notice leaked to third-party viewer: (%d) %+v", otherStatus, otherCtx.Scene.PlaceLog)
+		}
+		if heroStatus, heroCtx := contextGET(t, router, "hero", "session"); heroStatus != http.StatusOK || len(heroCtx.Scene.PlaceLog) != 0 {
+			t.Fatalf("kick notice leaked into room place_log: (%d) %+v", heroStatus, heroCtx.Scene.PlaceLog)
+		}
+		if len(placeLog.byPlace[roomPlace]) != 0 || len(placeLog.byPlace[casinoPlace]) != 1 {
+			t.Fatalf("unexpected placeLog buckets: %+v", placeLog.byPlace)
+		}
+
+		// Acknowledged lost-response retry does not duplicate the log row.
+		if err := waits.ReleaseLock(ctx, timer.CategoryActionWait, "hero"); err != nil {
+			t.Fatal(err)
+		}
+		if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"peer"}}`, nil); status != http.StatusOK {
+			t.Fatalf("idempotent retry failed: %d %s", status, raw)
+		}
+		if len(placeLog.byPlace[casinoPlace]) != 1 {
+			t.Fatalf("idempotent retry duplicated notice: %+v", placeLog.byPlace[casinoPlace])
+		}
+
+		// Best-effort append failure does not fail a committed kick.
+		if _, err := f.service.JoinRoom(ctx, roomID, "peer2", "", 0); err != nil {
+			t.Fatal(err)
+		}
+		if err := waits.ReleaseLock(ctx, timer.CategoryActionWait, "hero"); err != nil {
+			t.Fatal(err)
+		}
+		placeLog.err = errors.New("valkey log write failed")
+		if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"peer2"}}`, nil); status != http.StatusOK {
+			t.Fatalf("kick should succeed despite log append failure: %d %s", status, raw)
+		}
+	})
+
+	t.Run("failed wait write writes no log row", func(t *testing.T) {
+		_, waits, placeLog, router, roomID := setup(t)
+		waits.failExtend.Store(true)
+		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"peer"}}`, nil); status != http.StatusInternalServerError {
+			t.Fatalf("expected 500 on wait failure, got %d", status)
+		}
+		if len(placeLog.byPlace) != 0 {
+			t.Fatalf("failed kick wrote log: %+v", placeLog.byPlace)
+		}
+	})
 }

@@ -165,6 +165,12 @@ type RoomDetail struct {
 	Members []RoomMember `json:"members"`
 }
 
+// KickResult carries the room and leader display names for the lobby notice.
+type KickResult struct {
+	RoomName   string
+	LeaderName string
+}
+
 type CreateRoomRequest struct {
 	Name            string    `json:"name"`
 	GameType        GameType  `json:"game_type"`
@@ -254,7 +260,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	}
 
 	var detail *RoomDetail
-	if err := s.recoverCharacterDeparture(ctx, characterID); err != nil {
+	if _, _, err := s.recoverCharacterDeparture(ctx, characterID); err != nil {
 		return nil, err
 	}
 	err := s.runInTx(ctx, func(txCtx context.Context) error {

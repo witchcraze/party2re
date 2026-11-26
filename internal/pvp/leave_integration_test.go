@@ -344,7 +344,7 @@ func TestPvPKickIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID); err == nil {
+	if _, err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID); err == nil {
 		t.Fatal("expected KickMember error when wait write fails")
 	}
 	if claim, err := svc.GetCharacterClaim(ctx, c2.ID); err != nil || claim != room.Room.ID {

@@ -149,6 +149,12 @@ type RoomDetail struct {
 	Members []RoomMember  `json:"members"`
 }
 
+// KickResult carries the room and leader display names for the quest notice.
+type KickResult struct {
+	RoomName   string
+	LeaderName string
+}
+
 // RoomSummary provides concise listing information.
 type RoomSummary struct {
 	ID                string    `json:"id"`

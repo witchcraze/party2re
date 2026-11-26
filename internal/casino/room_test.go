@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -147,21 +148,21 @@ func TestCasinoRoomLobby(t *testing.T) {
 
 	// 6. Kick
 	t.Run("Non-leader cannot kick", func(t *testing.T) {
-		err := svc.KickMember(ctx, createdRoomID, charP2, charSpectator)
+		_, err := svc.KickMember(ctx, createdRoomID, charP2, charSpectator)
 		if !errors.Is(err, casino.ErrNotLeader) {
 			t.Errorf("expected ErrNotLeader, got %v", err)
 		}
 	})
 
 	t.Run("Leader cannot kick self", func(t *testing.T) {
-		err := svc.KickMember(ctx, createdRoomID, charLeader, charLeader)
+		_, err := svc.KickMember(ctx, createdRoomID, charLeader, charLeader)
 		if !errors.Is(err, casino.ErrCannotKickSelf) {
 			t.Errorf("expected ErrCannotKickSelf, got %v", err)
 		}
 	})
 
 	t.Run("Leader kicks member", func(t *testing.T) {
-		err := svc.KickMember(ctx, createdRoomID, charLeader, charSpectator)
+		_, err := svc.KickMember(ctx, createdRoomID, charLeader, charSpectator)
 		if err != nil {
 			t.Fatalf("KickMember error: %v", err)
 		}
@@ -476,4 +477,106 @@ func TestRoom_ShowdownIncrementsCasinoWins(t *testing.T) {
 			t.Errorf("expected winning child CasinoWins=1, got %d", cChild.CasinoWins)
 		}
 	})
+}
+
+func TestCasinoKickResultAndReplay(t *testing.T) {
+	ctx := context.Background()
+	casinoRepo := newMockPrizeCasinoRepo()
+	roomRepo := casino.NewMemoryRoomRepository()
+	charRepo := &inMemoryCharRepo{chars: map[string]corecharacter.Character{
+		"leader": {ID: "leader", Name: "Alice"},
+		"peer":   {ID: "peer", Name: "Bob"},
+	}}
+	casinoRepo.accounts["leader"] = casino.Account{CharacterID: "leader", Coins: 500}
+	casinoRepo.accounts["peer"] = casino.Account{CharacterID: "peer", Coins: 500}
+
+	svc, err := casino.NewService(
+		casinoRepo,
+		casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()),
+		casino.WithRoomRepository(roomRepo),
+		casino.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := svc.CreateRoom(ctx, "leader", casino.CreateRoomRequest{
+		Name: "CasinoHall", GameType: casino.GameTypeIndian, Speed: casino.SpeedNormal, MaxPlayers: 4, Rate: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.JoinRoom(ctx, room.Room.ID, "peer", "", 0); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.KickMember(ctx, room.Room.ID, "leader", "peer")
+	if err != nil {
+		t.Fatalf("KickMember: %v", err)
+	}
+	if res.RoomName != "CasinoHall" || res.LeaderName != "Alice" {
+		t.Fatalf("KickResult = %+v, want RoomName=CasinoHall LeaderName=Alice", res)
+	}
+	// Already-acknowledged idempotent replay returns empty names so callers do not duplicate notices.
+	replay, err := svc.KickMember(ctx, room.Room.ID, "leader", "peer")
+	if err != nil {
+		t.Fatalf("KickMember replay: %v", err)
+	}
+	if replay != (casino.KickResult{}) {
+		t.Fatalf("expected empty KickResult on acknowledged replay, got %+v", replay)
+	}
+}
+
+type failOnceActionWait struct {
+	fail bool
+}
+
+func (w *failOnceActionWait) ImposeActionWaitUntil(context.Context, string, time.Time) error {
+	if w.fail {
+		w.fail = false
+		return errors.New("wait store unavailable")
+	}
+	return nil
+}
+
+func TestCasinoKickResultOnPendingRecovery(t *testing.T) {
+	ctx := context.Background()
+	casinoRepo := newMockPrizeCasinoRepo()
+	roomRepo := casino.NewMemoryRoomRepository()
+	charRepo := &inMemoryCharRepo{chars: map[string]corecharacter.Character{
+		"leader": {ID: "leader", Name: "Alice"},
+		"peer":   {ID: "peer", Name: "Bob"},
+	}}
+	casinoRepo.accounts["leader"] = casino.Account{CharacterID: "leader", Coins: 500}
+	casinoRepo.accounts["peer"] = casino.Account{CharacterID: "peer", Coins: 500}
+	waits := &failOnceActionWait{fail: true}
+
+	svc, err := casino.NewService(
+		casinoRepo,
+		casino.WithDepartureRepository(casino.NewMemoryDepartureRepository()),
+		casino.WithRoomRepository(roomRepo),
+		casino.WithCharacterRepository(charRepo),
+		casino.WithActionWait(waits),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := svc.CreateRoom(ctx, "leader", casino.CreateRoomRequest{
+		Name: "CasinoHall", GameType: casino.GameTypeIndian, Speed: casino.SpeedNormal, MaxPlayers: 4, Rate: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.JoinRoom(ctx, room.Room.ID, "peer", "", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.KickMember(ctx, room.Room.ID, "leader", "peer"); !errors.Is(err, casino.ErrDepartureRecovery) {
+		t.Fatalf("expected ErrDepartureRecovery, got %v", err)
+	}
+	res, err := svc.KickMember(ctx, room.Room.ID, "leader", "peer")
+	if err != nil {
+		t.Fatalf("recovery KickMember: %v", err)
+	}
+	if res.RoomName != "CasinoHall" || res.LeaderName != "Alice" {
+		t.Fatalf("recovery KickResult = %+v, want RoomName=CasinoHall LeaderName=Alice", res)
+	}
 }
