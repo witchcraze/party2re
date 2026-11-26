@@ -287,7 +287,7 @@ func TestSettleContestWithAdminKey(t *testing.T) {
 			return contest.SettlementResult{
 				Round:             1,
 				PrizesDistributed: true,
-				Message:           "Settled",
+				EntryCount:        5,
 			}, nil
 		},
 	}
@@ -314,6 +314,52 @@ func TestSettleContestWithAdminKey(t *testing.T) {
 	}
 }
 
+func TestSettleContest_ComposesOutcomeMessage(t *testing.T) {
+	adminKey := "test-admin-secret-key"
+	for _, tc := range []struct {
+		name   string
+		result contest.SettlementResult
+		want   string
+	}{
+		{"postponed", contest.SettlementResult{Round: 1, Postponed: true, NextRound: 1, EntryCount: 3}, "Contest postponed and extended due to insufficient entries"},
+		{"settled", contest.SettlementResult{Round: 1, PrizesDistributed: true, NextRound: 2, EntryCount: 6}, "Contest round 1 successfully settled with 6 entries"},
+		{"preparing round started", contest.SettlementResult{Round: 1, NextRound: 1, EntryCount: 5}, "Contest round 1 successfully started with 5 entries"},
+		{"empty active round closed", contest.SettlementResult{Round: 1, NextRound: 2, EntryCount: 7}, "Contest round 2 successfully started from preparing entries with 7 entries"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stub := &stubContestService{
+				settleContestFn: func(ctx context.Context, force bool) (contest.SettlementResult, error) {
+					return tc.result, nil
+				},
+			}
+			handler, err := apihttp.NewHandler(&stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+				apihttp.WithAdminAPIKey(adminKey),
+				apihttp.WithContest(stub),
+			)
+			if err != nil {
+				t.Fatalf("NewHandler failed: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/contest/settle", nil)
+			req.Header.Set("X-Admin-Key", adminKey)
+			rec := httptest.NewRecorder()
+			handler.Router().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+			}
+			var payload struct {
+				Message    string `json:"message"`
+				EntryCount int    `json:"entry_count"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode response failed: %v", err)
+			}
+			if payload.Message != tc.want || payload.EntryCount != tc.result.EntryCount {
+				t.Errorf("message = %q entry_count = %d, want %q %d", payload.Message, payload.EntryCount, tc.want, tc.result.EntryCount)
+			}
+		})
+	}
+}
+
 func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
 	var logBuf bytes.Buffer
 	prevLogger := slog.Default()
@@ -326,7 +372,7 @@ func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
 			return contest.SettlementResult{
 				Round:             1,
 				PrizesDistributed: true,
-				Message:           "Settled",
+				EntryCount:        5,
 			}, fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
 		},
 	}

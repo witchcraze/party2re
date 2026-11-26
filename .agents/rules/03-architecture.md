@@ -22,7 +22,7 @@ Features own their rules and state and MAY use public contracts of core and doma
 ## 5. UI and API Layer Boundary
 - Handlers and UI MUST NOT contain game logic, math or complex validation; operations go through the UI-independent service layer. Authorization is also enforced at the service boundary (`06-security.md` §2).
 - Handlers and middleware MUST propagate `r.Context()`/`ctx`, never `context.Background()`/`TODO()` (`context_lint_test.go`).
-- Domain services (`internal/*` except `internal/api/http`) MUST return structured data, never HTML, NPC dialogue or display formatting; HTTP formats with `writeSuccess`/`writeAppError` or transport DTOs (`presentation_lint_test.go`, ratcheted).
+- Domain services (`internal/*` except `internal/api/http`) MUST return structured data, never HTML, NPC dialogue or display formatting; HTTP formats with `writeSuccess`/`writeAppError` or transport DTOs (`presentation_lint_test.go`).
 - New interactive clients MUST use the Gateway (`get_character_context`, `execute_character_action`) in [`client-agent-api.md`](../../docs/architecture/client-agent-api.md), consult the [OpenAPI spec](../../docs/api/openapi.json) for registered routes, and MUST NOT infer command support from `available_actions` eligibility. REST routes retire only through the tracked migration after verified replacement.
 
 ## 6. Architecture Review Triggers

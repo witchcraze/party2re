@@ -13,9 +13,7 @@ import (
 
 func TestPresentationFieldClassification(t *testing.T) {
 	for _, tc := range []struct {
-		name, fields string
-		whitelist    map[string]string
-		want         string
+		name, fields, want string
 	}{
 		{name: "new message", fields: "Message string `json:\"message\"`", want: "sample.Result.Message"},
 		{name: "optional message", fields: "Text string `json:\"message,omitempty\"`", want: "sample.Result.Text"},
@@ -26,7 +24,6 @@ func TestPresentationFieldClassification(t *testing.T) {
 		{name: "embedded generic type", fields: "external.Text[string] `json:\"message\"`", want: "sample.Result.Text"},
 		{name: "embedded generic pointer", fields: "*external.Text[string, int] `json:\"message\"`", want: "sample.Result.Text"},
 		{name: "embedded data", fields: "//lint:ignore presentation persisted notice body\nMessage `json:\"message\"`"},
-		{name: "embedded legacy field", fields: "Message `json:\"message\"`", whitelist: map[string]string{"sample.Result.Message": "#2293"}},
 		{name: "nested anonymous message", fields: "Nested struct { Message string }", want: "sample.(anonymous).Message"},
 		{name: "authored data", fields: "//lint:ignore presentation player-authored text\nMessage string"},
 		{name: "persisted data inline", fields: "Message string //lint:ignore presentation persisted notice body"},
@@ -34,9 +31,6 @@ func TestPresentationFieldClassification(t *testing.T) {
 		{name: "empty reason", fields: "//lint:ignore presentation   \nMessage string", want: "sample.Result.Message"},
 		{name: "different directive", fields: "//lint:ignore error-swallow persisted data\nMessage string", want: "sample.Result.Message"},
 		{name: "directive on other field", fields: "//lint:ignore presentation player-authored name\nName string\nMessage string", want: "sample.Result.Message"},
-		{name: "legacy field", fields: "Message string", whitelist: map[string]string{"sample.Result.Message": "#2293"}},
-		{name: "stale legacy field", fields: "Count int", whitelist: map[string]string{"sample.Result.Message": "#2293"}, want: "remove it"},
-		{name: "converted legacy field", fields: "//lint:ignore presentation stored text\nMessage string", whitelist: map[string]string{"sample.Result.Message": "#2293"}, want: "remove it"},
 		{name: "dialogue still prohibited", fields: "Dialogue string", want: "sample.Result.Dialogue"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -54,7 +48,7 @@ func TestPresentationFieldClassification(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			violations, err := presentationFieldViolations(root, tc.whitelist)
+			violations, err := presentationFieldViolations(root)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -245,6 +245,9 @@ func TestCL07AuditFreshContestStartsFromPreparingEntries(t *testing.T) {
 	if res.PrizesDistributed {
 		t.Error("expected prizes NOT to be distributed upon starting the round")
 	}
+	if res.EntryCount != 5 {
+		t.Errorf("expected EntryCount 5 for the started round, got %d", res.EntryCount)
+	}
 
 	// Round 1 is now active, Round 2 is preparing
 	r1, err := contestRepo.GetRoundByNumber(ctx, 1)
@@ -317,6 +320,9 @@ func TestCL07AuditEmptyActiveIgnoresPreparingEntries_Fixed(t *testing.T) {
 	}
 	if res.NextRound != 2 {
 		t.Errorf("expected NextRound to be 2, got %d", res.NextRound)
+	}
+	if res.Round != 1 || res.PrizesDistributed || res.EntryCount != 5 {
+		t.Errorf("expected empty round 1 closed and round 2 started with 5 entries, got %+v", res)
 	}
 
 	// Round 1 should be settled (without prizes)

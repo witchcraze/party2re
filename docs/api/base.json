@@ -13891,6 +13891,10 @@
       },
       "SettleContestResponse": {
         "properties": {
+          "entry_count": {
+            "description": "Entries in the round that was settled, postponed or, without prize distribution, started (next_round).",
+            "type": "integer"
+          },
           "extended_until": {
             "format": "date-time",
             "type": "string"
@@ -13945,6 +13949,7 @@
           "prizes_distributed",
           "postponed",
           "voters_rewarded",
+          "entry_count",
           "message"
         ],
         "type": "object",

@@ -56,7 +56,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 				result.ExtendedUntil = prepRound.EndTime
 				result.NextRound = prepRound.Round
 				result.NextRoundEndTime = prepRound.EndTime
-				result.Message = "Contest postponed and extended due to insufficient entries"
+				result.EntryCount = len(entries)
 				return nil
 			}
 
@@ -83,7 +83,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 
 			result.NextRound = prepRound.Round
 			result.NextRoundEndTime = prepRound.EndTime
-			result.Message = fmt.Sprintf("Contest round %d successfully started with %d entries", prepRound.Round, len(entries))
+			result.EntryCount = len(entries)
 			return nil
 		}
 
@@ -147,7 +147,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 
 				result.NextRound = prepRound.Round
 				result.NextRoundEndTime = prepRound.EndTime
-				result.Message = fmt.Sprintf("Contest round %d successfully started from preparing entries with %d entries", prepRound.Round, len(prepEntries))
+				result.EntryCount = len(prepEntries)
 				return nil
 			}
 
@@ -169,7 +169,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			result.ExtendedUntil = activeRound.EndTime
 			result.NextRound = activeRound.Round
 			result.NextRoundEndTime = activeRound.EndTime
-			result.Message = "Contest postponed and extended due to insufficient entries"
+			result.EntryCount = len(entries)
 			return nil
 		}
 
@@ -195,7 +195,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 				result.ExtendedUntil = activeRound.EndTime
 				result.NextRound = activeRound.Round
 				result.NextRoundEndTime = activeRound.EndTime
-				result.Message = "Contest postponed and extended due to insufficient entries"
+				result.EntryCount = len(entries)
 				return nil
 			}
 
@@ -311,7 +311,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 
 		result.Rankings = entries
 		result.PrizesDistributed = true
-		result.Message = fmt.Sprintf("Contest round %d successfully settled with %d entries", activeRound.Round, len(entries))
+		result.EntryCount = len(entries)
 		return nil
 	})
 	if err != nil {
