@@ -86,8 +86,11 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := combat.party.DisbandParty(ctx, lobby.Party.ID, leader.ID); err != nil {
-			t.Error(err)
+		// Run exits may already have removed members; only the lobby must go.
+		for _, id := range []string{member.ID, leader.ID} {
+			if err := combat.party.LeaveParty(ctx, lobby.Party.ID, id); err != nil && !errors.Is(err, party.ErrCharacterNotInParty) && !errors.Is(err, party.ErrNotFound) {
+				t.Error(err)
+			}
 		}
 	})
 	if _, err := combat.party.JoinParty(ctx, lobby.Party.ID, member.ID, ""); err != nil {
@@ -113,15 +116,6 @@ func TestCombatAdmissionProduction(t *testing.T) {
 				}
 				_, err := combat.challenge.StartPartySession(ctx, actor, ids, "1", "Consented", "#FFFFFF")
 				return err
-			}
-			if _, err := combat.party.SetReady(ctx, lobby.Party.ID, member.ID, false); err != nil {
-				t.Fatal(err)
-			}
-			if err := start(leader.ID, nil); !errors.Is(err, party.ErrPartyNotReady) {
-				t.Fatalf("unready accepted: %v", err)
-			}
-			if _, err := combat.party.SetReady(ctx, lobby.Party.ID, member.ID, true); err != nil {
-				t.Fatal(err)
 			}
 			if err := start(member.ID, nil); !errors.Is(err, party.ErrNotPartyLeader) {
 				t.Fatalf("nonleader accepted: %v", err)
@@ -351,12 +345,9 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 		t.Fatalf("expected leader to have dungeon_once lock immediately after CreateParty: %v, err=%v", lockedImmediate, err)
 	}
 
-	// Member joins and readies
+	// Member joins
 	if _, err := combat.party.JoinParty(ctx, partyDetail.Party.ID, char2.ID, ""); err != nil {
 		t.Fatalf("JoinParty failed: %v", err)
-	}
-	if _, err := combat.party.SetReady(ctx, partyDetail.Party.ID, char2.ID, true); err != nil {
-		t.Fatalf("SetReady failed: %v", err)
 	}
 
 	// Leader starts adventure
@@ -380,9 +371,11 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 		t.Fatalf("expected member to NOT have dungeon_once lock: %v, err=%v", memberLocked, err)
 	}
 
-	// 2. Leader disbands party and attempts to re-create stage-26 party -> rejected with ErrDailyOnceAlreadyUsed
-	if err := combat.party.DisbandParty(ctx, partyDetail.Party.ID, char1.ID); err != nil {
-		t.Fatalf("DisbandParty failed: %v", err)
+	// 2. Both leave and the leader attempts to re-create stage-26 party -> rejected with ErrDailyOnceAlreadyUsed
+	for _, id := range []string{char2.ID, char1.ID} {
+		if err := combat.party.LeaveParty(ctx, partyDetail.Party.ID, id); err != nil {
+			t.Fatalf("LeaveParty failed: %v", err)
+		}
 	}
 	_, err = combat.party.CreateParty(ctx, char1.ID, party.CreatePartyRequest{
 		Name:    "RetryStage26",
@@ -409,7 +402,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("member should be allowed to create stage-26 party: %v", err)
 	}
-	_ = combat.party.DisbandParty(ctx, memberParty.Party.ID, char2.ID)
+	_ = combat.party.LeaveParty(ctx, memberParty.Party.ID, char2.ID)
 
 	// 3. Releasing lock (wake reset) allows leader entry again
 	if err := soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char1.ID); err != nil {
@@ -422,7 +415,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("leader should be allowed to create stage-26 party after wake: %v", err)
 	}
-	_ = combat.party.DisbandParty(ctx, p2.Party.ID, char1.ID)
+	_ = combat.party.LeaveParty(ctx, p2.Party.ID, char1.ID)
 }
 
 func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
@@ -538,7 +531,7 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 
 	partyMu.Lock()
 	for _, pid := range createdPartyIDs {
-		_ = combat.party.DisbandParty(ctx, pid, char.ID)
+		_ = combat.party.LeaveParty(ctx, pid, char.ID)
 	}
 	partyMu.Unlock()
 

@@ -233,9 +233,6 @@ func TestGameplayScenario_NormalAdventurePartyRun(t *testing.T) {
 	a.call(leaderToken, http.MethodPost, "/parties", `{"character_id":"`+leader+`","name":"scenario","stage_id":"stage-00","speed":3}`, http.StatusCreated, &created)
 	partyID := created.Party.ID
 	a.call(memberToken, http.MethodPost, "/parties/"+partyID+"/join", `{"character_id":"`+member+`"}`, http.StatusOK, nil)
-	for _, m := range []struct{ token, id string }{{leaderToken, leader}, {memberToken, member}} {
-		a.call(m.token, http.MethodPost, "/parties/"+partyID+"/ready", `{"character_id":"`+m.id+`","ready":true}`, http.StatusOK, nil)
-	}
 
 	started := a.runCommand(leaderToken, leader, a.runContext(leaderToken, leader), "party_start", nil, http.StatusOK)
 	runID := started.Result.RunID

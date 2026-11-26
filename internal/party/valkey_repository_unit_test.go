@@ -44,7 +44,6 @@ func sampleTestMembers(partyID, leaderID string) []party.Member {
 			HP:            100,
 			MaxHP:         100,
 			IsLeader:      true,
-			ReadyState:    true,
 			JoinedAt:      now,
 		},
 		{
@@ -56,7 +55,6 @@ func sampleTestMembers(partyID, leaderID string) []party.Member {
 			HP:            120,
 			MaxHP:         120,
 			IsLeader:      false,
-			ReadyState:    false,
 			JoinedAt:      now.Add(2 * time.Second),
 		},
 	}
@@ -78,11 +76,9 @@ func TestValkeyRepository_NewWithOptions(t *testing.T) {
 	repo := party.NewValkeyRepository(
 		client,
 		party.WithLobbyKeyPrefix("test:lobby:"),
-		party.WithReadyKeyPrefix("test:ready:"),
 		party.WithCharacterKeyPrefix("test:char:"),
 		party.WithLobbiesIndexKey("test:lobbies"),
 		party.WithLobbyTTL(10*time.Minute),
-		party.WithReadyTTL(30*time.Second),
 		party.WithDurableLogRepository(dummy),
 	)
 	if repo == nil {
@@ -199,19 +195,6 @@ func TestValkeyRepository_GetPartyAndGetPartyForUpdate(t *testing.T) {
 	_, err = repoNil.GetParty(ctx, "party-not-found")
 	if !errors.Is(err, party.ErrNotFound) {
 		t.Errorf("expected ErrNotFound on nil, got %v", err)
-	}
-
-	// 3. Not found: Disbanded status
-	disbandedState := state
-	disbandedState.Party.Status = party.StatusDisbanded
-	disbandedData, _ := json.Marshal(disbandedState)
-	clientDisbanded := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		return valkeytest.MakeStringResult(string(disbandedData))
-	}))
-	repoDisbanded := party.NewValkeyRepository(clientDisbanded)
-	_, err = repoDisbanded.GetParty(ctx, "party-disbanded")
-	if !errors.Is(err, party.ErrNotFound) {
-		t.Errorf("expected ErrNotFound on disbanded party, got %v", err)
 	}
 
 	// 4. Error case: Malformed JSON
@@ -398,23 +381,15 @@ func TestValkeyRepository_AddMember(t *testing.T) {
 		PartyID:       "party-add-1",
 		CharacterID:   "char-m1",
 		CharacterName: "HeroM1",
-		ReadyState:    true,
 	}
 
-	// 1. Success case (ReadyState = true)
+	// 1. Success case
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		return valkeytest.MakeOKResult()
 	}))
 	repo := party.NewValkeyRepository(client)
 	if err := repo.AddMember(ctx, m); err != nil {
 		t.Fatalf("AddMember failed: %v", err)
-	}
-
-	// 2. Success case (ReadyState = false)
-	mNotReady := m
-	mNotReady.ReadyState = false
-	if err := repo.AddMember(ctx, mNotReady); err != nil {
-		t.Fatalf("AddMember (not ready) failed: %v", err)
 	}
 
 	// 3. Error mapping: ERR_PARTY_NOT_FOUND
@@ -443,17 +418,11 @@ func TestValkeyRepository_GetMembersAndGetMember(t *testing.T) {
 	state := party.LobbyState{Party: p, Members: members}
 	validData, _ := json.Marshal(state)
 
-	// 1. Success case: EXISTS returns 1 for leader, 0 for ally
+	// 1. Success case
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		c := cmd.Commands()
 		if c[0] == "GET" && c[1] == party.DefaultLobbyKeyPrefix+"party-m-1" {
 			return valkeytest.MakeStringResult(string(validData))
-		}
-		if c[0] == "EXISTS" {
-			if strings.Contains(c[1], "char-lead-1") {
-				return valkeytest.MakeIntResult(1)
-			}
-			return valkeytest.MakeIntResult(0)
 		}
 		return valkeytest.MakeNilResult()
 	}))
@@ -466,11 +435,8 @@ func TestValkeyRepository_GetMembersAndGetMember(t *testing.T) {
 	if len(gotMembers) != 2 {
 		t.Fatalf("expected 2 members, got %d", len(gotMembers))
 	}
-	if !gotMembers[0].IsLeader || !gotMembers[0].ReadyState {
-		t.Errorf("expected leader first and ready=true, got %+v", gotMembers[0])
-	}
-	if gotMembers[1].ReadyState {
-		t.Errorf("expected ally ready=false, got true")
+	if !gotMembers[0].IsLeader {
+		t.Errorf("expected leader first, got %+v", gotMembers[0])
 	}
 
 	// Test GetMember
@@ -632,41 +598,6 @@ func TestValkeyRepository_RemoveMember(t *testing.T) {
 	}
 }
 
-func TestValkeyRepository_UpdateMemberReady(t *testing.T) {
-	ctx := context.Background()
-
-	// 1. Success case
-	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		return valkeytest.MakeOKResult()
-	}))
-	repo := party.NewValkeyRepository(client)
-
-	if err := repo.UpdateMemberReady(ctx, "party-1", "char-1", true); err != nil {
-		t.Fatalf("UpdateMemberReady (true) failed: %v", err)
-	}
-	if err := repo.UpdateMemberReady(ctx, "party-1", "char-1", false); err != nil {
-		t.Fatalf("UpdateMemberReady (false) failed: %v", err)
-	}
-
-	// 2. Error mapping: ERR_PARTY_NOT_FOUND
-	clientNotFound := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		return valkeytest.MakeErrorResult(errors.New("ERR_PARTY_NOT_FOUND"))
-	}))
-	repoNotFound := party.NewValkeyRepository(clientNotFound)
-	if err := repoNotFound.UpdateMemberReady(ctx, "party-1", "char-1", true); !errors.Is(err, party.ErrNotFound) {
-		t.Fatalf("expected ErrNotFound, got %v", err)
-	}
-
-	// 3. Error mapping: ERR_CHAR_NOT_IN_PARTY
-	clientNotInParty := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		return valkeytest.MakeErrorResult(errors.New("ERR_CHAR_NOT_IN_PARTY"))
-	}))
-	repoNotInParty := party.NewValkeyRepository(clientNotInParty)
-	if err := repoNotInParty.UpdateMemberReady(ctx, "party-1", "char-1", true); !errors.Is(err, party.ErrCharacterNotInParty) {
-		t.Fatalf("expected ErrCharacterNotInParty, got %v", err)
-	}
-}
-
 func TestLobbyState_UnmarshalJSON(t *testing.T) {
 	// Case 1: normal array
 	jsonNormal := `{"party":{"id":"p1"},"members":[{"character_id":"c1"}]}`
@@ -740,7 +671,6 @@ func TestMemoryRepository_BattleActorRoundTripAndPublicJSON(t *testing.T) {
 		HP:            100,
 		MaxHP:         200,
 		IsLeader:      true,
-		ReadyState:    true,
 		JoinedAt:      now,
 		BattleActor:   actor,
 	}

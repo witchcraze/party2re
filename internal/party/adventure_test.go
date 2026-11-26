@@ -198,10 +198,6 @@ func createReadyParty(
 		if err != nil {
 			t.Fatalf("JoinParty failed for %s: %v", m.ID, err)
 		}
-		_, err = svc.SetReady(ctx, partyID, m.ID, true)
-		if err != nil {
-			t.Fatalf("SetReady failed for %s: %v", m.ID, err)
-		}
 	}
 
 	return partyID
@@ -664,36 +660,6 @@ func TestPartyAdventure_ResetPartyStatusErrorRollback(t *testing.T) {
 	}
 }
 
-func TestPartyAdventure_ResetMemberReadyErrorRollback(t *testing.T) {
-	ctx := context.Background()
-	txProvider := &mockTransactionProvider{}
-	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
-		t,
-		nil,
-		WithTransactionProvider(txProvider),
-	)
-
-	leader := corecharacter.Character{ID: "c-lead-err3", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
-	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
-
-	injectedErr := errors.New("db error resetting member ready")
-	partyRepo.updateMemberReadyErr = injectedErr
-
-	_, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
-	if err == nil {
-		t.Fatal("expected error on reset member ready failure, got nil")
-	}
-	if !strings.Contains(err.Error(), "reset member ready state") {
-		t.Errorf("expected error to contain 'reset member ready state', got: %v", err)
-	}
-	if !errors.Is(err, injectedErr) {
-		t.Errorf("expected wrapped injected error, got: %v", err)
-	}
-	if txProvider.rollbacks == 0 {
-		t.Error("expected transaction rollback, got 0 rollbacks")
-	}
-}
-
 func TestPartyAdventure_SettlementErrorRollback(t *testing.T) {
 	ctx := context.Background()
 	txProvider := &mockTransactionProvider{}
@@ -715,60 +681,6 @@ func TestPartyAdventure_SettlementErrorRollback(t *testing.T) {
 	}
 	if !errors.Is(err, injectedErr) {
 		t.Errorf("expected wrapped injected error, got: %v", err)
-	}
-	if txProvider.rollbacks == 0 {
-		t.Error("expected transaction rollback, got 0 rollbacks")
-	}
-}
-
-func TestLeaveParty_LeaderDisband_UpdatePartyErrorRollback(t *testing.T) {
-	ctx := context.Background()
-	txProvider := &mockTransactionProvider{}
-	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
-		t,
-		nil,
-		WithTransactionProvider(txProvider),
-	)
-
-	leader := corecharacter.Character{ID: "c-leave-lead", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
-	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
-
-	injectedErr := errors.New("db error disbanding party on leave")
-	partyRepo.updatePartyErr = injectedErr
-
-	err := svc.LeaveParty(ctx, partyID, leader.ID)
-	if err == nil {
-		t.Fatal("expected error on LeaveParty update failure, got nil")
-	}
-	if !errors.Is(err, injectedErr) {
-		t.Errorf("expected injected error, got: %v", err)
-	}
-	if txProvider.rollbacks == 0 {
-		t.Error("expected transaction rollback, got 0 rollbacks")
-	}
-}
-
-func TestDisbandParty_UpdatePartyErrorRollback(t *testing.T) {
-	ctx := context.Background()
-	txProvider := &mockTransactionProvider{}
-	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
-		t,
-		nil,
-		WithTransactionProvider(txProvider),
-	)
-
-	leader := corecharacter.Character{ID: "c-disband-lead", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
-	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
-
-	injectedErr := errors.New("db error updating party on disband")
-	partyRepo.updatePartyErr = injectedErr
-
-	err := svc.DisbandParty(ctx, partyID, leader.ID)
-	if err == nil {
-		t.Fatal("expected error on DisbandParty update failure, got nil")
-	}
-	if !errors.Is(err, injectedErr) {
-		t.Errorf("expected injected error, got: %v", err)
 	}
 	if txProvider.rollbacks == 0 {
 		t.Error("expected transaction rollback, got 0 rollbacks")
@@ -1201,9 +1113,6 @@ func TestPartyAdventure_ExitFatigueAndMealReset(t *testing.T) {
 				if _, err := svc.JoinParty(ctx, pDetail.Party.ID, ally.ID, ""); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := svc.SetReady(ctx, pDetail.Party.ID, ally.ID, true); err != nil {
-					t.Fatal(err)
-				}
 
 				res, err := svc.StartPartyAdventure(ctx, pDetail.Party.ID, leader.ID)
 				if err != nil {
@@ -1314,7 +1223,7 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 		if detail.Party.Mode != adventure.CrawlModeNormal {
 			t.Errorf("expected Mode %q, got %q", adventure.CrawlModeNormal, detail.Party.Mode)
 		}
-		_ = svc.DisbandParty(ctx, detail.Party.ID, leader.ID)
+		_ = svc.LeaveParty(ctx, detail.Party.ID, leader.ID)
 	})
 
 	t.Run("normal mode accepted case-insensitively", func(t *testing.T) {
@@ -1329,7 +1238,7 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 		if detail.Party.Mode != adventure.CrawlModeNormal {
 			t.Errorf("expected Mode %q, got %q", adventure.CrawlModeNormal, detail.Party.Mode)
 		}
-		_ = svc.DisbandParty(ctx, detail.Party.ID, leader.ID)
+		_ = svc.LeaveParty(ctx, detail.Party.ID, leader.ID)
 	})
 
 	t.Run("unimplemented modes return ErrUnsupportedMode", func(t *testing.T) {
@@ -1789,17 +1698,6 @@ func TestPartyAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
 		t.Fatalf("expected party status %s after error, got %s", StatusRecruiting, p.Status)
 	}
 
-	// Verify member ready states remain true
-	members, err := partyRepo.GetMembers(ctx, partyID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, m := range members {
-		if !m.ReadyState {
-			t.Fatalf("expected member %s ready state to remain true, got false", m.CharacterID)
-		}
-	}
-
 	// Verify no adventure logs written
 	if len(partyRepo.logs) != 0 {
 		t.Fatalf("expected 0 adventure logs on failure, got %d", len(partyRepo.logs))
@@ -1830,24 +1728,7 @@ func TestPartyAdventure_TreasureBlessing_ReadFailure(t *testing.T) {
 		t.Fatalf("expected exactly 1 adventure log after recovery, got %d", len(partyRepo.logs))
 	}
 
-	// Verify member ready states are now reset to false on success
-	membersAfter, err := partyRepo.GetMembers(ctx, partyID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, m := range membersAfter {
-		if m.ReadyState {
-			t.Fatalf("expected member %s ready state reset to false after success, got true", m.CharacterID)
-		}
-	}
-
 	// 3. Active blessing on leader: yields 3 chests (2 base + 1 blessing bonus)
-	for _, m := range membersAfter {
-		_, err = svc.SetReady(ctx, partyID, m.CharacterID, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
 	blessingProv.blessings = map[string]string{leader.ID: "DROP"}
 	battleEngine.calls = 0
 
@@ -2009,9 +1890,6 @@ func TestStartPartyAdventure_SeasonalExpiryRejection(t *testing.T) {
 	partyID := pDetail.Party.ID
 
 	// Ready leader
-	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
-		t.Fatalf("SetReady failed for leader: %v", err)
-	}
 
 	// Add member and ready member
 	member := corecharacter.Character{
@@ -2028,9 +1906,6 @@ func TestStartPartyAdventure_SeasonalExpiryRejection(t *testing.T) {
 
 	if _, err := svc.JoinParty(ctx, partyID, member.ID, ""); err != nil {
 		t.Fatalf("JoinParty failed on Halloween night: %v", err)
-	}
-	if _, err := svc.SetReady(ctx, partyID, member.ID, true); err != nil {
-		t.Fatalf("SetReady failed for member: %v", err)
 	}
 
 	// 2. Advance time 1 second to Nov 01, 00:00:00 JST (Halloween has ended!)
@@ -2145,10 +2020,6 @@ func TestStartPartyAdventure_Floor11Treasure_AutoCrawlDoesNotConsumeMasterKeyWit
 	}
 	partyID := pDetail.Party.ID
 
-	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
-		t.Fatalf("SetReady failed: %v", err)
-	}
-
 	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
 	if err != nil {
 		t.Fatalf("StartPartyAdventure failed: %v", err)
@@ -2244,9 +2115,6 @@ func TestPartyAdventure_SeasonalStagePersistence(t *testing.T) {
 				t.Fatalf("CreateParty season = %s, want %s", pDetail.Party.Season, sc.seasonName)
 			}
 			partyID := pDetail.Party.ID
-			if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
-				t.Fatalf("SetReady failed: %v", err)
-			}
 
 			res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
 			if err != nil {
@@ -2371,9 +2239,6 @@ func TestParty_Stage26SeasonLifecycleAcrossAdventuresAndDisbandment(t *testing.T
 	}
 
 	// 2. First Adventure: Run crawl. Should encounter Summer boss and enemies.
-	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
-		t.Fatalf("SetReady 1 failed: %v", err)
-	}
 	res1, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
 	if err != nil {
 		t.Fatalf("StartPartyAdventure 1 failed: %v", err)
@@ -2400,9 +2265,6 @@ func TestParty_Stage26SeasonLifecycleAcrossAdventuresAndDisbandment(t *testing.T
 	tracker.mu.Unlock()
 
 	// Party status reset to recruiting after adventure conclusion
-	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
-		t.Fatalf("SetReady 2 failed: %v", err)
-	}
 	res2, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
 	if err != nil {
 		t.Fatalf("StartPartyAdventure 2 failed: %v", err)
@@ -2421,8 +2283,8 @@ func TestParty_Stage26SeasonLifecycleAcrossAdventuresAndDisbandment(t *testing.T
 	}
 
 	// 4. Disband party
-	if err := svc.DisbandParty(ctx, partyID, leader.ID); err != nil {
-		t.Fatalf("DisbandParty failed: %v", err)
+	if err := svc.LeaveParty(ctx, partyID, leader.ID); err != nil {
+		t.Fatalf("LeaveParty failed: %v", err)
 	}
 
 	// 5. Create NEW party with RNG still pointing to Autumn (index 2)
@@ -2444,9 +2306,6 @@ func TestParty_Stage26SeasonLifecycleAcrossAdventuresAndDisbandment(t *testing.T
 	tracker.floorEnemies = nil
 	tracker.mu.Unlock()
 
-	if _, err := svc.SetReady(ctx, party2ID, leader.ID, true); err != nil {
-		t.Fatalf("SetReady 3 failed: %v", err)
-	}
 	res3, err := svc.StartPartyAdventure(ctx, party2ID, leader.ID)
 	if err != nil {
 		t.Fatalf("StartPartyAdventure 3 failed: %v", err)
@@ -2523,7 +2382,6 @@ func TestParty_Stage26BackwardCompatibilityForPartiesWithoutSeason(t *testing.T)
 		CharacterID:   leader.ID,
 		CharacterName: leader.Name,
 		IsLeader:      true,
-		ReadyState:    true,
 		JoinedAt:      now,
 	}
 	if err := partyRepo.AddMember(ctx, member); err != nil {
@@ -2562,9 +2420,6 @@ func TestParty_Stage26BackwardCompatibilityForPartiesWithoutSeason(t *testing.T)
 	tracker.floorEnemies = nil
 	tracker.mu.Unlock()
 
-	if _, err := svc.SetReady(ctx, partyID, leader.ID, true); err != nil {
-		t.Fatalf("SetReady failed: %v", err)
-	}
 	res2, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
 	if err != nil {
 		t.Fatalf("StartPartyAdventure 2 failed: %v", err)

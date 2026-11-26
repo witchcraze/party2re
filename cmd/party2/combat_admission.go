@@ -11,7 +11,7 @@ import (
 
 type combatAdmission struct {
 	party interface {
-		WithReadyRoster(context.Context, string, string, []string, func(context.Context, string, []string) error) error
+		WithRoster(context.Context, string, string, []string, func(context.Context, string, []string) error) error
 	}
 	characters interface {
 		FindByIDForUpdate(context.Context, string) (corecharacter.Character, error)
@@ -21,7 +21,7 @@ type combatAdmission struct {
 }
 
 func (a combatAdmission) AdmitParty(ctx context.Context, actor, partyID string, claimed []string, start func(context.Context, string, []string) error) error {
-	return a.party.WithReadyRoster(ctx, actor, partyID, claimed, func(ctx context.Context, resolved string, ids []string) error {
+	return a.party.WithRoster(ctx, actor, partyID, claimed, func(ctx context.Context, resolved string, ids []string) error {
 		return a.withMembers(ctx, ids, func(ctx context.Context) error { return start(ctx, resolved, ids) })
 	})
 }

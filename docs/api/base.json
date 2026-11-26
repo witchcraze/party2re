@@ -861,21 +861,6 @@
         ],
         "type": "object"
       },
-      "KickPartyMemberRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "target_character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "target_character_id"
-        ],
-        "type": "object"
-      },
       "AdminBanPlayerResponse": {
         "properties": {
           "message": {
@@ -1273,9 +1258,6 @@
           },
           "party_id": {
             "type": "string"
-          },
-          "ready_state": {
-            "type": "boolean"
           }
         },
         "required": [
@@ -1287,7 +1269,6 @@
           "hp",
           "max_hp",
           "is_leader",
-          "ready_state",
           "joined_at"
         ],
         "type": "object"
@@ -1453,21 +1434,6 @@
         },
         "required": [
           "enabled"
-        ],
-        "type": "object"
-      },
-      "SetPartyReadyRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "ready": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "character_id",
-          "ready"
         ],
         "type": "object"
       },
@@ -4655,43 +4621,6 @@
               "type": "object",
               "properties": {
                 "action": {
-                  "const": "party_ready"
-                }
-              },
-              "required": [
-                "action"
-              ]
-            },
-            "then": {
-              "type": "object",
-              "properties": {
-                "params": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "party_id": {
-                      "type": "string"
-                    },
-                    "ready": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "party_id",
-                    "ready"
-                  ]
-                }
-              },
-              "required": [
-                "params"
-              ]
-            }
-          },
-          {
-            "if": {
-              "type": "object",
-              "properties": {
-                "action": {
                   "const": "party_start"
                 }
               },
@@ -4969,6 +4898,43 @@
                   },
                   "required": [
                     "party_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "party_kick"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "party_id": {
+                      "type": "string"
+                    },
+                    "target_character_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "party_id",
+                    "target_character_id"
                   ]
                 }
               },

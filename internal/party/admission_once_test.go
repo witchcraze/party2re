@@ -63,10 +63,6 @@ func createReadyPartyWithStage(
 		if err != nil {
 			t.Fatalf("JoinParty failed for %s: %v", m.ID, err)
 		}
-		_, err = svc.SetReady(ctx, pDetail.Party.ID, m.ID, true)
-		if err != nil {
-			t.Fatalf("SetReady failed for %s: %v", m.ID, err)
-		}
 	}
 
 	return pDetail.Party.ID
@@ -108,9 +104,11 @@ func TestPartyCreation_DailyOnceLock_Lifecycle(t *testing.T) {
 		t.Fatalf("expected member NOT to be locked, locked=%v, err=%v", memberLocked, err)
 	}
 
-	// 3. 解散後の再作成拒否: Disbanding before starting does NOT reset once quota
-	if err := svc.DisbandParty(ctx, partyID, leader.ID); err != nil {
-		t.Fatalf("DisbandParty failed: %v", err)
+	// 3. 離脱後の再作成拒否: Leaving before starting does NOT reset once quota
+	for _, c := range []corecharacter.Character{leader, member} {
+		if err := svc.LeaveParty(ctx, partyID, c.ID); err != nil {
+			t.Fatalf("LeaveParty failed: %v", err)
+		}
 	}
 
 	_, err = svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
@@ -133,7 +131,7 @@ func TestPartyCreation_DailyOnceLock_Lifecycle(t *testing.T) {
 	}
 
 	// Leader can now create party for stage-26 again
-	_ = svc.DisbandParty(ctx, memberPartyID, member.ID)
+	_ = svc.LeaveParty(ctx, memberPartyID, member.ID)
 	newPartyID := createReadyPartyWithStage(ctx, t, svc, charRepo, "stage-26", leader)
 	if newPartyID == "" {
 		t.Fatal("expected leader party creation to succeed after lock release")
@@ -194,7 +192,7 @@ func TestPartyCreation_DailyOnceLock_CreationFailureCompensated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected party creation to succeed after DB recovered: %v", err)
 	}
-	_ = svc.DisbandParty(ctx, pDetail.Party.ID, leader.ID)
+	_ = svc.LeaveParty(ctx, pDetail.Party.ID, leader.ID)
 }
 
 func TestPartyCreation_DailyOnceLock_StorageFailurePropagates(t *testing.T) {

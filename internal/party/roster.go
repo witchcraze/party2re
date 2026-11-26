@@ -16,15 +16,15 @@ func (s *Service) SetMemberActivityCheck(check func(context.Context, string) err
 	s.activityCheck = check
 }
 
-// WithReadyRoster validates consent from the live lobby and serializes its handoff.
+// WithRoster validates the live lobby roster and serializes its handoff.
 // The callback receives the stored roster, with the leader first.
-func (s *Service) WithReadyRoster(ctx context.Context, actor, partyID string, claimed []string, start func(context.Context, string, []string) error) error {
-	return s.withReadyDetail(ctx, actor, partyID, claimed, func(ctx context.Context, detail PartyDetail, ids []string) error {
+func (s *Service) WithRoster(ctx context.Context, actor, partyID string, claimed []string, start func(context.Context, string, []string) error) error {
+	return s.withRosterDetail(ctx, actor, partyID, claimed, func(ctx context.Context, detail PartyDetail, ids []string) error {
 		return start(ctx, detail.Party.ID, ids)
 	})
 }
 
-func (s *Service) withReadyDetail(ctx context.Context, actor, partyID string, claimed []string, start func(context.Context, PartyDetail, []string) error) error {
+func (s *Service) withRosterDetail(ctx context.Context, actor, partyID string, claimed []string, start func(context.Context, PartyDetail, []string) error) error {
 	if partyID == "" {
 		p, _, err := s.GetActiveParty(ctx, actor)
 		if err != nil {
@@ -53,9 +53,6 @@ func (s *Service) withReadyDetail(ctx context.Context, actor, partyID string, cl
 				return ErrCharacterNotInParty
 			}
 			seen[m.CharacterID] = true
-			if !m.ReadyState {
-				return ErrPartyNotReady
-			}
 			if m.CharacterID != actor {
 				ids = append(ids, m.CharacterID)
 			}
@@ -104,7 +101,7 @@ func (s *Service) withWaitingLobby(ctx context.Context, partyID string, fn func(
 func (s *Service) WithNormalRoster(ctx context.Context, actor, partyID string, start func(context.Context, Party, []Member) error) error {
 	return s.repo.WithPartyAdventureLock(ctx, partyID, func(ctx context.Context) error {
 		return s.withWaitingLobby(ctx, partyID, func(ctx context.Context) error {
-			return s.withReadyDetail(ctx, actor, partyID, nil, func(ctx context.Context, detail PartyDetail, ids []string) error {
+			return s.withRosterDetail(ctx, actor, partyID, nil, func(ctx context.Context, detail PartyDetail, ids []string) error {
 				byID := make(map[string]Member, len(detail.Members))
 				for _, m := range detail.Members {
 					byID[m.CharacterID] = m

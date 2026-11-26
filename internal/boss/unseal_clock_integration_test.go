@@ -452,7 +452,7 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, c := range []corecharacter.Character{p1, p2} {
-		if err := lobbyRepo.AddMember(ctx, party.Member{PartyID: partyCrawlID, CharacterID: c.ID, IsLeader: i == 0, ReadyState: true}); err != nil {
+		if err := lobbyRepo.AddMember(ctx, party.Member{PartyID: partyCrawlID, CharacterID: c.ID, IsLeader: i == 0}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -472,12 +472,6 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 		}
 	}
 
-	// Ready members again after deferred cleanup restored recruiting state
-	for _, memberID := range []string{p1.ID, p2.ID} {
-		if err := lobbyRepo.UpdateMemberReady(ctx, partyCrawlID, memberID, true); err != nil {
-			t.Fatal(err)
-		}
-	}
 	partyLogRepo.fail.Store(false)
 	if _, err := partySvc.StartPartyAdventure(ctx, partyCrawlID, p1.ID); err != nil {
 		t.Fatalf("party stage-19 crawl failed: %v", err)

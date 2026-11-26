@@ -223,8 +223,8 @@ func runRejection(err error) (int, ErrorDetail) {
 		return http.StatusForbidden, ErrorDetail{Code: "RUN_FORBIDDEN", Message: "This character cannot perform that run command."}
 	case errors.Is(err, runhost.ErrNotFound), errors.Is(err, party.ErrNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "RUN_NOT_FOUND", Message: "Run not found."}
-	case errors.Is(err, party.ErrPartyNotReady), errors.Is(err, party.ErrPartyNotRecruiting):
-		return conflict("PARTY_NOT_READY", "Every member must be ready before starting.")
+	case errors.Is(err, party.ErrPartyNotRecruiting):
+		return conflict("PARTY_NOT_RECRUITING", "The party is no longer recruiting.")
 	case errors.Is(err, runhost.ErrCharacterUnconscious), errors.Is(err, runhost.ErrActorUnconscious), errors.Is(err, adventure.ErrUnconsciousCharacter), errors.Is(err, party.ErrCharacterUnconscious):
 		return unprocessable("RUN_UNCONSCIOUS", "A fallen character cannot do that.")
 	case errors.Is(err, runhost.ErrCharacterExhausted), errors.Is(err, party.ErrCharacterExhausted):

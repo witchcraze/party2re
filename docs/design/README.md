@@ -86,7 +86,7 @@ graph TD
 - [`dungeon.md`](dungeon.md) — 2D grid tile matrix exploration, hazard traps, `@ちず` scouting jobs, and escape portals.
 - [`challenge.md`](challenge.md) — Treasure, the stage record as legacy `$win`, and individual exit.
 - [`boss.md`](boss.md) — 6-player king1–10 / 4-player king99 sealing battles, eligibility, Dejon banishment, and victory celebration crowds.
-- [`party-system.md`](party-system.md) — 1–4 player co-op adventure lobbies, speed configuration, `need_join` condition gates, and synergy bonuses.
+- [`party-system.md`](party-system.md) — 1–4 player co-op waiting lobbies as the legacy round-0 quest room and battle-row capture timing.
 - [`pvp.md`](pvp.md) — Colosseum real-time 2..8 player Bet & Split arena, 9 team colors, and multi-round combat resolution.
 - [`gvg.md`](gvg.md) — Guild vs Guild 2..8 player live matches, GP prize pools, target wins, and 7-tier championship medals.
 - [`replay.md`](replay.md) — Original adventure scenes, personal archive ownership, public-read boundary, and current turn-log gaps.

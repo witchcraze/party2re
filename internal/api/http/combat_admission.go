@@ -18,7 +18,7 @@ func writeCombatAdmissionError(w http.ResponseWriter, err error) bool {
 		writeError(w, http.StatusBadRequest, err)
 	case errors.Is(err, party.ErrNotPartyLeader), errors.Is(err, dungeon.ErrForbidden):
 		writeError(w, http.StatusForbidden, err)
-	case errors.Is(err, party.ErrPartyNotRecruiting), errors.Is(err, party.ErrPartyNotReady),
+	case errors.Is(err, party.ErrPartyNotRecruiting),
 		errors.Is(err, party.ErrMemberBusy), errors.Is(err, party.ErrCharacterUnconscious),
 		errors.Is(err, party.ErrCharacterExhausted), errors.Is(err, party.ErrDailyOnceAlreadyUsed),
 		errors.Is(err, dungeon.ErrActiveExpeditionExists), errors.Is(err, dungeon.ErrActorFallen),

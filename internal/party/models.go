@@ -24,7 +24,6 @@ const (
 	StatusRecruiting = "recruiting"
 	StatusInProgress = "in_progress"
 	StatusCompleted  = "completed" //lint:ignore unused party lifecycle status enum completeness
-	StatusDisbanded  = "disbanded"
 
 	DefaultSpeed = 18
 )
@@ -40,7 +39,6 @@ var (
 	ErrNotPartyLeader         = errors.New("only the party leader can perform this action")
 	ErrCannotKickSelf         = errors.New("party leader cannot kick themselves")
 	ErrCharacterNotInParty    = errors.New("character is not a member of this party")
-	ErrPartyNotReady          = errors.New("all party members must be ready before starting")
 	ErrInvalidPartyName       = errors.New("party name must be 1 to 50 characters without whitespace or prohibited characters")
 	ErrInvalidMaxMembers      = errors.New("max members must be between 1 and 4")
 	ErrCharacterUnconscious   = errors.New("character is unconscious (HP <= 0) and cannot adventure")
@@ -81,7 +79,6 @@ type Member struct {
 	HP            int                   `json:"hp"`
 	MaxHP         int                   `json:"max_hp"`
 	IsLeader      bool                  `json:"is_leader"`
-	ReadyState    bool                  `json:"ready_state"`
 	JoinedAt      time.Time             `json:"joined_at"`
 	BattleActor   *battle.LifetimeActor `json:"-"`
 }
@@ -244,7 +241,6 @@ type Repository interface {
 	GetMember(ctx context.Context, partyID, characterID string) (Member, error)
 	GetActivePartyByCharacter(ctx context.Context, characterID string) (Party, Member, error)
 	RemoveMember(ctx context.Context, partyID, characterID string) error
-	UpdateMemberReady(ctx context.Context, partyID, characterID string, ready bool) error
 	CountMembers(ctx context.Context, partyID string) (int, error)
 }
 

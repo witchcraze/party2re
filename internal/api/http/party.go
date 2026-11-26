@@ -20,14 +20,14 @@ type PartyService interface {
 	JoinParty(ctx context.Context, partyID, characterID, password string) (party.PartyDetail, error)
 	LeaveParty(ctx context.Context, partyID, characterID string) error
 	KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) error
-	DisbandParty(ctx context.Context, partyID, leaderCharID string) error
-	SetReady(ctx context.Context, partyID, characterID string, ready bool) (party.PartyDetail, error)
 }
 
 // WithParty configures the PartyService for the Handler.
 func WithParty(p PartyService) Option {
 	return func(h *Handler) {
 		h.parties = p
+		partyLeaveCommand(p)(h)
+		partyKickCommand(p)(h)
 	}
 }
 
@@ -39,24 +39,6 @@ type createPartyRequest struct {
 type joinPartyRequest struct {
 	CharacterID string `json:"character_id"`
 	Password    string `json:"password,omitempty"`
-}
-
-type leavePartyRequest struct {
-	CharacterID string `json:"character_id"`
-}
-
-type kickPartyMemberRequest struct {
-	CharacterID       string `json:"character_id"`
-	TargetCharacterID string `json:"target_character_id"`
-}
-
-type disbandPartyRequest struct {
-	CharacterID string `json:"character_id"`
-}
-
-type setPartyReadyRequest struct {
-	CharacterID string `json:"character_id"`
-	Ready       bool   `json:"ready"`
 }
 
 // handleListParties returns a list of recruiting parties.
@@ -173,137 +155,6 @@ func (h *Handler) handleJoinParty(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "party not found"})
 			default:
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to join party"})
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, detail)
-	})
-}
-
-// handleLeaveParty removes the character from the party.
-func (h *Handler) handleLeaveParty(w http.ResponseWriter, r *http.Request) {
-	if h.parties == nil {
-		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "party service not configured"})
-		return
-	}
-
-	partyID := r.PathValue("id")
-	if partyID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "party id is required"})
-		return
-	}
-
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *leavePartyRequest) string {
-		return req.CharacterID
-	}, func(player coreplayer.Player, char corecharacter.Character, req leavePartyRequest) {
-		if err := h.parties.LeaveParty(r.Context(), partyID, char.ID); err != nil {
-			switch {
-			case errors.Is(err, party.ErrCharacterNotInParty):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, party.ErrNotFound):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "party not found"})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to leave party"})
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]string{"status": "left"})
-	})
-}
-
-// handleKickPartyMember removes a target member from the party (leader only).
-func (h *Handler) handleKickPartyMember(w http.ResponseWriter, r *http.Request) {
-	if h.parties == nil {
-		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "party service not configured"})
-		return
-	}
-
-	partyID := r.PathValue("id")
-	if partyID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "party id is required"})
-		return
-	}
-
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *kickPartyMemberRequest) string {
-		return req.CharacterID
-	}, func(player coreplayer.Player, char corecharacter.Character, req kickPartyMemberRequest) {
-		if err := h.parties.KickMember(r.Context(), partyID, char.ID, req.TargetCharacterID); err != nil {
-			switch {
-			case errors.Is(err, party.ErrNotPartyLeader),
-				errors.Is(err, party.ErrCannotKickSelf),
-				errors.Is(err, party.ErrCharacterNotInParty):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, party.ErrNotFound):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "party not found"})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to kick member"})
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]string{"status": "kicked"})
-	})
-}
-
-// handleDisbandParty disbands the entire party (leader only).
-func (h *Handler) handleDisbandParty(w http.ResponseWriter, r *http.Request) {
-	if h.parties == nil {
-		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "party service not configured"})
-		return
-	}
-
-	partyID := r.PathValue("id")
-	if partyID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "party id is required"})
-		return
-	}
-
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *disbandPartyRequest) string {
-		return req.CharacterID
-	}, func(player coreplayer.Player, char corecharacter.Character, req disbandPartyRequest) {
-		if err := h.parties.DisbandParty(r.Context(), partyID, char.ID); err != nil {
-			switch {
-			case errors.Is(err, party.ErrNotPartyLeader):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, party.ErrNotFound):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "party not found"})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to disband party"})
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]string{"status": "disbanded"})
-	})
-}
-
-// handleSetPartyReady toggles the member's ready state.
-func (h *Handler) handleSetPartyReady(w http.ResponseWriter, r *http.Request) {
-	if h.parties == nil {
-		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "party service not configured"})
-		return
-	}
-
-	partyID := r.PathValue("id")
-	if partyID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "party id is required"})
-		return
-	}
-
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *setPartyReadyRequest) string {
-		return req.CharacterID
-	}, func(player coreplayer.Player, char corecharacter.Character, req setPartyReadyRequest) {
-		detail, err := h.parties.SetReady(r.Context(), partyID, char.ID, req.Ready)
-		if err != nil {
-			switch {
-			case errors.Is(err, party.ErrCharacterNotInParty):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, party.ErrNotFound):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "party not found"})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to set ready state"})
 			}
 			return
 		}

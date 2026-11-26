@@ -135,7 +135,7 @@ func TestFeatureActivityComposition(t *testing.T) {
 	if err != nil || len(facts) != 6 {
 		t.Fatalf("all facts: %+v %v", facts, err)
 	}
-	for i, want := range [][]string{{"party_leave", "party_ready", "party_start"}, {"pvp_leave", "pvp_advance"}, {"gvg_leave", "gvg_advance"}, {"dungeon_move", "dungeon_escape"}, {"challenge_advance", "challenge_retire"}, {"casino_room_leave", "place_say"}} {
+	for i, want := range [][]string{{"party_leave", "party_start", "party_kick"}, {"pvp_leave", "pvp_advance"}, {"gvg_leave", "gvg_advance"}, {"dungeon_move", "dungeon_escape"}, {"challenge_advance", "challenge_retire"}, {"casino_room_leave", "place_say"}} {
 		if !slices.Equal(facts[i].Actions, want) {
 			t.Fatalf("%s actions=%v want=%v", facts[i].Kind, facts[i].Actions, want)
 		}
@@ -220,8 +220,8 @@ func TestActivityRoleAndPhaseControls(t *testing.T) {
 		round             int
 		want              []string
 	}{
-		{"party", party.StatusRecruiting, "leader", 0, []string{"party_leave", "party_ready", "party_start"}},
-		{"party", party.StatusRecruiting, "member", 0, []string{"party_leave", "party_ready"}},
+		{"party", party.StatusRecruiting, "leader", 0, []string{"party_leave", "party_start", "party_kick"}},
+		{"party", party.StatusRecruiting, "member", 0, []string{"party_leave"}},
 		{"party", party.StatusInProgress, "member", 0, []string{"party_leave"}},
 		{"pvp", pvp.StatusRecruiting, "leader", 0, []string{"pvp_leave", "pvp_team", "player_inspect", "pvp_start", "pvp_kick"}},
 		{"pvp", pvp.StatusRecruiting, "member", 0, []string{"pvp_leave", "pvp_team", "player_inspect"}},

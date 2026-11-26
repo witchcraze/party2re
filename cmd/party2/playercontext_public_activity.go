@@ -21,7 +21,7 @@ func (r contextActivityReaders) publicActivity(ctx context.Context, actor string
 	if err != nil && !errors.Is(err, party.ErrNotFound) {
 		return false, fmt.Errorf("public party activity: %w", err)
 	}
-	if err == nil && p.Status != party.StatusDisbanded {
+	if err == nil {
 		if member.CharacterID != actor || member.PartyID != p.ID {
 			return false, errors.New("public party membership mismatch")
 		}

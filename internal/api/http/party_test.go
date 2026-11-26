@@ -59,17 +59,6 @@ func (s *stubPartyService) KickMember(_ context.Context, partyID, leaderCharID, 
 	return s.err
 }
 
-func (s *stubPartyService) DisbandParty(_ context.Context, partyID, leaderCharID string) error {
-	return s.err
-}
-
-func (s *stubPartyService) SetReady(_ context.Context, partyID, characterID string, ready bool) (party.PartyDetail, error) {
-	if s.err != nil {
-		return party.PartyDetail{}, s.err
-	}
-	return s.detail, nil
-}
-
 func TestPartyHTTPHandlers(t *testing.T) {
 	playerSvc := &stubPlayerService{
 		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
@@ -98,7 +87,7 @@ func TestPartyHTTPHandlers(t *testing.T) {
 		detail: party.PartyDetail{
 			Party: party.Party{ID: "party-1", Name: "TestParty", LeaderCharacterID: "c1", Status: party.StatusRecruiting, MaxMembers: 4},
 			Members: []party.Member{
-				{PartyID: "party-1", CharacterID: "c1", CharacterName: "Hero", IsLeader: true, ReadyState: true},
+				{PartyID: "party-1", CharacterID: "c1", CharacterName: "Hero", IsLeader: true},
 			},
 		},
 	}
@@ -204,58 +193,20 @@ func TestPartyHTTPHandlers(t *testing.T) {
 		t.Fatalf("POST /parties/party-1/join returned %d, want 200", w.Code)
 	}
 
-	// 5. POST /parties/party-1/ready
-	body, _ = json.Marshal(map[string]any{
-		"character_id": "c1",
-		"ready":        true,
-	})
-	req = httptest.NewRequest(http.MethodPost, "/parties/party-1/ready", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer sess-1")
-	req.Header.Set("Content-Type", "application/json")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("POST /parties/party-1/ready returned %d, want 200", w.Code)
-	}
-
-	// 6. POST /parties/party-1/kick
-	body, _ = json.Marshal(map[string]any{
-		"character_id":        "c1",
-		"target_character_id": "c2",
-	})
-	req = httptest.NewRequest(http.MethodPost, "/parties/party-1/kick", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer sess-1")
-	req.Header.Set("Content-Type", "application/json")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("POST /parties/party-1/kick returned %d, want 200", w.Code)
-	}
-
-	// 8. POST /parties/party-1/leave
-	body, _ = json.Marshal(map[string]any{
-		"character_id": "c1",
-	})
-	req = httptest.NewRequest(http.MethodPost, "/parties/party-1/leave", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer sess-1")
-	req.Header.Set("Content-Type", "application/json")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("POST /parties/party-1/leave returned %d, want 200", w.Code)
-	}
-
-	// 9. DELETE /parties/party-1
-	body, _ = json.Marshal(map[string]any{
-		"character_id": "c1",
-	})
-	req = httptest.NewRequest(http.MethodDelete, "/parties/party-1", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer sess-1")
-	req.Header.Set("Content-Type", "application/json")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("DELETE /parties/party-1 returned %d, want 200", w.Code)
+	// 5. Lobby mutations without legacy REST owners are retired (#2824/#2825).
+	for _, route := range []struct{ method, path string }{
+		{http.MethodPost, "/parties/party-1/ready"},
+		{http.MethodPost, "/parties/party-1/kick"},
+		{http.MethodPost, "/parties/party-1/leave"},
+		{http.MethodDelete, "/parties/party-1"},
+	} {
+		req = httptest.NewRequest(route.method, route.path, bytes.NewReader([]byte(`{"character_id":"c1"}`)))
+		req.Header.Set("Authorization", "Bearer sess-1")
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusNotFound && w.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s %s returned %d, want a retired route", route.method, route.path, w.Code)
+		}
 	}
 }
 

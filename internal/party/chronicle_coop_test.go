@@ -414,9 +414,9 @@ func TestParty_Stage26SeasonalClear(t *testing.T) {
 		t.Errorf("stage-26 spring clears = %d, want 1", springClears)
 	}
 
-	// Disband spring party so leader can start summer party
-	if err := svc.DisbandParty(ctx, pSpring.ID, leader.ID); err != nil {
-		t.Fatalf("DisbandParty spring: %v", err)
+	// Leave the spring party so the leader can start a summer party
+	if err := svc.LeaveParty(ctx, pSpring.ID, leader.ID); err != nil {
+		t.Fatalf("LeaveParty spring: %v", err)
 	}
 
 	// 2. Create party with Summer season

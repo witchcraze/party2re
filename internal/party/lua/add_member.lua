@@ -4,9 +4,6 @@ if not lobbyData then
 end
 
 local state = cjson.decode(lobbyData)
-if state.party and state.party.status == 'disbanded' then
-    return redis.error_reply('ERR_PARTY_NOT_FOUND')
-end
 
 local memberObj = cjson.decode(ARGV[1])
 local charID = ARGV[2]
@@ -39,12 +36,5 @@ local updatedData = cjson.encode(state)
 local lobbyTTL = tonumber(ARGV[4])
 redis.call('SET', KEYS[1], updatedData, 'EX', lobbyTTL)
 redis.call('SET', KEYS[2], ARGV[3], 'EX', lobbyTTL)
-
-if ARGV[6] == '1' then
-    local readyTTL = tonumber(ARGV[5])
-    redis.call('SET', KEYS[3], '1', 'EX', readyTTL)
-else
-    redis.call('DEL', KEYS[3])
-end
 
 return 'OK'

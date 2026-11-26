@@ -29,7 +29,7 @@ func TestPartyCombatAdmissionHTTP(t *testing.T) {
 			{"fake party", party.ErrNotFound, 400},
 			{"unrelated member", party.ErrCharacterNotInParty, 400},
 			{"nonleader", party.ErrNotPartyLeader, 403},
-			{"not ready", party.ErrPartyNotReady, 422},
+			{"not recruiting", party.ErrPartyNotRecruiting, 422},
 			{"busy dungeon member", dungeon.ErrActiveExpeditionExists, 422},
 			{"busy challenge member", challenge.ErrActiveSessionExists, 422},
 			{"sleeping member", party.ErrMemberBusy, 422},

@@ -16,6 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/party"
+	"github.com/witchcraze/party2re/internal/testutil"
 )
 
 type dummyLogRepo struct {
@@ -70,7 +71,6 @@ func TestMemoryRepository_Lifecycle(t *testing.T) {
 		HP:            100,
 		MaxHP:         100,
 		IsLeader:      true,
-		ReadyState:    true,
 		JoinedAt:      now,
 	}
 	if err := repo.AddMember(ctx, leaderMember); err != nil {
@@ -87,7 +87,6 @@ func TestMemoryRepository_Lifecycle(t *testing.T) {
 		HP:            120,
 		MaxHP:         120,
 		IsLeader:      false,
-		ReadyState:    false,
 		JoinedAt:      now.Add(1 * time.Second),
 	}
 	if err := repo.AddMember(ctx, subMember); err != nil {
@@ -121,18 +120,6 @@ func TestMemoryRepository_Lifecycle(t *testing.T) {
 	}
 	if activeP.ID != p.ID || activeM.CharacterID != "char-2" {
 		t.Errorf("got active party %s member %s, want %s / char-2", activeP.ID, activeM.CharacterID, p.ID)
-	}
-
-	// 6. UpdateMemberReady
-	if err := repo.UpdateMemberReady(ctx, p.ID, "char-2", true); err != nil {
-		t.Fatalf("UpdateMemberReady failed: %v", err)
-	}
-	updatedM, err := repo.GetMember(ctx, p.ID, "char-2")
-	if err != nil {
-		t.Fatalf("GetMember failed: %v", err)
-	}
-	if !updatedM.ReadyState {
-		t.Errorf("expected ReadyState true, got false")
 	}
 
 	// 7. ListParties
@@ -170,49 +157,36 @@ func TestMemoryRepository_Lifecycle(t *testing.T) {
 	}
 }
 
-func TestMemoryRepository_ReadyCountdownExpiry(t *testing.T) {
+func TestMemoryRepository_LeaderHandover(t *testing.T) {
 	ctx := context.Background()
-	// Set 50ms ready countdown TTL
-	repo := party.NewMemoryRepository(party.WithReadyTTL(50 * time.Millisecond))
-
-	p := party.Party{
-		ID:        "party-countdown",
-		Name:      "秒読みパーティ",
-		Status:    party.StatusRecruiting,
-		CreatedAt: time.Now().UTC(),
-	}
+	repo := party.NewMemoryRepository()
+	now := time.Now().UTC()
+	p := party.Party{ID: "party-handover", LeaderCharacterID: "lead", Status: party.StatusRecruiting, CreatedAt: now}
 	_ = repo.SaveParty(ctx, p)
-	m := party.Member{
-		PartyID:     p.ID,
-		CharacterID: "char-countdown",
-		ReadyState:  false,
-	}
-	_ = repo.AddMember(ctx, m)
-
-	// Set ready = true
-	if err := repo.UpdateMemberReady(ctx, p.ID, m.CharacterID, true); err != nil {
-		t.Fatalf("UpdateMemberReady failed: %v", err)
+	for i, id := range []string{"lead", "first", "second"} {
+		if err := repo.AddMember(ctx, party.Member{PartyID: p.ID, CharacterID: id, IsLeader: id == "lead", JoinedAt: now.Add(time.Duration(i) * time.Second)}); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	// Immediately check: should be ready
-	gotM, err := repo.GetMember(ctx, p.ID, m.CharacterID)
-	if err != nil {
-		t.Fatalf("GetMember failed: %v", err)
+	if err := repo.RemoveMember(ctx, p.ID, "lead"); err != nil {
+		t.Fatalf("RemoveMember(leader) failed: %v", err)
 	}
-	if !gotM.ReadyState {
-		t.Errorf("expected ready state true before expiry")
+	got, err := repo.GetParty(ctx, p.ID)
+	if err != nil || got.LeaderCharacterID != "first" {
+		t.Fatalf("leader not handed to the earliest member: %+v (err=%v)", got, err)
+	}
+	members, _ := repo.GetMembers(ctx, p.ID)
+	if len(members) != 2 || members[0].CharacterID != "first" || !members[0].IsLeader || members[1].IsLeader {
+		t.Fatalf("unexpected members after handover: %+v", members)
 	}
 
-	// Wait 70ms for countdown to expire
-	time.Sleep(70 * time.Millisecond)
-
-	// Check again: ready state must auto-expire to false
-	gotM, err = repo.GetMember(ctx, p.ID, m.CharacterID)
-	if err != nil {
-		t.Fatalf("GetMember after expiry failed: %v", err)
+	// Removing a non-leader keeps the leader.
+	if err := repo.RemoveMember(ctx, p.ID, "second"); err != nil {
+		t.Fatal(err)
 	}
-	if gotM.ReadyState {
-		t.Errorf("expected ready state false after countdown expiry, got true")
+	if got, _ := repo.GetParty(ctx, p.ID); got.LeaderCharacterID != "first" {
+		t.Fatalf("leader changed on member removal: %+v", got)
 	}
 }
 
@@ -303,17 +277,14 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 	}
 
 	testLobbyPrefix := "party2:test:party:lobby:"
-	testReadyPrefix := "party2:test:party:ready:"
 	testCharPrefix := "party2:test:party:character:"
 	testIndexKey := "party2:test:party:lobbies"
 
 	repo := party.NewValkeyRepository(client,
 		party.WithLobbyKeyPrefix(testLobbyPrefix),
-		party.WithReadyKeyPrefix(testReadyPrefix),
 		party.WithCharacterKeyPrefix(testCharPrefix),
 		party.WithLobbiesIndexKey(testIndexKey),
 		party.WithLobbyTTL(10*time.Minute),
-		party.WithReadyTTL(1*time.Second),
 	)
 
 	partyID := "test-party-live-1"
@@ -325,8 +296,6 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 		_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+partyID).Build()).Error()
 		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+leaderID).Build()).Error()
 		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+memberID).Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testReadyPrefix+partyID+":"+leaderID).Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testReadyPrefix+partyID+":"+memberID).Build()).Error()
 		_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error()
 	}
 	cleanup()
@@ -365,7 +334,6 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 		CharacterID:   leaderID,
 		CharacterName: "リーダー",
 		IsLeader:      true,
-		ReadyState:    true,
 		JoinedAt:      now,
 	})
 	_ = repo.AddMember(ctx, party.Member{
@@ -373,7 +341,6 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 		CharacterID:   memberID,
 		CharacterName: "メンバー",
 		IsLeader:      false,
-		ReadyState:    false,
 		JoinedAt:      now.Add(time.Second),
 	})
 
@@ -394,24 +361,17 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 		t.Fatalf("got %d members, want 2", len(members))
 	}
 
-	// 4. Test Ready Check countdown in live Valkey
-	if err := repo.UpdateMemberReady(ctx, partyID, memberID, true); err != nil {
-		t.Fatalf("UpdateMemberReady failed: %v", err)
+	// 4. The leader's removal promotes the earliest remaining member atomically.
+	if err := repo.RemoveMember(ctx, partyID, leaderID); err != nil {
+		t.Fatalf("RemoveMember(leader) failed: %v", err)
 	}
-	m, err := repo.GetMember(ctx, partyID, memberID)
-	if err != nil || !m.ReadyState {
-		t.Errorf("expected ReadyState true immediately, got %v (err=%v)", m.ReadyState, err)
+	gotP, err = repo.GetParty(ctx, partyID)
+	if err != nil || gotP.LeaderCharacterID != memberID {
+		t.Fatalf("leader not handed over: %+v (err=%v)", gotP, err)
 	}
-
-	// Wait 1.1s for ready countdown key to expire in Valkey
-	time.Sleep(1100 * time.Millisecond)
-
-	m, err = repo.GetMember(ctx, partyID, memberID)
-	if err != nil {
-		t.Fatalf("GetMember after ready expiry failed: %v", err)
-	}
-	if m.ReadyState {
-		t.Errorf("expected ReadyState false after countdown expiry, got true")
+	members, err = repo.GetMembers(ctx, partyID)
+	if err != nil || len(members) != 1 || members[0].CharacterID != memberID || !members[0].IsLeader {
+		t.Fatalf("member not promoted: %+v (err=%v)", members, err)
 	}
 
 	// 5. DeleteParty cleans up all keys
@@ -468,15 +428,10 @@ func TestMemoryRepository_CapacityEnforcement(t *testing.T) {
 	}
 
 	// Updating existing member must still succeed
-	if err := repo.AddMember(ctx, party.Member{PartyID: p.ID, CharacterID: "member-2", ReadyState: true}); err != nil {
+	if err := repo.AddMember(ctx, party.Member{PartyID: p.ID, CharacterID: "member-2"}); err != nil {
 		t.Errorf("expected update of existing member to succeed, got %v", err)
 	}
 
-	// Ready check for non-member
-	err = repo.UpdateMemberReady(ctx, p.ID, "non-member", true)
-	if !errors.Is(err, party.ErrCharacterNotInParty) {
-		t.Errorf("expected ErrCharacterNotInParty, got %v", err)
-	}
 }
 
 func TestValkeyRepository_CapacityEnforcement_LiveValkey(t *testing.T) {
@@ -501,13 +456,11 @@ func TestValkeyRepository_CapacityEnforcement_LiveValkey(t *testing.T) {
 	}
 
 	testLobbyPrefix := "party2:test:party:lobby:"
-	testReadyPrefix := "party2:test:party:ready:"
 	testCharPrefix := "party2:test:party:character:"
 	testIndexKey := "party2:test:party:lobbies"
 
 	repo := party.NewValkeyRepository(client,
 		party.WithLobbyKeyPrefix(testLobbyPrefix),
-		party.WithReadyKeyPrefix(testReadyPrefix),
 		party.WithCharacterKeyPrefix(testCharPrefix),
 		party.WithLobbiesIndexKey(testIndexKey),
 	)
@@ -558,15 +511,10 @@ func TestValkeyRepository_CapacityEnforcement_LiveValkey(t *testing.T) {
 	}
 
 	// Update existing member must succeed
-	if err := repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: "mem1", ReadyState: true}); err != nil {
+	if err := repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: "mem1"}); err != nil {
 		t.Errorf("expected update of existing member in live Valkey to succeed, got %v", err)
 	}
 
-	// Ready check for non-member
-	err = repo.UpdateMemberReady(ctx, partyID, "non-member", true)
-	if !errors.Is(err, party.ErrCharacterNotInParty) {
-		t.Errorf("expected ErrCharacterNotInParty in live Valkey, got %v", err)
-	}
 }
 
 func TestMemoryRepository_ConcurrentJoinStress(t *testing.T) {
@@ -669,13 +617,11 @@ func TestValkeyRepository_ConcurrentJoinStress_LiveValkey(t *testing.T) {
 	}
 
 	testLobbyPrefix := "party2:test:party:lobby:"
-	testReadyPrefix := "party2:test:party:ready:"
 	testCharPrefix := "party2:test:party:character:"
 	testIndexKey := "party2:test:party:lobbies"
 
 	repo := party.NewValkeyRepository(client,
 		party.WithLobbyKeyPrefix(testLobbyPrefix),
-		party.WithReadyKeyPrefix(testReadyPrefix),
 		party.WithCharacterKeyPrefix(testCharPrefix),
 		party.WithLobbiesIndexKey(testIndexKey),
 	)
@@ -811,6 +757,71 @@ func (liveTestMonsterProvider) FindByID(string) (adventure.Monster, error) {
 	return adventure.Monster{}, nil
 }
 
+// Concurrent departures must leave exactly the remaining member as leader.
+func TestValkeyRepository_ConcurrentLeaderLeaveStress_LiveValkey(t *testing.T) {
+	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
+	if valkeyAddr == "" {
+		valkeyAddr = "127.0.0.1:6379"
+	}
+	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{valkeyAddr}})
+	if err != nil {
+		t.Skipf("skipping live Valkey test: %v", err)
+	}
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
+		t.Skipf("skipping live Valkey test: %v", err)
+	}
+
+	lobbyPrefix, charPrefix, indexKey := "party2:test:leave:lobby:", "party2:test:leave:character:", "party2:test:leave:lobbies"
+	repo := party.NewValkeyRepository(client, party.WithLobbyKeyPrefix(lobbyPrefix), party.WithCharacterKeyPrefix(charPrefix), party.WithLobbiesIndexKey(indexKey))
+	cfg := testutil.GetStressConfig()
+	for round := 0; round < cfg.OpsPerWorker; round++ {
+		partyID := fmt.Sprintf("leave-stress-%d-%d", time.Now().UnixNano(), round)
+		ids := []string{partyID + "-lead", partyID + "-a", partyID + "-b", partyID + "-c", partyID + "-stay"}
+		t.Cleanup(func() {
+			_ = repo.DeleteParty(context.Background(), partyID)
+			for _, id := range ids {
+				_ = client.Do(context.Background(), client.B().Del().Key(charPrefix+id).Build()).Error()
+			}
+		})
+		now := time.Now().UTC()
+		if err := repo.SaveParty(ctx, party.Party{ID: partyID, LeaderCharacterID: ids[0], MaxMembers: 5, Status: party.StatusRecruiting, CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+		for i, id := range ids {
+			if err := repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: id, IsLeader: i == 0, JoinedAt: now.Add(time.Duration(i) * time.Second)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		var leavers []func() error
+		for _, id := range ids[:4] {
+			leavers = append(leavers, func() error { return repo.RemoveMember(ctx, partyID, id) })
+		}
+		for _, err := range testutil.RunRace(leavers...) {
+			if err != nil {
+				t.Fatalf("round %d: concurrent leave failed: %v", round, err)
+			}
+		}
+
+		got, err := repo.GetParty(ctx, partyID)
+		if err != nil || got.LeaderCharacterID != ids[4] {
+			t.Fatalf("round %d: leader = %q (err=%v), want the remaining member", round, got.LeaderCharacterID, err)
+		}
+		members, err := repo.GetMembers(ctx, partyID)
+		if err != nil || len(members) != 1 || members[0].CharacterID != ids[4] || !members[0].IsLeader {
+			t.Fatalf("round %d: roster not conserved: %+v (err=%v)", round, members, err)
+		}
+		for _, id := range ids[:4] {
+			if _, _, err := repo.GetActivePartyByCharacter(ctx, id); !errors.Is(err, party.ErrNotFound) {
+				t.Fatalf("round %d: %s still mapped: %v", round, id, err)
+			}
+		}
+	}
+}
+
 func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
 	if valkeyAddr == "" {
@@ -833,13 +844,11 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 	}
 
 	testLobbyPrefix := "party2:test:pw:party:lobby:"
-	testReadyPrefix := "party2:test:pw:party:ready:"
 	testCharPrefix := "party2:test:pw:party:character:"
 	testIndexKey := "party2:test:pw:party:lobbies"
 
 	repo := party.NewValkeyRepository(client,
 		party.WithLobbyKeyPrefix(testLobbyPrefix),
-		party.WithReadyKeyPrefix(testReadyPrefix),
 		party.WithCharacterKeyPrefix(testCharPrefix),
 		party.WithLobbiesIndexKey(testIndexKey),
 	)
@@ -851,8 +860,6 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 	cleanup := func() {
 		if createdPartyID != "" {
 			_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+createdPartyID).Build()).Error()
-			_ = client.Do(ctx, client.B().Del().Key(testReadyPrefix+createdPartyID+":"+leaderID).Build()).Error()
-			_ = client.Do(ctx, client.B().Del().Key(testReadyPrefix+createdPartyID+":"+memberID).Build()).Error()
 			_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(createdPartyID).Build()).Error()
 		}
 		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+leaderID).Build()).Error()
@@ -924,20 +931,6 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 	}
 	assertNoPasswordLeak("ListParties", page)
 
-	// 3. Ready toggle via update_member_ready.lua preserves PasswordHash
-	readyDetail, err := svc.SetReady(ctx, createdPartyID, leaderID, false)
-	if err != nil {
-		t.Fatalf("SetReady(false) failed: %v", err)
-	}
-	assertNoPasswordLeak("SetReady(false)", readyDetail)
-	if _, err := svc.SetReady(ctx, createdPartyID, leaderID, true); err != nil {
-		t.Fatalf("SetReady(true) failed: %v", err)
-	}
-	gotParty, err := repo.GetParty(ctx, createdPartyID)
-	if err != nil || gotParty.PasswordHash != wantHash {
-		t.Fatalf("PasswordHash lost after SetReady: got %q, want %q (err=%v)", gotParty.PasswordHash, wantHash, err)
-	}
-
 	// 4. Wrong and empty passwords are rejected with ErrInvalidPassword
 	if _, err := svc.JoinParty(ctx, createdPartyID, memberID, "wrong"); !errors.Is(err, party.ErrInvalidPassword) {
 		t.Fatalf("expected ErrInvalidPassword for wrong password, got %v", err)
@@ -952,7 +945,7 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 		t.Fatalf("JoinParty with valid password failed: %v", err)
 	}
 	assertNoPasswordLeak("JoinParty", joinedDetail)
-	gotParty, err = repo.GetParty(ctx, createdPartyID)
+	gotParty, err := repo.GetParty(ctx, createdPartyID)
 	if err != nil || gotParty.PasswordHash != wantHash {
 		t.Fatalf("PasswordHash lost after JoinParty: got %q, want %q (err=%v)", gotParty.PasswordHash, wantHash, err)
 	}

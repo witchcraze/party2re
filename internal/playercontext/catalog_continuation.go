@@ -3,9 +3,9 @@ package playercontext
 // Controls are connected by their individual mutation adapters.
 // Their role/phase eligibility comes from public feature reads, not town gates.
 var continuationCatalog = []ActionDefinition{
-	{ID: "party_ready", Label: "準備する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"party_id", "ready"}, ActivityKind: "party", WaitExempt: WaitActivityPacing},
 	{ID: "party_start", Label: "冒険を始める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"party_id"}, ActivityKind: "party", WaitExempt: WaitActivityPacing},
 	{ID: "party_leave", Label: "パーティーを離れる", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"party_id"}, ActivityKind: "party", WaitExempt: WaitActivityPacing, Recovery: true},
+	{ID: "party_kick", Label: "パーティーのメンバーを外す", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"party_id", "target_character_id"}, ActivityKind: "party", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_team", Label: "チームを選ぶ", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "team_color"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_start", Label: "対戦を始める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_kick", Label: "部屋のメンバーを外す", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "target_character_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},

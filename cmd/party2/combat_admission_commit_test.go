@@ -111,14 +111,13 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := combat.party.DisbandParty(ctx, lobby.Party.ID, leader.ID); err != nil {
-			t.Error(err)
+		for _, id := range []string{member.ID, leader.ID} {
+			if err := combat.party.LeaveParty(ctx, lobby.Party.ID, id); err != nil {
+				t.Error(err)
+			}
 		}
 	})
 	if _, err := combat.party.JoinParty(ctx, lobby.Party.ID, member.ID, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := combat.party.SetReady(ctx, lobby.Party.ID, member.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	errInjected := errors.New("injected commit failure")

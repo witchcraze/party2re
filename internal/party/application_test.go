@@ -27,7 +27,6 @@ type mockPartyRepository struct {
 	updatePartyErr       error
 	updatePartyCallCount int
 	failUpdatePartyOn    int // if non-zero, fail on this N-th call
-	updateMemberReadyErr error
 	deletePartyErr       error
 	advLocksMu           sync.Mutex
 	advLocks             map[string]string
@@ -81,7 +80,7 @@ func (r *mockPartyRepository) SaveParty(_ context.Context, p Party) error {
 
 func (r *mockPartyRepository) GetParty(_ context.Context, id string) (Party, error) {
 	p, ok := r.parties[id]
-	if !ok || p.Status == StatusDisbanded {
+	if !ok {
 		return Party{}, ErrNotFound
 	}
 	return p, nil
@@ -196,7 +195,7 @@ func (r *mockPartyRepository) GetActivePartyByCharacter(_ context.Context, chara
 		return Party{}, Member{}, ErrNotFound
 	}
 	p, ok := r.parties[partyID]
-	if !ok || p.Status == StatusDisbanded {
+	if !ok {
 		return Party{}, Member{}, ErrNotFound
 	}
 	m := r.members[partyID][characterID]
@@ -204,27 +203,23 @@ func (r *mockPartyRepository) GetActivePartyByCharacter(_ context.Context, chara
 }
 
 func (r *mockPartyRepository) RemoveMember(_ context.Context, partyID, characterID string) error {
-	if mMap, ok := r.members[partyID]; ok {
-		delete(mMap, characterID)
-	}
+	mMap := r.members[partyID]
+	delete(mMap, characterID)
 	delete(r.memberParty, characterID)
-	return nil
-}
-
-func (r *mockPartyRepository) UpdateMemberReady(_ context.Context, partyID, characterID string, ready bool) error {
-	if r.updateMemberReadyErr != nil {
-		return r.updateMemberReadyErr
+	if p, ok := r.parties[partyID]; ok && p.LeaderCharacterID == characterID {
+		var next Member
+		for _, m := range mMap {
+			if next.CharacterID == "" || m.JoinedAt.Before(next.JoinedAt) {
+				next = m
+			}
+		}
+		if next.CharacterID != "" {
+			next.IsLeader = true
+			mMap[next.CharacterID] = next
+			p.LeaderCharacterID = next.CharacterID
+			r.parties[partyID] = p
+		}
 	}
-	mMap, ok := r.members[partyID]
-	if !ok {
-		return ErrCharacterNotInParty
-	}
-	m, ok := mMap[characterID]
-	if !ok {
-		return ErrCharacterNotInParty
-	}
-	m.ReadyState = ready
-	mMap[characterID] = m
 	return nil
 }
 
@@ -469,8 +464,8 @@ func TestPartyService_CreateAndGet(t *testing.T) {
 	if detail.Party.Name != "勇者パーティ" || detail.Party.LeaderCharacterID != leader.ID {
 		t.Fatalf("unexpected party details: %+v", detail.Party)
 	}
-	if len(detail.Members) != 1 || !detail.Members[0].IsLeader || !detail.Members[0].ReadyState {
-		t.Fatalf("expected leader member ready, got: %+v", detail.Members)
+	if len(detail.Members) != 1 || !detail.Members[0].IsLeader {
+		t.Fatalf("expected leader member, got: %+v", detail.Members)
 	}
 	if len(news.published) != 1 {
 		t.Fatalf("expected news broadcast, got %d", len(news.published))
@@ -574,18 +569,7 @@ func TestPartyService_JoinAndLeave(t *testing.T) {
 		t.Fatalf("expected ErrPartyFull, got %v", err)
 	}
 
-	// 5. Ready state toggle
-	readyDetail, err := svc.SetReady(context.Background(), partyID, m1.ID, true)
-	if err != nil {
-		t.Fatalf("SetReady failed: %v", err)
-	}
-	for _, m := range readyDetail.Members {
-		if m.CharacterID == m1.ID && !m.ReadyState {
-			t.Fatalf("expected m1 to be ready")
-		}
-	}
-
-	// 6. Member leaves party
+	// 5. Member leaves party
 	if err := svc.LeaveParty(context.Background(), partyID, m1.ID); err != nil {
 		t.Fatalf("LeaveParty failed: %v", err)
 	}
@@ -595,20 +579,27 @@ func TestPartyService_JoinAndLeave(t *testing.T) {
 	}
 }
 
-func TestPartyService_KickAndDisband(t *testing.T) {
+func TestPartyService_KickAndLeave(t *testing.T) {
 	svc, _, charRepo, _ := setupTestService(t)
 
 	leader := corecharacter.Character{ID: "leader", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
 	m1 := corecharacter.Character{ID: "m1", Name: "M1", Level: 10, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
-	charRepo.chars[leader.ID] = leader
-	charRepo.chars[m1.ID] = m1
+	m2 := corecharacter.Character{ID: "m2", Name: "M2", Level: 10, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
+	for _, c := range []corecharacter.Character{leader, m1, m2} {
+		charRepo.chars[c.ID] = c
+	}
 
 	detail, _ := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
 		Name:    "PartyX",
 		StageID: "forest",
 	})
 	partyID := detail.Party.ID
-	_, _ = svc.JoinParty(context.Background(), partyID, m1.ID, "")
+	for _, c := range []corecharacter.Character{m1, m2} {
+		if _, err := svc.JoinParty(context.Background(), partyID, c.ID, ""); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Millisecond) // distinct join order
+	}
 
 	// 1. Non-leader cannot kick
 	if err := svc.KickMember(context.Background(), partyID, m1.ID, leader.ID); !errors.Is(err, ErrNotPartyLeader) {
@@ -620,17 +611,29 @@ func TestPartyService_KickAndDisband(t *testing.T) {
 		t.Fatalf("expected ErrCannotKickSelf, got %v", err)
 	}
 
-	// 3. Leader kicks member
-	if err := svc.KickMember(context.Background(), partyID, leader.ID, m1.ID); err != nil {
+	// 3. The leader leaving hands leadership to the earliest remaining member.
+	if err := svc.LeaveParty(context.Background(), partyID, leader.ID); err != nil {
+		t.Fatalf("LeaveParty(leader) failed: %v", err)
+	}
+	after, err := svc.GetParty(context.Background(), partyID)
+	if err != nil || after.Party.LeaderCharacterID != m1.ID || len(after.Members) != 2 || after.Members[0].CharacterID != m1.ID || !after.Members[0].IsLeader {
+		t.Fatalf("leadership not handed over: %+v err=%v", after, err)
+	}
+
+	// 4. The new leader kicks a member.
+	if err := svc.KickMember(context.Background(), partyID, m1.ID, m2.ID); err != nil {
 		t.Fatalf("KickMember failed: %v", err)
 	}
 
-	// 4. Disband party
-	if err := svc.DisbandParty(context.Background(), partyID, leader.ID); err != nil {
-		t.Fatalf("DisbandParty failed: %v", err)
+	// 5. The last member leaving deletes the lobby.
+	if err := svc.LeaveParty(context.Background(), partyID, m1.ID); err != nil {
+		t.Fatalf("LeaveParty(last) failed: %v", err)
 	}
 	if _, err := svc.GetParty(context.Background(), partyID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("expected ErrNotFound after disband, got %v", err)
+		t.Fatalf("expected ErrNotFound after the last leave, got %v", err)
+	}
+	if err := svc.LeaveParty(context.Background(), partyID, m1.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound leaving a deleted lobby, got %v", err)
 	}
 }
 
@@ -663,14 +666,7 @@ func TestPartyService_StartPartyAdventure(t *testing.T) {
 	partyID := detail.Party.ID
 	_, _ = svc.JoinParty(context.Background(), partyID, m1.ID, "")
 
-	// 1. Cannot start if members not ready
-	if _, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID); !errors.Is(err, ErrPartyNotReady) {
-		t.Fatalf("expected ErrPartyNotReady, got %v", err)
-	}
-
-	// 2. Set ready and start
-	_, _ = svc.SetReady(context.Background(), partyID, m1.ID, true)
-
+	// The leader starts without any readiness step (vs_monster.cgi:56–58).
 	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
 	if err != nil {
 		t.Fatalf("StartPartyAdventure failed: %v", err)
@@ -868,9 +864,6 @@ func TestPartyService_StartPartyAdventure_DuplicateCharacterNames(t *testing.T) 
 	if _, err := svc.JoinParty(context.Background(), partyID, m1.ID, ""); err != nil {
 		t.Fatalf("JoinParty failed: %v", err)
 	}
-	if _, err := svc.SetReady(context.Background(), partyID, m1.ID, true); err != nil {
-		t.Fatalf("SetReady failed: %v", err)
-	}
 
 	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
 	if err != nil {
@@ -927,9 +920,6 @@ func TestPartyService_StartPartyAdventure_SurvivingDamagePersisted(t *testing.T)
 
 	if _, err := svc.JoinParty(context.Background(), partyID, m1.ID, ""); err != nil {
 		t.Fatalf("JoinParty failed: %v", err)
-	}
-	if _, err := svc.SetReady(context.Background(), partyID, m1.ID, true); err != nil {
-		t.Fatalf("SetReady failed: %v", err)
 	}
 
 	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
@@ -993,10 +983,6 @@ func TestPartyService_StartPartyAdventure_OverLevelAndCap(t *testing.T) {
 
 	if _, err := svc.JoinParty(context.Background(), partyID, normalMem.ID, ""); err != nil {
 		t.Fatalf("JoinParty failed: %v", err)
-	}
-
-	if _, err := svc.SetReady(context.Background(), partyID, normalMem.ID, true); err != nil {
-		t.Fatalf("SetReady failed: %v", err)
 	}
 
 	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
@@ -1197,7 +1183,7 @@ func TestPartyService_SpeedSettings(t *testing.T) {
 		if det.Party.Speed != speed {
 			t.Errorf("Speed = %d, want %d", det.Party.Speed, speed)
 		}
-		_ = svc.DisbandParty(ctx, det.Party.ID, c.ID)
+		_ = svc.LeaveParty(ctx, det.Party.ID, c.ID)
 	}
 
 	// Default fallback to 18
@@ -1252,7 +1238,6 @@ func TestPartyService_StartPartyAdventure_PostAdventureHook(t *testing.T) {
 	}
 	partyID := detail.Party.ID
 	_, _ = svc.JoinParty(ctx, partyID, m1.ID, "")
-	_, _ = svc.SetReady(ctx, partyID, m1.ID, true)
 
 	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
 	if err != nil {

@@ -3986,43 +3986,6 @@
             "if": {
               "properties": {
                 "action": {
-                  "const": "party_ready"
-                }
-              },
-              "required": [
-                "action"
-              ],
-              "type": "object"
-            },
-            "then": {
-              "properties": {
-                "params": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "party_id": {
-                      "type": "string"
-                    },
-                    "ready": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "party_id",
-                    "ready"
-                  ],
-                  "type": "object"
-                }
-              },
-              "required": [
-                "params"
-              ],
-              "type": "object"
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "action": {
                   "const": "party_start"
                 }
               },
@@ -4299,6 +4262,43 @@
                   },
                   "required": [
                     "party_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "party_kick"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "party_id": {
+                      "type": "string"
+                    },
+                    "target_character_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "party_id",
+                    "target_character_id"
                   ],
                   "type": "object"
                 }
@@ -12301,21 +12301,6 @@
         ],
         "type": "object"
       },
-      "KickPartyMemberRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "target_character_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "target_character_id"
-        ],
-        "type": "object"
-      },
       "Letter": {
         "properties": {
           "color": {
@@ -13386,9 +13371,6 @@
           },
           "party_id": {
             "type": "string"
-          },
-          "ready_state": {
-            "type": "boolean"
           }
         },
         "required": [
@@ -13400,7 +13382,6 @@
           "hp",
           "max_hp",
           "is_leader",
-          "ready_state",
           "joined_at"
         ],
         "type": "object"
@@ -17537,21 +17518,6 @@
         },
         "required": [
           "enabled"
-        ],
-        "type": "object"
-      },
-      "SetPartyReadyRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "ready": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "character_id",
-          "ready"
         ],
         "type": "object"
       },
@@ -25530,95 +25496,6 @@
       }
     },
     "/parties/{id}": {
-      "delete": {
-        "description": "Disbands the party (party leader only).",
-        "operationId": "disbandParty",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "status"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Party disbanded"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not party leader"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Party not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Disband party",
-        "tags": [
-          "Party"
-        ]
-      },
       "get": {
         "description": "Retrieves detailed information and member list for a party.",
         "operationId": "getPartyDetail",
@@ -25747,255 +25624,6 @@
           }
         ],
         "summary": "Join party",
-        "tags": [
-          "Party"
-        ]
-      }
-    },
-    "/parties/{id}/kick": {
-      "post": {
-        "description": "Kicks a member from the party (leader only).",
-        "operationId": "kickPartyMember",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/KickPartyMemberRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "status"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Member kicked successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not party leader or cannot kick self"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Party or member not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Kick party member",
-        "tags": [
-          "Party"
-        ]
-      }
-    },
-    "/parties/{id}/leave": {
-      "post": {
-        "description": "Leaves the party. If the leader leaves, the party is disbanded.",
-        "operationId": "leaveParty",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "status"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Left party successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not in party"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Party not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Leave party",
-        "tags": [
-          "Party"
-        ]
-      }
-    },
-    "/parties/{id}/ready": {
-      "post": {
-        "description": "Toggles or sets member readiness before starting the co-op adventure.",
-        "operationId": "setPartyReadyState",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetPartyReadyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PartyDetail"
-                }
-              }
-            },
-            "description": "Ready state updated"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Character not in party"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Party not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Set party member ready state",
         "tags": [
           "Party"
         ]
