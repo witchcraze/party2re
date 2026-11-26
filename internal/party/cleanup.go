@@ -20,9 +20,6 @@ func (r *ValkeyRepository) CleanupParty(ctx context.Context, state LobbyState) e
 		if err := cleanupCharacterScript.Exec(ctx, r.client, []string{r.characterKey(charID)}, []string{id}).Error(); err != nil {
 			return err
 		}
-		if err := r.client.Do(ctx, r.client.B().Del().Key(r.readyKey(id, charID)).Build()).Error(); err != nil {
-			return err
-		}
 	}
 	if err := r.client.Do(ctx, r.client.B().Del().Key(r.lobbyKey(id)).Build()).Error(); err != nil {
 		return err

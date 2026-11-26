@@ -166,7 +166,6 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			HP:            leaderChar.Stats.HP,
 			MaxHP:         maxHP,
 			IsLeader:      true,
-			ReadyState:    true,
 			JoinedAt:      now,
 			BattleActor:   battleActor,
 		}

@@ -207,10 +207,6 @@ func testConcurrentAdventureSerialization(t *testing.T, partyRepo party.Reposito
 	if err != nil {
 		t.Fatalf("JoinParty failed: %v", err)
 	}
-	_, err = svc.SetReady(ctx, partyID, member.ID, true)
-	if err != nil {
-		t.Fatalf("SetReady failed: %v", err)
-	}
 
 	const concurrency = 10
 	var wg sync.WaitGroup

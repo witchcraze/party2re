@@ -74,14 +74,14 @@ func TestFacilityAndTerminalWorkEligibility(t *testing.T) {
 func TestLinkedPartyRunIsOneActivity(t *testing.T) {
 	snapshot := healthySnapshot()
 	snapshot.Activities = []Activity{
-		{Kind: "party", ID: "party", Actions: []string{"party_ready", "party_start", "party_leave"}},
+		{Kind: "party", ID: "party", Actions: []string{"party_kick", "party_start", "party_leave"}},
 		{Kind: "dungeon", ID: "run", PartyID: "party", Actions: []string{"dungeon_move", "dungeon_escape"}},
 	}
 	if got := activityLocation(snapshot.ActiveActivities()); got != "dungeon" {
 		t.Fatalf("linked run misclassified: %s", got)
 	}
 	actions := Evaluate(snapshot)
-	if !slices.Contains(actions, "dungeon_move") || slices.Contains(actions, "party_start") || slices.Contains(actions, "party_ready") || !slices.Contains(actions, "party_leave") {
+	if !slices.Contains(actions, "dungeon_move") || slices.Contains(actions, "party_start") || slices.Contains(actions, "party_kick") || !slices.Contains(actions, "party_leave") {
 		t.Fatalf("linked continuation: %v", actions)
 	}
 	snapshot.Activities = append(snapshot.Activities, Activity{Kind: "challenge", ID: "other-run", PartyID: "party", Actions: []string{"challenge_advance"}})

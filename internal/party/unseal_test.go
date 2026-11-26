@@ -51,9 +51,6 @@ func TestStartPartyAdventure_Stage19UnsealOpensRoomsAfterCommit(t *testing.T) {
 		if _, err := svc.JoinParty(ctx, detail.Party.ID, member.ID, ""); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := svc.SetReady(ctx, detail.Party.ID, member.ID, true); err != nil {
-			t.Fatal(err)
-		}
 		_, err = svc.StartPartyAdventure(ctx, detail.Party.ID, leader.ID)
 		if fail {
 			if err == nil || len(calls) != 0 {

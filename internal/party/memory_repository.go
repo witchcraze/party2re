@@ -17,7 +17,6 @@ type MemoryRepository struct {
 	memLobbies      map[string]Party
 	memMembers      map[string]map[string]Member
 	memCharParty    map[string]string
-	memReadyExp     map[string]map[string]time.Time
 	memLobbyExp     map[string]time.Time
 	memPartyLocksMu sync.Mutex
 	memPartyLocks   map[string]string
@@ -30,7 +29,6 @@ func NewMemoryRepository(opts ...ValkeyRepositoryOption) *MemoryRepository {
 		memLobbies:       make(map[string]Party),
 		memMembers:       make(map[string]map[string]Member),
 		memCharParty:     make(map[string]string),
-		memReadyExp:      make(map[string]map[string]time.Time),
 		memLobbyExp:      make(map[string]time.Time),
 		memPartyLocks:    make(map[string]string),
 	}
@@ -53,9 +51,6 @@ func (r *MemoryRepository) saveLocked(p Party) {
 	if _, exists := r.memMembers[p.ID]; !exists {
 		r.memMembers[p.ID] = make(map[string]Member)
 	}
-	if _, exists := r.memReadyExp[p.ID]; !exists {
-		r.memReadyExp[p.ID] = make(map[string]time.Time)
-	}
 }
 
 func (r *MemoryRepository) GetParty(_ context.Context, id string) (Party, error) {
@@ -66,7 +61,7 @@ func (r *MemoryRepository) GetParty(_ context.Context, id string) (Party, error)
 		return Party{}, ErrNotFound
 	}
 	p, ok := r.memLobbies[id]
-	if !ok || p.Status == StatusDisbanded {
+	if !ok {
 		return Party{}, ErrNotFound
 	}
 	return p, nil
@@ -141,7 +136,6 @@ func (r *MemoryRepository) DeleteParty(_ context.Context, id string) error {
 		}
 		delete(r.memMembers, id)
 	}
-	delete(r.memReadyExp, id)
 	return nil
 }
 
@@ -153,14 +147,11 @@ func (r *MemoryRepository) AddMember(_ context.Context, m Member) error {
 		return ErrNotFound
 	}
 	p, ok := r.memLobbies[m.PartyID]
-	if !ok || p.Status == StatusDisbanded {
+	if !ok {
 		return ErrNotFound
 	}
 	if _, ok := r.memMembers[m.PartyID]; !ok {
 		r.memMembers[m.PartyID] = make(map[string]Member)
-	}
-	if _, ok := r.memReadyExp[m.PartyID]; !ok {
-		r.memReadyExp[m.PartyID] = make(map[string]time.Time)
 	}
 
 	maxMembers := p.MaxMembers
@@ -175,11 +166,6 @@ func (r *MemoryRepository) AddMember(_ context.Context, m Member) error {
 	m.BattleActor = cloneBattleActor(m.BattleActor)
 	r.memMembers[m.PartyID][m.CharacterID] = m
 	r.memCharParty[m.CharacterID] = m.PartyID
-	if m.ReadyState {
-		r.memReadyExp[m.PartyID][m.CharacterID] = time.Now().UTC().Add(r.readyTTL)
-	} else {
-		delete(r.memReadyExp[m.PartyID], m.CharacterID)
-	}
 	r.memLobbyExp[m.PartyID] = time.Now().UTC().Add(r.lobbyTTL)
 	return nil
 }
@@ -187,7 +173,6 @@ func (r *MemoryRepository) AddMember(_ context.Context, m Member) error {
 func (r *MemoryRepository) GetMembers(_ context.Context, partyID string) ([]Member, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	now := time.Now().UTC()
 	membersMap, ok := r.memMembers[partyID]
 	if !ok {
 		return nil, nil
@@ -195,11 +180,6 @@ func (r *MemoryRepository) GetMembers(_ context.Context, partyID string) ([]Memb
 	var list []Member
 	for _, m := range membersMap {
 		m.BattleActor = cloneBattleActor(m.BattleActor)
-		if readyExp, ok := r.memReadyExp[partyID][m.CharacterID]; ok && now.Before(readyExp) {
-			m.ReadyState = true
-		} else {
-			m.ReadyState = false
-		}
 		list = append(list, m)
 	}
 	sort.Slice(list, func(i, j int) bool {
@@ -223,7 +203,7 @@ func (r *MemoryRepository) GetActivePartyByCharacter(_ context.Context, characte
 		return Party{}, Member{}, ErrNotFound
 	}
 	p, ok := r.memLobbies[partyID]
-	if !ok || p.Status == StatusDisbanded {
+	if !ok {
 		return Party{}, Member{}, ErrNotFound
 	}
 	m, ok := r.memMembers[partyID][characterID]
@@ -231,11 +211,6 @@ func (r *MemoryRepository) GetActivePartyByCharacter(_ context.Context, characte
 		return Party{}, Member{}, ErrNotFound
 	}
 	m.BattleActor = cloneBattleActor(m.BattleActor)
-	if readyExp, ok := r.memReadyExp[partyID][characterID]; ok && time.Now().UTC().Before(readyExp) {
-		m.ReadyState = true
-	} else {
-		m.ReadyState = false
-	}
 	return p, m, nil
 }
 
@@ -246,44 +221,27 @@ func (r *MemoryRepository) RemoveMember(_ context.Context, partyID, characterID 
 	if !ok || time.Now().UTC().After(exp) {
 		return ErrNotFound
 	}
-	if _, ok := r.memLobbies[partyID]; !ok {
+	p, ok := r.memLobbies[partyID]
+	if !ok {
 		return ErrNotFound
 	}
-	if members, ok := r.memMembers[partyID]; ok {
-		delete(members, characterID)
-	}
+	members := r.memMembers[partyID]
+	delete(members, characterID)
 	delete(r.memCharParty, characterID)
-	if readyMap, ok := r.memReadyExp[partyID]; ok {
-		delete(readyMap, characterID)
-	}
-	r.memLobbyExp[partyID] = time.Now().UTC().Add(r.lobbyTTL)
-	return nil
-}
-
-func (r *MemoryRepository) UpdateMemberReady(_ context.Context, partyID, characterID string, ready bool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	exp, ok := r.memLobbyExp[partyID]
-	if !ok || time.Now().UTC().After(exp) {
-		return ErrNotFound
-	}
-	members, ok := r.memMembers[partyID]
-	if !ok {
-		return ErrNotFound
-	}
-	m, ok := members[characterID]
-	if !ok {
-		return ErrCharacterNotInParty
-	}
-	m.ReadyState = ready
-	members[characterID] = m
-	if _, ok := r.memReadyExp[partyID]; !ok {
-		r.memReadyExp[partyID] = make(map[string]time.Time)
-	}
-	if ready {
-		r.memReadyExp[partyID][characterID] = time.Now().UTC().Add(r.readyTTL)
-	} else {
-		delete(r.memReadyExp[partyID], characterID)
+	if p.LeaderCharacterID == characterID {
+		// Earliest joiner leads, as the Valkey script's join order does.
+		var next Member
+		for _, m := range members {
+			if next.CharacterID == "" || m.JoinedAt.Before(next.JoinedAt) {
+				next = m
+			}
+		}
+		if next.CharacterID != "" {
+			next.IsLeader = true
+			members[next.CharacterID] = next
+			p.LeaderCharacterID = next.CharacterID
+			r.memLobbies[partyID] = p
+		}
 	}
 	r.memLobbyExp[partyID] = time.Now().UTC().Add(r.lobbyTTL)
 	return nil
@@ -356,7 +314,6 @@ func (r *MemoryRepository) CleanupParty(_ context.Context, state LobbyState) err
 	delete(r.memLobbies, id)
 	delete(r.memLobbyExp, id)
 	delete(r.memMembers, id)
-	delete(r.memReadyExp, id)
 	return nil
 }
 

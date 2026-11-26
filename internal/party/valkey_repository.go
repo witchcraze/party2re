@@ -17,16 +17,12 @@ import (
 const (
 	// DefaultLobbyKeyPrefix is the Valkey key prefix for transient party lobby state.
 	DefaultLobbyKeyPrefix = "party2:party:lobby:"
-	// DefaultReadyKeyPrefix is the Valkey key prefix for 60-second ready check countdowns.
-	DefaultReadyKeyPrefix = "party2:party:ready:"
 	// DefaultCharacterKeyPrefix is the Valkey key prefix for O(1) character-to-party mapping.
 	DefaultCharacterKeyPrefix = "party2:party:character:"
 	// DefaultLobbiesIndexKey is the Valkey Sorted Set key tracking active recruiting lobbies.
 	DefaultLobbiesIndexKey = "party2:party:lobbies"
 	// DefaultLobbyTTL is the automatic expiration time for abandoned or idle party lobbies (30-minute auto-disband per quest.cgi).
 	DefaultLobbyTTL = 30 * time.Minute
-	// DefaultReadyTTL is the 60-second ready check countdown expiration duration.
-	DefaultReadyTTL = 60 * time.Second
 )
 
 //go:embed lua/add_member.lua
@@ -34,9 +30,6 @@ var addMemberLua string
 
 //go:embed lua/remove_member.lua
 var removeMemberLua string
-
-//go:embed lua/update_member_ready.lua
-var updateMemberReadyLua string
 
 //go:embed lua/update_party.lua
 var updatePartyLua string
@@ -51,9 +44,6 @@ func mapLuaError(err error) error {
 	}
 	if strings.Contains(errStr, "ERR_PARTY_NOT_FOUND") {
 		return ErrNotFound
-	}
-	if strings.Contains(errStr, "ERR_CHAR_NOT_IN_PARTY") {
-		return ErrCharacterNotInParty
 	}
 	return err
 }
@@ -73,15 +63,6 @@ func WithLobbyKeyPrefix(prefix string) ValkeyRepositoryOption {
 	return func(r *repositoryConfig) {
 		if prefix != "" {
 			r.lobbyPrefix = prefix
-		}
-	}
-}
-
-// WithReadyKeyPrefix overrides the default ready countdown key prefix.
-func WithReadyKeyPrefix(prefix string) ValkeyRepositoryOption {
-	return func(r *repositoryConfig) {
-		if prefix != "" {
-			r.readyPrefix = prefix
 		}
 	}
 }
@@ -113,33 +94,20 @@ func WithLobbyTTL(d time.Duration) ValkeyRepositoryOption {
 	}
 }
 
-// WithReadyTTL overrides the default ready check countdown TTL.
-func WithReadyTTL(d time.Duration) ValkeyRepositoryOption {
-	return func(r *repositoryConfig) {
-		if d > 0 {
-			r.readyTTL = d
-		}
-	}
-}
-
 type repositoryConfig struct {
 	logRepo         AdventureLogRepository
 	lobbyPrefix     string
-	readyPrefix     string
 	charPrefix      string
 	lobbiesIndexKey string
 	lobbyTTL        time.Duration
-	readyTTL        time.Duration
 }
 
 func newRepositoryConfig(opts []ValkeyRepositoryOption) repositoryConfig {
 	cfg := repositoryConfig{
 		lobbyPrefix:     DefaultLobbyKeyPrefix,
-		readyPrefix:     DefaultReadyKeyPrefix,
 		charPrefix:      DefaultCharacterKeyPrefix,
 		lobbiesIndexKey: DefaultLobbiesIndexKey,
 		lobbyTTL:        DefaultLobbyTTL,
-		readyTTL:        DefaultReadyTTL,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -147,16 +115,15 @@ func newRepositoryConfig(opts []ValkeyRepositoryOption) repositoryConfig {
 	return cfg
 }
 
-// ValkeyRepository stores transient party lobbies and ready checks in Valkey.
+// ValkeyRepository stores transient party lobbies in Valkey.
 type ValkeyRepository struct {
 	client valkey.Client
 	repositoryConfig
 
 	// Lua scripts for atomic lobby state mutations
-	addMemberScript         *valkey.Lua
-	removeMemberScript      *valkey.Lua
-	updateMemberReadyScript *valkey.Lua
-	updatePartyScript       *valkey.Lua
+	addMemberScript    *valkey.Lua
+	removeMemberScript *valkey.Lua
+	updatePartyScript  *valkey.Lua
 }
 
 // NewValkeyRepository constructs a ValkeyRepository. It panics if client is nil.
@@ -165,21 +132,16 @@ func NewValkeyRepository(client valkey.Client, opts ...ValkeyRepositoryOption) *
 		panic("party: Valkey client is required")
 	}
 	return &ValkeyRepository{
-		client:                  client,
-		repositoryConfig:        newRepositoryConfig(opts),
-		addMemberScript:         valkey.NewLuaScript(addMemberLua),
-		removeMemberScript:      valkey.NewLuaScript(removeMemberLua),
-		updateMemberReadyScript: valkey.NewLuaScript(updateMemberReadyLua),
-		updatePartyScript:       valkey.NewLuaScript(updatePartyLua),
+		client:             client,
+		repositoryConfig:   newRepositoryConfig(opts),
+		addMemberScript:    valkey.NewLuaScript(addMemberLua),
+		removeMemberScript: valkey.NewLuaScript(removeMemberLua),
+		updatePartyScript:  valkey.NewLuaScript(updatePartyLua),
 	}
 }
 
 func (r *ValkeyRepository) lobbyKey(id string) string {
 	return r.lobbyPrefix + id
-}
-
-func (r *ValkeyRepository) readyKey(partyID, charID string) string {
-	return r.readyPrefix + partyID + ":" + charID
 }
 
 func (r *ValkeyRepository) characterKey(charID string) string {
@@ -231,12 +193,7 @@ func (r *ValkeyRepository) GetParty(ctx context.Context, id string) (Party, erro
 		return Party{}, err
 	}
 
-	p := state.Party.toParty()
-	if p.Status == StatusDisbanded {
-		return Party{}, ErrNotFound
-	}
-
-	return p, nil
+	return state.Party.toParty(), nil
 }
 
 // GetPartyForUpdate retrieves party lobby state for update.
@@ -323,7 +280,7 @@ func (r *ValkeyRepository) DeleteParty(ctx context.Context, id string) error {
 			return err
 		}
 		for _, m := range state.Members {
-			keys = append(keys, r.characterKey(m.CharacterID), r.readyKey(id, m.CharacterID))
+			keys = append(keys, r.characterKey(m.CharacterID))
 		}
 		if state.Party.LeaderCharacterID != "" {
 			keys = append(keys, r.characterKey(state.Party.LeaderCharacterID))
@@ -344,27 +301,19 @@ func (r *ValkeyRepository) AddMember(ctx context.Context, m Member) error {
 	if err != nil {
 		return err
 	}
-	readyArg := "0"
-	if m.ReadyState {
-		readyArg = "1"
-	}
-
 	res := r.addMemberScript.Exec(ctx, r.client, []string{
 		r.lobbyKey(m.PartyID),
 		r.characterKey(m.CharacterID),
-		r.readyKey(m.PartyID, m.CharacterID),
 	}, []string{
 		string(memberJSON),
 		m.CharacterID,
 		m.PartyID,
 		strconv.FormatInt(int64(r.lobbyTTL.Seconds()), 10),
-		strconv.FormatInt(int64(r.readyTTL.Seconds()), 10),
-		readyArg,
 	})
 	return mapLuaError(res.Error())
 }
 
-// GetMembers retrieves all members of a party lobby, resolving ready states against 60-second countdowns.
+// GetMembers retrieves all members of a party lobby, leader first.
 func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Member, error) {
 	data, err := r.client.Do(ctx, r.client.B().Get().Key(r.lobbyKey(partyID)).Build()).AsBytes()
 	if err != nil {
@@ -383,15 +332,6 @@ func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Me
 	if err != nil {
 		return nil, err
 	}
-	for i := range members {
-		// Check ready countdown key in Valkey
-		exists, err := r.client.Do(ctx, r.client.B().Exists().Key(r.readyKey(partyID, members[i].CharacterID)).Build()).AsInt64()
-		if err == nil && exists > 0 {
-			members[i].ReadyState = true
-		} else {
-			members[i].ReadyState = false
-		}
-	}
 
 	sort.Slice(members, func(i, j int) bool {
 		if members[i].IsLeader != members[j].IsLeader {
@@ -403,7 +343,7 @@ func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Me
 	return members, nil
 }
 
-// GetMember retrieves a single member and evaluates their 60-second ready check countdown.
+// GetMember retrieves a single lobby member.
 func (r *ValkeyRepository) GetMember(ctx context.Context, partyID, characterID string) (Member, error) {
 	members, err := r.GetMembers(ctx, partyID)
 	if err != nil {
@@ -440,34 +380,15 @@ func (r *ValkeyRepository) GetActivePartyByCharacter(ctx context.Context, charac
 	return p, m, nil
 }
 
-// RemoveMember removes a member from a party lobby in Valkey Master.
+// RemoveMember removes a member from a party lobby in Valkey Master; a
+// removed leader is replaced by the earliest remaining member.
 func (r *ValkeyRepository) RemoveMember(ctx context.Context, partyID, characterID string) error {
 	res := r.removeMemberScript.Exec(ctx, r.client, []string{
 		r.lobbyKey(partyID),
 		r.characterKey(characterID),
-		r.readyKey(partyID, characterID),
 	}, []string{
 		characterID,
 		strconv.FormatInt(int64(r.lobbyTTL.Seconds()), 10),
-	})
-	return mapLuaError(res.Error())
-}
-
-// UpdateMemberReady sets or unsets member ready status with a 60-second countdown in Valkey Master.
-func (r *ValkeyRepository) UpdateMemberReady(ctx context.Context, partyID, characterID string, ready bool) error {
-	readyArg := "0"
-	if ready {
-		readyArg = "1"
-	}
-
-	res := r.updateMemberReadyScript.Exec(ctx, r.client, []string{
-		r.lobbyKey(partyID),
-		r.readyKey(partyID, characterID),
-	}, []string{
-		characterID,
-		readyArg,
-		strconv.FormatInt(int64(r.lobbyTTL.Seconds()), 10),
-		strconv.FormatInt(int64(r.readyTTL.Seconds()), 10),
 	})
 	return mapLuaError(res.Error())
 }

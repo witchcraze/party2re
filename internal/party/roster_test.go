@@ -8,31 +8,29 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
-func TestReadyRosterConsent(t *testing.T) {
+func TestRosterConsent(t *testing.T) {
 	for _, tc := range []struct {
 		name, actor, partyID string
 		claimed              []string
-		ready                bool
 		want                 error
 	}{
-		{"stored roster", "leader", "p", nil, true, nil},
-		{"explicit stored roster", "leader", "p", []string{"member", "leader"}, true, nil},
-		{"fake party", "leader", "fake", nil, true, ErrNotFound},
-		{"nonleader", "member", "p", nil, true, ErrNotPartyLeader},
-		{"unready", "leader", "p", nil, false, ErrPartyNotReady},
-		{"unrelated", "leader", "p", []string{"leader", "outsider"}, true, ErrCharacterNotInParty},
-		{"duplicate", "leader", "p", []string{"leader", "leader"}, true, ErrCharacterNotInParty},
-		{"subset", "leader", "p", []string{"leader"}, true, ErrCharacterNotInParty},
+		{"stored roster", "leader", "p", nil, nil},
+		{"explicit stored roster", "leader", "p", []string{"member", "leader"}, nil},
+		{"fake party", "leader", "fake", nil, ErrNotFound},
+		{"nonleader", "member", "p", nil, ErrNotPartyLeader},
+		{"unrelated", "leader", "p", []string{"leader", "outsider"}, ErrCharacterNotInParty},
+		{"duplicate", "leader", "p", []string{"leader", "leader"}, ErrCharacterNotInParty},
+		{"subset", "leader", "p", []string{"leader"}, ErrCharacterNotInParty},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, repo, _, _ := setupTestService(t)
 			repo.parties["p"] = Party{ID: "p", LeaderCharacterID: "leader", Status: StatusRecruiting}
 			repo.members["p"] = map[string]Member{
-				"leader": {PartyID: "p", CharacterID: "leader", ReadyState: true},
-				"member": {PartyID: "p", CharacterID: "member", ReadyState: tc.ready},
+				"leader": {PartyID: "p", CharacterID: "leader"},
+				"member": {PartyID: "p", CharacterID: "member"},
 			}
 			called := false
-			err := svc.WithReadyRoster(context.Background(), tc.actor, tc.partyID, tc.claimed, func(ctx context.Context, partyID string, ids []string) error {
+			err := svc.WithRoster(context.Background(), tc.actor, tc.partyID, tc.claimed, func(ctx context.Context, partyID string, ids []string) error {
 				called = true
 				if partyID != "p" || len(ids) != 2 || ids[0] != "leader" || ids[1] != "member" {
 					t.Fatalf("unexpected roster %s %v", partyID, ids)
@@ -58,16 +56,16 @@ type corruptRoster struct {
 }
 
 func (r corruptRoster) GetMembers(context.Context, string) ([]Member, error) { return r.members, nil }
-func TestReadyRosterRejectsCorruptMembership(t *testing.T) {
+func TestRosterRejectsCorruptMembership(t *testing.T) {
 	for _, members := range [][]Member{
-		{{PartyID: "p", CharacterID: "leader", ReadyState: true}, {PartyID: "p", CharacterID: "leader", ReadyState: true}},
-		{{PartyID: "other", CharacterID: "leader", ReadyState: true}},
-		{{PartyID: "p", CharacterID: "outsider", ReadyState: true}},
+		{{PartyID: "p", CharacterID: "leader"}, {PartyID: "p", CharacterID: "leader"}},
+		{{PartyID: "other", CharacterID: "leader"}},
+		{{PartyID: "p", CharacterID: "outsider"}},
 	} {
 		svc, repo, _, _ := setupTestService(t)
 		repo.parties["p"] = Party{ID: "p", LeaderCharacterID: "leader", Status: StatusRecruiting}
 		svc.repo = corruptRoster{Repository: repo, members: members}
-		err := svc.WithReadyRoster(context.Background(), "leader", "p", nil, func(context.Context, string, []string) error { t.Fatal("corrupt roster reached start"); return nil })
+		err := svc.WithRoster(context.Background(), "leader", "p", nil, func(context.Context, string, []string) error { t.Fatal("corrupt roster reached start"); return nil })
 		if !errors.Is(err, ErrCharacterNotInParty) {
 			t.Fatalf("corrupt roster accepted: %v", err)
 		}
@@ -79,11 +77,11 @@ func TestWithNormalRosterAndAdmissionFromRoster(t *testing.T) {
 	repo.parties["p"] = Party{ID: "p", Name: "Quest", LeaderCharacterID: "leader", StageID: "stage-01", Mode: "normal", Speed: 3, Status: StatusRecruiting}
 	repo.members["p"] = map[string]Member{
 		"member": {
-			PartyID: "p", CharacterID: "member", ReadyState: true,
+			PartyID: "p", CharacterID: "member",
 			BattleActor: &corebattle.LifetimeActor{Participant: corebattle.Participant{ID: "member", MaxHP: 150, MaxMP: 120}},
 		},
 		"leader": {
-			PartyID: "p", CharacterID: "leader", IsLeader: true, ReadyState: true,
+			PartyID: "p", CharacterID: "leader", IsLeader: true,
 			BattleActor: &corebattle.LifetimeActor{Participant: corebattle.Participant{ID: "leader", MaxHP: 220, MaxMP: 30}},
 		},
 	}
@@ -110,5 +108,28 @@ func TestWithNormalRosterAndAdmissionFromRoster(t *testing.T) {
 	legacy := NormalAdmissionFromRoster("leader", repo.parties["p"], []Member{{CharacterID: "leader"}, {CharacterID: "member"}})
 	if legacy.Actors != nil {
 		t.Fatalf("expected nil Actors for legacy lobby, got %+v", legacy.Actors)
+	}
+}
+
+type failingMemberRead struct {
+	Repository
+	err error
+}
+
+func (r failingMemberRead) GetMember(context.Context, string, string) (Member, error) {
+	return Member{}, r.err
+}
+
+func TestKickMemberPropagatesLobbyReadFailure(t *testing.T) {
+	svc, repo, _, _ := setupTestService(t)
+	repo.parties["p"] = Party{ID: "p", LeaderCharacterID: "leader", Status: StatusRecruiting}
+	down := errors.New("valkey down")
+	svc.repo = failingMemberRead{Repository: repo, err: down}
+	if err := svc.KickMember(context.Background(), "p", "leader", "member"); !errors.Is(err, down) {
+		t.Fatalf("read failure masked: %v", err)
+	}
+	svc.repo = repo
+	if err := svc.KickMember(context.Background(), "p", "leader", "absent"); !errors.Is(err, ErrCharacterNotInParty) {
+		t.Fatalf("absent target: %v", err)
 	}
 }

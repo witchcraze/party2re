@@ -26,7 +26,7 @@ import (
 //  3. Validate party status (StatusRecruiting) and transition to StatusInProgress in Valkey.
 //  4. Execute 10-floor crawl and Floor 11 treasure room in memory.
 //  5. Atomically commit character updates, inventory items, and durable party_adventure_logs in MariaDB.
-//  6. Reset party status to StatusRecruiting and member ready states to false.
+//  6. Reset party status to StatusRecruiting.
 func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID string) (PartyAdventureResult, error) {
 	var result PartyAdventureResult
 	var partyName string
@@ -48,15 +48,11 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 
 			// 2. Fetch members
 			members, err := s.repo.GetMembers(txCtx, partyID)
-			if err != nil || len(members) == 0 {
-				return ErrPartyNotReady
+			if err != nil {
+				return err
 			}
-
-			// All members must be ready
-			for _, m := range members {
-				if !m.ReadyState {
-					return ErrPartyNotReady
-				}
+			if len(members) == 0 {
+				return ErrCharacterNotInParty
 			}
 
 			// 3. Lock all character rows in ascending order to prevent deadlocks
@@ -276,15 +272,10 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 				}
 			}
 
-			// 9. Reset party status & ready states for members
+			// 9. Reset party status
 			p.Status = StatusRecruiting
 			if err := s.repo.UpdateParty(txCtx, p); err != nil {
 				return fmt.Errorf("reset party status: %w", err)
-			}
-			for _, m := range members {
-				if err := s.repo.UpdateMemberReady(txCtx, partyID, m.CharacterID, false); err != nil {
-					return fmt.Errorf("reset member ready state: %w", err)
-				}
 			}
 
 			result = PartyAdventureResult{

@@ -314,7 +314,7 @@ func TestAdventureConsumptionSQLIntegration(t *testing.T) {
 						t.Fatal(err)
 					}
 					for i, c := range originals[:members] {
-						if err := lobby.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: c.ID, IsLeader: i == 0, ReadyState: true}); err != nil {
+						if err := lobby.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: c.ID, IsLeader: i == 0}); err != nil {
 							t.Fatal(err)
 						}
 					}

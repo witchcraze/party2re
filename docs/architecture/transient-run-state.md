@@ -154,9 +154,9 @@ the accepted live revision. Publication renews activity only for a newly accepte
 command; retries and GET never extend its recorded deadline. Required state and
 reward-read failures propagate rather than certifying idle activity.
 
-Cooperative entry resolves the saved, ready roster through Party's public
-`WithReadyRoster` handoff, under its existing lobby lock. Lobby membership and
-ready writers share that lock. Optional `member_ids` asserts the complete roster;
+Cooperative entry resolves the saved roster through Party's public
+`WithRoster` handoff, under its existing lobby lock, which lobby membership
+writers share. Optional `member_ids` asserts the complete roster;
 it cannot add, omit or duplicate participants. Consent belongs to each joining
 character, including characters owned by different accounts. The composition
 root then locks every participating Character in ascending ID order in a SQL
@@ -296,7 +296,7 @@ participant's settlement outcome. A unique unfinished claim per character blocks
 competing enrollment, including an exit awaiting required publication. Admission
 and other activity gates use the owner's public reader to recognize these claims
 when Valkey discovery is absent. Creating the SQL admission/publication intent
-precedes publishing live state. Lobby readiness still comes from Party's public
+precedes publishing live state. The roster still comes from Party's public
 handoff; a run never infers consent from a stale lobby or changes another actor's
 lobby membership as a side effect of exit.
 

@@ -16,11 +16,16 @@ if type(state.members) == 'table' then
 end
 state.members = remaining
 
+-- The earliest remaining member (join order) replaces a departing leader.
+if state.party and state.party.leader_character_id == charID and #remaining > 0 then
+    remaining[1].is_leader = true
+    state.party.leader_character_id = remaining[1].character_id
+end
+
 local updatedData = cjson.encode(state)
 local lobbyTTL = tonumber(ARGV[2])
 redis.call('SET', KEYS[1], updatedData, 'EX', lobbyTTL)
 
 redis.call('DEL', KEYS[2])
-redis.call('DEL', KEYS[3])
 
 return 'OK'

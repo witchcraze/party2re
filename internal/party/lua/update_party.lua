@@ -12,7 +12,7 @@ local lobbyTTL = tonumber(ARGV[2])
 redis.call('SET', KEYS[1], updatedData, 'EX', lobbyTTL)
 
 local status = ARGV[3]
-if status == 'disbanded' or status == 'completed' then
+if status == 'completed' then
     redis.call('ZREM', KEYS[2], ARGV[4])
 end
 

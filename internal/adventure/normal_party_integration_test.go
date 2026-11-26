@@ -96,9 +96,6 @@ func (f *normalFixture) waitingParty(t *testing.T, mode string) (*normalPartyAdm
 		if _, err := svc.JoinParty(context.Background(), p.Party.ID, c.ID, ""); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := svc.SetReady(context.Background(), p.Party.ID, c.ID, true); err != nil {
-			t.Fatal(err)
-		}
 	}
 	t.Cleanup(func() {
 		state := party.LobbyState{Party: p.Party}
@@ -121,16 +118,10 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if err == nil || entry.Version != 1 {
 		t.Fatal(entry, err)
 	}
-	if _, err := a.service.SetReady(context.Background(), lobby, f.actors[1].ID, false); !errors.Is(err, runhost.ErrBusy) {
-		t.Fatal("handed-off roster mutated", err)
-	}
 	if err := a.service.LeaveParty(context.Background(), lobby, leader.ID); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
 	if err := a.service.KickMember(context.Background(), lobby, leader.ID, f.actors[1].ID); !errors.Is(err, runhost.ErrBusy) {
-		t.Fatal(err)
-	}
-	if err := a.service.DisbandParty(context.Background(), lobby, leader.ID); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
 	// Simulate an expired live lobby: SQL admission remains sufficient on restart.
@@ -596,11 +587,7 @@ func setupCapturedPartyMembers(t *testing.T, f *normalFixture) (*normalPartyAdmi
 		t.Fatalf("public lobby response exposed battle row or gear: %s", string(publicRaw))
 	}
 
-	if _, err := svc.SetReady(ctx, created.Party.ID, member.ID, true); err != nil {
-		t.Fatalf("SetReady failed: %v", err)
-	}
-
-	// Mutate member in store AFTER JoinParty/SetReady but BEFORE EnterParty.
+	// Mutate member in store AFTER JoinParty but BEFORE EnterParty.
 	member.Stats.MaxMP = 777
 	member.Stats.Defense = 999
 	if err := f.chars.Update(ctx, member); err != nil {
@@ -733,9 +720,6 @@ func TestNormalRunPartyLegacyLobbyFallback(t *testing.T) {
 		}
 	})
 	if _, err := legacySvc.JoinParty(ctx, p.Party.ID, member.ID, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := legacySvc.SetReady(ctx, p.Party.ID, member.ID, true); err != nil {
 		t.Fatal(err)
 	}
 

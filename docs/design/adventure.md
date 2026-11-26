@@ -27,7 +27,7 @@ Open: comments, whispers (`ささやき`), manual screenshots (`すくしょ`) a
 
 | Transition | Preconditions and resulting facts |
 | --- | --- |
-| Waiting admission | Party owns create/join/readiness; solo uses the same enrollment boundary without a lobby. Enrollment keeps ordered participants, leader, stage/mode and speed and creates floor 0 without combat |
+| Waiting admission | Party owns create/join; solo uses the same enrollment boundary without a lobby. Enrollment keeps ordered participants, leader, stage/mode and speed and creates floor 0 without combat |
 | Encounter creation (`すすむ`) | Living participant, interval satisfied, no living enemies; floor 0 also requires the leader. Clear applicable statuses and temporary/anti fields, advance exactly one floor and create its encounter; no NPC response or automatic allied action |
 | Battle action | Authorized current living actor (or a verified fallen-actor exception), registered action and valid target/resources. Process that operation, its effects and the bounded NPC response |
 | Defeat | Resolve revival and death effects within the operation. Keep fallen membership and earned facts; do not exit everyone, halve prior EXP or erase gold. With no living allies, offer permitted exit/recovery, not an automatic payout |
@@ -115,7 +115,7 @@ The batch crawl (`internal/adventure`, `internal/party`) no longer serves produc
 
 - **Treasure count** (`vs_monster.cgi:90–101`; `_npc_action.cgi:498–519`). The loop is inclusive (`for 0 .. $count`), so an index of P−1−D yields one chest per surviving member. P is `@partys`, which includes living helpers; fallen helpers were dropped at the previous save (`_battle.cgi:486–493,521`). Job, accessory (equipped slot only) and chapel blessing bonuses use the acting player (`%m`) only, never other members. **Pitfall:** `my $count = shift || $#partys;` treats an index of 0 as falsy and falls back to P−1 before the blessing and dead-member penalty.
 - **Treasure pocket** (item215). **Decision (2026-11-07, #1899):** `shiraberu` clears `$m{ite}` on use and the hand holds one unit, so a character carries at most one pocket at a time. Batch crawls claim only the base one-chest allowance and never consume a pocket automatically.
-- **Once-daily lock** (stage26, dungeon16; `quest.cgi:594–599` `$m{once}=1`). The quota is consumed at party creation or solo start, only for the creator/leader, and is not restored by disbanding or start failure. It clears only on waking at Home.
+- **Once-daily lock** (stage26, dungeon16; `quest.cgi:594–599` `$m{once}=1`). The quota is consumed at party creation or solo start, only for the creator/leader, and is not restored by leaving or start failure. It clears only on waking at Home.
 - **Exit fatigue** is `round × 3 + 1` (halved in calm mode) where round is the exit floor, not turns or floors cleared (`_battle.cgi:1187–1188,1216`).
 - **Unsupported modes** (`calm`, `try`, `hard`) are rejected at party creation until their reward rules are reconciled.
 - **Chronicle**: the legacy owner-view unlock belongs to the entry command so record GETs remain read-only under the [Gateway contract](../architecture/client-agent-api.md). Historical party-log backfill cannot recover members who fell before the final floor, seasons or per-member rewards; backfilled rows record zero rewards and unclassified season rather than guesses.

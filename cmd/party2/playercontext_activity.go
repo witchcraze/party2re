@@ -89,7 +89,7 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 	if err != nil && !errors.Is(err, party.ErrNotFound) {
 		return nil, fmt.Errorf("party activity: %w", err)
 	}
-	if err == nil && p.Status != party.StatusDisbanded {
+	if err == nil {
 		if member.CharacterID != actor || member.PartyID != p.ID {
 			return nil, errors.New("party activity membership mismatch")
 		}
@@ -97,11 +97,8 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if member.IsLeader && p.LeaderCharacterID == actor {
 			a.Role = "leader"
 		}
-		if p.Status == party.StatusRecruiting {
-			a.Actions = append(a.Actions, "party_ready")
-			if a.Role == "leader" {
-				a.Actions = append(a.Actions, "party_start")
-			}
+		if p.Status == party.StatusRecruiting && a.Role == "leader" {
+			a.Actions = append(a.Actions, "party_start", "party_kick")
 		}
 		facts = append(facts, a)
 	}

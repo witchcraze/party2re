@@ -444,10 +444,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /parties", h.handleCreateParty)
 	mux.HandleFunc("GET /parties/{id}", h.handleGetParty)
 	mux.HandleFunc("POST /parties/{id}/join", h.handleJoinParty)
-	mux.HandleFunc("POST /parties/{id}/leave", h.handleLeaveParty)
-	mux.HandleFunc("POST /parties/{id}/kick", h.handleKickPartyMember)
-	mux.HandleFunc("DELETE /parties/{id}", h.handleDisbandParty)
-	mux.HandleFunc("POST /parties/{id}/ready", h.handleSetPartyReady)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }

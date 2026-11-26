@@ -3,6 +3,7 @@ package party
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -233,32 +234,29 @@ func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, 
 		HP:            char.Stats.HP,
 		MaxHP:         maxHP,
 		IsLeader:      false,
-		ReadyState:    false,
 		JoinedAt:      time.Now().UTC(),
 		BattleActor:   battleActor,
 	})
 }
 
-// LeaveParty leaves the party. If the leader leaves, the party is disbanded.
+// LeaveParty removes the character from the lobby. When the leader leaves,
+// the earliest remaining member leads; the last leave deletes the lobby
+// (_battle.cgi:1330–1346).
 func (s *Service) LeaveParty(ctx context.Context, partyID, characterID string) error {
 	return s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
-		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
+		if _, err := s.repo.GetPartyForUpdate(txCtx, partyID); err != nil {
+			return err
+		}
+		members, err := s.repo.GetMembers(txCtx, partyID)
 		if err != nil {
 			return err
 		}
-		member, err := s.repo.GetMember(txCtx, partyID, characterID)
-		if err != nil {
+		if !slices.ContainsFunc(members, func(m Member) bool { return m.CharacterID == characterID }) {
 			return ErrCharacterNotInParty
 		}
-
-		if member.IsLeader {
-			p.Status = StatusDisbanded
-			if err := s.repo.UpdateParty(txCtx, p); err != nil {
-				return err
-			}
+		if len(members) == 1 {
 			return s.repo.DeleteParty(txCtx, partyID)
 		}
-
 		return s.repo.RemoveMember(txCtx, partyID, characterID)
 	})
 }
@@ -278,64 +276,11 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 			return ErrNotPartyLeader
 		}
 
-		_, err = s.repo.GetMember(txCtx, partyID, targetCharID)
-		if err != nil {
-			return ErrCharacterNotInParty
+		// Absent targets are ErrCharacterNotInParty; storage failures propagate.
+		if _, err := s.repo.GetMember(txCtx, partyID, targetCharID); err != nil {
+			return err
 		}
 
 		return s.repo.RemoveMember(txCtx, partyID, targetCharID)
 	})
-}
-
-// DisbandParty disbands the entire party (leader only).
-func (s *Service) DisbandParty(ctx context.Context, partyID, leaderCharID string) error {
-	return s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
-		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
-		if err != nil {
-			return err
-		}
-		if p.LeaderCharacterID != leaderCharID {
-			return ErrNotPartyLeader
-		}
-		p.Status = StatusDisbanded
-		if err := s.repo.UpdateParty(txCtx, p); err != nil {
-			return err
-		}
-		return s.repo.DeleteParty(txCtx, partyID)
-	})
-}
-
-// SetReady toggles or sets member ready state.
-func (s *Service) SetReady(ctx context.Context, partyID, characterID string, ready bool) (PartyDetail, error) {
-	var detail PartyDetail
-
-	err := s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
-		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
-		if err != nil {
-			return err
-		}
-		_, err = s.repo.GetMember(txCtx, partyID, characterID)
-		if err != nil {
-			return ErrCharacterNotInParty
-		}
-
-		if err := s.repo.UpdateMemberReady(txCtx, partyID, characterID, ready); err != nil {
-			return err
-		}
-
-		members, err := s.repo.GetMembers(txCtx, partyID)
-		if err != nil {
-			return err
-		}
-		detail = PartyDetail{
-			Party:   p,
-			Members: members,
-		}
-		return nil
-	})
-	if err != nil {
-		return PartyDetail{}, err
-	}
-
-	return detail, nil
 }
