@@ -25,9 +25,10 @@ import (
 )
 
 type partyLobbyStub struct {
-	calls   []string
-	err     error
-	parties []party.PartySummary
+	calls    []string
+	err      error
+	leaveRes party.LeaveResult
+	parties  []party.PartySummary
 }
 
 func (s *partyLobbyStub) CreateParty(_ context.Context, leader string, req party.CreatePartyRequest) (party.PartyDetail, error) {
@@ -57,9 +58,9 @@ func (s *partyLobbyStub) ListParties(_ context.Context, status string, limit, of
 	return pagination.NewPage(s.parties[min(offset, end):end], len(s.parties), limit, offset), nil
 }
 
-func (s *partyLobbyStub) LeaveParty(_ context.Context, partyID, actor string) error {
+func (s *partyLobbyStub) LeaveParty(_ context.Context, partyID, actor string) (party.LeaveResult, error) {
 	s.calls = append(s.calls, "leave/"+partyID+"/"+actor)
-	return s.err
+	return s.leaveRes, s.err
 }
 
 func (s *partyLobbyStub) KickMember(_ context.Context, partyID, leader, target string) (party.KickResult, error) {
@@ -301,8 +302,54 @@ func TestPartyKickSetsActionWaitAndQuestPlaceLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	placeLog.err = errors.New("valkey log write failed")
-	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json",
-		`{"action":"party_kick","params":{"party_id":"`+detail.Party.ID+`","target_character_id":"other"}}`, nil); status != http.StatusOK {
+	status, raw = gatewayRequest(t, router, "hero", "p-hero", "application/json",
+		`{"action":"party_kick","params":{"party_id":"`+detail.Party.ID+`","target_character_id":"other"}}`, nil)
+	if status != http.StatusOK {
 		t.Fatalf("kick should succeed even if place log append fails: %d %s", status, raw)
+	}
+}
+
+func TestPartyLeaveDeliveryNotice(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		delivery   *party.DeliveryOutcome
+		wantNotice string
+	}{
+		{"no delivery", nil, ""},
+		{"paid delivery", &party.DeliveryOutcome{ItemName: "癒しの湧き水", Paid: true}, "酒場から癒しの湧き水が届きました！"},
+		{"unpaid delivery", &party.DeliveryOutcome{ItemName: "完熟トマトジュース", Paid: false}, "酒場から完熟トマトジュースが届きましたが、お金が足りませんでした"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newGatewayFixture(t)
+			stub := &partyLobbyStub{leaveRes: party.LeaveResult{Delivery: tc.delivery}}
+			pc := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithActivities(func(context.Context, string, string) ([]playercontext.Activity, error) {
+				return []playercontext.Activity{{Kind: "party", ID: "p1", Phase: party.StatusRecruiting, Role: "leader", Actions: []string{"party_leave"}}}, nil
+			}))
+			router := f.router("rescue_request", timer.NewService(nil), WithParty(stub), WithPlayerContext(pc))
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"party_leave","params":{"party_id":"p1"}}`, nil)
+			if status != http.StatusOK {
+				t.Fatalf("status %d %s", status, raw)
+			}
+			var result struct {
+				Message        string `json:"message"`
+				DeliveryNotice string `json:"delivery_notice"`
+			}
+			if err := json.Unmarshal(raw["result"], &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Message != "パーティーから離れました" {
+				t.Fatalf("message = %q", result.Message)
+			}
+			if result.DeliveryNotice != tc.wantNotice {
+				t.Fatalf("delivery_notice = %q, want %q", result.DeliveryNotice, tc.wantNotice)
+			}
+			var resultObj map[string]any
+			if err := json.Unmarshal(raw["result"], &resultObj); err != nil {
+				t.Fatal(err)
+			}
+			if _, hasNotice := resultObj["delivery_notice"]; (tc.wantNotice != "") != hasNotice {
+				t.Fatalf("delivery_notice presence mismatch: %v", resultObj)
+			}
+		})
 	}
 }

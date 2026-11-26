@@ -36,6 +36,17 @@ type KickResult struct {
 	LeaderName string
 }
 
+// DeliveryOutcome records the structured result of settling a standing Tavern delivery on exit.
+type DeliveryOutcome struct {
+	ItemName string `json:"item_name"`
+	Paid     bool   `json:"paid"`
+}
+
+// LeaveResult records the structured outcome of leaving a Party waiting lobby.
+type LeaveResult struct {
+	Delivery *DeliveryOutcome `json:"delivery,omitempty"`
+}
+
 var (
 	ErrNotFound             = errors.New("party not found")
 	ErrAlreadyInParty       = errors.New("character is already in an active party")

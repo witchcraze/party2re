@@ -107,7 +107,7 @@ func TestPartyCreation_DailyOnceLock_Lifecycle(t *testing.T) {
 
 	// 3. 離脱後の再作成拒否: Leaving before starting does NOT reset once quota
 	for _, c := range []corecharacter.Character{leader, member} {
-		if err := svc.LeaveParty(ctx, partyID, c.ID); err != nil {
+		if _, err := svc.LeaveParty(ctx, partyID, c.ID); err != nil {
 			t.Fatalf("LeaveParty failed: %v", err)
 		}
 	}
@@ -133,7 +133,7 @@ func TestPartyCreation_DailyOnceLock_Lifecycle(t *testing.T) {
 	}
 
 	// Leader can now create party for stage-26 again
-	_ = svc.LeaveParty(ctx, memberPartyID, member.ID)
+	_, _ = svc.LeaveParty(ctx, memberPartyID, member.ID)
 	newPartyID := createReadyPartyWithStage(ctx, t, svc, charRepo, "stage-26", leader)
 	if newPartyID == "" {
 		t.Fatal("expected leader party creation to succeed after lock release")
@@ -196,7 +196,7 @@ func TestPartyCreation_DailyOnceLock_CreationFailureCompensated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected party creation to succeed after DB recovered: %v", err)
 	}
-	_ = svc.LeaveParty(ctx, pDetail.Party.ID, leader.ID)
+	_, _ = svc.LeaveParty(ctx, pDetail.Party.ID, leader.ID)
 }
 
 func TestPartyCreation_DailyOnceLock_StorageFailurePropagates(t *testing.T) {

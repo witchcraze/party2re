@@ -547,7 +547,7 @@ func TestPartyService_JoinAndLeave(t *testing.T) {
 	if _, err := svc.JoinParty(context.Background(), partyID, mLowLevel.ID, "pass123"); err != nil {
 		t.Fatalf("low-level joiner rejected: %v", err)
 	}
-	if err := svc.LeaveParty(context.Background(), partyID, mLowLevel.ID); err != nil {
+	if _, err := svc.LeaveParty(context.Background(), partyID, mLowLevel.ID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -573,7 +573,7 @@ func TestPartyService_JoinAndLeave(t *testing.T) {
 	}
 
 	// 5. Member leaves party
-	if err := svc.LeaveParty(context.Background(), partyID, m1.ID); err != nil {
+	if _, err := svc.LeaveParty(context.Background(), partyID, m1.ID); err != nil {
 		t.Fatalf("LeaveParty failed: %v", err)
 	}
 	detailAfterLeave, _ := svc.GetParty(context.Background(), partyID)
@@ -616,7 +616,7 @@ func TestPartyService_KickAndLeave(t *testing.T) {
 	}
 
 	// 3. The leader leaving hands leadership to the earliest remaining member.
-	if err := svc.LeaveParty(context.Background(), partyID, leader.ID); err != nil {
+	if _, err := svc.LeaveParty(context.Background(), partyID, leader.ID); err != nil {
 		t.Fatalf("LeaveParty(leader) failed: %v", err)
 	}
 	after, err := svc.GetParty(context.Background(), partyID)
@@ -634,13 +634,13 @@ func TestPartyService_KickAndLeave(t *testing.T) {
 	}
 
 	// 5. The last member leaving deletes the lobby.
-	if err := svc.LeaveParty(context.Background(), partyID, m1.ID); err != nil {
+	if _, err := svc.LeaveParty(context.Background(), partyID, m1.ID); err != nil {
 		t.Fatalf("LeaveParty(last) failed: %v", err)
 	}
 	if _, err := svc.GetParty(context.Background(), partyID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound after the last leave, got %v", err)
 	}
-	if err := svc.LeaveParty(context.Background(), partyID, m1.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := svc.LeaveParty(context.Background(), partyID, m1.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound leaving a deleted lobby, got %v", err)
 	}
 }
@@ -1198,7 +1198,7 @@ func TestPartyService_SpeedSettings(t *testing.T) {
 		if det.Party.Speed != speed {
 			t.Errorf("Speed = %d, want %d", det.Party.Speed, speed)
 		}
-		_ = svc.LeaveParty(ctx, det.Party.ID, c.ID)
+		_, _ = svc.LeaveParty(ctx, det.Party.ID, c.ID)
 	}
 
 	// Unknown speeds are rejected (quest.cgi:551–552).
@@ -1433,7 +1433,7 @@ func TestLeaveParty_LegacyRound0Effects(t *testing.T) {
 		m.Stats.HP, m.Stats.MP = 95, 28
 		charRepo.chars["member"] = m
 
-		if err := svc.LeaveParty(ctx, created.Party.ID, "member"); err != nil {
+		if _, err := svc.LeaveParty(ctx, created.Party.ID, "member"); err != nil {
 			t.Fatalf("LeaveParty(member) failed: %v", err)
 		}
 		gotMember := charRepo.chars["member"]
@@ -1445,7 +1445,7 @@ func TestLeaveParty_LegacyRound0Effects(t *testing.T) {
 		}
 
 		// Leader (last leave) deletes the lobby and clamps battle-row HP/MP to SQL MaxHP/MaxMP.
-		if err := svc.LeaveParty(ctx, created.Party.ID, "leader"); err != nil {
+		if _, err := svc.LeaveParty(ctx, created.Party.ID, "leader"); err != nil {
 			t.Fatalf("LeaveParty(leader) failed: %v", err)
 		}
 		gotLeader := charRepo.chars["leader"]
@@ -1488,7 +1488,7 @@ func TestLeaveParty_LegacyRound0Effects(t *testing.T) {
 		l.Stats.HP, l.Stats.MP = 90, 25
 		charRepo.chars["leader"] = l
 
-		if err := svc.LeaveParty(ctx, created.Party.ID, "leader"); err != nil {
+		if _, err := svc.LeaveParty(ctx, created.Party.ID, "leader"); err != nil {
 			t.Fatalf("LeaveParty failed: %v", err)
 		}
 		got := charRepo.chars["leader"]
@@ -1511,7 +1511,7 @@ func TestLeaveParty_LegacyRound0Effects(t *testing.T) {
 
 		writeErr := errors.New("sql write failed")
 		charRepo.updateErr = writeErr
-		if err := svc.LeaveParty(ctx, created.Party.ID, "leader"); !errors.Is(err, writeErr) {
+		if _, err := svc.LeaveParty(ctx, created.Party.ID, "leader"); !errors.Is(err, writeErr) {
 			t.Fatalf("expected writeErr, got %v", err)
 		}
 		if tx.rollbacks != 1 {
@@ -1524,4 +1524,79 @@ func TestLeaveParty_LegacyRound0Effects(t *testing.T) {
 			t.Fatalf("tired mutated despite write failure: got %d, want 7", got.Tired)
 		}
 	})
+
+	t.Run("tavern exit settles fullness and delivery or rolls back on failure", func(t *testing.T) {
+		resetErr := errors.New("reset fullness failed")
+		settleErr := errors.New("settle delivery failed")
+		for _, tc := range []struct {
+			name          string
+			resetErr      error
+			settleErr     error
+			outcome       *DeliveryOutcome
+			wantErr       error
+			wantSettle    bool
+			wantInLobby   bool
+			wantRollbacks int
+		}{
+			{"paid delivery", nil, nil, &DeliveryOutcome{ItemName: "癒しの湧き水", Paid: true}, nil, true, false, 0},
+			{"unpaid delivery", nil, nil, &DeliveryOutcome{ItemName: "完熟トマトジュース", Paid: false}, nil, true, false, 0},
+			{"no delivery", nil, nil, nil, nil, true, false, 0},
+			{"reset fullness failure", resetErr, nil, nil, resetErr, false, true, 1},
+			{"settle delivery failure", nil, settleErr, nil, settleErr, true, true, 1},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				tx := &mockTransactionProvider{}
+				settler := &mockTavernExitSettler{resetErr: tc.resetErr, settleErr: tc.settleErr, outcome: tc.outcome}
+				svc, repo, charRepo, _ := setupTestService(t, WithTransactionProvider(tx), WithTavernExitSettler(settler))
+				charRepo.chars["leader"] = corecharacter.Character{
+					ID: "leader", Name: "Hero1", Level: 5, Tired: 7,
+					Stats: corecharacter.Stats{HP: 50, MaxHP: 50, MP: 10, MaxMP: 10},
+				}
+				created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{Speed: 18, Name: "TavernLeave", StageID: "forest"})
+				if err != nil {
+					t.Fatalf("CreateParty failed: %v", err)
+				}
+				res, err := svc.LeaveParty(ctx, created.Party.ID, "leader")
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if len(settler.resetCalls) != 1 || settler.resetCalls[0] != "leader" {
+					t.Fatalf("resetCalls = %v, want [leader]", settler.resetCalls)
+				}
+				if wantSettleLen := map[bool]int{false: 0, true: 1}[tc.wantSettle]; len(settler.settleCalls) != wantSettleLen {
+					t.Fatalf("settleCalls = %v, want len %d", settler.settleCalls, wantSettleLen)
+				}
+				if tc.wantErr == nil {
+					if (res.Delivery == nil) != (tc.outcome == nil) || (res.Delivery != nil && *res.Delivery != *tc.outcome) {
+						t.Fatalf("res.Delivery = %+v, want %+v", res.Delivery, tc.outcome)
+					}
+				}
+				_, memberErr := repo.GetMember(ctx, created.Party.ID, "leader")
+				if (memberErr == nil) != tc.wantInLobby {
+					t.Fatalf("inLobby = %v (err=%v), want %v", memberErr == nil, memberErr, tc.wantInLobby)
+				}
+				if tx.rollbacks != tc.wantRollbacks {
+					t.Fatalf("rollbacks = %d, want %d", tx.rollbacks, tc.wantRollbacks)
+				}
+			})
+		}
+	})
+}
+
+type mockTavernExitSettler struct {
+	resetCalls  []string
+	settleCalls []string
+	resetErr    error
+	settleErr   error
+	outcome     *DeliveryOutcome
+}
+
+func (m *mockTavernExitSettler) ResetFullness(_ context.Context, characterID string) error {
+	m.resetCalls = append(m.resetCalls, characterID)
+	return m.resetErr
+}
+
+func (m *mockTavernExitSettler) SettleDelivery(_ context.Context, characterID string) (*DeliveryOutcome, error) {
+	m.settleCalls = append(m.settleCalls, characterID)
+	return m.outcome, m.settleErr
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
 
@@ -52,6 +53,28 @@ func buildPostAdventureHook(t postAdventureTavern) func(ctx context.Context, cha
 		}
 		return "酒場から" + result.Item.Name + "が届きました！", nil
 	}
+}
+
+type partyTavernExitAdapter struct {
+	tavern postAdventureTavern
+}
+
+func (a partyTavernExitAdapter) ResetFullness(ctx context.Context, characterID string) error {
+	return a.tavern.ResetFullness(ctx, characterID)
+}
+
+func (a partyTavernExitAdapter) SettleDelivery(ctx context.Context, characterID string) (*party.DeliveryOutcome, error) {
+	result, err := a.tavern.ClaimDelivery(ctx, characterID)
+	if errors.Is(err, tavern.ErrNoActiveDelivery) {
+		return nil, nil
+	}
+	if unpaid, ok := errors.AsType[tavern.UnaffordableDeliveryError](err); ok {
+		return &party.DeliveryOutcome{ItemName: unpaid.ItemName, Paid: false}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &party.DeliveryOutcome{ItemName: result.Item.Name, Paid: true}, nil
 }
 
 type contestGuildAdapter struct {

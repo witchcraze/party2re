@@ -32,6 +32,7 @@ type Service struct {
 	blessingProvider     BlessingProvider
 	timer                TimerService
 	actionWait           ActionWaitWriter
+	tavernExit           TavernExitSettler
 	clock                func() time.Time
 	rng                  func(n int) int
 }
@@ -252,10 +253,12 @@ func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, 
 }
 
 // LeaveParty removes the character from the lobby and applies the legacy
-// round-0 にげる effects (_battle.cgi:1184–1222, 1330–1346). When the leader
+// round-0 にげる effects (_battle.cgi:1184–1222, 1330–1375). When the leader
 // leaves, the earliest remaining member leads; the last leave deletes the lobby.
-func (s *Service) LeaveParty(ctx context.Context, partyID, characterID string) error {
-	return s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
+// Transaction: withLobbyMutation (RunInTx); Lock Order: party(0) -> characters(2) -> tavern(8).
+func (s *Service) LeaveParty(ctx context.Context, partyID, characterID string) (LeaveResult, error) {
+	var result LeaveResult
+	err := s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
 		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
 		if err != nil {
 			return err
@@ -284,11 +287,26 @@ func (s *Service) LeaveParty(ctx context.Context, partyID, characterID string) e
 			return err
 		}
 
+		if s.tavernExit != nil {
+			if err := s.tavernExit.ResetFullness(txCtx, characterID); err != nil {
+				return err
+			}
+			delivery, err := s.tavernExit.SettleDelivery(txCtx, characterID)
+			if err != nil {
+				return err
+			}
+			result.Delivery = delivery
+		}
+
 		if len(members) == 1 {
 			return s.repo.DeleteParty(txCtx, partyID)
 		}
 		return s.repo.RemoveMember(txCtx, partyID, characterID)
 	})
+	if err != nil {
+		return LeaveResult{}, err
+	}
+	return result, nil
 }
 
 func (s *Service) now() time.Time {
