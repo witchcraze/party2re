@@ -289,6 +289,15 @@ func TestCasinoGatewayEntryRejections(t *testing.T) {
 	}
 }
 
+func TestCasinoGatewayRoomCreateInvalidName(t *testing.T) {
+	f := newCasinoSceneFixture(t)
+	status, raw := gatewayRequest(t, f.router(), "hero", "session", "application/json", `{"action":"casino_room_create","params":{"name":"  Poker  ","game_type":"indian","speed":18,"max_players":4,"rate":10,"allow_spectators":true}}`, nil)
+	var e struct{ Error ErrorDetail }
+	if err := json.Unmarshal(mustJSON(t, raw), &e); err != nil || status != http.StatusBadRequest || e.Error.Code != "CASINO_INVALID_INPUT" {
+		t.Fatalf("%d %s %v", status, raw, err)
+	}
+}
+
 type faultyKickWaitService struct {
 	timer.Service
 	target     string

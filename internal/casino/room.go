@@ -6,13 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type GameType string
@@ -63,10 +62,9 @@ var AuthenticCardNames = [13]string{
 }
 
 const (
-	MaxRoomNameLen = 50
-	MinPartyCount  = 2
-	MaxPartyCount  = 8
-	MinDoppelBet   = 10
+	MinPartyCount = 2
+	MaxPartyCount = 8
+	MinDoppelBet  = 10
 )
 
 var (
@@ -109,21 +107,18 @@ func (e *SecondarySyncError) Is(target error) bool {
 	return target == ErrSecondarySync
 }
 
-var illegalNameChars = regexp.MustCompile(`[,;\"\'&<>\\\/@]`)
+func validateRoomName(name string) (string, error) {
+	normalized, err := validation.ValidateQuestName(name)
+	if err != nil {
+		return "", ErrInvalidRoomName
+	}
+	return normalized, nil
+}
 
+// ValidateRoomName validates a casino room name against legacy rules.
 func ValidateRoomName(name string) error {
-	name = strings.TrimSpace(name)
-	l := utf8.RuneCountInString(name)
-	if l < 1 || l > MaxRoomNameLen {
-		return ErrInvalidRoomName
-	}
-	if strings.ContainsAny(name, " \t\n\r　") {
-		return ErrInvalidRoomName
-	}
-	if illegalNameChars.MatchString(name) || strings.Contains(name, "＠") {
-		return ErrInvalidRoomName
-	}
-	return nil
+	_, err := validateRoomName(name)
+	return err
 }
 
 type Room struct {
@@ -233,7 +228,8 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	if characterID == "" {
 		return nil, ErrInvalidCharacterID
 	}
-	if err := ValidateRoomName(req.Name); err != nil {
+	name, err := validateRoomName(req.Name)
+	if err != nil {
 		return nil, err
 	}
 	if !req.GameType.Valid() {
@@ -263,8 +259,8 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	if err := s.recoverCharacterDeparture(ctx, characterID); err != nil {
 		return nil, err
 	}
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		existing, err := s.roomRepo.GetRoomByName(txCtx, req.Name)
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		existing, err := s.roomRepo.GetRoomByName(txCtx, name)
 		if err != nil && !errors.Is(err, ErrRoomNotFound) {
 			return err
 		}
@@ -288,7 +284,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 		roomID := id.New()
 		r := Room{
 			ID:                roomID,
-			Name:              req.Name,
+			Name:              name,
 			GameType:          req.GameType,
 			LeaderCharacterID: characterID,
 			Speed:             req.Speed,
