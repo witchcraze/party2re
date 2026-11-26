@@ -152,16 +152,48 @@ func (s *Service[R, P]) ObserveRun(ctx context.Context, player, actor string) (*
 	if err != nil {
 		return nil, err
 	}
-	su, err := s.setupCombat(ctx, run, actor, &requester, nil, &Effects{})
+	assets, err := s.observedJobAssets(ctx, actor, requester)
 	if err != nil {
 		return nil, err
 	}
-	if obs.Choices, err = r.DiscoverOperations(Command{ActorID: actor}, su.operation(&requester), su.choices); err != nil {
+	su, err := s.setupCombat(ctx, run, actor, &requester, assets, &Effects{})
+	if err != nil {
+		return nil, err
+	}
+	op := su.operation(&requester)
+	if obs.Choices, err = r.DiscoverOperations(Command{ActorID: actor}, op, su.choices); err != nil {
+		return nil, err
+	}
+	chest, err := r.chestAdmitted(actor, op, su.choices)
+	if err != nil {
 		return nil, err
 	}
 	// Whisper, screenshot, invite and kick stay listed; other owners execute them.
 	for i, c := range obs.Choices {
-		obs.Choices[i].Submittable = !c.Gated && (c.Kind == OperationBattle || c.Action == "chest" || c.Action == "exit" || slices.Contains(s.cfg.Room.Actions(), c.Action))
+		obs.Choices[i].Submittable = c.Kind == OperationBattle && !c.Gated || c.Action == "exit" && !c.Gated || c.Action == "chest" && chest ||
+			c.Kind == OperationRoom && !c.Gated && slices.Contains(s.cfg.Room.Actions(), c.Action)
 	}
 	return obs, nil
+}
+
+// chestAdmitted reports whether しらべる admits some unopened box. Untargeted
+// discovery gates the chest choice because it binds no box.
+func (r *State) chestAdmitted(actor string, ctx OperationContext, room []Choice) (bool, error) {
+	ops, err := r.operations(Command{ActorID: actor}, ctx, room)
+	if err != nil {
+		return false, err
+	}
+	c, ok := ops.typed("chest")
+	if !ok {
+		return false, nil
+	}
+	for _, b := range r.Boxes {
+		if !b.IsUnopened() {
+			continue
+		}
+		if _, err := ops.bind(c, b.ID, "", false); err == nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }

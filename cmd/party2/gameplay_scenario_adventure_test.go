@@ -40,8 +40,9 @@ type runObserved struct {
 		} `json:"data"`
 	} `json:"scene"`
 	AvailableActions []struct {
-		Action         string         `json:"action"`
-		ParamsTemplate map[string]any `json:"params_template"`
+		Action         string          `json:"action"`
+		ParamsTemplate map[string]any  `json:"params_template"`
+		ParamsSchema   json.RawMessage `json:"params_schema"`
 	} `json:"available_actions"`
 }
 
@@ -52,7 +53,11 @@ type runOutcome struct {
 		Version     int    `json:"version"`
 		Round       int    `json:"round"`
 		Disposition string `json:"disposition"`
-		Recipient   struct {
+		Box         *struct {
+			OpenedBy string `json:"opened_by"`
+			ItemID   string `json:"item_id"`
+		} `json:"box"`
+		Recipient struct {
 			Applied struct {
 				EXP int `json:"experience"`
 			} `json:"applied"`

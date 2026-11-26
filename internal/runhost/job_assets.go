@@ -2,11 +2,13 @@ package runhost
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
@@ -33,17 +35,11 @@ func (s *Service[R, P]) withJobAssets(ctx context.Context, r *State, cmd Command
 		if tc.Character.PlayerID != cmd.PlayerID {
 			return ErrForbidden
 		}
-		assets := corebattle.JobAssets{RequesterID: cmd.ActorID, Wallet: tc.Character.Money, AddWallet: economy.SafeAdd}
-		assets.HeldToolID = tc.Inventory.HeldToolID()
-		heldBefore, _ := tc.Inventory.HeldTool()
-		if s.cfg.JobAssetHelpers != nil {
-			tools, err := s.cfg.JobAssetHelpers(ctx)
-			if err != nil {
-				return err
-			}
-			assets.HelperToolIDs = append([]int{}, tools...)
+		assets, err := s.jobAssets(ctx, cmd, tc.Character.Money, tc.Inventory)
+		if err != nil {
+			return err
 		}
-		assets.StoredItem, assets.StoredTarget = cmd.TargetID, cmd.Input
+		heldBefore, _ := tc.Inventory.HeldTool()
 		var eq *coreequipment.Equipment
 		if s.cfg.JobAssetEquipment != nil {
 			value, err := s.cfg.JobAssetEquipment.FindByCharacterIDForUpdate(tc, cmd.ActorID)
@@ -123,6 +119,50 @@ func (s *Service[R, P]) withJobAssets(ctx context.Context, r *State, cmd Command
 		return s.saveHeldGear(tc, eq, heldBefore.ID)
 	})
 	return err
+}
+
+// jobAssets is the requester's asset view a combat callback reads: wallet,
+// tool hand, helper tools and job50's outer selector. Each caller adds stored
+// tools from its own Depot read.
+func (s *Service[R, P]) jobAssets(ctx context.Context, cmd Command, wallet int, inv coreinventory.Inventory) (corebattle.JobAssets, error) {
+	assets := corebattle.JobAssets{RequesterID: cmd.ActorID, Wallet: wallet, AddWallet: economy.SafeAdd, HeldToolID: inv.HeldToolID()}
+	if s.cfg.JobAssetHelpers != nil {
+		tools, err := s.cfg.JobAssetHelpers(ctx)
+		if err != nil {
+			return corebattle.JobAssets{}, err
+		}
+		assets.HelperToolIDs = append([]int{}, tools...)
+	}
+	assets.StoredItem, assets.StoredTarget = cmd.TargetID, cmd.Input
+	return assets, nil
+}
+
+// observedJobAssets reads the same view without locks or Depot creation, so
+// discovery admits what Command would; nil when Command has no asset session.
+// A missing Depot holds no stored tools.
+func (s *Service[R, P]) observedJobAssets(ctx context.Context, actor string, requester corecharacter.Character) (*corebattle.JobAssets, error) {
+	if s.cfg.JobAssetRunner == nil {
+		return nil, nil
+	}
+	inv, err := s.cfg.Inventories.FindByCharacterID(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	assets, err := s.jobAssets(ctx, Command{ActorID: actor}, requester.Money, inv)
+	if err != nil {
+		return nil, err
+	}
+	if s.cfg.JobAssetDepots != nil {
+		value, err := s.cfg.JobAssetDepots.FindByCharacterID(ctx, actor)
+		switch {
+		case errors.Is(err, depot.ErrNotFound):
+		case err != nil:
+			return nil, err
+		default:
+			assets.StoredTools = storedTools(value)
+		}
+	}
+	return &assets, nil
 }
 
 // takeHeld removes the durable held unit: the inventory's tool-hand row.

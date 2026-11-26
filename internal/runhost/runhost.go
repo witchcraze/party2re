@@ -236,8 +236,10 @@ type Blessings interface {
 }
 
 // JobAssetDepots locks and saves the requesting player's depot inside the
-// ambient Command transaction, after the economy runner's inventory lock.
+// ambient Command transaction, after the economy runner's inventory lock;
+// observation reads it unlocked.
 type JobAssetDepots interface {
+	FindByCharacterID(context.Context, string) (depot.Depot, error)
 	FindByCharacterIDForUpdate(context.Context, string) (depot.Depot, error)
 	Save(context.Context, depot.Depot) error
 }
