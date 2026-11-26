@@ -87,7 +87,7 @@ func TestKickDepartureRecovery_InterruptionWindows(t *testing.T) {
 			client.enabled.Store(true)
 
 			svc := kickService(t, db, client, evidence, waits)
-			if err := svc.KickMember(ctx, f.roomID, leader, target); !errors.Is(err, errDepartureFault) || !errors.Is(err, casino.ErrDepartureRecovery) {
+			if _, err := svc.KickMember(ctx, f.roomID, leader, target); !errors.Is(err, errDepartureFault) || !errors.Is(err, casino.ErrDepartureRecovery) {
 				t.Fatalf("interruption hidden: %v", err)
 			}
 
@@ -153,7 +153,7 @@ func TestKickDepartureRecovery_InterruptionWindows(t *testing.T) {
 			t.Cleanup(freshClient.Close)
 			restarted := kickService(t, database.OpenTestDB(t), freshClient, nil, &kickWaitAdapter{timers: realTimers})
 			for range 3 {
-				if err := restarted.KickMember(ctx, f.roomID, leader, target); err != nil {
+				if _, err := restarted.KickMember(ctx, f.roomID, leader, target); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -218,7 +218,7 @@ func TestKickDepartureRecovery_PreservesLongerWaitAndSkipsExpired(t *testing.T) 
 		waits := &kickWaitAdapter{timers: realTimers}
 		waits.failNext.Store(true)
 		svc := kickService(t, db, raw, nil, waits)
-		if err := svc.KickMember(ctx, f.roomID, leader, target); !errors.Is(err, casino.ErrDepartureRecovery) {
+		if _, err := svc.KickMember(ctx, f.roomID, leader, target); !errors.Is(err, casino.ErrDepartureRecovery) {
 			t.Fatalf("expected ErrDepartureRecovery, got %v", err)
 		}
 		waits.failNext.Store(false)
@@ -245,7 +245,7 @@ func TestKickDepartureRecovery_PreservesLongerWaitAndSkipsExpired(t *testing.T) 
 		waits := &kickWaitAdapter{timers: realTimers}
 		waits.failNext.Store(true)
 		svc := kickService(t, db, raw, nil, waits)
-		if err := svc.KickMember(ctx, f.roomID, leader, target); !errors.Is(err, casino.ErrDepartureRecovery) {
+		if _, err := svc.KickMember(ctx, f.roomID, leader, target); !errors.Is(err, casino.ErrDepartureRecovery) {
 			t.Fatalf("expected ErrDepartureRecovery, got %v", err)
 		}
 
@@ -294,7 +294,10 @@ func TestKickDepartureRecovery_RejectsStaleKickAfterNewAdmission(t *testing.T) {
 	joiner := kickService(t, database.OpenTestDB(t), raw, nil, &kickWaitAdapter{timers: realTimers})
 
 	kickErr, joinErr := testutil.RunRace2(
-		func() error { return kicker.KickMember(ctx, source.roomID, leader, mover) },
+		func() error {
+			_, err := kicker.KickMember(ctx, source.roomID, leader, mover)
+			return err
+		},
 		func() error {
 			defer close(pause.resume)
 			select {
@@ -362,8 +365,14 @@ func TestKickDepartureRecovery_ConcurrentKickAndRejoin(t *testing.T) {
 
 	var joinErr error
 	errs := testutil.RunRace(
-		func() error { return svc1.KickMember(ctx, f.roomID, leader, peer) },
-		func() error { return svc2.KickMember(ctx, f.roomID, leader, peer) },
+		func() error {
+			_, err := svc1.KickMember(ctx, f.roomID, leader, peer)
+			return err
+		},
+		func() error {
+			_, err := svc2.KickMember(ctx, f.roomID, leader, peer)
+			return err
+		},
 		func() error {
 			_, joinErr = svc2.JoinRoom(ctx, otherRoom.roomID, peer, "", 0)
 			if errors.Is(joinErr, casino.ErrAlreadyInRoom) || errors.Is(joinErr, casino.ErrDepartureRecovery) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/placelog"
 )
 
 // CasinoService is the Casino surface used by its scenes and commands.
@@ -27,7 +28,7 @@ type casinoRoomService interface {
 	JoinRoom(ctx context.Context, roomID string, characterID string, password string, fatigue int) (*casino.RoomDetail, error)
 	SpectateRoom(ctx context.Context, roomID string, characterID string, password string) (*casino.RoomDetail, error)
 	LeaveRoom(ctx context.Context, roomID string, characterID string) error
-	KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error
+	KickMember(ctx context.Context, roomID string, leaderID string, targetID string) (casino.KickResult, error)
 	RecoverCharacterDeparture(ctx context.Context, characterID string) error
 	StartGame(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error)
 	PlayRoomAction(ctx context.Context, roomID string, characterID string, action string) (*casino.RoomDetail, error)
@@ -171,7 +172,12 @@ func WithCasino(service CasinoService) Option {
 			return casinoRoom(service.PlayRoomAction(ctx, p.RoomID, actor, p.Action))
 		}, casinoActionRejection)(h)
 		withActionCommand("casino_room_kick", func(ctx context.Context, actor string, p casinoRoomKickParams) (any, error) {
-			return casinoRoomResult{RoomID: p.RoomID}, service.KickMember(ctx, p.RoomID, actor, p.TargetCharacterID)
+			res, err := service.KickMember(ctx, p.RoomID, actor, p.TargetCharacterID)
+			if err != nil {
+				return nil, err
+			}
+			h.appendKickPlaceLog(ctx, placelog.Place{Kind: placelog.KindFacility, ID: "casino"}, res.RoomName, res.LeaderName, p.TargetCharacterID)
+			return casinoRoomResult{RoomID: p.RoomID}, nil
 		}, casinoActionRejection)(h)
 		withActionCommand("casino_room_leave", func(ctx context.Context, actor string, p CasinoRoomParams) (any, error) {
 			return casinoRoomResult{RoomID: p.RoomID}, service.LeaveRoom(ctx, p.RoomID, actor)

@@ -3,10 +3,7 @@ package http
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/pagination"
@@ -106,29 +103,9 @@ func partyKickCommand(service PartyService) Option {
 			if err != nil {
 				return nil, err
 			}
-			h.appendQuestKickLog(ctx, res, p.TargetCharacterID)
+			h.appendKickPlaceLog(ctx, placelog.Place{Kind: placelog.KindFacility, ID: "quest"}, res.PartyName, res.LeaderName, p.TargetCharacterID)
 			return partyMessageResponse{Message: "メンバーをきっくしました"}, nil
 		}, partyLobbyRejection)(h)
-	}
-}
-
-// appendQuestKickLog posts the private kick notice to the quest place log
-// (lib/_skill.cgi:827-828); a lost log row is display-only.
-func (h *Handler) appendQuestKickLog(ctx context.Context, res party.KickResult, targetCharID string) {
-	if h.placeLog == nil || res.PartyName == "" || res.LeaderName == "" {
-		return
-	}
-	place := placelog.Place{Kind: placelog.KindFacility, ID: "quest"}
-	row := placelog.Entry{
-		OccurredAt:           time.Now().UTC(),
-		SpeakerKind:          placelog.SpeakerNPC,
-		Name:                 "＠",
-		Color:                npcColor,
-		Text:                 fmt.Sprintf("%sのリーダー%sからきっくされました", res.PartyName, res.LeaderName),
-		RecipientCharacterID: targetCharID,
-	}
-	if err := h.placeLog.Append(ctx, place, row); err != nil {
-		slog.WarnContext(ctx, "place log append failed", slog.String("place", place.Kind+":"+place.ID), slog.String("error", err.Error()))
 	}
 }
 

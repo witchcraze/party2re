@@ -626,7 +626,7 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 	}
 
 	// 1. KickMember removes spectator mapping; subsequent roomA renewal does not resurrect it.
-	if err := svc.KickMember(ctx, roomA, leaderA, specA); err != nil {
+	if _, err := svc.KickMember(ctx, roomA, leaderA, specA); err != nil {
 		t.Fatal(err)
 	}
 	rA, err := repo.GetRoom(ctx, roomA)

@@ -159,19 +159,21 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 
 // KickMember removes a participant before match start (@きっく, _skill.cgi:796-837),
 // applying the 60s ActionWait without bet refund or @にげる exit side-effects.
-func (s *Service) KickMember(ctx context.Context, roomID, leaderID, targetID string) error {
+func (s *Service) KickMember(ctx context.Context, roomID, leaderID, targetID string) (KickResult, error) {
 	if roomID == "" {
-		return ErrRoomNotFound
+		return KickResult{}, ErrRoomNotFound
 	}
 	if leaderID == "" || targetID == "" {
-		return ErrCharacterNotInRoom
+		return KickResult{}, ErrCharacterNotInRoom
 	}
 	if leaderID == targetID {
-		return ErrCannotKickSelf
+		return KickResult{}, ErrCannotKickSelf
 	}
-	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	var result KickResult
+	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		last := lastTransitionFromContext(lockedCtx)
 		if recoveredPendingFromContext(lockedCtx) && last.Kind == "kick" && last.ActorID == leaderID && slices.Contains(last.RemovedIDs, targetID) {
+			result = kickResultFromDetail(last.Detail, leaderID)
 			return nil
 		}
 		detail, err := s.checkInactiveLocked(lockedCtx, roomID)
@@ -188,19 +190,38 @@ func (s *Service) KickMember(ctx context.Context, roomID, leaderID, targetID str
 			return ErrCharacterNotInRoom
 		}
 
+		res := kickResultFromDetail(detail, leaderID)
 		removeMemberAndTransferLeader(&detail, targetID, false)
 		now := s.now()
 		detail.Room.UpdatedAt = now
 		detail.Room.LastActivityAt = now
-		return s.commitActivityTransition(lockedCtx, last, Transition{
+		if err := s.commitActivityTransition(lockedCtx, last, Transition{
 			Kind:           "kick",
 			ActorID:        leaderID,
 			Detail:         detail,
 			RemovedIDs:     []string{targetID},
 			LastActivityAt: now,
 			PenaltyUntil:   now.Add(KickActionWait),
-		})
+		}); err != nil {
+			return err
+		}
+		result = res
+		return nil
 	})
+	if err != nil {
+		return KickResult{}, err
+	}
+	return result, nil
+}
+
+func kickResultFromDetail(detail RoomDetail, leaderID string) KickResult {
+	leaderName := detail.Room.LeaderName
+	if leaderName == "" {
+		if m, ok := findMember(detail.Members, leaderID); ok {
+			leaderName = m.CharacterName
+		}
+	}
+	return KickResult{RoomName: detail.Room.Name, LeaderName: leaderName}
 }
 
 func (s *Service) lockExitCharacters(ctx context.Context, charID string, pendingKills map[string]int) error {

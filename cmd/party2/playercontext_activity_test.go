@@ -473,7 +473,7 @@ func TestCasinoActivityReaderPreservesDiscoveryAcrossRoomRenewal(t *testing.T) {
 	}
 
 	// Kick spectator and disband by leaving remaining members -> activity returns empty.
-	if err := casinoSvc.KickMember(ctx, roomID, leader, spec); err != nil {
+	if _, err := casinoSvc.KickMember(ctx, roomID, leader, spec); err != nil {
 		t.Fatal(err)
 	}
 	if facts, err := readers.read(ctx, "owner-"+spec, spec); err != nil || len(facts) != 0 {

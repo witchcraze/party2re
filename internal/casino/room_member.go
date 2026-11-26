@@ -151,18 +151,19 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 }
 
 // KickMember commits a kick departure and the target's 60 s wait deadline before publishing room state (party2/lib/_casino.cgi:148-187).
-func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error {
+func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string, targetID string) (KickResult, error) {
 	if leaderID == "" || targetID == "" {
-		return ErrInvalidCharacterID
+		return KickResult{}, ErrInvalidCharacterID
 	}
 	if leaderID == targetID {
-		return ErrCannotKickSelf
+		return KickResult{}, ErrCannotKickSelf
 	}
 	if s.roomRepo == nil || s.departures == nil {
-		return errors.New("room and departure repositories are required")
+		return KickResult{}, errors.New("room and departure repositories are required")
 	}
 
-	return s.withRoomMutationLock(ctx, roomID, leaderID, func(lockedCtx context.Context) error {
+	var result KickResult
+	err := s.withRoomMutationLock(ctx, roomID, leaderID, func(lockedCtx context.Context) error {
 		previous, err := s.departures.FindDeparture(lockedCtx, roomID)
 		if err != nil {
 			return err
@@ -202,6 +203,10 @@ func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string
 			return ErrDepartureRecovery
 		}
 
+		leaderName, err := s.resolveLeaderName(lockedCtx, members, leaderID)
+		if err != nil {
+			return err
+		}
 		claimed := departureClaimedIDs(members)
 		remaining := slices.Delete(members, index, index+1)
 		now := time.Now().UTC()
@@ -221,6 +226,30 @@ func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string
 		if err := s.commitDeparture(lockedCtx, &d, false, false, -1); err != nil {
 			return err
 		}
-		return s.publishDeparture(lockedCtx, d)
+		if err := s.publishDeparture(lockedCtx, d); err != nil {
+			return err
+		}
+		result = KickResult{RoomName: room.Name, LeaderName: leaderName}
+		return nil
 	})
+	if err != nil {
+		return KickResult{}, err
+	}
+	return result, nil
+}
+
+func (s *Service) resolveLeaderName(ctx context.Context, members []RoomMember, leaderID string) (string, error) {
+	for _, m := range members {
+		if m.CharacterID == leaderID && m.CharacterName != "" {
+			return m.CharacterName, nil
+		}
+	}
+	if s.charRepo == nil {
+		return "", nil
+	}
+	ch, err := s.charRepo.FindByID(ctx, leaderID)
+	if err != nil {
+		return "", err
+	}
+	return ch.Name, nil
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,8 +13,10 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/pvp"
 )
@@ -41,10 +44,10 @@ func (f *pvpLeaveFixture) LeaveRoom(ctx context.Context, actor, room string) err
 	return f.service.LeaveRoom(ctx, actor, room)
 }
 
-func (f *pvpLeaveFixture) KickMember(ctx context.Context, roomID, leaderID, targetID string) error {
+func (f *pvpLeaveFixture) KickMember(ctx context.Context, roomID, leaderID, targetID string) (pvp.KickResult, error) {
 	f.executions++
 	if f.executionErr != nil {
-		return f.executionErr
+		return pvp.KickResult{}, f.executionErr
 	}
 	return f.service.KickMember(ctx, roomID, leaderID, targetID)
 }
@@ -465,4 +468,153 @@ type pvpInspectStub struct{ called bool }
 func (s *pvpInspectStub) InspectPlayer(_ context.Context, _, targetID, _ string) (PlayerInspection, error) {
 	s.called = true
 	return PlayerInspection{InspectResult: character.InspectResult{CharacterID: targetID, Name: "Peer"}, Gems: []string{}, GemNames: []string{}}, nil
+}
+
+type pvpKickLogStore struct {
+	*pvpKickWaitStore
+}
+
+func (s *pvpKickLogStore) Authenticate(_ context.Context, token string) (coreplayer.Player, error) {
+	if token == "" {
+		return coreplayer.Player{}, errors.New("unauthorized")
+	}
+	return coreplayer.Player{ID: token}, nil
+}
+
+func TestPvPKickPlaceLog(t *testing.T) {
+	ctx := context.Background()
+	gw := newGatewayFixture(t)
+	gw.char.Name = "Hero"
+	gw.char.PlayerID = "p-hero"
+	gw.char.Money = 100
+	peer := corecharacter.Character{ID: "peer", PlayerID: "p-peer", Name: "Peer", Money: 100, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}}
+	other := corecharacter.Character{ID: "other", PlayerID: "p-other", Name: "Other", Money: 100, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}}
+
+	store := &pvpKickLogStore{
+		pvpKickWaitStore: &pvpKickWaitStore{
+			gatewayFixture: gw,
+			Service:        timer.NewService(nil),
+			chars:          map[string]corecharacter.Character{"hero": gw.char, "peer": peer, "other": other},
+			waits:          make(map[string]time.Time),
+		},
+	}
+	rooms := pvp.NewMemoryRoomRepository()
+	svc, err := pvp.NewService(rooms, store, &inProgressTestEngine{}, pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nav := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "quest"}}
+	pc := playercontext.NewService(store, store, store,
+		playercontext.WithActionWait(store, playercontext.DefaultActionWait),
+		playercontext.WithNavigation(nav, playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "quest", Parent: "town"}),
+		playercontext.WithActivities(func(ctx context.Context, _, actor string) ([]playercontext.Activity, error) {
+			detail, err := svc.GetCharacterRoom(ctx, actor)
+			if err != nil || detail.Room.Status == pvp.StatusDisbanded {
+				return nil, nil
+			}
+			actions := []string{"pvp_leave", "pvp_team"}
+			role := "member"
+			if detail.Room.LeaderCharacterID == actor {
+				role = "leader"
+				actions = append(actions, "pvp_start", "pvp_kick")
+			}
+			return []playercontext.Activity{{Kind: "pvp", ID: detail.Room.ID, Phase: detail.Room.Status, Round: detail.Room.Round, Role: role, Actions: actions}}, nil
+		}),
+	)
+	svc.SetActionWait(pc)
+
+	placeLog := &fakePlaceLog{byPlace: map[placelog.Place][]placelog.Entry{}}
+	f := &pvpLeaveFixture{gatewayFixture: gw, service: svc}
+	h, err := NewHandler(store, store, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithParty(&partyLobbyStub{}), WithQuestStages(partyTestStageCatalog{}), WithPvP(f), WithPlayerContext(pc), WithPlaceLog(placeLog))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := h.Router()
+
+	room, err := svc.CreateRoom(ctx, "hero", pvp.CreateRoomRequest{Name: "Arena", Bet: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.JoinRoom(ctx, "peer", room.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rejected self-kick writes no log row.
+	if status, _ := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"hero"}}`, nil); status != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 self-kick, got %d", status)
+	}
+	if len(placeLog.byPlace) != 0 {
+		t.Fatalf("rejected kick wrote log %+v", placeLog.byPlace)
+	}
+
+	// Valid kick appends private NPC notice to the quest lobby place log only.
+	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"peer"}}`, nil); status != http.StatusOK {
+		t.Fatalf("kick failed: %d %s", status, raw)
+	}
+	getCtx := func(actor, token string) PlayerContextResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/characters/"+actor+"/context", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET context(%s): %d %s", actor, rec.Code, rec.Body.String())
+		}
+		var out PlayerContextResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	peerCtx := getCtx("peer", "p-peer")
+	if len(peerCtx.Scene.PlaceLog) != 1 ||
+		!peerCtx.Scene.PlaceLog[0].Private ||
+		peerCtx.Scene.PlaceLog[0].SpeakerKind != string(placelog.SpeakerNPC) ||
+		peerCtx.Scene.PlaceLog[0].Name != "＠" ||
+		peerCtx.Scene.PlaceLog[0].Color != npcColor ||
+		peerCtx.Scene.PlaceLog[0].Text != "ArenaのリーダーHeroからきっくされました" {
+		t.Fatalf("kicked peer quest place_log = %+v", peerCtx.Scene.PlaceLog)
+	}
+	if otherCtx := getCtx("other", "p-other"); len(otherCtx.Scene.PlaceLog) != 0 {
+		t.Fatalf("kick notice leaked to third-party viewer: %+v", otherCtx.Scene.PlaceLog)
+	}
+	questPlace := placelog.Place{Kind: placelog.KindFacility, ID: "quest"}
+	if len(placeLog.byPlace) != 1 || len(placeLog.byPlace[questPlace]) != 1 {
+		t.Fatalf("unexpected placeLog buckets: %+v", placeLog.byPlace)
+	}
+
+	// Best-effort append failure does not fail a committed kick.
+	if _, err := svc.JoinRoom(ctx, "other", room.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	store.waits["hero"] = time.Time{}
+	placeLog.err = errors.New("valkey log write failed")
+	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"other"}}`, nil); status != http.StatusOK {
+		t.Fatalf("kick should succeed despite log append failure: %d %s", status, raw)
+	}
+
+	// Leader Gateway retry after wait-write failure recovers peer's wait and posts the notice once.
+	placeLog.err = nil
+	if _, err := svc.JoinRoom(ctx, "peer", room.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	store.waits["hero"] = time.Time{}
+	store.waits["peer"] = time.Time{}
+	store.failErr.Store(true)
+	if status, _ := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"peer"}}`, nil); status != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on wait write failure, got %d", status)
+	}
+	if len(placeLog.byPlace[questPlace]) != 1 {
+		t.Fatalf("failed kick wrote extra log: %+v", placeLog.byPlace[questPlace])
+	}
+	store.failErr.Store(false)
+	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"peer"}}`, nil); status != http.StatusOK {
+		t.Fatalf("gateway recovery retry failed: %d %s", status, raw)
+	}
+	if rem, _ := store.GetRemainingLock(ctx, timer.CategoryActionWait, "peer"); rem <= 55*time.Second || rem > 60*time.Second {
+		t.Fatalf("peer wait after gateway retry = %v, want ~60s", rem)
+	}
+	if len(placeLog.byPlace[questPlace]) != 2 {
+		t.Fatalf("expected notice posted once on pvp_kick gateway retry, got %+v", placeLog.byPlace[questPlace])
+	}
 }

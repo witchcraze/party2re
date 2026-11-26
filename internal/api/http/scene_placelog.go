@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/placelog"
@@ -63,6 +65,25 @@ func (h *Handler) readPlaceLog(ctx context.Context, current playercontext.Result
 			Name: r.Name, Color: r.Color, Text: r.Text, Private: r.RecipientCharacterID != ""})
 	}
 	return out, nil
+}
+
+// appendKickPlaceLog posts the private legacy kick notice to the destination
+// lobby place log (_skill.cgi:827-828, _casino.cgi:178); a lost row is display-only.
+func (h *Handler) appendKickPlaceLog(ctx context.Context, place placelog.Place, roomName, leaderName, targetCharID string) {
+	if h.placeLog == nil || roomName == "" || leaderName == "" {
+		return
+	}
+	row := placelog.Entry{
+		OccurredAt:           time.Now().UTC(),
+		SpeakerKind:          placelog.SpeakerNPC,
+		Name:                 "＠",
+		Color:                npcColor,
+		Text:                 fmt.Sprintf("%sのリーダー%sからきっくされました", roomName, leaderName),
+		RecipientCharacterID: targetCharID,
+	}
+	if err := h.placeLog.Append(ctx, place, row); err != nil {
+		slog.WarnContext(ctx, "place log append failed", slog.String("place", place.Kind+":"+place.ID), slog.String("error", err.Error()))
+	}
 }
 
 // activityFact returns the current activity when it is of the given kind.

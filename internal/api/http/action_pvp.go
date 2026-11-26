@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/pvp"
 )
 
@@ -33,12 +34,16 @@ func pvpKickCommand(service PvPService) Option {
 	if service == nil {
 		return withActionCommand[pvpKickParams]("pvp_kick", nil, nil)
 	}
-	return withActionCommand("pvp_kick", func(ctx context.Context, actor string, p pvpKickParams) (any, error) {
-		if err := service.KickMember(ctx, p.RoomID, actor, p.TargetCharacterID); err != nil {
-			return nil, err
-		}
-		return pvpMessageResponse{Message: "kicked member successfully"}, nil
-	}, pvpKickRejection)
+	return func(h *Handler) {
+		withActionCommand("pvp_kick", func(ctx context.Context, actor string, p pvpKickParams) (any, error) {
+			res, err := service.KickMember(ctx, p.RoomID, actor, p.TargetCharacterID)
+			if err != nil {
+				return nil, err
+			}
+			h.appendKickPlaceLog(ctx, placelog.Place{Kind: placelog.KindFacility, ID: "quest"}, res.RoomName, res.LeaderName, p.TargetCharacterID)
+			return pvpMessageResponse{Message: "kicked member successfully"}, nil
+		}, pvpKickRejection)(h)
+	}
 }
 
 func pvpLeaveRejection(err error) (int, ErrorDetail) {

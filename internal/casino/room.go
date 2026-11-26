@@ -165,6 +165,12 @@ type RoomDetail struct {
 	Members []RoomMember `json:"members"`
 }
 
+// KickResult carries the room and leader display names for the lobby notice.
+type KickResult struct {
+	RoomName   string
+	LeaderName string
+}
+
 type CreateRoomRequest struct {
 	Name            string    `json:"name"`
 	GameType        GameType  `json:"game_type"`
