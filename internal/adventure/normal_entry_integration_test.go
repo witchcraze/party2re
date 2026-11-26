@@ -21,25 +21,33 @@ func TestNormalRunDailyAdmissionRollbackAndRetry(t *testing.T) {
 	locks := timer.NewService(nil)
 	f.cfg.EntryLocks = locks
 	f.restart(t)
+	for _, badName := range []string{"", "   ", "bad space", "全角　空白", "bad@name", "＠冒険", "bad/name"} {
+		if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "bad-name", badName, "stage-26", "normal", 3); !errors.Is(err, adventure.ErrInvalidQuestName) {
+			t.Fatalf("bad name %q: got %v, want ErrInvalidQuestName", badName, err)
+		}
+		if locked, err := locks.IsLocked(context.Background(), timer.CategoryDungeonOnce, c.ID); err != nil || locked {
+			t.Fatalf("invalid quest name %q acquired daily lock: locked=%v err=%v", badName, locked, err)
+		}
+	}
 	f.store.failWrite.Store(true)
-	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "stage-26", "normal", 3); err == nil {
+	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "solo-quest", "stage-26", "normal", 3); err == nil {
 		t.Fatal("failed admission succeeded")
 	}
 	if locked, err := locks.IsLocked(context.Background(), timer.CategoryDungeonOnce, c.ID); err != nil || locked {
 		t.Fatal("aborted admission retained daily claim", locked, err)
 	}
 	f.store.failWrite.Store(false)
-	entry, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "stage-26", "normal", 3)
+	entry, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "solo-quest", "stage-26", "normal", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.restart(t)
-	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "stage-26", "normal", 3); err != nil {
+	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "solo-quest", "stage-26", "normal", 3); err != nil {
 		t.Fatal("committed daily admission could not be retried", err)
 	}
 	f.send(t, entry.Command.RunID, 0, "exit", "")
 	for _, stage := range []string{"stage-26", " stage-26 "} {
-		if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "another", stage, "normal", 3); !errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+		if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "another", "solo-quest", stage, "normal", 3); !errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
 			t.Fatal(stage, err)
 		}
 	}
@@ -58,7 +66,7 @@ func TestNormalRunAdmissionSnapshotIsImmutable(t *testing.T) {
 	if !errors.Is(err, runhost.ErrConflict) {
 		t.Fatal("admission snapshot changed", err)
 	}
-	if _, err := f.svc.EnterSolo(context.Background(), f.actors[0].PlayerID, f.actors[0].ID, "start", adventure.StarterAdventure, "normal", 3); err != nil {
+	if _, err := f.svc.EnterSolo(context.Background(), f.actors[0].PlayerID, f.actors[0].ID, "start", "solo-quest", adventure.StarterAdventure, "normal", 3); err != nil {
 		t.Fatal("original admission receipt lost", err)
 	}
 }

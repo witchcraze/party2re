@@ -490,9 +490,11 @@ func TestPartyService_CreateAndGet(t *testing.T) {
 		t.Fatalf("expected ErrAlreadyInParty, got %v", err)
 	}
 
-	// 4. Invalid party name
-	if _, err := svc.CreateParty(context.Background(), "char-other", CreatePartyRequest{Name: ""}); !errors.Is(err, ErrInvalidPartyName) {
-		t.Fatalf("expected ErrInvalidPartyName, got %v", err)
+	// 4. Invalid party name (empty, whitespace, prohibited characters, too long)
+	for _, invalid := range []string{"", "   ", "has space", "全角　空白", "bad@name", "＠冒険", "bad/name", strings.Repeat("あ", 51)} {
+		if _, err := svc.CreateParty(context.Background(), "char-other", CreatePartyRequest{Name: invalid}); !errors.Is(err, ErrInvalidPartyName) {
+			t.Fatalf("expected ErrInvalidPartyName for %q, got %v", invalid, err)
+		}
 	}
 
 	// 5. Stage not found
@@ -746,7 +748,7 @@ func TestPartyService_StartPartyAdventure_CrystalRewards(t *testing.T) {
 	charRepo.chars[leader.ID] = leader
 
 	p, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
-		Name:    "Crystal Party",
+		Name:    "CrystalParty",
 		StageID: "forest",
 		Speed:   3,
 	})
@@ -808,7 +810,7 @@ func TestListParties(t *testing.T) {
 	charRepo.chars[leader.ID] = leader
 
 	_, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
-		Name:    "Party One",
+		Name:    "PartyOne",
 		StageID: "forest",
 		Speed:   3,
 	})
@@ -823,8 +825,8 @@ func TestListParties(t *testing.T) {
 	if page.Total != 1 || len(page.Items) != 1 || page.Limit != 10 || page.Offset != 0 {
 		t.Fatalf("unexpected page result: %+v", page)
 	}
-	if page.Items[0].Name != "Party One" {
-		t.Errorf("expected party name 'Party One', got %s", page.Items[0].Name)
+	if page.Items[0].Name != "PartyOne" {
+		t.Errorf("expected party name 'PartyOne', got %s", page.Items[0].Name)
 	}
 	if page.Items[0].StageName != "はじまりの森" {
 		t.Errorf("expected stage name 'はじまりの森', got %q", page.Items[0].StageName)

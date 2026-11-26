@@ -308,7 +308,7 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 
 	// 2. Normal Run stage-19 floor-11 treasure: rollback, commit with MaoCount, replay/chest/exit non-trigger
 	heroNormal := newHero("Norm")
-	entry, err := normalSvc.EnterSolo(ctx, heroNormal.PlayerID, heroNormal.ID, id.New(), "stage-19", adventure.CrawlModeNormal, 3)
+	entry, err := normalSvc.EnterSolo(ctx, heroNormal.PlayerID, heroNormal.ID, id.New(), "SoloUnseal", "stage-19", adventure.CrawlModeNormal, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +370,7 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 		t.Fatalf("after normal unseal MaoCount = %d (err=%v), want 1", c.MaoCount, err)
 	}
 	opened := sealingRooms()
-	if len(unseals) != 1 || len(opened) != 11 || opened["king1"] != existing {
+	if len(unseals) != 1 || unseals[0] != "SoloUnseal" || len(opened) != 11 || opened["king1"] != existing {
 		t.Fatalf("normal unseal should open the 10 missing rooms beside the existing king1: %v %v", unseals, opened)
 	}
 
@@ -490,7 +490,7 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 			t.Fatalf("party crawl MaoCount for %s = %d, want 1", memberID, c.MaoCount)
 		}
 	}
-	if !slices.Equal(unseals, []string{"", "", "封印隊"}) || !maps.Equal(sealingRooms(), opened) {
+	if !slices.Equal(unseals, []string{"SoloUnseal", "", "封印隊"}) || !maps.Equal(sealingRooms(), opened) {
 		t.Fatalf("party crawl trigger should reach the hook once without duplicating rooms: %v %v", unseals, sealingRooms())
 	}
 }

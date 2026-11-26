@@ -106,7 +106,7 @@ func TestCombatAdmissionCommitFailureProduction(t *testing.T) {
 			}
 		}
 	})
-	lobby, err := combat.party.CreateParty(ctx, leader.ID, party.CreatePartyRequest{Name: "Commit fault", StageID: "stage-00"})
+	lobby, err := combat.party.CreateParty(ctx, leader.ID, party.CreatePartyRequest{Name: "CommitFault", StageID: "stage-00"})
 	if err != nil {
 		t.Fatal(err)
 	}

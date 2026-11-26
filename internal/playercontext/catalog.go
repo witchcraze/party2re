@@ -91,7 +91,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		Label:          "冒険に出る",
 		Category:       "adventure",
 		OperationID:    "executeCharacterAction",
-		RequiredParams: []string{"stage_id", "speed", "command_id"},
+		RequiredParams: []string{"name", "stage_id", "speed", "command_id"},
 		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{

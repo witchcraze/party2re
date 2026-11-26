@@ -91,10 +91,10 @@ func NewNormalRunService(cfg NormalRunConfig) (*NormalRunService, error) {
 	return s, nil
 }
 
-// EnterSolo enrolls actor alone in stageID without creating an encounter. The
-// caller retains key on retries.
-func (s *NormalRunService) EnterSolo(ctx context.Context, player, actor, key, stageID, mode string, speed int) (runhost.Receipt, error) {
-	return s.Enroll(ctx, player, key, runhost.Admission{ActorID: actor, StageID: stageID, Mode: mode, Speed: speed})
+// EnterSolo enrolls actor alone in stageID with quest name without creating an
+// encounter. The caller retains key on retries.
+func (s *NormalRunService) EnterSolo(ctx context.Context, player, actor, key, name, stageID, mode string, speed int) (runhost.Receipt, error) {
+	return s.Enroll(ctx, player, key, runhost.Admission{ActorID: actor, Name: name, StageID: stageID, Mode: mode, Speed: speed})
 }
 
 func (s *NormalRunService) SetBlessings(provider BlessingProvider) {

@@ -147,7 +147,7 @@ func TestGameplayScenario_NormalAdventureSoloRun(t *testing.T) {
 	a := newScenarioApp(t)
 	token, hero := a.register()
 
-	started := a.runCommand(token, hero, a.runContext(token, hero), "adventure_start", map[string]any{"stage_id": "stage-00", "speed": 3, "command_id": "start-1"}, http.StatusOK)
+	started := a.runCommand(token, hero, a.runContext(token, hero), "adventure_start", map[string]any{"name": "solo-quest", "stage_id": "stage-00", "speed": 3, "command_id": "start-1"}, http.StatusOK)
 	run := started.Context.Scene.Data.Run
 	if started.Result.Version != 1 || started.Result.Round != 0 || run == nil || run.Round != 0 || run.LeaderID != hero ||
 		slices.ContainsFunc(run.Actors, func(a struct {

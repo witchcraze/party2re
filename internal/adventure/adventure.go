@@ -33,6 +33,7 @@ var (
 	ErrCharacterUnconscious = runhost.ErrCharacterUnconscious
 	ErrCharacterExhausted   = runhost.ErrCharacterExhausted
 	ErrDailyOnceAlreadyUsed = errors.New("character has already challenged the once-daily dungeon today")
+	ErrInvalidQuestName     = errors.New("quest name must be 1 to 50 characters without whitespace or prohibited characters")
 )
 
 // ValidateCombatItem validates that an item is allowed for use in combat actions.

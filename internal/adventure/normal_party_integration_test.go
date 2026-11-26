@@ -80,7 +80,7 @@ func (f *normalFixture) waitingParty(t *testing.T, mode string) (*normalPartyAdm
 	f.cfg.Admission = a
 	f.restart(t)
 	svc.SetLobbyBoundary(f.svc.WithWaitingLobby)
-	p, err := svc.CreateParty(context.Background(), f.actors[0].ID, party.CreatePartyRequest{Name: "normal run", StageID: adventure.StarterAdventure, Mode: "normal", Speed: 3, MaxMembers: 4})
+	p, err := svc.CreateParty(context.Background(), f.actors[0].ID, party.CreatePartyRequest{Name: "normal-run", StageID: adventure.StarterAdventure, Mode: "normal", Speed: 3, MaxMembers: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestNormalRunPairedAdmissionStress(t *testing.T) {
 	f := newNormalFixture(t, 1)
 	c := f.actors[0]
 	stats := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(int, int) error {
-		_, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "start", adventure.StarterAdventure, "normal", 3)
+		_, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "start", "solo-quest", adventure.StarterAdventure, "normal", 3)
 		return err
 	})
 	if stats.Failures != 0 {
@@ -282,7 +282,7 @@ func TestNormalRunTimeoutPendingRecoveryAndRetention(t *testing.T) {
 	if err != nil || active == nil || !active.Recipient.TimerPending {
 		t.Fatal(active, err)
 	}
-	if _, err := f.svc.EnterSolo(context.Background(), member.PlayerID, member.ID, "new", adventure.StarterAdventure, "normal", 3); !errors.Is(err, runhost.ErrBusy) {
+	if _, err := f.svc.EnterSolo(context.Background(), member.PlayerID, member.ID, "new", "solo-quest", adventure.StarterAdventure, "normal", 3); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
 	departed, err := f.chars.FindByID(context.Background(), c.ID)

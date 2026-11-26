@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	battleadapter "github.com/witchcraze/party2re/internal/battle"
@@ -15,13 +14,12 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/runhost"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 const (
 	MaxPartyMembers = 4
 	MinPartyMembers = 1
-	MinPartyNameLen = 1
-	MaxPartyNameLen = 50
 
 	StatusRecruiting = "recruiting"
 	StatusInProgress = "in_progress"
@@ -43,7 +41,7 @@ var (
 	ErrCannotKickSelf         = errors.New("party leader cannot kick themselves")
 	ErrCharacterNotInParty    = errors.New("character is not a member of this party")
 	ErrPartyNotReady          = errors.New("all party members must be ready before starting")
-	ErrInvalidPartyName       = errors.New("party name must be between 1 and 50 characters")
+	ErrInvalidPartyName       = errors.New("party name must be 1 to 50 characters without whitespace or prohibited characters")
 	ErrInvalidMaxMembers      = errors.New("max members must be between 1 and 4")
 	ErrCharacterUnconscious   = errors.New("character is unconscious (HP <= 0) and cannot adventure")
 	ErrCharacterExhausted     = errors.New("character is exhausted (tired >= 100) and must rest")
@@ -190,11 +188,9 @@ func newSummary(p Party, leaderName string, members int) PartySummary {
 	}
 }
 
-// ValidatePartyName verifies party name constraints.
+// ValidatePartyName verifies party name constraints (quest.cgi:551–561).
 func ValidatePartyName(name string) error {
-	trimmed := strings.TrimSpace(name)
-	runes := utf8.RuneCountInString(trimmed)
-	if runes < MinPartyNameLen || runes > MaxPartyNameLen {
+	if _, err := validation.ValidateQuestName(name); err != nil {
 		return ErrInvalidPartyName
 	}
 	return nil

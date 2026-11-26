@@ -120,12 +120,12 @@ func TestNormalRunStage26EXDrawOnceAfterSeason(t *testing.T) {
 	f.cfg.EntryLocks = timer.NewService(nil)
 	f.restart(t)
 	f.store.failWrite.Store(true)
-	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "stage-26", "normal", 3); err == nil {
+	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "solo-quest", "stage-26", "normal", 3); err == nil {
 		t.Fatal("failed admission succeeded")
 	}
 	f.store.failWrite.Store(false)
 	draws := f.rng.calls.Load()
-	entry, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "stage-26", "normal", 3)
+	entry, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "solo-quest", "stage-26", "normal", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestNormalRunStage26EXDrawOnceAfterSeason(t *testing.T) {
 	if err != nil || r.Stage.Season != "spring" || r.RecordSeason != "spring" || !r.EXUnlocked || f.rng.calls.Load() != draws+2 {
 		t.Fatal("season/EX draw", r, err)
 	}
-	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "stage-26", "normal", 3); err != nil || f.rng.calls.Load() != draws+2 {
+	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "daily", "solo-quest", "stage-26", "normal", 3); err != nil || f.rng.calls.Load() != draws+2 {
 		t.Fatal("committed admission redrew", err)
 	}
 }

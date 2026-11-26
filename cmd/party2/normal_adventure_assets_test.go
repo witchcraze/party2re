@@ -128,7 +128,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			entry, err := combat.normal.EnterSolo(ctx, actor.PlayerID, actor.ID, id.New(), adventure.StarterAdventure, "normal", 3)
+			entry, err := combat.normal.EnterSolo(ctx, actor.PlayerID, actor.ID, id.New(), "solo-asset-run", adventure.StarterAdventure, "normal", 3)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -300,7 +300,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	entry, err := combat.normal.EnterSolo(ctx, actor.PlayerID, actor.ID, id.New(), adventure.StarterAdventure, "normal", 3)
+	entry, err := combat.normal.EnterSolo(ctx, actor.PlayerID, actor.ID, id.New(), "solo-asset-run", adventure.StarterAdventure, "normal", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
