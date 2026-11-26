@@ -10,6 +10,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -58,6 +59,7 @@ type fleaMarketDBFixture struct {
 	repo     *database.FleaMarketRepository
 	chars    *database.CharacterRepository
 	depots   *database.DepotRepository
+	invs     *database.InventoryRepository
 	homes    *home.Service
 	catalog  *item.Catalog
 	recorder *testFleaCollectionRecorder
@@ -68,6 +70,7 @@ func newFleaMarketDBFixture(t *testing.T) *fleaMarketDBFixture {
 	db := database.CreateTestDatabase(t,
 		"players",
 		"characters",
+		"inventory_items",
 		"character_depots",
 		"depot_items",
 		"character_pending_remittances",
@@ -88,6 +91,10 @@ func newFleaMarketDBFixture(t *testing.T) *fleaMarketDBFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	invs, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	homeRepo, err := database.NewHomeRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -105,6 +112,7 @@ func newFleaMarketDBFixture(t *testing.T) *fleaMarketDBFixture {
 		repo:     repo,
 		chars:    chars,
 		depots:   depots,
+		invs:     invs,
 		homes:    homes,
 		catalog:  catalog,
 		recorder: &testFleaCollectionRecorder{},
@@ -127,6 +135,7 @@ func (f *fleaMarketDBFixture) service(t *testing.T) *fleamarket.Service {
 		f.chars,
 		f.depots,
 		fleamarket.WithTransactionProvider(database.NewTransactionProvider(f.db)),
+		fleamarket.WithInventoryRepository(f.invs),
 		fleamarket.WithItemDefinitionProvider(f.catalog),
 		fleamarket.WithCollectionRecorder(f.recorder),
 		fleamarket.WithPaymentHolder(sqlFleaPaymentHolder{depots: f.depots, homes: f.homes}),
@@ -157,6 +166,20 @@ func TestFleaMarketListPurchaseCancel_Integration(t *testing.T) {
 	}
 	cancelledWeapon.EnhancementLevel = 4
 	if _, err := database.CreateTestDepot(ctx, f.db, seller.ID, 0, []item.Instance{soldWeapon, cancelledWeapon}); err != nil {
+		t.Fatal(err)
+	}
+	heldArmor, err := item.NewInstance("armor-01", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sellerInv, err := coreinventory.New(seller.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sellerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.invs.Save(ctx, sellerInv); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.CreateTestDepot(ctx, f.db, buyer.ID, 0, nil); err != nil {
@@ -224,7 +247,12 @@ func TestFleaMarketListPurchaseCancel_Integration(t *testing.T) {
 		t.Fatalf("buyer depot = %+v", buyerDepot.Items)
 	}
 	if len(f.recorder.records) == 0 {
-		t.Fatal("expected collection discovery recorded")
+		t.Fatal("expected collection discovery recorded for held hand item")
+	}
+	for _, rec := range f.recorder.records {
+		if rec != fmt.Sprintf("%s:armor-01:布の服:armor", seller.ID) {
+			t.Fatalf("unexpected collection record %q (listed weapon-01 must not be registered)", rec)
+		}
 	}
 
 	if _, err := svc.CancelListing(ctx, stranger.ID, listing2.ID); !errors.Is(err, fleamarket.ErrUnauthorizedSeller) {
@@ -266,6 +294,20 @@ func TestFleaMarketFailedListingRollsBackDepot_Integration(t *testing.T) {
 	}
 	wpn.EnhancementLevel = 5
 	if _, err := database.CreateTestDepot(ctx, f.db, seller.ID, 0, []item.Instance{wpn}); err != nil {
+		t.Fatal(err)
+	}
+	heldArmor, err := item.NewInstance("armor-01", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sellerInv, err := coreinventory.New(seller.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sellerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.invs.Save(ctx, sellerInv); err != nil {
 		t.Fatal(err)
 	}
 
@@ -310,6 +352,20 @@ func TestFleaMarketConcurrentPurchasesConserveAssets_Integration(t *testing.T) {
 	}
 	wpn.EnhancementLevel = 6
 	if _, err := database.CreateTestDepot(ctx, f.db, seller.ID, 0, []item.Instance{wpn}); err != nil {
+		t.Fatal(err)
+	}
+	heldArmor, err := item.NewInstance("armor-01", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sellerInv, err := coreinventory.New(seller.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sellerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.invs.Save(ctx, sellerInv); err != nil {
 		t.Fatal(err)
 	}
 

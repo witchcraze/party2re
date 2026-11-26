@@ -26,7 +26,7 @@ Commands name explicit Depot instances, listings and interiors instead of legacy
 - **Construction** (`_town.cgi:89–127`): `＠みせ` takes only a house style. The name is the owner's registered name, otherwise `@<name>の店@`; rejection order is funds, town capacity, already-owned store. Expiry removes only the town entry, so a rebuilt store keeps its name, wallpaper, furniture and listings, and neither the owner nor visitors can act in it until it stands again.
 - **Signboard name** (`store.cgi:298`): `is_build_store` compares against every town member name, so the owner's current name is also rejected. Signboard names forbid ASCII `@`, `/` and `\`; interior names allow them (`store.cgi:672–684`).
 - **Barter wish** (`store.cgi:208`): an empty wish passes validation and creates a listing that can never be traded; Go rejects it.
-- **Collection** (`store.cgi:175–176,276–277`): listing calls `add_collection`, which registers the lister's equipped items, not the listed or received item; purchase and barter register nothing. The listing-time rule is open (#2057).
+- **Collection** (`store.cgi:175–176,276–277`): listing registers the lister's held hand items (`add_collection`), not the listed Depot item; purchase and barter register nothing.
 
 ## Customization charges (#1146)
 

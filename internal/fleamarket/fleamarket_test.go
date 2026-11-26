@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
@@ -152,6 +153,21 @@ func (m *mockDepotRepo) Save(ctx context.Context, d depot.Depot) error {
 	return nil
 }
 
+type mockInvRepo struct {
+	inventories map[string]coreinventory.Inventory
+}
+
+func newMockInvRepo() *mockInvRepo {
+	return &mockInvRepo{inventories: make(map[string]coreinventory.Inventory)}
+}
+
+func (m *mockInvRepo) FindByCharacterIDForUpdate(_ context.Context, charID string) (coreinventory.Inventory, error) {
+	if inv, ok := m.inventories[charID]; ok {
+		return inv, nil
+	}
+	return coreinventory.New(charID)
+}
+
 type mockCollectionRecorder struct {
 	calls []struct {
 		charID   string
@@ -209,12 +225,20 @@ func (m *mockItemDefs) FindByID(id string) (coreitem.Definition, error) {
 			Price: 10,
 		}, nil
 	}
-	if id == "wea-sword" {
+	if id == "wea-sword" || id == "weapon-01" {
 		return coreitem.Definition{
-			ID:    "wea-sword",
+			ID:    id,
 			Name:  "銅の剣",
 			Price: 150,
 			Slot:  coreitem.SlotMainHand,
+		}, nil
+	}
+	if id == "armor-01" {
+		return coreitem.Definition{
+			ID:    "armor-01",
+			Name:  "皮の鎧",
+			Price: 120,
+			Slot:  coreitem.SlotBody,
 		}, nil
 	}
 	return coreitem.Definition{}, errors.New("item not found")
@@ -301,10 +325,18 @@ func TestFleaMarketService_CreateListing_CollectionDiscovery(t *testing.T) {
 	repo := newMockFleaMarketRepo()
 	charRepo := newMockCharRepo()
 	depotRepo := newMockDepotRepo()
+	invRepo := newMockInvRepo()
 	itemDefs := &mockItemDefs{}
 	recorder := &mockCollectionRecorder{}
 
-	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs), fleamarket.WithCollectionRecorder(recorder))
+	svc, _ := fleamarket.NewService(
+		repo,
+		charRepo,
+		depotRepo,
+		fleamarket.WithInventoryRepository(invRepo),
+		fleamarket.WithItemDefinitionProvider(itemDefs),
+		fleamarket.WithCollectionRecorder(recorder),
+	)
 
 	sellerID := "char-seller-col"
 	charRepo.characters[sellerID] = corecharacter.Character{
@@ -314,56 +346,72 @@ func TestFleaMarketService_CreateListing_CollectionDiscovery(t *testing.T) {
 	}
 	sellerDepot, _ := depot.NewDepot(sellerID)
 	sellerDepot.Capacity = 20
-	inst, _ := coreitem.NewInstance("wea-sword", 1)
-	_ = sellerDepot.AddItem(inst)
+	listedInst, _ := coreitem.NewInstance("item-herb", 2)
+	_ = sellerDepot.AddItem(listedInst)
 	_ = depotRepo.Save(ctx, sellerDepot)
+
+	heldInv, _ := coreinventory.New(sellerID)
+	heldWeapon, _ := coreitem.NewInstance("weapon-01", 1)
+	heldArmor, _ := coreitem.NewInstance("armor-01", 1)
+	if err := heldInv.Add(heldWeapon); err != nil {
+		t.Fatalf("add heldWeapon: %v", err)
+	}
+	if err := heldInv.Add(heldArmor); err != nil {
+		t.Fatalf("add heldArmor: %v", err)
+	}
+	invRepo.inventories[sellerID] = heldInv
 
 	now := time.Now().UTC()
 
-	// 1. Verify RecordItemDiscovered is called with correct parameters
-	_, err := svc.CreateListing(ctx, sellerID, "wea-sword", 300, now)
-	if err != nil {
+	// 1. Listing registers held hand items (legacy add_collection), not the listed Depot item
+	if _, err := svc.CreateListing(ctx, sellerID, "item-herb", 300, now); err != nil {
 		t.Fatalf("CreateListing failed: %v", err)
 	}
 
-	if len(recorder.calls) != 1 {
-		t.Fatalf("expected 1 call to RecordItemDiscovered, got %d", len(recorder.calls))
+	if len(recorder.calls) != 2 {
+		t.Fatalf("expected 2 calls to RecordItemDiscovered for held items, got %d (%+v)", len(recorder.calls), recorder.calls)
 	}
-	call := recorder.calls[0]
-	if call.charID != sellerID {
-		t.Errorf("expected charID %s, got %s", sellerID, call.charID)
+	if recorder.calls[0].charID != sellerID || recorder.calls[0].itemID != "weapon-01" ||
+		recorder.calls[0].itemName != "銅の剣" || recorder.calls[0].category != "weapon" {
+		t.Errorf("unexpected first collection call: %+v", recorder.calls[0])
 	}
-	if call.itemID != "wea-sword" {
-		t.Errorf("expected itemID 'wea-sword', got %s", call.itemID)
-	}
-	if call.itemName != "銅の剣" {
-		t.Errorf("expected itemName '銅の剣', got %s", call.itemName)
-	}
-	if call.category != "main-hand" {
-		t.Errorf("expected category 'main-hand', got %s", call.category)
+	if recorder.calls[1].charID != sellerID || recorder.calls[1].itemID != "armor-01" ||
+		recorder.calls[1].itemName != "皮の鎧" || recorder.calls[1].category != "armor" {
+		t.Errorf("unexpected second collection call: %+v", recorder.calls[1])
 	}
 
-	// 2. Verify nil collection recorder functions cleanly
-	svcNilRecorder, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	// 2. Empty hand records nothing even when listing a Depot item
+	recorder.calls = nil
+	emptyInv, _ := coreinventory.New(sellerID)
+	invRepo.inventories[sellerID] = emptyInv
+	if _, err := svc.CreateListing(ctx, sellerID, "item-herb", 250, now); err != nil {
+		t.Fatalf("CreateListing with empty hand failed: %v", err)
+	}
+	if len(recorder.calls) != 0 {
+		t.Fatalf("expected 0 collection calls for empty hand, got %+v", recorder.calls)
+	}
+
+	// 3. Verify nil collection recorder functions cleanly
+	svcNilRecorder, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithInventoryRepository(invRepo), fleamarket.WithItemDefinitionProvider(itemDefs))
 
 	inst2, _ := coreitem.NewInstance("item-herb", 1)
 	_ = sellerDepot.AddItem(inst2)
 	_ = depotRepo.Save(ctx, sellerDepot)
 
-	_, err = svcNilRecorder.CreateListing(ctx, sellerID, "item-herb", 50, now)
-	if err != nil {
+	if _, err := svcNilRecorder.CreateListing(ctx, sellerID, "item-herb", 50, now); err != nil {
 		t.Fatalf("CreateListing with nil recorder failed: %v", err)
 	}
 
-	// 3. Verify collection recorder error is propagated
+	// 4. Verify collection recorder error is propagated when a held item is present
 	colErr := errors.New("fleamarket collection failure")
 	recorder.err = colErr
+	invRepo.inventories[sellerID] = heldInv
 
 	inst3, _ := coreitem.NewInstance("wea-sword", 1)
 	_ = sellerDepot.AddItem(inst3)
 	_ = depotRepo.Save(ctx, sellerDepot)
 
-	_, err = svc.CreateListing(ctx, sellerID, "wea-sword", 300, now)
+	_, err := svc.CreateListing(ctx, sellerID, "wea-sword", 300, now)
 	if !errors.Is(err, colErr) {
 		t.Fatalf("expected collection error %v, got %v", colErr, err)
 	}

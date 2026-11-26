@@ -148,6 +148,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		fleamarketRepo,
 		core.charRepo,
 		depotRepo,
+		fleamarket.WithInventoryRepository(core.invRepo),
 		fleamarket.WithItemDefinitionProvider(core.itemCatalog),
 		fleamarket.WithTransactionProvider(core.txProvider),
 	)

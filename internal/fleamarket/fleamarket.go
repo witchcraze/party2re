@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
@@ -87,6 +88,10 @@ type DepotRepository interface {
 	Save(ctx context.Context, value depot.Depot) error
 }
 
+type InventoryRepository interface {
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+}
+
 type CollectionRecorder interface {
 	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
 }
@@ -108,6 +113,7 @@ type Service struct {
 	repo               FleaMarketRepository
 	charRepo           CharacterRepository
 	depotRepo          DepotRepository
+	invRepo            InventoryRepository
 	itemDefs           ItemDefinitionProvider
 	txProvider         TransactionProvider
 	collectionRecorder CollectionRecorder
@@ -134,6 +140,12 @@ func WithCollectionRecorder(recorder CollectionRecorder) Option {
 
 func (s *Service) SetCollectionRecorder(recorder CollectionRecorder) {
 	s.collectionRecorder = recorder
+}
+
+func WithInventoryRepository(invRepo InventoryRepository) Option {
+	return func(s *Service) {
+		s.invRepo = invRepo
+	}
 }
 
 func WithTransactionProvider(txProvider TransactionProvider) Option {
@@ -189,6 +201,8 @@ func (s *Service) lockCharacter(ctx context.Context, characterID string) (corech
 }
 
 // CreateListing lists an item from the character's depot onto the flea market.
+// Transaction: RunInTx.
+// Lock Order: fleamarket_capacity_lock(0) -> characters(2) -> inventory_items(3) -> character_depots/depot_items(5).
 func (s *Service) CreateListing(
 	ctx context.Context,
 	sellerCharacterID string,
@@ -237,6 +251,15 @@ func (s *Service) CreateListing(
 		maxListings := MaxListingsPerCharacter + seller.OverFlea
 		if activeCount >= maxListings {
 			return ErrMaxListingsReached
+		}
+
+		// 3.5. Lock seller hand inventory (Rank 3) for legacy add_collection on listing
+		var inv coreinventory.Inventory
+		if s.collectionRecorder != nil && s.invRepo != nil {
+			inv, err = s.invRepo.FindByCharacterIDForUpdate(txCtx, sellerCharacterID)
+			if err != nil {
+				return err
+			}
 		}
 
 		// 4. Lock seller depot (Rank 5)
@@ -297,9 +320,20 @@ func (s *Service) CreateListing(
 		if err := s.repo.CreateListing(txCtx, created); err != nil {
 			return err
 		}
+		// Legacy free.cgi:130-131 calls add_collection, which registers the lister's held hand items, not the listed Depot item.
 		if s.collectionRecorder != nil {
-			if err := s.collectionRecorder.RecordItemDiscovered(txCtx, seller.ID, consumedItem.DefinitionID, itemName, itemCategory); err != nil {
-				return err
+			for _, held := range inv.Items {
+				heldName := held.DefinitionID
+				heldCategory := coreitem.SlotNone.Category()
+				if s.itemDefs != nil {
+					if def, defErr := s.itemDefs.FindByID(held.DefinitionID); defErr == nil {
+						heldName = def.Name
+						heldCategory = def.Category()
+					}
+				}
+				if err := s.collectionRecorder.RecordItemDiscovered(txCtx, seller.ID, held.DefinitionID, heldName, heldCategory); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -309,185 +343,4 @@ func (s *Service) CreateListing(
 		return Listing{}, err
 	}
 	return created, nil
-}
-
-// PurchaseListing allows a buyer character to purchase a listed item.
-func (s *Service) PurchaseListing(
-	ctx context.Context,
-	buyerCharacterID string,
-	listingID string,
-	now time.Time,
-) (PurchaseResult, error) {
-	if strings.TrimSpace(buyerCharacterID) == "" || strings.TrimSpace(listingID) == "" {
-		return PurchaseResult{}, ErrInvalidInput
-	}
-
-	var result PurchaseResult
-
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		// 1. Lock listing first (CAS / P2P shared entity lock, Rank 0)
-		listing, err := s.repo.GetListingByIDForUpdate(txCtx, listingID)
-		if err != nil {
-			return err
-		}
-		if listing.Status != StatusActive {
-			return ErrListingNotActive
-		}
-		if listing.SellerCharacterID == buyerCharacterID {
-			return ErrCannotBuyOwnListing
-		}
-
-		// 2. Deterministic lock acquisition order for characters (ascending ID order, Rank 2)
-		firstID, secondID := id.Sort2(listing.SellerCharacterID, buyerCharacterID)
-
-		firstChar, err := s.lockCharacter(txCtx, firstID)
-		if err != nil {
-			return err
-		}
-		secondChar, err := s.lockCharacter(txCtx, secondID)
-		if err != nil {
-			return err
-		}
-
-		if err := s.checkMutation(txCtx, buyerCharacterID); err != nil {
-			return err
-		}
-
-		var buyerChar, sellerChar corecharacter.Character
-		if firstChar.ID == buyerCharacterID {
-			buyerChar = firstChar
-			sellerChar = secondChar
-		} else {
-			buyerChar = secondChar
-			sellerChar = firstChar
-		}
-
-		// 3. Verify buyer funds
-		if buyerChar.Money < listing.Price {
-			return ErrInsufficientGold
-		}
-
-		// 4. Lock buyer depot (Rank 5)
-		buyerDepot, err := depot.FindOrCreate(txCtx, s.depotRepo, buyerChar)
-		if err != nil {
-			return err
-		}
-
-		// 5. Deduct Gold from Buyer (seller receives a pending remittance below)
-		if err := buyerChar.DeductMoney(listing.Price); err != nil {
-			return ErrInsufficientGold
-		}
-
-		// 6. Deliver Item to Buyer Depot (legacy &send_item)
-		itemInst, err := coreitem.NewInstanceWithEnhancement(listing.ItemID, 1, listing.EnhancementLevel)
-		if err != nil {
-			return err
-		}
-		buyerDepot.Deliver(itemInst)
-
-		// 7. Update listing status
-		listing.Status = StatusSold
-		listing.SoldAt = &now
-		listing.BuyerCharacterID = &buyerCharacterID
-		buyerName := buyerChar.Name
-		listing.BuyerName = &buyerName
-
-		// 8. Persist mutations and hold seller proceeds with the Home money notice
-		if err := s.charRepo.Update(txCtx, buyerChar); err != nil {
-			return err
-		}
-		if err := s.depotRepo.Save(txCtx, buyerDepot); err != nil {
-			return err
-		}
-		if err := s.repo.UpdateListing(txCtx, listing); err != nil {
-			return err
-		}
-		if s.payment == nil {
-			return errors.New("fleamarket payment holder is required")
-		}
-		if err := s.payment.HoldPayment(txCtx, sellerChar.ID, buyerChar.Name, listing.Price); err != nil {
-			return err
-		}
-
-		result = PurchaseResult{
-			Listing:      listing,
-			BuyerGold:    buyerChar.Money,
-			ItemInstance: itemInst,
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return PurchaseResult{}, err
-	}
-	return result, nil
-}
-
-// CancelListing allows the seller to cancel an active listing and retrieve their item.
-func (s *Service) CancelListing(
-	ctx context.Context,
-	sellerCharacterID string,
-	listingID string,
-) (Listing, error) {
-	if strings.TrimSpace(sellerCharacterID) == "" || strings.TrimSpace(listingID) == "" {
-		return Listing{}, ErrInvalidInput
-	}
-
-	var cancelled Listing
-
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		// 1. Lock listing (Rank 0)
-		listing, err := s.repo.GetListingByIDForUpdate(txCtx, listingID)
-		if err != nil {
-			return err
-		}
-		if listing.SellerCharacterID != sellerCharacterID {
-			return ErrUnauthorizedSeller
-		}
-		if listing.Status != StatusActive {
-			return ErrListingNotActive
-		}
-
-		// 2. Lock seller character (Rank 2)
-		sellerChar, err := s.lockCharacter(txCtx, sellerCharacterID)
-		if err != nil {
-			return err
-		}
-
-		if err := s.checkMutation(txCtx, sellerCharacterID); err != nil {
-			return err
-		}
-
-		// 3. Lock seller depot (Rank 5)
-		sellerDepot, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, sellerCharacterID)
-		if err != nil {
-			return err
-		}
-		sellerDepot.RefreshCapacity(sellerChar.JobLevel, sellerChar.OverDepot)
-
-		// 4. Return item instance to seller depot (legacy &send_item)
-		itemInst, err := coreitem.NewInstanceWithEnhancement(listing.ItemID, 1, listing.EnhancementLevel)
-		if err != nil {
-			return err
-		}
-		sellerDepot.Deliver(itemInst)
-		if err := s.depotRepo.Save(txCtx, sellerDepot); err != nil {
-			return err
-		}
-
-		// 4. Update listing status
-		listing.Status = StatusCancelled
-		if err := s.repo.UpdateListing(txCtx, listing); err != nil {
-			return err
-		}
-
-		cancelled = listing
-		return nil
-	})
-
-	if err != nil {
-		return Listing{}, err
-	}
-	return cancelled, nil
 }
