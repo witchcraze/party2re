@@ -293,3 +293,94 @@ func TestWeeklyRotation_PreservesUncertainProcessing(t *testing.T) {
 		t.Fatal("reconciliation did not preserve the recovered Pending reservation")
 	}
 }
+
+type countingWeeklyLockRepo struct {
+	*mockRankingRepository
+	lockCalls int
+}
+
+func (r *countingWeeklyLockRepo) LockWeeklyJobChangesForUpdate(ctx context.Context) error {
+	r.lockCalls++
+	return r.mockRankingRepository.LockWeeklyJobChangesForUpdate(ctx)
+}
+
+func TestWeeklyRotation_ReconcileShortCircuitsOnSteadyStateAndRecoversLostReservation(t *testing.T) {
+	ctx := context.Background()
+	repo := &countingWeeklyLockRepo{mockRankingRepository: newMockRepo()}
+	now := time.Date(2026, 10, 10, 15, 0, 0, 0, time.UTC) // Sunday 00:00 JST
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduler := &weeklyScheduler{}
+	handler := ranking.NewRotateWeeklyHandler(svc, scheduler)
+
+	// 1. Initial reconciliation establishes future deadline in SQL and enqueues Valkey action.
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	due := repo.weeklyRotationDue
+	if repo.lockCalls != 1 || scheduler.writes != 1 {
+		t.Fatalf("startup lockCalls=%d writes=%d, want 1/1", repo.lockCalls, scheduler.writes)
+	}
+
+	// 2. Healthy steady-state ticks short-circuit without touching SQL or re-enqueueing.
+	now = now.Add(5 * time.Second)
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if repo.lockCalls != 1 || scheduler.writes != 1 {
+		t.Fatalf("steady-state tick hit SQL or re-enqueued: lockCalls=%d writes=%d", repo.lockCalls, scheduler.writes)
+	}
+
+	// 3. Mid-run Valkey reservation loss restores the reservation without hitting SQL.
+	repo.activeWeeklyJobChanges["char-1"] = 2
+	repo.weeklyJobChangeRankings = []ranking.CharacterRankingEntry{{CharacterID: "char-1", Score: 2}}
+	repo.weeklyJobChangeTotal = 1
+	scheduler.actions = nil
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if repo.lockCalls != 1 || scheduler.writes != 2 || len(scheduler.actions) != 1 || !scheduler.actions[0].ExecuteAt.Equal(due) {
+		t.Fatalf("lost reservation recovery lockCalls=%d writes=%d actions=%+v", repo.lockCalls, scheduler.writes, scheduler.actions)
+	}
+	if repo.activeWeeklyJobChanges["char-1"] != 2 {
+		t.Fatal("lost reservation recovery consumed active counters")
+	}
+
+	// 4. Crossing the deadline triggers SQL rotation and schedules next Sunday, then immediate Handle short-circuits.
+	now = due
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if repo.lockCalls != 2 || scheduler.writes != 3 || len(repo.activeWeeklyJobChanges) != 0 {
+		t.Fatalf("boundary rotation lockCalls=%d writes=%d active=%v", repo.lockCalls, scheduler.writes, repo.activeWeeklyJobChanges)
+	}
+	nextDue := repo.weeklyRotationDue
+	if !nextDue.Equal(due.AddDate(0, 0, 7)) {
+		t.Fatalf("nextDue = %v, want %v", nextDue, due.AddDate(0, 0, 7))
+	}
+	if err := handler.Handle(ctx, corescheduling.ScheduledAction{ExecuteAt: due}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.lockCalls != 2 || scheduler.writes != 3 {
+		t.Fatalf("post-reconcile Handle repeated SQL or enqueue: lockCalls=%d writes=%d", repo.lockCalls, scheduler.writes)
+	}
+
+	// 5. Post-commit enqueue failure on the next boundary recovers without re-entering SQL on retry.
+	now = nextDue
+	scheduler.enqueueErr = errors.New("valkey unavailable")
+	if err := handler.Reconcile(ctx); !errors.Is(err, scheduler.enqueueErr) {
+		t.Fatalf("expected enqueue error, got %v", err)
+	}
+	if repo.lockCalls != 3 {
+		t.Fatalf("expected SQL settlement attempt on boundary, got lockCalls=%d", repo.lockCalls)
+	}
+	scheduler.enqueueErr = nil
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if repo.lockCalls != 3 || scheduler.writes != 4 {
+		t.Fatalf("retry after enqueue error repeated SQL or skipped enqueue: lockCalls=%d writes=%d", repo.lockCalls, scheduler.writes)
+	}
+}
