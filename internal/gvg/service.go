@@ -68,8 +68,9 @@ type ExitClaimRepository interface {
 	MarkExitDeliveryDone(ctx context.Context, roomID, characterID, joinID string) error
 }
 
-// PostExitHook resets meal fullness and delivers reserved tavern food upon room exit.
-type PostExitHook func(ctx context.Context, characterID string) (string, error)
+// PostExitHook resets meal fullness and settles any standing Tavern delivery upon room exit.
+// It returns nil when no delivery was standing.
+type PostExitHook func(ctx context.Context, characterID string) (*DeliveryOutcome, error)
 
 // Option configures Service dependencies.
 type Option func(*Service)
@@ -412,7 +413,40 @@ func (s *Service) GetCharacterRoom(ctx context.Context, characterID string) (Roo
 	if err != nil {
 		return RoomDetail{}, err
 	}
-	return s.repo.GetRoom(ctx, roomID)
+	detail, err := s.repo.GetRoom(ctx, roomID)
+	if err != nil {
+		return RoomDetail{}, err
+	}
+	// A mapping left by an interrupted departure is not membership; see PendingDepartureRoom.
+	if _, ok := findMember(detail.Members, characterID); !ok {
+		return RoomDetail{}, ErrRoomNotFound
+	}
+	return detail, nil
+}
+
+// PendingDepartureRoom returns the room of a reverse mapping whose room is gone or no
+// longer lists the character, left when LeaveRoom committed the departure but failed to
+// delete the mapping; "" when none. LeaveRoom on that room completes the cleanup.
+// Rooms are published before their mappings, so a join never looks pending.
+func (s *Service) PendingDepartureRoom(ctx context.Context, characterID string) (string, error) {
+	roomID, err := s.repo.GetCharacterRoom(ctx, characterID)
+	if errors.Is(err, ErrRoomNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	detail, err := s.repo.GetRoom(ctx, roomID)
+	if errors.Is(err, ErrRoomNotFound) {
+		return roomID, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if _, ok := findMember(detail.Members, characterID); ok {
+		return "", nil
+	}
+	return roomID, nil
 }
 
 // GetStanding retrieves standing for a guild.

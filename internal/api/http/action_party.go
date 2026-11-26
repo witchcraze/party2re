@@ -61,7 +61,11 @@ type partyMessageResponse struct {
 	Message string `json:"message"`
 }
 
-type partyLeaveResponse struct {
+// escapeMessage is the participant departure notice from _battle.cgi:1229-1247,1335.
+const escapeMessage = "戦闘から逃げ出しました"
+
+// leaveResponse reports a room departure with the legacy battle-end delivery notice, if any.
+type leaveResponse struct {
 	Message        string `json:"message"`
 	DeliveryNotice string `json:"delivery_notice,omitempty"`
 }
@@ -95,22 +99,23 @@ func partyLeaveCommand(service PartyService) Option {
 		if err != nil {
 			return nil, err
 		}
-		return partyLeaveResponse{
-			Message:        "パーティーから離れました",
-			DeliveryNotice: deliveryNoticeText(res.Delivery),
-		}, nil
+		resp := leaveResponse{Message: escapeMessage}
+		if d := res.Delivery; d != nil {
+			resp.DeliveryNotice = deliveryNoticeText(d.ItemName, d.Paid)
+		}
+		return resp, nil
 	}, partyLobbyRejection)
 }
 
 // Battle-end delivery notices from _battle.cgi:1367,1372.
-func deliveryNoticeText(delivery *party.DeliveryOutcome) string {
-	if delivery == nil || delivery.ItemName == "" {
+func deliveryNoticeText(itemName string, paid bool) string {
+	if itemName == "" {
 		return ""
 	}
-	if delivery.Paid {
-		return "酒場から" + delivery.ItemName + "が届きました！"
+	if paid {
+		return "酒場から" + itemName + "が届きました！"
 	}
-	return "酒場から" + delivery.ItemName + "が届きましたが、お金が足りませんでした"
+	return "酒場から" + itemName + "が届きましたが、お金が足りませんでした"
 }
 
 func partyKickCommand(service PartyService) Option {
@@ -124,9 +129,31 @@ func partyKickCommand(service PartyService) Option {
 				return nil, err
 			}
 			h.appendKickPlaceLog(ctx, placelog.Place{Kind: placelog.KindFacility, ID: "quest"}, res.PartyName, res.LeaderName, p.TargetCharacterID)
-			return partyMessageResponse{Message: "メンバーをきっくしました"}, nil
-		}, partyLobbyRejection)(h)
+			return partyMessageResponse{Message: kickMessage(res.TargetName)}, nil
+		}, partyKickRejection)(h)
 	}
+}
+
+// Legacy @きっく texts from _skill.cgi:799-801,816.
+const (
+	kickSelfMessage      = "自分をきっくすることはできません"
+	kickNotLeaderMessage = "リーダーじゃないのできっくできません"
+	kickStartedMessage   = "クエスト中はきっくできません"
+)
+
+func kickMessage(targetName string) string {
+	return targetName + "をきっくしました"
+}
+
+func partyKickRejection(err error) (int, ErrorDetail) {
+	status, detail := partyLobbyRejection(err)
+	switch detail.Code {
+	case "PARTY_NOT_LEADER":
+		detail.Message = kickNotLeaderMessage
+	case "PARTY_NOT_RECRUITING":
+		detail.Message = kickStartedMessage
+	}
+	return status, detail
 }
 
 func partyLobbyRejection(err error) (int, ErrorDetail) {
@@ -138,7 +165,7 @@ func partyLobbyRejection(err error) (int, ErrorDetail) {
 	case errors.Is(err, party.ErrNotPartyLeader):
 		return http.StatusForbidden, ErrorDetail{Code: "PARTY_NOT_LEADER", Message: "Only the party leader can do that."}
 	case errors.Is(err, party.ErrCannotKickSelf):
-		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PARTY_CANNOT_KICK_SELF", Message: "自分をきっくすることはできません"}
+		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PARTY_CANNOT_KICK_SELF", Message: kickSelfMessage}
 	case errors.Is(err, runhost.ErrBusy), errors.Is(err, party.ErrPartyNotRecruiting):
 		return http.StatusConflict, ErrorDetail{Code: "PARTY_NOT_RECRUITING", Message: "クエスト途中から参加することはできません"}
 	case errors.Is(err, party.ErrPartyFull):

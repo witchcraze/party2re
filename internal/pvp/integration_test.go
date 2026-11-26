@@ -73,7 +73,7 @@ func TestPvPIntegration_DisbandRefundTransactional(t *testing.T) {
 	}
 
 	// Leader leaves room while member remains -> refunds only leader, promotes member to leader
-	err = svc.LeaveRoom(ctx, c1.ID, detail.Room.ID)
+	_, err = svc.LeaveRoom(ctx, c1.ID, detail.Room.ID)
 	if err != nil {
 		t.Fatalf("LeaveRoom failed: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestPvPIntegration_DisbandRefundTransactional(t *testing.T) {
 	}
 
 	// Remaining member (now leader) leaves -> disbands and refunds remaining bet
-	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
 		t.Fatalf("final LeaveRoom failed: %v", err)
 	}
 	c2DBFinal, _ := charRepo.FindByID(ctx, c2.ID)

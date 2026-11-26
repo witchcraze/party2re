@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,7 +66,7 @@ func (s *partyLobbyStub) LeaveParty(_ context.Context, partyID, actor string) (p
 
 func (s *partyLobbyStub) KickMember(_ context.Context, partyID, leader, target string) (party.KickResult, error) {
 	s.calls = append(s.calls, "kick/"+partyID+"/"+leader+"/"+target)
-	return party.KickResult{PartyName: "PartyOne", LeaderName: "Hero"}, s.err
+	return party.KickResult{PartyName: "PartyOne", LeaderName: "Hero", TargetName: "Ally"}, s.err
 }
 
 func TestPartyLobbyGateway(t *testing.T) {
@@ -74,18 +75,19 @@ func TestPartyLobbyGateway(t *testing.T) {
 		facts            []string
 		err              error
 		status           int
+		text             string
 	}{
-		{"leave", `{"action":"party_leave","params":{"party_id":"p1"}}`, "leave/p1/hero", []string{"party_leave"}, nil, 200},
-		{"kick", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"ally"}}`, "kick/p1/hero/ally", []string{"party_leave", "party_kick"}, nil, 200},
-		{"kick not offered", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"ally"}}`, "", []string{"party_leave"}, nil, 409},
-		{"missing party", `{"action":"party_leave","params":{}}`, "", []string{"party_leave"}, nil, 400},
-		{"unknown param", `{"action":"party_leave","params":{"party_id":"p1","ready":true}}`, "", []string{"party_leave"}, nil, 400},
-		{"lobby gone", `{"action":"party_leave","params":{"party_id":"p1"}}`, "leave/p1/hero", []string{"party_leave"}, party.ErrNotFound, 404},
-		{"not member", `{"action":"party_leave","params":{"party_id":"p1"}}`, "leave/p1/hero", []string{"party_leave"}, party.ErrCharacterNotInParty, 422},
-		{"not leader", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"ally"}}`, "kick/p1/hero/ally", []string{"party_kick"}, party.ErrNotPartyLeader, 403},
-		{"kick self", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"hero"}}`, "kick/p1/hero/hero", []string{"party_kick"}, party.ErrCannotKickSelf, 422},
-		{"started", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"ally"}}`, "kick/p1/hero/ally", []string{"party_kick"}, runhost.ErrBusy, 409},
-		{"store down", `{"action":"party_leave","params":{"party_id":"p1"}}`, "leave/p1/hero", []string{"party_leave"}, errors.New("down"), 500},
+		{"leave", `{"action":"party_leave","params":{"party_id":"p1"}}`, "leave/p1/hero", []string{"party_leave"}, nil, 200, ""},
+		{"kick", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"ally"}}`, "kick/p1/hero/ally", []string{"party_leave", "party_kick"}, nil, 200, "Allyをきっくしました"},
+		{"kick not offered", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"ally"}}`, "", []string{"party_leave"}, nil, 409, ""},
+		{"missing party", `{"action":"party_leave","params":{}}`, "", []string{"party_leave"}, nil, 400, ""},
+		{"unknown param", `{"action":"party_leave","params":{"party_id":"p1","ready":true}}`, "", []string{"party_leave"}, nil, 400, ""},
+		{"lobby gone", `{"action":"party_leave","params":{"party_id":"p1"}}`, "leave/p1/hero", []string{"party_leave"}, party.ErrNotFound, 404, ""},
+		{"not member", `{"action":"party_leave","params":{"party_id":"p1"}}`, "leave/p1/hero", []string{"party_leave"}, party.ErrCharacterNotInParty, 422, ""},
+		{"not leader", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"ally"}}`, "kick/p1/hero/ally", []string{"party_kick"}, party.ErrNotPartyLeader, 403, "リーダーじゃないのできっくできません"},
+		{"kick self", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"hero"}}`, "kick/p1/hero/hero", []string{"party_kick"}, party.ErrCannotKickSelf, 422, "自分をきっくすることはできません"},
+		{"started", `{"action":"party_kick","params":{"party_id":"p1","target_character_id":"ally"}}`, "kick/p1/hero/ally", []string{"party_kick"}, runhost.ErrBusy, 409, "クエスト中はきっくできません"},
+		{"store down", `{"action":"party_leave","params":{"party_id":"p1"}}`, "leave/p1/hero", []string{"party_leave"}, errors.New("down"), 500, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newGatewayFixture(t)
@@ -100,6 +102,9 @@ func TestPartyLobbyGateway(t *testing.T) {
 			}
 			if got := len(stub.calls); (tc.want == "" && got != 0) || (tc.want != "" && (got != 1 || stub.calls[0] != tc.want)) {
 				t.Fatalf("calls %v, want %q", stub.calls, tc.want)
+			}
+			if tc.text != "" && !strings.Contains(string(raw["result"])+string(raw["error"]), tc.text) {
+				t.Fatalf("response %s lacks %q", raw, tc.text)
 			}
 		})
 	}
@@ -337,7 +342,7 @@ func TestPartyLeaveDeliveryNotice(t *testing.T) {
 			if err := json.Unmarshal(raw["result"], &result); err != nil {
 				t.Fatal(err)
 			}
-			if result.Message != "パーティーから離れました" {
+			if result.Message != "戦闘から逃げ出しました" {
 				t.Fatalf("message = %q", result.Message)
 			}
 			if result.DeliveryNotice != tc.wantNotice {

@@ -57,7 +57,8 @@ func TestPvPLostRoomRecoveryConcurrentIntegration(t *testing.T) {
 				if worker%2 == 0 {
 					actor = f.member.ID
 				}
-				return f.service.LeaveRoom(ctx, actor, f.room.Room.ID)
+				_, err := f.service.LeaveRoom(ctx, actor, f.room.Room.ID)
+				return err
 			})
 			if result.Failures != 0 || result.Successes == 0 {
 				t.Fatalf("recovery: %+v", result)
@@ -83,7 +84,7 @@ func TestPvPLostRoomRecoveryConcurrentIntegration(t *testing.T) {
 			if err := f.create(t); err != nil {
 				t.Fatalf("re-entry: %v", err)
 			}
-			if err := f.service.LeaveRoom(ctx, f.leader.ID, oldRoom); err != nil {
+			if _, err := f.service.LeaveRoom(ctx, f.leader.ID, oldRoom); err != nil {
 				t.Fatal(err)
 			}
 			if room, err := f.service.GetCharacterRoom(ctx, f.leader.ID); err != nil || room.Room.ID != f.room.Room.ID {
@@ -100,7 +101,7 @@ func TestPvPLostRoomRecoveryPublicationRetryIntegration(t *testing.T) {
 	losePvPRoom(t, f)
 	f.rooms.fail = "delete-member"
 	f.rooms.armed.Store(true)
-	if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
+	if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
 		t.Fatalf("missing publication failure: %v", err)
 	}
 	assertPvPForfeited(t, f)
@@ -108,7 +109,7 @@ func TestPvPLostRoomRecoveryPublicationRetryIntegration(t *testing.T) {
 		t.Fatalf("claim released before publication: %s %v", claim, err)
 	}
 	f.restart(t)
-	if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+	if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
 		t.Fatal(err)
 	}
 	if claim, err := f.service.GetCharacterClaim(ctx, f.member.ID); err != nil || claim != "" {
@@ -123,12 +124,12 @@ func TestPvPLostRoomRecoversPendingPublicationBeforeAbandoningIntegration(t *tes
 	ctx := context.Background()
 	f.rooms.fail = "save"
 	f.rooms.armed.Store(true)
-	if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
+	if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
 		t.Fatal(err)
 	}
 	losePvPRoom(t, f)
 	f.restart(t)
-	if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+	if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
 		t.Fatal(err)
 	}
 	f.assertFunds(t, 1000, 1000, 0, 0)
@@ -154,7 +155,7 @@ func TestPvPLostRoomRecoveryRejectsUnownedAndUnavailableIntegration(t *testing.T
 	}
 	ctx := context.Background()
 	losePvPRoom(t, f)
-	if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+	if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 		t.Fatalf("unowned recovery: %v", err)
 	}
 	before, err := f.store.FindTransition(ctx, f.room.Room.ID)
@@ -163,7 +164,7 @@ func TestPvPLostRoomRecoveryRejectsUnownedAndUnavailableIntegration(t *testing.T
 	}
 	storageErr := errors.New("Valkey unavailable")
 	f.rooms.RoomRepository = unavailablePvPRooms{RoomRepository: f.rooms.RoomRepository, err: storageErr}
-	if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); !errors.Is(err, storageErr) {
+	if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); !errors.Is(err, storageErr) {
 		t.Fatalf("storage failure treated as loss: %v", err)
 	}
 	after, err := f.store.FindTransition(ctx, f.room.Room.ID)
@@ -196,23 +197,23 @@ func TestPvPCompletedRoomLeaveIntegration(t *testing.T) {
 	if err != nil || !res.MatchCompleted {
 		t.Fatalf("expected completed match, got %+v err=%v", res, err)
 	}
-	if err := f.service.LeaveRoom(ctx, outsider.ID, f.room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+	if _, err := f.service.LeaveRoom(ctx, outsider.ID, f.room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 		t.Fatalf("expected ErrCharacterNotInRoom for unrelated actor in completed room, got %v", err)
 	}
-	if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+	if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
 		t.Fatalf("leader leave completed room: %v", err)
 	}
-	if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+	if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
 		t.Fatalf("idempotent leader leave completed room: %v", err)
 	}
 	rem, err := f.service.GetRoom(ctx, f.room.Room.ID)
 	if err != nil || rem.Room.LeaderCharacterID != f.member.ID || rem.Room.LeaderName != f.member.Name || len(rem.Members) != 1 {
 		t.Fatalf("expected member promoted in completed room, got %+v err=%v", rem, err)
 	}
-	if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
+	if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
 		t.Fatalf("final leave completed room: %v", err)
 	}
-	if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
+	if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
 		t.Fatalf("idempotent final leave completed room: %v", err)
 	}
 	if _, err := f.service.GetRoom(ctx, f.room.Room.ID); !errors.Is(err, pvp.ErrRoomNotFound) {
@@ -233,7 +234,7 @@ func TestPvPCompletedRoomLeavePartialFailureIntegration(t *testing.T) {
 		}
 		f.rooms.fail = "save"
 		f.rooms.armed.Store(true)
-		if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
+		if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
 			t.Fatalf("expected SaveRoom failure, got %v", err)
 		}
 		// Both room and character mapping still show leader as member so activity retry works.
@@ -241,7 +242,7 @@ func TestPvPCompletedRoomLeavePartialFailureIntegration(t *testing.T) {
 		if err != nil || len(cur.Members) != 2 || cur.Room.LeaderCharacterID != f.leader.ID {
 			t.Fatalf("expected intact membership for activity retry, got %+v err=%v", cur, err)
 		}
-		if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+		if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
 			t.Fatalf("retry leave after SaveRoom failure: %v", err)
 		}
 		rem, err := f.service.GetRoom(ctx, f.room.Room.ID)
@@ -259,7 +260,7 @@ func TestPvPCompletedRoomLeavePartialFailureIntegration(t *testing.T) {
 		}
 		f.rooms.fail = "delete-member"
 		f.rooms.armed.Store(true)
-		if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
+		if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
 			t.Fatalf("expected DeleteCharacterRoom failure, got %v", err)
 		}
 		rem, err := f.service.GetRoom(ctx, f.room.Room.ID)
@@ -269,10 +270,10 @@ func TestPvPCompletedRoomLeavePartialFailureIntegration(t *testing.T) {
 		if _, err := f.service.GetCharacterRoom(ctx, f.leader.ID); !errors.Is(err, pvp.ErrRoomNotFound) {
 			t.Fatalf("expected ErrRoomNotFound instead of stale membership mismatch, got %v", err)
 		}
-		if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+		if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
 			t.Fatalf("retry leave to clear dangling character mapping: %v", err)
 		}
-		if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
+		if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
 			t.Fatalf("member exit after leader partial recovery: %v", err)
 		}
 		if _, err := f.service.GetRoom(ctx, f.room.Room.ID); !errors.Is(err, pvp.ErrRoomNotFound) {
@@ -287,19 +288,19 @@ func TestPvPCompletedRoomLeavePartialFailureIntegration(t *testing.T) {
 		if _, err := f.service.AdvanceRound(ctx, f.leader.ID, f.room.Room.ID); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
+		if _, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID); err != nil {
 			t.Fatal(err)
 		}
 		f.rooms.fail = "delete-room"
 		f.rooms.armed.Store(true)
-		if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
+		if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); !errors.Is(err, errPublication) {
 			t.Fatalf("expected DeleteRoom failure, got %v", err)
 		}
 		cur, err := f.service.GetCharacterRoom(ctx, f.member.ID)
 		if err != nil || len(cur.Members) != 1 {
 			t.Fatalf("expected final member mapping preserved for retry, got %+v err=%v", cur, err)
 		}
-		if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
+		if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
 			t.Fatalf("retry final leave after DeleteRoom failure: %v", err)
 		}
 		if _, err := f.service.GetRoom(ctx, f.room.Room.ID); !errors.Is(err, pvp.ErrRoomNotFound) {

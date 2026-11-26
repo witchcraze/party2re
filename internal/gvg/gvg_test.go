@@ -454,7 +454,7 @@ func TestJoinAndLeaveRoom(t *testing.T) {
 	})
 
 	t.Run("regular member leaves pre-start room and deducts 2 GP", func(t *testing.T) {
-		err := svc.LeaveRoom(ctx, "c2", detail.Room.ID)
+		_, err := svc.LeaveRoom(ctx, "c2", detail.Room.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -471,7 +471,7 @@ func TestJoinAndLeaveRoom(t *testing.T) {
 	})
 
 	t.Run("last member leaves and disbands room", func(t *testing.T) {
-		err := svc.LeaveRoom(ctx, "c1", detail.Room.ID)
+		_, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID)
 		if err != nil {
 			t.Fatal(err)
 		}

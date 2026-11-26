@@ -44,8 +44,9 @@ type PostBattleSettler interface {
 	ApplyPostBattleResult(ctx context.Context, req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error)
 }
 
-// PostExitHook resets meal fullness and delivers reserved tavern food upon room exit.
-type PostExitHook func(ctx context.Context, characterID string) (string, error)
+// PostExitHook resets meal fullness and settles any standing Tavern delivery upon room exit.
+// It returns nil when no delivery was standing.
+type PostExitHook func(ctx context.Context, characterID string) (*DeliveryOutcome, error)
 
 // ActionWaitWriter extends a kicked member's action wait until an absolute deadline.
 type ActionWaitWriter interface {

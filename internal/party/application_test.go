@@ -629,7 +629,7 @@ func TestPartyService_KickAndLeave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("KickMember failed: %v", err)
 	}
-	if res.PartyName != "PartyX" || res.LeaderName != m1.Name {
+	if res.PartyName != "PartyX" || res.LeaderName != m1.Name || res.TargetName != m2.Name {
 		t.Fatalf("unexpected kick result: %+v", res)
 	}
 

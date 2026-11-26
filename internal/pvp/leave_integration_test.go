@@ -161,21 +161,21 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	postExitHook := func(hookCtx context.Context, characterID string) (string, error) {
+	postExitHook := func(hookCtx context.Context, characterID string) (*pvp.DeliveryOutcome, error) {
 		if err := tavernSvc.ResetFullness(hookCtx, characterID); err != nil {
-			return "", err
+			return nil, err
 		}
 		res, err := tavernSvc.ClaimDelivery(hookCtx, characterID)
 		if errors.Is(err, tavern.ErrNoActiveDelivery) {
-			return "", nil
+			return nil, nil
 		}
 		if _, ok := errors.AsType[tavern.UnaffordableDeliveryError](err); ok {
-			return "", nil
+			return nil, nil
 		}
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return res.Item.Name, nil
+		return &pvp.DeliveryOutcome{ItemName: res.Item.Name, Paid: true}, nil
 	}
 
 	engine := scriptedIntegrationEngine{fn: func(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
@@ -236,10 +236,10 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	rooms.fail = "delete-member"
 	rooms.after = false
 	rooms.armed.Store(true)
-	if err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); !errors.Is(err, errPublication) {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); !errors.Is(err, errPublication) {
 		t.Fatalf("expected publication failure, got %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); err != nil {
 		t.Fatalf("retry LeaveRoom(c1): %v", err)
 	}
 
@@ -261,7 +261,7 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 
 	// c2 leaves: item-106 gold bonus int(1 * 0.5 * 77) = 38, Tired = 4, HP = 35, MP = 4.
 	c2Before, _ := chars.FindByID(ctx, c2.ID)
-	if err := svc.LeaveRoom(ctx, c2.ID, room.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom(c2): %v", err)
 	}
 	gotC2, err := chars.FindByID(ctx, c2.ID)
@@ -272,7 +272,7 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	if gotC2.Stats.HP != wantC2HP || gotC2.Stats.MP != 4 || gotC2.Tired != 4 || gotC2.Money != c2Before.Money+38 {
 		t.Fatalf("c2 after exit: HP=%d(want %d) MP=%d Tired=%d Money=%d(before %d)", gotC2.Stats.HP, wantC2HP, gotC2.Stats.MP, gotC2.Tired, gotC2.Money, c2Before.Money)
 	}
-	if err := svc.LeaveRoom(ctx, c3.ID, room.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c3.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom(c3): %v", err)
 	}
 	gotInv3, err := invs.FindByCharacterID(ctx, c3.ID)

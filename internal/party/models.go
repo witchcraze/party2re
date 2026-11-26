@@ -34,6 +34,7 @@ const (
 type KickResult struct {
 	PartyName  string
 	LeaderName string
+	TargetName string
 }
 
 // DeliveryOutcome records the structured result of settling a standing Tavern delivery on exit.

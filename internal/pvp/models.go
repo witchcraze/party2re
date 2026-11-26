@@ -149,10 +149,23 @@ type RoomDetail struct {
 	Members []RoomMember  `json:"members"`
 }
 
-// KickResult carries the room and leader display names for the quest notice.
+// DeliveryOutcome records the structured result of settling a standing Tavern delivery on exit.
+type DeliveryOutcome struct {
+	ItemName string
+	Paid     bool
+}
+
+// LeaveResult records the structured outcome of leaving a room.
+type LeaveResult struct {
+	RefundedBet int
+	Delivery    *DeliveryOutcome
+}
+
+// KickResult carries the room, leader and kicked-member display names for the kick notices.
 type KickResult struct {
 	RoomName   string
 	LeaderName string
+	TargetName string
 }
 
 // RoomSummary provides concise listing information.

@@ -17,12 +17,14 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 )
@@ -164,10 +166,14 @@ func wireHooks(
 			cmbt.party.SetTavernExitSettler(partyTavernExitAdapter{tavern: misc.tavern})
 		}
 		if cmbt.gvg != nil {
-			cmbt.gvg.SetPostExitHook(postAdventureHook)
+			cmbt.gvg.SetPostExitHook(buildRoomExitHook(misc.tavern, func(itemName string, paid bool) *gvg.DeliveryOutcome {
+				return &gvg.DeliveryOutcome{ItemName: itemName, Paid: paid}
+			}))
 		}
 		if cmbt.pvp != nil {
-			cmbt.pvp.SetPostExitHook(postAdventureHook)
+			cmbt.pvp.SetPostExitHook(buildRoomExitHook(misc.tavern, func(itemName string, paid bool) *pvp.DeliveryOutcome {
+				return &pvp.DeliveryOutcome{ItemName: itemName, Paid: paid}
+			}))
 		}
 	}
 	if misc.monsterRepo != nil || misc.homeMemberRepo != nil {

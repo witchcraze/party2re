@@ -181,7 +181,7 @@ func TestGvGExitTavernProductionHook(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := f.cmbt.gvg.LeaveRoom(ctx, tc.charID, room.Room.ID); err != nil {
+			if _, err := f.cmbt.gvg.LeaveRoom(ctx, tc.charID, room.Room.ID); err != nil {
 				t.Fatalf("LeaveRoom(%s): %v", tc.name, err)
 			}
 			gotChar, err := f.core.charRepo.FindByID(ctx, tc.charID)
@@ -251,7 +251,7 @@ func TestPvPExitTavernProductionHook(t *testing.T) {
 		_, _ = f.db.ExecContext(cleanupCtx, "DELETE FROM pvp_character_claims WHERE room_id = ?", room.Room.ID)
 		_, _ = f.db.ExecContext(cleanupCtx, "DELETE FROM pvp_room_transitions WHERE room_id = ?", room.Room.ID)
 	})
-	if err := f.cmbt.pvp.LeaveRoom(ctx, f.char.ID, room.Room.ID); err != nil {
+	if _, err := f.cmbt.pvp.LeaveRoom(ctx, f.char.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom: %v", err)
 	}
 	gotChar, err := f.core.charRepo.FindByID(ctx, f.char.ID)

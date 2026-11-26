@@ -87,7 +87,9 @@ Valkey room, a later `AdvanceRound` replay sees Valkey is current and returns
 the saved `RoundResolution` without restoring departed members or prior
 leadership. Failed Valkey cleanup keeps `party2:gvg:character:<id>` to block new
 admission while SQL exit retries stay idempotent, and `DeleteCharacterRoom`
-removes the mapping only if it still names that room. Neither operation
+removes the mapping only if it still names that room. The character context
+exposes `gvg_leave` as `recovery_pending` while the mapping names a room that is
+gone or no longer lists the character, and that retry removes it. Neither operation
 reconstructs a missing/expired Valkey room from `gvg_match_transitions`.
 
 <a id="gvg-round-retry-identity-target"></a>

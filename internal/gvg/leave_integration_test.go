@@ -158,15 +158,15 @@ func TestGvG_LeaveRoom_SideEffectsAndRetryIdempotency_Integration(t *testing.T) 
 		gvg.WithPostBattleSettler(battleSvc),
 		gvg.WithTransactionProvider(txProv),
 		gvg.WithExitClaimRepository(gvgRepo),
-		gvg.WithPostExitHook(func(ctx context.Context, characterID string) (string, error) {
+		gvg.WithPostExitHook(func(ctx context.Context, characterID string) (*gvg.DeliveryOutcome, error) {
 			if err := tavernSvc.ResetFullness(ctx, characterID); err != nil {
-				return "", err
+				return nil, err
 			}
 			res, err := tavernSvc.ClaimDelivery(ctx, characterID)
 			if errors.Is(err, tavern.ErrNoActiveDelivery) {
-				return "", nil
+				return nil, nil
 			}
-			return res.Item.Name, err
+			return &gvg.DeliveryOutcome{ItemName: res.Item.Name, Paid: true}, err
 		}),
 	)
 	if err != nil {
@@ -192,10 +192,10 @@ func TestGvG_LeaveRoom_SideEffectsAndRetryIdempotency_Integration(t *testing.T) 
 
 	// Simulate transient Valkey failure on c1 LeaveRoom, then retry -> must not duplicate fatigue, EXP, or delivery charge.
 	roomRepo.failDeleteCharRoom.Store(true)
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err == nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err == nil {
 		t.Fatal("expected Valkey DeleteCharacterRoom failure")
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
 		t.Fatalf("c1 LeaveRoom retry failed: %v", err)
 	}
 
@@ -214,7 +214,7 @@ func TestGvG_LeaveRoom_SideEffectsAndRetryIdempotency_Integration(t *testing.T) 
 	}
 
 	// c2 leaves -> consumed item-193 must be unequipped and removed from inventory, HP stays 0, Tired = 4.
-	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
 		t.Fatalf("c2 LeaveRoom failed: %v", err)
 	}
 	updatedC2, err := charRepo.FindByID(ctx, c2.ID)
@@ -350,15 +350,15 @@ func TestGvG_LeaveRoom_RejoinAfterPreStartExit_Integration(t *testing.T) {
 		gvg.WithPostBattleSettler(battleSvc),
 		gvg.WithTransactionProvider(txProv),
 		gvg.WithExitClaimRepository(gvgRepo),
-		gvg.WithPostExitHook(func(ctx context.Context, characterID string) (string, error) {
+		gvg.WithPostExitHook(func(ctx context.Context, characterID string) (*gvg.DeliveryOutcome, error) {
 			if err := tavernSvc.ResetFullness(ctx, characterID); err != nil {
-				return "", err
+				return nil, err
 			}
 			res, err := tavernSvc.ClaimDelivery(ctx, characterID)
 			if errors.Is(err, tavern.ErrNoActiveDelivery) {
-				return "", nil
+				return nil, nil
 			}
-			return res.Item.Name, err
+			return &gvg.DeliveryOutcome{ItemName: res.Item.Name, Paid: true}, err
 		}),
 	)
 	if err != nil {
@@ -377,7 +377,7 @@ func TestGvG_LeaveRoom_RejoinAfterPreStartExit_Integration(t *testing.T) {
 	}
 
 	// 1st exit pre-start (c1).
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
 		t.Fatalf("c1 pre-start LeaveRoom failed: %v", err)
 	}
 	afterFirstExit, err := charRepo.FindByID(ctx, c1.ID)
@@ -411,10 +411,10 @@ func TestGvG_LeaveRoom_RejoinAfterPreStartExit_Integration(t *testing.T) {
 	}
 
 	roomRepo.failDeleteCharRoom.Store(true)
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err == nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err == nil {
 		t.Fatal("expected Valkey DeleteCharacterRoom failure on 2nd exit")
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
 		t.Fatalf("c1 2nd LeaveRoom retry failed: %v", err)
 	}
 
@@ -625,7 +625,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 
 	// 2. Leader c1 leaves; SaveRoom fails after SQL side-effects commit.
 	roomRepo.failSave.Store(true)
-	if err := svc.LeaveRoom(ctx, c1.ID, room1.Room.ID); !errors.Is(err, roomRepo.saveErr) {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, room1.Room.ID); !errors.Is(err, roomRepo.saveErr) {
 		t.Fatalf("c1 LeaveRoom expected SaveRoom failure, got %v", err)
 	}
 	roomRepo.failSave.Store(false)
@@ -643,7 +643,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 
 	// Retry c1 LeaveRoom, injecting a DeleteCharacterRoom failure after SaveRoom succeeds.
 	roomRepo.failDeleteChar.Store(true)
-	if err := svc.LeaveRoom(ctx, c1.ID, room1.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, room1.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
 		t.Fatalf("c1 LeaveRoom expected DeleteCharacterRoom failure, got %v", err)
 	}
 	roomRepo.failDeleteChar.Store(false)
@@ -657,7 +657,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 	}
 
 	// Retry c1 LeaveRoom after roster removal -> clears mapping without repeating exit effects.
-	if err := svc.LeaveRoom(ctx, c1.ID, room1.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, room1.Room.ID); err != nil {
 		t.Fatalf("c1 LeaveRoom mapping retry failed: %v", err)
 	}
 	if _, err := baseRooms.GetCharacterRoom(ctx, c1.ID); !errors.Is(err, gvg.ErrRoomNotFound) {
@@ -675,7 +675,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 	if _, err := svc.JoinRoom(ctx, c1.ID, room2.Room.ID, ""); err != nil {
 		t.Fatalf("c1 JoinRoom(room2) failed: %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, room1.Room.ID); !errors.Is(err, gvg.ErrCharacterNotInRoom) {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, room1.Room.ID); !errors.Is(err, gvg.ErrCharacterNotInRoom) {
 		t.Fatalf("stale LeaveRoom(room1) = %v, want ErrCharacterNotInRoom", err)
 	}
 	if err := baseRooms.DeleteCharacterRoom(ctx, c1.ID, room1.Room.ID); err != nil {
@@ -687,7 +687,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 
 	// 3. Last member c2 leaves room1: fail DeleteRoom first, then fail DeleteCharacterRoom after DeleteRoom.
 	roomRepo.failDeleteRoom.Store(true)
-	if err := svc.LeaveRoom(ctx, c2.ID, room1.Room.ID); !errors.Is(err, roomRepo.deleteRoomErr) {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, room1.Room.ID); !errors.Is(err, roomRepo.deleteRoomErr) {
 		t.Fatalf("c2 LeaveRoom expected DeleteRoom failure, got %v", err)
 	}
 	roomRepo.failDeleteRoom.Store(false)
@@ -696,7 +696,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 	}
 
 	roomRepo.failDeleteChar.Store(true)
-	if err := svc.LeaveRoom(ctx, c2.ID, room1.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, room1.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
 		t.Fatalf("c2 LeaveRoom expected DeleteCharacterRoom failure, got %v", err)
 	}
 	roomRepo.failDeleteChar.Store(false)
@@ -708,7 +708,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 	}
 
 	// Retry c2 LeaveRoom completes mapping cleanup; c2 can then join room2 and stale room1 leave leaves room2 intact.
-	if err := svc.LeaveRoom(ctx, c2.ID, room1.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, room1.Room.ID); err != nil {
 		t.Fatalf("c2 LeaveRoom mapping retry failed: %v", err)
 	}
 	updatedC2, err := charRepo.FindByID(ctx, c2.ID)
@@ -721,7 +721,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 	if _, err := svc.JoinRoom(ctx, c2.ID, room2.Room.ID, ""); err != nil {
 		t.Fatalf("c2 JoinRoom(room2) failed: %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, c2.ID, room1.Room.ID); !errors.Is(err, gvg.ErrRoomNotFound) {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, room1.Room.ID); !errors.Is(err, gvg.ErrRoomNotFound) {
 		t.Fatalf("stale LeaveRoom(room1) after disband = %v, want ErrRoomNotFound", err)
 	}
 	if mapped, err := baseRooms.GetCharacterRoom(ctx, c2.ID); err != nil || mapped != room2.Room.ID {
@@ -915,18 +915,18 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 		gvg.WithPostBattleSettler(battleSvc),
 		gvg.WithTransactionProvider(txProv),
 		gvg.WithExitClaimRepository(claimRepo),
-		gvg.WithPostExitHook(func(ctx context.Context, characterID string) (string, error) {
+		gvg.WithPostExitHook(func(ctx context.Context, characterID string) (*gvg.DeliveryOutcome, error) {
 			if err := tavernSvc.ResetFullness(ctx, characterID); err != nil {
-				return "", err
+				return nil, err
 			}
 			res, err := tavernSvc.ClaimDelivery(ctx, characterID)
 			if errors.Is(err, tavern.ErrNoActiveDelivery) {
-				return "", nil
+				return nil, nil
 			}
 			if unpaid, ok := errors.AsType[tavern.UnaffordableDeliveryError](err); ok {
-				return unpaid.ItemName, nil
+				return &gvg.DeliveryOutcome{ItemName: unpaid.ItemName}, nil
 			}
-			return res.Item.Name, err
+			return &gvg.DeliveryOutcome{ItemName: res.Item.Name, Paid: true}, err
 		}),
 	)
 	if err != nil {
@@ -969,7 +969,7 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 
 	// 1. Fail MarkExitDeliveryDone for c1 -> whole SQL exit + delivery must roll back.
 	claimRepo.failMarkDone.Store(true)
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); !errors.Is(err, claimRepo.markDoneErr) {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); !errors.Is(err, claimRepo.markDoneErr) {
 		t.Fatalf("c1 LeaveRoom expected MarkExitDeliveryDone error, got %v", err)
 	}
 	c1AfterFail, err := charRepo.FindByID(ctx, c1.ID)
@@ -996,11 +996,11 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 
 	// Retry c1 with Valkey DeleteCharacterRoom failure, then final retry -> single charge, heal, and meal increment.
 	roomRepo.failDeleteChar.Store(true)
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
 		t.Fatalf("c1 LeaveRoom expected Valkey failure, got %v", err)
 	}
 	roomRepo.failDeleteChar.Store(false)
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
 		t.Fatalf("c1 LeaveRoom retry failed: %v", err)
 	}
 	c1AfterRetry, err := charRepo.FindByID(ctx, c1.ID)
@@ -1028,14 +1028,14 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 
 	// 2. Unaffordable delivery for c2 + Valkey failure -> marks delivery_done=true, so funding before retry does NOT charge.
 	roomRepo.failDeleteChar.Store(true)
-	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
 		t.Fatalf("c2 LeaveRoom expected Valkey failure, got %v", err)
 	}
 	roomRepo.failDeleteChar.Store(false)
 	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 1000 WHERE id = ?", c2.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
 		t.Fatalf("c2 LeaveRoom retry failed: %v", err)
 	}
 	c2After, err := charRepo.FindByID(ctx, c2.ID)
@@ -1058,11 +1058,11 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 
 	// 3. No active delivery for c3 + Valkey failure -> marks delivery_done=true and resets fullness.
 	roomRepo.failDeleteChar.Store(true)
-	if err := svc.LeaveRoom(ctx, c3.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
+	if _, err := svc.LeaveRoom(ctx, c3.ID, detail.Room.ID); !errors.Is(err, roomRepo.deleteCharRoomErr) {
 		t.Fatalf("c3 LeaveRoom expected Valkey failure, got %v", err)
 	}
 	roomRepo.failDeleteChar.Store(false)
-	if err := svc.LeaveRoom(ctx, c3.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c3.ID, detail.Room.ID); err != nil {
 		t.Fatalf("c3 LeaveRoom retry failed: %v", err)
 	}
 	c3StatusAfter, err := tavernRepo.GetCharacterStatus(ctx, c3.ID)
@@ -1110,7 +1110,7 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 	if _, err := svc.AdvanceRound(ctx, c2.ID, room2.Room.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, room2.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, room2.Room.ID); err != nil {
 		t.Fatalf("c1 second room LeaveRoom failed: %v", err)
 	}
 	c1AfterSecond, err := charRepo.FindByID(ctx, c1.ID)
@@ -1302,15 +1302,15 @@ func TestGvG_LeaveRoom_RecoverCommittedRoundBeforeDeparture_Integration(t *testi
 			gvg.WithPostBattleSettler(battleSvc),
 			gvg.WithTransactionProvider(txProv),
 			gvg.WithExitClaimRepository(gvgRepo),
-			gvg.WithPostExitHook(func(ctx context.Context, characterID string) (string, error) {
+			gvg.WithPostExitHook(func(ctx context.Context, characterID string) (*gvg.DeliveryOutcome, error) {
 				if err := tavernSvc.ResetFullness(ctx, characterID); err != nil {
-					return "", err
+					return nil, err
 				}
 				res, err := tavernSvc.ClaimDelivery(ctx, characterID)
 				if errors.Is(err, tavern.ErrNoActiveDelivery) {
-					return "", nil
+					return nil, nil
 				}
-				return res.Item.Name, err
+				return &gvg.DeliveryOutcome{ItemName: res.Item.Name, Paid: true}, err
 			}),
 		)
 		if err != nil {
@@ -1355,7 +1355,7 @@ func TestGvG_LeaveRoom_RecoverCommittedRoundBeforeDeparture_Integration(t *testi
 					t.Fatal(err)
 				}
 				// Round publication fails again -> LeaveRoom must abort before exit claim, copy-back, fatigue or delivery.
-				if err := svc.LeaveRoom(ctx, departID, detail.Room.ID); !errors.Is(err, roomRepo.saveErr) {
+				if _, err := svc.LeaveRoom(ctx, departID, detail.Room.ID); !errors.Is(err, roomRepo.saveErr) {
 					t.Fatalf("LeaveRoom with failing SaveRoom = %v, want %v", err, roomRepo.saveErr)
 				}
 				var claimCount int
@@ -1394,7 +1394,7 @@ func TestGvG_LeaveRoom_RecoverCommittedRoundBeforeDeparture_Integration(t *testi
 			}
 		}
 
-		if err := svc.LeaveRoom(ctx, departID, detail.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, departID, detail.Room.ID); err != nil {
 			t.Fatalf("LeaveRoom(%s) failed: %v", departID, err)
 		}
 

@@ -222,7 +222,7 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 	}
 
 	// Non-leader leaves: bet refunded
-	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
 		t.Fatalf("unexpected leave error: %v", err)
 	}
 
@@ -240,7 +240,7 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 	}
 
 	// Last remaining leader leaves first room: disbands & refunds Alice
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
 		t.Fatalf("unexpected leader leave error: %v", err)
 	}
 	updatedC1, _ := charRepo.FindByID(ctx, c1.ID)
@@ -268,7 +268,7 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 	if _, err := svc.JoinRoom(ctx, c3.ID, detail2.Room.ID, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, detail2.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail2.Room.ID); err != nil {
 		t.Fatalf("unexpected leader handover leave error: %v", err)
 	}
 	updatedC1, _ = charRepo.FindByID(ctx, c1.ID)
@@ -290,18 +290,18 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 	}
 	outsider := createTestCharacter("outsider", "Outsider", 500)
 	charRepo.add(outsider)
-	if err := svc.LeaveRoom(ctx, outsider.ID, detail2.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+	if _, err := svc.LeaveRoom(ctx, outsider.ID, detail2.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 		t.Fatalf("expected ErrCharacterNotInRoom for unrelated actor, got %v", err)
 	}
 	// Remaining members leave one by one until last member disbands the room
-	if err := svc.LeaveRoom(ctx, c2.ID, detail2.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, detail2.Room.ID); err != nil {
 		t.Fatal(err)
 	}
 	handed2, err := svc.GetRoom(ctx, detail2.Room.ID)
 	if err != nil || handed2.Room.LeaderCharacterID != c3.ID || handed2.Room.LeaderName != c3.Name {
 		t.Fatalf("expected Charlie (%s) promoted to leader, got %+v err=%v", c3.Name, handed2.Room, err)
 	}
-	if err := svc.LeaveRoom(ctx, c3.ID, detail2.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c3.ID, detail2.Room.ID); err != nil {
 		t.Fatal(err)
 	}
 	_, err = svc.GetRoom(ctx, detail2.Room.ID)
@@ -686,14 +686,14 @@ func TestColosseum_LeaveRoom_InProgress_AndForfeit(t *testing.T) {
 	_, _ = svc.SelectTeam(ctx, c2.ID, d1.Room.ID, pvp.ColorBlue)
 	_, _ = svc.StartMatch(ctx, c1.ID, d1.Room.ID)
 
-	if err := svc.LeaveRoom(ctx, c3.ID, d1.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+	if _, err := svc.LeaveRoom(ctx, c3.ID, d1.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 		t.Fatalf("expected ErrCharacterNotInRoom for unrelated actor in_progress, got %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, d1.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, d1.Room.ID); err != nil {
 		t.Fatalf("unexpected in_progress leader leave error: %v", err)
 	}
 	// Retry is idempotent
-	if err := svc.LeaveRoom(ctx, c1.ID, d1.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, d1.Room.ID); err != nil {
 		t.Fatalf("unexpected retry leave error: %v", err)
 	}
 	aAfter, _ := charRepo.FindByID(ctx, c1.ID)
@@ -712,7 +712,7 @@ func TestColosseum_LeaveRoom_InProgress_AndForfeit(t *testing.T) {
 	if !res.MatchCompleted || res.OverallWinnerTeam != pvp.ColorBlue || res.PrizePerMember != 200 || charRepo.prizes[c2.ID] != 200 {
 		t.Fatalf("expected Bob to win 200G forfeited pool, got res=%+v prizes=%+v", res, charRepo.prizes)
 	}
-	if err := svc.LeaveRoom(ctx, c2.ID, d1.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, d1.Room.ID); err != nil {
 		t.Fatalf("expected Bob to exit completed room before re-entering: %v", err)
 	}
 
@@ -728,17 +728,17 @@ func TestColosseum_LeaveRoom_InProgress_AndForfeit(t *testing.T) {
 	_, _ = svc.SelectTeam(ctx, c2.ID, d2.Room.ID, pvp.ColorBlue)
 	_, _ = svc.StartMatch(ctx, c1.ID, d2.Room.ID)
 
-	if err := svc.LeaveRoom(ctx, c2.ID, d2.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, d2.Room.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, d2.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, d2.Room.ID); err != nil {
 		t.Fatal(err)
 	}
 	tr, err := transRepo.FindTransition(ctx, d2.Room.ID)
 	if err != nil || tr.Kind != "forfeit" || tr.ForfeitedPool != 200 || tr.Detail.Room.Status != pvp.StatusDisbanded {
 		t.Fatalf("expected forfeit transition with 200G ForfeitedPool, got %+v err=%v", tr, err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, d2.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, d2.Room.ID); err != nil {
 		t.Fatalf("expected idempotent retry on forfeit, got %v", err)
 	}
 	if _, err := svc.GetRoom(ctx, d2.Room.ID); !errors.Is(err, pvp.ErrRoomNotFound) {
@@ -767,23 +767,23 @@ func TestColosseum_LeaveRoom_Completed(t *testing.T) {
 		t.Fatalf("expected completed match, got %+v err=%v", res, err)
 	}
 
-	if err := svc.LeaveRoom(ctx, c3.ID, d.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+	if _, err := svc.LeaveRoom(ctx, c3.ID, d.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 		t.Fatalf("expected ErrCharacterNotInRoom for unrelated actor in completed room, got %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, d.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, d.Room.ID); err != nil {
 		t.Fatalf("expected leader completed leave success, got %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, d.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, d.Room.ID); err != nil {
 		t.Fatalf("expected idempotent retry after completed leave, got %v", err)
 	}
 	rem, err := svc.GetRoom(ctx, d.Room.ID)
 	if err != nil || rem.Room.LeaderCharacterID != c2.ID || rem.Room.LeaderName != c2.Name || len(rem.Members) != 1 {
 		t.Fatalf("expected Bob (%s) promoted on completed leader exit, got %+v err=%v", c2.Name, rem, err)
 	}
-	if err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
 		t.Fatalf("expected final completed leave success, got %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
 		t.Fatalf("expected idempotent retry on deleted completed room, got %v", err)
 	}
 	if _, err := svc.GetRoom(ctx, d.Room.ID); !errors.Is(err, pvp.ErrRoomNotFound) {
@@ -813,7 +813,7 @@ func TestColosseum_LeaveRoom_Completed_PreservesAdvanceRoundReplay(t *testing.T)
 			t.Fatalf("expected completed match, got %+v err=%v", res, err)
 		}
 
-		if err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
 			t.Fatalf("expected non-leader completed leave success, got %v", err)
 		}
 
@@ -846,7 +846,7 @@ func TestColosseum_LeaveRoom_Completed_PreservesAdvanceRoundReplay(t *testing.T)
 			t.Fatalf("expected completed match, got %+v err=%v", res, err)
 		}
 
-		if err := svc.LeaveRoom(ctx, c1.ID, d.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, c1.ID, d.Room.ID); err != nil {
 			t.Fatalf("expected leader completed leave success, got %v", err)
 		}
 		if _, err := svc.AdvanceRound(ctx, c1.ID, d.Room.ID); !errors.Is(err, pvp.ErrNotRoomLeader) {
@@ -860,7 +860,7 @@ func TestColosseum_LeaveRoom_Completed_PreservesAdvanceRoundReplay(t *testing.T)
 			t.Fatalf("expected replayed resolution %+v, got %+v", res, replayed)
 		}
 
-		if err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, c2.ID, d.Room.ID); err != nil {
 			t.Fatalf("expected final completed leave success, got %v", err)
 		}
 		if _, err := svc.AdvanceRound(ctx, c2.ID, d.Room.ID); !errors.Is(err, pvp.ErrRoomNotFound) {

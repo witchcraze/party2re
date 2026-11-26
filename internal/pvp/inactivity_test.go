@@ -141,11 +141,11 @@ func TestPvPInactivity_ClockBoundariesAndRefreshingEvents(t *testing.T) {
 
 	// At lastAct + 1801s, LeaveRoom triggers inactivity cleanup for both participants.
 	*now = lastAct.Add(pvp.InactivityTimeout + time.Second)
-	if err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom timeout cleanup: %v", err)
 	}
 	// Idempotent second LeaveRoom does not error or re-penalize.
-	if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
 		t.Fatalf("second LeaveRoom after timeout: %v", err)
 	}
 
@@ -190,7 +190,7 @@ func TestPvPInactivity_CompletedRoomTimeoutAndEvictionDistinction(t *testing.T) 
 
 		// Alice leaves right away: no sleep penalty for Alice.
 		*now = t0.Add(time.Minute)
-		if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
 			t.Fatal(err)
 		}
 		aliceAfter, _ := chars.FindByID(ctx, alice.ID)
@@ -200,7 +200,7 @@ func TestPvPInactivity_CompletedRoomTimeoutAndEvictionDistinction(t *testing.T) 
 
 		// Bob stays past 1800s after Alice's leave -> timeout applies only to Bob.
 		*now = now.Add(pvp.InactivityTimeout + time.Second)
-		if err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
 			t.Fatal(err)
 		}
 		tr, _ := trans.FindTransition(ctx, room.Room.ID)
@@ -229,7 +229,7 @@ func TestPvPInactivity_CompletedRoomTimeoutAndEvictionDistinction(t *testing.T) 
 		if err := rooms.DeleteRoom(ctx, room.Room.ID); err != nil {
 			t.Fatal(err)
 		}
-		if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
 			t.Fatal(err)
 		}
 		tr, _ := trans.FindTransition(ctx, room.Room.ID)
@@ -265,7 +265,7 @@ func TestPvPInactivity_ConnectivityErrorAndInterruptedRetry(t *testing.T) {
 
 		now = t0.Add(pvp.InactivityTimeout + time.Minute)
 		downSvc, _ := pvp.NewService(failingReadRooms{RoomRepository: rooms, err: storageErr}, chars, mockBattleEngine{}, pvp.WithTransitionRepository(trans), pvp.WithTimerService(timers), pvp.WithClock(func() time.Time { return now }))
-		if err := downSvc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, storageErr) {
+		if _, err := downSvc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, storageErr) {
 			t.Fatalf("expected storageErr, got %v", err)
 		}
 		tr, _ := trans.FindTransition(ctx, room.Room.ID)
@@ -297,7 +297,7 @@ func TestPvPInactivity_ConnectivityErrorAndInterruptedRetry(t *testing.T) {
 
 		timeoutAt := t0.Add(pvp.InactivityTimeout + time.Second)
 		now = timeoutAt
-		if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, timerErr) {
+		if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, timerErr) {
 			t.Fatalf("expected timerErr, got %v", err)
 		}
 		until, pending, err := svc.GetPendingSleepPenalty(ctx, bob.ID)
@@ -308,7 +308,7 @@ func TestPvPInactivity_ConnectivityErrorAndInterruptedRetry(t *testing.T) {
 
 		// Retry 10 minutes later: uses saved PenaltyUntil without adding another 3600s.
 		now = timeoutAt.Add(10 * time.Minute)
-		if err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
 			t.Fatalf("retry LeaveRoom: %v", err)
 		}
 		_, pendingAfter, err := svc.GetPendingSleepPenalty(ctx, bob.ID)
@@ -403,7 +403,7 @@ func TestPvPInactivity_LongerSleepAndPendingLeaveBeforeTimeout(t *testing.T) {
 			t.Fatal(err)
 		}
 		*now = t0.Add(pvp.InactivityTimeout + time.Second)
-		if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
 			t.Fatal(err)
 		}
 		rem, err := timers.GetRemainingLock(ctx, timer.CategorySleep, alice.ID)
@@ -433,13 +433,13 @@ func TestPvPInactivity_LongerSleepAndPendingLeaveBeforeTimeout(t *testing.T) {
 		failErr := errors.New("save failed")
 		faultRooms := &failingDeleteRooms{RoomRepository: rooms, failSave: failErr}
 		faultSvc, _ := pvp.NewService(faultRooms, chars, mockBattleEngine{}, pvp.WithTransitionRepository(trans), pvp.WithTimerService(timers), pvp.WithClock(func() time.Time { return now }))
-		if err := faultSvc.LeaveRoom(ctx, bob.ID, room.Room.ID); !errors.Is(err, failErr) {
+		if _, err := faultSvc.LeaveRoom(ctx, bob.ID, room.Room.ID); !errors.Is(err, failErr) {
 			t.Fatalf("expected failErr, got %v", err)
 		}
 
 		// After T0+5m+1801s, Alice triggers LeaveRoom -> Bob's pending leave finishes without penalty, Alice times out.
 		now = now.Add(pvp.InactivityTimeout + time.Second)
-		if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
 			t.Fatalf("LeaveRoom: %v", err)
 		}
 		bobAfter, _ := chars.FindByID(ctx, bob.ID)
@@ -473,10 +473,10 @@ func TestPvPInactivity_LongerSleepAndPendingLeaveBeforeTimeout(t *testing.T) {
 		svc, _ := pvp.NewService(rooms, chars, mockBattleEngine{}, pvp.WithTransitionRepository(trans), pvp.WithTimerService(ft), pvp.WithClock(func() time.Time { return now }))
 		room, _ := svc.CreateRoom(ctx, alice.ID, pvp.CreateRoomRequest{Name: "ExpiredPenalty", Bet: 100})
 		now = t0.Add(pvp.InactivityTimeout + time.Second) // still in past (> 90m ago), so PenaltyUntil < time.Now()
-		if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, timerErr) {
+		if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, timerErr) {
 			t.Fatalf("expected timerErr, got %v", err)
 		}
-		if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); err != nil {
 			t.Fatalf("retry after expiry: %v", err)
 		}
 		if locked, _ := baseTimer.IsLocked(ctx, timer.CategorySleep, alice.ID); locked {
@@ -565,13 +565,13 @@ func TestPvPInactivity_NonFinalKillsSurviveValkeyExpiryAndRetry(t *testing.T) {
 	_ = rooms.DeleteCharacterRoom(ctx, bob.ID, room.Room.ID)
 
 	// First cleanup attempt fails during timer publication after SQL timeout commit.
-	if err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, timerErr) {
+	if _, err := svc.LeaveRoom(ctx, alice.ID, room.Room.ID); !errors.Is(err, timerErr) {
 		t.Fatalf("expected timerErr on interrupted timeout cleanup, got %v", err)
 	}
 
 	// Retry on fresh service instance finishes publication without double-incrementing PvPWins.
 	ft.failOnID = ""
-	if err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, bob.ID, room.Room.ID); err != nil {
 		t.Fatalf("retry LeaveRoom after timeout: %v", err)
 	}
 

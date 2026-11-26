@@ -295,7 +295,7 @@ func (f *transitionFixture) prepare(t *testing.T, kind string) {
 			t.Fatal(err)
 		}
 		if kind == "forfeit" || kind == "forfeit-win" {
-			if err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
+			if _, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -318,9 +318,11 @@ func (f *transitionFixture) act(t *testing.T, kind string) error {
 		_, err := f.service.JoinRoom(ctx, f.member.ID, f.room.Room.ID, "secret")
 		return err
 	case "leave", "inprogress-leave":
-		return f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID)
+		_, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID)
+		return err
 	case "handover", "disband", "forfeit":
-		return f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID)
+		_, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID)
+		return err
 	default:
 		_, err := f.service.AdvanceRound(ctx, f.leader.ID, f.room.Room.ID)
 		return err
@@ -508,9 +510,11 @@ func TestPvPFinancialConcurrentIntegration(t *testing.T) {
 					_, err := f.service.JoinRoom(ctx, f.member.ID, f.room.Room.ID, "secret")
 					return err
 				case "leave", "inprogress-leave":
-					return f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID)
+					_, err := f.service.LeaveRoom(ctx, f.member.ID, f.room.Room.ID)
+					return err
 				case "handover", "disband", "forfeit":
-					return f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID)
+					_, err := f.service.LeaveRoom(ctx, f.leader.ID, f.room.Room.ID)
+					return err
 				default:
 					_, err := f.service.AdvanceRound(ctx, f.leader.ID, f.room.Room.ID)
 					return err

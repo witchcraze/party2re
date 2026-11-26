@@ -13,12 +13,14 @@ import (
 // LeaveRoom exits a GvG room (@にげる, _battle.cgi:1184-1247,1330-1375) across all phases,
 // transferring leadership to the first remaining member and disbanding only when empty.
 // SQL exit side-effects commit in applyExitSideEffects independently of Valkey room publication and mapping cleanup.
-func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) error {
+// The result carries the standing Tavern delivery settled by this call; recovery replays carry none.
+func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) (LeaveResult, error) {
 	roomID = strings.TrimSpace(roomID)
 	if roomID == "" {
-		return ErrRoomNotFound
+		return LeaveResult{}, ErrRoomNotFound
 	}
-	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	var result LeaveResult
+	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		detail, err := s.repo.GetRoom(lockedCtx, roomID)
 		if err != nil {
 			if errors.Is(err, ErrRoomNotFound) {
@@ -46,9 +48,11 @@ func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) e
 		}
 		detail.Room.UpdatedAt = time.Now().UTC()
 
-		if err := s.applyExitSideEffects(lockedCtx, roomID, charID, round, departing); err != nil {
+		delivery, err := s.applyExitSideEffects(lockedCtx, roomID, charID, round, departing)
+		if err != nil {
 			return err
 		}
+		result.Delivery = delivery
 
 		if !hasRemaining {
 			if err := s.repo.DeleteRoom(lockedCtx, roomID); err != nil {
@@ -61,6 +65,10 @@ func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) e
 		}
 		return s.repo.DeleteCharacterRoom(lockedCtx, charID, roomID)
 	})
+	if err != nil {
+		return LeaveResult{}, err
+	}
+	return result, nil
 }
 
 func (s *Service) cleanupPendingCharacterRoom(ctx context.Context, charID, roomID string, notPendingErr error) error {
@@ -91,12 +99,12 @@ func (s *Service) recoverPendingRoundTransition(ctx context.Context, roomID stri
 	return committed.Detail, nil
 }
 
-func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID string, round int, departing GvGMember) error {
+func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID string, round int, departing GvGMember) (*DeliveryOutcome, error) {
 	exitFatigue := round*3 + 1
 	if s.settler == nil {
 		char, err := s.characters.FindByID(ctx, charID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		remMP := -1
 		if departing.MP != nil {
@@ -105,17 +113,16 @@ func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID strin
 		char.ApplyCombatSurvival(departing.HP, remMP, departing.HP <= 0)
 		char.AddTired(exitFatigue)
 		if err := s.characters.Update(ctx, char); err != nil {
-			return err
+			return nil, err
 		}
-		if s.postExitHook != nil {
-			if _, err := s.postExitHook(ctx, charID); err != nil {
-				return err
-			}
+		if s.postExitHook == nil {
+			return nil, nil
 		}
-		return nil
+		return s.postExitHook(ctx, charID)
 	}
 
 	joinID := memberJoinKey(departing)
+	var delivery *DeliveryOutcome
 	if err := s.runInTx(ctx, func(txCtx context.Context) error {
 		var claim ExitClaimState
 		if s.exitClaims != nil {
@@ -158,7 +165,8 @@ func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID strin
 					return err
 				}
 			}
-			if _, err := s.postExitHook(txCtx, charID); err != nil {
+			var err error
+			if delivery, err = s.postExitHook(txCtx, charID); err != nil {
 				return err
 			}
 			if s.exitClaims != nil {
@@ -169,9 +177,9 @@ func (s *Service) applyExitSideEffects(ctx context.Context, roomID, charID strin
 		}
 		return nil
 	}); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return delivery, nil
 }
 
 func memberJoinKey(m GvGMember) string {

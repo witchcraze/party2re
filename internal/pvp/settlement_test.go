@@ -165,7 +165,7 @@ func TestSettlement_LeaveRoom_LeaderDisband_RollbackOnFailure(t *testing.T) {
 	charRepo.resetLockCalls()
 
 	// Leader leaves recruiting room -> refunds only leader (char-3), hands leadership to first remaining member on retry.
-	err = svc.LeaveRoom(ctx, c1.ID, detail.Room.ID)
+	_, err = svc.LeaveRoom(ctx, c1.ID, detail.Room.ID)
 	if err == nil {
 		t.Fatal("expected error on LeaveRoom, got nil")
 	}
@@ -237,7 +237,7 @@ func TestSettlement_LeaveRoom_NonLeader_RollbackOnFailure(t *testing.T) {
 	errDB := errors.New("simulated lock timeout")
 	charRepo.failUpdateIDs[c2.ID] = errDB
 
-	err = svc.LeaveRoom(ctx, c2.ID, detail.Room.ID)
+	_, err = svc.LeaveRoom(ctx, c2.ID, detail.Room.ID)
 	if err == nil {
 		t.Fatal("expected error on LeaveRoom, got nil")
 	}
@@ -539,10 +539,10 @@ func TestSettlement_LeaveForfeit_FlushesPendingPvPKills(t *testing.T) {
 		t.Fatalf("AdvanceRound failed: %v", err)
 	}
 	// Member leaves mid-match (kills stay pending on room), then remaining leader leaves -> disbanded & flushes c2's kill_p.
-	if err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c2.ID, detail.Room.ID); err != nil {
 		t.Fatalf("member LeaveRoom failed: %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, c1.ID, detail.Room.ID); err != nil {
 		t.Fatalf("leader LeaveRoom failed: %v", err)
 	}
 

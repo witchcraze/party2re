@@ -16,7 +16,7 @@ type PvPService interface {
 	GetRoom(ctx context.Context, roomID string) (pvp.RoomDetail, error)
 	ListRooms(ctx context.Context) ([]pvp.RoomSummary, error)
 	JoinRoom(ctx context.Context, characterID string, roomID string, password string) (pvp.RoomDetail, error)
-	LeaveRoom(ctx context.Context, characterID string, roomID string) error
+	LeaveRoom(ctx context.Context, characterID string, roomID string) (pvp.LeaveResult, error)
 	KickMember(ctx context.Context, roomID string, leaderID string, targetID string) (pvp.KickResult, error)
 	SelectTeam(ctx context.Context, characterID string, roomID string, teamColor string) (pvp.RoomDetail, error)
 	StartMatch(ctx context.Context, leaderID string, roomID string) (pvp.RoomDetail, error)
@@ -201,37 +201,6 @@ func (h *Handler) handleJoinPvPRoom(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, detail)
-	})
-}
-
-func (h *Handler) handleLeavePvPRoom(w http.ResponseWriter, r *http.Request) {
-	if h.pvp == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("pvp service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		err := h.pvp.LeaveRoom(r.Context(), char.ID, roomID)
-		if err != nil {
-			if errors.Is(err, pvp.ErrRoomNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, pvp.ErrCharacterNotInRoom) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			if errors.Is(err, pvp.ErrTransitionConflict) {
-				writeError(w, http.StatusConflict, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, pvpMessageResponse{Message: "left room successfully"})
 	})
 }
 
