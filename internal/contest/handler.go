@@ -75,12 +75,13 @@ func NewContestSettlementHandler(service *Service, opts ...SettlementOption) *Co
 	return h
 }
 
-// Reconcile reconciles the recurring contest settlement schedule from current SQL round state.
+// Reconcile reconciles the recurring contest settlement schedule, skipping SQL reads
+// on healthy steady-state ticks before the cached target end time when Valkey already holds a reservation.
 func (h *ContestSettlementHandler) Reconcile(ctx context.Context) error {
 	if h.service == nil {
 		return nil
 	}
-	return h.service.ReconcileSettlementSchedule(ctx)
+	return h.service.reconcileSettlementSchedule(ctx, true)
 }
 
 // Handle executes the contest settlement logic and schedules the next settlement check.
