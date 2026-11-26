@@ -171,11 +171,18 @@ func TestStoreBuildBuyAndTrade_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	heldShield, err := item.NewInstance("item-071", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ownerInv, err := inventory.New(owner.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := ownerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerInv.Add(heldShield); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.invs.Save(ctx, ownerInv); err != nil {
@@ -215,13 +222,22 @@ func TestStoreBuildBuyAndTrade_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListBarterItem failed: %v", err)
 	}
-	if len(f.collection.calls) != 2 {
-		t.Fatalf("expected 2 listing collection calls (1 per listing for held armor-01), got %+v", f.collection.calls)
+	if len(f.collection.calls) != 4 {
+		t.Fatalf("expected 4 listing collection calls (2 listings × 2 held items), got %+v", f.collection.calls)
 	}
+	var seenArmor, seenShield bool
 	for _, call := range f.collection.calls {
-		if call.CharacterID != owner.ID || call.ItemID != "armor-01" || call.Category != "armor" {
-			t.Fatalf("unexpected listing collection call: %+v (listed weapon-01 must not be registered)", call)
+		switch {
+		case call.CharacterID == owner.ID && call.ItemID == "armor-01" && call.Category == "armor":
+			seenArmor = true
+		case call.CharacterID == owner.ID && call.ItemID == "item-071" && call.Category == "item":
+			seenShield = true
+		default:
+			t.Fatalf("unexpected listing collection call: %+v (listed weapon-01 must not be registered; shield must be item)", call)
 		}
+	}
+	if !seenArmor || !seenShield {
+		t.Fatalf("expected both armor and shield recorded, got %+v", f.collection.calls)
 	}
 	f.collection.calls = nil
 
@@ -309,11 +325,18 @@ func TestStoreFailedListingRollsBackDepot_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	heldShield, err := item.NewInstance("item-071", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ownerInv, err := inventory.New(owner.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := ownerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := ownerInv.Add(heldShield); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.invs.Save(ctx, ownerInv); err != nil {

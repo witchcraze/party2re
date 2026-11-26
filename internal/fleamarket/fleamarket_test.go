@@ -241,6 +241,22 @@ func (m *mockItemDefs) FindByID(id string) (coreitem.Definition, error) {
 			Slot:  coreitem.SlotBody,
 		}, nil
 	}
+	if id == "item-071" {
+		return coreitem.Definition{
+			ID:    "item-071",
+			Name:  "天上の盾と兜",
+			Price: 5000,
+			Slot:  coreitem.SlotOffHand,
+		}, nil
+	}
+	if id == "item-012" {
+		return coreitem.Definition{
+			ID:    "item-012",
+			Name:  "祈りの指輪",
+			Price: 2000,
+			Slot:  coreitem.SlotAccessory,
+		}, nil
+	}
 	return coreitem.Definition{}, errors.New("item not found")
 }
 
@@ -353,23 +369,28 @@ func TestFleaMarketService_CreateListing_CollectionDiscovery(t *testing.T) {
 	heldInv, _ := coreinventory.New(sellerID)
 	heldWeapon, _ := coreitem.NewInstance("weapon-01", 1)
 	heldArmor, _ := coreitem.NewInstance("armor-01", 1)
+	heldShield, _ := coreitem.NewInstance("item-071", 1)
 	if err := heldInv.Add(heldWeapon); err != nil {
 		t.Fatalf("add heldWeapon: %v", err)
 	}
 	if err := heldInv.Add(heldArmor); err != nil {
 		t.Fatalf("add heldArmor: %v", err)
 	}
+	if err := heldInv.Add(heldShield); err != nil {
+		t.Fatalf("add heldShield: %v", err)
+	}
 	invRepo.inventories[sellerID] = heldInv
 
 	now := time.Now().UTC()
 
-	// 1. Listing registers held hand items (legacy add_collection), not the listed Depot item
+	// 1. Listing registers held hand items (legacy add_collection), not the listed Depot item;
+	// shields/accessories ($m{ite}) must classify as "item", not "armor".
 	if _, err := svc.CreateListing(ctx, sellerID, "item-herb", 300, now); err != nil {
 		t.Fatalf("CreateListing failed: %v", err)
 	}
 
-	if len(recorder.calls) != 2 {
-		t.Fatalf("expected 2 calls to RecordItemDiscovered for held items, got %d (%+v)", len(recorder.calls), recorder.calls)
+	if len(recorder.calls) != 3 {
+		t.Fatalf("expected 3 calls to RecordItemDiscovered for held items, got %d (%+v)", len(recorder.calls), recorder.calls)
 	}
 	if recorder.calls[0].charID != sellerID || recorder.calls[0].itemID != "weapon-01" ||
 		recorder.calls[0].itemName != "銅の剣" || recorder.calls[0].category != "weapon" {
@@ -378,6 +399,29 @@ func TestFleaMarketService_CreateListing_CollectionDiscovery(t *testing.T) {
 	if recorder.calls[1].charID != sellerID || recorder.calls[1].itemID != "armor-01" ||
 		recorder.calls[1].itemName != "皮の鎧" || recorder.calls[1].category != "armor" {
 		t.Errorf("unexpected second collection call: %+v", recorder.calls[1])
+	}
+	if recorder.calls[2].charID != sellerID || recorder.calls[2].itemID != "item-071" ||
+		recorder.calls[2].itemName != "天上の盾と兜" || recorder.calls[2].category != "item" {
+		t.Errorf("unexpected shield collection call: %+v", recorder.calls[2])
+	}
+
+	// Accessory in tool hand also classifies as "item"
+	recorder.calls = nil
+	accInv, _ := coreinventory.New(sellerID)
+	heldAcc, _ := coreitem.NewInstance("item-012", 1)
+	if err := accInv.Add(heldAcc); err != nil {
+		t.Fatalf("add heldAcc: %v", err)
+	}
+	invRepo.inventories[sellerID] = accInv
+	if err := sellerDepot.AddItem(coreitem.Instance{ID: "extra-herb", DefinitionID: "item-herb", Quantity: 1}); err != nil {
+		t.Fatalf("add extra-herb: %v", err)
+	}
+	_ = depotRepo.Save(ctx, sellerDepot)
+	if _, err := svc.CreateListing(ctx, sellerID, "item-herb", 280, now); err != nil {
+		t.Fatalf("CreateListing with accessory failed: %v", err)
+	}
+	if len(recorder.calls) != 1 || recorder.calls[0].itemID != "item-012" || recorder.calls[0].category != "item" {
+		t.Fatalf("expected accessory classified as item, got %+v", recorder.calls)
 	}
 
 	// 2. Empty hand records nothing even when listing a Depot item

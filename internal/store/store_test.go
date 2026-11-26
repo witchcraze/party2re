@@ -1026,6 +1026,8 @@ func TestStoreService_ListingCollectionDiscovery(t *testing.T) {
 		"wpn_001":   {ID: "wpn_001", Name: "ひのきのぼう", Price: 100, Slot: coreitem.SlotMainHand},
 		"weapon-02": {ID: "weapon-02", Name: "どうのつるぎ", Price: 500, Slot: coreitem.SlotMainHand},
 		"item-001":  {ID: "item-001", Name: "やくそう", Price: 10},
+		"item-071":  {ID: "item-071", Name: "天上の盾と兜", Price: 5000, Slot: coreitem.SlotOffHand},
+		"item-012":  {ID: "item-012", Name: "祈りの指輪", Price: 2000, Slot: coreitem.SlotAccessory},
 	}}
 
 	c1, _ := corecharacter.New("Seller")
@@ -1056,13 +1058,14 @@ func TestStoreService_ListingCollectionDiscovery(t *testing.T) {
 		},
 	})
 
-	// 1. Listing registers held hand items, never the listed Depot item
+	// 1. Listing registers held hand items, never the listed Depot item;
+	// shields (SlotOffHand) and accessories (SlotAccessory) in $m{ite} classify as "item".
 	heldInv, _ := coreinventory.New("c1")
 	if err := heldInv.Add(coreitem.Instance{ID: "hand_w", DefinitionID: "weapon-02", Quantity: 1}); err != nil {
 		t.Fatalf("add weapon-02: %v", err)
 	}
-	if err := heldInv.Add(coreitem.Instance{ID: "hand_i", DefinitionID: "item-001", Quantity: 1}); err != nil {
-		t.Fatalf("add item-001: %v", err)
+	if err := heldInv.Add(coreitem.Instance{ID: "hand_s", DefinitionID: "item-071", Quantity: 1}); err != nil {
+		t.Fatalf("add item-071: %v", err)
 	}
 	invRepo.inventories["c1"] = heldInv
 
@@ -1073,9 +1076,18 @@ func TestStoreService_ListingCollectionDiscovery(t *testing.T) {
 		t.Fatalf("gold listing collection calls = %+v, want 2 held items", collector.calls)
 	}
 	if collector.calls[0] != (collectionRecordCall{CharacterID: "c1", ItemID: "weapon-02", ItemName: "どうのつるぎ", Category: "weapon"}) ||
-		collector.calls[1] != (collectionRecordCall{CharacterID: "c1", ItemID: "item-001", ItemName: "やくそう", Category: "item"}) {
+		collector.calls[1] != (collectionRecordCall{CharacterID: "c1", ItemID: "item-071", ItemName: "天上の盾と兜", Category: "item"}) {
 		t.Fatalf("unexpected gold listing collection calls: %+v", collector.calls)
 	}
+
+	accInv, _ := coreinventory.New("c1")
+	if err := accInv.Add(coreitem.Instance{ID: "hand_w2", DefinitionID: "weapon-02", Quantity: 1}); err != nil {
+		t.Fatalf("add weapon-02: %v", err)
+	}
+	if err := accInv.Add(coreitem.Instance{ID: "hand_a", DefinitionID: "item-012", Quantity: 1}); err != nil {
+		t.Fatalf("add item-012: %v", err)
+	}
+	invRepo.inventories["c1"] = accInv
 
 	collector.calls = nil
 	if _, err := svc.ListBarterItem(ctx, "c1", "dep_2", "やくそう"); err != nil {
@@ -1085,7 +1097,7 @@ func TestStoreService_ListingCollectionDiscovery(t *testing.T) {
 		t.Fatalf("barter listing collection calls = %+v, want 2 held items", collector.calls)
 	}
 	if collector.calls[0] != (collectionRecordCall{CharacterID: "c1", ItemID: "weapon-02", ItemName: "どうのつるぎ", Category: "weapon"}) ||
-		collector.calls[1] != (collectionRecordCall{CharacterID: "c1", ItemID: "item-001", ItemName: "やくそう", Category: "item"}) {
+		collector.calls[1] != (collectionRecordCall{CharacterID: "c1", ItemID: "item-012", ItemName: "祈りの指輪", Category: "item"}) {
 		t.Fatalf("unexpected barter listing collection calls: %+v", collector.calls)
 	}
 

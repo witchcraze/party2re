@@ -172,11 +172,18 @@ func TestFleaMarketListPurchaseCancel_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	heldAccessory, err := item.NewInstance("item-012", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sellerInv, err := coreinventory.New(seller.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := sellerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := sellerInv.Add(heldAccessory); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.invs.Save(ctx, sellerInv); err != nil {
@@ -246,13 +253,24 @@ func TestFleaMarketListPurchaseCancel_Integration(t *testing.T) {
 	if len(buyerDepot.Items) != 1 || buyerDepot.Items[0].DefinitionID != "weapon-01" || buyerDepot.Items[0].EnhancementLevel != 7 {
 		t.Fatalf("buyer depot = %+v", buyerDepot.Items)
 	}
-	if len(f.recorder.records) == 0 {
-		t.Fatal("expected collection discovery recorded for held hand item")
+	if len(f.recorder.records) != 4 {
+		t.Fatalf("expected 4 collection discovery records (2 listings × 2 held items), got %+v", f.recorder.records)
 	}
+	wantArmor := fmt.Sprintf("%s:armor-01:布の服:armor", seller.ID)
+	wantAcc := fmt.Sprintf("%s:item-012:祈りの指輪:item", seller.ID)
+	var seenArmor, seenAcc bool
 	for _, rec := range f.recorder.records {
-		if rec != fmt.Sprintf("%s:armor-01:布の服:armor", seller.ID) {
-			t.Fatalf("unexpected collection record %q (listed weapon-01 must not be registered)", rec)
+		switch rec {
+		case wantArmor:
+			seenArmor = true
+		case wantAcc:
+			seenAcc = true
+		default:
+			t.Fatalf("unexpected collection record %q (listed weapon-01 must not be registered; accessory must be item)", rec)
 		}
+	}
+	if !seenArmor || !seenAcc {
+		t.Fatalf("expected both armor and accessory recorded, got %+v", f.recorder.records)
 	}
 
 	if _, err := svc.CancelListing(ctx, stranger.ID, listing2.ID); !errors.Is(err, fleamarket.ErrUnauthorizedSeller) {
@@ -300,11 +318,18 @@ func TestFleaMarketFailedListingRollsBackDepot_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	heldAccessory, err := item.NewInstance("item-012", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sellerInv, err := coreinventory.New(seller.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := sellerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := sellerInv.Add(heldAccessory); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.invs.Save(ctx, sellerInv); err != nil {
@@ -358,11 +383,18 @@ func TestFleaMarketConcurrentPurchasesConserveAssets_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	heldAccessory, err := item.NewInstance("item-012", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sellerInv, err := coreinventory.New(seller.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := sellerInv.Add(heldArmor); err != nil {
+		t.Fatal(err)
+	}
+	if err := sellerInv.Add(heldAccessory); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.invs.Save(ctx, sellerInv); err != nil {

@@ -239,18 +239,29 @@ func (s *Service) recordHeldCollection(ctx context.Context, characterID string, 
 	}
 	for _, held := range inv.Items {
 		itemName := held.DefinitionID
-		category := coreitem.SlotNone.Category()
+		handKind := coreitem.LegacyHandKindByID(held.DefinitionID)
 		if s.itemCatalog != nil {
 			if def, err := s.itemCatalog.FindByID(held.DefinitionID); err == nil {
 				itemName = def.Name
-				category = def.Category()
+				handKind = def.LegacyHandKind()
 			}
 		}
-		if err := s.collection.RecordItemDiscovered(ctx, characterID, held.DefinitionID, itemName, category); err != nil {
+		if err := s.collection.RecordItemDiscovered(ctx, characterID, held.DefinitionID, itemName, collectionCategoryForHandKind(handKind)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func collectionCategoryForHandKind(kind int) string {
+	switch kind {
+	case 1:
+		return "weapon"
+	case 2:
+		return "armor"
+	default:
+		return "item"
+	}
 }
 
 // WithdrawListing withdraws a listed item back to the owner's depot.

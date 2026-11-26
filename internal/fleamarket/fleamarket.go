@@ -324,14 +324,14 @@ func (s *Service) CreateListing(
 		if s.collectionRecorder != nil {
 			for _, held := range inv.Items {
 				heldName := held.DefinitionID
-				heldCategory := coreitem.SlotNone.Category()
+				handKind := coreitem.LegacyHandKindByID(held.DefinitionID)
 				if s.itemDefs != nil {
 					if def, defErr := s.itemDefs.FindByID(held.DefinitionID); defErr == nil {
 						heldName = def.Name
-						heldCategory = def.Category()
+						handKind = def.LegacyHandKind()
 					}
 				}
-				if err := s.collectionRecorder.RecordItemDiscovered(txCtx, seller.ID, held.DefinitionID, heldName, heldCategory); err != nil {
+				if err := s.collectionRecorder.RecordItemDiscovered(txCtx, seller.ID, held.DefinitionID, heldName, collectionCategoryForHandKind(handKind)); err != nil {
 					return err
 				}
 			}
@@ -343,4 +343,15 @@ func (s *Service) CreateListing(
 		return Listing{}, err
 	}
 	return created, nil
+}
+
+func collectionCategoryForHandKind(kind int) string {
+	switch kind {
+	case 1:
+		return "weapon"
+	case 2:
+		return "armor"
+	default:
+		return "item"
+	}
 }
