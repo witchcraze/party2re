@@ -109,6 +109,12 @@ An EX room continues 11→12→13, where 13 is terminal; a room without EX ends 
 
 **Pitfall (fixed chests).** `shiraberu` marks a fixed chest (`over_lv`) in `$ms{$m}{is_get_fixed}`, but that key is not in `@battle_datas` (`config.cgi_origin:102–104`), so it is lost when the request ends. Fixed chests therefore have no lasting per-actor limit and never consume item215. They also leave the ordinary allowance untouched (`_npc_action.cgi:42–54`). The reconstruction reproduces this rather than repairing it.
 
+## Stage admission and clean-room enemy data
+
+- **Stage admission (#1194, #2833).** Where legacy `quest.cgi` (`tsukuru` / `get_limited_stages`) and `check_create_quest` / `exclude_job_lv_stage` diverged on stages 22, 23, 25 and 27, party2re adopts the selection UI's job-level and JST seasonal rules across both observation and admission, with no character-level gate (`internal/adventure/stage_catalog.go`). Gates apply only to the room's creator (solo start or Party creation); legacy `add_member` and the first `すすむ` never re-check members (`vs_monster.cgi:56–82`).
+- **Stage 26 season fallback.** Explicit ordinary rooms preserve their selected season marker; missing markers default to spring (`stage/26.cgi:16–28`).
+- **Shared enemy data and clean-room naming (#2402).** Ordinary stage encounters and Dungeon maps share the legacy transcription in `internal/stagedata` (retaining native combat payloads and source-position identities rather than the batch catalog's last-monster boss convention; see [Battle](battle.md#normal-adventure-action-and-target-matrix)). Stage enemies keep their legacy stage-file name, except franchise-distinctive names ([rule 00 §3](../../.agents/rules/00-migration-constraints.md#3-asset-and-intellectual-property-rules)) map one-to-one to generic replacements across every shipped catalog with `A`/`B` suffixes kept (`internal/stagedata/names_test.go`).
+
 ## Batch crawl
 
 The batch crawl (`internal/adventure`, `internal/party`) no longer serves production starts; #2474 deletes it. These decisions and source findings remain current:
@@ -116,8 +122,6 @@ The batch crawl (`internal/adventure`, `internal/party`) no longer serves produc
 - **Treasure count** (`vs_monster.cgi:90–101`; `_npc_action.cgi:498–519`). The loop is inclusive (`for 0 .. $count`), so an index of P−1−D yields one chest per surviving member. P is `@partys`, which includes living helpers; fallen helpers were dropped at the previous save (`_battle.cgi:486–493,521`). Job, accessory (equipped slot only) and chapel blessing bonuses use the acting player (`%m`) only, never other members. **Pitfall:** `my $count = shift || $#partys;` treats an index of 0 as falsy and falls back to P−1 before the blessing and dead-member penalty.
 - **Treasure pocket** (item215). **Decision (2026-11-07, #1899):** `shiraberu` clears `$m{ite}` on use and the hand holds one unit, so a character carries at most one pocket at a time. Batch crawls claim only the base one-chest allowance and never consume a pocket automatically.
 - **Once-daily lock** (stage26, dungeon16; `quest.cgi:594–599` `$m{once}=1`). The quota is consumed at party creation or solo start, only for the creator/leader, and is not restored by leaving or start failure. It clears only on waking at Home.
-- **Exit fatigue** is `round × 3 + 1` (halved in calm mode) where round is the exit floor, not turns or floors cleared (`_battle.cgi:1187–1188,1216`).
-- **Unsupported modes** (`calm`, `try`, `hard`) are rejected at party creation until their reward rules are reconciled.
 - **Chronicle**: the legacy owner-view unlock belongs to the entry command so record GETs remain read-only under the [Gateway contract](../architecture/client-agent-api.md). Historical party-log backfill cannot recover members who fell before the final floor, seasons or per-member rewards; backfilled rows record zero rewards and unclassified season rather than guesses.
 
 Grid dungeons and endurance challenges are separate modes; see [Dungeon](dungeon.md) and [Challenge](challenge.md).

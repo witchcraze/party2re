@@ -81,8 +81,7 @@ graph TD
 
 ### 3. Combat, Adventure & Dungeon Exploration
 - [`battle.md`](battle.md) — Deterministic turn resolver, multi-participant factions, status effects, formulas, and Battle Adapter.
-- [`stages-and-monsters.md`](stages-and-monsters.md) — 28-stage adventure catalog and 286 clean-room monsters.
-- [`adventure.md`](adventure.md) — Sequential 10-floor dungeon crawl, Floor 11 treasure room, adventure chronicle history and its on-view unlocks.
+- [`adventure.md`](adventure.md) — Stage admission, clean-room enemy data, sequential 10-floor dungeon crawl, Floor 11 treasure room, and adventure chronicle history.
 - [`dungeon.md`](dungeon.md) — 2D grid tile matrix exploration, hazard traps, `@ちず` scouting jobs, and escape portals.
 - [`challenge.md`](challenge.md) — Treasure, the stage record as legacy `$win`, and individual exit.
 - [`boss.md`](boss.md) — 6-player king1–10 / 4-player king99 sealing battles, eligibility, Dejon banishment, and victory celebration crowds.

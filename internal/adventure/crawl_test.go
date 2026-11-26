@@ -1397,7 +1397,7 @@ func TestCrawlSession_EncounterCount_PartySizesAndBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMonsterCatalog: %v", err)
 	}
-	stage, err := adventure.NewStageWithBosses("s-test", "Test Stage", 1, []string{"m-dummy"}, nil)
+	stage, err := adventure.NewStageWithBosses("s-test", "Test Stage", []string{"m-dummy"}, nil)
 	if err != nil {
 		t.Fatalf("NewStageWithBosses: %v", err)
 	}
@@ -1505,7 +1505,7 @@ func TestCrawlSession_StatScaling_PartySizesAndBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMonsterCatalog: %v", err)
 	}
-	stage, err := adventure.NewStageWithBosses("s-scale", "Scale Stage", 1, []string{"m-scale"}, []string{"m-boss"})
+	stage, err := adventure.NewStageWithBosses("s-scale", "Scale Stage", []string{"m-scale"}, []string{"m-boss"})
 	if err != nil {
 		t.Fatalf("NewStageWithBosses: %v", err)
 	}

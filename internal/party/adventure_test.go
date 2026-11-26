@@ -1781,6 +1781,7 @@ func TestPartyAdmission_MatchesStageCatalogAndAvailableStages(t *testing.T) {
 		time     time.Time
 		stageID  string
 	}{
+		{"stage-02 with Level 1 JobLevel 0 (accepted)", 1, 0, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-02"},
 		{"stage-02 with JobLevel 0", 20, 0, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-02"},
 		{"stage-03 with JobLevel 0 (rejected)", 20, 0, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-03"},
 		{"stage-03 with JobLevel 1 (accepted)", 20, 1, time.Date(2026, 5, 1, 12, 0, 0, 0, jst), "stage-03"},
@@ -1792,9 +1793,9 @@ func TestPartyAdmission_MatchesStageCatalogAndAvailableStages(t *testing.T) {
 		{"stage-27 in halloween (accepted)", 99, 0, time.Date(2026, 10, 15, 12, 0, 0, 0, jst), "stage-27"},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			charID := fmt.Sprintf("char-%s", tc.stageID)
+			charID := fmt.Sprintf("char-%d-%s", i, tc.stageID)
 			char := corecharacter.Character{
 				ID:       charID,
 				Name:     "Leader",
@@ -1825,7 +1826,7 @@ func TestPartyAdmission_MatchesStageCatalogAndAvailableStages(t *testing.T) {
 
 			_, createErr := svc.CreateParty(ctx, char.ID, CreatePartyRequest{
 				Speed:      18,
-				Name:       fmt.Sprintf("Party-%s", tc.stageID),
+				Name:       fmt.Sprintf("Party-%d-%s", i, tc.stageID),
 				StageID:    tc.stageID,
 				MaxMembers: 4,
 			})

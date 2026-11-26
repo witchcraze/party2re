@@ -17,7 +17,6 @@ import (
 var (
 	ErrInvalidStage              = errors.New("stage definition is invalid")
 	ErrStageNotFound             = errors.New("stage definition not found")
-	ErrLevelRequirementNotMet    = errors.New("character level requirement not met for stage")
 	ErrJobLevelRequirementNotMet = errors.New("character job level requirement not met for stage")
 	ErrStageNotAvailable         = errors.New("stage is not currently available")
 )
@@ -54,11 +53,10 @@ type EXStage struct {
 	FixedTreasure string   `json:"fixed_treasure,omitempty"`
 }
 
-// Stage defines an adventure destination with required levels, normal monsters, boss encounters, and treasure pools.
+// Stage defines an adventure destination with normal monsters, boss encounters, and treasure pools.
 type Stage struct {
 	ID              string              `json:"id"`
 	Name            string              `json:"name"`
-	MinLevel        int                 `json:"min_level"`
 	MonsterIDs      []string            `json:"monster_ids"`
 	BossIDs         []string            `json:"boss_ids,omitempty"`
 	TreasureWeapons []string            `json:"treasure_weapons,omitempty"`
@@ -141,7 +139,6 @@ func (s Stage) GetNormalMonsterIDs() []string {
 type stageJSON struct {
 	ID              string              `json:"id"`
 	Name            string              `json:"name"`
-	MinLevel        int                 `json:"min_level"`
 	MonsterIDs      []string            `json:"monster_ids"`
 	BossIDs         []string            `json:"boss_ids,omitempty"`
 	TreasureWeapons []string            `json:"treasure_weapons,omitempty"`
@@ -152,15 +149,15 @@ type stageJSON struct {
 }
 
 // NewStage creates a Stage definition without duration (purging the fictional timer).
-func NewStage(id, name string, minLevel int, monsterIDs []string) (Stage, error) {
-	return NewStageWithBosses(id, name, minLevel, monsterIDs, nil)
+func NewStage(id, name string, monsterIDs []string) (Stage, error) {
+	return NewStageWithBosses(id, name, monsterIDs, nil)
 }
 
 // NewStageWithBosses creates a Stage definition with explicit stage boss monster IDs.
-func NewStageWithBosses(id, name string, minLevel int, monsterIDs []string, bossIDs []string) (Stage, error) {
+func NewStageWithBosses(id, name string, monsterIDs []string, bossIDs []string) (Stage, error) {
 	id = strings.TrimSpace(id)
 	name = strings.TrimSpace(name)
-	if id == "" || name == "" || minLevel < 1 || len(monsterIDs) == 0 {
+	if id == "" || name == "" || len(monsterIDs) == 0 {
 		return Stage{}, ErrInvalidStage
 	}
 	cleanedMonsters := make([]string, 0, len(monsterIDs))
@@ -181,7 +178,6 @@ func NewStageWithBosses(id, name string, minLevel int, monsterIDs []string, boss
 	return Stage{
 		ID:         id,
 		Name:       name,
-		MinLevel:   minLevel,
 		MonsterIDs: cleanedMonsters,
 		BossIDs:    cleanedBosses,
 	}, nil
@@ -197,7 +193,7 @@ func NewStageCatalog(stages []Stage) (*StageCatalog, error) {
 	for _, s := range stages {
 		s.ID = strings.TrimSpace(s.ID)
 		s.Name = strings.TrimSpace(s.Name)
-		if s.ID == "" || s.Name == "" || s.MinLevel < 1 || len(s.MonsterIDs) == 0 {
+		if s.ID == "" || s.Name == "" || len(s.MonsterIDs) == 0 {
 			return nil, ErrInvalidStage
 		}
 		if _, exists := catalog.stages[s.ID]; exists {
@@ -347,12 +343,12 @@ func RequiredJobLevel(stageID string) int {
 	}
 }
 
-// CanAccessStage checks whether a character meets level, job-level, and seasonal criteria for a stage at current time.
+// CanAccessStage checks whether a character meets job-level and seasonal criteria for a stage at current time.
 func (c *StageCatalog) CanAccessStage(char corecharacter.Character, stageID string) error {
 	return c.CanAccessStageAt(char, stageID, c.now())
 }
 
-// CanAccessStageAt checks whether a character meets level, job-level, and seasonal criteria for a stage at the given time.
+// CanAccessStageAt checks whether a character meets job-level and seasonal criteria for a stage at the given time.
 func (c *StageCatalog) CanAccessStageAt(char corecharacter.Character, stageID string, t time.Time) error {
 	st, err := c.FindByID(stageID)
 	if err != nil {
@@ -360,9 +356,6 @@ func (c *StageCatalog) CanAccessStageAt(char corecharacter.Character, stageID st
 	}
 	if !IsStageInSeason(st.ID, t) {
 		return ErrStageNotAvailable
-	}
-	if char.Level < st.MinLevel {
-		return ErrLevelRequirementNotMet
 	}
 	if char.JobLevel < RequiredJobLevel(st.ID) {
 		return ErrJobLevelRequirementNotMet
@@ -401,7 +394,7 @@ func InitialStageCatalog() (*StageCatalog, error) {
 	}
 	stages := make([]Stage, 0, len(rawList))
 	for _, raw := range rawList {
-		stage, err := NewStageWithBosses(raw.ID, raw.Name, raw.MinLevel, raw.MonsterIDs, raw.BossIDs)
+		stage, err := NewStageWithBosses(raw.ID, raw.Name, raw.MonsterIDs, raw.BossIDs)
 		if err != nil {
 			return nil, fmt.Errorf("invalid stage %s: %w", raw.ID, err)
 		}
