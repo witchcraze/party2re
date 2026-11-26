@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -799,5 +800,137 @@ func TestContestSettlementHandler_ProcessingReservation_NotOverwritten(t *testin
 	// Must NOT overwrite or add a duplicate action
 	if len(sched.scheduledActions) != 0 {
 		t.Errorf("expected 0 new scheduled actions (processing protected), got %d", len(sched.scheduledActions))
+	}
+}
+
+type countingContestRepo struct {
+	*mockContestRepo
+	sqlReadCalls atomic.Int32
+}
+
+func (c *countingContestRepo) GetActiveRound(ctx context.Context) (contest.ContestRound, error) {
+	c.sqlReadCalls.Add(1)
+	return c.mockContestRepo.GetActiveRound(ctx)
+}
+
+func (c *countingContestRepo) GetPreparingRound(ctx context.Context) (contest.ContestRound, error) {
+	c.sqlReadCalls.Add(1)
+	return c.mockContestRepo.GetPreparingRound(ctx)
+}
+
+func (c *countingContestRepo) GetPreparingRoundForUpdate(ctx context.Context) (contest.ContestRound, error) {
+	c.sqlReadCalls.Add(1)
+	return c.mockContestRepo.GetPreparingRoundForUpdate(ctx)
+}
+
+func TestContestSettlementHandler_ReconcileShortCircuitsAndRecovers(t *testing.T) {
+	ctx := context.Background()
+	startTime := time.Date(2026, 10, 1, 12, 0, 0, 500_000_000, time.UTC)
+	endTime := startTime.Add(contest.ContestCycleDays * 24 * time.Hour)
+	now := startTime.Add(time.Hour)
+
+	charRepo := newMockCharRepo()
+	baseRepo := newMockContestRepo()
+	baseRepo.rounds[1] = contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+	for i := 1; i <= 5; i++ {
+		charID := fmt.Sprintf("char-%d", i)
+		charRepo.characters[charID] = corecharacter.Character{ID: charID, Name: fmt.Sprintf("Player%d", i)}
+		baseRepo.entries[fmt.Sprintf("entry-%d", i)] = contest.ContestEntry{
+			ID:            fmt.Sprintf("entry-%d", i),
+			Round:         1,
+			CharacterID:   charID,
+			CharacterName: fmt.Sprintf("Player%d", i),
+			Title:         fmt.Sprintf("Title%d", i),
+			PhotoID:       fmt.Sprintf("photo-%d", i),
+			Votes:         10 - i,
+			CreatedAt:     startTime,
+		}
+	}
+	repo := &countingContestRepo{mockContestRepo: baseRepo}
+
+	svc, err := contest.NewService(
+		charRepo,
+		repo,
+		contest.WithPrizeDelivery(&mockPrizes{}),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	sched := &mockScheduler{}
+	handler := contest.NewContestSettlementHandler(svc, contest.WithScheduler(sched))
+
+	// Cold reconcile hits SQL once and caches (round=1, endTime).
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("initial Reconcile failed: %v", err)
+	}
+	if got := repo.sqlReadCalls.Load(); got != 1 {
+		t.Fatalf("initial sqlReadCalls = %d, want 1", got)
+	}
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 scheduled action, got %d", len(sched.scheduledActions))
+	}
+
+	// Healthy steady-state ticks before endTime perform zero SQL calls and zero new schedules.
+	for i := 0; i < 3; i++ {
+		if err := handler.Reconcile(ctx); err != nil {
+			t.Fatalf("steady-state Reconcile %d failed: %v", i, err)
+		}
+	}
+	if got := repo.sqlReadCalls.Load(); got != 1 {
+		t.Fatalf("steady-state ticks hit SQL: sqlReadCalls = %d, want 1", got)
+	}
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 scheduled action after steady ticks, got %d", len(sched.scheduledActions))
+	}
+
+	// Transient Valkey error during steady-state propagates without hitting SQL.
+	valkeyErr := errors.New("valkey timeout")
+	sched.findPendingErr = valkeyErr
+	if err := handler.Reconcile(ctx); !errors.Is(err, valkeyErr) {
+		t.Fatalf("expected valkeyErr, got %v", err)
+	}
+	if got := repo.sqlReadCalls.Load(); got != 1 {
+		t.Fatalf("valkey error path hit SQL: sqlReadCalls = %d, want 1", got)
+	}
+	sched.findPendingErr = nil
+
+	// Mid-run Valkey reservation loss is detected and restored via SQL on next Reconcile.
+	sched.scheduledActions = nil
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("recovery Reconcile failed: %v", err)
+	}
+	if got := repo.sqlReadCalls.Load(); got != 2 {
+		t.Fatalf("recovery sqlReadCalls = %d, want 2", got)
+	}
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected restored scheduled action, got %d", len(sched.scheduledActions))
+	}
+
+	// Subsequent steady-state tick returns to zero SQL calls.
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("post-recovery steady-state Reconcile failed: %v", err)
+	}
+	if got := repo.sqlReadCalls.Load(); got != 2 {
+		t.Fatalf("post-recovery steady-state hit SQL: sqlReadCalls = %d, want 2", got)
+	}
+
+	// Settling resets cached target and schedules the next preparing round.
+	now = endTime.Add(time.Minute)
+	if _, err := svc.SettleContest(ctx, false); err != nil {
+		t.Fatalf("SettleContest failed: %v", err)
+	}
+	sqlAfterSettle := repo.sqlReadCalls.Load()
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("post-settle steady-state Reconcile failed: %v", err)
+	}
+	if got := repo.sqlReadCalls.Load(); got != sqlAfterSettle {
+		t.Fatalf("post-settle steady-state hit SQL: got %d, want %d", got, sqlAfterSettle)
 	}
 }

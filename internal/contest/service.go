@@ -10,7 +10,6 @@ import (
 	"unicode"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 )
@@ -27,6 +26,8 @@ type Service struct {
 	nowFunc           func() time.Time
 	settlementActorID string
 	reconcileMu       sync.Mutex
+	verifiedRound     int
+	verifiedEndTime   time.Time
 }
 
 type Option func(*Service)
@@ -102,7 +103,7 @@ func NewService(
 	s := &Service{
 		characters: characters,
 		contests:   contests,
-		nowFunc:    func() time.Time { return time.Now().UTC() },
+		nowFunc:    func() time.Time { return time.Now().UTC().Truncate(time.Second) },
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -420,75 +421,4 @@ func (s *Service) GetActiveRound(ctx context.Context) (ContestRound, error) {
 // GetRoundByNumber retrieves a contest round by its round number.
 func (s *Service) GetRoundByNumber(ctx context.Context, round int) (ContestRound, error) {
 	return s.contests.GetRoundByNumber(ctx, round)
-}
-
-// ReconcileSettlementSchedule ensures the settlement scheduled action exists for the current contest round.
-// It inspects current SQL round state (active round, or preparing round if no active round exists),
-// discovers active reservations via FindPendingByActorID, avoids duplicating Pending or overwriting
-// Processing actions, and registers the deterministic settlement reservation with a safe nonce suffix.
-func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
-	if s.scheduler == nil {
-		return nil
-	}
-
-	s.reconcileMu.Lock()
-	defer s.reconcileMu.Unlock()
-
-	var targetRound int
-	var targetEndTime time.Time
-
-	activeRound, err := s.contests.GetActiveRound(ctx)
-	if err == nil {
-		targetRound = activeRound.Round
-		targetEndTime = activeRound.EndTime
-	} else if errors.Is(err, ErrContestNotFound) {
-		prepRound, prepErr := s.EnsurePreparingRound(ctx)
-		if prepErr != nil {
-			return fmt.Errorf("ensure preparing contest round: %w", prepErr)
-		}
-		targetRound = prepRound.Round
-		targetEndTime = prepRound.EndTime
-	} else {
-		return fmt.Errorf("read active contest round: %w", err)
-	}
-
-	if targetEndTime.IsZero() {
-		return nil
-	}
-
-	actorID := s.SettlementActorID()
-	activeActions, err := s.scheduler.FindPendingByActorID(ctx, actorID)
-	if err != nil {
-		return fmt.Errorf("discover contest settlement reservation: %w", err)
-	}
-	// Check legacy actor ID "system" for backward compatibility with pre-upgrade actions
-	if actorID != "system" {
-		legacyActions, err := s.scheduler.FindPendingByActorID(ctx, "system")
-		if err != nil {
-			return fmt.Errorf("discover legacy contest settlement reservation: %w", err)
-		}
-		activeActions = append(activeActions, legacyActions...)
-	}
-
-	for _, action := range activeActions {
-		if action.ActionType != ActionTypeContestSettlement {
-			continue
-		}
-		round, targetTime, ok := ParseSettlementActionID(action.ID)
-		if !ok {
-			continue
-		}
-		if round == targetRound && action.ExecuteAt.Equal(targetEndTime) && targetTime.Equal(targetEndTime) {
-			if action.State == core_scheduling.StatePending || action.State == core_scheduling.StateProcessing {
-				return nil
-			}
-		}
-	}
-
-	actionID := fmt.Sprintf("%s:%s", SettlementActionID(targetRound, targetEndTime), id.New())
-	if err := s.scheduler.ScheduleWithID(ctx, actionID, ActionTypeContestSettlement, actorID, nil, targetEndTime); err != nil {
-		return fmt.Errorf("%w: %v", ErrScheduleFailed, err)
-	}
-
-	return nil
 }

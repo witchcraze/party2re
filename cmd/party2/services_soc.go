@@ -236,7 +236,9 @@ func (s *socServices) registerWorkerHandlers(activityService *activity.Service, 
 			s.worker.RegisterHandler(guild.ActionTypeGuildPointDecay, guild.NewPointDecayHandler(s.guild, guild.WithPointDecayScheduler(s.sched)))
 		}
 		if contestService != nil {
-			s.worker.RegisterHandler(contest.ActionTypeContestSettlement, contest.NewContestSettlementHandler(contestService, contest.WithScheduler(s.sched)))
+			handler := contest.NewContestSettlementHandler(contestService, contest.WithScheduler(s.sched))
+			s.worker.RegisterHandler(contest.ActionTypeContestSettlement, handler)
+			s.worker.RegisterReconciler(contest.ActionTypeContestSettlement, handler.Reconcile)
 		}
 	}
 }

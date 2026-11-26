@@ -318,6 +318,11 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 		return SettlementResult{}, err
 	}
 
+	s.reconcileMu.Lock()
+	s.verifiedRound = 0
+	s.verifiedEndTime = time.Time{}
+	s.reconcileMu.Unlock()
+
 	if s.scheduler != nil && !result.NextRoundEndTime.IsZero() {
 		if schedErr := s.ReconcileSettlementSchedule(ctx); schedErr != nil {
 			return result, fmt.Errorf("%w: %v", ErrScheduleFailed, schedErr)

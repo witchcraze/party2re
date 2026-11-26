@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -642,6 +644,188 @@ func TestWireContestSettlement_ScheduleError_PropagatesError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), queueErr.Error()) {
 		t.Fatalf("expected error containing queueErr, got %v", err)
+	}
+}
+
+type threadSafeContestRepo struct {
+	contest.ContestRepository
+	mu          sync.Mutex
+	activeRound contest.ContestRound
+	sqlReads    atomic.Int32
+}
+
+func (r *threadSafeContestRepo) GetActiveRound(context.Context) (contest.ContestRound, error) {
+	r.sqlReads.Add(1)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.activeRound.Round == 0 {
+		return contest.ContestRound{}, contest.ErrContestNotFound
+	}
+	return r.activeRound, nil
+}
+
+type threadSafeContestSchedRepo struct {
+	mu      sync.Mutex
+	actions []core_scheduling.ScheduledAction
+	onSched chan string
+	onCheck chan struct{}
+}
+
+func (m *threadSafeContestSchedRepo) Schedule(_ context.Context, a core_scheduling.ScheduledAction) error {
+	m.mu.Lock()
+	m.actions = append(m.actions, a)
+	m.mu.Unlock()
+	if m.onSched != nil {
+		select {
+		case m.onSched <- a.ActorID:
+		default:
+		}
+	}
+	return nil
+}
+
+func (m *threadSafeContestSchedRepo) FetchDue(context.Context, time.Time, int) ([]core_scheduling.ScheduledAction, error) {
+	return nil, nil
+}
+
+func (m *threadSafeContestSchedRepo) FindPendingByActorID(_ context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []core_scheduling.ScheduledAction
+	for _, a := range m.actions {
+		if a.ActorID == actorID && (a.State == core_scheduling.StatePending || a.State == core_scheduling.StateProcessing) {
+			out = append(out, a)
+		}
+	}
+	if m.onCheck != nil && actorID == contest.ContestSettlementActorID {
+		select {
+		case m.onCheck <- struct{}{}:
+		default:
+		}
+	}
+	return out, nil
+}
+
+func (m *threadSafeContestSchedRepo) RequeuePending(context.Context, core_scheduling.ScheduledAction) error {
+	return nil
+}
+
+func (m *threadSafeContestSchedRepo) AcquireLock(context.Context, string, time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (m *threadSafeContestSchedRepo) Save(context.Context, core_scheduling.ScheduledAction) error {
+	return nil
+}
+
+func (m *threadSafeContestSchedRepo) CancelByActorID(_ context.Context, actorID string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var kept []core_scheduling.ScheduledAction
+	removed := 0
+	for _, a := range m.actions {
+		if a.ActorID == actorID {
+			removed++
+			continue
+		}
+		kept = append(kept, a)
+	}
+	m.actions = kept
+	return removed, nil
+}
+
+func TestContestPeriodicReconciliationWired(t *testing.T) {
+	now := time.Date(2026, 11, 26, 6, 0, 0, 0, time.UTC)
+	endTime := now.Add(contest.ContestCycleDays * 24 * time.Hour)
+	repo := &threadSafeContestRepo{
+		activeRound: contest.ContestRound{
+			Round:     3,
+			Status:    contest.StatusActive,
+			StartTime: now,
+			EndTime:   endTime,
+		},
+	}
+	contestSvc, err := contest.NewService(
+		&stubCharRepo{},
+		repo,
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	onSched := make(chan string, 8)
+	onCheck := make(chan struct{}, 16)
+	queue := &threadSafeContestSchedRepo{onSched: onSched, onCheck: onCheck}
+	soc := &socServices{
+		sched:  scheduling.NewService(queue),
+		worker: scheduling.NewWorker(queue, time.Millisecond, logging.Nop()),
+	}
+	soc.registerWorkerHandlers(nil, nil, nil, contestSvc)
+	if err := wireContestSettlement(soc.sched, contestSvc); err != nil {
+		t.Fatalf("wireContestSettlement failed: %v", err)
+	}
+	if got := repo.sqlReads.Load(); got != 1 {
+		t.Fatalf("startup sqlReads = %d, want 1", got)
+	}
+	for len(onCheck) > 0 {
+		<-onCheck
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		soc.worker.Run(ctx)
+	}()
+
+	// Wait for at least 3 steady-state worker reconciliation ticks and confirm zero extra SQL reads.
+	steadyDeadline := time.After(5 * time.Second)
+	for i := 0; i < 3; i++ {
+		select {
+		case <-onCheck:
+		case <-steadyDeadline:
+			cancel()
+			<-done
+			t.Fatal("timed out waiting for steady-state worker reconciler ticks")
+		}
+	}
+	if got := repo.sqlReads.Load(); got != 1 {
+		cancel()
+		<-done
+		t.Fatalf("steady-state worker ticks hit SQL: sqlReads = %d, want 1", got)
+	}
+
+	// Simulate mid-run Valkey reservation loss for contest:settlement.
+	for len(onSched) > 0 {
+		<-onSched
+	}
+	if _, err := queue.CancelByActorID(context.Background(), contest.ContestSettlementActorID); err != nil {
+		cancel()
+		<-done
+		t.Fatal(err)
+	}
+
+	restored := false
+	deadline := time.After(5 * time.Second)
+	for !restored {
+		select {
+		case actor := <-onSched:
+			if actor == contest.ContestSettlementActorID {
+				restored = true
+			}
+		case <-deadline:
+			cancel()
+			<-done
+			t.Fatal("contest settlement reconciler not wired to worker")
+		}
+	}
+	cancel()
+	<-done
+
+	pending, err := queue.FindPendingByActorID(context.Background(), contest.ContestSettlementActorID)
+	if err != nil || len(pending) != 1 || pending[0].ActionType != contest.ActionTypeContestSettlement {
+		t.Fatalf("restored contest pending = %+v, err = %v", pending, err)
 	}
 }
 
