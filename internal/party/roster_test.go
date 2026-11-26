@@ -110,3 +110,26 @@ func TestWithNormalRosterAndAdmissionFromRoster(t *testing.T) {
 		t.Fatalf("expected nil Actors for legacy lobby, got %+v", legacy.Actors)
 	}
 }
+
+type failingMemberRead struct {
+	Repository
+	err error
+}
+
+func (r failingMemberRead) GetMember(context.Context, string, string) (Member, error) {
+	return Member{}, r.err
+}
+
+func TestKickMemberPropagatesLobbyReadFailure(t *testing.T) {
+	svc, repo, _, _ := setupTestService(t)
+	repo.parties["p"] = Party{ID: "p", LeaderCharacterID: "leader", Status: StatusRecruiting}
+	down := errors.New("valkey down")
+	svc.repo = failingMemberRead{Repository: repo, err: down}
+	if err := svc.KickMember(context.Background(), "p", "leader", "member"); !errors.Is(err, down) {
+		t.Fatalf("read failure masked: %v", err)
+	}
+	svc.repo = repo
+	if err := svc.KickMember(context.Background(), "p", "leader", "absent"); !errors.Is(err, ErrCharacterNotInParty) {
+		t.Fatalf("absent target: %v", err)
+	}
+}

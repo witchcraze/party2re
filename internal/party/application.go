@@ -276,9 +276,9 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 			return ErrNotPartyLeader
 		}
 
-		_, err = s.repo.GetMember(txCtx, partyID, targetCharID)
-		if err != nil {
-			return ErrCharacterNotInParty
+		// Absent targets are ErrCharacterNotInParty; storage failures propagate.
+		if _, err := s.repo.GetMember(txCtx, partyID, targetCharID); err != nil {
+			return err
 		}
 
 		return s.repo.RemoveMember(txCtx, partyID, targetCharID)
