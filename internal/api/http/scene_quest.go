@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -54,17 +55,14 @@ func (h *Handler) questSceneData(ctx context.Context, r playercontext.Result) (a
 	}
 	n := r.Navigation.Selection
 	if n.Subject != (playercontext.Subject{}) {
-		// shortcut: scans the first 100 lobbies; read the lobby by ID if more can wait at once.
-		page, err := h.parties.ListParties(ctx, party.StatusRecruiting, 100, 0)
+		p, err := h.parties.GetPartySummary(ctx, n.Subject.ID)
+		if errors.Is(err, party.ErrNotFound) {
+			return nil, playercontext.ErrSelectionNotFound
+		}
 		if err != nil {
 			return nil, err
 		}
-		for _, p := range page.Items {
-			if p.ID == n.Subject.ID {
-				return QuestSelectedSceneData{Parent: "town", Party: p, JoinParams: QuestPartyParams{PartyID: p.ID}}, nil
-			}
-		}
-		return nil, playercontext.ErrSelectionNotFound
+		return QuestSelectedSceneData{Parent: "town", Party: p, JoinParams: QuestPartyParams{PartyID: p.ID}}, nil
 	}
 	limit := n.Limit
 	if limit == 0 {

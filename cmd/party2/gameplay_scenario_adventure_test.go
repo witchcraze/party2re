@@ -226,9 +226,14 @@ func TestGameplayScenario_NormalAdventurePartyRun(t *testing.T) {
 	leaderToken, leader := a.register()
 	memberToken, member := a.register()
 
+	// Only the creator meets stage-01's gate; a joiner and the start never
+	// re-check it (quest.cgi:518–524, add_member, vs_monster.cgi:56–82).
+	if _, err := a.db.ExecContext(context.Background(), `UPDATE characters SET level = 3 WHERE id = ?`, leader); err != nil {
+		t.Fatal(err)
+	}
 	// Both meet at 冒険に出る: the leader creates, the member selects the lobby and joins.
 	a.enter(leaderToken, leader, a.context(leaderToken, leader), "quest")
-	a.offered(leaderToken, leader, a.context(leaderToken, leader), "party_create", map[string]any{"name": "scenario", "stage_id": "stage-00", "speed": 3, "max_members": 4}, http.StatusOK)
+	a.offered(leaderToken, leader, a.context(leaderToken, leader), "party_create", map[string]any{"name": "scenario", "stage_id": "stage-01", "speed": 3, "max_members": 4}, http.StatusOK)
 	quest := a.enter(memberToken, member, a.context(memberToken, member), "quest")
 	parties := quest.Scene.Data.Parties
 	i := slices.IndexFunc(parties, func(p struct {

@@ -111,14 +111,32 @@ func (s *Service) ListParties(ctx context.Context, status string, limit, offset 
 	if err != nil {
 		return pagination.Page[PartySummary]{}, err
 	}
-	if s.stages != nil {
-		for i := range items {
-			if st, err := s.stages.FindByID(items[i].StageID); err == nil {
-				items[i].StageName = st.Name
-			}
-		}
+	for i := range items {
+		items[i].StageName = s.stageName(items[i].StageID)
 	}
 	return pagination.NewPage(items, total, limit, offset), nil
+}
+
+// GetPartySummary returns one lobby's public list row.
+func (s *Service) GetPartySummary(ctx context.Context, partyID string) (PartySummary, error) {
+	detail, err := s.GetParty(ctx, partyID)
+	if err != nil {
+		return PartySummary{}, err
+	}
+	summary := newSummary(detail.Party, detail.Members)
+	summary.StageName = s.stageName(summary.StageID)
+	return summary, nil
+}
+
+func (s *Service) stageName(id string) string {
+	if s.stages == nil {
+		return ""
+	}
+	st, err := s.stages.FindByID(id)
+	if err != nil {
+		return ""
+	}
+	return st.Name
 }
 
 func (s *Service) buildBattleActor(ctx context.Context, characterID string) (*battle.LifetimeActor, error) {

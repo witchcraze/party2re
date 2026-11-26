@@ -15,6 +15,7 @@ import (
 type PartyService interface {
 	CreateParty(ctx context.Context, leaderCharID string, req party.CreatePartyRequest) (party.PartyDetail, error)
 	ListParties(ctx context.Context, status string, limit, offset int) (pagination.Page[party.PartySummary], error)
+	GetPartySummary(ctx context.Context, partyID string) (party.PartySummary, error)
 	JoinParty(ctx context.Context, partyID, characterID, password string) (party.PartyDetail, error)
 	LeaveParty(ctx context.Context, partyID, characterID string) error
 	KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) error

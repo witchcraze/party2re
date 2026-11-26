@@ -29,6 +29,15 @@ func (s *partyLobbyStub) JoinParty(_ context.Context, partyID, actor, password s
 	return party.PartyDetail{Party: party.Party{ID: partyID}}, s.err
 }
 
+func (s *partyLobbyStub) GetPartySummary(_ context.Context, id string) (party.PartySummary, error) {
+	for _, p := range s.parties {
+		if p.ID == id {
+			return p, nil
+		}
+	}
+	return party.PartySummary{}, party.ErrNotFound
+}
+
 func (s *partyLobbyStub) ListParties(_ context.Context, status string, limit, offset int) (pagination.Page[party.PartySummary], error) {
 	if status != party.StatusRecruiting {
 		return pagination.Page[party.PartySummary]{}, errors.New("quest scene must list recruiting lobbies")
