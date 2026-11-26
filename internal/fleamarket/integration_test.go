@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -66,10 +65,16 @@ type fleaMarketDBFixture struct {
 
 func newFleaMarketDBFixture(t *testing.T) *fleaMarketDBFixture {
 	t.Helper()
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN not set")
-	}
-	db := database.OpenTestDB(t)
+	db := database.CreateTestDatabase(t,
+		"players",
+		"characters",
+		"character_depots",
+		"depot_items",
+		"character_pending_remittances",
+		"character_delivery_notices",
+		"fleamarket_listings",
+		"fleamarket_capacity_lock",
+	)
 
 	repo, err := database.NewFleaMarketRepository(db)
 	if err != nil {
@@ -112,13 +117,6 @@ func (f *fleaMarketDBFixture) createCharacter(t *testing.T, ctx context.Context,
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cleanupCancel()
-		if err := f.chars.Delete(cleanupCtx, char.ID); err != nil {
-			t.Error(err)
-		}
-	})
 	return char
 }
 

@@ -521,7 +521,15 @@ func (h stressFleaPaymentHolder) HoldPayment(ctx context.Context, recipientID, b
 }
 
 func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
-	db := OpenTestDB(t)
+	db := CreateTestDatabase(t,
+		"players",
+		"characters",
+		"character_depots",
+		"depot_items",
+		"character_pending_remittances",
+		"fleamarket_listings",
+		"fleamarket_capacity_lock",
+	)
 
 	ctx := context.Background()
 	now := time.Now().UTC()
