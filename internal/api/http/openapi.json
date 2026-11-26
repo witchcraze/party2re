@@ -106,6 +106,9 @@
           },
           "dungeon": {
             "$ref": "#/components/schemas/DungeonExpeditionObservation"
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunSceneData"
           }
         },
         "required": [
@@ -394,67 +397,6 @@
         ],
         "type": "object"
       },
-      "AdventureResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "experience_reward": {
-            "type": "integer"
-          },
-          "floors_cleared": {
-            "type": "integer"
-          },
-          "id": {
-            "type": "string"
-          },
-          "is_cleared": {
-            "type": "boolean"
-          },
-          "monster_tames": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/BattleMonsterTameResult"
-              },
-              "type": "array"
-            },
-            "type": "object"
-          },
-          "party_size": {
-            "type": "integer"
-          },
-          "post_adventure_messages": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Post-adventure settlement messages keyed by participant character ID. Omitted when no messages exist; present only in the completion response, without persisted history.",
-            "type": "object"
-          },
-          "resolved": {
-            "type": "boolean"
-          },
-          "stage_id": {
-            "type": "string"
-          },
-          "started_at": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "character_id",
-          "stage_id",
-          "started_at",
-          "floors_cleared",
-          "is_cleared",
-          "party_size",
-          "resolved",
-          "experience_reward"
-        ],
-        "type": "object"
-      },
       "AdventureStageClearStat": {
         "additionalProperties": false,
         "properties": {
@@ -482,34 +424,6 @@
           "stage_name",
           "clear_count",
           "total_attempts"
-        ],
-        "type": "object"
-      },
-      "AdventureTreasureBox": {
-        "additionalProperties": false,
-        "properties": {
-          "delivered_to": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "item_id": {
-            "type": "string"
-          },
-          "item_name": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "opened_by": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
         ],
         "type": "object"
       },
@@ -905,188 +819,6 @@
         "required": [
           "id",
           "quantity"
-        ],
-        "type": "object"
-      },
-      "BattleFieldState": {
-        "additionalProperties": false,
-        "properties": {
-          "anti_field_turn": {
-            "type": "integer"
-          },
-          "element": {
-            "type": "string"
-          },
-          "remaining_turn": {
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "BattleMonsterTameResult": {
-        "additionalProperties": false,
-        "properties": {
-          "box_full": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string"
-          },
-          "monster_id": {
-            "type": "string"
-          },
-          "monster_name": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "tamer_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "monster_id",
-          "monster_name",
-          "success",
-          "box_full",
-          "tamer_name",
-          "message"
-        ],
-        "type": "object"
-      },
-      "BattlePartyBattleResult": {
-        "additionalProperties": false,
-        "properties": {
-          "allies_fallen": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "allies_survived": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "banished_ids": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "base_reward": {
-            "$ref": "#/components/schemas/BattleReward"
-          },
-          "bonus_percent": {
-            "type": "integer"
-          },
-          "consumed_items": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/BattleConsumedItem"
-              },
-              "type": [
-                "array",
-                "null"
-              ]
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "final_field": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BattleFieldState"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "logs": {
-            "items": {
-              "$ref": "#/components/schemas/BattleTurnLog"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "outcome": {
-            "type": "string"
-          },
-          "remaining_cmp": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "remaining_hp": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "remaining_mp": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "remaining_status": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "total_reward": {
-            "$ref": "#/components/schemas/BattleReward"
-          },
-          "turns": {
-            "type": "integer"
-          },
-          "winner_side": {
-            "type": "string"
-          },
-          "winner_team": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "outcome",
-          "winner_side",
-          "turns",
-          "base_reward",
-          "bonus_percent",
-          "total_reward",
-          "allies_survived",
-          "allies_fallen",
-          "remaining_hp"
         ],
         "type": "object"
       },
@@ -3432,12 +3164,29 @@
                 "params": {
                   "additionalProperties": false,
                   "properties": {
+                    "command_id": {
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome.",
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "speed": {
+                      "description": "Per-actor action interval in seconds.",
+                      "enum": [
+                        3,
+                        18,
+                        25
+                      ],
+                      "type": "integer"
+                    },
                     "stage_id": {
                       "type": "string"
                     }
                   },
                   "required": [
-                    "stage_id"
+                    "stage_id",
+                    "speed",
+                    "command_id"
                   ],
                   "type": "object"
                 }
@@ -4288,6 +4037,230 @@
                   },
                   "required": [
                     "party_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "run_operation"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "command_id": {
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome.",
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "follow_up_operation": {
+                      "description": "The darkness field's named follow-up command.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "follow_up_target_id": {
+                      "description": "The follow-up's encounter target; omit with an additional submission, whose name the legacy text passes instead.",
+                      "type": "string"
+                    },
+                    "input": {
+                      "description": "The operation's argument text, such as a travel destination.",
+                      "type": "string"
+                    },
+                    "operation": {
+                      "description": "A submittable operation from the run scene.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "run_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "second_operation": {
+                      "description": "An additional submission, admitted only under the actor's extended state.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "second_target_id": {
+                      "type": "string"
+                    },
+                    "target_id": {
+                      "description": "An encounter actor or box ID; omit for the operation's default.",
+                      "type": "string"
+                    },
+                    "version": {
+                      "description": "The observed run version.",
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "run_id",
+                    "version",
+                    "command_id",
+                    "operation"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "run_chest"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "box_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "command_id": {
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome.",
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "run_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "version": {
+                      "description": "The observed run version.",
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "run_id",
+                    "version",
+                    "command_id",
+                    "box_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "run_exit"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "command_id": {
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome.",
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "run_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "version": {
+                      "description": "The observed run version.",
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "run_id",
+                    "version",
+                    "command_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "run_recover"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "command_id": {
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome.",
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "run_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "version": {
+                      "description": "The observed run version.",
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "run_id",
+                    "version",
+                    "command_id"
                   ],
                   "type": "object"
                 }
@@ -13358,108 +13331,6 @@
         ],
         "type": "object"
       },
-      "PartyAdventureResult": {
-        "properties": {
-          "battle_result": {
-            "$ref": "#/components/schemas/BattlePartyBattleResult"
-          },
-          "exit_fatigue": {
-            "type": "integer"
-          },
-          "floors_cleared": {
-            "type": "integer"
-          },
-          "lost_drops": {
-            "additionalProperties": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "array",
-                "null"
-              ]
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "monster_tames": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/BattleMonsterTameResult"
-              },
-              "type": "array"
-            },
-            "type": "object"
-          },
-          "outcome": {
-            "type": "string"
-          },
-          "party_id": {
-            "type": "string"
-          },
-          "post_adventure_messages": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Post-adventure settlement messages keyed by participant character ID. Omitted when no messages exist; present only in the completion response, without persisted history.",
-            "type": "object"
-          },
-          "rewards": {
-            "items": {
-              "$ref": "#/components/schemas/PartyMemberRewardSummary"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "round": {
-            "type": "integer"
-          },
-          "stage_id": {
-            "type": "string"
-          },
-          "synergy_bonus_percent": {
-            "type": "integer"
-          },
-          "total_crystals": {
-            "type": "integer"
-          },
-          "total_exp": {
-            "type": "integer"
-          },
-          "total_gold": {
-            "type": "integer"
-          },
-          "treasure_boxes": {
-            "items": {
-              "$ref": "#/components/schemas/AdventureTreasureBox"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "turns": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "party_id",
-          "stage_id",
-          "outcome",
-          "floors_cleared",
-          "turns",
-          "total_exp",
-          "total_gold",
-          "synergy_bonus_percent",
-          "rewards",
-          "battle_result"
-        ],
-        "type": "object"
-      },
       "PartyDetail": {
         "properties": {
           "members": {
@@ -13526,49 +13397,6 @@
           "is_leader",
           "ready_state",
           "joined_at"
-        ],
-        "type": "object"
-      },
-      "PartyMemberRewardSummary": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "drops": {
-            "items": {
-              "$ref": "#/components/schemas/ItemInstance"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "gained_crystals": {
-            "type": "integer"
-          },
-          "gained_exp": {
-            "type": "integer"
-          },
-          "gained_gold": {
-            "type": "integer"
-          },
-          "level_after": {
-            "type": "integer"
-          },
-          "level_before": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "name",
-          "gained_exp",
-          "gained_gold",
-          "level_before",
-          "level_after"
         ],
         "type": "object"
       },
@@ -15178,6 +15006,222 @@
           "reason",
           "penalty_seconds",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "RunEarnings": {
+        "additionalProperties": false,
+        "properties": {
+          "crystals": {
+            "type": "integer"
+          },
+          "experience": {
+            "type": "integer"
+          },
+          "gold": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "experience",
+          "gold",
+          "crystals"
+        ],
+        "type": "object"
+      },
+      "RunSceneData": {
+        "additionalProperties": false,
+        "description": "The actor's owned run observation. Other members expose only battle facts; the recipient ledger is the actor's own.",
+        "properties": {
+          "actors": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "enemy": {
+                  "type": "boolean"
+                },
+                "hp": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "leader": {
+                  "type": "boolean"
+                },
+                "max_hp": {
+                  "type": "integer"
+                },
+                "max_mp": {
+                  "type": "integer"
+                },
+                "mp": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "npc": {
+                  "type": "boolean"
+                },
+                "team_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "team_id",
+                "hp",
+                "max_hp",
+                "mp",
+                "max_mp",
+                "npc",
+                "enemy",
+                "leader"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "boxes": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "defeated": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "item_name": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "opened_by": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "defeated"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "idle_at": {
+            "description": "When the room becomes due for idle cleanup.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "leader_id": {
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "battle",
+                    "room",
+                    "comment",
+                    "whisper",
+                    "screenshot"
+                  ],
+                  "type": "string"
+                },
+                "mp_cost": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": "string"
+                },
+                "submittable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "operation",
+                "name",
+                "kind",
+                "mp_cost",
+                "submittable"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ready_at": {
+            "description": "When the actor's action interval elapses (server clock).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "recipient": {
+            "additionalProperties": false,
+            "properties": {
+              "applied": {
+                "$ref": "#/components/schemas/RunEarnings"
+              },
+              "conditional": {
+                "$ref": "#/components/schemas/RunEarnings"
+              },
+              "inspected": {
+                "type": "integer"
+              },
+              "penalty_until": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "pending": {
+                "$ref": "#/components/schemas/RunEarnings"
+              }
+            },
+            "required": [
+              "pending",
+              "conditional",
+              "applied",
+              "inspected"
+            ],
+            "type": "object"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "server_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "version",
+          "round",
+          "leader_id",
+          "speed",
+          "ready_at",
+          "idle_at",
+          "server_time",
+          "actors",
+          "boxes",
+          "operations",
+          "recipient"
         ],
         "type": "object"
       },
@@ -19215,110 +19259,6 @@
         ]
       }
     },
-    "/adventures": {
-      "post": {
-        "operationId": "startAdventure",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  },
-                  "stage_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id",
-                  "stage_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdventureResponse"
-                }
-              }
-            },
-            "description": "Adventure started"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Start stage adventure",
-        "tags": [
-          "Adventure"
-        ]
-      }
-    },
     "/api/v1/characters/{id}/actions": {
       "post": {
         "description": "Executes a typed command for the authenticated owner. Validates catalog parameters, current eligibility and sleep/recovery state before service dispatch. Known success or rejection includes refreshed context; an observation failure preserves the known result or rejection with requires_context_refresh=true. Recover by GET context without replaying the command. Unknown, unconnected and unexpected failures use their documented error responses. Per-action schemas are supplied by context; domain services validate exact prerequisites.",
@@ -19342,7 +19282,7 @@
               }
             }
           },
-          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_sell require non-null string item_id; depot_withdraw accepts an optional non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. npc_talk, npc_inspect, park_divinate and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. place_say requires non-null string text and place_whisper also requires non-null string recipient_name; the place comes from the owner's current scene. Invalid text or name is rejected before execution with no log row; an unknown recipient is 404 RECIPIENT_NOT_FOUND, and a scene without a place log is 409 ACTION_UNAVAILABLE. place_say is never blocked by ACTION_WAIT. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor. presence_refresh accepts omitted params or an empty object and has no effect beyond the member refresh that precedes every command; it is never blocked by ACTION_WAIT, sleep or death.",
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start requires non-null stage_id, speed (3, 18 or 25) and command_id and, like party_start, returns the enrolled floor-0 run's receipt. run_operation, run_chest, run_exit and run_recover require run_id, the observed version and command_id (plus operation or box_id) and return the actor's run receipt: run_id, command_id, version, round, disposition, the opened box, the actor's own recipient ledger, inspections and monster_tames. An identical retry returns the stored receipt even after personal exit; a foreign identity or changed input is rejected. rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_deposit/depot_sell require non-null string item_id; depot_withdraw accepts an optional non-null string item_id; depot_send_item requires non-null string item_id and recipient_character_id, with actor identity only from the owned path; depot_sell_batch requires non-null item_ids, an array of non-null strings. depot_send_money requires a non-null integer amount (int64) and non-null string recipient_character_id; nonpositive or excessive amounts reach Depot service validation. These commands reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed. challenge_retire requires only non-null session_id (nonempty string) and expected_revision (positive integer); the actor is the authenticated character. Invalid identity values conflict before domain execution. npc_talk, npc_inspect, park_divinate and secretshop_puffpuff accept omitted params or an empty object; the facility comes from the owner's current scene. place_say requires non-null string text and place_whisper also requires non-null string recipient_name; the place comes from the owner's current scene. Invalid text or name is rejected before execution with no log row; an unknown recipient is 404 RECIPIENT_NOT_FOUND, and a scene without a place log is 409 ACTION_UNAVAILABLE. place_say is never blocked by ACTION_WAIT. player_inspect accepts only optional non-null target_character_id and target_character_name (strings) in any scene; ID takes precedence, and an omitted or missing target inspects the actor. presence_refresh accepts omitted params or an empty object and has no effect beyond the member refresh that precedes every command; it is never blocked by ACTION_WAIT, sleep or death.",
           "required": true
         },
         "responses": {
@@ -26051,99 +25991,6 @@
           }
         ],
         "summary": "Set party member ready state",
-        "tags": [
-          "Party"
-        ]
-      }
-    },
-    "/parties/{id}/start": {
-      "post": {
-        "description": "Starts and executes multiplayer co-op combat adventure for the party (leader only).",
-        "operationId": "startPartyAdventure",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "character_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "character_id"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PartyAdventureResult"
-                }
-              }
-            },
-            "description": "Adventure completed"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not leader, not all members ready, or party not recruiting"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Party or stage not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Stage is not currently available or member is already enrolled in another activity"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Start party adventure",
         "tags": [
           "Party"
         ]

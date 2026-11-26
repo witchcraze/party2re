@@ -79,55 +79,13 @@ func (s *Service[R, P]) executeCombat(ctx context.Context, run *R, cmd Command) 
 func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, requester *corecharacter.Character, assets *corebattle.JobAssets) (Effects, error) {
 	r := P(run).Host()
 	fx := Effects{RoomActivity: true, ActorActivity: true, ReleaseStock: true}
-	if s.cfg.Jobs == nil {
-		return fx, ErrUnavailable
-	}
-	blessing := ""
-	if s.cfg.Blessings != nil {
-		var err error
-		if blessing, err = s.cfg.Blessings.GetActiveBlessing(ctx, cmd.ActorID); err != nil {
-			return fx, err
-		}
-	}
-	def, err := s.cfg.Jobs.FindByID(requester.JobID)
+	su, err := s.setupCombat(ctx, run, cmd.ActorID, requester, assets, &fx)
 	if err != nil {
 		return fx, err
 	}
-	state, frame, inspection, err := r.ProjectCombat(cmd.ActorID)
-	if err != nil {
-		return fx, err
-	}
-	seals, err := battle.BuildWeaponSealTable(findActor(state.Actors, cmd.ActorID).Participant, s.cfg.RNG)
-	if err != nil {
-		return fx, err
-	}
-	resetLevel := requester.Level
-	reset, err := r.ResetContext(cmd.ActorID, &resetLevel)
-	if err != nil {
-		return fx, err
-	}
-	var room RoomCombat
-	var choices []Choice
-	if s.cfg.CombatRoom != nil {
-		if room, err = s.cfg.CombatRoom.Combat(ctx, run, cmd.ActorID, &reset, assets != nil); err != nil {
-			return fx, err
-		}
-		choices = s.cfg.CombatRoom.Choices(run, cmd.ActorID)
-	}
-	level := requester.Level
+	def, state, room, contexts, rooms, defs, callback := su.def, &su.state, su.room, &su.contexts, su.rooms, su.defs, su.callback
 	conditional := s.cfg.Room.Conditional(run)
-	rewards := defeatRewards(r, room, *requester, blessing, s.cfg.RNG, &fx)
-	ports := newRunPorts(frame, &level, &seals, state.Fields.Current(), rewards, false)
-	ports.damage = state.NativeDamageContext(ports.damage, ports.defeat, s.cfg.RNG)
-	contexts := ports.callbacks(room, &state, requester, inspection)
-	contexts.Tools.RequesterMaxHP = &requester.Stats.MaxHP
-	rooms := bindRoomPorts(r, room, &state, frame, &reset, &contexts, ports, assets)
-	var base skill.BattleDefinitions
-	base.RegisterPlayerCallbacks(contexts, len(frame.PartyIDs))
-	base.RegisterGemCallbacks(contexts, &ports.damage)
-	defs := withHeldTravel(r, base, room.Tools)
-	callback := corebattle.CallbackContext{TargetContext: frame, Damage: &ports.damage, Status: ports.status, Defeat: ports.defeat, Inspection: inspection, Assets: assets}
-	parsed, err := r.parseOperation(cmd, OperationContext{Definitions: defs, Callback: callback, Requester: requester, Arithmetic: contexts.Arithmetic, Fields: contexts.Fields}, choices)
+	parsed, err := r.parseOperation(cmd, su.operation(requester), su.choices)
 	if err != nil {
 		return fx, err
 	}
@@ -158,9 +116,9 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 	reportFieldSuppression(&parsed.First.PlayerAction, contexts.Fields, rooms)
 	op := corebattle.PlayerOperation{
 		First: parsed.First.PlayerAction,
-		Tail:  corebattle.PlayerTailContext{DamageContext: ports.damage, DefeatContext: ports.defeat},
+		Tail:  corebattle.PlayerTailContext{DamageContext: su.ports.damage, DefeatContext: su.ports.defeat},
 		Field: corebattle.NamedFieldContext{
-			DamageContext: ports.damage, Death: ports.defeat, Roster: contexts.Roster, Catalog: defs.Invocations,
+			DamageContext: su.ports.damage, Death: su.ports.defeat, Roster: contexts.Roster, Catalog: defs.Invocations,
 			RequesterGender: contexts.Fields.RequesterGender, RequesterIcon: contexts.Fields.RequesterIcon,
 		},
 		ResponseEnabled: s.responds(run),
@@ -182,7 +140,7 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 	}
 	op.LevelUp = func(b *corebattle.LifetimeState, rng random.Generator) (bool, error) {
 		due, err := levelUpDue(b, *requester, conditional, released, fx.Earnings[requester.ID].EXP)
-		if err != nil || !due || requester.Level != level {
+		if err != nil || !due || requester.Level != su.level {
 			return false, err
 		}
 		pending := 0
@@ -194,7 +152,7 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 		})
 	}
 	hadEnemies := r.LivingEnemies()
-	consumed := consumedCounts(state)
+	consumed := consumedCounts(*state)
 	result, err := state.ApplyPlayerOperation(&op, s.cfg.RNG)
 	if err != nil {
 		return fx, err
@@ -207,9 +165,9 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 		}
 		return fx, ErrUnavailable
 	}
-	fx.Consumed = addConsumed(fx.Consumed, state, consumed)
+	fx.Consumed = addConsumed(fx.Consumed, *state, consumed)
 	fx.Inspections = appendInspections(nil, cmd.ActorID, contexts.Tools.Results)
-	if err := r.ReconcileCombat(state, result.Target); err != nil {
+	if err := r.ReconcileCombat(*state, result.Target); err != nil {
 		return fx, err
 	}
 	if result.NormalAction && (op.First.EntryID == "front" || op.First.EntryID == "back") {
@@ -230,7 +188,7 @@ func (s *Service[R, P]) execute(ctx context.Context, run *R, cmd Command, reques
 			respond = room.Respond
 		}
 		if npc := respond(now); npc != "" {
-			if err := s.respond(run, npc, cmd.ActorID, requester, &level, &seals, rewards, assets, result.ArithmeticDivisor, result.GuaranteedHit, room, &fx); err != nil {
+			if err := s.respond(run, npc, cmd.ActorID, requester, &su.level, &su.seals, su.rewards, assets, result.ArithmeticDivisor, result.GuaranteedHit, room, &fx); err != nil {
 				return fx, err
 			}
 			if err := r.RecordNPCResponse(npc, now); err != nil {

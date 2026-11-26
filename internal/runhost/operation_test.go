@@ -223,6 +223,76 @@ func TestParseNormalOperationDuplicateAndSecondCost(t *testing.T) {
 	}
 }
 
+// A typed second submission passes the legacy text's additional-submission
+// gate and binds the same entry, cost and target.
+func TestParseTypedSecondSubmission(t *testing.T) {
+	r, ctx := operationFixture()
+	a := r.Actor("a")
+	a.Jobs = corebattle.BattleJobs{JobID: "job-17", SP: 40, OldJobID: "job-33", OldSP: 30}
+	a.ItemDefinitionIDs, a.Extended = []string{"item-249"}, corebattle.ExtendedAdditional
+	cmd := Command{ActorID: "a", Action: "job-33-entry-0", SecondAction: "job-33-entry-2", SecondTargetID: "b"}
+	got, err := r.parseOperation(cmd, ctx, nil)
+	if err != nil || got.First.EntryID != "job-33-entry-0" || got.First.Cost != 12 ||
+		got.Second == nil || got.Second.EntryID != "job-33-entry-2" || got.Second.Cost != 7 || got.Second.TargetID != "b" || !got.Second.Whitelisted {
+		t.Fatalf("got %+v, second=%+v, err=%v", got, got.Second, err)
+	}
+	for name, edit := range map[string]func(*Command){
+		"stale target":        func(c *Command) { c.SecondTargetID = "stale" },
+		"target without step": func(c *Command) { c.SecondAction = "" },
+		"unlisted second":     func(c *Command) { c.SecondAction = "job-99-entry-0" },
+		"non-battle second":   func(c *Command) { c.SecondAction, c.SecondTargetID = "exit", "" },
+		"without extended":    func(*Command) { a.Extended = "" },
+		"non-battle first":    func(c *Command) { c.Action = "exit" },
+	} {
+		c := cmd
+		edit(&c)
+		if _, err := r.parseOperation(c, ctx, nil); !errors.Is(err, ErrConflict) && !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("%s admitted: %v", name, err)
+		}
+		a.Extended = corebattle.ExtendedAdditional
+	}
+}
+
+// The darkness field's typed follow-up freezes the continuation like its
+// legacy `>` text (_skill.cgi:2208–2222); only the darkness field takes one.
+func TestParseTypedDarknessFollowUp(t *testing.T) {
+	r, ctx := operationFixture()
+	a := r.Actor("a")
+	a.Jobs, a.ItemDefinitionIDs = corebattle.BattleJobs{JobID: "job-22", SP: 140}, []string{"item-240"}
+	fields := &corebattle.NamedFieldContext{DamageContext: *ctx.Callback.Damage, NameKey: skill.OperationNameKey, EntryKey: func(id string) string { return skill.EntrySourceKey(id, false) }}
+	ctx.Definitions.RegisterRecoilDarkState(&corebattle.RecoilDarkStateContext{DamageContext: *ctx.Callback.Damage})
+	ctx.Definitions.RegisterNamedFields(fields)
+	ctx.Fields = fields
+	dark := Command{ActorID: "a", Action: "job-22-entry-5", FollowUpAction: "job-22-entry-0", FollowUpTargetID: "c"}
+	got, err := r.parseOperation(dark, ctx, nil)
+	key := skill.OperationNameKey("あんこく")
+	if err != nil || got.First.EntryID != "job-22-entry-5" || got.Second != nil || fields.SubmittedCommand != "＠"+key || fields.SubmittedTarget != "c" || fields.NameKey(key) != key {
+		t.Fatalf("got %+v second=%+v fields=%+v err=%v", got.First, got.Second, fields, err)
+	}
+	if fields.NameKey("あんこく") != key {
+		t.Fatal("follow-up key mapping replaced submitted-name keys")
+	}
+	for name, edit := range map[string]func(*Command){
+		"unknown target":          func(c *Command) { c.FollowUpTargetID = "nobody" },
+		"target without step":     func(c *Command) { c.FollowUpAction = "" },
+		"other first step":        func(c *Command) { c.Action = "attack" },
+		"target with second step": func(c *Command) { c.SecondAction = "defend" },
+		"second without extended": func(c *Command) { c.FollowUpTargetID, c.SecondAction = "", "defend" },
+	} {
+		c := dark
+		edit(&c)
+		if _, err := r.parseOperation(c, ctx, nil); !errors.Is(err, ErrConflict) && !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("%s admitted: %v", name, err)
+		}
+	}
+	// Under the double pattern `$3` is the second command's name, naming no participant.
+	a.Extended = corebattle.ExtendedAdditional
+	got, err = r.parseOperation(Command{ActorID: "a", Action: "job-22-entry-5", FollowUpAction: "job-22-entry-0", SecondAction: "defend", SecondTargetID: "a"}, ctx, nil)
+	if err != nil || got.Second == nil || got.Second.EntryID != "job-0-entry-4" || fields.SubmittedTarget != "defend" {
+		t.Fatalf("combined: %+v second=%+v target=%q err=%v", got.First, got.Second, fields.SubmittedTarget, err)
+	}
+}
+
 func TestParseNormalOperationCustomAndUnsupportedAdmissionArePure(t *testing.T) {
 	r, ctx := operationFixture()
 	a := r.Actor("a")

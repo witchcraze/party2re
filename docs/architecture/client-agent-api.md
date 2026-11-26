@@ -468,14 +468,14 @@ authority; it makes no combat, wager or settlement formula parity claim.
 | --- | --- |
 | `party.cgi:14–30`: sleep → saved module → park, then member read/action dispatch | Shared owned Query derives sleep/work/room/run facts before ordinary selection. Explicit Wake/Rescue is the approved transport/recovery contract; GET never performs legacy automatic recovery. |
 | `lib/quest.cgi:189–199,1047–1075`: `つくる`, `さんか`, `けんがく`; `パーティー`, `とうぎじょう`, `ギルドバトル`, `ダンジョン`, `チャレンジ` selectors | Existing Party.CreateParty/JoinParty, PvP/GvG.CreateRoom/JoinRoom, Dungeon.StartPartyExpedition and Challenge.StartPartySession remain behind registered REST routes. Observation reads existing membership/run services. Full entry, spectator and category selection migrations belong to #948; selection alone grants no admission. |
-| Party preparation / departure | Public Party.GetActiveParty supplies verified membership. Candidate `party_ready`/`party_start`/`party_leave` correspond to SetReady/StartPartyAdventure/LeaveParty and retained `/parties/{id}` ready/start/leave routes; mutation connection remains #948. |
+| Party preparation / departure | Public Party.GetActiveParty supplies verified membership. Gateway `party_start` enrolls the ready roster in a [normal run](#normal-run-commands-and-recovery); candidate `party_ready`/`party_leave` correspond to SetReady/LeaveParty and their retained `/parties/{id}` routes (#948). |
 | `lib/vs_player.cgi:32–41`, `vs_guild.cgi:31–38`, `lib/_skill.cgi:161–164`: `かいし`, pre-round `しらべる`/`きっく`/`さそう`, PvP `ぱーてぃー` | GetCharacterRoom verifies actor membership; Gateway `pvp_leave`/`pvp_kick` and pre-round `player_inspect` cover PvP exit, pre-start kick and player inspection, while PvP `さそう` awaits the quest-lobby place log (#2585). Leader start/advance, `pvp_team` and GvG `gvg_leave` candidates correspond to existing PvP/GvG services and retained character room routes; detail/party inspection and remaining mutation migration belong to #948. |
 | `lib/_casino.cgi:10–32,100–111`: `にげる`, `すくしょ`, `かいし`, `さそう`, leader `きっく`; delegated game actions | Casino.GetCharacterRoomView reuses owned admitted GetRoomView; context composes masked detail and role/phase choices. Gateway `casino_room_leave`/`casino_room_start`/`casino_room_kick` call LeaveRoom/StartGame/KickMember; speech is `place_say` into the [room log](place-log.md#casino-rooms). Invitation is #2645; in-room screenshot is #2638. |
 | `lib/casino_indian.cgi:10–16`: `つづける`, `しょうぶ`, `おりる`; `casino_highlow.cgi:10–27`: `つづける`, `ハイ`, conditional `ロウ`, `おりる`; `casino_doppel.cgi:10–15`: generated marks | Gateway `casino_room_action` calls PlayRoomAction with one of the service-owned choices the context offers; legacy/current menu differences are recorded in the [scoped Casino mapping](../design/casino.md#scoped-legacy-dispatch-reconciliation). |
 | `lib/vs_dungeon.cgi:33–48`: leader initial `すすむ`, `にし`, `きた`, `みなみ`, `ひがし`, `ちず`, treasure `しらべる` | Owned ObserveExpedition supplies actor-visible map, floor/revision/turn facts and verified direction/Fight/Escape candidates. Standalone map GET is replaced by context; map listing and Move/Fight/Escape REST remain. Current StartPartyExpedition/Move bundle initialization/tile resolution; native initial advance/treasure inspection remains under the [Dungeon action mapping](../design/dungeon.md#legacy-action-reconciliation), and per-participant combat/exit remains #1204. |
 | `lib/vs_challenge.cgi:20–46`: treasure `しらべる`, phase-dependent `すすむ` | Owned GetActiveSession supplies phase/round; AdvanceRound remains the retained character challenge advance operation and unconnected candidate. Treasure/battle/party detail reconciliation remains #948. |
 | `lib/_skill.cgi:158` → `lib/_battle.cgi:1184–1222,1330–1346`: participant `にげる` | Gateway `challenge_retire` → `Challenge.Service.ExitSession` settles the caller, preserves survivors and hands leadership to the first remaining member; last exit ends the run. Shared settlement owns resource/consumption/reward/record/fullness effects. |
-| Inherited `lib/_skill.cgi:22–29,78–79,282–317`: spectator `ささやき`/`にげる`/`すくしょ`, generated job/custom skills and `すとっく`, then `add_battle_action` | Shared member/spectator dispatch is inspected only to establish activity authority. No generated skill menu or per-turn battle command is replaced here; skill/stock/combat, battle spectator and screenshot reconciliation remain #948; rendering belongs to #140. Existing feature and battle operations stay registered. |
+| Inherited `lib/_skill.cgi:22–29,78–79,282–317`: spectator `ささやき`/`にげる`/`すくしょ`, generated job/custom skills and `すとっく`, then `add_battle_action` | Normal runs discover this menu, including `すとっく`, through the owned run observation and execute it with [run commands](#normal-run-commands-and-recovery). Spectating (#2728), whisper/comment (#948) and screenshot (#2638) stay listed but unconnected; other modes' per-turn commands remain #948; rendering belongs to #140. |
 | `lib/sleep.cgi:18–42`: empty action menu, elapsed automatic vitality recovery | Existing timer facts preserve sleep and elapsed recovery pending; only explicit connected Wake/Rescue commands can recover. GET changes no vitality, timer or feature record. |
 
 GvG advance clients must adopt the
@@ -633,7 +633,7 @@ Only explicitly mapped 4xx errors are known rejections; every other execution er
 
 Bank, Shop, SecretShop, stage adventure, rescue and Home sleep/wake commands keep their feature owners' rules ([Bank](../design/bank.md), [Shop](../design/shops.md#10-shop-scenes-and-commands), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration), [Adventure](../design/adventure.md), [Rescue](../design/rescue-and-helper.md#emergency-rescue), [Home recovery](../design/home.md#5-resting--sleeping-sleepcgi-homecgi)). Cross-cutting points:
 
-- `adventure_start` keeps the immediate batch crawl; its Gateway connection certifies neither parity nor a delayed expedition.
+- `adventure_start` and `party_start` enroll a floor-0 [normal run](#normal-run-commands-and-recovery) and resolve no combat.
 - `rescue_request` bypasses ordinary entry and Sleep/CanWake gates and does not guarantee that sleep is removed.
 - An early Wake reaches the service and returns its known rejection; an awake character has no eligible Wake.
 
@@ -641,46 +641,15 @@ Bank, Shop, SecretShop, stage adventure, rescue and Home sleep/wake commands kee
 
 The command requires explicit `item_id` and `quantity`; it does not inherit the retired REST default of one.
 
-### Planned normal-adventure commands and recovery
+### Normal-run commands and recovery
 
-Adventure's [durable run authority](transient-run-state.md#run-host-durable-command-boundary-1325)
-provides service-level enrollment, explicit combat, owned facts and receipts. Its
-Gateway connection (#1330) remains pending under #1323;
-#948 owns coordinated transport replacement. Keep the existing
-`adventure_start` and REST paths until their verified replacement is deployed.
-Do not document proposed ActionIDs or result fields in OpenAPI as if connected.
+These commands are the transport of Adventure's [durable run authority](transient-run-state.md#run-host-durable-command-boundary-1325); OpenAPI owns their inputs and results. `run_*` commands are mode-neutral, for later reuse by every run-host mode.
 
-The new start result must identify an enrolled floor-0 run rather than claim a
-completed crawl. Separate strict command variants cover advance, explicit
-battle action/target, chest inspection and personal exit. Each active command
-binds immutable run identity, expected version and actor-scoped command identity;
-the owned path/session supplies actor identity. Battle/chest choices use explicit
-encounter target IDs, never another player's Character ID as permission to read
-private data. Variant schemas reject unknown/null fields and stale selections;
-action-specific multi-target/extra-action inputs follow verified effect rules.
-
-Adventure's actor reader supplies typed run/version/phase, actor role and vitality,
-public roster/encounter/field facts, permitted action/target choices, actor deadline
-and outstanding personal exit/recovery facts. Progressive action then target
-selection uses the current version and explicit command template. Spectator and
-fallen views have their own restricted choices; generic town-entry gates cannot
-block legal exit/recovery. SQL ownership survives lobby loss and unfinished exit.
-GET neither settles nor advances, claims, penalizes, captures Replay or extends
-deadlines. Storage errors remain errors, never false absence of an active run.
-
-Retain the shared success/rejection and refresh-failure envelopes. Add owned
-command-receipt observation so a lost response/commit-unknown can be resolved
-even after personal exit; GET context alone is not proof of whether a specific
-command committed. Receipt lookup authenticates the viewer and verifies ownership
-of the recorded executing actor before payload access, without requiring current
-membership or a live Run. Receipts remain queryable after Run deletion. Explicit
-same-identity/same-input retry, once implemented, returns the original domain
-result even after exit; foreign receipts and changed input for that identity are
-rejected. Only a new command validates current membership, state and version.
-Clients never automatically replay POST or mint a new identity
-to retry an unknown outcome. Version conflicts request fresh observation.
-Unfinished mandatory effects keep entry blocked and expose explicit recovery;
-optional Replay/cleanup failures do not change a committed settlement result.
+- `adventure_start` (solo, with a caller-minted `command_id` as its admission identity) and `party_start` (ready leader) return the enrolled run's identity.
+- `run_operation`, `run_chest`, `run_exit` and `run_recover` bind `run_id`, the observed `version` and an actor-scoped `command_id`; the path supplies the actor. `run_operation` takes one submittable operation with an optional encounter target and argument text, an optional additional submission admitted only under the engine's extended-state gate and, for the darkness field, its named follow-up. Targets are encounter IDs, never permission to read another member.
+- `run_recover` resumes a committed idle cleanup whose penalty projection is pending; otherwise it requests the owner cleanup.
+- The activity scene's `run` observation carries public encounter facts, the actor's own ledger, its interval and the idle deadline on the server clock, and every discovered operation; only submittable ones become command inputs. GET never settles, advances, claims, penalizes, captures Replay or extends deadlines, and storage errors stay errors rather than absence of a run.
+- A lost response is resolved by resending the identical command, which returns the stored receipt even after personal exit; a foreign identity or changed input is rejected. Clients never mint a new identity to retry an unknown outcome, and a version conflict requires fresh observation. Unfinished mandatory effects keep entry blocked; optional Replay or cleanup failures do not change a committed result.
 
 ### Outcome responses
 

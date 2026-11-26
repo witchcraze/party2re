@@ -124,17 +124,3 @@ func TestStartOutcomeUnknownHTTP(t *testing.T) {
 		})
 	}
 }
-
-func TestOrdinaryPartyStartRejectsCombatEnrollment(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	h := newTestHandler(t, &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}, &stubCharacterService{getFn: func(context.Context, string) (corecharacter.Character, error) {
-		return corecharacter.Character{ID: "c1", PlayerID: player.ID}, nil
-	}}, &stubAdventureService{}, &stubShopService{}, apihttp.WithParty(&stubPartyService{err: party.ErrMemberBusy}))
-	req := jsonRequest(t, http.MethodPost, "/parties/lobby/start", `{"character_id":"c1"}`)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	rec := httptest.NewRecorder()
-	h.Router().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-}

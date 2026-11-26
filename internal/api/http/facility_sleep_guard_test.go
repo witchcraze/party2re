@@ -89,8 +89,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		path   string
 		body   string
 	}{
-		// Adventure
-		{"adventure_start", http.MethodPost, "/adventures", `{"character_id":"char-1","stage_id":"stage-1"}`},
 		// Bank
 		{"bank_deposit", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"bank_deposit","params":{"amount":100}}`},
 		{"bank_withdraw", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"bank_withdraw","params":{"amount":100}}`},

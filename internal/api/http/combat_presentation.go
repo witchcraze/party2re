@@ -9,7 +9,6 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/gvg"
-	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
 )
 
@@ -73,12 +72,6 @@ type pvpRoundResponse struct {
 type gvgRoundResponse struct {
 	gvg.RoundResolution
 	BattleLog []turnLogResponse `json:"battle_log,omitempty"`
-}
-
-type partyAdventureResponse struct {
-	party.PartyAdventureResult
-	MonsterTames map[string][]monsterTameResponse `json:"monster_tames,omitempty"`
-	BattleResult partyBattleResultResponse        `json:"battle_result"`
 }
 
 type monsterTameResponse struct {

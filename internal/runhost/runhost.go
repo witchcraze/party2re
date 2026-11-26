@@ -120,6 +120,13 @@ type Command struct {
 	Action   string `json:"action"`
 	TargetID string `json:"target_id"`
 	Input    string `json:"input"`
+	// SecondAction and SecondTargetID type the additional submission of the
+	// legacy `＠A>a ＠B>b` text; FollowUpAction and FollowUpTargetID type the
+	// darkness field's `＠field>＠follow-up target` continuation.
+	SecondAction     string `json:"second_action,omitempty"`
+	SecondTargetID   string `json:"second_target_id,omitempty"`
+	FollowUpAction   string `json:"follow_up_action,omitempty"`
+	FollowUpTargetID string `json:"follow_up_target_id,omitempty"`
 }
 
 // Receipt contains only the executing actor's result, including after exit.

@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
@@ -26,7 +25,7 @@ import (
 type commandLoopFixture struct {
 	*homeGatewayFixture
 	bank      *bankGatewayFixture
-	adventure *adventureGatewayFixture
+	adventure *runStub
 	profiles  *injectableProfileRepo
 	router    http.Handler
 }
@@ -46,25 +45,19 @@ func newCommandLoopFixture(t *testing.T) *commandLoopFixture {
 	f := &commandLoopFixture{
 		homeGatewayFixture: homes,
 		bank:               newBankGatewayFixture(t),
-		adventure:          newAdventureGatewayFixture(t),
+		adventure:          &runStub{t: t},
 		profiles: &injectableProfileRepo{profiles: map[string]character.Profile{
 			"hero": {CharacterID: "hero", AvatarURL: "avatar"},
 		}},
 	}
-	f.bank.gatewayFixture, f.adventure.gatewayFixture = homes.gatewayFixture, homes.gatewayFixture
+	f.bank.gatewayFixture = homes.gatewayFixture
 	characters, err := character.NewService(commandLoopCharacterRepository{homes: homes},
 		character.WithProfileRepository(f.profiles))
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.adventure.service, err = adventure.NewService(adventureGatewayRecords{adventureGatewayFixture: f.adventure},
-		f.adventure, adventureGatewayBattle{}, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.adventure.service.SetTimerService(f.timers)
-	h, err := NewHandler(f.gatewayFixture, characters, f.adventure, &struct{ ShopService }{},
-		WithBank(f.bank), WithHome(homes),
+	h, err := NewHandler(f.gatewayFixture, characters, &struct{ AdventureService }{}, &struct{ ShopService }{},
+		WithBank(f.bank), WithHome(homes), WithNormalRuns(f.adventure),
 		WithPlayerContext(playercontext.NewService(homes, f.gatewayFixture, f.timers)))
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +80,7 @@ func (f *commandLoopFixture) command(action, params string, wantStatus int) map[
 
 func (f *commandLoopFixture) getContext() PlayerContextResponse {
 	f.t.Helper()
-	before, deposits, saves, updates := f.executions, f.bank.depositCalls, f.adventure.saves, f.updates
+	before, deposits, saves, updates := f.executions, f.bank.depositCalls, len(f.adventure.enters), f.updates
 	stored := f.char
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/characters/hero/context", nil).WithContext(f.expectedContext)
 	r.Header.Set("Authorization", "Bearer session")
@@ -96,7 +89,7 @@ func (f *commandLoopFixture) getContext() PlayerContextResponse {
 	if w.Code != http.StatusOK {
 		f.t.Fatalf("GET context: status=%d body=%s", w.Code, w.Body.String())
 	}
-	if f.executions != before || f.bank.depositCalls != deposits || f.adventure.saves != saves || f.updates != updates || f.char != stored {
+	if f.executions != before || f.bank.depositCalls != deposits || len(f.adventure.enters) != saves || f.updates != updates || f.char != stored {
 		f.t.Fatal("GET context executed a mutation")
 	}
 	return f.observation(map[string]json.RawMessage{"context": w.Body.Bytes()})
@@ -217,10 +210,10 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 				}
 				assertLoopRecovery(t, f.getContext(), true, elapsed)
 				executions := f.executions
-				got = f.command("adventure_start", `{"stage_id":"stage-01"}`, http.StatusConflict)
+				got = f.command("adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k"}`, http.StatusConflict)
 				assertGatewayError(t, got, "ACTION_UNAVAILABLE")
 				assertLoopRecovery(t, f.observation(got), true, elapsed)
-				if f.executions != executions || f.adventure.saves != 0 || f.updates != 1 || f.char != sleepChar {
+				if f.executions != executions || len(f.adventure.enters) != 0 || f.updates != 1 || f.char != sleepChar {
 					t.Fatal("sleep/pending wake executed guarded command or mutated state")
 				}
 			}
@@ -239,16 +232,11 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			assertLoopRecovery(t, f.observation(got), false, false)
 			assertLoopRecovery(t, f.getContext(), false, false)
 
-			got = f.command("adventure_start", `{"stage_id":"stage-01"}`, http.StatusOK)
-			var crawl adventureResponse
-			if err := json.Unmarshal(got["result"], &crawl); err != nil {
-				t.Fatal(err)
+			got = f.command("adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k"}`, http.StatusOK)
+			if r := decodeRunReceipt(t, got); r.RunID != "run" || r.Round != 0 || !reflect.DeepEqual(f.adventure.enters, []string{"owner/hero/k/stage-01/normal/18"}) {
+				t.Fatalf("adventure did not enroll through the run port: %+v %v", r, f.adventure.enters)
 			}
-			if f.adventure.saves != 1 || !reflect.DeepEqual(crawl, toAdventureResponse(f.adventure.saved)) ||
-				crawl.CharacterID != "hero" || crawl.StageID != "stage-01" || !crawl.Resolved {
-				t.Fatalf("adventure did not preserve dispatcher outcome: %+v; saved: %+v", crawl, f.adventure.saved)
-			}
-			// Immediate Adventure resolution must not invent a delayed expedition.
+			// Enrollment must not invent a delayed expedition.
 			assertLoopRecovery(t, f.observation(got), false, false)
 			assertLoopRecovery(t, f.getContext(), false, false)
 		})
@@ -284,13 +272,13 @@ func TestActionGatewayCommandLoopUnfinishedWork(t *testing.T) {
 		}
 		assertWork(f.getContext())
 		for _, command := range []struct{ action, params string }{
-			{"bank_deposit", `{"amount":1}`}, {"adventure_start", `{"stage_id":"stage-01"}`},
+			{"bank_deposit", `{"amount":1}`}, {"adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k"}`},
 		} {
 			got := f.command(command.action, command.params, http.StatusConflict)
 			assertGatewayError(t, got, "ACTION_UNAVAILABLE")
 			assertWork(f.observation(got))
 		}
-		if f.executions != 0 || f.adventure.saves != 0 || f.char != before {
+		if f.executions != 0 || len(f.adventure.enters) != 0 || f.char != before {
 			t.Fatal("deadline arrival settled work or allowed a guarded mutation")
 		}
 	}

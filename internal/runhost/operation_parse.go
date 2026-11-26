@@ -48,20 +48,7 @@ func (r *State) parseOperation(cmd Command, ctx OperationContext, room []Choice)
 
 func (ops *operations) parse(cmd Command) (parsedOperation, error) {
 	if cmd.Action != "" && cmd.Action != "comment" {
-		var namedCustom *candidate
-		for _, key := range ops.order {
-			c := ops.byKey[key]
-			if c.Action == cmd.Action && c.Action != "br" {
-				return ops.parseFirst(c, cmd.TargetID, cmd.Input)
-			}
-			if c.custom && c.Name == cmd.Action {
-				namedCustom = &c
-			}
-		}
-		if namedCustom != nil {
-			return ops.parseFirst(*namedCustom, cmd.TargetID, cmd.Input)
-		}
-		return parsedOperation{}, ErrUnavailable
+		return ops.parseTyped(cmd)
 	}
 
 	input := cmd.Input + " "
@@ -91,23 +78,9 @@ func (ops *operations) parse(cmd Command) (parsedOperation, error) {
 		secondKey := skill.OperationNameKey(matches[3])
 		second, listed := ops.byKey[secondKey]
 		if listed && second.Kind == OperationBattle {
-			action, err := ops.parseEntry(second, matches[4], "", true)
-			if err != nil {
+			if err := ops.addSecond(&result, second, matches[4], true); err != nil {
 				return parsedOperation{}, err
 			}
-			if action.Whitelisted && first.Whitelisted {
-				if !ops.registered(second) {
-					return parsedOperation{}, ErrUnavailable
-				}
-				frame := ops.ctx.Callback
-				frame.Arguments = slices.Clone(action.Arguments)
-				frame.Command = action.EntryID
-				if err := ops.state.CertifyInvocations(&frame, ops.ctx.Definitions.Invocations, []corebattle.CallbackInvocation{action.Invocation}, random.Default()); err != nil {
-					return parsedOperation{}, err
-				}
-			}
-			action.Cost = second.binding.MPCost
-			result.Second = &action
 		} else if skill.IsSecondOperationKey(secondKey) {
 			if first.Whitelisted {
 				return parsedOperation{}, ErrUnavailable
@@ -118,6 +91,111 @@ func (ops *operations) parse(cmd Command) (parsedOperation, error) {
 		}
 	}
 	return result, nil
+}
+
+// parseTyped binds a typed selection: the first step, the darkness field's
+// named follow-up and, under the same gate as the legacy text, an additional
+// battle submission.
+func (ops *operations) parseTyped(cmd Command) (parsedOperation, error) {
+	c, ok := ops.typed(cmd.Action)
+	if !ok {
+		return parsedOperation{}, ErrUnavailable
+	}
+	if cmd.FollowUpAction != "" {
+		if err := ops.followUp(c, cmd); err != nil {
+			return parsedOperation{}, err
+		}
+	} else if cmd.FollowUpTargetID != "" {
+		return parsedOperation{}, ErrConflict
+	}
+	result, err := ops.parseFirst(c, cmd.TargetID, cmd.Input)
+	if err != nil || cmd.SecondAction == "" {
+		if err == nil && cmd.SecondTargetID != "" {
+			err = ErrConflict
+		}
+		return result, err
+	}
+	second, ok := ops.typed(cmd.SecondAction)
+	if !ok || c.Kind != OperationBattle || second.Kind != OperationBattle || ops.actor == nil || ops.actor.Extended != corebattle.ExtendedAdditional {
+		return parsedOperation{}, ErrUnavailable
+	}
+	return result, ops.addSecond(&result, second, cmd.SecondTargetID, false)
+}
+
+// followUp freezes the darkness continuation before the field is admitted
+// (_skill.cgi:2208–2222). With an additional submission the legacy double
+// pattern hands the continuation the second command's name as `$3`, text that
+// names no participant; the second action's ID stands in for it.
+func (ops *operations) followUp(c candidate, cmd Command) error {
+	f := ops.ctx.Fields
+	if c.Action != "job-22-entry-5" || f == nil {
+		return ErrUnavailable
+	}
+	follow, ok := ops.typed(cmd.FollowUpAction)
+	if !ok {
+		return ErrUnavailable
+	}
+	target := cmd.FollowUpTargetID
+	if cmd.SecondAction != "" {
+		if target != "" {
+			return ErrConflict
+		}
+		target = cmd.SecondAction
+	} else if target != "" && ops.participantID(target, false) == "" {
+		return ErrConflict
+	}
+	key, names := follow.key, f.NameKey
+	f.SubmittedCommand, f.SubmittedTarget = "＠"+key, target
+	// The follow-up arrives as its discovered key, not as a submitted name.
+	f.NameKey = func(name string) string {
+		if name == key || names == nil {
+			return name
+		}
+		return names(name)
+	}
+	return nil
+}
+
+// typed finds the first candidate listed under action, or else the custom
+// loadout named action.
+func (ops *operations) typed(action string) (candidate, bool) {
+	var namedCustom *candidate
+	for _, key := range ops.order {
+		c := ops.byKey[key]
+		if c.Action == action && c.Action != "br" {
+			return c, true
+		}
+		if c.custom && c.Name == action {
+			namedCustom = &c
+		}
+	}
+	if namedCustom != nil {
+		return *namedCustom, true
+	}
+	return candidate{}, false
+}
+
+// addSecond binds an additional battle submission. Two whitelisted names
+// certify the second's reachable closure before any execution.
+func (ops *operations) addSecond(result *parsedOperation, second candidate, target string, legacy bool) error {
+	action, err := ops.parseEntry(second, target, "", legacy)
+	if err != nil {
+		return err
+	}
+	if action.Whitelisted && result.First.Whitelisted {
+		if !ops.registered(second) {
+			return ErrUnavailable
+		}
+		frame := ops.ctx.Callback
+		frame.Arguments = slices.Clone(action.Arguments)
+		frame.Command = action.EntryID
+		if err := ops.state.CertifyInvocations(&frame, ops.ctx.Definitions.Invocations, []corebattle.CallbackInvocation{action.Invocation}, random.Default()); err != nil {
+			return err
+		}
+	}
+	action.Cost = second.binding.MPCost
+	result.Second = &action
+	return nil
 }
 
 func (o *operations) parseFirst(c candidate, target, input string) (parsedOperation, error) {

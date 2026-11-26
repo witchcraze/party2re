@@ -22,7 +22,8 @@ type actionCommand struct {
 	prepare func(json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error)
 	reject  func(error) (int, ErrorDetail)
 	// An owned receipt permits explicit replay after continuation disappears.
-	replay func(context.Context, string, json.RawMessage) (bool, error)
+	// It receives the authenticated player and the path actor.
+	replay func(context.Context, string, string, json.RawMessage) (bool, error)
 }
 
 // withActionCommand is the package-local seam for subsequent service adapters.
@@ -179,7 +180,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 		if !earlyWake && !slices.Contains(current.AvailableActions, req.Action) {
 			replay := false
 			if command.replay != nil {
-				replay, err = command.replay(r.Context(), char.ID, req.Params)
+				replay, err = command.replay(r.Context(), player.ID, char.ID, req.Params)
 				if err != nil {
 					writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify the owned command receipt.")
 					return

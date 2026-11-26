@@ -73,9 +73,13 @@ func decodeActionParams(raw json.RawMessage, required []string, dst any) error {
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
 		return errors.New("params must be an object")
 	}
-	for name := range fields {
+	for name, value := range fields {
 		if strings.EqualFold(name, "character_id") || strings.EqualFold(name, "player_id") {
 			return errors.New("actor overrides are forbidden")
+		}
+		// No command schema declares a nullable input.
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return errors.New("null action parameter")
 		}
 	}
 	for _, name := range required {

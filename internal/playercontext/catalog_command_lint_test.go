@@ -88,7 +88,6 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 	}{
 		{"bank_deposit", "amount", "integer", true},
 		{"bank_withdraw", "amount", "integer", true},
-		{"adventure_start", "stage_id", "string", true},
 		{"rescue_request", "reason", "string", true},
 		{"chapel_pray", "blessing", "string", true},
 		{"exile_approve", "target_name", "string", true},

@@ -331,7 +331,3 @@ Order and lifetime traps:
 - **Monster kills** (`kill_m`): on victory, each surviving character counts every defeated non-player enemy that is strong relative to the player (`_battle.cgi:230–235`). The demon-king unseal counter is driven by the explicit [stage19 treasure event](adventure.md#combat-travel-and-encounter-replacement), not by victory; see [Boss unsealing](boss.md#6-unseal-to-sealing-room-lifecycle).
 - **Damage floor scope.** The physical base formula has a 1-or-2 fallback. Misses, evasion, immunity and later modifiers can yield zero; it is not a minimum for every attack or skill.
 - **Context isolation.** The battle engine never queries persistence or mutates character state; feature modules persist results through `internal/battle`.
-
-## Open gaps
-
-- Interactive Gateway cutover; no direct or indirect effect is advertised until the gates above are met: #1330.

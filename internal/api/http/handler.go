@@ -88,7 +88,6 @@ type CharacterService interface {
 
 // AdventureService defines the adventure operations exposed over HTTP.
 type AdventureService interface {
-	StartStage(ctx context.Context, characterID string, stageID string) (adventure.Adventure, error)
 	Get(ctx context.Context, id string) (adventure.Adventure, error)
 	ListHistory(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
 	ListHistoryByCursor(ctx context.Context, characterID string, limit int, cursor string) (pagination.CursorPage[adventure.AdventureHistoryEntry], error)
@@ -159,6 +158,7 @@ type Handler struct {
 	monster        MonsterService
 	contest        ContestService
 	parties        PartyService
+	runs           NormalRunService
 	altar          AltarService
 	bank           BankService
 	blacksmith     BlacksmithService
@@ -290,7 +290,7 @@ func NewHandler(
 		shops:          shops,
 		allowedOrigins: make(map[string]struct{}),
 	}
-	for _, opt := range append([]Option{adventureStartCommand(adventures), shopCommands(), homeProfileCommand(characters)}, opts...) {
+	for _, opt := range append([]Option{shopCommands(), homeProfileCommand(characters)}, opts...) {
 		if opt != nil {
 			opt(h)
 		}
@@ -335,7 +335,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/gender", h.handleChangeCharacterGender)
 	mux.HandleFunc("GET /naming-hall/dialogue", h.handleNamingHallDialogue)
 
-	mux.HandleFunc("POST /adventures", h.handleStartAdventure)
 	mux.HandleFunc("GET /characters/{id}/adventures", h.handleListCharacterAdventures)
 	mux.HandleFunc("GET /characters/{id}/adventure-chronicle", h.handleGetAdventureChronicle)
 
@@ -449,7 +448,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /parties/{id}/kick", h.handleKickPartyMember)
 	mux.HandleFunc("DELETE /parties/{id}", h.handleDisbandParty)
 	mux.HandleFunc("POST /parties/{id}/ready", h.handleSetPartyReady)
-	mux.HandleFunc("POST /parties/{id}/start", h.handleStartPartyAdventure)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }
@@ -713,32 +711,6 @@ func toCharacterResponse(char corecharacter.Character) characterResponse {
 			Agility: char.Stats.Agility,
 		},
 	}
-}
-
-// -------------------------------------------------------------------
-// Adventure
-// -------------------------------------------------------------------
-
-type startAdventureRequest struct {
-	CharacterID string `json:"character_id"`
-	StageID     string `json:"stage_id"`
-}
-
-func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
-	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *startAdventureRequest) string {
-		return req.CharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req startAdventureRequest) {
-		adv, err := h.adventures.StartStage(r.Context(), char.ID, req.StageID)
-		if err != nil {
-			if errors.Is(err, adventure.ErrLevelRequirementNotMet) || errors.Is(err, adventure.ErrJobLevelRequirementNotMet) {
-				writeError(w, http.StatusForbidden, err)
-				return
-			}
-			writeError(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, toAdventureResponse(adv))
-	})
 }
 
 // -------------------------------------------------------------------

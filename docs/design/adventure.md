@@ -4,7 +4,7 @@
 
 The Adventure system reconstructs the operation-driven stage adventure of legacy Party2 (`quest.cgi`, `vs_monster.cgi`, `_battle.cgi`). Evidence paths are under `party2/` at revision `ff97fc549932a146cc945d7edf71b44c868a840e`.
 
-Production starts still resolve all battles, floor advances and treasure inspections in one request (the batch crawl). This is an implementation gap, not the original game: the user directed restoration of player-command progression (#1323). Removing the invented one-hour expedition timer does not remove the original per-actor action interval. The native interactive run (`NormalRunService`) is not yet reachable through the Gateway (#1330).
+Solo and Party starts enroll a floor-0 run on the run host (`NormalRunService`); each later operation is a Gateway [run command](../architecture/client-agent-api.md#normal-run-commands-and-recovery).
 
 ## Original interaction contract and reconstruction target
 
@@ -41,7 +41,7 @@ Evidence: `quest.cgi:579–586`; `vs_monster.cgi:37–82,89–109`; `_battle.cgi
 
 ### Normal-run operation discovery
 
-**Decision (#1327, 2026-10-12):** normal-run discovery follows original behavior. The [Battle action matrix](battle.md#normal-adventure-action-and-target-matrix) owns shared targeting and effect rules. The legacy free-text path supplies the optional second command, and the typed Gateway input contract is tracked in [#1330](https://github.com/witchcraze/party2re/issues/1330).
+**Decision (#1327, 2026-10-12):** normal-run discovery follows original behavior. The [Battle action matrix](battle.md#normal-adventure-action-and-target-matrix) owns shared targeting and effect rules. The legacy free-text path supplies the optional second command; its typed Gateway form is `run_operation`'s additional submission.
 
 **Decision ([#2528](https://github.com/witchcraze/party2re/pull/2528), 2026-11-21):** although original `lib/_battle.cgi:28–275` passes defeated chests into `defeat`, intentionally suppress chest defeat rewards, monster capture, and monster-book registration; defeating a box makes it fallen and removes it from the next request's opposing pool without opening it or granting defeat drops (approved departure from the `get_exp`/`get_money` field-overload side effect).
 
@@ -111,13 +111,12 @@ An EX room continues 11→12→13, where 13 is terminal; a room without EX ends 
 
 ## Batch crawl
 
-The batch crawl (`internal/adventure`, `internal/party`) is the current production path. It is not authorization to keep automatic battles, advance, inspection or exit in the interactive adventure. Its formulas live in code and tests; these points are decisions or non-obvious source behavior:
+The batch crawl (`internal/adventure`, `internal/party`) no longer serves production starts; #2474 deletes it. These decisions and source findings remain current:
 
 - **Treasure count** (`vs_monster.cgi:90–101`; `_npc_action.cgi:498–519`). The loop is inclusive (`for 0 .. $count`), so an index of P−1−D yields one chest per surviving member. P is `@partys`, which includes living helpers; fallen helpers were dropped at the previous save (`_battle.cgi:486–493,521`). Job, accessory (equipped slot only) and chapel blessing bonuses use the acting player (`%m`) only, never other members. **Pitfall:** `my $count = shift || $#partys;` treats an index of 0 as falsy and falls back to P−1 before the blessing and dead-member penalty.
 - **Treasure pocket** (item215). **Decision (2026-11-07, #1899):** `shiraberu` clears `$m{ite}` on use and the hand holds one unit, so a character carries at most one pocket at a time. Batch crawls claim only the base one-chest allowance and never consume a pocket automatically.
 - **Once-daily lock** (stage26, dungeon16; `quest.cgi:594–599` `$m{once}=1`). The quota is consumed at party creation or solo start, only for the creator/leader, and is not restored by disbanding or start failure. It clears only on waking at Home.
 - **Exit fatigue** is `round × 3 + 1` (halved in calm mode) where round is the exit floor, not turns or floors cleared (`_battle.cgi:1187–1188,1216`).
-- **Room speed** values (3/18/25 seconds) are the per-actor action interval in the original; the batch crawl stores but does not enforce them.
 - **Unsupported modes** (`calm`, `try`, `hard`) are rejected at party creation until their reward rules are reconciled.
 - **Chronicle**: the legacy owner-view unlock belongs to the entry command so record GETs remain read-only under the [Gateway contract](../architecture/client-agent-api.md). Historical party-log backfill cannot recover members who fell before the final floor, seasons or per-member rewards; backfilled rows record zero rewards and unclassified season rather than guesses.
 

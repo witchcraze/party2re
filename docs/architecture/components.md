@@ -108,8 +108,8 @@ admission, explicit progress and encounters, exit effects, records and the stage
 combat seams. Party owns waiting admission; its roster writers serialize with
 the one-way SQL handoff. Core battle supplies serializable effects, the battle
 adapter supplies character binding and asset application, Home enforces durable
-sleep deadlines, and PlayerContext reads owned run facts. Production starts still
-use the batch path; see the [run boundary](transient-run-state.md#run-host-durable-command-boundary-1325).
+sleep deadlines, PlayerContext reads owned run facts and the Gateway's
+[run commands](client-agent-api.md#normal-run-commands-and-recovery) drive it.
 
 ### Common Foundation Packages
 

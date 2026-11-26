@@ -1,17 +1,12 @@
 package http
 
 import (
-	"context"
-	"encoding/json"
 	"net/http"
 	"testing"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/dungeon"
-	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
 func TestDungeonOutcomePresentation(t *testing.T) {
@@ -44,15 +39,6 @@ func TestDungeonOutcomePresentation(t *testing.T) {
 	}
 }
 
-type presentationAdventureService struct {
-	AdventureService
-	result adventure.Adventure
-}
-
-func (s presentationAdventureService) StartStage(context.Context, string, string) (adventure.Adventure, error) {
-	return s.result, nil
-}
-
 func TestMonsterTameGatewayPresentation(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -63,21 +49,13 @@ func TestMonsterTameGatewayPresentation(t *testing.T) {
 		{"full box", false, true, "なんと スライム が起き上がりこちらを見ている。しかし、アレックスのモンスター預かり所はいっぱいだった。スライムは悲しそうに去っていった…"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newGatewayFixture(t)
-			service := presentationAdventureService{result: adventure.Adventure{MonsterTames: map[string][]battle.MonsterTameResult{"hero": {{MonsterID: "monster-002", MonsterName: "スライム", TamerName: "アレックス", Success: tc.success, BoxFull: tc.full}}}}}
-			h, err := NewHandler(f, f, service, &struct{ ShopService }{}, WithPlayerContext(playercontext.NewService(f, f, timer.NewService(nil))), func(h *Handler) { h.homes = f })
-			if err != nil {
-				t.Fatal(err)
-			}
-			status, response := gatewayRequest(t, h.Router(), "hero", "session", "application/json", `{"action":"adventure_start","params":{"stage_id":"stage-01"}}`, nil)
+			f := newRunGatewayFixture(t)
+			f.runs.tames = []battle.MonsterTameResult{{MonsterID: "monster-002", MonsterName: "スライム", TamerName: "アレックス", Success: tc.success, BoxFull: tc.full}}
+			status, response := f.post(f.router(), "run_operation", `{"run_id":"run","version":3,"command_id":"c","operation":"attack","target_id":"foe"}`)
 			if status != http.StatusOK {
 				t.Fatalf("status=%d response=%s", status, response)
 			}
-			var result adventureResponse
-			if err := json.Unmarshal(response["result"], &result); err != nil {
-				t.Fatal(err)
-			}
-			got := result.MonsterTames["hero"]
+			got := decodeRunReceipt(t, response).Tames
 			if len(got) != 1 || got[0].Message != tc.want || got[0].Success != tc.success || got[0].BoxFull != tc.full || got[0].MonsterID != "monster-002" {
 				t.Fatalf("lost taming outcome: %s", response)
 			}

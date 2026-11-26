@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
@@ -41,7 +42,7 @@ type casinoActivityReader interface {
 
 type contextActivityReaders struct {
 	normal interface {
-		GetActorRun(context.Context, string, string) (*runhost.ActorRun, error)
+		ObserveRun(context.Context, string, string) (*runhost.Observation, error)
 		HasActiveRun(context.Context, string) (bool, error)
 	}
 	party     partyActivityReader
@@ -76,19 +77,12 @@ type pvpPendingPenaltyReader interface {
 func (r contextActivityReaders) read(ctx context.Context, owner, actor string) ([]playercontext.Activity, error) {
 	facts := []playercontext.Activity{}
 	if r.normal != nil {
-		run, err := r.normal.GetActorRun(ctx, owner, actor)
+		run, err := r.normal.ObserveRun(ctx, owner, actor)
 		if err != nil {
 			return nil, fmt.Errorf("normal adventure activity: %w", err)
 		}
 		if run != nil {
-			phase := "active"
-			if run.IdleDue {
-				phase = "idle_due"
-			}
-			if run.Recipient.TimerPending {
-				phase = "recovery_pending"
-			}
-			facts = append(facts, playercontext.Activity{Kind: "adventure", ID: run.RunID, Revision: run.Version, PartyID: run.PartyID, Role: run.Role, Phase: phase, Round: run.Round, BlocksWake: run.Recipient.TimerPending, Actions: []string{}})
+			facts = append(facts, runActivity(run))
 		}
 	}
 	p, member, err := r.party.GetActiveParty(ctx, actor)
@@ -256,4 +250,31 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		facts = append(facts, a)
 	}
 	return facts, nil
+}
+
+// runActivity offers the run commands the owned observation can submit.
+func runActivity(run *runhost.Observation) playercontext.Activity {
+	a := playercontext.Activity{Kind: "adventure", ID: run.RunID, Revision: run.Version, PartyID: run.PartyID, Role: run.Role, Phase: "active", Round: run.Round, BlocksWake: run.Recipient.TimerPending, Actions: []string{}}
+	if run.IdleDue {
+		a.Phase = "idle_due"
+	}
+	if run.Recipient.TimerPending {
+		a.Phase = "recovery_pending"
+	}
+	for _, c := range run.Choices {
+		id := "run_operation"
+		switch c.Action {
+		case "chest":
+			id = "run_chest"
+		case "exit":
+			id = "run_exit"
+		}
+		if c.Submittable && !slices.Contains(a.Actions, id) {
+			a.Actions = append(a.Actions, id)
+		}
+	}
+	if run.IdleDue || run.Recipient.TimerPending {
+		a.Actions = append(a.Actions, "run_recover")
+	}
+	return a
 }

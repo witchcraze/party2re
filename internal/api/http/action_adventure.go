@@ -1,27 +1,12 @@
 package http
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
-
-type adventureActionParams struct {
-	StageID string `json:"stage_id"`
-}
-
-func adventureStartCommand(service AdventureService) Option {
-	return withActionCommand("adventure_start", func(ctx context.Context, actorID string, params adventureActionParams) (any, error) {
-		value, err := service.StartStage(ctx, actorID, params.StageID)
-		if err != nil {
-			return nil, err
-		}
-		return toAdventureResponse(value), nil
-	}, adventureActionRejection)
-}
 
 func adventureActionRejection(err error) (int, ErrorDetail) {
 	switch {

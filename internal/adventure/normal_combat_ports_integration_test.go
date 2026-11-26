@@ -1,7 +1,9 @@
 package adventure_test
 
 import (
+	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -232,6 +234,49 @@ func TestRunCombatDarknessContinuation(t *testing.T) {
 	t.Run("unaffordable", func(t *testing.T) {
 		f := combatFixture(t, 1)
 		rejected(t, f, combatCommand(room(t, f), "dark", "", "", "＠インヴァイトダーク&gt;＠あんこくけん foe"))
+	})
+	// Under 開悟 the double pattern also runs an additional submission and hands
+	// the continuation the second command's name as its target (_battle.cgi:563–575).
+	t.Run("typed follow-up with additional submission matches legacy text", func(t *testing.T) {
+		outcome := func(typed bool) string {
+			f := combatFixture(t, 1)
+			cmd := customRoom(t, f, 0, func(_ *adventure.NormalRun, a *corebattle.LifetimeActor) {
+				a.Jobs = corebattle.BattleJobs{JobID: "job-22", SP: 140}
+				a.MP, a.MaxMP, a.ItemDefinitionIDs, a.Extended = 39, 39, []string{"item-240"}, corebattle.ExtendedAdditional
+				// Each fixture rolls its own character; pin the stats the operation reads.
+				a.Attack, a.Defense, a.Agility = 7, 6, 8
+				a.BaseStats = corebattle.BattleBaseStats{Attack: 7, Defense: 6, Agility: 8}
+			}, runEnemy("foe", 900), runEnemy("other", 900))
+			if typed {
+				cmd = combatCommand(cmd, "dark", "job-22-entry-5", "", "")
+				cmd.FollowUpAction, cmd.SecondAction = "job-22-entry-0", "defend"
+			} else {
+				cmd = combatCommand(cmd, "dark", "", "", "＠インヴァイトダーク&gt;＠あんこく ＠ぼうぎょ")
+			}
+			r := accepted(t, f, cmd)
+			a := *runActorByID(r, cmd.ActorID)
+			a.ID, a.Name = "", ""
+			got, err := json.Marshal([]any{r.Battle.Fields, a, runActorByID(r, "foe").HP, runActorByID(r, "other").HP})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return string(got)
+		}
+		if typed, legacy := outcome(true), outcome(false); typed != legacy || !strings.Contains(typed, "darkness") {
+			t.Fatalf("typed %s\nlegacy %s", typed, legacy)
+		}
+	})
+	t.Run("typed follow-up", func(t *testing.T) {
+		f := combatFixture(t, 1)
+		cmd := room(t, f)
+		hp := runActorByID(readStockRoom(t, f, cmd.RunID), cmd.ActorID).HP
+		cmd = combatCommand(cmd, "dark", "job-22-entry-5", "", "")
+		cmd.FollowUpAction, cmd.FollowUpTargetID = "job-22-entry-0", "foe"
+		r := accepted(t, f, cmd)
+		a, foe, other := runActorByID(r, cmd.ActorID), runActorByID(r, "foe"), runActorByID(r, "other")
+		if r.Battle.Fields.Current() != "darkness" || foe.HP >= 900 || other.HP != 900 || a.MP != 32 || a.HP != hp-hp/2 {
+			t.Fatalf("field=%q foe=%d other=%d actor hp=%d/%d mp=%d", r.Battle.Fields.Current(), foe.HP, other.HP, a.HP, hp, a.MP)
+		}
 	})
 }
 

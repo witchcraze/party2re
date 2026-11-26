@@ -22,7 +22,6 @@ type PartyService interface {
 	KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) error
 	DisbandParty(ctx context.Context, partyID, leaderCharID string) error
 	SetReady(ctx context.Context, partyID, characterID string, ready bool) (party.PartyDetail, error)
-	StartPartyAdventure(ctx context.Context, partyID, leaderCharID string) (party.PartyAdventureResult, error)
 }
 
 // WithParty configures the PartyService for the Handler.
@@ -58,10 +57,6 @@ type disbandPartyRequest struct {
 type setPartyReadyRequest struct {
 	CharacterID string `json:"character_id"`
 	Ready       bool   `json:"ready"`
-}
-
-type startPartyAdventureRequest struct {
-	CharacterID string `json:"character_id"`
 }
 
 // handleListParties returns a list of recruiting parties.
@@ -314,45 +309,5 @@ func (h *Handler) handleSetPartyReady(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, detail)
-	})
-}
-
-// handleStartPartyAdventure starts the adventure (leader only).
-func (h *Handler) handleStartPartyAdventure(w http.ResponseWriter, r *http.Request) {
-	if h.parties == nil {
-		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "party service not configured"})
-		return
-	}
-
-	partyID := r.PathValue("id")
-	if partyID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "party id is required"})
-		return
-	}
-
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *startPartyAdventureRequest) string {
-		return req.CharacterID
-	}, func(player coreplayer.Player, char corecharacter.Character, req startPartyAdventureRequest) {
-		result, err := h.parties.StartPartyAdventure(r.Context(), partyID, char.ID)
-		if err != nil {
-			switch {
-			case errors.Is(err, adventure.ErrStageNotAvailable),
-				errors.Is(err, party.ErrMemberBusy):
-				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
-			case errors.Is(err, party.ErrNotPartyLeader),
-				errors.Is(err, party.ErrPartyNotRecruiting),
-				errors.Is(err, party.ErrPartyNotReady),
-				errors.Is(err, party.ErrCharacterUnconscious):
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			case errors.Is(err, party.ErrNotFound),
-				errors.Is(err, party.ErrStageNotFound):
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			default:
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to start party adventure"})
-			}
-			return
-		}
-
-		writeJSON(w, http.StatusOK, partyAdventureResponse{PartyAdventureResult: result, MonsterTames: toMonsterTames(result.MonsterTames), BattleResult: toPartyBattleResult(result.BattleResult)})
 	})
 }
