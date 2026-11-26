@@ -27,6 +27,7 @@ type pvpActivityReader interface {
 }
 type gvgActivityReader interface {
 	GetCharacterRoom(context.Context, string) (gvg.RoomDetail, error)
+	PendingDepartureRoom(context.Context, string) (string, error)
 }
 type dungeonActivityReader interface {
 	GetActiveExpedition(context.Context, string) (*dungeon.ActiveExpedition, error)
@@ -173,6 +174,15 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 			a.Actions = append(a.Actions, "gvg_advance")
 		}
 		facts = append(facts, a)
+	} else {
+		// A committed departure whose mapping cleanup failed is finished by gvg_leave.
+		roomID, err := r.gvg.PendingDepartureRoom(ctx, actor)
+		if err != nil {
+			return nil, fmt.Errorf("gvg pending departure: %w", err)
+		}
+		if roomID != "" {
+			facts = append(facts, playercontext.Activity{Kind: "gvg", ID: roomID, Phase: "recovery_pending", Role: "member", Actions: []string{"gvg_leave"}})
+		}
 	}
 	exp, err := r.dungeon.GetActiveExpedition(ctx, actor)
 	if err != nil {

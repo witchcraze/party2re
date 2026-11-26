@@ -80,8 +80,13 @@ func (f *pvpActivityFixture) GetCharacterRoom(context.Context, string) (pvp.Room
 }
 
 type gvgActivityFixture struct {
-	room gvg.RoomDetail
-	err  error
+	room    gvg.RoomDetail
+	err     error
+	pending string
+}
+
+func (f *gvgActivityFixture) PendingDepartureRoom(context.Context, string) (string, error) {
+	return f.pending, nil
 }
 
 func (f *gvgActivityFixture) GetCharacterRoom(context.Context, string) (gvg.RoomDetail, error) {
