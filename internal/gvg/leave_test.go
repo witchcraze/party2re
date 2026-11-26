@@ -133,7 +133,7 @@ func setupTwoGuildRoom(t *testing.T, targetWins int, engine gvg.BattleEngine, op
 		t.Fatal(err)
 	}
 	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
-		Name:       "Test War",
+		Name:       "TestWar",
 		MaxMembers: 4,
 		TargetWins: targetWins,
 	})
@@ -495,7 +495,7 @@ func TestLeaveRoom_RejoinSameRoomAppliesNewExitSideEffectsAndRetryIdempotency(t 
 		t.Fatal(err)
 	}
 
-	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Rejoin Test", MaxMembers: 4, TargetWins: 1})
+	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "RejoinTest", MaxMembers: 4, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -612,7 +612,7 @@ func TestAdmissionAbortsOnGetCharacterRoomError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Should Abort"}); !errors.Is(err, lookupErr) {
+	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "ShouldAbort"}); !errors.Is(err, lookupErr) {
 		t.Fatalf("CreateRoom error = %v, want %v", err, lookupErr)
 	}
 	if repo.saveCalls != 0 || repo.setCharCalls != 0 {
@@ -621,7 +621,7 @@ func TestAdmissionAbortsOnGetCharacterRoomError(t *testing.T) {
 
 	// Valid room creation succeeds when GetCharacterRoom returns ErrRoomNotFound.
 	repo.getCharErr = nil
-	room, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Valid Room", MaxMembers: 4, TargetWins: 1})
+	room, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "ValidRoom", MaxMembers: 4, TargetWins: 1})
 	if err != nil {
 		t.Fatalf("CreateRoom after recovery: %v", err)
 	}
@@ -662,7 +662,7 @@ func TestLeaveRoom_SaveFailurePreservesMappingAndBlocksSecondRoom(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	room1, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room 1", MaxMembers: 4, TargetWins: 1})
+	room1, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room1", MaxMembers: 4, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -677,7 +677,7 @@ func TestLeaveRoom_SaveFailurePreservesMappingAndBlocksSecondRoom(t *testing.T) 
 	repo.saveErr = nil
 
 	// Mapping must remain intact so c1 cannot enter a second room while still in room1.
-	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room 2"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
+	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room2"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
 		t.Fatalf("CreateRoom while partial leave pending = %v, want ErrAlreadyInRoom", err)
 	}
 
@@ -727,7 +727,7 @@ func TestLeaveRoom_DeleteFailureAndMappingRetrySafety(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	room1, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room 1", MaxMembers: 4, TargetWins: 1})
+	room1, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room1", MaxMembers: 4, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,7 +762,7 @@ func TestLeaveRoom_DeleteFailureAndMappingRetrySafety(t *testing.T) {
 	}
 
 	// 2. c1 creates room2; stale DeleteCharacterRoom or LeaveRoom for room1 cannot delete room2's mapping.
-	room2, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room 2", MaxMembers: 4, TargetWins: 1})
+	room2, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Room2", MaxMembers: 4, TargetWins: 1})
 	if err != nil {
 		t.Fatalf("c1 CreateRoom(room2) failed: %v", err)
 	}
@@ -781,7 +781,7 @@ func TestLeaveRoom_DeleteFailureAndMappingRetrySafety(t *testing.T) {
 	if err := svc.LeaveRoom(ctx, "c1", room2.Room.ID); !errors.Is(err, delCharErr) {
 		t.Fatalf("c1 LeaveRoom(room2) = %v, want %v", err, delCharErr)
 	}
-	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Blocked 3"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
+	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Blocked3"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
 		t.Fatalf("c1 CreateRoom while mapping cleanup pending = %v, want ErrAlreadyInRoom", err)
 	}
 	if err := svc.LeaveRoom(ctx, "c1", room2.Room.ID); err != nil {

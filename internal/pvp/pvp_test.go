@@ -3,6 +3,7 @@ package pvp_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -99,7 +100,7 @@ func TestColosseum_CreateRoom(t *testing.T) {
 
 	// Valid creation
 	detail, err := svc.CreateRoom(ctx, hero.ID, pvp.CreateRoomRequest{
-		Name:       "Arena Grand Match",
+		Name:       "ArenaGrandMatch",
 		Bet:        100,
 		MaxMembers: 4,
 		TargetWins: 2,
@@ -109,8 +110,8 @@ func TestColosseum_CreateRoom(t *testing.T) {
 		t.Fatalf("unexpected error creating room: %v", err)
 	}
 
-	if detail.Room.Name != "Arena Grand Match" {
-		t.Errorf("expected room name %q, got %q", "Arena Grand Match", detail.Room.Name)
+	if detail.Room.Name != "ArenaGrandMatch" {
+		t.Errorf("expected room name %q, got %q", "ArenaGrandMatch", detail.Room.Name)
 	}
 	if detail.Room.PrizePool != 100 {
 		t.Errorf("expected initial prize pool 100, got %d", detail.Room.PrizePool)
@@ -125,8 +126,42 @@ func TestColosseum_CreateRoom(t *testing.T) {
 		t.Errorf("expected hero money 400 after 100G bet, got %d", updatedHero.Money)
 	}
 
+	// Invalid room names (empty, >50 runes, whitespace, fullwidth space, prohibited symbols, unsafe Unicode)
+	for _, invalid := range []string{
+		"",
+		" ",
+		" room",
+		"room ",
+		"room 1",
+		"闘技　場",
+		"room@1",
+		"＠闘技場",
+		"room/1",
+		"room<1>",
+		"room\x001",
+		"room\u200B1",
+		"room\u202E1",
+		"Z\u0300\u0301\u0302",
+		strings.Repeat("あ", 51),
+	} {
+		if _, err := svc.CreateRoom(ctx, hero.ID, pvp.CreateRoomRequest{Name: invalid, Bet: 10}); !errors.Is(err, pvp.ErrInvalidRoomName) {
+			t.Errorf("CreateRoom(%q) = %v, want ErrInvalidRoomName", invalid, err)
+		}
+	}
+
+	// NFC normalization on valid room name
+	nfcHero := createTestCharacter("char-nfc", "NFCHero", 500)
+	charRepo.add(nfcHero)
+	nfcDetail, err := svc.CreateRoom(ctx, nfcHero.ID, pvp.CreateRoomRequest{Name: "Ka\u0301", Bet: 10})
+	if err != nil {
+		t.Fatalf("CreateRoom NFC failed: %v", err)
+	}
+	if nfcDetail.Room.Name != "Ká" {
+		t.Errorf("expected NFC-normalized room name %q, got %q", "Ká", nfcDetail.Room.Name)
+	}
+
 	// Invalid Bet < 10
-	_, err = svc.CreateRoom(ctx, hero.ID, pvp.CreateRoomRequest{Name: "Bad Bet", Bet: 5})
+	_, err = svc.CreateRoom(ctx, hero.ID, pvp.CreateRoomRequest{Name: "BadBet", Bet: 5})
 	if !errors.Is(err, pvp.ErrInvalidBet) {
 		t.Errorf("expected ErrInvalidBet, got %v", err)
 	}
@@ -134,7 +169,7 @@ func TestColosseum_CreateRoom(t *testing.T) {
 	// Insufficient funds
 	poorChar := createTestCharacter("char-poor", "Poor", 10)
 	charRepo.add(poorChar)
-	_, err = svc.CreateRoom(ctx, poorChar.ID, pvp.CreateRoomRequest{Name: "Rich Match", Bet: 50})
+	_, err = svc.CreateRoom(ctx, poorChar.ID, pvp.CreateRoomRequest{Name: "RichMatch", Bet: 50})
 	if !errors.Is(err, pvp.ErrInsufficientBetFunds) {
 		t.Errorf("expected ErrInsufficientBetFunds, got %v", err)
 	}
@@ -150,7 +185,7 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 	charRepo.add(c2)
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Colosseum Duel",
+		Name:       "ColosseumDuel",
 		Bet:        100,
 		MaxMembers: 2,
 		TargetWins: 1,
@@ -218,7 +253,7 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 
 	// Leader leaves while Bob remains: refunds only Alice, promotes Bob to leader.
 	detail2, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Handover Room",
+		Name:       "HandoverRoom",
 		Bet:        100,
 		MaxMembers: 3,
 		TargetWins: 1,
@@ -284,7 +319,7 @@ func TestColosseum_SelectTeamAndStartMatch(t *testing.T) {
 	charRepo.add(c2)
 
 	detail, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Team Clash",
+		Name:       "TeamClash",
 		Bet:        50,
 		MaxMembers: 4,
 		TargetWins: 2,
@@ -406,7 +441,7 @@ func TestColosseum_MultiRound_2v2TeamBattle(t *testing.T) {
 
 	// Create room with 100G bet, TargetWins = 2
 	detail, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "2v2 Championship",
+		Name:       "2v2Championship",
 		Bet:        100,
 		MaxMembers: 4,
 		TargetWins: 2,
@@ -531,7 +566,7 @@ func TestColosseum_KillPRecordedPerStrongDefeatAcrossRounds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
-	detail, _ := svc.CreateRoom(ctx, alice.ID, pvp.CreateRoomRequest{Name: "Strong KillP", Bet: 100, MaxMembers: 4, TargetWins: 1})
+	detail, _ := svc.CreateRoom(ctx, alice.ID, pvp.CreateRoomRequest{Name: "StrongKillP", Bet: 100, MaxMembers: 4, TargetWins: 1})
 	_, _ = svc.JoinRoom(ctx, teammate.ID, detail.Room.ID, "")
 	_, _ = svc.JoinRoom(ctx, strongBob.ID, detail.Room.ID, "")
 	_, _ = svc.JoinRoom(ctx, weakFoe.ID, detail.Room.ID, "")
@@ -579,7 +614,7 @@ func TestColosseum_MaxRoundsDraw(t *testing.T) {
 	charRepo.add(c2)
 
 	detail, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Endless Duel",
+		Name:       "EndlessDuel",
 		Bet:        100,
 		MaxMembers: 2,
 		TargetWins: 3,
@@ -641,7 +676,7 @@ func TestColosseum_LeaveRoom_InProgress_AndForfeit(t *testing.T) {
 	charRepo.add(c3)
 
 	// Case 1: Leader leaves mid-match -> no refund, Bob becomes leader and wins remaining pool via AdvanceRound
-	d1, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Forfeit Win", Bet: 100, MaxMembers: 2, TargetWins: 1})
+	d1, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "ForfeitWin", Bet: 100, MaxMembers: 2, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -681,7 +716,7 @@ func TestColosseum_LeaveRoom_InProgress_AndForfeit(t *testing.T) {
 	}
 
 	// Case 2: Both members leave in_progress -> room closes with durable ForfeitedPool
-	d2, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Mutual Forfeit", Bet: 100, MaxMembers: 2, TargetWins: 1})
+	d2, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "MutualForfeit", Bet: 100, MaxMembers: 2, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -721,7 +756,7 @@ func TestColosseum_LeaveRoom_Completed(t *testing.T) {
 	charRepo.add(c2)
 	charRepo.add(c3)
 
-	d, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Post-Match Exit", Bet: 100, MaxMembers: 2, TargetWins: 1})
+	d, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "PostMatchExit", Bet: 100, MaxMembers: 2, TargetWins: 1})
 	_, _ = svc.JoinRoom(ctx, c2.ID, d.Room.ID, "")
 	_, _ = svc.SelectTeam(ctx, c1.ID, d.Room.ID, pvp.ColorRed)
 	_, _ = svc.SelectTeam(ctx, c2.ID, d.Room.ID, pvp.ColorBlue)
@@ -767,7 +802,7 @@ func TestColosseum_LeaveRoom_Completed_PreservesAdvanceRoundReplay(t *testing.T)
 		charRepo.add(c1)
 		charRepo.add(c2)
 
-		d, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Retry After Exit", Bet: 100, MaxMembers: 2, TargetWins: 1})
+		d, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "RetryAfterExit", Bet: 100, MaxMembers: 2, TargetWins: 1})
 		_, _ = svc.JoinRoom(ctx, c2.ID, d.Room.ID, "")
 		_, _ = svc.SelectTeam(ctx, c1.ID, d.Room.ID, pvp.ColorRed)
 		_, _ = svc.SelectTeam(ctx, c2.ID, d.Room.ID, pvp.ColorBlue)
@@ -800,7 +835,7 @@ func TestColosseum_LeaveRoom_Completed_PreservesAdvanceRoundReplay(t *testing.T)
 		charRepo.add(c1)
 		charRepo.add(c2)
 
-		d, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Promoted Retry", Bet: 100, MaxMembers: 2, TargetWins: 1})
+		d, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "PromotedRetry", Bet: 100, MaxMembers: 2, TargetWins: 1})
 		_, _ = svc.JoinRoom(ctx, c2.ID, d.Room.ID, "")
 		_, _ = svc.SelectTeam(ctx, c1.ID, d.Room.ID, pvp.ColorRed)
 		_, _ = svc.SelectTeam(ctx, c2.ID, d.Room.ID, pvp.ColorBlue)

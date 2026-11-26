@@ -52,7 +52,7 @@ var (
 	ErrRoundMismatch             = errors.New("gvg expected round conflicts with the latest round")
 	ErrMatchCompleted            = errors.New("match is already completed")
 	ErrInvalidDependencies       = errors.New("gvg dependencies cannot be nil")
-	ErrInvalidRoomName           = errors.New("room name must be between 1 and 50 characters")
+	ErrInvalidRoomName           = errors.New("room name must be 1 to 50 characters without whitespace or prohibited characters")
 	ErrCharacterNotFound         = errors.New("character not found")
 	ErrGuildNotFound             = errors.New("guild not found")
 	ErrInvalidGuildID            = errors.New("invalid guild ID")

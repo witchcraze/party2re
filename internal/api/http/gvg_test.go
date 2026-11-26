@@ -208,6 +208,22 @@ func TestGvGEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/gvg/rooms - invalid room name bad request", func(t *testing.T) {
+		stubGvG.createRoomFn = func(_ context.Context, _ string, _ gvg.CreateRoomRequest) (gvg.RoomDetail, error) {
+			return gvg.RoomDetail{}, gvg.ErrInvalidRoomName
+		}
+		defer func() { stubGvG.createRoomFn = nil }()
+
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/gvg/rooms", `{"name":"bad room"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 BadRequest, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("POST /characters/{id}/gvg/rooms - friendly guild rejected", func(t *testing.T) {
 		stubGvG.createRoomFn = func(_ context.Context, _ string, _ gvg.CreateRoomRequest) (gvg.RoomDetail, error) {
 			return gvg.RoomDetail{}, gvg.ErrFriendlyGuildCannotBattle
@@ -542,7 +558,7 @@ func TestGvGHTTPPasswordPolicyAndNoVerifierLeak(t *testing.T) {
 		}
 	}
 
-	createReq := jsonRequest(t, http.MethodPost, "/characters/c1/gvg/rooms", `{"name":"Secret War","password":"secret"}`)
+	createReq := jsonRequest(t, http.MethodPost, "/characters/c1/gvg/rooms", `{"name":"SecretWar","password":"secret"}`)
 	createReq.Header.Set("Authorization", "Bearer valid-token")
 	createRec := httptest.NewRecorder()
 	router.ServeHTTP(createRec, createReq)

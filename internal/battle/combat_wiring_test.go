@@ -94,7 +94,7 @@ func TestCombatWiring_PvPEquippedParticipant(t *testing.T) {
 	}
 
 	detail, err := pvpService.CreateRoom(ctx, "char-pvp", pvp.CreateRoomRequest{
-		Name:       "PvP Test Room",
+		Name:       "PvPTestRoom",
 		MaxMembers: 2,
 		Bet:        100,
 		TargetWins: 1,

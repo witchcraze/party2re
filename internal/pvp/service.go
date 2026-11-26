@@ -8,12 +8,12 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // CharacterRepository defines persistence operations on Character.
@@ -174,8 +174,8 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 		return RoomDetail{}, ErrCharacterExhausted
 	}
 
-	nameLen := utf8.RuneCountInString(strings.TrimSpace(req.Name))
-	if nameLen < 1 || nameLen > 50 {
+	name, err := validation.ValidateQuestName(req.Name)
+	if err != nil {
 		return RoomDetail{}, ErrInvalidRoomName
 	}
 	if req.Bet < MinBet {
@@ -213,7 +213,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	roomID := id.New()
 	room := ColosseumRoom{
 		ID:                roomID,
-		Name:              strings.TrimSpace(req.Name),
+		Name:              name,
 		LeaderCharacterID: char.ID,
 		LeaderName:        char.Name,
 		Speed:             req.Speed,

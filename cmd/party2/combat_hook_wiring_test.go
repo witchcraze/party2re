@@ -177,7 +177,7 @@ func TestGvGExitTavernProductionHook(t *testing.T) {
 		{"no order", c3.ID, 500 - 20, 1, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			room, err := f.cmbt.gvg.CreateRoom(ctx, tc.charID, gvg.CreateRoomRequest{Name: "Hook " + tc.name, MaxMembers: 2, TargetWins: 1})
+			room, err := f.cmbt.gvg.CreateRoom(ctx, tc.charID, gvg.CreateRoomRequest{Name: "Hook-" + tc.charID, MaxMembers: 2, TargetWins: 1})
 			if err != nil {
 				t.Fatal(err)
 			}

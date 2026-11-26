@@ -112,7 +112,7 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 
 	// 3. Leader A creates GvG Room (seeds 2 GP)
 	createdRoom, err := service.CreateRoom(ctx, leaderA.ID, gvg.CreateRoomRequest{
-		Name:       "Live GvG Tournament",
+		Name:       "LiveGvGTournament",
 		MaxMembers: 4,
 		TargetWins: 1,
 	})

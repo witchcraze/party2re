@@ -50,7 +50,7 @@ func TestPvPIntegration_DisbandRefundTransactional(t *testing.T) {
 
 	// Leader creates room (bet 200G)
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Integration PvP Room",
+		Name:       "IntegrationPvPRoom",
 		Bet:        200,
 		MaxMembers: 2,
 		TargetWins: 1,
@@ -141,7 +141,7 @@ func TestPvPIntegration_MatchPrizeDistributionTransactional(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Integration Prize Room",
+		Name:       "IntegrationPrizeRoom",
 		Bet:        100,
 		MaxMembers: 2,
 		TargetWins: 1,

@@ -109,7 +109,7 @@ func TestGvG_CarryCurrentMPBetweenRounds(t *testing.T) {
 	guildRepo.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
 	guildRepo.charGuilds["c1"], guildRepo.charGuilds["c2"] = "g1", "g2"
 
-	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "GvG MP", MaxMembers: 2, TargetWins: 2})
+	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "GvGMP", MaxMembers: 2, TargetWins: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestGvG_MP_LegacyCompatibility_And_RetryIdempotency(t *testing.T) {
 	guildRepo.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
 	guildRepo.charGuilds["c1"], guildRepo.charGuilds["c2"] = "g1", "g2"
 
-	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Legacy Retry", MaxMembers: 2, TargetWins: 2})
+	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "LegacyRetry", MaxMembers: 2, TargetWins: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
