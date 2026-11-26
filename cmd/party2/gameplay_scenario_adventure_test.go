@@ -147,6 +147,7 @@ func TestGameplayScenario_NormalAdventureSoloRun(t *testing.T) {
 	a := newScenarioApp(t)
 	token, hero := a.register()
 
+	a.enter(token, hero, a.context(token, hero), "quest")
 	started := a.runCommand(token, hero, a.runContext(token, hero), "adventure_start", map[string]any{"name": "solo-quest", "stage_id": "stage-00", "speed": 3, "command_id": "start-1"}, http.StatusOK)
 	run := started.Context.Scene.Data.Run
 	if started.Result.Version != 1 || started.Result.Round != 0 || run == nil || run.Round != 0 || run.LeaderID != hero ||
@@ -225,14 +226,31 @@ func TestGameplayScenario_NormalAdventurePartyRun(t *testing.T) {
 	leaderToken, leader := a.register()
 	memberToken, member := a.register()
 
-	var created struct {
-		Party struct {
-			ID string `json:"id"`
-		} `json:"party"`
+	// Only the creator meets stage-01's gate; a joiner and the start never
+	// re-check it (quest.cgi:518–524, add_member, vs_monster.cgi:56–82).
+	if _, err := a.db.ExecContext(context.Background(), `UPDATE characters SET level = 3 WHERE id = ?`, leader); err != nil {
+		t.Fatal(err)
 	}
-	a.call(leaderToken, http.MethodPost, "/parties", `{"character_id":"`+leader+`","name":"scenario","stage_id":"stage-00","speed":3}`, http.StatusCreated, &created)
-	partyID := created.Party.ID
-	a.call(memberToken, http.MethodPost, "/parties/"+partyID+"/join", `{"character_id":"`+member+`"}`, http.StatusOK, nil)
+	// Both meet at 冒険に出る: the leader creates, the member selects the lobby and joins.
+	a.enter(leaderToken, leader, a.context(leaderToken, leader), "quest")
+	a.offered(leaderToken, leader, a.context(leaderToken, leader), "party_create", map[string]any{"name": "scenario", "stage_id": "stage-01", "speed": 3, "max_members": 4}, http.StatusOK)
+	quest := a.enter(memberToken, member, a.context(memberToken, member), "quest")
+	parties := quest.Scene.Data.Parties
+	i := slices.IndexFunc(parties, func(p struct {
+		Name         string         `json:"name"`
+		MemberNames  []string       `json:"member_names"`
+		SelectParams map[string]any `json:"select_params"`
+	}) bool {
+		return p.Name == "scenario"
+	})
+	if i < 0 || len(parties[i].MemberNames) != 1 {
+		t.Fatalf("lobby not listed: %+v", parties)
+	}
+	a.offered(memberToken, member, quest, "scene_select", parties[i].SelectParams, http.StatusOK)
+	a.offered(memberToken, member, a.context(memberToken, member), "party_join", nil, http.StatusOK)
+	// ＠パーティー and ＠さんか end in reload, which starts the action wait (system.cgi:438–440).
+	a.elapseActionWait(leader)
+	a.elapseActionWait(member)
 
 	started := a.runCommand(leaderToken, leader, a.runContext(leaderToken, leader), "party_start", nil, http.StatusOK)
 	runID := started.Result.RunID

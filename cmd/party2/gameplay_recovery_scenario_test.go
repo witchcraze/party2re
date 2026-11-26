@@ -16,11 +16,11 @@ func TestGameplayScenario_SleepWakeRescue(t *testing.T) {
 	a := newScenarioApp(t)
 	ctx := context.Background()
 	token, hero := a.register()
-	town := a.context(token, hero)
-	if !town.offers("adventure_start") {
+	if !a.enter(token, hero, a.context(token, hero), "quest").offers("adventure_start") {
 		t.Fatal("healthy character cannot start an adventure")
 	}
-	a.enter(token, hero, town, "bank")
+	a.offered(token, hero, a.context(token, hero), "scene_back", nil, http.StatusOK)
+	a.enter(token, hero, a.context(token, hero), "bank")
 	a.offered(token, hero, a.context(token, hero), "bank_deposit", map[string]any{"amount": 10}, http.StatusOK)
 	a.elapseActionWait(hero)
 	a.offered(token, hero, a.context(token, hero), "scene_back", nil, http.StatusOK)
@@ -29,11 +29,12 @@ func TestGameplayScenario_SleepWakeRescue(t *testing.T) {
 	if _, err := a.db.ExecContext(ctx, `UPDATE characters SET hp = 0, max_hp = 30, mp = 1, max_mp = 6, tired = 80 WHERE id = ?`, hero); err != nil {
 		t.Fatal(err)
 	}
-	town = a.context(token, hero)
-	if !town.Character.IsDead || town.offers("adventure_start") || !town.offers("scene_enter") {
-		t.Fatalf("dead character has wrong eligibility: %+v", town)
+	quest := a.enter(token, hero, a.context(token, hero), "quest")
+	if !quest.Character.IsDead || quest.offers("adventure_start") || quest.offers("party_create") || !quest.offers("scene_back") {
+		t.Fatalf("dead character has wrong eligibility: %+v", quest)
 	}
-	home := a.enter(token, hero, town, "home")
+	a.offered(token, hero, quest, "scene_back", nil, http.StatusOK)
+	home := a.enter(token, hero, a.context(token, hero), "home")
 
 	assertState := func(c scenarioContext, hp, mp, tired int, pending bool) {
 		t.Helper()
@@ -177,7 +178,7 @@ func TestGameplayScenario_SleepWakeRescue(t *testing.T) {
 		}
 	}
 	a.offered(token, hero, woke.Context, "scene_back", nil, http.StatusOK)
-	if !a.context(token, hero).offers("adventure_start") {
+	if !a.enter(token, hero, a.context(token, hero), "quest").offers("adventure_start") {
 		t.Fatal("wake did not restore the previously forbidden adventure command")
 	}
 }

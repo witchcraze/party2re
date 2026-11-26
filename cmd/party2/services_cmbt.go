@@ -39,6 +39,7 @@ type cmbtServices struct {
 	challenge   *challenge.Service
 	customSkill *customskill.Service
 	party       *party.Service
+	stages      *adventure.StageCatalog
 	adv         *adventure.Service
 	record      *adventure.RecordService
 	normal      *adventure.NormalRunService
@@ -440,6 +441,7 @@ func newCmbtServices(
 		challenge:   challengeService,
 		customSkill: customSkillService,
 		party:       partyService,
+		stages:      adventureStages,
 		adv:         advService,
 		record:      recordService,
 		normal:      normalService,

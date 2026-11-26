@@ -31,7 +31,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		gamehttp.WithDepot(&stubDepotService{}), gamehttp.WithBlacksmith(&stubBlacksmithService{}),
 		gamehttp.WithPvP(&stubColosseumPvPService{}), gamehttp.WithGvG(&stubGvGService{}),
 		gamehttp.WithHome(&mockHomeService{}),
-		gamehttp.WithParty(&stubPartyService{}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +46,6 @@ func TestOpenAPIResponsesMatchHandlers(t *testing.T) {
 		{"GET", "/gvg/rooms", "", "", 200},
 		{"GET", "/gvg/rooms/{room_id}", "", "", 200},
 		{"GET", "/gvg/leaderboard", "", "", 200},
-		{"GET", "/parties/{id}", "", "", 200},
 		{"GET", "/homes/{id}", "", "", 200},
 	} {
 		t.Run(tc.method+" "+tc.path+"/"+strconv.Itoa(tc.status), func(t *testing.T) {

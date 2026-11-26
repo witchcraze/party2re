@@ -38,7 +38,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 
 	speed := req.Speed
 	if speed != 3 && speed != 18 && speed != 25 {
-		speed = DefaultSpeed
+		return PartyDetail{}, ErrInvalidSpeed // quest.cgi:551–552
 	}
 
 	maxMembers := req.MaxMembers
@@ -47,19 +47,6 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 	}
 	if maxMembers < MinPartyMembers || maxMembers > MaxPartyMembers {
 		return PartyDetail{}, ErrInvalidMaxMembers
-	}
-
-	minLevel := req.MinLevel
-	if minLevel <= 0 {
-		minLevel = 1
-	}
-	maxLevel := req.MaxLevel
-	if maxLevel <= 0 {
-		maxLevel = 999
-	}
-	minHP := req.MinHP
-	if minHP < 0 {
-		minHP = 0
 	}
 
 	var createdParty Party
@@ -145,9 +132,6 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			Mode:              mode,
 			Speed:             speed,
 			MaxMembers:        maxMembers,
-			MinLevel:          minLevel,
-			MaxLevel:          maxLevel,
-			MinHP:             minHP,
 			NeedJoin:          strings.TrimSpace(req.NeedJoin),
 			Status:            StatusRecruiting,
 			CreatedAt:         now,

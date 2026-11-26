@@ -16,6 +16,8 @@
     "scene_page",
     "scene_back",
     "adventure_start",
+    "party_create",
+    "party_join",
     "challenge_start",
     "dungeon_start",
     "pvp_room_create",

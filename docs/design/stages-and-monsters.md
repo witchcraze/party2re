@@ -64,11 +64,7 @@ In party2re, the intended selection UI rules are adopted as the canonical specif
   - Stage 26 (神秘の森 / 四季のダンジョン): Once per sleep/day (`CategoryDungeonOnce`), JobLevel 0.
   - Stage 27 (ハロウィンタウン): Halloween only (October in JST), JobLevel 0.
 
-`StageCatalog.CanAccessStage` and `AvailableStages` (and their time-aware variants
-`CanAccessStageAt` / `AvailableStagesAt`) enforce these job level thresholds and seasonal
-windows in JST, ensuring observation and solo/party admission are identical across party creation,
-joining, and adventure start.
-`Character.Level` additionally checks against `min_level` as configured in the catalog.
+These gates apply only to the room's creator (a solo start or Party creation); legacy `add_member` and the first `すすむ` never re-check members (`vs_monster.cgi:56–82`).
 
 ### 2. Monsters (`monsters.json`)
 The historical batch definitions specify:

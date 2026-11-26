@@ -3,18 +3,47 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
 type partyLobbyStub struct {
-	PartyService
-	calls []string
-	err   error
+	calls   []string
+	err     error
+	parties []party.PartySummary
+}
+
+func (s *partyLobbyStub) CreateParty(_ context.Context, leader string, req party.CreatePartyRequest) (party.PartyDetail, error) {
+	s.calls = append(s.calls, fmt.Sprintf("create/%s/%s/%s/%d/%d/%s/%s", leader, req.Name, req.StageID, req.Speed, req.MaxMembers, req.NeedJoin, req.Password))
+	return party.PartyDetail{Party: party.Party{ID: "new"}}, s.err
+}
+
+func (s *partyLobbyStub) JoinParty(_ context.Context, partyID, actor, password string) (party.PartyDetail, error) {
+	s.calls = append(s.calls, "join/"+partyID+"/"+actor+"/"+password)
+	return party.PartyDetail{Party: party.Party{ID: partyID}}, s.err
+}
+
+func (s *partyLobbyStub) GetPartySummary(_ context.Context, id string) (party.PartySummary, error) {
+	for _, p := range s.parties {
+		if p.ID == id {
+			return p, nil
+		}
+	}
+	return party.PartySummary{}, party.ErrNotFound
+}
+
+func (s *partyLobbyStub) ListParties(_ context.Context, status string, limit, offset int) (pagination.Page[party.PartySummary], error) {
+	if status != party.StatusRecruiting {
+		return pagination.Page[party.PartySummary]{}, errors.New("quest scene must list recruiting lobbies")
+	}
+	end := min(offset+limit, len(s.parties))
+	return pagination.NewPage(s.parties[min(offset, end):end], len(s.parties), limit, offset), nil
 }
 
 func (s *partyLobbyStub) LeaveParty(_ context.Context, partyID, actor string) error {

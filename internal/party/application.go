@@ -111,14 +111,32 @@ func (s *Service) ListParties(ctx context.Context, status string, limit, offset 
 	if err != nil {
 		return pagination.Page[PartySummary]{}, err
 	}
-	if s.stages != nil {
-		for i := range items {
-			if st, err := s.stages.FindByID(items[i].StageID); err == nil {
-				items[i].StageName = st.Name
-			}
-		}
+	for i := range items {
+		items[i].StageName = s.stageName(items[i].StageID)
 	}
 	return pagination.NewPage(items, total, limit, offset), nil
+}
+
+// GetPartySummary returns one lobby's public list row.
+func (s *Service) GetPartySummary(ctx context.Context, partyID string) (PartySummary, error) {
+	detail, err := s.GetParty(ctx, partyID)
+	if err != nil {
+		return PartySummary{}, err
+	}
+	summary := newSummary(detail.Party, detail.Members)
+	summary.StageName = s.stageName(summary.StageID)
+	return summary, nil
+}
+
+func (s *Service) stageName(id string) string {
+	if s.stages == nil {
+		return ""
+	}
+	st, err := s.stages.FindByID(id)
+	if err != nil {
+		return ""
+	}
+	return st.Name
 }
 
 func (s *Service) buildBattleActor(ctx context.Context, characterID string) (*battle.LifetimeActor, error) {
@@ -201,19 +219,11 @@ func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, 
 	if char.Tired >= 100 {
 		return ErrCharacterExhausted
 	}
-	if err := s.stages.CanAccessStage(char, p.StageID); err != nil {
-		return err
-	}
+	// Only the creator passes the stage gate (quest.cgi:518–524 vs add_member).
 	if p.NeedJoin != "" {
 		if err := ValidateNeedJoin(p.NeedJoin, char); err != nil {
 			return err
 		}
-	}
-	if char.Level < p.MinLevel || char.Level > p.MaxLevel {
-		return ErrLevelRequirementNotMet
-	}
-	if char.Stats.MaxHP < p.MinHP {
-		return ErrHPRequirementNotMet
 	}
 
 	battleActor, err := s.buildBattleActor(txCtx, char.ID)

@@ -9,7 +9,7 @@ import (
 
 // The town hub is the legacy default place and 交流広場 (party.cgi:18, lib/park.cgi).
 var townFacility = facility{
-	title: "交流広場", commands: []string{"adventure_start", "park_divinate"}, read: (*Handler).townSceneData, placeLog: true,
+	title: "交流広場", commands: []string{"park_divinate"}, read: (*Handler).townSceneData, placeLog: true,
 	controlsOnly: true,
 	present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 		return scenePresentation{next: data.(TownSceneData).Page.Next}

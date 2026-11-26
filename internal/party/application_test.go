@@ -106,9 +106,6 @@ func (r *mockPartyRepository) ListParties(_ context.Context, status string, limi
 			CurrentMembers:    memCount,
 			MaxMembers:        p.MaxMembers,
 			HasPassword:       p.PasswordHash != "",
-			MinLevel:          p.MinLevel,
-			MaxLevel:          p.MaxLevel,
-			MinHP:             p.MinHP,
 			Status:            p.Status,
 			CreatedAt:         p.CreatedAt,
 		})
@@ -372,7 +369,6 @@ func setupTestServiceWithEngine(
 			"forest": {
 				ID:         "forest",
 				Name:       "はじまりの森",
-				MinLevel:   1,
 				MonsterIDs: []string{"slime", "goblin"},
 			},
 		},
@@ -453,9 +449,6 @@ func TestPartyService_CreateAndGet(t *testing.T) {
 		Password:   "secret",
 		Speed:      3,
 		MaxMembers: 4,
-		MinLevel:   5,
-		MaxLevel:   20,
-		MinHP:      30,
 	}
 	detail, err := svc.CreateParty(context.Background(), leader.ID, req)
 	if err != nil {
@@ -487,13 +480,13 @@ func TestPartyService_CreateAndGet(t *testing.T) {
 
 	// 4. Invalid party name (empty, whitespace, prohibited characters, too long)
 	for _, invalid := range []string{"", "   ", "has space", "全角　空白", "bad@name", "＠冒険", "bad/name", strings.Repeat("あ", 51)} {
-		if _, err := svc.CreateParty(context.Background(), "char-other", CreatePartyRequest{Name: invalid}); !errors.Is(err, ErrInvalidPartyName) {
+		if _, err := svc.CreateParty(context.Background(), "char-other", CreatePartyRequest{Speed: 18, Name: invalid}); !errors.Is(err, ErrInvalidPartyName) {
 			t.Fatalf("expected ErrInvalidPartyName for %q, got %v", invalid, err)
 		}
 	}
 
 	// 5. Stage not found
-	if _, err := svc.CreateParty(context.Background(), "char-other", CreatePartyRequest{Name: "Party", StageID: "invalid-stage"}); !errors.Is(err, ErrStageNotFound) {
+	if _, err := svc.CreateParty(context.Background(), "char-other", CreatePartyRequest{Speed: 18, Name: "Party", StageID: "invalid-stage"}); !errors.Is(err, ErrStageNotFound) {
 		t.Fatalf("expected ErrStageNotFound, got %v", err)
 	}
 }
@@ -525,13 +518,11 @@ func TestPartyService_JoinAndLeave(t *testing.T) {
 	charRepo.chars[mLowLevel.ID] = mLowLevel
 
 	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "AdventureSquad",
 		StageID:    "forest",
 		Password:   "pass123",
 		MaxMembers: 2,
-		MinLevel:   5,
-		MaxLevel:   15,
-		MinHP:      30,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -543,9 +534,19 @@ func TestPartyService_JoinAndLeave(t *testing.T) {
 		t.Fatalf("expected ErrInvalidPassword, got %v", err)
 	}
 
-	// 2. Level requirement not met
-	if _, err := svc.JoinParty(context.Background(), partyID, mLowLevel.ID, "pass123"); !errors.Is(err, ErrLevelRequirementNotMet) {
-		t.Fatalf("expected ErrLevelRequirementNotMet, got %v", err)
+	// 2. Joiners face no stage or level gate (quest.cgi add_member).
+	stages := svc.stages.(*mockStageProvider)
+	forest := stages.stages["forest"]
+	forest.MinLevel = 5
+	stages.stages["forest"] = forest
+	if err := stages.CanAccessStage(mLowLevel, "forest"); err == nil {
+		t.Fatal("fixture must fail the creator stage gate")
+	}
+	if _, err := svc.JoinParty(context.Background(), partyID, mLowLevel.ID, "pass123"); err != nil {
+		t.Fatalf("low-level joiner rejected: %v", err)
+	}
+	if err := svc.LeaveParty(context.Background(), partyID, mLowLevel.ID); err != nil {
+		t.Fatal(err)
 	}
 
 	// 3. Successful join
@@ -590,6 +591,7 @@ func TestPartyService_KickAndLeave(t *testing.T) {
 	}
 
 	detail, _ := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "PartyX",
 		StageID: "forest",
 	})
@@ -660,6 +662,7 @@ func TestPartyService_StartPartyAdventure(t *testing.T) {
 	charRepo.chars[m1.ID] = m1
 
 	detail, _ := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "CoopParty",
 		StageID: "forest",
 	})
@@ -701,7 +704,6 @@ func TestPartyService_StartPartyAdventure_CrystalRewards(t *testing.T) {
 			"forest": {
 				ID:         "forest",
 				Name:       "はじまりの森",
-				MinLevel:   1,
 				MonsterIDs: []string{"slime"},
 			},
 		},
@@ -853,6 +855,7 @@ func TestPartyService_StartPartyAdventure_DuplicateCharacterNames(t *testing.T) 
 	charRepo.chars[m1.ID] = m1
 
 	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "TwinParty",
 		StageID: "forest",
 	})
@@ -910,6 +913,7 @@ func TestPartyService_StartPartyAdventure_SurvivingDamagePersisted(t *testing.T)
 	charRepo.chars[m1.ID] = m1
 
 	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "BattleDamageParty",
 		StageID: "forest",
 	})
@@ -972,9 +976,9 @@ func TestPartyService_StartPartyAdventure_OverLevelAndCap(t *testing.T) {
 	charRepo.chars[normalMem.ID] = normalMem
 
 	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
-		Name:     "HighLevelParty",
-		StageID:  "forest",
-		MaxLevel: 150,
+		Speed:   18,
+		Name:    "HighLevelParty",
+		StageID: "forest",
 	})
 	if err != nil {
 		t.Fatalf("CreateParty failed: %v", err)
@@ -1021,6 +1025,7 @@ func TestPartyService_StartPartyAdventure_SaveAdventureLogError(t *testing.T) {
 	charRepo.chars[leader.ID] = leader
 
 	detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "ログ失敗テスト",
 		StageID: "forest",
 	})
@@ -1076,6 +1081,7 @@ func TestPartyService_NeedJoinCondition(t *testing.T) {
 
 	// Leader with JobLevel 1 tries to create party requiring JobLevel >= 3 -> fails
 	_, err := svc.CreateParty(ctx, leaderUnder.ID, CreatePartyRequest{
+		Speed:    18,
 		Name:     "HighLevelOnly",
 		StageID:  "forest",
 		NeedJoin: "joblv_3_o",
@@ -1086,6 +1092,7 @@ func TestPartyService_NeedJoinCondition(t *testing.T) {
 
 	// Leader with JobLevel 5 creates party requiring JobLevel >= 3 -> succeeds
 	detail, err := svc.CreateParty(ctx, leaderOver.ID, CreatePartyRequest{
+		Speed:    18,
 		Name:     "HighLevelOnly",
 		StageID:  "forest",
 		NeedJoin: "joblv_3_o",
@@ -1134,6 +1141,7 @@ func TestPartyService_ExhaustedCharacter(t *testing.T) {
 
 	// Tired character cannot create party
 	_, err := svc.CreateParty(ctx, exhaustedChar.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "TiredParty",
 		StageID: "forest",
 	})
@@ -1143,6 +1151,7 @@ func TestPartyService_ExhaustedCharacter(t *testing.T) {
 
 	// Normal character creates party
 	detail, err := svc.CreateParty(ctx, normalChar.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "FreshParty",
 		StageID: "forest",
 	})
@@ -1186,17 +1195,11 @@ func TestPartyService_SpeedSettings(t *testing.T) {
 		_ = svc.LeaveParty(ctx, det.Party.ID, c.ID)
 	}
 
-	// Default fallback to 18
-	det, err := svc.CreateParty(ctx, c.ID, CreatePartyRequest{
-		Name:    "Party-InvalidSpeed",
-		StageID: "forest",
-		Speed:   99,
-	})
-	if err != nil {
-		t.Fatalf("CreateParty invalid speed failed: %v", err)
-	}
-	if det.Party.Speed != 18 {
-		t.Errorf("Speed = %d, want 18 (default)", det.Party.Speed)
+	// Unknown speeds are rejected (quest.cgi:551–552).
+	for _, speed := range []int{0, 99} {
+		if _, err := svc.CreateParty(ctx, c.ID, CreatePartyRequest{Name: "Party-InvalidSpeed", StageID: "forest", Speed: speed}); !errors.Is(err, ErrInvalidSpeed) {
+			t.Fatalf("speed %d: %v", speed, err)
+		}
 	}
 }
 
@@ -1230,6 +1233,7 @@ func TestPartyService_StartPartyAdventure_PostAdventureHook(t *testing.T) {
 	})
 
 	detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "DeliveryParty",
 		StageID: "forest",
 	})
@@ -1321,7 +1325,7 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 		Stats: corecharacter.Stats{HP: 90, MaxHP: 90, MP: 40, MaxMP: 40},
 	}
 
-	created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{Name: "BattleRowParty", StageID: adventure.StarterAdventure})
+	created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{Speed: 18, Name: "BattleRowParty", StageID: adventure.StarterAdventure})
 	if err != nil {
 		t.Fatalf("CreateParty failed: %v", err)
 	}
@@ -1351,7 +1355,7 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 	// Builder error must abort CreateParty and JoinParty cleanly without leaving a partial lobby.
 	builder.err = errors.New("builder unavailable")
 	charRepo.chars["other"] = corecharacter.Character{ID: "other", Name: "Other", Level: 5, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
-	if _, err := svc.CreateParty(ctx, "other", CreatePartyRequest{Name: "FailCreate", StageID: adventure.StarterAdventure}); err == nil {
+	if _, err := svc.CreateParty(ctx, "other", CreatePartyRequest{Speed: 18, Name: "FailCreate", StageID: adventure.StarterAdventure}); err == nil {
 		t.Fatal("expected CreateParty to fail when battle row capture fails")
 	}
 	if _, _, err := svc.GetActiveParty(ctx, "other"); !errors.Is(err, ErrNotFound) {
@@ -1373,7 +1377,7 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService(ValkeyRepository) failed: %v", err)
 	}
-	if _, err := valkeySvc.CreateParty(ctx, "other", CreatePartyRequest{Name: "FailValkeyCreate", StageID: adventure.StarterAdventure}); err == nil {
+	if _, err := valkeySvc.CreateParty(ctx, "other", CreatePartyRequest{Speed: 18, Name: "FailValkeyCreate", StageID: adventure.StarterAdventure}); err == nil {
 		t.Fatal("expected CreateParty to fail when battle row capture fails")
 	}
 	if page, err := valkeySvc.ListParties(ctx, StatusRecruiting, 10, 0); err != nil || page.Total != 0 {

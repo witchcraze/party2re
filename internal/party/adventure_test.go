@@ -184,6 +184,7 @@ func createReadyParty(
 	}
 
 	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "TestParty",
 		StageID:    "stage-01",
 		MaxMembers: 1 + len(members),
@@ -1098,6 +1099,7 @@ func TestPartyAdventure_ExitFatigueAndMealReset(t *testing.T) {
 				})
 
 				pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+					Speed:      18,
 					Name:       "FatigueParty",
 					StageID:    "stage-01",
 					MaxMembers: 2,
@@ -1213,6 +1215,7 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 
 	t.Run("empty mode defaults to normal", func(t *testing.T) {
 		detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+			Speed:   18,
 			Name:    "PartyEmptyMode",
 			StageID: "stage-01",
 			Mode:    "",
@@ -1228,6 +1231,7 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 
 	t.Run("normal mode accepted case-insensitively", func(t *testing.T) {
 		detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+			Speed:   18,
 			Name:    "PartyNormalMode",
 			StageID: "stage-01",
 			Mode:    "NORMAL",
@@ -1244,6 +1248,7 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 	t.Run("unimplemented modes return ErrUnsupportedMode", func(t *testing.T) {
 		for _, unsupported := range []string{"calm", "try", "hard", "CALM"} {
 			_, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+				Speed:   18,
 				Name:    "PartyUnsupported",
 				StageID: "stage-01",
 				Mode:    unsupported,
@@ -1256,6 +1261,7 @@ func TestCreateParty_ModeValidation(t *testing.T) {
 
 	t.Run("unrecognized mode returns ErrInvalidMode", func(t *testing.T) {
 		_, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+			Speed:   18,
 			Name:    "PartyInvalid",
 			StageID: "stage-01",
 			Mode:    "not_a_valid_mode",
@@ -1818,6 +1824,7 @@ func TestPartyAdmission_MatchesStageCatalogAndAvailableStages(t *testing.T) {
 			}
 
 			_, createErr := svc.CreateParty(ctx, char.ID, CreatePartyRequest{
+				Speed:      18,
 				Name:       fmt.Sprintf("Party-%s", tc.stageID),
 				StageID:    tc.stageID,
 				MaxMembers: 4,
@@ -1880,6 +1887,7 @@ func TestStartPartyAdventure_SeasonalExpiryRejection(t *testing.T) {
 	charRepo.chars[leader.ID] = leader
 
 	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "HalloweenParty",
 		StageID:    "stage-27",
 		MaxMembers: 2,
@@ -2011,6 +2019,7 @@ func TestStartPartyAdventure_Floor11Treasure_AutoCrawlDoesNotConsumeMasterKeyWit
 	}
 
 	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "KeyParty",
 		StageID:    "stage-17",
 		MaxMembers: 1,
@@ -2104,6 +2113,7 @@ func TestPartyAdventure_SeasonalStagePersistence(t *testing.T) {
 			charRepo.chars[leader.ID] = leader
 
 			pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+				Speed:      18,
 				Name:       fmt.Sprintf("SeasonParty-%s", sc.seasonName),
 				StageID:    "stage-26",
 				MaxMembers: 1,
@@ -2217,6 +2227,7 @@ func TestParty_Stage26SeasonLifecycleAcrossAdventuresAndDisbandment(t *testing.T
 
 	// 1. Create party with RNG pointing to Summer (index 1)
 	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "SummerParty",
 		StageID:    "stage-26",
 		MaxMembers: 1,
@@ -2290,6 +2301,7 @@ func TestParty_Stage26SeasonLifecycleAcrossAdventuresAndDisbandment(t *testing.T
 	// 5. Create NEW party with RNG still pointing to Autumn (index 2)
 	// A newly created party MUST roll and receive Autumn!
 	pDetail2, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "AutumnParty",
 		StageID:    "stage-26",
 		MaxMembers: 1,
@@ -2367,7 +2379,7 @@ func TestParty_Stage26BackwardCompatibilityForPartiesWithoutSeason(t *testing.T)
 		Name:              "LegacyParty",
 		StageID:           "stage-26",
 		Season:            "", // intentionally empty
-		Speed:             DefaultSpeed,
+		Speed:             18,
 		MaxMembers:        1,
 		Status:            StatusRecruiting,
 		CreatedAt:         now,

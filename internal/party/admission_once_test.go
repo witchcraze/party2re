@@ -50,6 +50,7 @@ func createReadyPartyWithStage(
 	}
 
 	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "TestParty_" + id.New()[:8],
 		StageID:    stageID,
 		MaxMembers: 1 + len(members),
@@ -112,6 +113,7 @@ func TestPartyCreation_DailyOnceLock_Lifecycle(t *testing.T) {
 	}
 
 	_, err = svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "RetryParty",
 		StageID: "stage-26",
 	})
@@ -167,6 +169,7 @@ func TestPartyCreation_DailyOnceLock_CreationFailureCompensated(t *testing.T) {
 	partyRepo.savePartyErr = injectedErr
 
 	_, err = svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "FailParty",
 		StageID: "stage-26",
 	})
@@ -186,6 +189,7 @@ func TestPartyCreation_DailyOnceLock_CreationFailureCompensated(t *testing.T) {
 	// Now clear the error: leader can successfully create party
 	partyRepo.savePartyErr = nil
 	pDetail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "RecoverParty",
 		StageID: "stage-26",
 	})
@@ -215,6 +219,7 @@ func TestPartyCreation_DailyOnceLock_StorageFailurePropagates(t *testing.T) {
 	charRepo.chars[leader.ID] = leader
 
 	_, err = svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:   18,
 		Name:    "StorageFail",
 		StageID: "stage-26",
 	})
@@ -252,6 +257,7 @@ func TestPartyAdmission_ConcurrentSoloCrawlAndPartyCreation(t *testing.T) {
 			defer wg.Done()
 			<-startBarrier
 			_, err := partySvc.CreateParty(ctx, char.ID, CreatePartyRequest{
+				Speed:   18,
 				Name:    partyName,
 				StageID: "stage-26",
 			})

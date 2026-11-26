@@ -24,31 +24,28 @@ const (
 	StatusRecruiting = "recruiting"
 	StatusInProgress = "in_progress"
 	StatusCompleted  = "completed" //lint:ignore unused party lifecycle status enum completeness
-
-	DefaultSpeed = 18
 )
 
 var (
-	ErrNotFound               = errors.New("party not found")
-	ErrAlreadyInParty         = errors.New("character is already in an active party")
-	ErrPartyFull              = errors.New("party is already full")
-	ErrPartyNotRecruiting     = errors.New("party is not currently recruiting")
-	ErrInvalidPassword        = errors.New("invalid party password")
-	ErrLevelRequirementNotMet = errors.New("character level does not meet party requirement")
-	ErrHPRequirementNotMet    = errors.New("character max HP does not meet party requirement")
-	ErrNotPartyLeader         = errors.New("only the party leader can perform this action")
-	ErrCannotKickSelf         = errors.New("party leader cannot kick themselves")
-	ErrCharacterNotInParty    = errors.New("character is not a member of this party")
-	ErrInvalidPartyName       = errors.New("party name must be 1 to 50 characters without whitespace or prohibited characters")
-	ErrInvalidMaxMembers      = errors.New("max members must be between 1 and 4")
-	ErrCharacterUnconscious   = errors.New("character is unconscious (HP <= 0) and cannot adventure")
-	ErrCharacterExhausted     = errors.New("character is exhausted (tired >= 100) and must rest")
-	ErrNeedJoinNotMet         = errors.New("character does not meet party join condition")
-	ErrStageNotFound          = errors.New("adventure stage not found")
-	ErrDailyOnceAlreadyUsed   = adventure.ErrDailyOnceAlreadyUsed
-	ErrForbidden              = errors.New("forbidden: character does not belong to player")
-	ErrUnsupportedMode        = errors.New("adventure mode is unsupported")
-	ErrInvalidMode            = errors.New("invalid adventure mode")
+	ErrNotFound             = errors.New("party not found")
+	ErrAlreadyInParty       = errors.New("character is already in an active party")
+	ErrPartyFull            = errors.New("party is already full")
+	ErrPartyNotRecruiting   = errors.New("party is not currently recruiting")
+	ErrInvalidPassword      = errors.New("invalid party password")
+	ErrNotPartyLeader       = errors.New("only the party leader can perform this action")
+	ErrCannotKickSelf       = errors.New("party leader cannot kick themselves")
+	ErrCharacterNotInParty  = errors.New("character is not a member of this party")
+	ErrInvalidPartyName     = errors.New("party name must be 1 to 50 characters without whitespace or prohibited characters")
+	ErrInvalidMaxMembers    = errors.New("max members must be between 1 and 4")
+	ErrInvalidSpeed         = errors.New("party speed must be 3, 18 or 25")
+	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0) and cannot adventure")
+	ErrCharacterExhausted   = errors.New("character is exhausted (tired >= 100) and must rest")
+	ErrNeedJoinNotMet       = errors.New("character does not meet party join condition")
+	ErrStageNotFound        = errors.New("adventure stage not found")
+	ErrDailyOnceAlreadyUsed = adventure.ErrDailyOnceAlreadyUsed
+	ErrForbidden            = errors.New("forbidden: character does not belong to player")
+	ErrUnsupportedMode      = errors.New("adventure mode is unsupported")
+	ErrInvalidMode          = errors.New("invalid adventure mode")
 )
 
 type Party struct {
@@ -61,9 +58,6 @@ type Party struct {
 	Mode              string    `json:"mode,omitempty"`
 	Speed             int       `json:"speed"`
 	MaxMembers        int       `json:"max_members"`
-	MinLevel          int       `json:"min_level"`
-	MaxLevel          int       `json:"max_level"`
-	MinHP             int       `json:"min_hp"`
 	NeedJoin          string    `json:"need_join,omitempty"`
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -93,15 +87,13 @@ type PartySummary struct {
 	Name              string    `json:"name"`
 	LeaderCharacterID string    `json:"leader_character_id"`
 	LeaderName        string    `json:"leader_name"`
+	MemberNames       []string  `json:"member_names"`
 	StageID           string    `json:"stage_id"`
 	StageName         string    `json:"stage_name"`
 	Speed             int       `json:"speed"`
 	CurrentMembers    int       `json:"current_members"`
 	MaxMembers        int       `json:"max_members"`
 	HasPassword       bool      `json:"has_password"`
-	MinLevel          int       `json:"min_level"`
-	MaxLevel          int       `json:"max_level"`
-	MinHP             int       `json:"min_hp"`
 	NeedJoin          string    `json:"need_join,omitempty"`
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -114,9 +106,6 @@ type CreatePartyRequest struct {
 	Password   string `json:"password,omitempty"`
 	Speed      int    `json:"speed,omitempty"`
 	MaxMembers int    `json:"max_members,omitempty"`
-	MinLevel   int    `json:"min_level,omitempty"`
-	MaxLevel   int    `json:"max_level,omitempty"`
-	MinHP      int    `json:"min_hp,omitempty"`
 	NeedJoin   string `json:"need_join,omitempty"`
 }
 
@@ -165,20 +154,32 @@ type PartyAdventureLog struct {
 	CreatedAt           time.Time `json:"created_at"`
 }
 
-func newSummary(p Party, leaderName string, members int) PartySummary {
+// newSummary lists the leader first, then members in join order, as the
+// legacy quest list does (quest.cgi:98–106).
+func newSummary(p Party, joinOrder []Member) PartySummary {
+	names := make([]string, 0, len(joinOrder))
+	var leaderName string
+	for _, m := range joinOrder {
+		if m.CharacterID == p.LeaderCharacterID {
+			leaderName = m.CharacterName
+			continue
+		}
+		names = append(names, m.CharacterName)
+	}
+	if leaderName != "" {
+		names = append([]string{leaderName}, names...)
+	}
 	return PartySummary{
 		ID:                p.ID,
 		Name:              p.Name,
 		LeaderCharacterID: p.LeaderCharacterID,
 		LeaderName:        leaderName,
+		MemberNames:       names,
 		StageID:           p.StageID,
 		Speed:             p.Speed,
-		CurrentMembers:    members,
+		CurrentMembers:    len(joinOrder),
 		MaxMembers:        p.MaxMembers,
 		HasPassword:       p.PasswordHash != "",
-		MinLevel:          p.MinLevel,
-		MaxLevel:          p.MaxLevel,
-		MinHP:             p.MinHP,
 		NeedJoin:          p.NeedJoin,
 		Status:            p.Status,
 		CreatedAt:         p.CreatedAt,

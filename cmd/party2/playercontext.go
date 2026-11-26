@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -76,6 +77,13 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		{ID: "home_image", Parent: "home", OwnedParentOnly: true, CanEnter: func(ctx context.Context, c character.Character) (bool, error) {
 			unlocks, err := core.charService.ImageUnlocks(ctx, c.ID)
 			return unlocks.Image, err
+		}},
+		{ID: "quest", Parent: "town", SubjectKind: "party", Pageable: true, SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
+			_, err := cmbt.party.GetParty(ctx, target)
+			if errors.Is(err, party.ErrNotFound) {
+				return false, nil
+			}
+			return err == nil, err
 		}},
 		{ID: "casino", Parent: "town", SubjectKind: "room", Pageable: true, SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
 			rooms, err := misc.casino.ListRooms(ctx)

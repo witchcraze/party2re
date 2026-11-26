@@ -95,6 +95,22 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
+		ID:             "party_create",
+		Label:          "パーティーをつくる",
+		Category:       "adventure",
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{"name", "stage_id", "speed", "max_members"},
+		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+	},
+	{
+		ID:             "party_join",
+		Label:          "パーティーにさんかする",
+		Category:       "adventure",
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{"party_id"},
+		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+	},
+	{
 		ID:             "challenge_start",
 		Label:          "試練の道（連戦チャレンジ）",
 		Category:       "adventure",

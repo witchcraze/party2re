@@ -57,6 +57,7 @@ func offeredEnum(t *testing.T, o runObserved, action, field string) []string {
 func TestNormalRunGatewayObservationMatchesExecution(t *testing.T) {
 	a := newScenarioApp(t)
 	token, hero := a.register()
+	a.enter(token, hero, a.context(token, hero), "quest")
 	started := a.runCommand(token, hero, a.runContext(token, hero), "adventure_start", map[string]any{"name": "solo-quest", "stage_id": "stage-00", "speed": 3, "command_id": "start"}, http.StatusOK)
 	runID := started.Result.RunID
 	a.elapseActionWait(hero)

@@ -31,6 +31,12 @@ func (stageRoom) Prepare(a *runhost.Admission) error {
 }
 
 func (room stageRoom) AdmitMember(ctx context.Context, r *NormalRun, id string) error {
+	// Only the room creator passes the stage gate (quest.cgi:518–524): a Party
+	// lobby checked its creator when created, and neither add_member nor the
+	// first すすむ re-checks members (vs_monster.cgi:56–82).
+	if r.Admission.PartyID != "" {
+		return nil
+	}
 	c, err := room.s.cfg.Characters.FindByID(ctx, id)
 	if err != nil {
 		return err

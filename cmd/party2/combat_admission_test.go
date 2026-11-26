@@ -81,7 +81,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	if leader.PlayerID == member.PlayerID {
 		t.Fatal("fixture must exercise cross-account consent")
 	}
-	lobby, err := combat.party.CreateParty(ctx, leader.ID, party.CreatePartyRequest{Name: "AuthorizedRoster", StageID: "stage-00"})
+	lobby, err := combat.party.CreateParty(ctx, leader.ID, party.CreatePartyRequest{Speed: 18, Name: "AuthorizedRoster", StageID: "stage-00"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,6 +331,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 
 	// 1. Leader creates party on stage-26
 	partyDetail, err := combat.party.CreateParty(ctx, char1.ID, party.CreatePartyRequest{
+		Speed:      18,
 		Name:       "Stage26Party",
 		StageID:    "stage-26",
 		MaxMembers: 2,
@@ -378,6 +379,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 		}
 	}
 	_, err = combat.party.CreateParty(ctx, char1.ID, party.CreatePartyRequest{
+		Speed:   18,
 		Name:    "RetryStage26",
 		StageID: "stage-26",
 	})
@@ -396,6 +398,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 
 	// Member CAN create a party on stage-26
 	memberParty, err := combat.party.CreateParty(ctx, char2.ID, party.CreatePartyRequest{
+		Speed:   18,
 		Name:    "MemberStage26",
 		StageID: "stage-26",
 	})
@@ -409,6 +412,7 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 		t.Fatalf("ReleaseLock failed: %v", err)
 	}
 	p2, err := combat.party.CreateParty(ctx, char1.ID, party.CreatePartyRequest{
+		Speed:   18,
 		Name:    "AfterWakeParty",
 		StageID: "stage-26",
 	})
@@ -477,6 +481,7 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 			defer wg.Done()
 			<-startBarrier
 			pDetail, err := combat.party.CreateParty(ctx, char.ID, party.CreatePartyRequest{
+				Speed:   18,
 				Name:    pName,
 				StageID: "stage-26",
 			})
