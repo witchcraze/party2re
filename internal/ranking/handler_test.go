@@ -40,6 +40,16 @@ func TestDailyRefreshActionIDUsesJSTDate(t *testing.T) {
 	}
 }
 
+type countingSnapshotSaveRepo struct {
+	*mockRankingRepository
+	saveSnapshotCalls int
+}
+
+func (r *countingSnapshotSaveRepo) SaveSnapshot(ctx context.Context, snapshot ranking.RankingSnapshot) error {
+	r.saveSnapshotCalls++
+	return r.mockRankingRepository.SaveSnapshot(ctx, snapshot)
+}
+
 func TestRefreshHandler_HandleAll(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockRepo()
@@ -53,8 +63,9 @@ func TestRefreshHandler_HandleAll(t *testing.T) {
 	handler := ranking.NewRefreshHandler(svc, ranking.WithRefreshScheduler(sched))
 
 	action := core_scheduling.ScheduledAction{
-		ID:         "act-1",
+		ID:         ranking.DailyRefreshActionID(now) + ":1",
 		ActionType: ranking.RankingActionTypeRefresh,
+		ActorID:    "ranking:daily",
 		Params:     map[string]string{"ranking_type": "ALL"},
 	}
 
@@ -74,6 +85,99 @@ func TestRefreshHandler_HandleAll(t *testing.T) {
 	}
 	if !sched.actions[0].ExecuteAt.Equal(ranking.NextMidnightJST(now)) || sched.actions[0].ActorID != "ranking:daily" {
 		t.Fatalf("unexpected scheduled action: %+v", sched.actions[0])
+	}
+}
+
+func TestRefreshHandler_ReconcileThenDueHandleDoesNotDoubleRefresh(t *testing.T) {
+	ctx := context.Background()
+	repo := &countingSnapshotSaveRepo{mockRankingRepository: newMockRepo()}
+
+	// Yesterday's snapshot was published at 2026-11-25 15:00 JST.
+	yesterday := time.Date(2026, 11, 25, 6, 0, 0, 0, time.UTC)
+	now := yesterday
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dueToday := ranking.NextMidnightJST(yesterday) // 2026-11-26 00:00 JST
+	sched := &weeklyScheduler{
+		actions: []core_scheduling.ScheduledAction{
+			{
+				ID:         ranking.DailyRefreshActionID(dueToday) + ":due",
+				ActionType: ranking.RankingActionTypeRefresh,
+				ActorID:    "ranking:daily",
+				Params:     map[string]string{"ranking_type": "all"},
+				ExecuteAt:  dueToday,
+				State:      core_scheduling.StatePending,
+			},
+			{
+				ID:         ranking.DailyRefreshActionID(yesterday) + ":stale",
+				ActionType: ranking.RankingActionTypeRefresh,
+				ActorID:    "ranking:daily",
+				Params:     map[string]string{"ranking_type": "all"},
+				ExecuteAt:  yesterday,
+				State:      core_scheduling.StatePending,
+			},
+		},
+	}
+	handler := ranking.NewRefreshHandler(svc, ranking.WithRefreshScheduler(sched))
+	if err := svc.RefreshAllSnapshots(ctx); err != nil {
+		t.Fatal(err)
+	}
+	repo.saveSnapshotCalls = 0
+
+	// Worker tick crosses 00:00 JST: Reconcile runs before FetchDue.
+	now = dueToday.Add(5 * time.Second)
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile at 00:00 JST: %v", err)
+	}
+	if repo.saveSnapshotCalls != 8 {
+		t.Fatalf("expected 8 snapshot saves during Reconcile, got %d", repo.saveSnapshotCalls)
+	}
+	calcAt := repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt
+
+	// Due action (and a stale downtime action) execute right after Reconcile: neither may refresh again.
+	now = now.Add(time.Second)
+	for _, act := range sched.actions[:2] {
+		if err := handler.Handle(ctx, act); err != nil {
+			t.Fatalf("Handle(%s): %v", act.ID, err)
+		}
+	}
+	if repo.saveSnapshotCalls != 8 {
+		t.Fatalf("expected no duplicate refresh after Reconcile, got saveSnapshotCalls=%d", repo.saveSnapshotCalls)
+	}
+	if !repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt.Equal(calcAt) {
+		t.Fatalf("CalculatedAt changed after Handle: got %v, want %v", repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt, calcAt)
+	}
+
+	// Cross-instance Handle (fresh handler with unverified boundary) also skips once DB snapshots are fresh for today.
+	freshHandler := ranking.NewRefreshHandler(svc, ranking.WithRefreshScheduler(sched))
+	if err := freshHandler.Handle(ctx, sched.actions[0]); err != nil {
+		t.Fatalf("freshHandler.Handle: %v", err)
+	}
+	if repo.saveSnapshotCalls != 8 {
+		t.Fatalf("expected cross-instance Handle to see today's persisted snapshots and skip, got saveSnapshotCalls=%d", repo.saveSnapshotCalls)
+	}
+
+	// Explicit RefreshAllSnapshots (admin path) and non-daily scheduled actions still refresh unconditionally.
+	now = now.Add(time.Minute)
+	if err := svc.RefreshAllSnapshots(ctx); err != nil {
+		t.Fatalf("explicit RefreshAllSnapshots: %v", err)
+	}
+	if repo.saveSnapshotCalls != 16 {
+		t.Fatalf("expected explicit RefreshAllSnapshots to save 8 snapshots, got %d", repo.saveSnapshotCalls)
+	}
+	now = now.Add(time.Minute)
+	if err := handler.Handle(ctx, core_scheduling.ScheduledAction{
+		ID:         "admin-scheduled",
+		ActionType: ranking.RankingActionTypeRefresh,
+		ActorID:    "admin",
+		Params:     map[string]string{"ranking_type": "all"},
+	}); err != nil {
+		t.Fatalf("explicit non-daily Handle: %v", err)
+	}
+	if repo.saveSnapshotCalls != 24 {
+		t.Fatalf("expected non-daily Handle to save 8 snapshots, got %d", repo.saveSnapshotCalls)
 	}
 }
 

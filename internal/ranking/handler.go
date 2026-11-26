@@ -63,15 +63,12 @@ func NewRefreshHandler(service *Service, opts ...RefreshOption) *RefreshHandler 
 func (h *RefreshHandler) Handle(ctx context.Context, action core_scheduling.ScheduledAction) error {
 	rankingTypeStr := strings.TrimSpace(action.Params["ranking_type"])
 	if rankingTypeStr == "" || strings.EqualFold(rankingTypeStr, "all") {
-		if err := h.service.RefreshAllSnapshots(ctx); err != nil {
-			return err
+		if action.ActorID == dailyRefreshActorID {
+			// A scheduled daily wake-up defers to durable snapshot timestamps so
+			// worker/startup reconciliation and due delivery never refresh twice.
+			return h.Reconcile(ctx)
 		}
-		now := h.service.nowFunc().UTC()
-		h.reconcileMu.Lock()
-		h.verifiedBoundary = currentDailyBoundaryJST(now)
-		err := h.ensureDailyScheduleLocked(ctx, NextMidnightJST(now))
-		h.reconcileMu.Unlock()
-		return err
+		return h.service.RefreshAllSnapshots(ctx)
 	}
 	t := RankingType(strings.ToLower(rankingTypeStr))
 	if !IsValidRankingType(t) {
@@ -111,20 +108,6 @@ func (h *RefreshHandler) Reconcile(ctx context.Context) error {
 		h.verifiedBoundary = boundary
 	}
 
-	if hasPendingNext {
-		return nil
-	}
-	return h.scheduleDailyRefresh(ctx, next)
-}
-
-func (h *RefreshHandler) ensureDailyScheduleLocked(ctx context.Context, next time.Time) error {
-	if h.scheduler == nil {
-		return nil
-	}
-	hasPendingNext, err := h.hasPendingDailySchedule(ctx, next)
-	if err != nil {
-		return err
-	}
 	if hasPendingNext {
 		return nil
 	}

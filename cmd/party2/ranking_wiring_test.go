@@ -33,6 +33,13 @@ func TestRankingDailyPublicationAndSnapshotOnlyHTTPWiring(t *testing.T) {
 	if err != nil || len(pending) != 1 || pending[0].ActionType != ranking.RankingActionTypeRefresh {
 		t.Fatalf("pending daily refresh actions = %+v, err = %v", pending, err)
 	}
+	// Executing the daily scheduled action after Reconcile must not republish today's snapshots.
+	calcBefore := snaps[ranking.RankingTypeMonsterKills].CalculatedAt
+	app.worker.ProcessAction(ctx, pending[0])
+	snapAfter, err := repo.GetSnapshot(ctx, ranking.RankingTypeMonsterKills)
+	if err != nil || !snapAfter.CalculatedAt.Equal(calcBefore) {
+		t.Fatalf("scheduled daily action re-refreshed after Reconcile: before=%v after=%v err=%v", calcBefore, snapAfter.CalculatedAt, err)
+	}
 
 	// 2. Live counter mutations do not leak through ?snapshot=false on public boards.
 	char, err := database.CreateTestCharacter(ctx, app.db, "LiveHide")
