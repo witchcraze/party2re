@@ -73,12 +73,35 @@ func (d deletionFleaPayment) HoldPayment(ctx context.Context, recipientID, buyer
 		Amount: amount, Source: depot.RemittanceFleaMarketPayment, SenderName: buyerName})
 }
 
+func allTestTables(t *testing.T) []string {
+	t.Helper()
+	db := database.OpenTestDB(t)
+	rows, err := db.QueryContext(context.Background(), "SHOW TABLES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var tables []string
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			t.Fatal(err)
+		}
+		tables = append(tables, table)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return tables
+}
+
 func TestMarketCreatedAfterDeletionDiscovery(t *testing.T) {
+	db := database.CreateTestDatabase(t, allTestTables(t)...)
 	for _, market := range []string{"flea", "gold", "barter"} {
 		for _, mode := range []string{"character", "account", "account rollback"} {
 			for iteration := range testutil.GetStressConfig().OpsPerWorker {
 				t.Run(fmt.Sprintf("%s/%s/%d", market, mode, iteration), func(t *testing.T) {
-					f := newDeletionFixture(t)
+					f := newDeletionFixtureWithDB(t, db)
 					ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 					defer cancel()
 					seller, buyer := f.character(t, ""), f.character(t, "")

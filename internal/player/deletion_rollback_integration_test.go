@@ -89,7 +89,11 @@ type deletionFixture struct {
 
 func newDeletionFixture(t *testing.T) *deletionFixture {
 	t.Helper()
-	db := database.OpenTestDB(t)
+	return newDeletionFixtureWithDB(t, database.OpenTestDB(t))
+}
+
+func newDeletionFixtureWithDB(t *testing.T, db *sql.DB) *deletionFixture {
+	t.Helper()
 	tx := database.NewTransactionProvider(db)
 	f := &deletionFixture{db: db}
 	charRepo, err := database.NewCharacterRepository(db)
