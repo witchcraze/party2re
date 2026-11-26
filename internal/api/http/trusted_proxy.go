@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"os"
 	"strings"
 )
 
@@ -49,34 +48,6 @@ func ParseTrustedProxies(s string) ([]netip.Prefix, error) {
 func WithTrustedProxies(proxies ...netip.Prefix) Option {
 	return func(h *Handler) {
 		h.trustedProxies = append(h.trustedProxies, proxies...)
-	}
-}
-
-// WithTrustedProxyCIDRs parses and configures trusted proxy CIDRs/IPs for the Handler.
-func WithTrustedProxyCIDRs(cidrs ...string) Option {
-	return func(h *Handler) {
-		for _, c := range cidrs {
-			prefixes, err := ParseTrustedProxies(c)
-			if err == nil {
-				h.trustedProxies = append(h.trustedProxies, prefixes...)
-			}
-		}
-	}
-}
-
-// WithTrustedProxiesFromEnv loads trusted proxy CIDRs from an environment variable (default: "PARTY2_TRUSTED_PROXIES").
-func WithTrustedProxiesFromEnv(envKey string) Option {
-	return func(h *Handler) {
-		if envKey == "" {
-			envKey = "PARTY2_TRUSTED_PROXIES"
-		}
-		raw := os.Getenv(envKey)
-		if raw != "" {
-			prefixes, err := ParseTrustedProxies(raw)
-			if err == nil {
-				h.trustedProxies = append(h.trustedProxies, prefixes...)
-			}
-		}
 	}
 }
 

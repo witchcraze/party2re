@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
-	"os"
 	"strings"
 	"time"
 
@@ -190,24 +189,6 @@ func WithAdminAPIKey(key string) Option {
 	}
 }
 
-// WithAdminAPIKeyFromEnv loads the administrator API key from an environment variable (default: "PARTY2_ADMIN_API_KEY", falling back to "ADMIN_API_KEY").
-func WithAdminAPIKeyFromEnv(envKey string) Option {
-	return func(h *Handler) {
-		if envKey != "" {
-			//lint:ignore env-docs caller-supplied override; the default names below are documented
-			if val := os.Getenv(envKey); val != "" {
-				h.adminAPIKey = strings.TrimSpace(val)
-				return
-			}
-		}
-		if val := os.Getenv("PARTY2_ADMIN_API_KEY"); val != "" {
-			h.adminAPIKey = strings.TrimSpace(val)
-		} else if val := os.Getenv("ADMIN_API_KEY"); val != "" {
-			h.adminAPIKey = strings.TrimSpace(val)
-		}
-	}
-}
-
 // WithRateLimiter configures rate limiting for the Handler.
 func WithRateLimiter(limiter RateLimiter, cfg ...RateLimitConfig) Option {
 	return func(h *Handler) {
@@ -225,19 +206,6 @@ func WithRateLimiter(limiter RateLimiter, cfg ...RateLimitConfig) Option {
 func WithAllowedOrigins(origins ...string) Option {
 	return func(h *Handler) {
 		h.setAllowedOrigins(origins)
-	}
-}
-
-// WithAllowedOriginsFromEnv loads allowed CORS origins from an environment variable (default: "PARTY2_CORS_ORIGINS").
-func WithAllowedOriginsFromEnv(envKey string) Option {
-	return func(h *Handler) {
-		if envKey == "" {
-			envKey = "PARTY2_CORS_ORIGINS"
-		}
-		raw := os.Getenv(envKey)
-		if raw != "" {
-			h.setAllowedOrigins(ParseCORSOrigins(raw))
-		}
 	}
 }
 
