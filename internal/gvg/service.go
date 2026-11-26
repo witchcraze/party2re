@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // CharacterRepository defines persistence operations on Character.
@@ -194,8 +194,8 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 		return RoomDetail{}, err
 	}
 
-	nameLen := utf8.RuneCountInString(strings.TrimSpace(req.Name))
-	if nameLen < 1 || nameLen > 50 {
+	name, err := validation.ValidateQuestName(req.Name)
+	if err != nil {
 		return RoomDetail{}, ErrInvalidRoomName
 	}
 
@@ -229,7 +229,7 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 
 	room := GvGRoom{
 		ID:                roomID,
-		Name:              strings.TrimSpace(req.Name),
+		Name:              name,
 		LeaderCharacterID: char.ID,
 		LeaderName:        char.Name,
 		Speed:             speed,

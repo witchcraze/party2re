@@ -93,7 +93,7 @@ var (
 	ErrMatchNotInProgress     = errors.New("match is not in progress")
 	ErrMatchCompleted         = errors.New("match is already completed")
 	ErrInvalidDependencies    = errors.New("pvp dependencies cannot be nil")
-	ErrInvalidRoomName        = errors.New("room name must be between 1 and 50 characters")
+	ErrInvalidRoomName        = errors.New("room name must be 1 to 50 characters without whitespace or prohibited characters")
 	ErrAcquireRoomLockTimeout = errors.New("failed to acquire pvp room lock: timeout")
 	ErrCharacterSleeping      = errors.New("character is currently sleeping")
 	ErrRoomInactive           = errors.New("colosseum room expired due to inactivity")

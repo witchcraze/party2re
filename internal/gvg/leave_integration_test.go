@@ -173,7 +173,7 @@ func TestGvG_LeaveRoom_SideEffectsAndRetryIdempotency_Integration(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Exit Integration", MaxMembers: 2, TargetWins: 1})
+	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "ExitIntegration", MaxMembers: 2, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +365,7 @@ func TestGvG_LeaveRoom_RejoinAfterPreStartExit_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Rejoin Integration", MaxMembers: 2, TargetWins: 1})
+	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "RejoinIntegration", MaxMembers: 2, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -583,12 +583,12 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 	// 1. Lookup failure other than ErrRoomNotFound aborts CreateRoom and JoinRoom without writes.
 	lookupErr := errors.New("valkey lookup failure")
 	roomRepo.getCharErr = lookupErr
-	if _, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Aborted Create"}); !errors.Is(err, lookupErr) {
+	if _, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "AbortedCreate"}); !errors.Is(err, lookupErr) {
 		t.Fatalf("CreateRoom lookup error = %v, want %v", err, lookupErr)
 	}
 	roomRepo.getCharErr = nil
 
-	room1, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Room 1", MaxMembers: 4, TargetWins: 2})
+	room1, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Room1", MaxMembers: 4, TargetWins: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -610,7 +610,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 	}
 
 	// Recruiting room 2 owned by c3.
-	room2, err := svc.CreateRoom(ctx, c3.ID, gvg.CreateRoomRequest{Name: "Room 2", MaxMembers: 4, TargetWins: 1})
+	room2, err := svc.CreateRoom(ctx, c3.ID, gvg.CreateRoomRequest{Name: "Room2", MaxMembers: 4, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -637,7 +637,7 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 	if _, err := svc.JoinRoom(ctx, c1.ID, room2.Room.ID, ""); !errors.Is(err, gvg.ErrAlreadyInRoom) {
 		t.Fatalf("JoinRoom(room2) during partial leave = %v, want ErrAlreadyInRoom", err)
 	}
-	if _, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Room 3"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
+	if _, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Room3"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
 		t.Fatalf("CreateRoom during partial leave = %v, want ErrAlreadyInRoom", err)
 	}
 
@@ -933,7 +933,7 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "Atomic Delivery", MaxMembers: 4, TargetWins: 1})
+	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "AtomicDelivery", MaxMembers: 4, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1074,13 +1074,13 @@ func TestGvG_LeaveRoom_AtomicDeliveryClaimAndRetry_Integration(t *testing.T) {
 	}
 
 	// 4. Unconscious 0 HP survivor cannot re-enter until recovered; once healed, rejoin and departure settles standing order again.
-	if _, err := svc.CreateRoom(ctx, c2.ID, gvg.CreateRoomRequest{Name: "Atomic Rejoin", MaxMembers: 2, TargetWins: 1}); !errors.Is(err, gvg.ErrCharacterUnconscious) {
+	if _, err := svc.CreateRoom(ctx, c2.ID, gvg.CreateRoomRequest{Name: "AtomicRejoin", MaxMembers: 2, TargetWins: 1}); !errors.Is(err, gvg.ErrCharacterUnconscious) {
 		t.Fatalf("expected ErrCharacterUnconscious for 0 HP survivor c2, got %v", err)
 	}
 	if _, err := db.ExecContext(ctx, "UPDATE characters SET hp = 100 WHERE id = ?", c2.ID); err != nil {
 		t.Fatal(err)
 	}
-	room2, err := svc.CreateRoom(ctx, c2.ID, gvg.CreateRoomRequest{Name: "Atomic Rejoin", MaxMembers: 2, TargetWins: 1})
+	room2, err := svc.CreateRoom(ctx, c2.ID, gvg.CreateRoomRequest{Name: "AtomicRejoin", MaxMembers: 2, TargetWins: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

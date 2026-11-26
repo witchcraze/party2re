@@ -61,7 +61,7 @@ func TestGvG_3Guilds_ThirdGuildSurvives(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{
-		Name:       "Tri-Guild Skirmish",
+		Name:       "TriGuildSkirmish",
 		MaxMembers: 3,
 		TargetWins: 2,
 	})
@@ -142,7 +142,7 @@ func TestGvG_AllGuildsFell_Draw(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{
-		Name:       "Draw Skirmish",
+		Name:       "DrawSkirmish",
 		MaxMembers: 2,
 		TargetWins: 2,
 	})
@@ -223,7 +223,7 @@ func TestGvG_3Guilds_RealBattleEngine_LeaderFallsEarly(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{
-		Name:       "Real Engine Tri-Guild",
+		Name:       "RealEngineTriGuild",
 		MaxMembers: 3,
 		TargetWins: 2,
 	})

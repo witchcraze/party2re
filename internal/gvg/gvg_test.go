@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -285,14 +286,14 @@ func TestCreateRoom(t *testing.T) {
 
 	t.Run("fails if character not in guild", func(t *testing.T) {
 		charRepo.characters["c_no_guild"] = createTestCharacter("c_no_guild", "NoGuild", 100, 0)
-		_, err := svc.CreateRoom(ctx, "c_no_guild", gvg.CreateRoomRequest{Name: "GvG Arena"})
+		_, err := svc.CreateRoom(ctx, "c_no_guild", gvg.CreateRoomRequest{Name: "GvGArena"})
 		if !errors.Is(err, gvg.ErrActorNotInGuild) {
 			t.Fatalf("expected ErrActorNotInGuild, got %v", err)
 		}
 	})
 
 	t.Run("fails if guild has friendly color #FFFFFF", func(t *testing.T) {
-		_, err := svc.CreateRoom(ctx, "c_friendly", gvg.CreateRoomRequest{Name: "GvG Arena"})
+		_, err := svc.CreateRoom(ctx, "c_friendly", gvg.CreateRoomRequest{Name: "GvGArena"})
 		if !errors.Is(err, gvg.ErrFriendlyGuildCannotBattle) {
 			t.Fatalf("expected ErrFriendlyGuildCannotBattle, got %v", err)
 		}
@@ -302,20 +303,56 @@ func TestCreateRoom(t *testing.T) {
 		guildRepo.charGuilds["c_dead"] = "g1"
 		guildRepo.charGuilds["c_tired"] = "g1"
 
-		_, err := svc.CreateRoom(ctx, "c_dead", gvg.CreateRoomRequest{Name: "GvG Arena"})
+		_, err := svc.CreateRoom(ctx, "c_dead", gvg.CreateRoomRequest{Name: "GvGArena"})
 		if !errors.Is(err, gvg.ErrCharacterUnconscious) {
 			t.Fatalf("expected ErrCharacterUnconscious, got %v", err)
 		}
 
-		_, err = svc.CreateRoom(ctx, "c_tired", gvg.CreateRoomRequest{Name: "GvG Arena"})
+		_, err = svc.CreateRoom(ctx, "c_tired", gvg.CreateRoomRequest{Name: "GvGArena"})
 		if !errors.Is(err, gvg.ErrCharacterExhausted) {
 			t.Fatalf("expected ErrCharacterExhausted, got %v", err)
 		}
 	})
 
+	t.Run("fails on invalid room name per legacy quest rules", func(t *testing.T) {
+		for _, invalid := range []string{
+			"",
+			" ",
+			" room",
+			"room ",
+			"room 1",
+			"ギルド　戦",
+			"room@1",
+			"＠ギルド戦",
+			"room/1",
+			"room<1>",
+			"room\x001",
+			"room\u200B1",
+			"room\u202E1",
+			"Z\u0300\u0301\u0302",
+			strings.Repeat("あ", 51),
+		} {
+			if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: invalid}); !errors.Is(err, gvg.ErrInvalidRoomName) {
+				t.Errorf("CreateRoom(%q) = %v, want ErrInvalidRoomName", invalid, err)
+			}
+		}
+	})
+
+	t.Run("normalizes valid room name with NFC", func(t *testing.T) {
+		charRepo.characters["c_nfc"] = createTestCharacter("c_nfc", "NFCLdr", 100, 0)
+		guildRepo.charGuilds["c_nfc"] = "g1"
+		detail, err := svc.CreateRoom(ctx, "c_nfc", gvg.CreateRoomRequest{Name: "Ka\u0301"})
+		if err != nil {
+			t.Fatalf("CreateRoom NFC failed: %v", err)
+		}
+		if detail.Room.Name != "Ká" {
+			t.Errorf("expected NFC-normalized room name %q, got %q", "Ká", detail.Room.Name)
+		}
+	})
+
 	t.Run("successfully creates room with initial 2 GP prize pool", func(t *testing.T) {
 		detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
-			Name:       "Crimson Clan War",
+			Name:       "CrimsonClanWar",
 			MaxMembers: 8,
 			TargetWins: 2,
 		})
@@ -373,7 +410,7 @@ func TestJoinAndLeaveRoom(t *testing.T) {
 	guildRepo.charGuilds["c3"] = "g2"
 
 	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
-		Name:       "Test GvG",
+		Name:       "TestGvG",
 		Password:   "secret",
 		MaxMembers: 2,
 		TargetWins: 1,
@@ -463,7 +500,7 @@ func TestGvGMatchFlow(t *testing.T) {
 	guildRepo.charGuilds["c3"] = "g_azure"
 
 	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
-		Name:       "War of the Guilds",
+		Name:       "WarOfTheGuilds",
 		MaxMembers: 4,
 		TargetWins: 1,
 	})
@@ -592,7 +629,7 @@ func TestJoinRoom_GuildMemberLimit(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, "c_g1_1", gvg.CreateRoomRequest{
-		Name:       "GvG Guild Member Limit Test",
+		Name:       "GvGGuildMemberLimitTest",
 		MaxMembers: 8,
 		TargetWins: 2,
 	})

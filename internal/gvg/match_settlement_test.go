@@ -64,7 +64,7 @@ func setupSettlementTest(t *testing.T, standingRepo gvg.StandingRepository) (*gv
 
 	// Create room with TargetWins = 1 so round 1 concludes the match
 	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
-		Name:       "Settlement Test Room",
+		Name:       "SettlementTestRoom",
 		MaxMembers: 2,
 		TargetWins: 1,
 	})
@@ -206,7 +206,7 @@ func TestAdvanceRound_RecordMatchSettlement_Draw_ErrorPropagation(t *testing.T) 
 	}
 
 	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
-		Name:       "Draw Test Room",
+		Name:       "DrawTestRoom",
 		MaxMembers: 2,
 		TargetWins: 3,
 	})

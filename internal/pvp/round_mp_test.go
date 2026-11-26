@@ -111,7 +111,7 @@ func TestColosseum_CarryCurrentMPBetweenRounds(t *testing.T) {
 	charRepo.add(c1)
 	charRepo.add(c2)
 
-	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "MP Carry", Bet: 50, MaxMembers: 2, TargetWins: 2})
+	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "MPCarry", Bet: 50, MaxMembers: 2, TargetWins: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestColosseum_MPCarryOver_FailureRecoveryDoesNotDoubleApply(t *testing.T) {
 	charRepo.add(c1)
 	charRepo.add(c2)
 
-	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Retry Safe", Bet: 50, MaxMembers: 2, TargetWins: 2})
+	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "RetrySafe", Bet: 50, MaxMembers: 2, TargetWins: 2})
 	if err != nil {
 		t.Fatal(err)
 	}

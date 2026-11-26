@@ -188,7 +188,7 @@ func TestPvPPrizeProductionWiringIntegration(t *testing.T) {
 	if _, err := f.db.ExecContext(ctx, "UPDATE characters SET hp = 1, max_hp = 1, attack = 0, defense = 0, agility = 0 WHERE id = ?", f.recipient.ID); err != nil {
 		t.Fatal(err)
 	}
-	room := preparePrizeMatch(t, cmbt.pvp, []string{f.sender.ID, f.recipient.ID}, "Wired arena")
+	room := preparePrizeMatch(t, cmbt.pvp, []string{f.sender.ID, f.recipient.ID}, "WiredArena")
 	// Existing uncleared flags must not multiply when an arena prize arrives.
 	if err := soc.home.AddDeliveryFlag(ctx, f.sender.ID, depot.NoticeMoneyTransfer, "お金が預かり所に届いています"); err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestPvPPrizeProductionWiringIntegration(t *testing.T) {
 		t.Fatalf("production settlement: %+v, %v", result, err)
 	}
 	held, err := f.econ.depot.PendingRemittances(ctx, f.sender.ID)
-	if err != nil || len(held) != 1 || held[0].Amount != 200 || held[0].Source != depot.RemittancePvPPrize || held[0].SenderName != "Wired arena" {
+	if err != nil || len(held) != 1 || held[0].Amount != 200 || held[0].Source != depot.RemittancePvPPrize || held[0].SenderName != "WiredArena" {
 		t.Fatalf("production held prize: %+v, %v", held, err)
 	}
 	notices, err := soc.home.ListDeliveryNotices(ctx, f.sender.ID, true)
@@ -235,7 +235,7 @@ func TestPvPKillPProductionWiringIntegration(t *testing.T) {
 	if _, err := f.db.ExecContext(ctx, "UPDATE characters SET hp = 1500, max_hp = 1500, mp = 0, max_mp = 0, attack = 0, defense = 0, agility = 0 WHERE id = ?", f.recipient.ID); err != nil {
 		t.Fatal(err)
 	}
-	room := preparePrizeMatch(t, cmbt.pvp, []string{f.sender.ID, f.recipient.ID}, "KillP Arena")
+	room := preparePrizeMatch(t, cmbt.pvp, []string{f.sender.ID, f.recipient.ID}, "KillPArena")
 	result, err := cmbt.pvp.AdvanceRound(ctx, f.sender.ID, room)
 	if err != nil || !result.MatchCompleted || result.OverallWinnerTeam != pvp.ColorRed {
 		t.Fatalf("production settlement: %+v, %v", result, err)

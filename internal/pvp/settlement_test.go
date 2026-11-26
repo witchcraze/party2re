@@ -133,7 +133,7 @@ func TestSettlement_LeaveRoom_LeaderDisband_RollbackOnFailure(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Colosseum Disband Test",
+		Name:       "ColosseumDisbandTest",
 		Bet:        100,
 		MaxMembers: 3,
 		TargetWins: 1,
@@ -219,7 +219,7 @@ func TestSettlement_LeaveRoom_NonLeader_RollbackOnFailure(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Colosseum NonLeader Test",
+		Name:       "ColosseumNonLeaderTest",
 		Bet:        100,
 		MaxMembers: 2,
 		TargetWins: 1,
@@ -299,7 +299,7 @@ func TestSettlement_AdvanceRound_PrizeDistribution_RollbackOnFailure(t *testing.
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Prize Rollback Test",
+		Name:       "PrizeRollbackTest",
 		Bet:        100,
 		MaxMembers: 3,
 		TargetWins: 1,
@@ -393,7 +393,7 @@ func TestSettlement_AdvanceRound_MaxRoundsDraw_NoRefund(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "MaxRounds Draw Test",
+		Name:       "MaxRoundsDrawTest",
 		Bet:        100,
 		MaxMembers: 2,
 		TargetWins: 1,
@@ -467,7 +467,7 @@ func TestSettlement_HappyPath_AscendingLockOrder_AndCommit(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Happy Path Settlement",
+		Name:       "HappyPathSettlement",
 		Bet:        100,
 		MaxMembers: 3,
 		TargetWins: 1,
@@ -529,7 +529,7 @@ func TestSettlement_LeaveForfeit_FlushesPendingPvPKills(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
-	detail, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Forfeit Kills", Bet: 100, MaxMembers: 2, TargetWins: 2})
+	detail, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "ForfeitKills", Bet: 100, MaxMembers: 2, TargetWins: 2})
 	_, _ = svc.JoinRoom(ctx, c2.ID, detail.Room.ID, "")
 	_, _ = svc.SelectTeam(ctx, c1.ID, detail.Room.ID, pvp.ColorRed)
 	_, _ = svc.SelectTeam(ctx, c2.ID, detail.Room.ID, pvp.ColorBlue)

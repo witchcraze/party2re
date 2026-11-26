@@ -39,7 +39,7 @@ func TestColosseum_3Teams_ThirdTeamSurvives(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "3-Way Battle",
+		Name:       "3WayBattle",
 		Bet:        50,
 		MaxMembers: 3,
 		TargetWins: 2,
@@ -109,7 +109,7 @@ func TestColosseum_AllTeamsFell_Draw(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Mutual Kill Room",
+		Name:       "MutualKillRoom",
 		Bet:        50,
 		MaxMembers: 2,
 		TargetWins: 2,
@@ -175,7 +175,7 @@ func TestColosseum_3Teams_RealBattleEngine_LeaderFallsEarly(t *testing.T) {
 	}
 
 	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
-		Name:       "Real Engine 3-Way",
+		Name:       "RealEngine3Way",
 		Bet:        50,
 		MaxMembers: 3,
 		TargetWins: 2,

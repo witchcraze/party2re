@@ -71,7 +71,7 @@ func TestGvG_StrongOpponentDefeatIncrementsPvPWinsPerRound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
-	detail, _ := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "GvG KillP", MaxMembers: 4, TargetWins: 1})
+	detail, _ := svc.CreateRoom(ctx, c1.ID, gvg.CreateRoomRequest{Name: "GvGKillP", MaxMembers: 4, TargetWins: 1})
 	_, _ = svc.JoinRoom(ctx, c2.ID, detail.Room.ID, "")
 	_, _ = svc.JoinRoom(ctx, c3.ID, detail.Room.ID, "")
 	_, _ = svc.StartMatch(ctx, c1.ID, detail.Room.ID)

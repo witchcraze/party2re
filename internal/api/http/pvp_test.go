@@ -200,6 +200,22 @@ func TestColosseumPvPEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/pvp/rooms - invalid room name bad request", func(t *testing.T) {
+		stubPvP.createRoomFn = func(_ context.Context, _ string, _ pvp.CreateRoomRequest) (pvp.RoomDetail, error) {
+			return pvp.RoomDetail{}, pvp.ErrInvalidRoomName
+		}
+		defer func() { stubPvP.createRoomFn = nil }()
+
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/pvp/rooms", `{"name":"bad room","bet":100}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 BadRequest, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("POST /characters/{id}/pvp/rooms - invalid bet bad request", func(t *testing.T) {
 		stubPvP.createRoomFn = func(_ context.Context, _ string, _ pvp.CreateRoomRequest) (pvp.RoomDetail, error) {
 			return pvp.RoomDetail{}, pvp.ErrInvalidBet
