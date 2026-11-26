@@ -28,6 +28,7 @@ type mockPartyRepository struct {
 	updatePartyCallCount int
 	failUpdatePartyOn    int // if non-zero, fail on this N-th call
 	deletePartyErr       error
+	removeMemberErr      error
 	advLocksMu           sync.Mutex
 	advLocks             map[string]string
 }
@@ -200,6 +201,9 @@ func (r *mockPartyRepository) GetActivePartyByCharacter(_ context.Context, chara
 }
 
 func (r *mockPartyRepository) RemoveMember(_ context.Context, partyID, characterID string) error {
+	if r.removeMemberErr != nil {
+		return r.removeMemberErr
+	}
 	mMap := r.members[partyID]
 	delete(mMap, characterID)
 	delete(r.memberParty, characterID)
@@ -1388,4 +1392,136 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 	if _, _, err := valkeySvc.GetActiveParty(ctx, "other"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("failed CreateParty left character-party mapping: %v", err)
 	}
+}
+
+func TestLeaveParty_LegacyRound0Effects(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("normal mode applies +1 fatigue and clamps battle-row HP/MP", func(t *testing.T) {
+		builder := &stubLifetimePartyBuilder{
+			actors: map[string]battle.LifetimeActor{
+				"leader": {
+					Participant: battle.Participant{ID: "leader", Name: "Hero1", HP: 150, MaxHP: 200, MP: 45, MaxMP: 50},
+				},
+				"member": {
+					Participant: battle.Participant{ID: "member", Name: "Hero2", HP: 70, MaxHP: 100, MP: 15, MaxMP: 30},
+				},
+			},
+		}
+		tx := &mockTransactionProvider{}
+		svc, repo, charRepo, _ := setupTestService(t, WithParticipantBuilder(builder), WithTransactionProvider(tx))
+
+		charRepo.chars["leader"] = corecharacter.Character{
+			ID: "leader", Name: "Hero1", Level: 5, Tired: 10,
+			Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 30, MaxMP: 30},
+		}
+		charRepo.chars["member"] = corecharacter.Character{
+			ID: "member", Name: "Hero2", Level: 5, Tired: 4,
+			Stats: corecharacter.Stats{HP: 70, MaxHP: 100, MP: 15, MaxMP: 30},
+		}
+
+		created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{Speed: 18, Name: "NormalLeave", StageID: "forest"})
+		if err != nil {
+			t.Fatalf("CreateParty failed: %v", err)
+		}
+		if _, err := svc.JoinParty(ctx, created.Party.ID, "member", ""); err != nil {
+			t.Fatalf("JoinParty failed: %v", err)
+		}
+
+		// Simulate live HP/MP differing from the captured battle row before leaving.
+		m := charRepo.chars["member"]
+		m.Stats.HP, m.Stats.MP = 95, 28
+		charRepo.chars["member"] = m
+
+		if err := svc.LeaveParty(ctx, created.Party.ID, "member"); err != nil {
+			t.Fatalf("LeaveParty(member) failed: %v", err)
+		}
+		gotMember := charRepo.chars["member"]
+		if gotMember.Tired != 5 || gotMember.Stats.HP != 70 || gotMember.Stats.MP != 15 {
+			t.Fatalf("member after leave = tired:%d hp:%d mp:%d, want tired:5 hp:70 mp:15", gotMember.Tired, gotMember.Stats.HP, gotMember.Stats.MP)
+		}
+		if _, err := repo.GetMember(ctx, created.Party.ID, "member"); !errors.Is(err, ErrCharacterNotInParty) {
+			t.Fatalf("member still in lobby: err=%v", err)
+		}
+
+		// Leader (last leave) deletes the lobby and clamps battle-row HP/MP to SQL MaxHP/MaxMP.
+		if err := svc.LeaveParty(ctx, created.Party.ID, "leader"); err != nil {
+			t.Fatalf("LeaveParty(leader) failed: %v", err)
+		}
+		gotLeader := charRepo.chars["leader"]
+		if gotLeader.Tired != 11 || gotLeader.Stats.HP != 100 || gotLeader.Stats.MP != 30 {
+			t.Fatalf("leader after leave = tired:%d hp:%d mp:%d, want tired:11 hp:100 mp:30", gotLeader.Tired, gotLeader.Stats.HP, gotLeader.Stats.MP)
+		}
+		if _, err := svc.GetParty(ctx, created.Party.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("expected lobby deleted after last leave, got %v", err)
+		}
+		if tx.commits != 4 || tx.rollbacks != 0 {
+			t.Fatalf("unexpected tx counts: commits=%d rollbacks=%d", tx.commits, tx.rollbacks)
+		}
+	})
+
+	t.Run("calm mode halves round-0 fatigue to 0 while preserving HP/MP copyback", func(t *testing.T) {
+		builder := &stubLifetimePartyBuilder{
+			actors: map[string]battle.LifetimeActor{
+				"leader": {
+					Participant: battle.Participant{ID: "leader", Name: "Hero1", HP: 60, MaxHP: 100, MP: 12, MaxMP: 30},
+				},
+			},
+		}
+		svc, repo, charRepo, _ := setupTestService(t, WithParticipantBuilder(builder))
+		charRepo.chars["leader"] = corecharacter.Character{
+			ID: "leader", Name: "Hero1", Level: 5, Tired: 10,
+			Stats: corecharacter.Stats{HP: 60, MaxHP: 100, MP: 12, MaxMP: 30},
+		}
+
+		created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{Speed: 18, Name: "CalmLeave", StageID: "forest"})
+		if err != nil {
+			t.Fatalf("CreateParty failed: %v", err)
+		}
+		p := created.Party
+		p.Mode = adventure.CrawlModeCalm
+		if err := repo.UpdateParty(ctx, p); err != nil {
+			t.Fatalf("UpdateParty failed: %v", err)
+		}
+
+		l := charRepo.chars["leader"]
+		l.Stats.HP, l.Stats.MP = 90, 25
+		charRepo.chars["leader"] = l
+
+		if err := svc.LeaveParty(ctx, created.Party.ID, "leader"); err != nil {
+			t.Fatalf("LeaveParty failed: %v", err)
+		}
+		got := charRepo.chars["leader"]
+		if got.Tired != 10 || got.Stats.HP != 60 || got.Stats.MP != 12 {
+			t.Fatalf("calm leader after leave = tired:%d hp:%d mp:%d, want tired:10 hp:60 mp:12", got.Tired, got.Stats.HP, got.Stats.MP)
+		}
+	})
+
+	t.Run("character write failure preserves lobby membership", func(t *testing.T) {
+		tx := &mockTransactionProvider{}
+		svc, repo, charRepo, _ := setupTestService(t, WithTransactionProvider(tx))
+		charRepo.chars["leader"] = corecharacter.Character{
+			ID: "leader", Name: "Hero1", Level: 5, Tired: 7,
+			Stats: corecharacter.Stats{HP: 50, MaxHP: 50, MP: 10, MaxMP: 10},
+		}
+		created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{Speed: 18, Name: "FailUpdate", StageID: "forest"})
+		if err != nil {
+			t.Fatalf("CreateParty failed: %v", err)
+		}
+
+		writeErr := errors.New("sql write failed")
+		charRepo.updateErr = writeErr
+		if err := svc.LeaveParty(ctx, created.Party.ID, "leader"); !errors.Is(err, writeErr) {
+			t.Fatalf("expected writeErr, got %v", err)
+		}
+		if tx.rollbacks != 1 {
+			t.Fatalf("expected 1 rollback, got %d", tx.rollbacks)
+		}
+		if _, err := repo.GetMember(ctx, created.Party.ID, "leader"); err != nil {
+			t.Fatalf("leader should remain in lobby on character write failure: %v", err)
+		}
+		if got := charRepo.chars["leader"]; got.Tired != 7 {
+			t.Fatalf("tired mutated despite write failure: got %d, want 7", got.Tired)
+		}
+	})
 }

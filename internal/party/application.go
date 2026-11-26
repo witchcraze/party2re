@@ -251,21 +251,39 @@ func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, 
 	})
 }
 
-// LeaveParty removes the character from the lobby. When the leader leaves,
-// the earliest remaining member leads; the last leave deletes the lobby
-// (_battle.cgi:1330–1346).
+// LeaveParty removes the character from the lobby and applies the legacy
+// round-0 にげる effects (_battle.cgi:1184–1222, 1330–1346). When the leader
+// leaves, the earliest remaining member leads; the last leave deletes the lobby.
 func (s *Service) LeaveParty(ctx context.Context, partyID, characterID string) error {
 	return s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
-		if _, err := s.repo.GetPartyForUpdate(txCtx, partyID); err != nil {
+		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
+		if err != nil {
 			return err
 		}
 		members, err := s.repo.GetMembers(txCtx, partyID)
 		if err != nil {
 			return err
 		}
-		if !slices.ContainsFunc(members, func(m Member) bool { return m.CharacterID == characterID }) {
+		idx := slices.IndexFunc(members, func(m Member) bool { return m.CharacterID == characterID })
+		if idx < 0 {
 			return ErrCharacterNotInParty
 		}
+		leaving := members[idx]
+
+		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+		hp, mp := leaving.HP, -1
+		if leaving.BattleActor != nil {
+			hp, mp = leaving.BattleActor.HP, leaving.BattleActor.MP
+		}
+		char.ApplyCombatSurvival(hp, mp, hp <= 0)
+		char.AddTired(adventure.CalculateExitFatigue(0, p.Mode))
+		if err := s.charRepo.Update(txCtx, char); err != nil {
+			return err
+		}
+
 		if len(members) == 1 {
 			return s.repo.DeleteParty(txCtx, partyID)
 		}
