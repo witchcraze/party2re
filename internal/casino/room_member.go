@@ -169,21 +169,10 @@ func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string
 			return err
 		}
 		isReplay := previous.Kicked && previous.Member.CharacterID == targetID && previous.LeaderID == leaderID
-		replayResult := func() error {
-			if !recoveredPendingFromContext(lockedCtx) {
-				return nil
-			}
-			leaderName, err := s.resolveLeaderName(lockedCtx, previous.Detail.Members, leaderID)
-			if err != nil {
-				return err
-			}
-			result = KickResult{RoomName: previous.Detail.Room.Name, LeaderName: leaderName}
-			return nil
-		}
 
 		room, err := s.roomRepo.GetRoomForUpdate(lockedCtx, roomID)
 		if errors.Is(err, ErrRoomNotFound) && isReplay {
-			return replayResult()
+			return nil
 		}
 		if err != nil {
 			return err
@@ -202,7 +191,7 @@ func (s *Service) KickMember(ctx context.Context, roomID string, leaderID string
 		index := slices.IndexFunc(members, func(m RoomMember) bool { return m.CharacterID == targetID })
 		if index < 0 {
 			if isReplay {
-				return replayResult()
+				return nil
 			}
 			return ErrMemberNotFound
 		}

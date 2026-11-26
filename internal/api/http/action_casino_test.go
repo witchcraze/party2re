@@ -1056,7 +1056,7 @@ func TestCasinoKickPlaceLog(t *testing.T) {
 		}
 	})
 
-	t.Run("failed wait write writes no log row", func(t *testing.T) {
+	t.Run("gateway retry after wait-write failure recovers wait without duplicating or failing best-effort log", func(t *testing.T) {
 		_, waits, placeLog, router, roomID := setup(t)
 		waits.failExtend.Store(true)
 		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"peer"}}`, nil); status != http.StatusInternalServerError {
@@ -1064,6 +1064,18 @@ func TestCasinoKickPlaceLog(t *testing.T) {
 		}
 		if len(placeLog.byPlace) != 0 {
 			t.Fatalf("failed kick wrote log: %+v", placeLog.byPlace)
+		}
+		// Gateway preflight RecoverCharacterDeparture clears the pending departure before KickMember runs,
+		// so the retry succeeds idempotently with peer's wait enforced and best-effort notice omitted.
+		waits.failExtend.Store(false)
+		if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"casino_room_kick","params":{"room_id":"`+roomID+`","target_character_id":"peer"}}`, nil); status != http.StatusOK {
+			t.Fatalf("gateway recovery retry failed: %d %s", status, raw)
+		}
+		if rem, err := waits.GetRemainingLock(ctx, timer.CategoryActionWait, "peer"); err != nil || rem <= 58*time.Second {
+			t.Fatalf("peer kick wait not enforced after gateway recovery: rem=%v err=%v", rem, err)
+		}
+		if len(placeLog.byPlace) != 0 {
+			t.Fatalf("expected best-effort notice omitted when preflight acknowledged departure, got %+v", placeLog.byPlace)
 		}
 	})
 }

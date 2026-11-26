@@ -260,7 +260,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	}
 
 	var detail *RoomDetail
-	if _, _, err := s.recoverCharacterDeparture(ctx, characterID); err != nil {
+	if err := s.recoverCharacterDeparture(ctx, characterID); err != nil {
 		return nil, err
 	}
 	err := s.runInTx(ctx, func(txCtx context.Context) error {

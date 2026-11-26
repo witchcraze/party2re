@@ -592,4 +592,29 @@ func TestPvPKickPlaceLog(t *testing.T) {
 	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"other"}}`, nil); status != http.StatusOK {
 		t.Fatalf("kick should succeed despite log append failure: %d %s", status, raw)
 	}
+
+	// Leader Gateway retry after wait-write failure recovers peer's wait and posts the notice once.
+	placeLog.err = nil
+	if _, err := svc.JoinRoom(ctx, "peer", room.Room.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	store.waits["hero"] = time.Time{}
+	store.waits["peer"] = time.Time{}
+	store.failErr.Store(true)
+	if status, _ := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"peer"}}`, nil); status != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on wait write failure, got %d", status)
+	}
+	if len(placeLog.byPlace[questPlace]) != 1 {
+		t.Fatalf("failed kick wrote extra log: %+v", placeLog.byPlace[questPlace])
+	}
+	store.failErr.Store(false)
+	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"peer"}}`, nil); status != http.StatusOK {
+		t.Fatalf("gateway recovery retry failed: %d %s", status, raw)
+	}
+	if rem, _ := store.GetRemainingLock(ctx, timer.CategoryActionWait, "peer"); rem <= 55*time.Second || rem > 60*time.Second {
+		t.Fatalf("peer wait after gateway retry = %v, want ~60s", rem)
+	}
+	if len(placeLog.byPlace[questPlace]) != 2 {
+		t.Fatalf("expected notice posted once on pvp_kick gateway retry, got %+v", placeLog.byPlace[questPlace])
+	}
 }
