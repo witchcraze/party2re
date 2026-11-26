@@ -602,12 +602,12 @@ func TestPartyService_KickAndLeave(t *testing.T) {
 	}
 
 	// 1. Non-leader cannot kick
-	if err := svc.KickMember(context.Background(), partyID, m1.ID, leader.ID); !errors.Is(err, ErrNotPartyLeader) {
+	if _, err := svc.KickMember(context.Background(), partyID, m1.ID, leader.ID); !errors.Is(err, ErrNotPartyLeader) {
 		t.Fatalf("expected ErrNotPartyLeader, got %v", err)
 	}
 
 	// 2. Leader cannot kick self
-	if err := svc.KickMember(context.Background(), partyID, leader.ID, leader.ID); !errors.Is(err, ErrCannotKickSelf) {
+	if _, err := svc.KickMember(context.Background(), partyID, leader.ID, leader.ID); !errors.Is(err, ErrCannotKickSelf) {
 		t.Fatalf("expected ErrCannotKickSelf, got %v", err)
 	}
 
@@ -621,8 +621,12 @@ func TestPartyService_KickAndLeave(t *testing.T) {
 	}
 
 	// 4. The new leader kicks a member.
-	if err := svc.KickMember(context.Background(), partyID, m1.ID, m2.ID); err != nil {
+	res, err := svc.KickMember(context.Background(), partyID, m1.ID, m2.ID)
+	if err != nil {
 		t.Fatalf("KickMember failed: %v", err)
+	}
+	if res.PartyName != "PartyX" || res.LeaderName != m1.Name {
+		t.Fatalf("unexpected kick result: %+v", res)
 	}
 
 	// 5. The last member leaving deletes the lobby.

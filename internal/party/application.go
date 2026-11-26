@@ -31,6 +31,8 @@ type Service struct {
 	depotRepo            DepotRepository
 	blessingProvider     BlessingProvider
 	timer                TimerService
+	actionWait           ActionWaitWriter
+	clock                func() time.Time
 	rng                  func(n int) int
 }
 
@@ -271,13 +273,22 @@ func (s *Service) LeaveParty(ctx context.Context, partyID, characterID string) e
 	})
 }
 
-// KickMember removes a member from the party (leader only).
-func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) error {
+func (s *Service) now() time.Time {
+	if s.clock != nil {
+		return s.clock().UTC()
+	}
+	return time.Now().UTC()
+}
+
+// KickMember removes a member from the recruiting lobby (leader only) and
+// imposes the legacy 60-second action wait (_skill.cgi:796-837).
+func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) (KickResult, error) {
 	if leaderCharID == targetCharID {
-		return ErrCannotKickSelf
+		return KickResult{}, ErrCannotKickSelf
 	}
 
-	return s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
+	var result KickResult
+	err := s.withLobbyMutation(ctx, partyID, func(txCtx context.Context) error {
 		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
 		if err != nil {
 			return err
@@ -285,12 +296,38 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 		if p.LeaderCharacterID != leaderCharID {
 			return ErrNotPartyLeader
 		}
+		if p.Status != StatusRecruiting {
+			return ErrPartyNotRecruiting
+		}
 
 		// Absent targets are ErrCharacterNotInParty; storage failures propagate.
-		if _, err := s.repo.GetMember(txCtx, partyID, targetCharID); err != nil {
+		target, err := s.repo.GetMember(txCtx, partyID, targetCharID)
+		if err != nil {
+			return err
+		}
+		leader, err := s.repo.GetMember(txCtx, partyID, leaderCharID)
+		if err != nil && !errors.Is(err, ErrCharacterNotInParty) {
 			return err
 		}
 
-		return s.repo.RemoveMember(txCtx, partyID, targetCharID)
+		if err := s.repo.RemoveMember(txCtx, partyID, targetCharID); err != nil {
+			return err
+		}
+		if s.actionWait != nil {
+			if waitErr := s.actionWait.ImposeActionWaitUntil(txCtx, targetCharID, s.now().Add(KickActionWait)); waitErr != nil {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if restoreErr := s.repo.AddMember(cleanupCtx, target); restoreErr != nil {
+					return errors.Join(waitErr, restoreErr)
+				}
+				return waitErr
+			}
+		}
+		result = KickResult{PartyName: p.Name, LeaderName: leader.CharacterName}
+		return nil
 	})
+	if err != nil {
+		return KickResult{}, err
+	}
+	return result, nil
 }

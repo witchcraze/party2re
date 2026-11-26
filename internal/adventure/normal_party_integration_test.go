@@ -121,7 +121,7 @@ func TestNormalRunPartyHandoffAndIndividualExit(t *testing.T) {
 	if err := a.service.LeaveParty(context.Background(), lobby, leader.ID); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
-	if err := a.service.KickMember(context.Background(), lobby, leader.ID, f.actors[1].ID); !errors.Is(err, runhost.ErrBusy) {
+	if _, err := a.service.KickMember(context.Background(), lobby, leader.ID, f.actors[1].ID); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
 	// Simulate an expired live lobby: SQL admission remains sufficient on restart.

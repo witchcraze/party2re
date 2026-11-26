@@ -11,6 +11,30 @@ import (
 // Option configures optional parameters on Service.
 type Option func(*Service)
 
+// ActionWaitWriter extends a kicked member's action wait until an absolute deadline.
+type ActionWaitWriter interface {
+	ImposeActionWaitUntil(ctx context.Context, characterID string, until time.Time) error
+}
+
+// WithActionWait configures the kick wait writer.
+func WithActionWait(writer ActionWaitWriter) Option {
+	return func(s *Service) {
+		s.actionWait = writer
+	}
+}
+
+// SetActionWait configures the kick wait writer after service construction.
+func (s *Service) SetActionWait(writer ActionWaitWriter) {
+	s.actionWait = writer
+}
+
+// WithClock overrides the clock used for action wait deadlines.
+func WithClock(clock func() time.Time) Option {
+	return func(s *Service) {
+		s.clock = clock
+	}
+}
+
 // TimerService manages daily dungeon once locks for party admission.
 type TimerService interface {
 	IsLocked(ctx context.Context, category, targetID string) (bool, error)
