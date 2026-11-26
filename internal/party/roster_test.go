@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 func TestRosterConsent(t *testing.T) {
@@ -151,20 +152,33 @@ func (r *recordingKickWait) ImposeActionWaitUntil(_ context.Context, characterID
 	return nil
 }
 
-type failingRemoveMember struct {
+type kickOrderRepo struct {
 	Repository
-	err error
+	onRemove func() error
+	onAdd    func()
 }
 
-func (r failingRemoveMember) RemoveMember(context.Context, string, string) error {
-	return r.err
+func (r kickOrderRepo) RemoveMember(ctx context.Context, partyID, characterID string) error {
+	if r.onRemove != nil {
+		if err := r.onRemove(); err != nil {
+			return err
+		}
+	}
+	return r.Repository.RemoveMember(ctx, partyID, characterID)
+}
+
+func (r kickOrderRepo) AddMember(ctx context.Context, m Member) error {
+	if r.onAdd != nil {
+		r.onAdd()
+	}
+	return r.Repository.AddMember(ctx, m)
 }
 
 func TestKickMemberActionWaitAndConsistency(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
 
-	t.Run("success imposes 60s wait and returns notice names", func(t *testing.T) {
+	t.Run("success imposes 60s wait before removing member and returns notice names", func(t *testing.T) {
 		waits := &recordingKickWait{}
 		svc, repo, _, _ := setupTestService(t, WithActionWait(waits), WithClock(func() time.Time { return now }))
 		repo.parties["p"] = Party{ID: "p", Name: "冒険の旅", LeaderCharacterID: "leader", Status: StatusRecruiting}
@@ -174,6 +188,16 @@ func TestKickMemberActionWaitAndConsistency(t *testing.T) {
 		}
 		repo.memberParty["leader"] = "p"
 		repo.memberParty["member"] = "p"
+		svc.repo = kickOrderRepo{
+			Repository: repo,
+			onRemove: func() error {
+				if !waits.waits["member"].Equal(now.Add(KickActionWait)) {
+					t.Fatalf("RemoveMember ran before 60s wait was set: %+v", waits.waits)
+				}
+				return nil
+			},
+			onAdd: func() { t.Fatal("AddMember must not be called during KickMember") },
+		}
 
 		res, err := svc.KickMember(ctx, "p", "leader", "member")
 		if err != nil {
@@ -181,9 +205,6 @@ func TestKickMemberActionWaitAndConsistency(t *testing.T) {
 		}
 		if res.PartyName != "冒険の旅" || res.LeaderName != "Leader" {
 			t.Fatalf("KickResult = %+v", res)
-		}
-		if !waits.waits["member"].Equal(now.Add(KickActionWait)) {
-			t.Fatalf("member wait = %v, want %v", waits.waits["member"], now.Add(KickActionWait))
 		}
 		if _, err := repo.GetMember(ctx, "p", "member"); !errors.Is(err, ErrCharacterNotInParty) {
 			t.Fatalf("kicked member still in party: %v", err)
@@ -206,31 +227,44 @@ func TestKickMemberActionWaitAndConsistency(t *testing.T) {
 		}
 	})
 
-	t.Run("wait write failure restores lobby membership", func(t *testing.T) {
+	t.Run("wait write failure leaves lobby intact without remove or compensatory add", func(t *testing.T) {
 		waitErr := errors.New("timer down")
 		waits := &recordingKickWait{err: waitErr}
-		svc, repo, _, _ := setupTestService(t, WithActionWait(waits), WithClock(func() time.Time { return now }))
-		repo.parties["p"] = Party{ID: "p", Name: "Quest", LeaderCharacterID: "leader", Status: StatusRecruiting}
-		joinedAt := now.Add(-time.Minute)
+		svc, repo, charRepo, _ := setupTestService(t, WithActionWait(waits), WithClock(func() time.Time { return now }))
+		charRepo.chars["member"] = corecharacter.Character{ID: "member", Name: "Member", Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
+		repo.parties["p"] = Party{ID: "p", Name: "Quest", LeaderCharacterID: "leader", Status: StatusRecruiting, MaxMembers: 4}
+		repo.parties["p2"] = Party{ID: "p2", Name: "Other", LeaderCharacterID: "other", Status: StatusRecruiting, MaxMembers: 4}
 		repo.members["p"] = map[string]Member{
-			"leader": {PartyID: "p", CharacterID: "leader", CharacterName: "Leader", IsLeader: true, JoinedAt: joinedAt},
-			"member": {PartyID: "p", CharacterID: "member", CharacterName: "Member", JoinedAt: now},
+			"leader": {PartyID: "p", CharacterID: "leader", CharacterName: "Leader", IsLeader: true},
+			"member": {PartyID: "p", CharacterID: "member", CharacterName: "Member"},
+		}
+		repo.members["p2"] = map[string]Member{
+			"other": {PartyID: "p2", CharacterID: "other", CharacterName: "Other", IsLeader: true},
 		}
 		repo.memberParty["leader"] = "p"
 		repo.memberParty["member"] = "p"
+		repo.memberParty["other"] = "p2"
+		svc.repo = kickOrderRepo{
+			Repository: repo,
+			onRemove:   func() error { t.Fatal("RemoveMember must not run when wait write fails"); return nil },
+			onAdd:      func() { t.Fatal("AddMember compensation must not run when wait write fails") },
+		}
 
 		if _, err := svc.KickMember(ctx, "p", "leader", "member"); !errors.Is(err, waitErr) {
 			t.Fatalf("got %v, want %v", err, waitErr)
 		}
-		if m, err := repo.GetMember(ctx, "p", "member"); err != nil || !m.JoinedAt.Equal(joinedAt.Add(time.Minute)) {
-			t.Fatalf("member not restored: %+v err=%v", m, err)
+		if _, err := repo.GetMember(ctx, "p", "member"); err != nil {
+			t.Fatalf("member removed despite wait failure: %v", err)
 		}
-		if _, _, err := repo.GetActivePartyByCharacter(ctx, "member"); err != nil {
-			t.Fatalf("character mapping not restored: %v", err)
+		if p, _, err := repo.GetActivePartyByCharacter(ctx, "member"); err != nil || p.ID != "p" {
+			t.Fatalf("character mapping changed: %+v err=%v", p, err)
+		}
+		if _, err := svc.JoinParty(ctx, "p2", "member", ""); !errors.Is(err, ErrAlreadyInParty) {
+			t.Fatalf("member joined second party after failed kick: %v", err)
 		}
 	})
 
-	t.Run("remove failure skips wait", func(t *testing.T) {
+	t.Run("remove failure keeps target in lobby without double membership", func(t *testing.T) {
 		removeErr := errors.New("lobby write down")
 		waits := &recordingKickWait{}
 		svc, repo, _, _ := setupTestService(t, WithActionWait(waits), WithClock(func() time.Time { return now }))
@@ -239,13 +273,18 @@ func TestKickMemberActionWaitAndConsistency(t *testing.T) {
 			"leader": {PartyID: "p", CharacterID: "leader", CharacterName: "Leader", IsLeader: true},
 			"member": {PartyID: "p", CharacterID: "member", CharacterName: "Member"},
 		}
-		svc.repo = failingRemoveMember{Repository: repo, err: removeErr}
+		repo.memberParty["leader"] = "p"
+		repo.memberParty["member"] = "p"
+		svc.repo = kickOrderRepo{
+			Repository: repo,
+			onRemove:   func() error { return removeErr },
+		}
 
 		if _, err := svc.KickMember(ctx, "p", "leader", "member"); !errors.Is(err, removeErr) {
 			t.Fatalf("got %v, want %v", err, removeErr)
 		}
-		if len(waits.waits) != 0 {
-			t.Fatalf("failed remove imposed wait: %+v", waits.waits)
+		if p, _, err := repo.GetActivePartyByCharacter(ctx, "member"); err != nil || p.ID != "p" {
+			t.Fatalf("character mapping lost on remove failure: %+v err=%v", p, err)
 		}
 	})
 }

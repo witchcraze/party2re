@@ -301,8 +301,7 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 		}
 
 		// Absent targets are ErrCharacterNotInParty; storage failures propagate.
-		target, err := s.repo.GetMember(txCtx, partyID, targetCharID)
-		if err != nil {
+		if _, err := s.repo.GetMember(txCtx, partyID, targetCharID); err != nil {
 			return err
 		}
 		leader, err := s.repo.GetMember(txCtx, partyID, leaderCharID)
@@ -310,18 +309,16 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 			return err
 		}
 
+		// Impose the 60s wait before removing the member (lib/_skill.cgi:815-817),
+		// so a wait write failure never removes the target without a wait or
+		// requires a compensatory AddMember that could overwrite another lobby.
+		if s.actionWait != nil {
+			if err := s.actionWait.ImposeActionWaitUntil(txCtx, targetCharID, s.now().Add(KickActionWait)); err != nil {
+				return err
+			}
+		}
 		if err := s.repo.RemoveMember(txCtx, partyID, targetCharID); err != nil {
 			return err
-		}
-		if s.actionWait != nil {
-			if waitErr := s.actionWait.ImposeActionWaitUntil(txCtx, targetCharID, s.now().Add(KickActionWait)); waitErr != nil {
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if restoreErr := s.repo.AddMember(cleanupCtx, target); restoreErr != nil {
-					return errors.Join(waitErr, restoreErr)
-				}
-				return waitErr
-			}
 		}
 		result = KickResult{PartyName: p.Name, LeaderName: leader.CharacterName}
 		return nil
