@@ -17,45 +17,18 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 	)
 
 	switch rankingType {
-	case RankingTypeMonsterKills:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetMonsterKillsRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeMaoCount:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetMaoCountRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeHeroCount:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetHeroCountRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypePvPVictory:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetPvPVictoryRanking(ctx, 100, 0)
-		data = entries
+	case RankingTypeWeeklyJobChange:
+		return nil // Weekly rotation is the only writer of the finalized weekly snapshot.
 	case RankingTypeJobPopularity:
 		var entries []JobPopularityEntry
 		entries, err = s.repo.GetJobPopularityRanking(ctx)
 		totalCount = len(entries)
 		data = entries
-	case RankingTypeHelper:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetHelperRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeCasinoWins:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetCasinoWinsRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeAlchemy:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetAlchemyRanking(ctx, 100, 0)
-		data = entries
-	case RankingTypeWeeklyJobChange:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetWeeklyJobChangeRanking(ctx, 100, 0)
-		data = entries
 	default:
-		return ErrInvalidRankingType
+		var entries []CharacterRankingEntry
+		entries, err = s.loadBoard(ctx, rankingType)
+		totalCount = len(entries)
+		data = entries
 	}
 
 	if err != nil {
