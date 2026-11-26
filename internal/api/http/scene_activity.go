@@ -14,6 +14,7 @@ type ActivitySceneData struct {
 	Activities []playercontext.Activity       `json:"activities"`
 	Casino     *CasinoRoomSceneData           `json:"casino,omitempty"`
 	Dungeon    *dungeon.ExpeditionObservation `json:"dungeon,omitempty"`
+	Run        *RunSceneData                  `json:"run,omitempty"`
 }
 
 var activitySceneTitles = map[string]string{
@@ -49,6 +50,8 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 			data.Casino, err = h.casinoActivityData(ctx, result, facts[i])
 		case "dungeon":
 			data.Dungeon, err = h.dungeonActivityData(ctx, result, facts[i])
+		case "adventure":
+			data.Run, err = h.runActivityData(ctx, result)
 		}
 		if err != nil {
 			return true, err
@@ -88,7 +91,7 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 			if a.Kind != def.ActivityKind {
 				continue
 			}
-			for _, field := range []string{"room_id", "party_id", "session_id"} {
+			for _, field := range []string{"room_id", "party_id", "session_id", "run_id"} {
 				if slices.Contains(def.RequiredParams, field) {
 					template[field] = a.ID
 				}
@@ -96,8 +99,14 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 			if slices.Contains(def.RequiredParams, "expected_revision") {
 				template["expected_revision"] = a.Revision
 			}
+			if slices.Contains(def.RequiredParams, "version") {
+				template["version"] = a.Revision
+			}
 		}
 		action, err := h.contextAction(ctx, def.ID, template, result)
+		if err == nil {
+			action, err = withEnums(action, data.Run.runInputEnums(def.ID))
+		}
 		if err != nil {
 			return true, err
 		}

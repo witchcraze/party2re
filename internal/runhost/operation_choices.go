@@ -31,6 +31,8 @@ type OperationChoice struct {
 	Kind         OperationKind
 	MPCost       int
 	Gated        bool
+	// Submittable marks an ungated choice Command executes; ObserveRun sets it.
+	Submittable bool
 }
 
 // OperationContext supplies operation-local battle ports. The requester

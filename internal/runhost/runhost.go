@@ -120,6 +120,13 @@ type Command struct {
 	Action   string `json:"action"`
 	TargetID string `json:"target_id"`
 	Input    string `json:"input"`
+	// SecondAction and SecondTargetID type the additional submission of the
+	// legacy `＠A>a ＠B>b` text; FollowUpAction and FollowUpTargetID type the
+	// darkness field's `＠field>＠follow-up target` continuation.
+	SecondAction     string `json:"second_action,omitempty"`
+	SecondTargetID   string `json:"second_target_id,omitempty"`
+	FollowUpAction   string `json:"follow_up_action,omitempty"`
+	FollowUpTargetID string `json:"follow_up_target_id,omitempty"`
 }
 
 // Receipt contains only the executing actor's result, including after exit.
@@ -229,8 +236,10 @@ type Blessings interface {
 }
 
 // JobAssetDepots locks and saves the requesting player's depot inside the
-// ambient Command transaction, after the economy runner's inventory lock.
+// ambient Command transaction, after the economy runner's inventory lock;
+// observation reads it unlocked.
 type JobAssetDepots interface {
+	FindByCharacterID(context.Context, string) (depot.Depot, error)
 	FindByCharacterIDForUpdate(context.Context, string) (depot.Depot, error)
 	Save(context.Context, depot.Depot) error
 }

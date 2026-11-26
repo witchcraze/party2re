@@ -259,6 +259,11 @@ func TestAdminAuth(t *testing.T) {
 	})
 }
 
+// sleepGuardPlaza accepts presence so only the sleep guard decides the outcome.
+type sleepGuardPlaza struct{ apihttp.EventPlazaService }
+
+func (sleepGuardPlaza) RecordPresence(context.Context, string) error { return nil }
+
 func TestGuardSleepingCharacter(t *testing.T) {
 	player := coreplayer.Player{ID: "player-1", Username: "hero"}
 	char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
@@ -281,12 +286,12 @@ func TestGuardSleepingCharacter(t *testing.T) {
 	}
 
 	t.Run("returns true when homes service is nil", func(t *testing.T) {
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{})
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithEventPlaza(sleepGuardPlaza{}))
 		if err != nil {
 			t.Fatalf("failed to create handler: %v", err)
 		}
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/adventures", bytes.NewReader([]byte(`{"character_id":"char-1","stage_id":"stage-1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/eventplaza/presence", bytes.NewReader([]byte(`{"character_id":"char-1"}`)))
 		req.Header.Set("Authorization", "Bearer valid-session")
 		req.Header.Set("Content-Type", "application/json")
 		h.Router().ServeHTTP(rec, req)
@@ -305,12 +310,12 @@ func TestGuardSleepingCharacter(t *testing.T) {
 				}, nil
 			},
 		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithEventPlaza(sleepGuardPlaza{}))
 		if err != nil {
 			t.Fatalf("failed to create handler: %v", err)
 		}
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/adventures", bytes.NewReader([]byte(`{"character_id":"char-1","stage_id":"stage-1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/eventplaza/presence", bytes.NewReader([]byte(`{"character_id":"char-1"}`)))
 		req.Header.Set("Authorization", "Bearer valid-session")
 		req.Header.Set("Content-Type", "application/json")
 		h.Router().ServeHTTP(rec, req)
@@ -330,12 +335,12 @@ func TestGuardSleepingCharacter(t *testing.T) {
 				}, nil
 			},
 		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithEventPlaza(sleepGuardPlaza{}))
 		if err != nil {
 			t.Fatalf("failed to create handler: %v", err)
 		}
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/adventures", bytes.NewReader([]byte(`{"character_id":"char-1","stage_id":"stage-1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/eventplaza/presence", bytes.NewReader([]byte(`{"character_id":"char-1"}`)))
 		req.Header.Set("Authorization", "Bearer valid-session")
 		req.Header.Set("Content-Type", "application/json")
 		h.Router().ServeHTTP(rec, req)
@@ -354,12 +359,12 @@ func TestGuardSleepingCharacter(t *testing.T) {
 				}, nil
 			},
 		}
-		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithEventPlaza(sleepGuardPlaza{}))
 		if err != nil {
 			t.Fatalf("failed to create handler: %v", err)
 		}
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/adventures", bytes.NewReader([]byte(`{"character_id":"char-1","stage_id":"stage-1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/eventplaza/presence", bytes.NewReader([]byte(`{"character_id":"char-1"}`)))
 		req.Header.Set("Authorization", "Bearer valid-session")
 		req.Header.Set("Content-Type", "application/json")
 		h.Router().ServeHTTP(rec, req)

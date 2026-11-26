@@ -361,8 +361,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Event Plaza
 		"handlePostEventPlazaPresence":         "eventplaza.go",
 		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",
-		// Adventure
-		"handleStartAdventure": "handler.go",
 		// Monster
 		"handleBringMonsterToHome":  "monster.go",
 		"handleDepositMonsterToBox": "monster.go",

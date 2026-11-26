@@ -3832,15 +3832,32 @@
               "properties": {
                 "params": {
                   "type": "object",
+                  "additionalProperties": false,
                   "properties": {
                     "stage_id": {
                       "type": "string"
+                    },
+                    "speed": {
+                      "type": "integer",
+                      "enum": [
+                        3,
+                        18,
+                        25
+                      ],
+                      "description": "Per-actor action interval in seconds."
+                    },
+                    "command_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome."
                     }
                   },
                   "required": [
-                    "stage_id"
-                  ],
-                  "additionalProperties": false
+                    "stage_id",
+                    "speed",
+                    "command_id"
+                  ]
                 }
               },
               "required": [
@@ -4690,6 +4707,230 @@
                   },
                   "required": [
                     "party_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "run_operation"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "The observed run version."
+                    },
+                    "command_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome."
+                    },
+                    "operation": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "A submittable operation from the run scene."
+                    },
+                    "target_id": {
+                      "type": "string",
+                      "description": "An encounter actor or box ID; omit for the operation's default."
+                    },
+                    "input": {
+                      "type": "string",
+                      "description": "The operation's argument text, such as a travel destination."
+                    },
+                    "second_operation": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "An additional submission, admitted only under the actor's extended state."
+                    },
+                    "second_target_id": {
+                      "type": "string"
+                    },
+                    "follow_up_operation": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The darkness field's named follow-up command."
+                    },
+                    "follow_up_target_id": {
+                      "type": "string",
+                      "description": "The follow-up's encounter target; omit with an additional submission, whose name the legacy text passes instead."
+                    }
+                  },
+                  "required": [
+                    "run_id",
+                    "version",
+                    "command_id",
+                    "operation"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "run_chest"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "The observed run version."
+                    },
+                    "command_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome."
+                    },
+                    "box_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "run_id",
+                    "version",
+                    "command_id",
+                    "box_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "run_exit"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "The observed run version."
+                    },
+                    "command_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome."
+                    }
+                  },
+                  "required": [
+                    "run_id",
+                    "version",
+                    "command_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "run_recover"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "The observed run version."
+                    },
+                    "command_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "description": "Caller-minted command identity. Resend the same identity and input only to resolve an unknown outcome."
+                    }
+                  },
+                  "required": [
+                    "run_id",
+                    "version",
+                    "command_id"
                   ]
                 }
               },
@@ -9881,6 +10122,9 @@
           },
           "dungeon": {
             "$ref": "#/components/schemas/DungeonExpeditionObservation"
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunSceneData"
           }
         },
         "required": [
@@ -10794,49 +11038,6 @@
         ],
         "type": "object"
       },
-      "PartyMemberRewardSummary": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "drops": {
-            "items": {
-              "$ref": "#/components/schemas/ItemInstance"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "gained_crystals": {
-            "type": "integer"
-          },
-          "gained_exp": {
-            "type": "integer"
-          },
-          "gained_gold": {
-            "type": "integer"
-          },
-          "level_after": {
-            "type": "integer"
-          },
-          "level_before": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "name",
-          "gained_exp",
-          "gained_gold",
-          "level_before",
-          "level_after"
-        ],
-        "type": "object"
-      },
       "ItemInstance": {
         "properties": {
           "DefinitionID": {
@@ -10857,243 +11058,6 @@
           "DefinitionID",
           "Quantity",
           "EnhancementLevel"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PartyAdventureResult": {
-        "properties": {
-          "post_adventure_messages": {
-            "description": "Post-adventure settlement messages keyed by participant character ID. Omitted when no messages exist; present only in the completion response, without persisted history.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "battle_result": {
-            "$ref": "#/components/schemas/BattlePartyBattleResult"
-          },
-          "exit_fatigue": {
-            "type": "integer"
-          },
-          "floors_cleared": {
-            "type": "integer"
-          },
-          "lost_drops": {
-            "additionalProperties": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "array",
-                "null"
-              ]
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "outcome": {
-            "type": "string"
-          },
-          "party_id": {
-            "type": "string"
-          },
-          "rewards": {
-            "items": {
-              "$ref": "#/components/schemas/PartyMemberRewardSummary"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "round": {
-            "type": "integer"
-          },
-          "stage_id": {
-            "type": "string"
-          },
-          "synergy_bonus_percent": {
-            "type": "integer"
-          },
-          "total_crystals": {
-            "type": "integer"
-          },
-          "total_exp": {
-            "type": "integer"
-          },
-          "total_gold": {
-            "type": "integer"
-          },
-          "treasure_boxes": {
-            "items": {
-              "$ref": "#/components/schemas/AdventureTreasureBox"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "turns": {
-            "type": "integer"
-          },
-          "monster_tames": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/BattleMonsterTameResult"
-              }
-            }
-          }
-        },
-        "required": [
-          "party_id",
-          "stage_id",
-          "outcome",
-          "floors_cleared",
-          "turns",
-          "total_exp",
-          "total_gold",
-          "synergy_bonus_percent",
-          "rewards",
-          "battle_result"
-        ],
-        "type": "object"
-      },
-      "BattlePartyBattleResult": {
-        "properties": {
-          "allies_fallen": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "allies_survived": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "banished_ids": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "base_reward": {
-            "$ref": "#/components/schemas/BattleReward"
-          },
-          "bonus_percent": {
-            "type": "integer"
-          },
-          "consumed_items": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/BattleConsumedItem"
-              },
-              "type": [
-                "array",
-                "null"
-              ]
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "final_field": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BattleFieldState"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "logs": {
-            "items": {
-              "$ref": "#/components/schemas/BattleTurnLog"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "outcome": {
-            "type": "string"
-          },
-          "remaining_cmp": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "remaining_hp": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "remaining_mp": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "remaining_status": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "total_reward": {
-            "$ref": "#/components/schemas/BattleReward"
-          },
-          "turns": {
-            "type": "integer"
-          },
-          "winner_side": {
-            "type": "string"
-          },
-          "winner_team": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "outcome",
-          "winner_side",
-          "turns",
-          "base_reward",
-          "bonus_percent",
-          "total_reward",
-          "allies_survived",
-          "allies_fallen",
-          "remaining_hp"
         ],
         "type": "object",
         "additionalProperties": false
@@ -11145,49 +11109,6 @@
         "required": [
           "id",
           "quantity"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "BattleFieldState": {
-        "properties": {
-          "anti_field_turn": {
-            "type": "integer"
-          },
-          "element": {
-            "type": "string"
-          },
-          "remaining_turn": {
-            "type": "integer"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
-      "AdventureTreasureBox": {
-        "properties": {
-          "delivered_to": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "item_id": {
-            "type": "string"
-          },
-          "item_name": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "opened_by": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
         ],
         "type": "object",
         "additionalProperties": false
@@ -11282,67 +11203,6 @@
           "expires_at"
         ],
         "type": "object"
-      },
-      "AdventureResponse": {
-        "properties": {
-          "post_adventure_messages": {
-            "description": "Post-adventure settlement messages keyed by participant character ID. Omitted when no messages exist; present only in the completion response, without persisted history.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "experience_reward": {
-            "type": "integer"
-          },
-          "floors_cleared": {
-            "type": "integer"
-          },
-          "id": {
-            "type": "string"
-          },
-          "is_cleared": {
-            "type": "boolean"
-          },
-          "party_size": {
-            "type": "integer"
-          },
-          "resolved": {
-            "type": "boolean"
-          },
-          "stage_id": {
-            "type": "string"
-          },
-          "started_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "monster_tames": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/BattleMonsterTameResult"
-              }
-            }
-          }
-        },
-        "required": [
-          "id",
-          "character_id",
-          "stage_id",
-          "started_at",
-          "floors_cleared",
-          "is_cleared",
-          "party_size",
-          "resolved",
-          "experience_reward"
-        ],
-        "type": "object",
-        "additionalProperties": false
       },
       "AdventureChronicle": {
         "properties": {
@@ -18611,38 +18471,6 @@
         ],
         "additionalProperties": false
       },
-      "BattleMonsterTameResult": {
-        "type": "object",
-        "properties": {
-          "monster_id": {
-            "type": "string"
-          },
-          "monster_name": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "box_full": {
-            "type": "boolean"
-          },
-          "tamer_name": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "monster_id",
-          "monster_name",
-          "success",
-          "box_full",
-          "tamer_name",
-          "message"
-        ],
-        "additionalProperties": false
-      },
       "DungeonMonster": {
         "type": "object",
         "properties": {
@@ -18741,6 +18569,222 @@
           "total_clears",
           "unlocks",
           "newly_unlocked"
+        ]
+      },
+      "RunEarnings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "experience": {
+            "type": "integer"
+          },
+          "gold": {
+            "type": "integer"
+          },
+          "crystals": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "experience",
+          "gold",
+          "crystals"
+        ]
+      },
+      "RunSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The actor's owned run observation. Other members expose only battle facts; the recipient ledger is the actor's own.",
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "leader_id": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "ready_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the actor's action interval elapses (server clock)."
+          },
+          "idle_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the room becomes due for idle cleanup."
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "team_id": {
+                  "type": "string"
+                },
+                "hp": {
+                  "type": "integer"
+                },
+                "max_hp": {
+                  "type": "integer"
+                },
+                "mp": {
+                  "type": "integer"
+                },
+                "max_mp": {
+                  "type": "integer"
+                },
+                "npc": {
+                  "type": "boolean"
+                },
+                "enemy": {
+                  "type": "boolean"
+                },
+                "leader": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "team_id",
+                "hp",
+                "max_hp",
+                "mp",
+                "max_mp",
+                "npc",
+                "enemy",
+                "leader"
+              ]
+            }
+          },
+          "boxes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "opened_by": {
+                  "type": "string"
+                },
+                "item_name": {
+                  "type": "string"
+                },
+                "defeated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "defeated"
+              ]
+            }
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "operation": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "battle",
+                    "room",
+                    "comment",
+                    "whisper",
+                    "screenshot"
+                  ]
+                },
+                "mp_cost": {
+                  "type": "integer"
+                },
+                "submittable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "operation",
+                "name",
+                "kind",
+                "mp_cost",
+                "submittable"
+              ]
+            }
+          },
+          "recipient": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pending": {
+                "$ref": "#/components/schemas/RunEarnings"
+              },
+              "conditional": {
+                "$ref": "#/components/schemas/RunEarnings"
+              },
+              "applied": {
+                "$ref": "#/components/schemas/RunEarnings"
+              },
+              "inspected": {
+                "type": "integer"
+              },
+              "penalty_until": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "pending",
+              "conditional",
+              "applied",
+              "inspected"
+            ]
+          }
+        },
+        "required": [
+          "run_id",
+          "version",
+          "round",
+          "leader_id",
+          "speed",
+          "ready_at",
+          "idle_at",
+          "server_time",
+          "actors",
+          "boxes",
+          "operations",
+          "recipient"
         ]
       }
     },

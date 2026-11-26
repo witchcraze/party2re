@@ -82,7 +82,7 @@ func navigationRouter(t *testing.T, f *gatewayFixture, store *gatewayNavigationS
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := NewHandler(f, f, &struct{ AdventureService }{}, navigationShopService{}, WithPlayerContext(service), func(h *Handler) { h.homes, h.bank = f, bankService })
+	h, err := NewHandler(f, f, &struct{ AdventureService }{}, navigationShopService{}, WithNormalRuns(&runStub{t: t}), WithPlayerContext(service), func(h *Handler) { h.homes, h.bank = f, bankService })
 	if err != nil {
 		t.Fatal(err)
 	}

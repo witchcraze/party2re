@@ -19,6 +19,11 @@ var continuationCatalog = []ActionDefinition{
 	{ID: "dungeon_escape", Label: "探索から脱出する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{}, ActivityKind: "dungeon", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "challenge_advance", Label: "試練を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"session_id"}, ActivityKind: "challenge", WaitExempt: WaitActivityPacing},
 	{ID: "challenge_retire", Label: "試練から退出する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"session_id", "expected_revision"}, ActivityKind: "challenge", WaitExempt: WaitActivityPacing, Recovery: true},
+	// Run commands are mode-neutral; their eligibility comes from the run's owned observation.
+	{ID: "run_operation", Label: "行動する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"run_id", "version", "command_id", "operation"}, ActivityKind: "adventure", WaitExempt: WaitActivityPacing},
+	{ID: "run_chest", Label: "宝箱をしらべる", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"run_id", "version", "command_id", "box_id"}, ActivityKind: "adventure", WaitExempt: WaitActivityPacing},
+	{ID: "run_exit", Label: "にげる", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"run_id", "version", "command_id"}, ActivityKind: "adventure", WaitExempt: WaitActivityPacing, Recovery: true},
+	{ID: "run_recover", Label: "放置された冒険を片付ける", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"run_id", "version", "command_id"}, ActivityKind: "adventure", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "casino_room_start", Label: "ゲームを始める", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "casino", WaitExempt: WaitActivityPacing},
 	{ID: "casino_room_leave", Label: "カジノ部屋を離れる", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "casino", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "casino_room_action", Label: "ゲームの行動を選ぶ", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "action"}, ActivityKind: "casino", WaitExempt: WaitActivityPacing},

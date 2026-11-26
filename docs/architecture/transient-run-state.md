@@ -452,8 +452,7 @@ then `pvp_room_transitions`, then characters), moving the bet escrow into the
 run. Room deletion and claim release follow the commit, as in
 [PvP financial publication](#pvp-financial-publication). A room without an
 encounter sets `Teams`, so each combat frame treats every other color as the
-enemy. Production starts
-retain batch execution until the Gateway cutover (#1330). Neither this service nor Candidate
+enemy. Neither this service nor Candidate
 D's loss limitations certify combat effects whose ports remain whole-action gates.
 Gameplay evidence remains in [Adventure](../design/adventure.md#resumable-normal-run-transitions)
 and shared effect state in [Battle](../design/battle.md#explicit-action-resumption-requirements).

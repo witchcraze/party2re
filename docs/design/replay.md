@@ -233,7 +233,7 @@ The native receipt must retain the committed outcome independently of publicatio
 
 ## Current state and remaining gaps
 
-- The scene and latest-slot storage boundary exists, but no production producer calls it; production starts still use the batch crawl. The Gateway cutover (#1330) is the prerequisite for real operation facts, and solo/party capture adoption is #1826, which must reflect actual removal after exit.
+- The scene and latest-slot storage boundary exists, but no production producer calls it. Normal runs now execute each operation on the run host; solo/party capture adoption is #1826, which must reflect actual removal after exit.
 - The older `battle_replays` raw-stat/turn-log records have no safe public display payload. Only rows explicitly classified as a personal archive with a recipient are readable, by that recipient's owner. Detail denies everything else, and the recent feed is empty regardless of login. A visibility flag alone must never enable public display.
 - **Decision:** historical rows stay unavailable unless independent, trustworthy archive-copy evidence establishes their recipient; ownership is never guessed from combat headers or current membership.
 - **Deployment:** guarded readers must replace every old reader before any classified producer is enabled. Old readers still expose data, so use a maintenance window or disable Replay routing during a rolling deployment.

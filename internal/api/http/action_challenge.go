@@ -40,7 +40,7 @@ func challengeRetireCommand(exits challengeExitService) Option {
 			return response, nil
 		}, challengeActionRejection)(h)
 		command := h.actionCommands["challenge_retire"]
-		command.replay = func(ctx context.Context, actor string, raw json.RawMessage) (bool, error) {
+		command.replay = func(ctx context.Context, _, actor string, raw json.RawMessage) (bool, error) {
 			var p advanceChallengeRequest
 			if err := json.Unmarshal(raw, &p); err != nil {
 				return false, err

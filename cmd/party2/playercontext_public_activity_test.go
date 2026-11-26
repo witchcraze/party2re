@@ -26,7 +26,7 @@ func (f publicNormalActivity) HasActiveRun(_ context.Context, actor string) (boo
 	return f.active, f.err
 }
 
-func (f publicNormalActivity) GetActorRun(context.Context, string, string) (*runhost.ActorRun, error) {
+func (f publicNormalActivity) ObserveRun(context.Context, string, string) (*runhost.Observation, error) {
 	panic("public inspection must not read the owned run")
 }
 

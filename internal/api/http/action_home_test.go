@@ -138,7 +138,7 @@ func (r homeGatewayRepository) GetHome(ctx context.Context, id string) (home.Cha
 }
 
 func (f *homeGatewayFixture) router(timers playercontext.TimerReader, options ...Option) http.Handler {
-	options = append([]Option{WithHome(f), WithPlayerContext(playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers))}, options...)
+	options = append([]Option{WithHome(f), WithNormalRuns(&runStub{t: f.t}), WithPlayerContext(playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers))}, options...)
 	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, options...)
 	if err != nil {
 		f.t.Fatal(err)
@@ -198,7 +198,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 				params = `,"params":{"amount":1}`
 			}
 			if action == "adventure_start" {
-				params = `,"params":{"stage_id":"stage-00"}`
+				params = `,"params":{"stage_id":"stage-00","speed":18,"command_id":"k"}`
 			}
 			status, got = f.request(router, action, params)
 			if status != 409 || f.executions != before || f.updates != 1 || f.char.Stats.HP != 10 || f.char.Stats.MP != 5 || f.char.Tired != 80 {

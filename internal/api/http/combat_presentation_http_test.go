@@ -14,7 +14,6 @@ import (
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/gvg"
-	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/replay"
 )
@@ -22,7 +21,6 @@ import (
 func TestCombatPresentationHTTPPaths(t *testing.T) {
 	logs := []corebattle.TurnLog{{Turn: 1, Kind: "damage", ActorID: "c1", ActorName: "Hero", TargetID: "enemy", TargetName: "Slime", ActionName: "攻撃", DamageDealt: 12, RemainingHP: map[string]int{"c1": 100, "enemy": 0}}}
 	solo := corebattle.Result{Outcome: corebattle.OutcomeWin, Logs: logs}
-	group := corebattle.PartyBattleResult{Outcome: corebattle.OutcomeWin, Logs: logs}
 	dungeonResult := dungeon.ExpeditionStepResult{EventType: dungeon.EventBattle, Monsters: []dungeon.DungeonMonster{{Name: "Slime", ExpReward: 2, GoldReward: 3}}, CombatOutcome: corebattle.OutcomeWin, BattleResult: &solo}
 	moveResult := dungeonResult
 	moveResult.EventType = dungeon.EventBoss
@@ -43,13 +41,12 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 	gs := &stubGvGService{advanceRoundFn: func(context.Context, string, string, int) (gvg.RoundResolution, error) {
 		return gvg.RoundResolution{BattleLog: logs}, nil
 	}}
-	partyService := &stubPartyService{advRes: party.PartyAdventureResult{BattleResult: group}}
 	rs := &stubReplayService{getReplayFn: func(context.Context, string, string) (*replay.BattleReplay, error) {
 		return &replay.BattleReplay{TurnLogs: json.RawMessage(replay.EncodeJSON(logs))}, nil
 	}}
 	h := newTestHandler(t, &stubPlayerService{authenticateFn: alwaysAuthPlayer(coreplayer.Player{ID: "p1"})}, &stubCharacterService{getFn: func(context.Context, string) (corecharacter.Character, error) {
 		return corecharacter.Character{ID: "c1", PlayerID: "p1"}, nil
-	}}, &stubAdventureService{}, &stubShopService{}, apihttp.WithDungeon(ds), apihttp.WithChallenge(cs), apihttp.WithPvP(ps), apihttp.WithGvG(gs), apihttp.WithParty(partyService), apihttp.WithReplay(rs))
+	}}, &stubAdventureService{}, &stubShopService{}, apihttp.WithDungeon(ds), apihttp.WithChallenge(cs), apihttp.WithPvP(ps), apihttp.WithGvG(gs), apihttp.WithReplay(rs))
 	for _, tc := range []struct {
 		name, path, body string
 		keys             []string
@@ -60,7 +57,6 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 		{"challenge", "/characters/c1/challenges/advance", `{"session_id":"run","expected_revision":1}`, []string{"round_result", "battle_result", "logs"}},
 		{"pvp", "/characters/c1/pvp/rooms/room/advance", "", []string{"battle_log"}},
 		{"gvg", "/characters/c1/gvg/rooms/room/advance", `{"expected_round":1}`, []string{"battle_log"}},
-		{"party", "/parties/team/start", `{"character_id":"c1"}`, []string{"battle_result", "logs"}},
 		{"replay", "/replays/saved", "", []string{"turn_logs"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
