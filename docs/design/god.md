@@ -4,7 +4,7 @@ The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wis
 
 ## Visit
 
-- Using the reins from either Home source records the realm on the character (`god_visit`, the legacy `$m{lib}`) and consumes one in the same transaction. A wish is granted in the recorded realm, and granting clears the visit in the wish's transaction. A rejected or joke wish (`wish_lover`) mutates nothing and the visit continues.
+- Using the reins from either Home source records the realm on the character (`god_visit`, the legacy `$m{lib}`) and consumes one in the same transaction. A wish is granted in the recorded realm, and granting clears the visit in the wish's transaction. A rejected wish, or one the god refuses (legacy `$mes`: `wish_lover`, `wish_stats` while limit-broken, `wish_celestial_dragon` for a celestial dragon, an Underworld wish at tier 5), mutates nothing and the visit continues. A guild wish outside a guild is granted with no effect (`god.cgi:38,46`).
 - **Decision:** reins used while a visit is recorded have no effect and are kept. Legacy cannot reach this because items are used only at Home.
 - The visit is the character's place, as legacy reins set `$m{lib}` (`_data.cgi:961,2074`): while it is recorded, context shows the realm's scene whatever the saved selection says. Legacy `＠いどう`/`＠まち`/`＠ほーむ` replace `$m{lib}` (`system.cgi:266–330,416–421`), so any navigation that leaves the scene forfeits the visit. **Decision:** a granted wish returns to the saved selection instead of forcing Home (`god.cgi:176`); the reins are used at own Home, which is normally that selection.
 - Both realms share the god's `@words` line and grant reply (`u_god.cgi:39–41,66`). The Underworld god's `＠しらべる` prints nothing.
@@ -19,7 +19,5 @@ The God system (`internal/god`, legacy `god.cgi` and `u_god.cgi`) grants one wis
 - **Pitfall:** the legacy wish path checks job completion as exactly `$#jobs − 1` (86) mastered jobs against the flag shared with the normal 72-job check, so it practically never fires. **Decision:** the wish does not evaluate completion; the next normal departure does, using the 72-job rule.
 
 ## Underworld wishes
-
-Each Underworld wish raises one of `OverDepot`, `OverMonster`, `OverFuture`, `OverFlea` or `OverStore` by one tier up to 5; the capacity each tier adds is owned by the affected feature.
 
 **Pitfall:** `u_god.cgi:81–190` copies the job-change and mastery routines from `job_change.cgi`, but no Underworld wish calls them.

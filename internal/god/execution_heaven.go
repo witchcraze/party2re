@@ -20,12 +20,12 @@ func (s *Service) executeHeavenWish(
 ) error {
 	var wishName string
 	var desc string
-	var msg string
 
 	switch wishID {
 	case WishStats:
 		if char.OverLevel {
-			return fmt.Errorf("%w: それは無理な願いだ…。私の力ではこれ以上そなたを強くできんのだ…", ErrWishRequirement)
+			refuse(char, catalogWish(buildHeavenWishes(*char, false), wishID), res)
+			return nil
 		}
 		wishName = "強くなりたい"
 		desc = "全ステータス 40 アップ"
@@ -34,7 +34,6 @@ func (s *Service) executeHeavenWish(
 		char.Stats.Attack += 40
 		char.Stats.Defense += 40
 		char.Stats.Agility += 40
-		msg = "全ステータスが 40 上昇しました！"
 
 	case WishSP:
 		wishName = "スキルを覚えたい"
@@ -42,7 +41,6 @@ func (s *Service) executeHeavenWish(
 		if err := char.AddSP(50); err != nil {
 			return err
 		}
-		msg = "スキルポイントが 50 増加しました！"
 
 	case WishMoney:
 		wishName = "お金がほしい"
@@ -50,7 +48,6 @@ func (s *Service) executeHeavenWish(
 		if err := char.AddMoney(100000); err != nil {
 			return err
 		}
-		msg = "100,000 G を獲得しました！"
 
 	case WishCasinoCoins:
 		wishName = "カジノコインがほしい"
@@ -60,7 +57,6 @@ func (s *Service) executeHeavenWish(
 				return err
 			}
 		}
-		msg = "カジノコイン 50,000 枚を獲得しました！"
 
 	case WishSmallMedals:
 		wishName = "小さなメダルがほしい"
@@ -68,7 +64,6 @@ func (s *Service) executeHeavenWish(
 		if err := char.AddSmallMedals(20); err != nil {
 			return err
 		}
-		msg = "小さなメダル 20 枚を獲得しました！"
 
 	case WishLotteryTickets:
 		wishName = "福引券がほしい"
@@ -78,7 +73,6 @@ func (s *Service) executeHeavenWish(
 				return err
 			}
 		}
-		msg = "福引券 1,000 枚を獲得しました！"
 
 	case WishGuildRank:
 		wishName = "ギルドランクをあげたい"
@@ -86,17 +80,14 @@ func (s *Service) executeHeavenWish(
 		if s.guilds == nil {
 			return ErrWishRequirement
 		}
+		// Outside a guild the wish is granted with no effect (god.cgi:38).
 		g, _, err := s.guilds.GetByCharacter(ctx, char.ID)
-		if errors.Is(err, guild.ErrCharacterNotInGuild) {
-			return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
+		if err == nil {
+			err = s.guilds.AddPoints(ctx, g.ID, 1000)
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, guild.ErrCharacterNotInGuild) {
 			return err
 		}
-		if err := s.guilds.AddPoints(ctx, g.ID, 1000); err != nil {
-			return err
-		}
-		msg = "所属ギルドに 1,000 ポイントが加算されました！"
 
 	case WishGuildGorgeous:
 		wishName = "ギルドをゴージャスにしたい"
@@ -104,31 +95,26 @@ func (s *Service) executeHeavenWish(
 		if s.guilds == nil {
 			return ErrWishRequirement
 		}
-		if err := s.guilds.MakeGorgeous(ctx, char.ID); err != nil {
-			if errors.Is(err, guild.ErrCharacterNotInGuild) {
-				return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
-			}
-			return err
+		if err := s.guilds.MakeGorgeous(ctx, char.ID); err != nil && !errors.Is(err, guild.ErrCharacterNotInGuild) {
+			return err // outside a guild: granted with no effect (god.cgi:46)
 		}
-		msg = "ギルドが神々しい佇まいに生まれ変わりました！"
 
 	case WishRefresh:
 		wishName = "元気いっぱいになりたい"
 		desc = "疲労度 -150 %"
 		char.ReduceTired(150)
-		msg = "疲労度が 150% 回復しました！"
 
 	case WishAllOrbs:
 		wishName = "新しい冒険場所に行きたい"
 		desc = "全オーブ"
 		char.SetAllOrbs()
-		msg = "すべてのオーブを獲得しました！"
 
 	case WishCelestialDragon:
 		wishName = "天竜人になりたい"
 		desc = "転職 (空竜の民)"
 		if char.JobID == "job-70" || char.OldJobID == "job-70" || char.JobID == "70" || char.OldJobID == "70" {
-			return fmt.Errorf("%w: すでに天竜人です", ErrWishRequirement)
+			refuse(char, catalogWish(buildHeavenWishes(*char, false), wishID), res)
+			return nil
 		}
 		if s.jobs == nil {
 			return ErrNilDependency
@@ -138,7 +124,6 @@ func (s *Service) executeHeavenWish(
 			return err
 		}
 		char.OverLevel = wasOverLevel
-		msg = "空竜の民 (天竜人) へ転職しました！"
 
 	case WishGodOfNewWorld:
 		wishName = "新世界の神になりたい"
@@ -153,7 +138,6 @@ func (s *Service) executeHeavenWish(
 				return err
 			}
 		}
-		msg = "新世界の神の姿と神殿のような住処を手に入れました！"
 
 	case WishOrtega:
 		wishName = "オルテガを生き返らして"
@@ -169,7 +153,6 @@ func (s *Service) executeHeavenWish(
 				return err
 			}
 		}
-		msg = "父オルテガが自宅に帰還しました！"
 
 	case WishCat:
 		wishName = "猫を飼いたい"
@@ -191,7 +174,6 @@ func (s *Service) executeHeavenWish(
 				return err
 			}
 		}
-		msg = fmt.Sprintf("自宅に可愛い%sがやってきました！", catName)
 
 	case WishEroticBook:
 		wishName = "エッチな本がほしい"
@@ -217,7 +199,6 @@ func (s *Service) executeHeavenWish(
 		if err := s.depots.Save(ctx, dep); err != nil {
 			return err
 		}
-		msg = "「エッチな本」を預かり所に送致しました！"
 
 	case WishAlchemyRecipe:
 		wishName = "錬金レシピがほしい"
@@ -247,21 +228,9 @@ func (s *Service) executeHeavenWish(
 		if err := s.depots.Save(ctx, dep); err != nil {
 			return err
 		}
-		msg = "錬金レシピを預かり所に送致しました！"
 
 	case WishLover:
-		char.GodVisit = string(RealmHeaven) // refused: the visit continues
-		*res = WishResult{
-			Character: *char,
-			Wish: Wish{
-				ID:          WishLover,
-				Name:        "素敵な恋人がほしい",
-				Realm:       RealmHeaven,
-				Description: "恋人が…？",
-				Available:   true,
-			},
-			Message: "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…",
-		}
+		refuse(char, catalogWish(buildHeavenWishes(*char, false), wishID), res)
 		return nil
 
 	case WishLimitBreakLevel:
@@ -271,7 +240,6 @@ func (s *Service) executeHeavenWish(
 		wishName = "もっと強くなりたい"
 		desc = "Lv上限を上げる"
 		char.OverLevel = true
-		msg = "レベル上限が150へ限界突破しました！"
 
 	case WishRestoreLevelLimit:
 		if !char.OverLevel {
@@ -280,7 +248,6 @@ func (s *Service) executeHeavenWish(
 		wishName = "もとの強さに戻りたい"
 		desc = "Lv上限を元に戻す"
 		char.OverLevel = false
-		msg = "レベル上限を通常(99)に戻しました。"
 
 	default:
 		return ErrWishNotFound
@@ -301,7 +268,6 @@ func (s *Service) executeHeavenWish(
 			Description: desc,
 			Available:   true,
 		},
-		Message: msg,
 	}
 	return nil
 }

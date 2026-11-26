@@ -42,19 +42,19 @@ func (f *faithGatewayFixture) GetStatus(_ context.Context, actor string) (altar.
 func (f *faithGatewayFixture) Pray(ctx context.Context, actor string) (altar.PrayResult, error) {
 	f.inputs = []any{}
 	_, err := f.execute(ctx, actor, 0)
-	return altar.PrayResult{CharacterID: actor, Message: altar.MsgRamiaAwakening, RamiaAwakened: true}, err
+	return altar.PrayResult{CharacterID: actor, RamiaAwakened: true}, err
 }
 
 func (f *faithGatewayFixture) Wish(ctx context.Context, actor, itemID string) (altar.WishResult, error) {
 	f.inputs = []any{itemID}
 	_, err := f.execute(ctx, actor, 0)
-	return altar.WishResult{CharacterID: actor, ItemID: itemID, DeliveredTo: "depot"}, err
+	return altar.WishResult{CharacterID: actor, CharacterName: "Hero", ItemID: itemID, ItemName: "真実の鏡", DeliveredTo: "depot"}, err
 }
 
 func (f *faithGatewayFixture) Exchange(ctx context.Context, req wishingwell.ExchangeRequest) (wishingwell.ExchangeResult, error) {
 	f.inputs = []any{req.CharacterID, req.Stat, req.SP}
 	_, err := f.execute(ctx, req.CharacterID, 0)
-	return wishingwell.ExchangeResult{CharacterID: req.CharacterID, StatIncrease: 6}, err
+	return wishingwell.ExchangeResult{CharacterID: req.CharacterID, StatName: "ＨＰ", SPConsumed: req.SP, StatIncrease: 6}, err
 }
 
 func (f *faithGatewayFixture) router(t *testing.T, destination string, options ...Option) (*gatewayNavigationStore, http.Handler) {
@@ -120,6 +120,31 @@ func TestFaithGatewayForwardsExplicitInputs(t *testing.T) {
 	}
 }
 
+func TestFaithGatewayReplies(t *testing.T) {
+	want := map[string]string{
+		"altar_pray":           "時は来たれり。今こそ目覚める時。大空はお前のもの。舞い上がれ空高く！",
+		"altar_wish":           "真実の鏡 をHeroの預かり所に送っておきました。冒険中に使うことで未知の世界へと行くことができるでしょう",
+		"wishingwell_exchange": "SP 3 のかわりに ＨＰ を 6 あたえましょう",
+	}
+	for _, input := range faithInputs {
+		t.Run(input.action, func(t *testing.T) {
+			f := newFaithFixture(t)
+			_, router := f.router(t, input.scene)
+			status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody(input.action, input.params), nil)
+			var result struct {
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal(got["result"], &result); err != nil || status != 200 || result.Message != want[input.action] {
+				t.Fatalf("reply: %d %s %v", status, got, err)
+			}
+		})
+	}
+	inventory := altarWishReply(altar.WishResult{CharacterName: "Hero", ItemName: "宝の地図", DeliveredTo: "inventory"}).Message
+	if inventory != "宝の地図 ですね。冒険中に使うことで未知の世界へと行くことができるでしょう" {
+		t.Fatalf("inventory reply %q", inventory)
+	}
+}
+
 func TestFaithGatewayErrors(t *testing.T) {
 	for _, tc := range []struct {
 		action  string
@@ -128,7 +153,7 @@ func TestFaithGatewayErrors(t *testing.T) {
 		status  int
 		message string
 	}{
-		{"altar_pray", altar.ErrInsufficientOrbs, "ALTAR_INSUFFICIENT_ORBS", 400, ""},
+		{"altar_pray", altar.ErrInsufficientOrbs, "ALTAR_INSUFFICIENT_ORBS", 400, "オーブが足りません。オーブが足りません。オーブを６つ集めてください"},
 		{"altar_pray", altar.ErrRamiaAwakened, "ALTAR_RAMIA_AWAKENED", 409, "The phoenix is already awakened."},
 		{"altar_wish", altar.ErrRamiaNotAwakened, "ALTAR_RAMIA_NOT_AWAKENED", 409, "The phoenix is not awakened."},
 		{"altar_wish", altar.ErrInvalidWishItem, "ALTAR_INVALID_WISH_ITEM", 400, ""},
@@ -288,7 +313,7 @@ func TestMikoWordsFollowOrbState(t *testing.T) {
 	if !slices.Contains(mikoGuardingWords, "伝説の不死鳥はよみがえりましょう") {
 		t.Fatalf("expected clean-room phoenix line in %v", mikoGuardingWords)
 	}
-	for _, line := range slices.Concat([]string{altar.RamiaMemberName, altar.MsgRamiaAwakening}, mikoGuardingWords, mikoReadyWords, mikoAwakenedWords) {
+	for _, line := range slices.Concat([]string{altar.RamiaMemberName, altarAwakeningReply}, mikoGuardingWords, mikoReadyWords, mikoAwakenedWords) {
 		if strings.Contains(line, "ラーミァ") || strings.Contains(line, "ラーミア") {
 			t.Fatalf("legacy phoenix name remained in altar text: %q", line)
 		}

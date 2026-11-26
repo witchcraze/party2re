@@ -334,10 +334,9 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 		t.Error("expected OverLevel to be true")
 	}
 
-	// 6. Stats wish fails when OverLevel
-	_, err = svc.GrantWish(ctx, "char_hero", "wish_stats")
-	if !errors.Is(err, god.ErrWishRequirement) {
-		t.Errorf("expected ErrWishRequirement for stats wish when OverLevel, got %v", err)
+	// 6. Stats wish is refused when OverLevel
+	if res, err := svc.GrantWish(ctx, "char_hero", "wish_stats"); err != nil || !res.Refused {
+		t.Errorf("expected refused stats wish when OverLevel, got %+v %v", res, err)
 	}
 
 	// 7. Restore level limit
@@ -354,8 +353,8 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GrantWish lover failed: %v", err)
 	}
-	if resLover.Message == "" {
-		t.Error("expected joke response message")
+	if resLover.Wish.ID != god.WishLover {
+		t.Errorf("expected the lover wish outcome, got %+v", resLover.Wish)
 	}
 
 }
@@ -395,10 +394,14 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 		}
 	}
 
-	// 6th time -> fails (maxed)
-	_, err = svc.GrantWish(ctx, "char_underworld", "wish_expand_depot")
-	if !errors.Is(err, god.ErrLimitBreakMaxed) {
-		t.Errorf("expected ErrLimitBreakMaxed on 6th expand, got %v", err)
+	// 6th time -> refused (maxed): nothing changes and the visit continues
+	before := charRepo.characters["char_underworld"]
+	resMax, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_depot")
+	if err != nil || !resMax.Refused || resMax.Wish.ID != god.WishExpandDepot || resMax.Character.OverDepot != 5 {
+		t.Errorf("expected refused 6th expand, got %+v %v", resMax, err)
+	}
+	if after := charRepo.characters["char_underworld"]; after.OverDepot != 5 || after.GodVisit != before.GodVisit {
+		t.Errorf("refused expand changed the character: %+v", after)
 	}
 
 	// 2. Expand flea market
@@ -420,9 +423,6 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 	}
 	if resMon.Wish.Description != "モンスター預入上限アップ (+50枠)" {
 		t.Errorf("expected description 'モンスター預入上限アップ (+50枠)', got %q", resMon.Wish.Description)
-	}
-	if resMon.Message != "モンスター預入上限が +50 拡張されました！ (段階: 1/5)" {
-		t.Errorf("expected message 'モンスター預入上限が +50 拡張されました！ (段階: 1/5)', got %q", resMon.Message)
 	}
 
 	// 4. Expand job memory

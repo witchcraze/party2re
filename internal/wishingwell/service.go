@@ -69,7 +69,6 @@ func (s *Service) Exchange(ctx context.Context, req ExchangeRequest) (ExchangeRe
 			SPConsumed:   req.SP,
 			StatIncrease: increase,
 			RemainingSP:  char.SP,
-			Message:      FormatExchangeMessage(req.SP, statName, increase),
 			Character:    char,
 		}
 		return nil

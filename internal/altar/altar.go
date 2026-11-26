@@ -27,17 +27,9 @@ const (
 
 )
 
-// Legacy dialogue & messages from reborn.cgi
-const (
-	MsgOrbsInsufficient = "オーブが足りません。オーブが足りません。オーブを６つ集めてください"
-	MsgRamiaAwakening   = "時は来たれり。今こそ目覚める時。大空はお前のもの。舞い上がれ空高く！"
-	MsgWishInventoryFmt = "%s ですね。冒険中に使うことで未知の世界へと行くことができるでしょう"
-	MsgWishDepotFmt     = "%s を%sの預かり所に送っておきました。冒険中に使うことで未知の世界へと行くことができるでしょう"
-)
-
 var (
 	ErrCharacterNotFound = errors.New("character not found")
-	ErrInsufficientOrbs  = errors.New(MsgOrbsInsufficient)
+	ErrInsufficientOrbs  = errors.New("all six orbs are required to pray")
 	ErrRamiaNotAwakened  = errors.New("Ramia is not awakened; cannot make a wish")
 	ErrInvalidWishItem   = errors.New("invalid travel item chosen for wish")
 	ErrRamiaAwakened     = errors.New("Ramia is already awakened; make a wish instead")
@@ -97,17 +89,16 @@ type WishItemInfo struct {
 
 type PrayResult struct {
 	CharacterID   string    `json:"character_id"`
-	Message       string    `json:"message"`
 	RamiaAwakened bool      `json:"ramia_awakened"`
 	ExpiresAt     time.Time `json:"expires_at"`
 }
 
 type WishResult struct {
-	CharacterID string `json:"character_id"`
-	ItemID      string `json:"item_id"`
-	ItemName    string `json:"item_name"`
-	DeliveredTo string `json:"delivered_to"` // "inventory" or "depot"
-	Message     string `json:"message"`
+	CharacterID   string `json:"character_id"`
+	CharacterName string `json:"-"` // for the depot reply
+	ItemID        string `json:"item_id"`
+	ItemName      string `json:"item_name"`
+	DeliveredTo   string `json:"delivered_to"` // "inventory" or "depot"
 }
 
 type CharacterRepository interface {

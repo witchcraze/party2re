@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/witchcraze/party2re/internal/altar"
@@ -45,6 +46,40 @@ type WishingWellSceneData struct {
 	wishingwell.WishingWellStatus
 }
 
+// AltarPrayResult, AltarWishResult and WishingWellExchangeResult add the
+// speaker's reply (reborn.cgi ＠いのる/＠ねがう, sp_change.cgi $npc_com).
+type AltarPrayResult struct {
+	altar.PrayResult
+	Message string `json:"message"`
+}
+
+type AltarWishResult struct {
+	altar.WishResult
+	Message string `json:"message"`
+}
+
+type WishingWellExchangeResult struct {
+	wishingwell.ExchangeResult
+	Message string `json:"message"`
+}
+
+const (
+	altarOrbsInsufficientReply = "オーブが足りません。オーブが足りません。オーブを６つ集めてください"
+	altarAwakeningReply        = "時は来たれり。今こそ目覚める時。大空はお前のもの。舞い上がれ空高く！"
+)
+
+func altarWishReply(res altar.WishResult) AltarWishResult {
+	msg := res.ItemName + " ですね。冒険中に使うことで未知の世界へと行くことができるでしょう"
+	if res.DeliveredTo == "depot" {
+		msg = fmt.Sprintf("%s を%sの預かり所に送っておきました。冒険中に使うことで未知の世界へと行くことができるでしょう", res.ItemName, res.CharacterName)
+	}
+	return AltarWishResult{res, msg}
+}
+
+func wishingWellExchangeReply(res wishingwell.ExchangeResult) WishingWellExchangeResult {
+	return WishingWellExchangeResult{res, fmt.Sprintf("SP %d のかわりに %s を %d あたえましょう", res.SPConsumed, res.StatName, res.StatIncrease)}
+}
+
 // WithAltar configures the altar scene observation and its commands.
 func WithAltar(service AltarService) Option {
 	return func(h *Handler) {
@@ -55,10 +90,18 @@ func WithAltar(service AltarService) Option {
 			return
 		}
 		withActionCommand("altar_pray", func(ctx context.Context, actor string, _ struct{}) (any, error) {
-			return service.Pray(ctx, actor)
+			res, err := service.Pray(ctx, actor)
+			if err != nil {
+				return nil, err
+			}
+			return AltarPrayResult{res, altarAwakeningReply}, nil
 		}, altarActionRejection)(h)
 		withActionCommand("altar_wish", func(ctx context.Context, actor string, p altarWishRequest) (any, error) {
-			return service.Wish(ctx, actor, p.ItemID)
+			res, err := service.Wish(ctx, actor, p.ItemID)
+			if err != nil {
+				return nil, err
+			}
+			return altarWishReply(res), nil
 		}, altarActionRejection)(h)
 	}
 }
@@ -71,7 +114,11 @@ func WithWishingWell(service WishingWellService) Option {
 			return
 		}
 		withActionCommand("wishingwell_exchange", func(ctx context.Context, actor string, p wishingWellExchangeRequest) (any, error) {
-			return service.Exchange(ctx, wishingwell.ExchangeRequest{CharacterID: actor, Stat: p.Stat, SP: p.SP})
+			res, err := service.Exchange(ctx, wishingwell.ExchangeRequest{CharacterID: actor, Stat: p.Stat, SP: p.SP})
+			if err != nil {
+				return nil, err
+			}
+			return wishingWellExchangeReply(res), nil
 		}, wishingWellActionRejection)(h)
 	}
 }
@@ -96,7 +143,7 @@ func altarActionRejection(err error) (int, ErrorDetail) {
 	case errors.Is(err, corecharacter.ErrNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "CHARACTER_NOT_FOUND", Message: "Character not found."}
 	case errors.Is(err, altar.ErrInsufficientOrbs):
-		return http.StatusBadRequest, ErrorDetail{Code: "ALTAR_INSUFFICIENT_ORBS", Message: altar.MsgOrbsInsufficient}
+		return http.StatusBadRequest, ErrorDetail{Code: "ALTAR_INSUFFICIENT_ORBS", Message: altarOrbsInsufficientReply}
 	case errors.Is(err, altar.ErrRamiaAwakened):
 		return http.StatusConflict, ErrorDetail{Code: "ALTAR_RAMIA_AWAKENED", Message: "The phoenix is already awakened."}
 	case errors.Is(err, altar.ErrRamiaNotAwakened):
