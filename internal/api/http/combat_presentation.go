@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/witchcraze/party2re/internal/battle"
-	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/dungeon"
@@ -47,15 +46,6 @@ func toDungeonStepResult(result dungeon.ExpeditionStepResult) dungeonStepResultR
 		response.Message = "探索に失敗した…"
 	}
 	return response
-}
-
-type bossBattleResultResponse struct {
-	boss.SealingBattleResult
-	BattleResult partyBattleResultResponse `json:"battle_result"`
-}
-
-func toBossBattleResult(result boss.SealingBattleResult) bossBattleResultResponse {
-	return bossBattleResultResponse{SealingBattleResult: result, BattleResult: toPartyBattleResult(result.BattleResult)}
 }
 
 type challengeRoundResultResponse struct {

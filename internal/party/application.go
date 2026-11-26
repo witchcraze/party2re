@@ -140,12 +140,7 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 		if err != nil {
 			return err
 		}
-		if p.Kind == KindSealing {
-			err = s.joinSealingRoom(txCtx, p, characterID)
-		} else {
-			err = s.joinWaitingLobby(txCtx, p, characterID, password)
-		}
-		if err != nil {
+		if err := s.joinWaitingLobby(txCtx, p, characterID, password); err != nil {
 			return err
 		}
 
@@ -189,7 +184,8 @@ func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, 
 	if err != nil {
 		return err
 	}
-	// Membership is read under the character row lock (see joinSealingRoom).
+	// Joins to different lobbies hold different lobby locks; the character row
+	// lock serializes them, so membership is read only after taking it.
 	if _, _, err := s.repo.GetActivePartyByCharacter(txCtx, characterID); err == nil {
 		return ErrAlreadyInParty
 	}

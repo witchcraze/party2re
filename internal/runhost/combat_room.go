@@ -60,6 +60,10 @@ type RoomCombat struct {
 	// Win is legacy $win (_battle.cgi:232–241, _skill.cgi:9835): defeats count
 	// as PvP wins, nothing is captured and enemy summons do nothing.
 	Win bool
+	// NPCSkills replaces the mode's @npc_skills seed (default こうげき);
+	// NPCEntries binds its entries that the shared catalog lacks.
+	NPCSkills  []corebattle.CallbackBinding
+	NPCEntries map[string]corebattle.CallbackDefinition
 }
 
 // Summons are the encounter pool, appearance positions and Hard flag that

@@ -14,7 +14,7 @@ func TestWireBossBanquet_SkipsAmbientTransaction(t *testing.T) {
 	hook := buildVictoryBanquetHook(plaza)
 	injected := errors.New("outer rollback")
 	err := database.RunInTx(context.Background(), db, func(ctx context.Context) error {
-		if err := hook(ctx, "king1", "King", "hero", "Hero", 1); err == nil {
+		if err := hook(ctx); err == nil {
 			t.Fatal("ambient transaction must not publish a banquet")
 		}
 		return injected

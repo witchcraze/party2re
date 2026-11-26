@@ -1,469 +1,133 @@
 package boss
 
-// DefaultBossCatalog returns the 11 authentic King Sealing stages from legacy Party2 (stage/king1.cgi - king10.cgi, king99.cgi).
-func DefaultBossCatalog() []BossStage {
-	return []BossStage{
-		{
-			ID:         "king1",
-			Name:       "@全てを無に還す者@",
-			LeaderName: "破壊神",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_400_o",
-			TreasureItemIDs: []string{
-				"item-059", "item-071", "item-104",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "レッドストーン",
-					HP:         50,
-					MP:         999,
-					MaxHP:      50,
-					MaxMP:      999,
-					Attack:     400,
-					Defense:    9000,
-					Agility:    3000,
-					GetExp:     1000,
-					GetMoney:   2000,
-					Icon:       "mon/190.gif",
-					Job:        26,
-					SP:         999,
-					OldJob:     6,
-					OldSP:      999,
-					TMP:        "魔無効",
-					GetCrystal: 5,
-				},
-				{
-					Name:       "ブルーストーン",
-					HP:         50,
-					MP:         999,
-					MaxHP:      50,
-					MaxMP:      999,
-					Attack:     500,
-					Defense:    9000,
-					Agility:    3000,
-					GetExp:     1000,
-					GetMoney:   2000,
-					Icon:       "mon/191.gif",
-					Job:        33,
-					SP:         130,
-					OldJob:     31,
-					OldSP:      999,
-					TMP:        "魔無効",
-					GetCrystal: 5,
-				},
-				{
-					Name:       "イエローストーン",
-					HP:         50,
-					MP:         999,
-					MaxHP:      50,
-					MaxMP:      999,
-					Attack:     500,
-					Defense:    9000,
-					Agility:    3000,
-					GetExp:     1000,
-					GetMoney:   2000,
-					Icon:       "mon/192.gif",
-					Job:        36,
-					SP:         999,
-					OldJob:     37,
-					OldSP:      999,
-					TMP:        "魔無効",
-					GetCrystal: 5,
-				},
-				{
-					Name:       "破壊神",
-					HP:         150000,
-					MP:         999999,
-					MaxHP:      150000,
-					MaxMP:      999999,
-					Attack:     600,
-					Defense:    300,
-					Agility:    300,
-					GetExp:     10000,
-					GetMoney:   5000,
-					Icon:       "mon/850.gif",
-					Job:        97,
-					SP:         999,
-					TMP:        "攻軽減",
-					GetCrystal: 40,
-				},
-				{
-					Name:       "グリーンストーン",
-					HP:         50,
-					MP:         99999,
-					MaxHP:      50,
-					MaxMP:      99999,
-					Attack:     500,
-					Defense:    9000,
-					Agility:    3000,
-					GetExp:     1000,
-					GetMoney:   2000,
-					Icon:       "mon/193.gif",
-					Job:        90,
-					SP:         999,
-					OldJob:     91,
-					OldSP:      999,
-					TMP:        "魔無効",
-					GetCrystal: 5,
-				},
-				{
-					Name:       "パープルストーン",
-					HP:         50,
-					MP:         999,
-					MaxHP:      50,
-					MaxMP:      999,
-					Attack:     500,
-					Defense:    9000,
-					Agility:    3000,
-					GetExp:     1000,
-					GetMoney:   2000,
-					Icon:       "mon/194.gif",
-					Job:        35,
-					SP:         999,
-					OldJob:     92,
-					OldSP:      999,
-					TMP:        "魔無効",
-					GetCrystal: 5,
-				},
-				{
-					Name:       "シルバーストーン",
-					HP:         50,
-					MP:         99999,
-					MaxHP:      50,
-					MaxMP:      99999,
-					Attack:     500,
-					Defense:    9000,
-					Agility:    3000,
-					GetExp:     500,
-					GetMoney:   2000,
-					Icon:       "mon/196.gif",
-					Job:        19,
-					SP:         999,
-					OldJob:     20,
-					OldSP:      999,
-					TMP:        "魔無効",
-					GetCrystal: 5,
-				},
-			},
-		},
-		{
-			ID:         "king2",
-			Name:       "@全てを憎む者@",
-			LeaderName: "暗黒竜",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_400_o",
-			TreasureItemIDs: []string{
-				"item-059", "item-071", "item-104",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "暗黒竜",
-					HP:         140000,
-					MP:         99999,
-					MaxHP:      140000,
-					MaxMP:      99999,
-					Attack:     300,
-					Defense:    200,
-					Agility:    0,
-					GetExp:     8000,
-					GetMoney:   5000,
-					Icon:       "mon/710.gif",
-					Job:        0,
-					SP:         999,
-					OldJob:     101,
-					OldSP:      999,
-					TMP:        "受流し",
-					GetCrystal: 40,
-				},
-			},
-		},
-		{
-			ID:         "king3",
-			Name:       "@全てを破壊する者@",
-			LeaderName: "悪魔の書",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_300_o",
-			TreasureItemIDs: []string{
-				"item-059", "item-071",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "悪魔の書",
-					HP:         160000,
-					MP:         99999,
-					MaxHP:      160000,
-					MaxMP:      99999,
-					Attack:     100,
-					Defense:    100,
-					Agility:    700,
-					GetExp:     5000,
-					GetMoney:   5000,
-					Icon:       "mon/615.gif",
-					Job:        98,
-					SP:         999,
-					OldJob:     95,
-					OldSP:      999,
-					TMP:        "魔無効",
-					GetCrystal: 20,
-				},
-			},
-		},
-		{
-			ID:         "king4",
-			Name:       "@全てを呪う者@",
-			LeaderName: "暗黒の盾",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_300_o",
-			TreasureItemIDs: []string{
-				"item-059", "item-071", "item-107",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "暗黒の剣",
-					HP:         100000,
-					MP:         99999,
-					MaxHP:      100000,
-					MaxMP:      99999,
-					Attack:     500,
-					Defense:    200,
-					Agility:    250,
-					GetExp:     6000,
-					GetMoney:   3000,
-					Icon:       "mon/707.gif",
-					Job:        22,
-					SP:         999,
-					OldJob:     95,
-					OldSP:      999,
-					TMP:        "攻反撃",
-					GetCrystal: 20,
-				},
-				{
-					Name:       "暗黒の盾",
-					HP:         100000,
-					MP:         99999,
-					MaxHP:      100000,
-					MaxMP:      99999,
-					Attack:     300,
-					Defense:    600,
-					Agility:    250,
-					GetExp:     7000,
-					GetMoney:   4000,
-					Icon:       "mon/708.gif",
-					Job:        35,
-					SP:         999,
-					OldJob:     95,
-					OldSP:      999,
-					TMP:        "魔反撃",
-					GetCrystal: 20,
-				},
-			},
-		},
-		{
-			ID:         "king5",
-			Name:       "@全てを支配する者@",
-			LeaderName: "ドールマスター",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_200_o",
-			TreasureItemIDs: []string{
-				"item-059", "item-071", "item-107",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "ドールマスター",
-					HP:         150000,
-					MP:         999999,
-					MaxHP:      150000,
-					MaxMP:      999999,
-					Attack:     500,
-					Defense:    250,
-					Agility:    350,
-					GetExp:     8000,
-					GetMoney:   4000,
-					Icon:       "mon/705.gif",
-					Job:        55,
-					SP:         999,
-					OldJob:     96,
-					OldSP:      999,
-					TMP:        "100倍",
-					GetCrystal: 20,
-				},
-			},
-		},
-		{
-			ID:         "king6",
-			Name:       "@二重世界@",
-			LeaderName: "闇のクリスタル",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_200_o",
-			TreasureItemIDs: []string{
-				"item-023", "item-059", "item-060", "item-061", "item-062", "item-063", "item-064", "item-065", "item-107",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "闇のクリスタル",
-					HP:         150000,
-					MP:         99999,
-					MaxHP:      150000,
-					MaxMP:      99999,
-					Attack:     500,
-					Defense:    300,
-					Agility:    300,
-					GetExp:     4000,
-					GetMoney:   3000,
-					Icon:       "mon/706.gif",
-					Job:        95,
-					SP:         999,
-					OldJob:     95,
-					OldSP:      999,
-					TMP:        "魔反撃",
-					GetCrystal: 20,
-				},
-			},
-		},
-		{
-			ID:         "king7",
-			Name:       "@全てを爆発させる者@",
-			LeaderName: "ボマー",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_200_o",
-			TreasureItemIDs: []string{
-				"item-042", "item-057", "item-058", "item-059",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "ボマー",
-					HP:         60000,
-					MP:         99999,
-					MaxHP:      60000,
-					MaxMP:      99999,
-					Attack:     450,
-					Defense:    250,
-					Agility:    150,
-					GetExp:     5000,
-					GetMoney:   1,
-					Icon:       "mon/652.gif",
-					Job:        8,
-					SP:         999,
-					OldJob:     95,
-					OldSP:      999,
-					TMP:        "するぞ",
-					State:      "大爆発",
-					GetCrystal: 20,
-				},
-			},
-		},
-		{
-			ID:         "king8",
-			Name:       "@闇でおおいつくす者@",
-			LeaderName: "魔人のツボ",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_400_u",
-			TreasureItemIDs: []string{
-				"item-023", "item-059", "item-060", "item-061", "item-062", "item-063", "item-064", "item-065", "item-107",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "魔人のツボ",
-					HP:         80000,
-					MP:         99999,
-					MaxHP:      80000,
-					MaxMP:      99999,
-					Attack:     300,
-					Defense:    400,
-					Agility:    250,
-					GetExp:     2500,
-					GetMoney:   2000,
-					Icon:       "mon/605.gif",
-					Job:        95,
-					SP:         999,
-					OldJob:     95,
-					OldSP:      999,
-					TMP:        "攻軽減",
-					GetCrystal: 20,
-				},
-			},
-		},
-		{
-			ID:         "king9",
-			Name:       "@悪の城@",
-			LeaderName: "悪の城",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_200_u",
-			TreasureItemIDs: []string{
-				"item-023", "item-059", "item-072", "item-107",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "悪の城",
-					HP:         30000,
-					MP:         99999,
-					MaxHP:      30000,
-					MaxMP:      99999,
-					Attack:     150,
-					Defense:    150,
-					Agility:    100,
-					GetExp:     1800,
-					GetMoney:   2000,
-					Icon:       "mon/603.gif",
-					Job:        95,
-					SP:         999,
-					OldJob:     95,
-					OldSP:      999,
-					TMP:        "攻軽減",
-					GetCrystal: 20,
-				},
-			},
-		},
-		{
-			ID:         "king10",
-			Name:       "@無限に増殖する者@",
-			LeaderName: "スライムボックス",
-			Speed:      12,
-			MaxMembers: 6,
-			NeedJoin:   "hp_100_u",
-			TreasureItemIDs: []string{
-				"item-059", "item-072", "item-107",
-			},
-			Bosses: []BossMonster{
-				{
-					Name:       "スライムボックス",
-					HP:         15000,
-					MP:         9999,
-					MaxHP:      15000,
-					MaxMP:      9999,
-					Attack:     60,
-					Defense:    0,
-					Agility:    0,
-					GetExp:     1500,
-					GetMoney:   500,
-					Icon:       "mon/600.gif",
-					Job:        95,
-					SP:         999,
-					TMP:        "攻軽減",
-					GetCrystal: 20,
-				},
-			},
-		},
-		{
-			ID:         "king99",
-			Name:       "@罪と罰@",
-			LeaderName: "リーダーの影",
-			Speed:      12,
-			MaxMembers: 4,
-			NeedJoin:   "hp_200_o",
-			TreasureItemIDs: []string{
-				"item-059", "item-060", "item-061", "item-062", "item-063", "item-064", "item-065", "item-107",
-			},
-			Bosses: nil, // Dynamically cloned from challenging party members
-		},
+import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
+
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/runhost"
+)
+
+// stagesJSON transcribes %k, @treasures and @bosses of party2/stage/king*.cgi.
+//
+//go:embed data/stages.json
+var stagesJSON []byte
+
+// BossStage is one king stage file: the room's name, leader, capacity,
+// join condition, treasure tables, initial bosses and summon pool
+// (@monsters). king99's bosses are the unsealers' clones, so its list is empty.
+type BossStage struct {
+	ID         string                `json:"id"`
+	Name       string                `json:"name"`
+	LeaderName string                `json:"leader_name"`
+	Speed      int                   `json:"speed"`
+	MaxMembers int                   `json:"max_members"`
+	NeedJoin   string                `json:"need_join"`
+	Treasures  runhost.TreasurePools `json:"treasures"`
+	Bosses     []BossMonster         `json:"bosses"`
+	Monsters   []BossMonster         `json:"monsters"`
+}
+
+// BossMonster is one @bosses row with its legacy keys.
+type BossMonster struct {
+	Name     string `json:"name"`
+	HP       int    `json:"hp"`
+	MP       int    `json:"mp"`
+	MaxMP    int    `json:"mmp"`
+	Attack   int    `json:"at"`
+	Defense  int    `json:"df"`
+	Agility  int    `json:"ag"`
+	EXP      int    `json:"get_exp"`
+	Gold     int    `json:"get_money"`
+	Crystals int    `json:"get_crystal"`
+	Icon     string `json:"icon"`
+	Hit      int    `json:"hit"`
+	Job      int    `json:"job"`
+	SP       int    `json:"sp"`
+	OldJob   int    `json:"old_job"`
+	OldSP    int    `json:"old_sp"`
+	TMP      string `json:"tmp"`
+	State    string `json:"state"`
+	// RandomCrystal is get_crystal => int(rand(2)), drawn at each stage-file load.
+	RandomCrystal bool `json:"random_crystal"`
+}
+
+// DefaultBossCatalog decodes the king stages in file order (king1–king10, king99).
+func DefaultBossCatalog() ([]BossStage, error) {
+	var stages []BossStage
+	if err := json.Unmarshal(stagesJSON, &stages); err != nil {
+		return nil, fmt.Errorf("decode king stages: %w", err)
 	}
+	return stages, nil
+}
+
+// temporaries maps @bosses tmp names (%tmp_tip, _data.cgi:2247–2270) to
+// battle effects; a name without a handler (するぞ, 100倍) stays inert.
+var temporaries = map[string]corebattle.TemporaryEffect{
+	"防御": corebattle.TemporaryDefense, "大防御": corebattle.TemporaryStrongDefense, "単発防御": corebattle.TemporaryOneHitDefense,
+	"攻軽減": corebattle.TemporaryReduceAttack, "魔軽減": corebattle.TemporaryReduceMagic, "息軽減": corebattle.TemporaryReduceBreath,
+	"攻無効": corebattle.TemporaryNullAttack, "魔無効": corebattle.TemporaryNullMagic, "息無効": corebattle.TemporaryNullBreath,
+	"攻反撃": corebattle.TemporaryReflectAttack, "魔反撃": corebattle.TemporaryReflectMagic, "息反撃": corebattle.TemporaryReflectBreath,
+	"踊反撃": corebattle.TemporaryReflectDance, "２倍": corebattle.TemporaryDouble, "受流し": corebattle.TemporaryDeflect,
+	"魔吸収": corebattle.TemporaryAbsorbMagic, "回復": corebattle.TemporaryRegeneration, "復活": corebattle.TemporaryRevival,
+	"激昂": corebattle.TemporaryRage, "朧幻": corebattle.TemporaryPhantom,
+}
+
+func temporary(tmp string) corebattle.TemporaryEffect {
+	if e, ok := temporaries[tmp]; ok {
+		return e
+	}
+	return corebattle.TemporaryEffect(tmp)
+}
+
+func legacyJobID(n int) string {
+	if n == 0 {
+		return "starter"
+	}
+	return fmt.Sprintf("job-%02d", n)
+}
+
+// payload is the row's battle data as written: a missing field is 0.
+func (b BossMonster) payload(id string) corebattle.LifetimeActor {
+	jobs := corebattle.BattleJobs{JobID: legacyJobID(b.Job), SP: b.SP, OldJobID: legacyJobID(b.OldJob), OldSP: b.OldSP}
+	return corebattle.LifetimeActor{
+		Participant: corebattle.Participant{
+			ID: id, Name: b.Name, TeamID: "enemies", HP: b.HP, MP: b.MP, MaxMP: b.MaxMP,
+			Attack: b.Attack, Defense: b.Defense, Agility: b.Agility,
+			Gear: &corebattle.BattleGearStats{}, Status: b.State, Icon: b.Icon, ExperienceReward: b.EXP, GoldReward: b.Gold,
+		},
+		Jobs: jobs, OriginalJobs: jobs, NPC: true, Hit: b.Hit, Temporary: temporary(b.TMP),
+		EncounterIdentity: id, CrystalReward: b.Crystals,
+	}
+}
+
+// actor is make_vs_king's battle row (vs_monster.cgi:178–196): max stats
+// default to the base, hit to 95 and tension to 1.
+func (b BossMonster) actor(id string) corebattle.LifetimeActor {
+	a := b.payload(id)
+	a.MaxHP = a.HP
+	if a.MaxMP == 0 {
+		a.MaxMP = a.MP
+	}
+	a.BaseStats = corebattle.BattleBaseStats{Attack: a.Attack, Defense: a.Defense, Agility: a.Agility}
+	if a.Hit == 0 {
+		a.Hit = 95
+	}
+	a.Tension = 1
+	return a
+}
+
+// summonPool is @monsters as _add_enemy loads it: each random crystal is
+// drawn for this load; the summon owner scales stats and fills defaults.
+func (stage BossStage) summonPool(rng random.Generator) []corebattle.LifetimeActor {
+	pool := make([]corebattle.LifetimeActor, len(stage.Monsters))
+	for i, m := range stage.Monsters {
+		pool[i] = m.payload(fmt.Sprintf("%s-monster-%d", stage.ID, i))
+		if m.RandomCrystal {
+			pool[i].CrystalReward = rng.Intn(2)
+		}
+	}
+	return pool
 }

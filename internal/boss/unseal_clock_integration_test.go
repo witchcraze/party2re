@@ -22,6 +22,8 @@ import (
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
+var errInjected = errors.New("injected failure")
+
 type controllableClock struct{ nanos atomic.Int64 }
 
 func (c *controllableClock) Set(t time.Time) { c.nanos.Store(t.UTC().UnixNano()) }
@@ -121,14 +123,14 @@ func (alwaysWinBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleReques
 	}, nil
 }
 
-func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T) {
+func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 	db := database.CreateTestDatabase(t,
 		"players", "characters", "inventory_items", "equipment_slots",
 		"character_depots", "depot_items", "character_jobs", "character_job_history", "character_job_masteries",
 		"adventures", "party_adventure_logs",
 		"runs", "run_enrollments",
 		"run_recipients", "run_receipts",
-		"boss_room_settlements", "boss_unseal_clock",
+		"boss_unseal_clock",
 	)
 
 	ctx := context.Background()
@@ -203,22 +205,24 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 	}
 
 	lobbyRepo := party.NewMemoryRepository(party.WithDurableLogRepository(partyLogRepo))
-	bossSvc, err := boss.NewService(bossRepo, chars, alwaysWinBattleEngine{})
+	bossStore, err := database.NewRunRepository[boss.Run](db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bossSvc.Configure(
-		boss.WithPartyRepository(lobbyRepo),
-		boss.WithTransactionProvider(tx),
-		boss.WithNowFunc(clock.Now),
+	bossSvc, err := boss.NewRunService(boss.RunConfig{
+		Store: bossStore, Characters: chars, Inventories: invs, Builder: adapter, Settler: adapter,
+		Penalty: stubNormalPenalty{}, Clock: clock, UnsealClock: bossRepo,
 		// Unseal news fails after commit; the committed settlement must stand.
-		boss.WithNewsPublisher(boss.NewsPublisherFunc(func(_ context.Context, _, _, content, _ string, _ time.Time) error {
+		News: boss.NewsPublisherFunc(func(_ context.Context, _, _, content, _ string, _ time.Time) error {
 			if strings.Contains(content, "封印が解かれました") {
 				return errInjected
 			}
 			return nil
-		})),
-	)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	var unseals []string
 	unseal := adventure.UnsealHook(func(ctx context.Context, name string, unsealers []corebattle.LifetimeActor) {
 		unseals = append(unseals, name)
@@ -226,16 +230,21 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 			t.Errorf("expected only the injected news failure, got %v", err)
 		}
 	})
+	kings, err := boss.DefaultBossCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A slot read, unlike the room listing, never deletes an idle room.
 	sealingRooms := func() map[string]string {
 		t.Helper()
-		list, _, err := lobbyRepo.ListParties(ctx, party.StatusRecruiting, 100, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
 		rooms := make(map[string]string)
-		for _, p := range list {
-			if p.Kind == party.KindSealing && !strings.HasPrefix(p.ID, "p-") && !strings.HasPrefix(p.ID, "boundary-") {
-				rooms[p.StageID] = p.ID
+		for _, stage := range kings {
+			r, err := bossSvc.FindSlot(ctx, "sealing:"+stage.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r != nil {
+				rooms[stage.ID] = r.ID
 			}
 		}
 		return rooms
@@ -288,47 +297,13 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		return c
 	}
 
-	sealKing1 := func(partyID string, hero corecharacter.Character, partyCreatedAt time.Time) int {
-		t.Helper()
-		hero.Tired = 0
-		hero.Stats.HP = hero.Stats.MaxHP
-		if err := chars.Update(ctx, hero); err != nil {
-			t.Fatal(err)
-		}
-		if err := lobbyRepo.SaveParty(ctx, party.Party{
-			ID: partyID, Kind: party.KindSealing, StageID: "king1", Enemies: catalogRoster("king1"),
-			Status: party.StatusRecruiting, MaxMembers: 6, CreatedAt: partyCreatedAt,
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := lobbyRepo.AddMember(ctx, party.Member{
-			PartyID: partyID, CharacterID: hero.ID, CharacterName: hero.Name, ReadyState: true, IsLeader: true,
-		}); err != nil {
-			t.Fatal(err)
-		}
-		res, err := bossSvc.StartSealingBattle(ctx, partyID, hero.ID)
-		if err != nil {
-			t.Fatalf("StartSealingBattle(%s): %v", partyID, err)
-		}
-		return res.RewardCrystals
+	// An already-open king1 room must survive a re-unseal, which still overwrites unsealed_at.
+	existing, err := bossSvc.Open(ctx, "sealing:king1", runhost.Admission{StageID: "king1"}, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	heroBoss := newHero("BossHero")
-
-	// 1. Before any unseal: GetUnsealedAt is nil and boss awards 1.0x (70), ignoring party.CreatedAt
 	if got, err := bossRepo.GetUnsealedAt(ctx); err != nil || got != nil {
 		t.Fatalf("initial GetUnsealedAt = %v (err=%v), want nil", got, err)
-	}
-	if crystals := sealKing1("p-before-unseal", heroBoss, clock.Now().Add(-5*time.Second)); crystals != 70 {
-		t.Fatalf("pre-unseal crystals = %d, want 70 (1.0x)", crystals)
-	}
-
-	// Prepare an already-existing boss sealing room to verify re-unseal still overwrites unsealed_at
-	if opened, err := lobbyRepo.OpenSystemRoom(ctx, party.Party{
-		ID: "existing-king1", Kind: party.KindSealing, StageID: "king1", Enemies: catalogRoster("king1"),
-		Status: party.StatusRecruiting, MaxMembers: 6, CreatedAt: t0.Add(-2 * time.Hour),
-	}); err != nil || !opened {
-		t.Fatal(opened, err)
 	}
 
 	// 2. Normal Run stage-19 floor-11 treasure: rollback, commit with MaoCount, replay/chest/exit non-trigger
@@ -395,7 +370,7 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 		t.Fatalf("after normal unseal MaoCount = %d (err=%v), want 1", c.MaoCount, err)
 	}
 	opened := sealingRooms()
-	if len(unseals) != 1 || len(opened) != 11 || opened["king1"] != "existing-king1" {
+	if len(unseals) != 1 || len(opened) != 11 || opened["king1"] != existing {
 		t.Fatalf("normal unseal should open the 10 missing rooms beside the existing king1: %v %v", unseals, opened)
 	}
 
@@ -517,26 +492,5 @@ func TestUnsealClock_Stage19AllPathsAndBossCrystals_SQLIntegration(t *testing.T)
 	}
 	if !slices.Equal(unseals, []string{"", "", "封印隊"}) || !maps.Equal(sealingRooms(), opened) {
 		t.Fatalf("party crawl trigger should reach the hook once without duplicating rooms: %v %v", unseals, sealingRooms())
-	}
-
-	// 5. Boss settlement reads persisted unsealed_at=t3 across exact 600/601, 1800/1801, 3600/3601 boundaries
-	boundaries := []struct {
-		name      string
-		elapsed   time.Duration
-		createdAt time.Time
-		want      int
-	}{
-		{"600s (3x)", 600 * time.Second, t3.Add(-2 * time.Hour), 210},
-		{"601s (2x)", 601 * time.Second, t3.Add(600 * time.Second), 140},
-		{"1800s (2x)", 1800 * time.Second, t3.Add(-2 * time.Hour), 140},
-		{"1801s (1.5x per enemy)", 1801 * time.Second, t3.Add(1800 * time.Second), 102},
-		{"3600s (1.5x per enemy)", 3600 * time.Second, t3.Add(-2 * time.Hour), 102},
-		{"3601s (1x)", 3601 * time.Second, t3.Add(3600 * time.Second), 70},
-	}
-	for i, tc := range boundaries {
-		clock.Set(t3.Add(tc.elapsed))
-		if got := sealKing1("boundary-"+string(rune('a'+i)), heroBoss, tc.createdAt); got != tc.want {
-			t.Errorf("%s: got %d crystals, want %d", tc.name, got, tc.want)
-		}
 	}
 }

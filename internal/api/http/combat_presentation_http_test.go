@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
-	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -35,11 +34,6 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 		fightFn:  func(context.Context, string) (dungeon.ExpeditionStepResult, error) { return dungeonResult, nil },
 		escapeFn: func(context.Context, string) (dungeon.ExpeditionStepResult, error) { return dungeonResult, nil },
 	}
-	bs := &stubBossService{
-		startSealingBattleFn: func(context.Context, string, string) (boss.SealingBattleResult, error) {
-			return boss.SealingBattleResult{BattleResult: group}, nil
-		},
-	}
 	cs := &stubChallengeService{advanceRoundFn: func(context.Context, string, string, int) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
 		return &challenge.RoundResult{BattleResult: solo}, &challenge.ChallengeSession{}, nil
 	}}
@@ -55,7 +49,7 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 	}}
 	h := newTestHandler(t, &stubPlayerService{authenticateFn: alwaysAuthPlayer(coreplayer.Player{ID: "p1"})}, &stubCharacterService{getFn: func(context.Context, string) (corecharacter.Character, error) {
 		return corecharacter.Character{ID: "c1", PlayerID: "p1"}, nil
-	}}, &stubAdventureService{}, &stubShopService{}, apihttp.WithDungeon(ds), apihttp.WithBoss(bs), apihttp.WithChallenge(cs), apihttp.WithPvP(ps), apihttp.WithGvG(gs), apihttp.WithParty(partyService), apihttp.WithReplay(rs))
+	}}, &stubAdventureService{}, &stubShopService{}, apihttp.WithDungeon(ds), apihttp.WithChallenge(cs), apihttp.WithPvP(ps), apihttp.WithGvG(gs), apihttp.WithParty(partyService), apihttp.WithReplay(rs))
 	for _, tc := range []struct {
 		name, path, body string
 		keys             []string
@@ -63,7 +57,6 @@ func TestCombatPresentationHTTPPaths(t *testing.T) {
 		{"dungeon move", "/characters/c1/dungeons/move", `{"direction":"north"}`, []string{"result", "battle_result", "logs"}},
 		{"dungeon fight", "/characters/c1/dungeons/fight", "", []string{"result", "battle_result", "logs"}},
 		{"dungeon escape", "/characters/c1/dungeons/escape", "", []string{"result", "battle_result", "logs"}},
-		{"sealing", "/parties/team/sealing-battle", `{"character_id":"c1"}`, []string{"result", "battle_result", "logs"}},
 		{"challenge", "/characters/c1/challenges/advance", `{"session_id":"run","expected_revision":1}`, []string{"round_result", "battle_result", "logs"}},
 		{"pvp", "/characters/c1/pvp/rooms/room/advance", "", []string{"battle_log"}},
 		{"gvg", "/characters/c1/gvg/rooms/room/advance", `{"expected_round":1}`, []string{"battle_log"}},

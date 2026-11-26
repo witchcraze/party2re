@@ -109,8 +109,9 @@ func (s *Service[R, P]) Join(ctx context.Context, player, actor, runID, key stri
 		if len(r.Roster) >= s.maxMembers() {
 			return ErrRoomFull
 		}
-		// A recipient left by exit is replaced; anything still owed must never be dropped.
-		if left, ok := r.Recipients[actor]; ok && (left.Disposition != "exit" || left.Pending != (Earnings{}) || left.Conditional != (Earnings{})) {
+		// A recipient left by exit or Dejon is replaced; JoinRun carries its
+		// unreleased earnings over (legacy stock.cgi outlives the room).
+		if left, ok := r.Recipients[actor]; ok && (left.Disposition != "exit" && left.Disposition != "dejon" || left.Conditional != (Earnings{})) {
 			return ErrConflict
 		}
 		c, err := s.cfg.Characters.FindByIDForUpdate(ctx, actor)
@@ -152,12 +153,13 @@ func (s *Service[R, P]) Join(ctx context.Context, player, actor, runID, key stri
 		a.TeamID = "allies"
 		r.Battle.Actors = append(r.Battle.Actors, a)
 		r.Roster = append(r.Roster, actor)
-		r.Recipients[actor] = Recipient{PlayerID: player}
-		// A joiner's battle row is new (get_battle_line), so no earlier action time carries over.
-		delete(r.LastActions, actor)
-		if err := s.cfg.Store.JoinRun(ctx, runID, actor, len(r.Roster)-1, r.Recipients[actor]); err != nil {
+		joined, err := s.cfg.Store.JoinRun(ctx, runID, actor, len(r.Roster)-1, Recipient{PlayerID: player})
+		if err != nil {
 			return err
 		}
+		r.Recipients[actor] = joined
+		// A joiner's battle row is new (get_battle_line), so no earlier action time carries over.
+		delete(r.LastActions, actor)
 		version := r.Version
 		r.Version++
 		if err := s.cfg.Store.SaveRun(ctx, *run, version); err != nil {

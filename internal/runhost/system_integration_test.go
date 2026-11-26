@@ -47,6 +47,7 @@ func (sysRoom) Exit(*sysRun, string) (runhost.Earnings, int, error) {
 func (sysRoom) Record(context.Context, *sysRun, string, string) error { return nil }
 func (sysRoom) Conditional(*sysRun) bool                              { return false }
 func (room sysRoom) Retain(*sysRun) bool                              { return room.retain.Load() }
+func (sysRoom) Banish(_ *sysRun, c *corecharacter.Character) error    { c.AddTired(30); return nil }
 func (room sysRoom) Join(r *sysRun, c *corecharacter.Character) error {
 	if len(r.Roster) >= room.capacity {
 		return runhost.ErrRoomFull

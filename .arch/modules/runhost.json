@@ -111,7 +111,33 @@
           "note": "Room records run after the Settler; recipient history, disposition and immutable command result commit with state and assets."
         }
       ],
-      "note": "One bounded SQL transaction via WithRunForUpdate. Room actions (Room.Act) and treasure inspection reach the action tail; explicit operations run the host executor (player step and at most one NPC response) with the room library's CombatRoom seams. No automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
+      "note": "One bounded SQL transaction via WithRunForUpdate. Room actions (Room.Act) and treasure inspection reach the action tail; explicit operations run the host executor (player step and at most one NPC response) with the room library's CombatRoom seams. Members a room NPC banished (SystemRoom.Banish) leave after the Settler with a dejon disposition that releases their enrollment. No automatic combat fallback. Cleanup recovery projects a stored absolute timer deadline before releasing pending ownership."
+    },
+    {
+      "method": "Join",
+      "source_ref": "internal/runhost/system.go#Service.Join",
+      "transaction_type": "Delegated",
+      "lock_sequence": [
+        {
+          "table": "runs",
+          "tier": 0,
+          "mode": "SELECT ... FOR UPDATE (via Store)",
+          "note": "Receipt replay before admission checks."
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "The joiner only; SystemRoom.Join applies its effects before the save."
+        },
+        {
+          "table": "run_enrollments / run_recipients / run_receipts",
+          "tier": 8,
+          "mode": "INSERT / SELECT ... FOR UPDATE / UPSERT",
+          "note": "A left exit or dejon ledger row is locked and replaced, carrying its unreleased earnings."
+        }
+      ],
+      "note": "One SQL transaction via WithRunForUpdate on a system-opened run."
     },
     {
       "method": "executeCombat",

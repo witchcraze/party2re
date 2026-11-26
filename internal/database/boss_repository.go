@@ -4,12 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/id"
+	"fmt"
+	"time"
 )
 
+// BossRepository keeps the demon king unseal clock (boss_unseal_clock).
 type BossRepository struct {
 	db *sql.DB
 }
@@ -21,29 +20,29 @@ func NewBossRepository(db *sql.DB) (*BossRepository, error) {
 	return &BossRepository{db: db}, nil
 }
 
-// SettleMember updates the character's post-battle state and delivers any chest reward item.
-func (r *BossRepository) SettleMember(
-	ctx context.Context,
-	character corecharacter.Character,
-	rewardItem *coreitem.Instance,
-) error {
-	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		executor := ExecutorFromContext(txCtx, r.db)
+// SaveUnsealedAt upserts the single-row demon king unseal clock inside the active transaction or DB.
+func (r *BossRepository) SaveUnsealedAt(ctx context.Context, unsealedAt time.Time) error {
+	const query = `
+		INSERT INTO boss_unseal_clock (id, unsealed_at)
+		VALUES (1, ?)
+		ON DUPLICATE KEY UPDATE unsealed_at = VALUES(unsealed_at)
+	`
+	if _, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, unsealedAt.UTC()); err != nil {
+		return fmt.Errorf("failed to save boss unsealed_at: %w", err)
+	}
+	return nil
+}
 
-		if err := updateCharacter(txCtx, executor, character); err != nil {
-			return err
+// GetUnsealedAt reads the single-row demon king unseal clock, returning (nil, nil) if never unsealed.
+func (r *BossRepository) GetUnsealedAt(ctx context.Context) (*time.Time, error) {
+	const query = `SELECT unsealed_at FROM boss_unseal_clock WHERE id = 1`
+	var unsealedAt time.Time
+	if err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query).Scan(&unsealedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
 		}
-
-		// Deliver reward item if present (Rank 3 Inventory -> Rank 5 Depot).
-		if rewardItem != nil {
-			if rewardItem.ID == "" {
-				rewardItem.ID = id.New()
-			}
-			if err := deliverRewardItems(txCtx, r.db, character, []coreitem.Instance{*rewardItem}); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
+		return nil, fmt.Errorf("failed to get boss unsealed_at: %w", err)
+	}
+	t := unsealedAt.UTC()
+	return &t, nil
 }

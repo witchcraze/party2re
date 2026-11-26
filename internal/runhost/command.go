@@ -26,6 +26,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 	var result Receipt
 	var unsealers []corebattle.LifetimeActor
 	var runName string
+	var committed func(context.Context)
 	err := s.cfg.Store.WithRunForUpdate(ctx, cmd.RunID, false, func(ctx context.Context) error {
 		old, err := s.cfg.Store.FindRunReceipt(ctx, cmd.RunID, cmd.ID)
 		if err != nil {
@@ -203,6 +204,9 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 					return err
 				}
 			}
+			if err := s.banish(ctx, run); err != nil {
+				return err
+			}
 			if cmd.Action == "exit" {
 				if err := s.finishExit(ctx, run, cmd.ActorID); err != nil {
 					return err
@@ -213,6 +217,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		if effects.UnsealDemonKing {
 			unsealers, runName = r.unsealingParty(chars), r.Admission.Name
 		}
+		committed = effects.Committed
 		if effects.RoomActivity && (len(r.Roster) > 0 || r.Retained) {
 			r.LastActivity = now
 		}
@@ -238,6 +243,9 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 	})
 	if err == nil && len(unsealers) > 0 && s.cfg.Unsealed != nil {
 		s.cfg.Unsealed(ctx, runName, unsealers)
+	}
+	if err == nil && committed != nil {
+		committed(ctx)
 	}
 	result, err = s.resolveReceipt(ctx, cmd, result, err)
 	if err == nil && cmd.Action == "cleanup" {

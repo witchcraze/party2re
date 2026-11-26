@@ -2,7 +2,7 @@
 
 ## Overview
 
-Parties (`quest.cgi`, `party.cgi`) let up to four characters form a waiting lobby and run a stage together. Lobby fields, states, endpoints and reward formulas are owned by code and [OpenAPI](../api/openapi.json); the lobby lives in Valkey ([transient run state](../architecture/transient-run-state.md)). System-owned sealing rooms are a separate lobby kind with their own capacity and join rules ([boss §6](boss.md#6-unseal-to-sealing-room-lifecycle)).
+Parties (`quest.cgi`, `party.cgi`) let up to four characters form a waiting lobby and run a stage together. Lobby fields, states, endpoints and reward formulas are owned by code and [OpenAPI](../api/openapi.json); the lobby lives in Valkey ([transient run state](../architecture/transient-run-state.md)). Sealing rooms are not party lobbies; they run on the run host ([boss §6](boss.md#6-unseal-to-sealing-room-lifecycle)).
 
 Starting a party currently resolves every floor and inspects treasure automatically (the batch crawl). Player-selected actions, per-actor intervals, explicit advances and inspection, and individual exits belong to [Adventure's interaction contract](adventure.md#original-interaction-contract-and-reconstruction-target). A lobby leave is not the original active-combat exit, and a lobby roster is not resumable battle state.
 

@@ -29,10 +29,6 @@ const (
 	StatusDisbanded  = "disbanded"
 
 	DefaultSpeed = 18
-
-	// KindSealing is a system-owned sealing room (quest type 6): an NPC leads it,
-	// so it has no character leader (vs_monster.cgi make_vs_king).
-	KindSealing = "sealing"
 )
 
 var (
@@ -61,9 +57,7 @@ var (
 
 type Party struct {
 	ID                string    `json:"id"`
-	Kind              string    `json:"kind,omitempty"`
 	LeaderCharacterID string    `json:"leader_character_id"`
-	LeaderName        string    `json:"leader_name,omitempty"` // NPC leader of a system-owned room
 	Name              string    `json:"name"`
 	PasswordHash      string    `json:"-"`
 	StageID           string    `json:"stage_id"`
@@ -78,8 +72,6 @@ type Party struct {
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
-	// Enemies is a system room's initial enemy roster, owned by the room's opener.
-	Enemies []battle.LifetimeActor `json:"-"`
 }
 
 type Member struct {
@@ -103,7 +95,6 @@ type PartyDetail struct {
 
 type PartySummary struct {
 	ID                string    `json:"id"`
-	Kind              string    `json:"kind,omitempty"`
 	Name              string    `json:"name"`
 	LeaderCharacterID string    `json:"leader_character_id"`
 	LeaderName        string    `json:"leader_name"`
@@ -180,12 +171,8 @@ type PartyAdventureLog struct {
 }
 
 func newSummary(p Party, leaderName string, members int) PartySummary {
-	if leaderName == "" {
-		leaderName = p.LeaderName
-	}
 	return PartySummary{
 		ID:                p.ID,
-		Kind:              p.Kind,
 		Name:              p.Name,
 		LeaderCharacterID: p.LeaderCharacterID,
 		LeaderName:        leaderName,

@@ -123,25 +123,23 @@ func WithReadyTTL(d time.Duration) ValkeyRepositoryOption {
 }
 
 type repositoryConfig struct {
-	logRepo          AdventureLogRepository
-	lobbyPrefix      string
-	readyPrefix      string
-	charPrefix       string
-	lobbiesIndexKey  string
-	systemRoomPrefix string
-	lobbyTTL         time.Duration
-	readyTTL         time.Duration
+	logRepo         AdventureLogRepository
+	lobbyPrefix     string
+	readyPrefix     string
+	charPrefix      string
+	lobbiesIndexKey string
+	lobbyTTL        time.Duration
+	readyTTL        time.Duration
 }
 
 func newRepositoryConfig(opts []ValkeyRepositoryOption) repositoryConfig {
 	cfg := repositoryConfig{
-		lobbyPrefix:      DefaultLobbyKeyPrefix,
-		readyPrefix:      DefaultReadyKeyPrefix,
-		charPrefix:       DefaultCharacterKeyPrefix,
-		lobbiesIndexKey:  DefaultLobbiesIndexKey,
-		systemRoomPrefix: DefaultSystemRoomKeyPrefix,
-		lobbyTTL:         DefaultLobbyTTL,
-		readyTTL:         DefaultReadyTTL,
+		lobbyPrefix:     DefaultLobbyKeyPrefix,
+		readyPrefix:     DefaultReadyKeyPrefix,
+		charPrefix:      DefaultCharacterKeyPrefix,
+		lobbiesIndexKey: DefaultLobbiesIndexKey,
+		lobbyTTL:        DefaultLobbyTTL,
+		readyTTL:        DefaultReadyTTL,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -190,11 +188,7 @@ func (r *ValkeyRepository) characterKey(charID string) string {
 
 // SaveParty stores a newly created party lobby in Valkey Master.
 func (r *ValkeyRepository) SaveParty(ctx context.Context, p Party) error {
-	sp, err := newStoredParty(p)
-	if err != nil {
-		return err
-	}
-	data, err := json.Marshal(storedLobbyState{Party: sp, Members: []storedMember{}})
+	data, err := json.Marshal(storedLobbyState{Party: newStoredParty(p), Members: []storedMember{}})
 	if err != nil {
 		return err
 	}
@@ -237,10 +231,7 @@ func (r *ValkeyRepository) GetParty(ctx context.Context, id string) (Party, erro
 		return Party{}, err
 	}
 
-	p, err := state.Party.toParty()
-	if err != nil {
-		return Party{}, err
-	}
+	p := state.Party.toParty()
 	if p.Status == StatusDisbanded {
 		return Party{}, ErrNotFound
 	}
@@ -279,10 +270,7 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 			continue
 		}
 
-		p, err := state.Party.toParty()
-		if err != nil {
-			continue
-		}
+		p := state.Party.toParty()
 		if status != "" && p.Status != status {
 			continue
 		}
@@ -310,7 +298,7 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 
 // UpdateParty updates party metadata in Valkey Master.
 func (r *ValkeyRepository) UpdateParty(ctx context.Context, p Party) error {
-	partyJSON, err := marshalStoredParty(p)
+	partyJSON, err := json.Marshal(newStoredParty(p))
 	if err != nil {
 		return err
 	}

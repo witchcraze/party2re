@@ -21,34 +21,6 @@ Do not invent generic auto-fold, forfeiture/refund, turn-history keys, or a
 60-second post-game retention policy. Each owning game must define and verify
 its actual transitions against the original CGI.
 
-### Boss completion recovery
-
-Party sealing locks the SQL `boss_room_settlements` row (Rank 0) before ascending
-character locks (Rank 2). Its room identity, roster and battle result commit with
-all participant rewards and mandatory Collection records. Valkey's
-`in_progress` status excludes ordinary lobby activity; the SQL receipt prevents
-repeat settlement even after the short party lock expires. An interrupted room
-without a committed receipt can resume under that SQL lock.
-
-No room, roster, reverse mapping or Ready key is deleted before SQL commit.
-On a transaction error, a bounded, cancellation-independent locking read waits
-for its outcome. Confirmed rollback releases the room to recruiting. A committed
-receipt leads only to cleanup. If outcome confirmation or release fails, the
-error is returned and the room is preserved for another attempt; an unknown
-commit is never treated as permission to repeat rewards.
-
-A retry of the same sealing request by a saved member returns the recorded
-result and retries cleanup using the saved roster, even if the lobby is already
-missing. Cleanup failures propagate with the committed result retained in SQL.
-Reverse mappings are removed only if they still name that room, preserving new
-membership. Ready keys and the lobby are room-scoped, and index removal is
-idempotent. Recovery uses the next sealing request, without a background worker.
-Receipts have no automatic expiry: their room IDs must not be reused, and deletion
-would remove the replay guard. This is recovery evidence, not a second live lobby.
-Unsettled lobbies retain their ordinary idle TTL; this protocol does not rebuild
-expired uncommitted rooms or make Valkey loss harmless. Sealing must own its SQL
-transaction boundary; cleanup must not run inside a caller-owned transaction.
-
 ### PvP financial publication
 
 PvP keeps live teams and rounds in Valkey. SQL (`pvp_room_transitions` and
@@ -572,8 +544,8 @@ Wake; timer loss or an unavailable projection cannot bypass the penalty.
 
 Recovery does not pay the retained stock. Following the legacy rule that user-owned
 stock outlives the deleted room, the recipient ledger stays the only authority for
-unpaid unconditional earnings of every disposed timeout, not just the latest
-penalty record. The actor's next stock-releasing command in a later normal run reads
+unpaid unconditional earnings of every disposed timeout or Dejon removal, not just the latest
+penalty record. The actor's next stock-releasing command in a later run reads
 them without taking Rank 8 row locks before Rank 3/4/5 asset settlement, adds them
 to its own release in the same settler call, then locks each released row at Rank 8,
 verifies its unpaid balance matches the credited amount, and moves it to Applied
@@ -600,4 +572,7 @@ its join rules and effects in that transaction, and joining is not room activity
 At the last personal exit the room decides whether the run survives with its enemy
 state (`_battle.cgi:1331`). A surviving empty run has no member to request cleanup,
 so a member-less disposal removes it after the same idle timeout; member cleanup
-removes a retained room like any other.
+removes a retained room like any other. A room NPC may also remove fallen members
+(`vs_king.cgi` dejon): they leave without exit settlement or the deletion check,
+their unreleased stock stays in the ledger like a disposed timeout's, and a rejoin
+to the same room carries it over.

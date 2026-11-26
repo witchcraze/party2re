@@ -33,7 +33,7 @@ type cmbtServices struct {
 	gems        customskill.GemProvider
 	pvp         *pvp.Service
 	gvg         *gvg.Service
-	boss        *boss.Service
+	boss        *boss.RunService
 	dungeon     *dungeon.Service
 	replay      *replay.Service
 	challenge   *challenge.Service
@@ -148,11 +148,6 @@ func newCmbtServices(
 		gvg.WithTransactionProvider(core.txProvider),
 		gvg.WithExitClaimRepository(gvgRepo),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	bossService, err := boss.NewService(bossRepo, core.charRepo, battleEngine)
 	if err != nil {
 		return nil, err
 	}
@@ -280,20 +275,7 @@ func newCmbtServices(
 		return nil, err
 	}
 
-	// Wire party repository, participant builder, and news publisher into boss service so that
-	// StartSealingBattle (パーティー封印戦) can resolve party membership and publish sealing news.
-	// The shared transaction provider makes rewards and mandatory Collection/Hall
-	// of Fame records settle in one Unit of Work. BossRepository also supplies durable room receipts
-	// so party cleanup follows the committed outcome and retries cannot repeat rewards.
-	bossService.Configure(
-		boss.WithPartyRepository(partyRepo),
-		boss.WithTransactionProvider(core.txProvider),
-		boss.WithParticipantBuilder(battleAdapter),
-		boss.WithNewsPublisher(boss.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
-			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
-			return err
-		})),
-	)
+	var bossService *boss.RunService
 	// Every stage19 unseal opens the missing sealing rooms after its settlement commits.
 	unseal := adventure.UnsealHook(func(ctx context.Context, name string, unsealers []corebattle.LifetimeActor) {
 		if err := bossService.OpenSealingRooms(ctx, name, unsealers); err != nil {
@@ -422,6 +404,24 @@ func newCmbtServices(
 	dungeonService.ConfigureAdmission(admission)
 	advService.SetLegacyAdmission(admission.withMembers)
 	challengeService.ConfigureAdmission(admission)
+	bossStore, err := database.NewRunRepository[boss.Run](db)
+	if err != nil {
+		return nil, err
+	}
+	bossService, err = boss.NewRunService(boss.RunConfig{
+		Store: bossStore, Characters: core.charRepo, Inventories: core.invRepo, Builder: battleAdapter, Settler: battleAdapter,
+		Jobs: core.jobCatalog, Penalty: normalPenaltyAdapter{timers: soc.timer}, Clock: adventure.RealClock{},
+		CheckEntry:  func(ctx context.Context, actor string) error { return admission.busy(ctx, actor) },
+		UnsealClock: bossRepo,
+		News: boss.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		}),
+		JobAssetRunner: core.economy, JobAssetHelpers: helperToolNumbers(helperRepo), JobAssetDepots: econ.depotRepo, JobAssetEquipment: econ.equipRepo,
+	})
+	if err != nil {
+		return nil, err
+	}
 	partyService.SetMemberActivityCheck(func(ctx context.Context, actor string) error {
 		err := admission.busy(ctx, actor)
 		if errors.Is(err, dungeon.ErrActiveExpeditionExists) || errors.Is(err, challenge.ErrActiveSessionExists) {

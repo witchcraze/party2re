@@ -298,14 +298,14 @@ func TestWireBossVictoryBanquetHook(t *testing.T) {
 	hook := buildVictoryBanquetHook(plaza)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := hook(ctx, "king", "King", "hero", "Hero", 1); err != nil {
+	if err := hook(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if tracker.calls != 1 || tracker.recordedContext != ctx {
 		t.Fatalf("hook lost crowd call or context: %+v", tracker)
 	}
 	tracker.err = errors.New("plaza unavailable")
-	if err := hook(context.Background(), "king", "King", "hero", "Hero", 1); !errors.Is(err, tracker.err) {
+	if err := hook(context.Background()); !errors.Is(err, tracker.err) {
 		t.Fatalf("hook suppressed error: %v", err)
 	}
 }
