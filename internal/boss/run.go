@@ -122,3 +122,10 @@ func NewRunService(cfg RunConfig) (*RunService, error) {
 
 // SetBanquet sets the celebration hook run after a sealing commits.
 func (s *RunService) SetBanquet(hook VictoryBanquetHook) { s.banquet = hook }
+
+// SetBlessings sets the Chapel blessing reader for both the host's combat
+// and ＠ふういん's treasure count.
+func (s *RunService) SetBlessings(provider runhost.Blessings) {
+	s.cfg.Blessings = provider
+	s.Service.SetBlessings(provider)
+}

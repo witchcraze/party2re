@@ -3,6 +3,7 @@ package boss_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -337,8 +338,14 @@ func TestSealingRoomDejonRemovesFallenPlayers(t *testing.T) {
 	a, b := f.hero(t), f.hero(t)
 	f.join(t, a, runID)
 	f.join(t, b, runID)
-	f.editRun(t, runID, func(r *boss.Run) { r.Actor(a.ID).HP = 0 })
-	if _, err := f.command(b, runID, "attack", f.room(t).Leader); err != nil {
+	f.editRun(t, runID, func(r *boss.Run) {
+		r.Actor(a.ID).HP = 0
+		p := r.Recipients[a.ID]
+		p.Pending.Gold = 7
+		r.Recipients[a.ID] = p
+	})
+	leader := f.room(t).Leader
+	if _, err := f.command(b, runID, "attack", leader); err != nil {
 		t.Fatal(err)
 	}
 	r := f.room(t)
@@ -351,13 +358,82 @@ func TestSealingRoomDejonRemovesFallenPlayers(t *testing.T) {
 	if run, err := f.svc.GetActorRun(ctx, a.PlayerID, a.ID); err != nil || run != nil {
 		t.Fatalf("banished member still enrolled: %+v %v", run, err)
 	}
-	// The ledger row keeps the banished player's unpaid stock; a rejoin carries it over.
-	if _, err := f.db.ExecContext(ctx, `UPDATE run_recipients SET recipient_json=JSON_SET(recipient_json,'$.pending.gold',7) WHERE run_id=? AND character_id=?`, runID, a.ID); err != nil {
+	ledger := func() runhost.Earnings {
+		t.Helper()
+		var p runhost.Recipient
+		var data []byte
+		if err := f.db.QueryRowContext(ctx, `SELECT recipient_json FROM run_recipients WHERE run_id=? AND character_id=?`, runID, a.ID).Scan(&data); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(data, &p); err != nil {
+			t.Fatal(err)
+		}
+		return p.Pending
+	}
+	if got := ledger(); got.Gold != 7 {
+		t.Fatalf("banished stock = %+v, want 7 gold retained", got)
+	}
+	// A retained claim elsewhere pays the stock from the ledger row; a later command
+	// in this room must not restore it from the room's stale snapshot.
+	if _, err := f.db.ExecContext(ctx, `UPDATE run_recipients SET recipient_json=JSON_SET(recipient_json,'$.pending.gold',0,'$.applied.gold',7) WHERE run_id=? AND character_id=?`, runID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.command(b, runID, "attack", leader); err != nil {
+		t.Fatal(err)
+	}
+	if got := ledger(); got.Gold != 0 {
+		t.Fatalf("paid stock came back: %+v", got)
+	}
+	// A banished player may join again while the room is unsealed, carrying only the ledger's stock.
+	f.join(t, a, runID)
+	if got := f.room(t).Recipients[a.ID]; got.Disposition != "" || got.Pending.Gold != 0 {
+		t.Fatalf("rejoined recipient = %+v", got)
+	}
+}
+
+// ＠ふういん reads the Chapel blessing set through production wiring (SetBlessings):
+// the treasure blessing adds a chest on a 1/5 roll (_npc_action.cgi:501).
+func TestSealingRoomTreasureBlessing(t *testing.T) {
+	f := newSealFixture(t, fixedRNG{v: 0})
+	f.svc.SetBlessings(dropBlessing{})
+	runID := f.open(t)
+	a := f.hero(t)
+	f.join(t, a, runID)
+	f.editRun(t, runID, func(r *boss.Run) { r.Actor(r.Leader).HP = 0 })
+	if _, err := f.command(a, runID, "seal", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(f.room(t).Boxes); got != 2 {
+		t.Fatalf("blessed chests = %d, want 2", got)
+	}
+}
+
+type dropBlessing struct{}
+
+func (dropBlessing) GetActiveBlessing(context.Context, string) (string, error) { return "DROP", nil }
+
+// A level-up in ＠ふういん's action tail must keep the Hero Count the seal just added.
+func TestSealingRoomSealLevelUpKeepsHeroCount(t *testing.T) {
+	f := newSealFixture(t, random.Default())
+	ctx := context.Background()
+	runID := f.open(t)
+	a := f.hero(t)
+	a.Level, a.Experience = 10, 0
+	if err := f.chars.Update(ctx, a); err != nil {
 		t.Fatal(err)
 	}
 	f.join(t, a, runID)
-	if got := f.room(t).Recipients[a.ID]; got.Disposition != "" || got.Pending.Gold != 7 {
-		t.Fatalf("rejoined recipient = %+v", got)
+	f.editRun(t, runID, func(r *boss.Run) {
+		r.Actor(r.Leader).HP = 0
+		p := r.Recipients[a.ID]
+		p.Pending.EXP = 1000000
+		r.Recipients[a.ID] = p
+	})
+	if _, err := f.command(a, runID, "seal", ""); err != nil {
+		t.Fatal(err)
+	}
+	if c := f.character(t, a.ID); c.Level != 11 || c.HeroCount != a.HeroCount+1 {
+		t.Fatalf("level=%d hero=%d, want 11 and %d", c.Level, c.HeroCount, a.HeroCount+1)
 	}
 }
 

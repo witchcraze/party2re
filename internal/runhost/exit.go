@@ -167,7 +167,7 @@ func (s *Service[R, P]) GetActorPenalty(ctx context.Context, player, actor strin
 // banish removes the members a room NPC banished in this command (vs_king.cgi
 // dejon): no exit settlement and no deletion check. Unreleased earnings stay
 // in the recipient ledger as retained earnings.
-func (s *Service[R, P]) banish(ctx context.Context, run *R) error {
+func (s *Service[R, P]) banish(ctx context.Context, run *R) ([]string, error) {
 	r := P(run).Host()
 	var gone []string
 	for _, id := range r.Roster {
@@ -176,21 +176,21 @@ func (s *Service[R, P]) banish(ctx context.Context, run *R) error {
 		}
 	}
 	if len(gone) == 0 {
-		return nil
+		return nil, nil
 	}
 	if s.cfg.SystemRoom == nil {
-		return ErrConflict
+		return nil, ErrConflict
 	}
 	for _, id := range gone {
 		c, err := s.cfg.Characters.FindByID(ctx, id)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := s.cfg.SystemRoom.Banish(run, &c); err != nil {
-			return err
+			return nil, err
 		}
 		if err := s.cfg.Characters.Update(ctx, c); err != nil {
-			return err
+			return nil, err
 		}
 		p := r.Recipients[id]
 		p.Disposition, p.Conditional = "dejon", Earnings{}
@@ -199,5 +199,5 @@ func (s *Service[R, P]) banish(ctx context.Context, run *R) error {
 	}
 	r.Roster = slices.DeleteFunc(r.Roster, func(id string) bool { return slices.Contains(gone, id) })
 	r.Battle.Actors = slices.DeleteFunc(r.Battle.Actors, func(a corebattle.LifetimeActor) bool { return slices.Contains(gone, a.ID) })
-	return nil
+	return gone, nil
 }
