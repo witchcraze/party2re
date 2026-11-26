@@ -7,18 +7,19 @@ import (
 
 func TestNamedFieldBurnTailSnapshotsAndRole(t *testing.T) {
 	for _, row := range []struct {
-		before, after                  string
-		anti                           int
-		npc, enabled, suppressed, burn bool
+		before, after                               string
+		anti                                        int
+		npc, enabled, withoutResp, suppressed, burn bool
 	}{
-		{"burn", "", 0, false, true, false, true}, {"", "burn", 0, false, true, false, true}, {"burn", "burn", 1, false, true, false, false},
-		{"burn", "burn", 0, false, true, true, false}, {"burn", "burn", 0, false, false, false, false}, {"burn", "burn", 0, true, false, true, true},
+		{"burn", "", 0, false, true, false, false, true}, {"", "burn", 0, false, true, false, false, true}, {"burn", "burn", 1, false, true, false, false, false},
+		{"burn", "burn", 0, false, true, false, true, false}, {"burn", "burn", 0, false, false, false, false, false}, {"burn", "burn", 0, true, false, false, true, true},
+		{"burn", "burn", 0, false, false, true, false, true}, {"burn", "burn", 0, false, false, true, true, false}, {"burn", "burn", 1, false, false, true, false, false},
 	} {
 		s, c := namedFieldFixture()
 		a := s.actor("self")
 		a.HP, a.MaxHP = 3, 3000
 		a.Temporary, a.Status, a.Extended, a.ExtendedTurns = TemporaryDefense, StatusSleep, ExtendedAwakening, 8
-		s.Fields = LifetimeFields{Default: row.after, AntiTurns: row.anti}
+		s.Fields = LifetimeFields{Default: row.after, AntiTurns: row.anti, ExerciseWithoutResponse: row.withoutResp}
 		if err := s.ApplyNamedFieldTail(&c, NamedFieldTail{Before: row.before, NPC: row.npc, ResponseEnabled: row.enabled, Suppressed: row.suppressed}, &targetRNG{t: t}); err != nil {
 			t.Fatal(err)
 		}

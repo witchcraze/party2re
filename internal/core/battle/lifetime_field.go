@@ -4,10 +4,12 @@ package battle
 // Default survives temporary expiry and anti-field creation. Special boss-marker
 // flags are separate encounter facts; they are never inferred from a field name.
 type LifetimeFields struct {
-	Temporary string `json:"temporary,omitempty"`
-	Turns     int    `json:"turns,omitempty"`
-	Default   string `json:"default,omitempty"`
-	AntiTurns int    `json:"anti_turns,omitempty"`
+	Temporary               string `json:"temporary,omitempty"`
+	Turns                   int    `json:"turns,omitempty"`
+	Default                 string `json:"default,omitempty"`
+	AntiTurns               int    `json:"anti_turns,omitempty"`
+	DoubleTurns             bool   `json:"double_turns,omitempty"`
+	ExerciseWithoutResponse bool   `json:"exercise_without_response,omitempty"`
 }
 
 // Current returns the temporary/default snapshot even during anti-field. Original
@@ -24,6 +26,9 @@ func (f LifetimeFields) Current() string {
 func (f *LifetimeFields) Create(name string, turns int) bool {
 	if name == "" || turns <= 0 || f.AntiTurns > 0 || f.Temporary == name {
 		return false
+	}
+	if f.DoubleTurns {
+		turns *= 2
 	}
 	f.Temporary, f.Turns = name, turns
 	return true
@@ -60,7 +65,7 @@ func (f *LifetimeFields) FinishOperation(enemiesRemain, suppressed bool) {
 // Exercises is the special-field hook predicate (_battle.cgi:1715–1720).
 // before/after are operation snapshots, not a cached elemental multiplier.
 func (f LifetimeFields) Exercises(name, before string, npcResponseEnabled, suppressed bool) bool {
-	return (name == before || name == f.Current()) && npcResponseEnabled && !suppressed && f.AntiTurns == 0
+	return (name == before || name == f.Current()) && (npcResponseEnabled || f.ExerciseWithoutResponse) && !suppressed && f.AntiTurns == 0
 }
 
 // ResetFloor removes only temporary and anti-field state on explicit advance.

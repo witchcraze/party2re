@@ -61,6 +61,25 @@ func TestLifetimeFields(t *testing.T) {
 	if s.Fields.AntiTurns != 0 || s.Fields.Temporary != "" {
 		t.Fatal(s.Fields)
 	}
+	// DoubleTurns doubles Create (not CreateAnti) and ExerciseWithoutResponse
+	// exercises without NPC response; both survive ResetFloor and JSON reload.
+	d := LifetimeState{Fields: LifetimeFields{Default: "default", DoubleTurns: true, ExerciseWithoutResponse: true}}
+	d = reloadLifetime(t, d)
+	if !d.Fields.Create("burn", 5) || d.Fields.Turns != 10 {
+		t.Fatalf("double create: %+v", d.Fields)
+	}
+	if !d.Fields.Exercises("burn", "", false, false) || d.Fields.Exercises("burn", "", false, true) {
+		t.Fatalf("exercise without response: %+v", d.Fields)
+	}
+	d.Fields.CreateAnti(3)
+	if d.Fields.AntiTurns != 3 || d.Fields.Exercises("burn", "burn", false, false) {
+		t.Fatalf("anti field: %+v", d.Fields)
+	}
+	d.Fields.ResetFloor()
+	d = reloadLifetime(t, d)
+	if !d.Fields.DoubleTurns || !d.Fields.ExerciseWithoutResponse || d.Fields.Default != "default" || d.Fields.Temporary != "" || d.Fields.Turns != 0 || d.Fields.AntiTurns != 0 {
+		t.Fatalf("reset floor: %+v", d.Fields)
+	}
 }
 
 func TestLifetimeCounterPredicates(t *testing.T) {

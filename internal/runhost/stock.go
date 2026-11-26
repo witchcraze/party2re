@@ -62,7 +62,7 @@ func (s *Service[R, P]) stockLevel(ctx context.Context, run *R, cmd Command, req
 		First: first,
 		Tail:  corebattle.PlayerTailContext{DamageContext: damage, DefeatContext: defeat},
 		Field: corebattle.NamedFieldContext{DamageContext: damage, Death: defeat},
-		// A room without responses disables NPC-dependent field exercises.
+		// A room without responses disables NPC-dependent field exercises unless ExerciseWithoutResponse is set.
 		ResponseEnabled: s.responds(run),
 		LevelUp: func(b *corebattle.LifetimeState, rng random.Generator) (bool, error) {
 			if b.SpecialBossField || requester.Level != level {

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 func namedFieldFixture() (LifetimeState, NamedFieldContext) {
@@ -51,6 +53,49 @@ func TestNamedFieldProducerDurationsAndCreationBoundaries(t *testing.T) {
 	before := reloadLifetime(t, s)
 	if err := s.ApplyNamedField(&c, "job-22-entry-5", &targetRNG{t: t, draws: []float64{0}}); err != nil || !reflect.DeepEqual(before, s) {
 		t.Fatal(err, s)
+	}
+	// DoubleTurns doubles both execution duration and admission projection.
+	for _, row := range []struct {
+		id, field   string
+		base, width int
+	}{
+		{"job-22-entry-5", "darkness", 5, 5}, {"job-29-entry-7", "cosmic", 5, 3}, {"job-53-entry-6", "antlion", 6, 5}, {"job-86-entry-1", "library", 11, 6},
+	} {
+		s, c := namedFieldFixture()
+		s.Fields.DoubleTurns = true
+		c.Arguments = []string{"enemy"}
+		draws := []float64{.999}
+		if row.field == "cosmic" {
+			s.actor("self").MaxMP = 100
+			draws = append(draws, 0)
+		}
+		if row.field == "antlion" {
+			draws = append(draws, .5)
+		}
+		rng := &targetRNG{t: t, draws: draws}
+		if err := s.ApplyNamedField(&c, row.id, rng); err != nil || s.Fields.Temporary != row.field || s.Fields.Turns != 2*(row.base+int(.999*float64(row.width))) {
+			t.Fatal(row, err, s.Fields)
+		}
+		rng.done()
+	}
+	ds, dc := namedFieldFixture()
+	ds.Fields.DoubleTurns = true
+	dc.SubmittedCommand, dc.SubmittedTarget = "＠darkness-cont", "enemy"
+	dc.Discovered = []CallbackEntry{{ID: "cont", Name: "darkness-cont"}}
+	dc.EntryKey = func(string) string { return "darkness-cont" }
+	dc.Catalog = CallbackCatalog{Entries: map[string]CallbackDefinition{
+		"cont": {
+			Validate: func(projected *LifetimeState, _ *CallbackContext) error {
+				if projected.Fields.Turns != 10 {
+					t.Fatalf("admission projected turns = %d, want 10", projected.Fields.Turns)
+				}
+				return nil
+			},
+			Execute: func(*LifetimeState, *CallbackContext, random.Generator) error { return nil },
+		},
+	}}
+	if err := ds.ValidateNamedField(&dc, "job-22-entry-5", &targetRNG{t: t}); err != nil {
+		t.Fatal(err)
 	}
 }
 

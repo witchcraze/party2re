@@ -552,3 +552,25 @@ func TestSealingCatalogBossesRespond(t *testing.T) {
 		}
 	}
 }
+
+func TestSealingRoomDoublesFieldDuration(t *testing.T) {
+	f := newSealFixture(t, random.Default(), boss.BossMonster{Name: "王", HP: 900000, Defense: 900000, Attack: 1, Agility: 1})
+	ctx := context.Background()
+	runID := f.open(t)
+	a := f.hero(t)
+	a.JobID, a.SP = "job-84", 140
+	if err := f.chars.Update(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	f.join(t, a, runID)
+	if r := f.room(t); !r.Battle.Fields.DoubleTurns || r.Battle.Fields.ExerciseWithoutResponse {
+		t.Fatalf("sealing field flags = %+v", r.Battle.Fields)
+	}
+	if _, err := f.command(a, runID, "job-84-entry-4", ""); err != nil {
+		t.Fatal(err)
+	}
+	r := f.room(t)
+	if r.Battle.Fields.Temporary != "burn" || r.Battle.Fields.Turns != 9 || !r.Battle.Fields.DoubleTurns {
+		t.Fatalf("sealing burn field = %+v, want burn with 9 turns and DoubleTurns=true", r.Battle.Fields)
+	}
+}

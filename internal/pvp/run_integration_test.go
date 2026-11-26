@@ -415,3 +415,55 @@ func TestRunHandoffGroupsAFullerRoomByColor(t *testing.T) {
 		t.Fatal(order, r.Pool)
 	}
 }
+
+func TestRunMatchDoublesFieldDurationAndExercisesTails(t *testing.T) {
+	f := newMatchFixture(t, 2, pvp.ColorRed, pvp.ColorBlue)
+	ctx := context.Background()
+	for i, jobID := range []string{"job-84", "starter"} {
+		c := f.actors[i]
+		c.JobID, c.SP = jobID, 140
+		c.Stats = corecharacter.Stats{HP: 500, MaxHP: 500, MP: 100, MaxMP: 100, Attack: 50, Defense: 50, Agility: 50}
+		if err := f.chars.Update(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entry, err := f.start(t, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := entry.Command.RunID
+	r := f.run(t, runID)
+	if !r.Battle.Fields.DoubleTurns || !r.Battle.Fields.ExerciseWithoutResponse {
+		t.Fatalf("pvp field flags = %+v", r.Battle.Fields)
+	}
+
+	// job-84-entry-4 creates a 5-turn burn field -> 10 in PvP, exercises burn tail (500 - 50 = 450), then ticks to 9.
+	f.send(t, runID, 0, "job-84-entry-4", "")
+	f.restart(t)
+	r = f.run(t, runID)
+	if r.Battle.Fields.Temporary != "burn" || r.Battle.Fields.Turns != 9 {
+		t.Fatalf("burn after pvp cast = %+v", r.Battle.Fields)
+	}
+	if a := r.Actor(f.actors[0].ID); a.HP != 450 {
+		t.Fatalf("actor 0 HP after pvp burn tail = %d, want 450", a.HP)
+	}
+	oppBefore := r.Actor(f.actors[1].ID).HP
+
+	// Opponent's defend also exercises burn tail (-50 HP) and ticks turns 9 -> 8.
+	f.send(t, runID, 1, "defend", "")
+	r = f.run(t, runID)
+	if r.Battle.Fields.Turns != 8 {
+		t.Fatalf("burn turns after opponent defend = %d, want 8", r.Battle.Fields.Turns)
+	}
+	if b := r.Actor(f.actors[1].ID); b.HP != oppBefore-50 {
+		t.Fatalf("actor 1 HP after pvp burn tail = %d, want %d", b.HP, oppBefore-50)
+	}
+
+	// Round reset clears active field turns while retaining PvP field flags.
+	f.stage(t, runID, func(r *pvp.Run) { r.Actor(f.actors[1].ID).HP = 0 })
+	f.send(t, runID, 0, "start", "")
+	r = f.run(t, runID)
+	if r.Round != 2 || !r.Battle.Fields.DoubleTurns || !r.Battle.Fields.ExerciseWithoutResponse || r.Battle.Fields.Temporary != "" || r.Battle.Fields.Turns != 0 {
+		t.Fatalf("round 2 field state = %+v", r.Battle.Fields)
+	}
+}
