@@ -203,7 +203,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | Design Doc & OpenAPI | Review boundary | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| `lib/vs_monster.cgi`, `lib/adventure.cgi`, `lib/adventure_record.cgi` | 冒険・階層探索 (Adventure) | `internal/adventure/` | [design/adventure.md](../design/adventure.md)<br/>[design/stages-and-monsters.md](../design/stages-and-monsters.md)<br/>[api/paths/adventure.json](../api/paths/adventure.json) | Partial; interaction missing (#1323) | 開始一要求で全戦闘・階層・調査を自動完了する重大gap。原典 `vs_monster.cgi:35–82` / `_battle.cgi:561–659,1169–1178` / `_npc_action.cgi:89–155` の明示action・対象・行動間隔・NPC反撃・個別退出を復元する。#478の1時間待機撤去は操作省略の承認ではなく、#1014は既存transport接続のみ。 |
+| `lib/vs_monster.cgi`, `lib/adventure.cgi`, `lib/adventure_record.cgi` | 冒険・階層探索 (Adventure) | `internal/adventure/` | [design/adventure.md](../design/adventure.md)<br/>[api/paths/adventure.json](../api/paths/adventure.json) | Partial; interaction missing (#1323) | 開始一要求で全戦闘・階層・調査を自動完了する重大gap。原典 `vs_monster.cgi:35–82` / `_battle.cgi:561–659,1169–1178` / `_npc_action.cgi:89–155` の明示action・対象・行動間隔・NPC反撃・個別退出を復元する。#478の1時間待機撤去は操作省略の承認ではなく、#1014は既存transport接続のみ。 |
 | `lib/vs_king.cgi`, `lib/_win_vs_king.cgi` | 封印の魔王 (Boss) | `internal/boss/` | [design/boss.md](../design/boss.md) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `lib/_battle.cgi` | コア戦闘エンジン | `internal/core/battle/` | [design/battle.md](../design/battle.md) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
 | `lib/_skill.cgi` | スキル発動エンジン | `internal/core/skill/` | [design/jobs-and-skills.md](../design/jobs-and-skills.md) | Review against source | 仕様・残差は所有 Design Doc と原典を照合する。 |
@@ -245,7 +245,7 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 
 | Script / Directory | Contents | Target Implementation in Go | Migration Status |
 | :--- | :--- | :--- | :---: |
-| `party2/stage/0.cgi` .. `27.cgi` | 28の通常冒険ステージ構成・敵出現テーブル | `internal/adventure/data/stages.json`<br/>[design/stages-and-monsters.md](../design/stages-and-monsters.md) | Compliant |
+| `party2/stage/0.cgi` .. `27.cgi` | 28の通常冒険ステージ構成・敵出現テーブル | `internal/adventure/data/stages.json`<br/>[design/adventure.md](../design/adventure.md#stage-admission-and-clean-room-enemy-data) | Compliant |
 | `party2/stage/king1.cgi` .. `king99.cgi` | 10体の封印魔王ステージ構成・耐性テーブル | `internal/boss/catalog.go`<br/>[design/boss.md](../design/boss.md) | Compliant |
 | `party2/challenge/0.cgi` .. `8.cgi` | 9段階の連戦チャレンジステージ構成 | `internal/challenge/data/challenge_tiers.json`<br/>[design/challenge.md](../design/challenge.md) | Compliant |
 | `party2/map/0` .. `17` | ダンジョンマップ・イベント | `internal/dungeon/catalog.go`, `internal/dungeon/native_map.go`, `internal/dungeon/native_map1.go`, `internal/dungeon/native_map2.go`, `internal/dungeon/native_map3.go`<br/>[native contract and restoration scopes](../design/dungeon.md#native-map-contract) | Maps 0–3 restored natively with listed differences; the other maps remain planned. |

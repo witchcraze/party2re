@@ -310,7 +310,8 @@ func (r *mockInventoryRepository) Save(_ context.Context, inv coreinventory.Inve
 }
 
 type mockStageProvider struct {
-	stages map[string]adventure.Stage
+	stages      map[string]adventure.Stage
+	reqJobLevel map[string]int
 }
 
 func (p *mockStageProvider) FindByID(id string) (adventure.Stage, error) {
@@ -322,12 +323,11 @@ func (p *mockStageProvider) FindByID(id string) (adventure.Stage, error) {
 }
 
 func (p *mockStageProvider) CanAccessStage(c corecharacter.Character, stageID string) error {
-	s, ok := p.stages[stageID]
-	if !ok {
+	if _, ok := p.stages[stageID]; !ok {
 		return adventure.ErrStageNotFound
 	}
-	if s.MinLevel > 0 && c.Level < s.MinLevel {
-		return adventure.ErrLevelRequirementNotMet
+	if req := p.reqJobLevel[stageID]; req > 0 && c.JobLevel < req {
+		return adventure.ErrJobLevelRequirementNotMet
 	}
 	return nil
 }
@@ -534,11 +534,9 @@ func TestPartyService_JoinAndLeave(t *testing.T) {
 		t.Fatalf("expected ErrInvalidPassword, got %v", err)
 	}
 
-	// 2. Joiners face no stage or level gate (quest.cgi add_member).
+	// 2. Joiners face no stage or job-level gate (quest.cgi add_member).
 	stages := svc.stages.(*mockStageProvider)
-	forest := stages.stages["forest"]
-	forest.MinLevel = 5
-	stages.stages["forest"] = forest
+	stages.reqJobLevel = map[string]int{"forest": 5}
 	if err := stages.CanAccessStage(mLowLevel, "forest"); err == nil {
 		t.Fatal("fixture must fail the creator stage gate")
 	}

@@ -2,7 +2,6 @@
   {
     "id": "stage-00",
     "name": "プニプニ平原",
-    "min_level": 1,
     "monster_ids": [
       "monster-001",
       "monster-002",
@@ -52,7 +51,6 @@
   {
     "id": "stage-01",
     "name": "キノコの森",
-    "min_level": 3,
     "monster_ids": [
       "monster-008",
       "monster-009",
@@ -115,7 +113,6 @@
   {
     "id": "stage-02",
     "name": "幽霊城",
-    "min_level": 6,
     "monster_ids": [
       "monster-018",
       "monster-019",
@@ -183,7 +180,6 @@
   {
     "id": "stage-03",
     "name": "海辺の洞窟",
-    "min_level": 9,
     "monster_ids": [
       "monster-028",
       "monster-029",
@@ -254,7 +250,6 @@
   {
     "id": "stage-04",
     "name": "地獄の砂浜",
-    "min_level": 12,
     "monster_ids": [
       "monster-037",
       "monster-038",
@@ -328,7 +323,6 @@
   {
     "id": "stage-05",
     "name": "魔術師の塔",
-    "min_level": 15,
     "monster_ids": [
       "monster-048",
       "monster-049",
@@ -413,7 +407,6 @@
   {
     "id": "stage-06",
     "name": "荒野の獣道",
-    "min_level": 18,
     "monster_ids": [
       "monster-061",
       "monster-062",
@@ -488,7 +481,6 @@
   {
     "id": "stage-07",
     "name": "マグマ山",
-    "min_level": 21,
     "monster_ids": [
       "monster-074",
       "monster-075",
@@ -562,7 +554,6 @@
   {
     "id": "stage-08",
     "name": "妖精の森",
-    "min_level": 24,
     "monster_ids": [
       "monster-088",
       "monster-089",
@@ -646,7 +637,6 @@
   {
     "id": "stage-09",
     "name": "スライムランド",
-    "min_level": 27,
     "monster_ids": [
       "monster-098",
       "monster-099",
@@ -743,7 +733,6 @@
   {
     "id": "stage-10",
     "name": "死霊の沼地",
-    "min_level": 30,
     "monster_ids": [
       "monster-119",
       "monster-120",
@@ -831,7 +820,6 @@
   {
     "id": "stage-11",
     "name": "ドラゴンの谷",
-    "min_level": 33,
     "monster_ids": [
       "monster-133",
       "monster-134",
@@ -914,7 +902,6 @@
   {
     "id": "stage-12",
     "name": "暗黒魔城",
-    "min_level": 36,
     "monster_ids": [
       "monster-144",
       "monster-145",
@@ -989,7 +976,6 @@
   {
     "id": "stage-13",
     "name": "死の大地",
-    "min_level": 39,
     "monster_ids": [
       "monster-157",
       "monster-158",
@@ -1050,7 +1036,6 @@
   {
     "id": "stage-14",
     "name": "魔界",
-    "min_level": 42,
     "monster_ids": [
       "monster-169",
       "monster-170",
@@ -1119,7 +1104,6 @@
   {
     "id": "stage-15",
     "name": "鏡の世界",
-    "min_level": 25,
     "monster_ids": [
       "monster-182",
       "monster-183",
@@ -1220,7 +1204,6 @@
   {
     "id": "stage-16",
     "name": "マダムガーデン",
-    "min_level": 30,
     "monster_ids": [
       "monster-112",
       "monster-113",
@@ -1301,7 +1284,6 @@
   {
     "id": "stage-17",
     "name": "幻の秘境",
-    "min_level": 35,
     "monster_ids": [
       "monster-190",
       "monster-191",
@@ -1522,7 +1504,6 @@
   {
     "id": "stage-18",
     "name": "闇のランプ",
-    "min_level": 40,
     "monster_ids": [
       "monster-202",
       "monster-203",
@@ -1555,7 +1536,6 @@
   {
     "id": "stage-19",
     "name": "封印の地",
-    "min_level": 45,
     "monster_ids": [
       "monster-211",
       "monster-212"
@@ -1647,7 +1627,6 @@
   {
     "id": "stage-20",
     "name": "天空城",
-    "min_level": 50,
     "monster_ids": [
       "monster-213",
       "monster-214",
@@ -1690,7 +1669,6 @@
   {
     "id": "stage-21",
     "name": "カオスフィールド",
-    "min_level": 55,
     "monster_ids": [
       "monster-220",
       "monster-221",
@@ -1737,7 +1715,6 @@
   {
     "id": "stage-22",
     "name": "ワイルドアピアリー",
-    "min_level": 60,
     "monster_ids": [
       "monster-236",
       "monster-237",
@@ -1808,7 +1785,6 @@
   {
     "id": "stage-23",
     "name": "プニプニ雪原",
-    "min_level": 65,
     "monster_ids": [
       "monster-244",
       "monster-245",
@@ -1925,7 +1901,6 @@
   {
     "id": "stage-24",
     "name": "白亜の宮殿",
-    "min_level": 70,
     "monster_ids": [
       "monster-251",
       "monster-252",
@@ -1986,7 +1961,6 @@
   {
     "id": "stage-25",
     "name": "氷の彫刻館",
-    "min_level": 75,
     "monster_ids": [
       "monster-260",
       "monster-261",
@@ -2089,7 +2063,6 @@
   {
     "id": "stage-26",
     "name": "四季のダンジョン",
-    "min_level": 80,
     "monster_ids": [
       "monster-275",
       "monster-276",
@@ -2475,7 +2448,6 @@
   {
     "id": "stage-27",
     "name": "ハロウィンタウン",
-    "min_level": 85,
     "monster_ids": [
       "monster-280",
       "monster-281",

@@ -81,7 +81,7 @@
               }
             }
           },
-          "description": "Authentication/ownership rejection exposes no context. Adventure service rejects level/job-level requirements with ADVENTURE_LEVEL_REQUIRED / ADVENTURE_JOB_LEVEL_REQUIRED and refreshes when possible. Challenge ownership rejection uses CHALLENGE_FORBIDDEN."
+          "description": "Authentication/ownership rejection exposes no context. Adventure service rejects job-level requirements with ADVENTURE_JOB_LEVEL_REQUIRED and refreshes when possible. Challenge ownership rejection uses CHALLENGE_FORBIDDEN."
         },
         "404": {
           "content": {

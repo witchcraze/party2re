@@ -130,7 +130,7 @@ func partyLobbyRejection(err error) (int, ErrorDetail) {
 		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PARTY_JOIN_CONDITION", Message: "参加条件を満たしていません"}
 	case errors.Is(err, party.ErrInvalidPartyName), errors.Is(err, party.ErrInvalidMaxMembers), errors.Is(err, party.ErrInvalidSpeed), errors.Is(err, party.ErrStageNotFound):
 		return http.StatusBadRequest, ErrorDetail{Code: "INVALID_ACTION_PARAMS", Message: "Invalid action parameters."}
-	case errors.Is(err, adventure.ErrStageNotAvailable), errors.Is(err, adventure.ErrLevelRequirementNotMet), errors.Is(err, adventure.ErrJobLevelRequirementNotMet):
+	case errors.Is(err, adventure.ErrStageNotAvailable), errors.Is(err, adventure.ErrJobLevelRequirementNotMet):
 		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PARTY_STAGE_UNAVAILABLE", Message: "冒険場所が異常です"}
 	case errors.Is(err, party.ErrDailyOnceAlreadyUsed):
 		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PARTY_DAILY_ONCE_USED", Message: err.Error()}

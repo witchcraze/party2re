@@ -104,8 +104,8 @@ func TestNormalizePagination(t *testing.T) {
 func TestListHistory(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	stages, err := NewStageCatalog([]Stage{
-		{ID: "stage-01", Name: "平原", MinLevel: 1, MonsterIDs: []string{"mon-01"}},
-		{ID: "stage-02", Name: "森林", MinLevel: 2, MonsterIDs: []string{"mon-02"}},
+		{ID: "stage-01", Name: "平原", MonsterIDs: []string{"mon-01"}},
+		{ID: "stage-02", Name: "森林", MonsterIDs: []string{"mon-02"}},
 	})
 	if err != nil {
 		t.Fatalf("create stage catalog: %v", err)
@@ -217,8 +217,8 @@ func TestListHistory(t *testing.T) {
 func TestGetChronicle(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	stages, err := NewStageCatalog([]Stage{
-		{ID: "stage-01", Name: "平原", MinLevel: 1, MonsterIDs: []string{"mon-01"}},
-		{ID: "stage-02", Name: "森林", MinLevel: 2, MonsterIDs: []string{"mon-02"}},
+		{ID: "stage-01", Name: "平原", MonsterIDs: []string{"mon-01"}},
+		{ID: "stage-02", Name: "森林", MonsterIDs: []string{"mon-02"}},
 	})
 	if err != nil {
 		t.Fatalf("create stage catalog: %v", err)

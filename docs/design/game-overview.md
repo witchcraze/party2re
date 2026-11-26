@@ -145,7 +145,7 @@ The target is the game's meaningful behavior and design, not its historical impl
 - [`jobs-and-skills.md`](jobs-and-skills.md) — jobs, mastery, and skill execution
 - [`items-and-equipment.md`](items-and-equipment.md) — usage categories, legacy hand fields, and equipment rules
 - [`activities.md`](activities.md) — delayed training activities
-- [`stages-and-monsters.md`](stages-and-monsters.md) — stage exploration and monster catalog
+- [`adventure.md`](adventure.md) — stage admission, exploration, and clean-room enemy data
 - [`shops.md`](shops.md) — item purchase and 50% resale
 - [`depot.md`](depot.md) — item storage and delivery
 - [`blacksmith.md`](blacksmith.md) — weapon seals, equipment naming, and dedicated storage

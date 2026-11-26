@@ -11,11 +11,11 @@ import (
 )
 
 func TestStageCreation(t *testing.T) {
-	st, err := adventure.NewStage("s-1", "Meadow", 1, []string{"m-1"})
+	st, err := adventure.NewStage("s-1", "Meadow", []string{"m-1"})
 	if err != nil {
 		t.Fatalf("NewStage() error = %v", err)
 	}
-	if st.ID != "s-1" || st.Name != "Meadow" || st.MinLevel != 1 {
+	if st.ID != "s-1" || st.Name != "Meadow" {
 		t.Errorf("NewStage() = %#v", st)
 	}
 	if len(st.GetBossIDs()) != 1 || st.GetBossIDs()[0] != "m-1" {
@@ -28,19 +28,17 @@ func TestStageCreationValidation(t *testing.T) {
 		name      string
 		id        string
 		stageName string
-		minLevel  int
 		monsters  []string
 	}{
-		{name: "empty id", id: "", stageName: "Meadow", minLevel: 1, monsters: []string{"m-1"}},
-		{name: "empty name", id: "s-1", stageName: "", minLevel: 1, monsters: []string{"m-1"}},
-		{name: "non-positive minLevel", id: "s-1", stageName: "Meadow", minLevel: 0, monsters: []string{"m-1"}},
-		{name: "empty monsters", id: "s-1", stageName: "Meadow", minLevel: 1, monsters: []string{}},
-		{name: "nil monsters", id: "s-1", stageName: "Meadow", minLevel: 1, monsters: nil},
+		{name: "empty id", id: "", stageName: "Meadow", monsters: []string{"m-1"}},
+		{name: "empty name", id: "s-1", stageName: "", monsters: []string{"m-1"}},
+		{name: "empty monsters", id: "s-1", stageName: "Meadow", monsters: []string{}},
+		{name: "nil monsters", id: "s-1", stageName: "Meadow", monsters: nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := adventure.NewStage(tt.id, tt.stageName, tt.minLevel, tt.monsters)
+			_, err := adventure.NewStage(tt.id, tt.stageName, tt.monsters)
 			if err == nil {
 				t.Errorf("NewStage(%s) expected error, got nil", tt.name)
 			}
@@ -49,8 +47,8 @@ func TestStageCreationValidation(t *testing.T) {
 }
 
 func TestStageCatalogOperations(t *testing.T) {
-	s1, _ := adventure.NewStage("s-1", "Meadow", 1, []string{"m-1", "m-boss"})
-	s2, _ := adventure.NewStageWithBosses("s-2", "Cave", 5, []string{"m-2"}, []string{"m-boss2"})
+	s1, _ := adventure.NewStage("s-1", "Meadow", []string{"m-1", "m-boss"})
+	s2, _ := adventure.NewStageWithBosses("s-2", "Cave", []string{"m-2"}, []string{"m-boss2"})
 
 	cat, err := adventure.NewStageCatalog([]adventure.Stage{s1, s2})
 	if err != nil {
@@ -77,7 +75,7 @@ func TestStageCatalogOperations(t *testing.T) {
 
 func TestStage_BossAndNormalMonsters(t *testing.T) {
 	// Without explicit bosses, last monster is boss
-	s1, _ := adventure.NewStage("s-1", "Meadow", 1, []string{"m-1", "m-2", "m-boss"})
+	s1, _ := adventure.NewStage("s-1", "Meadow", []string{"m-1", "m-2", "m-boss"})
 	bosses := s1.GetBossIDs()
 	if len(bosses) != 1 || bosses[0] != "m-boss" {
 		t.Fatalf("expected m-boss, got %v", bosses)
@@ -88,7 +86,7 @@ func TestStage_BossAndNormalMonsters(t *testing.T) {
 	}
 
 	// With explicit bosses
-	s2, _ := adventure.NewStageWithBosses("s-2", "Forest", 3, []string{"m-1", "m-2", "b-1", "b-2"}, []string{"b-1", "b-2"})
+	s2, _ := adventure.NewStageWithBosses("s-2", "Forest", []string{"m-1", "m-2", "b-1", "b-2"}, []string{"b-1", "b-2"})
 	bosses2 := s2.GetBossIDs()
 	if len(bosses2) != 2 || bosses2[0] != "b-1" || bosses2[1] != "b-2" {
 		t.Fatalf("expected [b-1, b-2], got %v", bosses2)
@@ -151,39 +149,47 @@ func TestCanAccessStage(t *testing.T) {
 		JobLevel: 0,
 	}
 
-	// stage-00: minLevel 1, jobLevel 0 -> OK
-	if err := cat.CanAccessStage(novice, "stage-00"); err != nil {
-		t.Errorf("novice should access stage-00, got: %v", err)
+	// stage-00..stage-02: jobLevel 0 -> OK regardless of character level
+	for _, id := range []string{"stage-00", "stage-01", "stage-02"} {
+		if err := cat.CanAccessStage(novice, id); err != nil {
+			t.Errorf("novice (Lv 1, JobLv 0) should access %s, got: %v", id, err)
+		}
 	}
 
-	// stage-02: minLevel 5, jobLevel 0 -> Level fails first (level 1 < 5)
-	if err := cat.CanAccessStage(novice, "stage-02"); err != adventure.ErrLevelRequirementNotMet {
-		t.Errorf("expected ErrLevelRequirementNotMet, got: %v", err)
-	}
-
-	// Lv 20, JobLevel 0 -> OK for stage-02 (stage-02 requires jobLevel 0)
+	// stage-03 requires jobLevel 1 even at Lv 99
 	experiencedNovice := corecharacter.Character{
 		ID:       "c-2",
-		Level:    20,
+		Level:    99,
 		JobLevel: 0,
 	}
-	if err := cat.CanAccessStage(experiencedNovice, "stage-02"); err != nil {
-		t.Errorf("expected experiencedNovice to access stage-02, got: %v", err)
-	}
-
-	// Lv 20, JobLevel 0 -> JobLevel fails on stage-03 (requires jobLevel 1)
 	if err := cat.CanAccessStage(experiencedNovice, "stage-03"); err != adventure.ErrJobLevelRequirementNotMet {
 		t.Errorf("expected ErrJobLevelRequirementNotMet for stage-03, got: %v", err)
 	}
 
-	// Lv 20, JobLevel 1 -> OK for stage-03
+	// Lv 1, JobLevel 1 -> OK for stage-03 (no character-level gate)
 	reincarnated := corecharacter.Character{
 		ID:       "c-3",
-		Level:    20,
+		Level:    1,
 		JobLevel: 1,
 	}
 	if err := cat.CanAccessStage(reincarnated, "stage-03"); err != nil {
-		t.Errorf("reincarnated should access stage-03, got: %v", err)
+		t.Errorf("Lv 1, JobLevel 1 should access stage-03, got: %v", err)
+	}
+
+	// Lv 1 with sufficient job level can access every stage (00..27) in season.
+	jst := time.FixedZone("JST", 9*60*60)
+	masterLv1 := corecharacter.Character{ID: "c-master-lv1", Level: 1, JobLevel: 50}
+	for _, st := range cat.Stages() {
+		checkAt := time.Date(2026, 5, 1, 12, 0, 0, 0, jst)
+		switch st.ID {
+		case "stage-23", "stage-25":
+			checkAt = time.Date(2026, 12, 15, 12, 0, 0, 0, jst)
+		case "stage-27":
+			checkAt = time.Date(2026, 10, 15, 12, 0, 0, 0, jst)
+		}
+		if err := cat.CanAccessStageAt(masterLv1, st.ID, checkAt); err != nil {
+			t.Errorf("Lv 1 JobLevel 50 should access %s in season, got: %v", st.ID, err)
+		}
 	}
 }
 
@@ -252,9 +258,6 @@ func TestInitialStageCatalogValid(t *testing.T) {
 		if s.Name == "" {
 			t.Errorf("stage %s has empty Name", s.ID)
 		}
-		if s.MinLevel < 1 {
-			t.Errorf("stage %s has invalid MinLevel: %d", s.ID, s.MinLevel)
-		}
 		if len(s.MonsterIDs) == 0 {
 			t.Errorf("stage %s has no monsters", s.ID)
 		}
@@ -280,20 +283,19 @@ func TestRequiredJobLevel_Stage2To14Boundaries(t *testing.T) {
 		req := stageNum - 2
 
 		t.Run(fmt.Sprintf("%s_req_%d", stageID, req), func(t *testing.T) {
-			// Character level 99 ensures MinLevel requirement is always satisfied.
 			if req > 0 {
-				before := corecharacter.Character{ID: "char-before", Level: 99, JobLevel: req - 1}
+				before := corecharacter.Character{ID: "char-before", Level: 1, JobLevel: req - 1}
 				if err := cat.CanAccessStage(before, stageID); !errors.Is(err, adventure.ErrJobLevelRequirementNotMet) {
 					t.Errorf("[%s] JobLevel %d (before %d): expected ErrJobLevelRequirementNotMet, got %v", stageID, req-1, req, err)
 				}
 			}
 
-			at := corecharacter.Character{ID: "char-at", Level: 99, JobLevel: req}
+			at := corecharacter.Character{ID: "char-at", Level: 1, JobLevel: req}
 			if err := cat.CanAccessStage(at, stageID); err != nil {
 				t.Errorf("[%s] JobLevel %d (exact match): expected nil, got %v", stageID, req, err)
 			}
 
-			after := corecharacter.Character{ID: "char-after", Level: 99, JobLevel: req + 1}
+			after := corecharacter.Character{ID: "char-after", Level: 1, JobLevel: req + 1}
 			if err := cat.CanAccessStage(after, stageID); err != nil {
 				t.Errorf("[%s] JobLevel %d (after %d): expected nil, got %v", stageID, req+1, req, err)
 			}
