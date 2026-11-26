@@ -189,12 +189,11 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 
-		// Reject if OverLevel
+		// Refuse if OverLevel
 		char.OverLevel = true
 		charRepo.characters[char.ID] = char
-		_, err = svc.GrantWish(ctx, char.ID, god.WishStats)
-		if !errors.Is(err, god.ErrWishRequirement) {
-			t.Errorf("expected ErrWishRequirement for OverLevel, got %v", err)
+		if res, err := svc.GrantWish(ctx, char.ID, god.WishStats); err != nil || !res.Refused {
+			t.Errorf("expected refusal for OverLevel, got %+v %v", res, err)
 		}
 	})
 
@@ -283,16 +282,20 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 	})
 
-	t.Run("wish_guild_rank and wish_guild_gorgeous require guild membership", func(t *testing.T) {
+	t.Run("wish_guild_rank and wish_guild_gorgeous affect only a guild member", func(t *testing.T) {
 		svc, charRepo, _, _, _, guildRepo, _, _, _ := setupHeavenService()
 		char := corecharacter.Character{ID: "char-guild", Name: "GuildMaster"}
 		charRepo.characters[char.ID] = char
 
-		// Without guild: fails
-		_, err := svc.GrantWish(ctx, char.ID, god.WishGuildRank)
-		if !errors.Is(err, god.ErrWishRequirement) {
-			t.Errorf("expected ErrWishRequirement without guild, got %v", err)
+		// Without guild: granted with no effect (god.cgi:38,46)
+		for _, wish := range []string{god.WishGuildRank, god.WishGuildGorgeous} {
+			charRepo.characters[char.ID] = char
+			res, err := svc.GrantWish(ctx, char.ID, wish)
+			if err != nil || res.Refused || res.Character.GodVisit != "" || len(guildRepo.guilds) != 0 || guildRepo.decorations != 0 {
+				t.Errorf("%s without guild: %+v %v", wish, res, err)
+			}
 		}
+		charRepo.characters[char.ID] = char
 
 		// Join guild
 		guildRepo.guilds["guild-1"] = guild.Guild{ID: "guild-1", Name: "Test Guild", Points: 200}
@@ -344,10 +347,6 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		if stored := charRepo.characters[char.ID]; stored.Stats.HP != 10 || stored.Stats.MP != 0 || stored.Tired != -70 {
 			t.Errorf("expected persisted Tired -70 and HP/MP 10/0, got %d and %d/%d", stored.Tired, stored.Stats.HP, stored.Stats.MP)
-		}
-		expectedMsg := "疲労度が 150% 回復しました！"
-		if res.Message != expectedMsg {
-			t.Errorf("expected Message %q, got %q", expectedMsg, res.Message)
 		}
 		if res.Character.GodVisit != "" {
 			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
@@ -413,10 +412,9 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 			t.Errorf("expected the granted wish to end the visit, got %q", res.Character.GodVisit)
 		}
 
-		// Reject if already job-70
-		_, err = svc.GrantWish(ctx, char.ID, god.WishCelestialDragon)
-		if !errors.Is(err, god.ErrWishRequirement) {
-			t.Errorf("expected ErrWishRequirement for existing job-70, got %v", err)
+		// Refuse if already job-70
+		if res, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon); err != nil || !res.Refused || res.Character.JobID != "job-70" {
+			t.Errorf("expected refusal for existing job-70, got %+v %v", res, err)
 		}
 	})
 
@@ -568,9 +566,6 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		if res.Character.GodVisit != string(god.RealmHeaven) {
 			t.Errorf("expected the refused wish to keep the visit, got %q", res.Character.GodVisit)
-		}
-		if res.Message != "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…" {
-			t.Errorf("unexpected message: %s", res.Message)
 		}
 	})
 }

@@ -38,7 +38,7 @@ func TestGod_GrantWish_Admission(t *testing.T) {
 		// The visit decides the realm, so an Underworld wish is unknown in Heaven.
 		{"other realm wish", corecharacter.GodVisitHeaven, god.WishExpandDepot, nil, god.ErrWishNotFound, corecharacter.GodVisitHeaven, 0},
 		{"granted ends visit", corecharacter.GodVisitHeaven, god.WishMoney, nil, nil, "", 100000},
-		{"unmet requirement keeps visit", corecharacter.GodVisitHeaven, god.WishGuildRank, nil, god.ErrWishRequirement, corecharacter.GodVisitHeaven, 0},
+		{"unmet requirement keeps visit", corecharacter.GodVisitHeaven, god.WishLimitBreakLevel, nil, god.ErrWishRequirement, corecharacter.GodVisitHeaven, 0},
 		{"lover keeps visit", corecharacter.GodVisitHeaven, god.WishLover, nil, nil, corecharacter.GodVisitHeaven, 0},
 		{"dependency failure keeps visit", corecharacter.GodVisitHeaven, god.WishCasinoCoins, failingCasino{}, errCasinoSave, corecharacter.GodVisitHeaven, 0},
 	} {

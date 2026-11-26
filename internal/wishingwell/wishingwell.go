@@ -3,7 +3,6 @@ package wishingwell
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -61,11 +60,5 @@ type ExchangeResult struct {
 	SPConsumed   int                          `json:"sp_consumed"`
 	StatIncrease int                          `json:"stat_increase"`
 	RemainingSP  int                          `json:"remaining_sp"`
-	Message      string                       `json:"message"`
 	Character    corecharacter.Character      `json:"character"`
-}
-
-// FormatExchangeMessage formats the legacy NPC dialogue upon exchange ($npc_com).
-func FormatExchangeMessage(sp int, statName string, statIncrease int) string {
-	return fmt.Sprintf("SP %d のかわりに %s を %d あたえましょう", sp, statName, statIncrease)
 }

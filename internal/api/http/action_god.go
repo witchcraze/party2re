@@ -47,7 +47,7 @@ func WithGod(service GodService) Option {
 			if err != nil {
 				return nil, err
 			}
-			return godWishResponse{WishResult: res, NPCSpeech: godWishNPCSpeech(res.Wish, res.Character.Name)}, nil
+			return godWishResponse{WishResult: res, NPCSpeech: godWishNPCSpeech(res)}, nil
 		}, godActionRejection)(h)
 	}
 }
@@ -64,12 +64,23 @@ func (h *Handler) godSceneData(ctx context.Context, r playercontext.Result) (any
 	return GodSceneData{Parent: "town", Realm: realm, Wishes: append([]god.Wish{}, wishes...)}, nil
 }
 
-// godWishNPCSpeech is ＠ねがう's reply; both realms share it (god.cgi:172–175, u_god.cgi:66–68).
-func godWishNPCSpeech(wish god.Wish, characterName string) string {
-	if wish.ID == god.WishLover {
-		return "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…"
+// godWishNPCSpeech is ＠ねがう's reply; both realms share the grant line
+// (god.cgi:172–175, u_god.cgi:66–68), and a refusal is the wish's $mes.
+func godWishNPCSpeech(res god.WishResult) string {
+	name := res.Character.Name
+	if !res.Refused {
+		return fmt.Sprintf("ふむ。%sの願いは「%s」だな。\n%sの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…", name, res.Wish.Name, name)
 	}
-	return fmt.Sprintf("ふむ。%sの願いは「%s」だな。\n%sの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…", characterName, wish.Name, characterName)
+	switch res.Wish.ID {
+	case god.WishLover:
+		return "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…"
+	case god.WishStats:
+		return "それは無理な願いだ…。私の力ではこれ以上" + name + "を強くできんのだ…"
+	case god.WishCelestialDragon:
+		return "ふむ。すでに" + name + "は天竜人だぞ…"
+	default: // Underworld tier limit (u_god.cgi:19–23)
+		return "それは無理な願いだ…。私の力ではこれ以上その上限を増やすことはできんのだ…"
+	}
 }
 
 func godActionRejection(err error) (int, ErrorDetail) {
@@ -80,8 +91,6 @@ func godActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusConflict, ErrorDetail{Code: "GOD_NOT_ADMITTED", Message: "No god visit is recorded."}
 	case errors.Is(err, god.ErrWishNotFound), errors.Is(err, god.ErrInvalidWishID):
 		return http.StatusBadRequest, ErrorDetail{Code: "GOD_WISH_NOT_FOUND", Message: "Choose one of the observed wishes."}
-	case errors.Is(err, god.ErrLimitBreakMaxed):
-		return http.StatusConflict, ErrorDetail{Code: "GOD_LIMIT_BREAK_MAXED", Message: "This limit is already at its maximum tier."}
 	case errors.Is(err, god.ErrWishRequirement):
 		return http.StatusConflict, ErrorDetail{Code: "GOD_WISH_REQUIREMENT", Message: "The wish requirements are not met."}
 	default:

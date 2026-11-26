@@ -20,7 +20,6 @@ var (
 	ErrInvalidRealm       = errors.New("invalid realm, must be 'heaven' or 'underworld'")
 	ErrWishNotFound       = errors.New("wish not found in catalog")
 	ErrWishRequirement    = errors.New("character does not meet requirements for this wish")
-	ErrLimitBreakMaxed    = errors.New("limit break is already at maximum tier")
 	ErrNotAdmitted        = errors.New("character has not entered this realm")
 )
 
@@ -79,11 +78,12 @@ type Wish struct {
 	Note        string `json:"note,omitempty"`
 }
 
-// WishResult represents the outcome of having a wish granted.
+// WishResult is a granted wish, or a refused one (legacy $mes) that changed
+// nothing and kept the visit.
 type WishResult struct {
 	Character corecharacter.Character `json:"character"`
 	Wish      Wish                    `json:"wish"`
-	Message   string                  `json:"message"`
+	Refused   bool                    `json:"refused"`
 }
 
 // HomeMember represents a companion/resident at the player's home.

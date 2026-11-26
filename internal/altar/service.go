@@ -3,7 +3,6 @@ package altar
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -100,7 +99,6 @@ func (s *Service) Pray(ctx context.Context, characterID string) (PrayResult, err
 
 		result = PrayResult{
 			CharacterID:   char.ID,
-			Message:       MsgRamiaAwakening,
 			RamiaAwakened: true,
 			ExpiresAt:     awakening.ExpiresAt,
 		}
@@ -142,7 +140,6 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 		}
 
 		deliveredTo := "inventory"
-		var mes string
 
 		if !inv.IsFull(itemID) {
 			inst, err := coreitem.NewInstance(itemID, 1)
@@ -164,7 +161,6 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 					return err
 				}
 			}
-			mes = fmt.Sprintf(MsgWishInventoryFmt, itemDef.Name)
 		} else {
 			// Rank 5: Depot lock
 			deliveredTo = "depot"
@@ -187,7 +183,6 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 			if err := s.depots.Save(txCtx, dep); err != nil {
 				return err
 			}
-			mes = fmt.Sprintf(MsgWishDepotFmt, itemDef.Name, char.Name)
 		}
 
 		// Clear orbs upon successful wish
@@ -197,11 +192,11 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 		}
 
 		result = WishResult{
-			CharacterID: char.ID,
-			ItemID:      itemDef.ID,
-			ItemName:    itemDef.Name,
-			DeliveredTo: deliveredTo,
-			Message:     mes,
+			CharacterID:   char.ID,
+			CharacterName: char.Name,
+			ItemID:        itemDef.ID,
+			ItemName:      itemDef.Name,
+			DeliveredTo:   deliveredTo,
 		}
 		return nil
 	})

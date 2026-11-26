@@ -2,7 +2,6 @@ package god_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -94,11 +93,11 @@ func TestGod_HeavenWishOverLevelCeilings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := svc.GrantWish(context.Background(), c.ID, god.WishStats); !errors.Is(err, god.ErrWishRequirement) {
-				t.Fatalf("stat wish err=%v", err)
+			if res, err := svc.GrantWish(context.Background(), c.ID, god.WishStats); err != nil || !res.Refused {
+				t.Fatalf("stat wish %+v err=%v", res, err)
 			}
 			if repo.characters[c.ID] != c {
-				t.Fatal("rejected wish changed character")
+				t.Fatal("refused wish changed character")
 			}
 			res, err := svc.GrantWish(context.Background(), c.ID, god.WishSP)
 			if err != nil {

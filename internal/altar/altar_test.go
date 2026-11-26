@@ -228,7 +228,7 @@ func TestPraySuccessAwakensRamia(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected pray error: %v", err)
 	}
-	if !res.RamiaAwakened || res.Message != MsgRamiaAwakening {
+	if !res.RamiaAwakened {
 		t.Fatalf("unexpected pray result: %+v", res)
 	}
 
@@ -342,7 +342,7 @@ func TestWishDeliveredToDepotWhenInventoryFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected wish error: %v", err)
 	}
-	if res.DeliveredTo != "depot" || res.ItemID != ItemTreasureMap {
+	if res.DeliveredTo != "depot" || res.ItemID != ItemTreasureMap || res.CharacterName != "Hero" {
 		t.Fatalf("unexpected wish result: %+v", res)
 	}
 
@@ -476,7 +476,7 @@ func TestAltarEligibilityAfterOrbReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected pray error: %v", err)
 	}
-	if !prayRes.RamiaAwakened || prayRes.Message != MsgRamiaAwakening {
+	if !prayRes.RamiaAwakened {
 		t.Fatalf("unexpected pray result: %+v", prayRes)
 	}
 

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -123,22 +124,26 @@ func TestGodWishCommand(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		visit, wish, speech string
+		refused             bool
 	}{
-		{corecharacter.GodVisitHeaven, god.WishMoney, "ふむ。Heroの願いは「お金がほしい」だな。\nHeroの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…"},
-		{corecharacter.GodVisitUnderworld, god.WishExpandDepot, "ふむ。Heroの願いは「お金がほしい」だな。\nHeroの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…"},
-		{corecharacter.GodVisitHeaven, god.WishLover, "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…"},
+		{corecharacter.GodVisitHeaven, god.WishMoney, "ふむ。Heroの願いは「お金がほしい」だな。\nHeroの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…", false},
+		{corecharacter.GodVisitUnderworld, god.WishExpandDepot, "ふむ。Heroの願いは「お金がほしい」だな。\nHeroの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…", false},
+		{corecharacter.GodVisitHeaven, god.WishLover, "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…", true},
+		{corecharacter.GodVisitHeaven, god.WishStats, "それは無理な願いだ…。私の力ではこれ以上Heroを強くできんのだ…", true},
+		{corecharacter.GodVisitHeaven, god.WishCelestialDragon, "ふむ。すでにHeroは天竜人だぞ…", true},
+		{corecharacter.GodVisitUnderworld, god.WishExpandShopStore, "それは無理な願いだ…。私の力ではこれ以上その上限を増やすことはできんのだ…", true},
 	} {
 		t.Run(tc.visit+tc.wish, func(t *testing.T) {
 			f := newGodFixture(t, tc.visit)
-			f.grant = god.WishResult{Character: corecharacter.Character{ID: "hero", Name: "Hero"}, Wish: god.Wish{ID: tc.wish, Name: "お金がほしい"}, Message: "granted"}
+			f.grant = god.WishResult{Character: corecharacter.Character{ID: "hero", Name: "Hero"}, Wish: god.Wish{ID: tc.wish, Name: "お金がほしい"}, Refused: tc.refused}
 			_, router := f.router(t)
 			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("god_wish", fmt.Sprintf(`{"wish_id":%q}`, tc.wish)), nil)
 			var result struct {
-				Message   string   `json:"message"`
 				NPCSpeech string   `json:"npc_speech"`
 				Wish      god.Wish `json:"wish"`
+				Refused   bool     `json:"refused"`
 			}
-			if err := json.Unmarshal(raw["result"], &result); err != nil || status != 200 || f.wishID != tc.wish || result.NPCSpeech != tc.speech || result.Message != "granted" || result.Wish.ID != tc.wish {
+			if err := json.Unmarshal(raw["result"], &result); err != nil || status != 200 || f.wishID != tc.wish || result.NPCSpeech != tc.speech || result.Wish.ID != tc.wish || result.Refused != tc.refused || bytes.Contains(raw["result"], []byte(`"message"`)) {
 				t.Fatalf("%d %s %v", status, raw, err)
 			}
 			assertGatewayContext(t, raw)
@@ -154,7 +159,6 @@ func TestGodWishRejections(t *testing.T) {
 	}{
 		{god.ErrNotAdmitted, "GOD_NOT_ADMITTED", 409},
 		{god.ErrWishNotFound, "GOD_WISH_NOT_FOUND", 400},
-		{god.ErrLimitBreakMaxed, "GOD_LIMIT_BREAK_MAXED", 409},
 		{god.ErrWishRequirement, "GOD_WISH_REQUIREMENT", 409},
 		{god.ErrCharacterNotFound, "CHARACTER_NOT_FOUND", 404},
 		{errors.New("private storage failure"), "EXECUTION_FAILED", 500},

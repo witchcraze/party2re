@@ -206,6 +206,21 @@ func (s *Service) GrantWish(ctx context.Context, characterID, wishID string) (Wi
 	return res, nil
 }
 
+// refuse answers wish with the god's refusal: nothing changes and the visit continues.
+func refuse(char *corecharacter.Character, wish Wish, res *WishResult) {
+	char.GodVisit = string(wish.Realm)
+	*res = WishResult{Character: *char, Wish: wish, Refused: true}
+}
+
+func catalogWish(wishes []Wish, id string) Wish {
+	for _, w := range wishes {
+		if w.ID == id {
+			return w
+		}
+	}
+	return Wish{ID: id}
+}
+
 // ForfeitVisit ends a recorded visit without a wish, as leaving the realm
 // does in legacy (＠いどう/＠まち/＠ほーむ replace $m{lib}).
 func (s *Service) ForfeitVisit(ctx context.Context, characterID string) error {

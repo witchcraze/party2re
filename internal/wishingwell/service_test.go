@@ -3,7 +3,6 @@ package wishingwell_test
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -108,9 +107,6 @@ func TestWishingWell_Exchange_Success(t *testing.T) {
 	}
 	if res.RemainingSP != 20 {
 		t.Errorf("got remaining sp %d, want 20", res.RemainingSP)
-	}
-	if !strings.Contains(res.Message, "SP 5 のかわりに ＨＰ を 10 あたえましょう") {
-		t.Errorf("unexpected message: %s", res.Message)
 	}
 	if res.Character.Stats.MaxHP != initialMaxHP+10 {
 		t.Errorf("got max HP %d, want %d", res.Character.Stats.MaxHP, initialMaxHP+10)

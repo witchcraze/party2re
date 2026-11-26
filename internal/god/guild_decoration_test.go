@@ -113,16 +113,20 @@ func TestGodGuildDecoration_PersistenceAndMembership(t *testing.T) {
 		if err := f.admit(outsider.ID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.wishes.GrantWish(f.ctx, outsider.ID, god.WishGuildGorgeous); !errors.Is(err, god.ErrWishRequirement) {
+		// Outside a guild the wish is granted with no effect (god.cgi:46).
+		if _, err := f.wishes.GrantWish(f.ctx, outsider.ID, god.WishGuildGorgeous); err != nil {
 			t.Fatalf("unaffiliated/pending wish: %v", err)
 		}
 		c, err := f.chars.FindByID(f.ctx, outsider.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.GodVisit != corecharacter.GodVisitHeaven {
-			t.Fatal("rejected wish consumed visit")
+		if c.GodVisit != "" {
+			t.Fatal("no-effect wish kept the visit")
 		}
+	}
+	if detail, err := f.guilds.Get(f.ctx, f.g.ID); err != nil || len(detail.Decorations) != 2 {
+		t.Fatalf("pending member decorated the guild: %+v %v", detail, err)
 	}
 	other, _, err := database.CreateTestGuildWithLeader(f.ctx, f.db, "OtherMedals", 10000)
 	if err != nil {
