@@ -210,7 +210,7 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 				}
 				assertLoopRecovery(t, f.getContext(), true, elapsed)
 				executions := f.executions
-				got = f.command("adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k"}`, http.StatusConflict)
+				got = f.command("adventure_start", `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":"k"}`, http.StatusConflict)
 				assertGatewayError(t, got, "ACTION_UNAVAILABLE")
 				assertLoopRecovery(t, f.observation(got), true, elapsed)
 				if f.executions != executions || len(f.adventure.enters) != 0 || f.updates != 1 || f.char != sleepChar {
@@ -232,8 +232,8 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			assertLoopRecovery(t, f.observation(got), false, false)
 			assertLoopRecovery(t, f.getContext(), false, false)
 
-			got = f.command("adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k"}`, http.StatusOK)
-			if r := decodeRunReceipt(t, got); r.RunID != "run" || r.Round != 0 || !reflect.DeepEqual(f.adventure.enters, []string{"owner/hero/k/stage-01/normal/18"}) {
+			got = f.command("adventure_start", `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":"k"}`, http.StatusOK)
+			if r := decodeRunReceipt(t, got); r.RunID != "run" || r.Round != 0 || !reflect.DeepEqual(f.adventure.enters, []string{"owner/hero/k/solo-quest/stage-01/normal/18"}) {
 				t.Fatalf("adventure did not enroll through the run port: %+v %v", r, f.adventure.enters)
 			}
 			// Enrollment must not invent a delayed expedition.
@@ -272,7 +272,7 @@ func TestActionGatewayCommandLoopUnfinishedWork(t *testing.T) {
 		}
 		assertWork(f.getContext())
 		for _, command := range []struct{ action, params string }{
-			{"bank_deposit", `{"amount":1}`}, {"adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k"}`},
+			{"bank_deposit", `{"amount":1}`}, {"adventure_start", `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":"k"}`},
 		} {
 			got := f.command(command.action, command.params, http.StatusConflict)
 			assertGatewayError(t, got, "ACTION_UNAVAILABLE")

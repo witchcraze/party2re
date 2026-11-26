@@ -176,7 +176,7 @@ func TestNormalRunUnsealOpensRoomsOnceAfterCommit(t *testing.T) {
 			f.restart(t)
 			run, wantName := "", ""
 			if count == 1 {
-				run = f.enter(t, "normal").Command.RunID
+				run, wantName = f.enter(t, "normal").Command.RunID, "solo-quest"
 			} else {
 				_, lobby := f.waitingParty(t, "normal")
 				a := f.actors[0]
@@ -184,7 +184,7 @@ func TestNormalRunUnsealOpensRoomsOnceAfterCommit(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				run, wantName = entry.Command.RunID, "normal run"
+				run, wantName = entry.Command.RunID, "normal-run"
 			}
 			for _, definition := range []string{"item-070", "item-107"} {
 				addTravelTool(t, f, 0, definition)

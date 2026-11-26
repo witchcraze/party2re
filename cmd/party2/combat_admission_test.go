@@ -81,7 +81,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	if leader.PlayerID == member.PlayerID {
 		t.Fatal("fixture must exercise cross-account consent")
 	}
-	lobby, err := combat.party.CreateParty(ctx, leader.ID, party.CreatePartyRequest{Name: "Authorized roster", StageID: "stage-00"})
+	lobby, err := combat.party.CreateParty(ctx, leader.ID, party.CreatePartyRequest{Name: "AuthorizedRoster", StageID: "stage-00"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestCombatAdmissionProduction(t *testing.T) {
 		if err := combat.party.LeaveParty(ctx, lobby.Party.ID, member.ID); err != nil {
 			t.Fatal(err)
 		}
-		entry, err := combat.normal.EnterSolo(ctx, member.PlayerID, member.ID, "normal-owned", adventure.StarterAdventure, "normal", 3)
+		entry, err := combat.normal.EnterSolo(ctx, member.PlayerID, member.ID, "normal-owned", "normal-owned-run", adventure.StarterAdventure, "normal", 3)
 		if err != nil {
 			t.Fatal(err)
 		}

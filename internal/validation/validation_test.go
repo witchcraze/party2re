@@ -748,6 +748,36 @@ func TestValidateGuildName(t *testing.T) {
 	}
 }
 
+func TestValidateQuestName(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantErr    error
+		wantOutput string
+	}{
+		{name: "valid 50 runes", input: strings.Repeat("あ", 50), wantOutput: strings.Repeat("あ", 50)},
+		{name: "51 runes exceeds limit", input: strings.Repeat("あ", 51), wantErr: validation.ErrTooLong},
+		{name: "empty name", input: "", wantErr: validation.ErrEmpty},
+		{name: "ascii whitespace rejected", input: "solo quest", wantErr: validation.ErrInternalWhitespace},
+		{name: "fullwidth whitespace rejected", input: "冒険　隊", wantErr: validation.ErrInternalWhitespace},
+		{name: "prohibited at sign rejected", input: "quest@1", wantErr: validation.ErrProhibitedCharacter},
+		{name: "prohibited fullwidth at sign rejected", input: "＠冒険", wantErr: validation.ErrProhibitedCharacter},
+		{name: "nfc normalized", input: "Ka\u0301", wantOutput: "Ká"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := validation.ValidateQuestName(tc.input)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("ValidateQuestName(%q) error = %v; want %v", tc.input, err, tc.wantErr)
+				}
+			} else if err != nil || got != tc.wantOutput {
+				t.Fatalf("ValidateQuestName(%q) = %q, %v; want %q, nil", tc.input, got, err, tc.wantOutput)
+			}
+		})
+	}
+}
+
 func TestValidateLegacyComment(t *testing.T) {
 	tests := []struct {
 		name    string

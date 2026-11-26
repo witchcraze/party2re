@@ -181,7 +181,7 @@ func (f *normalFixture) restart(t *testing.T) {
 func (f *normalFixture) enter(t *testing.T, mode string) runhost.Receipt {
 	t.Helper()
 	c := f.actors[0]
-	r, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "start", adventure.StarterAdventure, mode, 3)
+	r, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "start", "solo-quest", adventure.StarterAdventure, mode, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestNormalRunAdmissionReceiptRestart(t *testing.T) {
 	f := newNormalFixture(t, 1)
 	entry := f.enter(t, "normal")
 	r, err := f.store.FindRun(context.Background(), entry.Command.RunID)
-	if err != nil || r.Round != 0 || len(r.Enemies) != 0 {
+	if err != nil || r.Round != 0 || len(r.Enemies) != 0 || r.Admission.Name != "solo-quest" {
 		t.Fatal(r, err)
 	}
 	f.restart(t)
@@ -215,7 +215,7 @@ func TestNormalRunAdmissionReceiptRestart(t *testing.T) {
 		t.Fatal("admission retry changed receipt")
 	}
 	c := f.actors[0]
-	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "new-key", adventure.StarterAdventure, "normal", 3); !errors.Is(err, runhost.ErrBusy) {
+	if _, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, "new-key", "solo-quest", adventure.StarterAdventure, "normal", 3); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal(err)
 	}
 	if _, err := f.svc.GetActorRun(context.Background(), "another-player", c.ID); !errors.Is(err, runhost.ErrForbidden) {

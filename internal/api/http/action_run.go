@@ -27,7 +27,7 @@ type RunService interface {
 // NormalRunService adds normal-adventure enrollment to the run port.
 type NormalRunService interface {
 	RunService
-	EnterSolo(ctx context.Context, player, actor, key, stageID, mode string, speed int) (runhost.Receipt, error)
+	EnterSolo(ctx context.Context, player, actor, key, name, stageID, mode string, speed int) (runhost.Receipt, error)
 	EnterParty(ctx context.Context, player, actor, partyID string) (runhost.Receipt, error)
 }
 
@@ -54,6 +54,7 @@ type runChestParams struct {
 }
 
 type adventureStartParams struct {
+	Name      string `json:"name"`
 	StageID   string `json:"stage_id"`
 	Speed     int    `json:"speed"`
 	CommandID string `json:"command_id"`
@@ -97,7 +98,7 @@ func WithNormalRuns(runs NormalRunService) Option {
 			if p.CommandID == "" {
 				return nil, errInvalidRunParams
 			}
-			receipt, err := runs.EnterSolo(ctx, player, actor, p.CommandID, p.StageID, adventure.CrawlModeNormal, p.Speed)
+			receipt, err := runs.EnterSolo(ctx, player, actor, p.CommandID, p.Name, p.StageID, adventure.CrawlModeNormal, p.Speed)
 			return toRunReceipt(receipt), err
 		}, nil)
 		registerRunCommand(h, "party_start", func(ctx context.Context, player, actor string, p partyStartParams) (any, error) {

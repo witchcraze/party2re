@@ -10,6 +10,8 @@ import (
 
 func adventureActionRejection(err error) (int, ErrorDetail) {
 	switch {
+	case errors.Is(err, adventure.ErrInvalidQuestName):
+		return http.StatusBadRequest, ErrorDetail{Code: "ADVENTURE_INVALID_NAME", Message: "Quest name must be 1 to 50 characters without whitespace or prohibited characters."}
 	case errors.Is(err, adventure.ErrStageNotFound):
 		return http.StatusUnprocessableEntity, ErrorDetail{Code: "ADVENTURE_STAGE_NOT_FOUND", Message: "Adventure stage not found."}
 	case errors.Is(err, adventure.ErrStageNotAvailable):

@@ -2,6 +2,7 @@ package adventure
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/runhost"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // stageRoom is the Adventure stage room library (vs_monster.cgi) the run host
@@ -16,11 +18,15 @@ import (
 type stageRoom struct{ s *NormalRunService }
 
 func (stageRoom) Prepare(a *runhost.Admission) error {
+	name, err := validation.ValidateQuestName(a.Name)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidQuestName, err)
+	}
 	mode, err := ValidateCrawlMode(a.Mode)
 	if err != nil {
 		return err
 	}
-	a.Mode, a.StageID = mode, strings.TrimSpace(a.StageID)
+	a.Name, a.Mode, a.StageID = name, mode, strings.TrimSpace(a.StageID)
 	return nil
 }
 

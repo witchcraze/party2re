@@ -145,13 +145,12 @@ func ValidateVerbatimLine(input string, maxRunes int) error {
 	return nil
 }
 
-// ValidateCharacterName validates character names according to legacy Party2 rules and modern safety checks:
-// - Max 8 runes (legacy: new_entry.cgi:114; name_change.cgi:125)
-// - No whitespace (\s or \u3000) permitted anywhere in the name (surrounding or internal) (legacy: new_entry.cgi:113; name_change.cgi:124)
-// - No prohibited symbols ([,;\"\'&<>\\\/@＠])
-// - No control characters, zero-width characters, bidi overrides, or Zalgo marks
-// - Unicode NFC normalization
-func ValidateCharacterName(name string) (string, error) {
+// MaxQuestNameLen is the legacy $max_title limit for quest/party names (quest.cgi:18).
+const MaxQuestNameLen = 50
+
+// validateName applies legacy identifier name constraints (NFC, no prohibited
+// symbols, no ASCII/fullwidth whitespace, safety checks, and maxRunes).
+func validateName(name string, maxRunes int) (string, error) {
 	if name == "" {
 		return "", ErrEmpty
 	}
@@ -173,11 +172,21 @@ func ValidateCharacterName(name string) (string, error) {
 		}
 	}
 
-	if utf8.RuneCountInString(normalized) > 8 {
+	if utf8.RuneCountInString(normalized) > maxRunes {
 		return "", ErrTooLong
 	}
 
 	return normalized, nil
+}
+
+// ValidateCharacterName validates character names according to legacy Party2 rules and modern safety checks:
+// - Max 8 runes (legacy: new_entry.cgi:114; name_change.cgi:125)
+// - No whitespace (\s or \u3000) permitted anywhere in the name (surrounding or internal) (legacy: new_entry.cgi:113; name_change.cgi:124)
+// - No prohibited symbols ([,;\"\'&<>\\\/@＠])
+// - No control characters, zero-width characters, bidi overrides, or Zalgo marks
+// - Unicode NFC normalization
+func ValidateCharacterName(name string) (string, error) {
+	return validateName(name, 8)
 }
 
 // ValidateGuildName validates guild names according to legacy Party2 rules and modern safety checks:
@@ -187,31 +196,13 @@ func ValidateCharacterName(name string) (string, error) {
 // - No control characters, zero-width characters, bidi overrides, or Zalgo marks
 // - Unicode NFC normalization
 func ValidateGuildName(name string) (string, error) {
-	if name == "" {
-		return "", ErrEmpty
-	}
-	normalized := norm.NFC.String(name)
-	if normalized == "" {
-		return "", ErrEmpty
-	}
-	if utf8.RuneCountInString(normalized) > 16 {
-		return "", ErrTooLong
-	}
-	if prohibitedNameChars.MatchString(normalized) {
-		return "", ErrProhibitedCharacter
-	}
+	return validateName(name, 16)
+}
 
-	consecutiveCombining := 0
-	for _, r := range normalized {
-		if unicode.IsSpace(r) || r == '\u3000' {
-			return "", ErrInternalWhitespace
-		}
-		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
-			return "", err
-		}
-	}
-
-	return normalized, nil
+// ValidateQuestName validates quest/party names according to legacy Party2 rules (quest.cgi:18,554–561)
+// and shared safety checks (NFC, max 50 runes, no whitespace, no prohibited symbols).
+func ValidateQuestName(name string) (string, error) {
+	return validateName(name, MaxQuestNameLen)
 }
 
 // ValidateStarterJob verifies and normalizes starter job ID.

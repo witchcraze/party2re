@@ -79,8 +79,8 @@ func (s *runStub) RecoverTimeout(context.Context, string, string, string) error 
 	return s.err
 }
 
-func (s *runStub) EnterSolo(_ context.Context, player, actor, key, stage, mode string, speed int) (runhost.Receipt, error) {
-	s.enters = append(s.enters, fmt.Sprintf("%s/%s/%s/%s/%s/%d", player, actor, key, stage, mode, speed))
+func (s *runStub) EnterSolo(_ context.Context, player, actor, key, name, stage, mode string, speed int) (runhost.Receipt, error) {
+	s.enters = append(s.enters, fmt.Sprintf("%s/%s/%s/%s/%s/%s/%d", player, actor, key, name, stage, mode, speed))
 	if s.err != nil {
 		return runhost.Receipt{}, s.err
 	}
@@ -148,27 +148,28 @@ func TestRunGatewaySoloStartEnrollsFloorZero(t *testing.T) {
 	f := newRunGatewayFixture(t)
 	f.facts = nil
 	router := f.router()
-	status, got := f.post(router, "adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k1"}`)
-	if r := decodeRunReceipt(t, got); status != 200 || r.RunID != "run" || r.Version != 1 || r.Round != 0 || !slices.Equal(f.runs.enters, []string{"owner/hero/k1/stage-01/normal/18"}) {
+	status, got := f.post(router, "adventure_start", `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":"k1"}`)
+	if r := decodeRunReceipt(t, got); status != 200 || r.RunID != "run" || r.Version != 1 || r.Round != 0 || !slices.Equal(f.runs.enters, []string{"owner/hero/k1/solo-quest/stage-01/normal/18"}) {
 		t.Fatalf("start: %d %s %v", status, got, f.runs.enters)
 	}
-	for _, params := range []string{`{"stage_id":"stage-01","speed":18}`, `{"stage_id":"stage-01","command_id":"k"}`, `{"stage_id":"stage-01","speed":18,"command_id":null}`,
-		`{"stage_id":"stage-01","speed":18,"command_id":"k","mode":"try"}`, `{"stage_id":"stage-01","speed":18,"command_id":"k","character_id":"other"}`, `{"stage_id":"stage-01","speed":18,"command_id":""}`} {
+	for _, params := range []string{`{"stage_id":"stage-01","speed":18,"command_id":"k"}`, `{"name":null,"stage_id":"stage-01","speed":18,"command_id":"k"}`,
+		`{"name":"solo-quest","stage_id":"stage-01","speed":18}`, `{"name":"solo-quest","stage_id":"stage-01","command_id":"k"}`, `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":null}`,
+		`{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":"k","mode":"try"}`, `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":"k","character_id":"other"}`, `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":""}`} {
 		f.runs.enters = nil
 		if status, _ := f.post(router, "adventure_start", params); status != 400 || len(f.runs.enters) != 0 {
 			t.Fatalf("%s: status=%d enters=%v", params, status, f.runs.enters)
 		}
 	}
-	for err, want := range map[error]string{runhost.ErrBusy: "RUN_BUSY", adventure.ErrStageNotFound: "ADVENTURE_STAGE_NOT_FOUND", runhost.ErrCharacterExhausted: "ADVENTURE_EXHAUSTED"} {
+	for err, want := range map[error]string{adventure.ErrInvalidQuestName: "ADVENTURE_INVALID_NAME", runhost.ErrBusy: "RUN_BUSY", adventure.ErrStageNotFound: "ADVENTURE_STAGE_NOT_FOUND", runhost.ErrCharacterExhausted: "ADVENTURE_EXHAUSTED"} {
 		f.runs.err = err
-		if status, got := f.post(router, "adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k2"}`); status < 400 || status >= 500 {
+		if status, got := f.post(router, "adventure_start", `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":"k2"}`); status < 400 || status >= 500 {
 			t.Fatalf("%v: %d %s", err, status, got)
 		} else {
 			assertGatewayError(t, got, want)
 		}
 	}
 	f.runs.err = errors.Join(runhost.ErrRecovery, runhost.ErrConflict)
-	if status, got := f.post(router, "adventure_start", `{"stage_id":"stage-01","speed":18,"command_id":"k3"}`); status != 500 {
+	if status, got := f.post(router, "adventure_start", `{"name":"solo-quest","stage_id":"stage-01","speed":18,"command_id":"k3"}`); status != 500 {
 		t.Fatalf("unknown commit presented as rejection: %d %s", status, got)
 	} else {
 		assertGatewayError(t, got, "EXECUTION_FAILED")

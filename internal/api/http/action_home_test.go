@@ -198,7 +198,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 				params = `,"params":{"amount":1}`
 			}
 			if action == "adventure_start" {
-				params = `,"params":{"stage_id":"stage-00","speed":18,"command_id":"k"}`
+				params = `,"params":{"name":"solo-quest","stage_id":"stage-00","speed":18,"command_id":"k"}`
 			}
 			status, got = f.request(router, action, params)
 			if status != 409 || f.executions != before || f.updates != 1 || f.char.Stats.HP != 10 || f.char.Stats.MP != 5 || f.char.Tired != 80 {

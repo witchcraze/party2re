@@ -74,7 +74,7 @@ func (f *normalFixture) nextNormalRun(t *testing.T) string {
 	t.Helper()
 	f.wake(t)
 	c := f.actors[1]
-	r, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, id.New(), adventure.StarterAdventure, "normal", 3)
+	r, err := f.svc.EnterSolo(context.Background(), c.PlayerID, c.ID, id.New(), "solo-quest", adventure.StarterAdventure, "normal", 3)
 	if err != nil {
 		t.Fatal(err)
 	}

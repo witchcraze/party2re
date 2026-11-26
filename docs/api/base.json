@@ -3834,6 +3834,10 @@
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Quest name (1 to 50 characters, no whitespace or , ; \" ' & < > \\ / @ ＠)."
+                    },
                     "stage_id": {
                       "type": "string"
                     },
@@ -3854,6 +3858,7 @@
                     }
                   },
                   "required": [
+                    "name",
                     "stage_id",
                     "speed",
                     "command_id"
