@@ -3,11 +3,15 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/party"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
@@ -18,7 +22,7 @@ type PartyService interface {
 	GetPartySummary(ctx context.Context, partyID string) (party.PartySummary, error)
 	JoinParty(ctx context.Context, partyID, characterID, password string) (party.PartyDetail, error)
 	LeaveParty(ctx context.Context, partyID, characterID string) error
-	KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) error
+	KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) (party.KickResult, error)
 }
 
 // WithParty connects the quest scene's lobby list and the lobby commands.
@@ -96,12 +100,36 @@ func partyKickCommand(service PartyService) Option {
 	if service == nil {
 		return withActionCommand[partyKickParams]("party_kick", nil, nil)
 	}
-	return withActionCommand("party_kick", func(ctx context.Context, actor string, p partyKickParams) (any, error) {
-		if err := service.KickMember(ctx, p.PartyID, actor, p.TargetCharacterID); err != nil {
-			return nil, err
-		}
-		return partyMessageResponse{Message: "メンバーをきっくしました"}, nil
-	}, partyLobbyRejection)
+	return func(h *Handler) {
+		withActionCommand("party_kick", func(ctx context.Context, actor string, p partyKickParams) (any, error) {
+			res, err := service.KickMember(ctx, p.PartyID, actor, p.TargetCharacterID)
+			if err != nil {
+				return nil, err
+			}
+			h.appendQuestKickLog(ctx, res, p.TargetCharacterID)
+			return partyMessageResponse{Message: "メンバーをきっくしました"}, nil
+		}, partyLobbyRejection)(h)
+	}
+}
+
+// appendQuestKickLog posts the private kick notice to the quest place log
+// (lib/_skill.cgi:827-828); a lost log row is display-only.
+func (h *Handler) appendQuestKickLog(ctx context.Context, res party.KickResult, targetCharID string) {
+	if h.placeLog == nil || res.PartyName == "" || res.LeaderName == "" {
+		return
+	}
+	place := placelog.Place{Kind: placelog.KindFacility, ID: "quest"}
+	row := placelog.Entry{
+		OccurredAt:           time.Now().UTC(),
+		SpeakerKind:          placelog.SpeakerNPC,
+		Name:                 "＠",
+		Color:                npcColor,
+		Text:                 fmt.Sprintf("%sのリーダー%sからきっくされました", res.PartyName, res.LeaderName),
+		RecipientCharacterID: targetCharID,
+	}
+	if err := h.placeLog.Append(ctx, place, row); err != nil {
+		slog.WarnContext(ctx, "place log append failed", slog.String("place", place.Kind+":"+place.ID), slog.String("error", err.Error()))
+	}
 }
 
 func partyLobbyRejection(err error) (int, ErrorDetail) {

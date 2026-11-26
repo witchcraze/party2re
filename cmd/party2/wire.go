@@ -330,6 +330,9 @@ func newHTTPHandler(
 	if cmbt.pvp != nil {
 		cmbt.pvp.SetActionWait(pc)
 	}
+	if cmbt.party != nil {
+		cmbt.party.SetActionWait(pc)
+	}
 	if soc.schedRepo != nil {
 		opts = append(opts, http.WithPlayerContext(pc))
 	}

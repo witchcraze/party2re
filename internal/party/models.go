@@ -21,10 +21,20 @@ const (
 	MaxPartyMembers = 4
 	MinPartyMembers = 1
 
+	// KickActionWait is the legacy 60-second action wait imposed on a kicked
+	// lobby member (_skill.cgi:815).
+	KickActionWait = 60 * time.Second
+
 	StatusRecruiting = "recruiting"
 	StatusInProgress = "in_progress"
 	StatusCompleted  = "completed" //lint:ignore unused party lifecycle status enum completeness
 )
+
+// KickResult carries the lobby and leader names needed for the quest notice.
+type KickResult struct {
+	PartyName  string
+	LeaderName string
+}
 
 var (
 	ErrNotFound             = errors.New("party not found")
