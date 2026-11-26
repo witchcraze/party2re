@@ -19,11 +19,7 @@ var htmlTagRegex = regexp.MustCompile(`(?i)</?(?:b|br|font|span|div|i|u|p|a|tabl
 
 // TestProhibitHTMLInDomainPackages scans all production Go source files under internal/
 // (excluding transport layer internal/api/http and test utilities) and asserts that
-// no HTML presentation tags are hardcoded in string literals.
-// Per .agents/rules/03-architecture.md §5:
-// "Backend domain services MUST NEVER return HTML markup (<b>, <br>, etc.) or layout-specific
-// formatting strings. All rendering, dialogue formatting, and presentation styling belong strictly
-// to the presentation/client layer."
+// no HTML presentation tags are hardcoded in string literals (.agents/rules/03-architecture.md §5).
 func TestProhibitHTMLInDomainPackages(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
@@ -90,24 +86,14 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 	}
 }
 
-// whitelistedLegacyPresentationFields records pre-existing legacy struct fields declaring presentation strings
-// (including Message) in untouched domain packages.
-// Each entry maps pkg.Struct.Field to the issue tracking its decoupling.
-// No new fields may be added. When a field is decoupled, it MUST be removed from this map to ratchet down.
-var whitelistedLegacyPresentationFields = map[string]string{
-	"contest.SettlementResult.Message": "#2308",
-}
-
 // TestProhibitPresentationFieldsInDomainModels verifies that domain service result structs
-// do not declare presentation fields without a tracked migration or a data annotation.
-// Pre-existing violations in untouched domain packages are locked in whitelistedLegacyPresentationFields;
-// any new violation or un-ratcheted removal fails the test.
+// do not declare presentation fields unless annotated as authored or persisted data.
 func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatalf("failed to determine repository root: %v", err)
 	}
-	violations, err := presentationFieldViolations(repoRoot, whitelistedLegacyPresentationFields)
+	violations, err := presentationFieldViolations(repoRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,11 +102,10 @@ func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 	}
 }
 
-func presentationFieldViolations(repoRoot string, whitelist map[string]string) ([]string, error) {
+func presentationFieldViolations(repoRoot string) ([]string, error) {
 	internalDir := filepath.Join(repoRoot, "internal")
 	fset := token.NewFileSet()
 
-	seenWhitelisted := make(map[string]bool)
 	var violations []string
 
 	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
@@ -198,10 +183,6 @@ func presentationFieldViolations(repoRoot string, whitelist map[string]string) (
 							continue
 						}
 						key := pkgName + "." + typeName + "." + name.Name
-						if _, ok := whitelist[key]; ok {
-							seenWhitelisted[key] = true
-							continue
-						}
 						pos := fset.Position(name.Pos())
 						relPath, _ := filepath.Rel(repoRoot, path)
 						violations = append(violations, fmt.Sprintf("%s:%d: prohibited presentation field %s; move formatting to HTTP or annotate authored/persisted data with //lint:ignore presentation <reason>",
@@ -217,13 +198,6 @@ func presentationFieldViolations(repoRoot string, whitelist map[string]string) (
 
 	if err != nil {
 		return nil, err
-	}
-
-	// Ratchet down check: every whitelisted entry must still exist in the codebase
-	for key, issue := range whitelist {
-		if !seenWhitelisted[key] {
-			violations = append(violations, fmt.Sprintf("whitelisted legacy presentation field %q (%s) is no longer present; remove it from whitelistedLegacyPresentationFields to ratchet down", key, issue))
-		}
 	}
 
 	return violations, nil

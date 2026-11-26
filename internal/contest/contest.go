@@ -137,7 +137,9 @@ type SettlementResult struct {
 	NextRound         int            `json:"next_round,omitempty"`
 	NextRoundEndTime  time.Time      `json:"next_round_end_time,omitempty"`
 	VotersRewarded    int            `json:"voters_rewarded"`
-	Message           string         `json:"message"`
+	// EntryCount is the number of entries in the round that was settled,
+	// postponed or, when no prizes were distributed, started (NextRound).
+	EntryCount int `json:"entry_count"`
 }
 
 // ValidateTitle checks title length and character constraints.

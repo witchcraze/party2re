@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -57,7 +58,23 @@ type settleContestRequest struct {
 
 type settleContestResponse struct {
 	contest.SettlementResult
+	Message string `json:"message"`
 	Warning string `json:"warning,omitempty"`
+}
+
+func newSettleContestResponse(result contest.SettlementResult, warning string) settleContestResponse {
+	var message string
+	switch {
+	case result.Postponed:
+		message = "Contest postponed and extended due to insufficient entries"
+	case result.PrizesDistributed:
+		message = fmt.Sprintf("Contest round %d successfully settled with %d entries", result.Round, result.EntryCount)
+	case result.Round == result.NextRound:
+		message = fmt.Sprintf("Contest round %d successfully started with %d entries", result.NextRound, result.EntryCount)
+	default: // the empty active round closed and the preparing round started
+		message = fmt.Sprintf("Contest round %d successfully started from preparing entries with %d entries", result.NextRound, result.EntryCount)
+	}
+	return settleContestResponse{SettlementResult: result, Message: message, Warning: warning}
 }
 
 func (h *Handler) handleGetContestVenue(w http.ResponseWriter, r *http.Request) {
@@ -159,10 +176,7 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, contest.ErrScheduleFailed) {
 			slog.ErrorContext(r.Context(), "contest settlement scheduling failed", slog.Any("error", err))
-			writeJSON(w, http.StatusAccepted, settleContestResponse{
-				SettlementResult: result,
-				Warning:          "contest settled, but settlement scheduling failed",
-			})
+			writeJSON(w, http.StatusAccepted, newSettleContestResponse(result, "contest settled, but settlement scheduling failed"))
 			return
 		}
 		switch {
@@ -181,7 +195,7 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, settleContestResponse{SettlementResult: result})
+	writeJSON(w, http.StatusOK, newSettleContestResponse(result, ""))
 }
 
 func (h *Handler) handleSaveCharacterPhoto(w http.ResponseWriter, r *http.Request) {

@@ -803,6 +803,9 @@ func TestSettlementPostponementWhenUnderMinEntries(t *testing.T) {
 	if res.PrizesDistributed {
 		t.Error("expected prizes NOT to be distributed on postponement")
 	}
+	if res.EntryCount != 2 {
+		t.Errorf("expected EntryCount 2 for the postponed round, got %d", res.EntryCount)
+	}
 
 	// Verify round end time was extended
 	updatedRound, _ := contestRepo.GetRoundByNumber(ctx, 1)
@@ -901,7 +904,7 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SettleContest failed: %v", err)
 	}
-	if res.Postponed || !res.PrizesDistributed || res.VotersRewarded != 5 {
+	if res.Postponed || !res.PrizesDistributed || res.VotersRewarded != 5 || res.EntryCount != 5 {
 		t.Errorf("unexpected settlement result: %+v", res)
 	}
 
