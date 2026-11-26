@@ -37,6 +37,7 @@ var (
 	ErrActorUnconscious     = errors.New("unconscious character cannot open treasure")
 	ErrNoUnopenedTreasure   = errors.New("no unopened treasure boxes remaining")
 	ErrTreasureLimitReached = errors.New("character has reached treasure inspection limit")
+	ErrRoomFull             = errors.New("run has no free member slot")
 )
 
 // State is the host-owned part of a durable run. A room library's snapshot
@@ -64,6 +65,9 @@ type State struct {
 	// each other team's living member is the requester's enemy. A room with
 	// no encounter (PvP) sets it; Enemies then never decides a frame.
 	Teams bool `json:"teams,omitempty"`
+	// Retained keeps the run, its enemies and its round after its last member
+	// leaves: a system room (vs_king) outlives its members until it is deleted.
+	Retained bool `json:"retained,omitempty"`
 }
 
 // Snapshot is a room library's run type: a pointer exposing its embedded State.
@@ -174,10 +178,24 @@ type RetainedEarningsStore interface {
 	SaveRetainedRecipient(context.Context, string, string, Earnings, Recipient) error
 }
 
+// SystemStore keeps system-opened runs. A slot is a run's unique live
+// identity; disposal releases it.
+type SystemStore[R any] interface {
+	// OpenRun writes a new run under its run lock. It fails with ErrConflict
+	// while another live run holds slot.
+	OpenRun(ctx context.Context, run R, slot string) error
+	// FindSlot returns the live run holding slot, or "".
+	FindSlot(ctx context.Context, slot string) (string, error)
+	// JoinRun enrolls actor into the locked run, replacing a recipient row the
+	// actor left by exit. It fails with ErrBusy when actor is enrolled elsewhere.
+	JoinRun(ctx context.Context, runID, actor string, order int, recipient Recipient) error
+}
+
 // Store keeps receipts and recipient dispositions beyond active state
 // disposal. WithRunForUpdate must start before any ambient character transaction.
 type Store[R any] interface {
 	RetainedEarningsStore
+	SystemStore[R]
 	WithRunForUpdate(context.Context, string, bool, func(context.Context) error) error
 	FindRun(context.Context, string) (*R, error)
 	SaveRun(context.Context, R, int) error
@@ -261,6 +279,17 @@ type Room[R any] interface {
 	Conditional(r *R) bool
 }
 
+// SystemRoom is Room's part for a room the system opens with no members,
+// that characters join while its battle runs (quest.cgi add_member, type 6)
+// and that can outlive its members.
+type SystemRoom[R any] interface {
+	// Join checks c against the room's join rules and applies the join's own
+	// effects to c; the host saves c in the join transaction.
+	Join(r *R, c *corecharacter.Character) error
+	// Retain reports whether r survives its last member's exit.
+	Retain(r *R) bool
+}
+
 // Effects are one command's new earnings, consumption and settlement facts.
 type Effects struct {
 	Earnings        map[string]Earnings
@@ -295,6 +324,8 @@ type Config[R any] struct {
 	Room        Room[R]
 	// CombatRoom is Room's part of explicit combat; nil keeps the host defaults.
 	CombatRoom CombatRoom[R]
+	// SystemRoom enables Open, Join and retained empty runs; nil disables them.
+	SystemRoom SystemRoom[R]
 	Blessings  Blessings
 	// Unsealed runs after a command's stage19 treasure creation commits, never
 	// on receipt replay; it receives the run name and the party, leader first.

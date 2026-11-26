@@ -263,7 +263,7 @@ func (s *Service[R, P]) GetActorRun(ctx context.Context, player, actor string) (
 	if state.Recipient.PlayerID != player {
 		return nil, ErrForbidden
 	}
-	state.IdleDue = s.cfg.Clock.Now().After(state.LastActivity.Add(1800 * time.Second))
+	state.IdleDue = s.cfg.Clock.Now().After(state.LastActivity.Add(idleTimeout))
 	return state, nil
 }
 

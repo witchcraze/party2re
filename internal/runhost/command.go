@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -21,7 +20,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 	if err := s.authorize(ctx, cmd.PlayerID, cmd.ActorID); err != nil {
 		return Receipt{}, err
 	}
-	if strings.TrimSpace(cmd.ID) == "" || len(cmd.ID) > 128 || cmd.RunID == "" || cmd.Action == "enroll" {
+	if strings.TrimSpace(cmd.ID) == "" || len(cmd.ID) > 128 || cmd.RunID == "" || cmd.Action == "enroll" || cmd.Action == "join" {
 		return Receipt{}, ErrConflict
 	}
 	var result Receipt
@@ -93,7 +92,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		tail := false
 		switch {
 		case cmd.Action == "cleanup":
-			if !now.After(r.LastActivity.Add(1800 * time.Second)) {
+			if !now.After(r.LastActivity.Add(idleTimeout)) {
 				return ErrConflict
 			}
 			if err := s.timeout(ctx, run, now); err != nil {
@@ -214,7 +213,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		if effects.UnsealDemonKing {
 			unsealers, runName = r.unsealingParty(chars), r.Admission.Name
 		}
-		if effects.RoomActivity && len(r.Roster) > 0 {
+		if effects.RoomActivity && (len(r.Roster) > 0 || r.Retained) {
 			r.LastActivity = now
 		}
 		if effects.ActorActivity {

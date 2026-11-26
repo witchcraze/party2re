@@ -556,8 +556,9 @@ order and releases enrollment.
 Remaining actors, legitimate helpers, NPCs, resources and timestamps retain their
 state and order; subsequent encounter scaling, Stage15 echoes, targeting and EX
 marker checks observe only active members. Sorted lock order never changes leadership.
-Last exit clears active state while preserving admission, recipient dispositions and
-receipts; another actor cannot read those receipts.
+Last exit clears active state, unless a [system-opened room](#system-opened-rooms)
+retains it, while preserving admission, recipient dispositions and receipts; another
+actor cannot read those receipts.
 
 Room-log-equivalent activity uses the [gameplay matrix](../design/adventure.md#room-activity-contract).
 GET, rejected commands and receipt retries do not renew it. Explicit cleanup is
@@ -587,3 +588,16 @@ Unsupported encodings and store errors fail closed, without memory fallback.
 Replay/scene publication is optional, must not repeat committed effects and follows
 the [Replay source/copy contract](../design/replay.md#command-commit-and-publication-failure).
 Clients retain GET-only recovery and do not automatically replay POST requests.
+
+### System-opened rooms
+
+A room library may open a run with no members and no character leader, as legacy
+`make_vs_king` creates each sealing room already in battle. A slot is the room's
+unique live identity: a concurrent or repeated opening returns the live run, and an
+opening after disposal is a new run identity that inherits no receipts or recipients.
+Characters join the running battle by their own idempotent request; the room applies
+its join rules and effects in that transaction, and joining is not room activity.
+At the last personal exit the room decides whether the run survives with its enemy
+state (`_battle.cgi:1331`). A surviving empty run has no member to request cleanup,
+so a member-less disposal removes it after the same idle timeout; member cleanup
+removes a retained room like any other.

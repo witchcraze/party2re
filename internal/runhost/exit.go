@@ -62,6 +62,10 @@ func (s *Service[R, P]) finishExit(ctx context.Context, run *R, actor string) er
 			r.LeaderID = r.Roster[0]
 		}
 	}
+	// The last exit's deletion check (_battle.cgi:1331); SaveRun disposes an unretained empty run.
+	if len(r.Roster) == 0 {
+		r.Retained = s.cfg.SystemRoom != nil && s.cfg.SystemRoom.Retain(run)
+	}
 	return nil
 }
 
@@ -86,7 +90,8 @@ func (s *Service[R, P]) timeout(ctx context.Context, run *R, now time.Time) erro
 			return err
 		}
 	}
-	r.TimedOut = true
+	// Idle deletion removes a room in any state (quest.cgi auto_delete_quest).
+	r.TimedOut, r.Retained = true, false
 	return nil
 }
 
