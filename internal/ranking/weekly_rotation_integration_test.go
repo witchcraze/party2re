@@ -124,9 +124,16 @@ func TestWeeklyRotation_DurableProgress_RealDB(t *testing.T) {
 	if err != nil || !due.Equal(now.AddDate(0, 0, 7)) {
 		t.Fatalf("durable deadline %v: %v", due, err)
 	}
-	// Administrative snapshot refresh must not overwrite dedicated rotation progress.
+	// Administrative snapshot refresh must not overwrite dedicated rotation progress or its finalized week.
+	finalized, err := repo.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil || finalized.TotalCount != 1 {
+		t.Fatalf("finalized snapshot %+v: %v", finalized, err)
+	}
 	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeWeeklyJobChange); err != nil {
 		t.Fatal(err)
+	}
+	if refreshed, err := repo.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange); err != nil || refreshed.SnapshotData != finalized.SnapshotData || refreshed.TotalCount != finalized.TotalCount {
+		t.Fatalf("refresh overwrote finalized week: %+v: %v", refreshed, err)
 	}
 	afterRefresh, err := repo.GetWeeklyRotationDue(ctx)
 	if err != nil || !afterRefresh.Equal(due) {
