@@ -109,7 +109,7 @@ func TestPvPActivityTTLsAndEvictionProtectionIntegration(t *testing.T) {
 	// Arbitrary Valkey eviction at T0+35m (only 10m after StartMatch at T0+25m) must NOT trigger inactivity sleep!
 	now = now.Add(10 * time.Minute) // T0 + 35m, StartMatch + 10m
 	losePvPRoom(t, f)
-	if err := svc.LeaveRoom(ctx, f.leader.ID, room.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, f.leader.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom after eviction: %v", err)
 	}
 	tr, err := f.store.FindTransition(ctx, room.Room.ID)
@@ -171,7 +171,8 @@ func TestPvPInactivityCleanupConcurrentIntegration(t *testing.T) {
 		if worker%2 == 0 {
 			actor = f.member.ID
 		}
-		return f.service.LeaveRoom(ctx, actor, room.Room.ID)
+		_, err := f.service.LeaveRoom(ctx, actor, room.Room.ID)
+		return err
 	})
 	if result.Failures != 0 || result.Successes == 0 {
 		t.Fatalf("concurrent inactivity cleanup failed: %+v", result)
@@ -209,7 +210,7 @@ func TestPvPInactivityCleanupConcurrentIntegration(t *testing.T) {
 		t.Fatalf("CreateRoom after wakeup: %v", err)
 	}
 	f.roomIDs[newRoom.Room.ID] = true
-	if err := f.service.LeaveRoom(ctx, f.leader.ID, room.Room.ID); err != nil {
+	if _, err := f.service.LeaveRoom(ctx, f.leader.ID, room.Room.ID); err != nil {
 		t.Fatalf("delayed old LeaveRoom retry: %v", err)
 	}
 	if cur, err := f.service.GetCharacterRoom(ctx, f.leader.ID); err != nil || cur.Room.ID != newRoom.Room.ID {
@@ -257,7 +258,7 @@ func TestPvPInactivityInterruptedCleanupIntegration(t *testing.T) {
 	timeoutAt := now.Add(pvp.InactivityTimeout + time.Second)
 	now = timeoutAt
 	ft.armed.Store(true)
-	if err := svc.LeaveRoom(ctx, f.leader.ID, room.Room.ID); !errors.Is(err, timerErr) {
+	if _, err := svc.LeaveRoom(ctx, f.leader.ID, room.Room.ID); !errors.Is(err, timerErr) {
 		t.Fatalf("expected injected timer failure, got %v", err)
 	}
 	if claim, err := svc.GetCharacterClaim(ctx, f.member.ID); err != nil || claim != room.Room.ID {
@@ -276,7 +277,7 @@ func TestPvPInactivityInterruptedCleanupIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := restarted.LeaveRoom(ctx, f.member.ID, room.Room.ID); err != nil {
+	if _, err := restarted.LeaveRoom(ctx, f.member.ID, room.Room.ID); err != nil {
 		t.Fatalf("retry LeaveRoom: %v", err)
 	}
 	wantUntil := timeoutAt.Add(pvp.InactivitySleepDuration)
@@ -363,7 +364,7 @@ func TestPvPInactivity_PendingKillsExpiredRoomAndRetryIntegration(t *testing.T) 
 
 	// Arm timer failure after SQL timeout commit, then retry on a fresh service instance.
 	ft.armed.Store(true)
-	if err := svc.LeaveRoom(ctx, f.leader.ID, room.Room.ID); !errors.Is(err, timerErr) {
+	if _, err := svc.LeaveRoom(ctx, f.leader.ID, room.Room.ID); !errors.Is(err, timerErr) {
 		t.Fatalf("expected injected timer failure, got %v", err)
 	}
 	restarted, err := pvp.NewService(f.rooms, f.chars, engine,
@@ -376,11 +377,11 @@ func TestPvPInactivity_PendingKillsExpiredRoomAndRetryIntegration(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := restarted.LeaveRoom(ctx, f.member.ID, room.Room.ID); err != nil {
+	if _, err := restarted.LeaveRoom(ctx, f.member.ID, room.Room.ID); err != nil {
 		t.Fatalf("retry LeaveRoom: %v", err)
 	}
 	// Repeating cleanup/leave must never double-increment PvPWins.
-	if err := restarted.LeaveRoom(ctx, f.leader.ID, room.Room.ID); err != nil && !errors.Is(err, pvp.ErrRoomNotFound) && !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+	if _, err := restarted.LeaveRoom(ctx, f.leader.ID, room.Room.ID); err != nil && !errors.Is(err, pvp.ErrRoomNotFound) && !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 		t.Fatalf("second retry LeaveRoom unexpected error: %v", err)
 	}
 
@@ -717,7 +718,7 @@ func TestPvPJoinCrossingDeadlineAndRecoveryIntegration(t *testing.T) {
 			timeoutAt := t0.Add(pvp.InactivityTimeout + time.Second)
 			clock.Store(timeoutAt.UnixNano())
 			ft.armed.Store(true)
-			if err := svc.LeaveRoom(ctx, f.member.ID, room.Room.ID); !errors.Is(err, timerErr) {
+			if _, err := svc.LeaveRoom(ctx, f.member.ID, room.Room.ID); !errors.Is(err, timerErr) {
 				t.Fatalf("expected timerErr during timeout recovery, got %v", err)
 			}
 			midTr, err := f.store.FindTransition(ctx, room.Room.ID)

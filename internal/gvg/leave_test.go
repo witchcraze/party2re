@@ -154,7 +154,7 @@ func TestLeaveRoom_PreStartLeaderHandoverAndUnclampedGP(t *testing.T) {
 	svc, _, chars, standings, roomID := setupTwoGuildRoom(t, 1, &mockBattleEngine{outcome: corebattle.OutcomeWin})
 
 	// Initial 2 + c2(+1) + c3(+1) = 4 GP. Leader c1 leaves -> transfers leadership to c2, deducts 2 GP -> 2 GP.
-	if err := svc.LeaveRoom(ctx, "c1", roomID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", roomID); err != nil {
 		t.Fatalf("leader leave failed: %v", err)
 	}
 	if _, err := svc.GetCharacterRoom(ctx, "c1"); !errors.Is(err, gvg.ErrRoomNotFound) {
@@ -180,7 +180,7 @@ func TestLeaveRoom_PreStartLeaderHandoverAndUnclampedGP(t *testing.T) {
 		if _, err := svc.JoinRoom(ctx, "c1", roomID, ""); err != nil {
 			t.Fatalf("rejoin failed: %v", err)
 		}
-		if err := svc.LeaveRoom(ctx, "c1", roomID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, "c1", roomID); err != nil {
 			t.Fatalf("re-leave failed: %v", err)
 		}
 	}
@@ -216,11 +216,11 @@ func TestLeaveRoom_MidMatchDepartureAndSoleRemainingGuildWin(t *testing.T) {
 	}
 
 	// Non-leader member c3 (only member of g2) leaves mid-match.
-	if err := svc.LeaveRoom(ctx, "c3", roomID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c3", roomID); err != nil {
 		t.Fatalf("non-leader mid-match leave failed: %v", err)
 	}
 	// Leader c1 leaves mid-match -> transfers leadership to c2.
-	if err := svc.LeaveRoom(ctx, "c1", roomID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", roomID); err != nil {
 		t.Fatalf("leader mid-match leave failed: %v", err)
 	}
 
@@ -264,7 +264,7 @@ func TestLeaveRoom_PostMatchIndividualExitAndFinalRoundHP(t *testing.T) {
 	}
 
 	// c1 leaves completed room: room stays open for c2 and c3, leadership transfers to c2.
-	if err := svc.LeaveRoom(ctx, "c1", roomID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", roomID); err != nil {
 		t.Fatalf("c1 post-match leave failed: %v", err)
 	}
 	detail, err := svc.GetRoom(ctx, roomID)
@@ -279,7 +279,7 @@ func TestLeaveRoom_PostMatchIndividualExitAndFinalRoundHP(t *testing.T) {
 	}
 
 	// c3 leaves defeated (0 HP -> 0 HP copyback, 0 MP, tired = 4).
-	if err := svc.LeaveRoom(ctx, "c3", roomID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c3", roomID); err != nil {
 		t.Fatalf("c3 post-match leave failed: %v", err)
 	}
 	if got := chars.characters["c3"]; got.Stats.HP != 0 || got.Stats.MP != 0 || got.Tired != 4 {
@@ -287,7 +287,7 @@ func TestLeaveRoom_PostMatchIndividualExitAndFinalRoundHP(t *testing.T) {
 	}
 
 	// Last member c2 leaves -> disbands room.
-	if err := svc.LeaveRoom(ctx, "c2", roomID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c2", roomID); err != nil {
 		t.Fatalf("last member leave failed: %v", err)
 	}
 	if _, err := svc.GetRoom(ctx, roomID); !errors.Is(err, gvg.ErrRoomNotFound) {
@@ -322,12 +322,12 @@ func TestLeaveRoom_ConsumedItemsCarryAcrossRoundsAndRetryIdempotency(t *testing.
 	var hookCalls int
 	var failHook atomic.Bool
 	failHook.Store(true)
-	hook := func(_ context.Context, _ string) (string, error) {
+	hook := func(_ context.Context, _ string) (*gvg.DeliveryOutcome, error) {
 		hookCalls++
 		if failHook.CompareAndSwap(true, false) {
-			return "", errors.New("tavern temporary error")
+			return nil, errors.New("tavern temporary error")
 		}
-		return "ok", nil
+		return &gvg.DeliveryOutcome{ItemName: "ok", Paid: true}, nil
 	}
 
 	standings := newMockStandingRepo()
@@ -371,16 +371,16 @@ func TestLeaveRoom_ConsumedItemsCarryAcrossRoundsAndRetryIdempotency(t *testing.
 	}
 
 	// Attempt 1: settler succeeds, postExitHook fails -> retry must NOT re-run settler.
-	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
 		t.Fatal("expected postExitHook failure")
 	}
 	// Attempt 2: postExitHook succeeds, Valkey DeleteCharacterRoom fails -> retry must NOT re-run settler or postExitHook.
 	roomRepo.failDeleteCharRoom.Store(true)
-	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
 		t.Fatal("expected Valkey DeleteCharacterRoom failure")
 	}
 	// Attempt 3: succeeds cleanly.
-	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
 		t.Fatalf("final LeaveRoom retry failed: %v", err)
 	}
 
@@ -417,12 +417,12 @@ func TestLeaveRoom_PendingDeliveryLocksCharacterBeforeHook(t *testing.T) {
 
 	var failHook atomic.Bool
 	failHook.Store(true)
-	hook := func(_ context.Context, _ string) (string, error) {
+	hook := func(_ context.Context, _ string) (*gvg.DeliveryOutcome, error) {
 		events = append(events, "post_exit_hook")
 		if failHook.CompareAndSwap(true, false) {
-			return "", errors.New("temporary tavern failure")
+			return nil, errors.New("temporary tavern failure")
 		}
-		return "ok", nil
+		return &gvg.DeliveryOutcome{ItemName: "ok", Paid: true}, nil
 	}
 
 	svc, err := gvg.NewService(
@@ -443,11 +443,11 @@ func TestLeaveRoom_PendingDeliveryLocksCharacterBeforeHook(t *testing.T) {
 	}
 
 	// Simulate an already-claimed exit whose delivery_done is still false before retry.
-	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
 		t.Fatal("expected first hook attempt to fail")
 	}
 	events = nil
-	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
 		t.Fatalf("retry LeaveRoom failed: %v", err)
 	}
 	if len(events) != 2 || events[0] != "lock_character" || events[1] != "post_exit_hook" {
@@ -464,9 +464,9 @@ func TestLeaveRoom_RejoinSameRoomAppliesNewExitSideEffectsAndRetryIdempotency(t 
 		err:            errors.New("valkey unavailable"),
 	}
 	var hookCalls int
-	hook := func(_ context.Context, _ string) (string, error) {
+	hook := func(_ context.Context, _ string) (*gvg.DeliveryOutcome, error) {
 		hookCalls++
-		return "ok", nil
+		return &gvg.DeliveryOutcome{ItemName: "ok", Paid: true}, nil
 	}
 
 	standings := newMockStandingRepo()
@@ -508,7 +508,7 @@ func TestLeaveRoom_RejoinSameRoomAppliesNewExitSideEffectsAndRetryIdempotency(t 
 	}
 
 	// 1st exit (pre-start).
-	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
 		t.Fatalf("first leave failed: %v", err)
 	}
 
@@ -536,10 +536,10 @@ func TestLeaveRoom_RejoinSameRoomAppliesNewExitSideEffectsAndRetryIdempotency(t 
 	}
 
 	roomRepo.failDeleteCharRoom.Store(true)
-	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err == nil {
 		t.Fatal("expected transient Valkey DeleteCharacterRoom failure")
 	}
-	if err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", detail.Room.ID); err != nil {
 		t.Fatalf("second leave retry failed: %v", err)
 	}
 
@@ -671,7 +671,7 @@ func TestLeaveRoom_SaveFailurePreservesMappingAndBlocksSecondRoom(t *testing.T) 
 	}
 
 	repo.saveErr = errors.New("valkey save failure")
-	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err == nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err == nil {
 		t.Fatal("expected SaveRoom failure on LeaveRoom")
 	}
 	repo.saveErr = nil
@@ -682,7 +682,7 @@ func TestLeaveRoom_SaveFailurePreservesMappingAndBlocksSecondRoom(t *testing.T) 
 	}
 
 	// Retry LeaveRoom finishes room publication and mapping removal without repeating exit effects.
-	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom retry failed: %v", err)
 	}
 	if settler.calls != 1 {
@@ -737,24 +737,24 @@ func TestLeaveRoom_DeleteFailureAndMappingRetrySafety(t *testing.T) {
 
 	// 1. DeleteCharacterRoom fails after SaveRoom removes c1; c2 also leaves (disbanding room1) before c1 retries.
 	delCharWrap.failDeleteCharRoom.Store(true)
-	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); !errors.Is(err, delCharErr) {
+	if _, err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); !errors.Is(err, delCharErr) {
 		t.Fatalf("c1 LeaveRoom = %v, want %v", err, delCharErr)
 	}
 	// DeleteRoom fails for last member c2 -> mapping preserved -> retry succeeds.
 	repo.deleteErr = errors.New("valkey delete room failure")
-	if err := svc.LeaveRoom(ctx, "c2", room1.Room.ID); err == nil {
+	if _, err := svc.LeaveRoom(ctx, "c2", room1.Room.ID); err == nil {
 		t.Fatal("expected DeleteRoom failure")
 	}
 	repo.deleteErr = nil
 	if _, err := svc.CreateRoom(ctx, "c2", gvg.CreateRoomRequest{Name: "Blocked"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
 		t.Fatalf("c2 CreateRoom while DeleteRoom pending = %v, want ErrAlreadyInRoom", err)
 	}
-	if err := svc.LeaveRoom(ctx, "c2", room1.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c2", room1.Room.ID); err != nil {
 		t.Fatalf("c2 LeaveRoom retry failed: %v", err)
 	}
 
 	// Room1 is gone, c1 mapping still points to room1 -> c1 retry cleans mapping without ErrRoomNotFound.
-	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); err != nil {
 		t.Fatalf("c1 LeaveRoom mapping retry after disband failed: %v", err)
 	}
 	if settler.calls != 2 {
@@ -769,7 +769,7 @@ func TestLeaveRoom_DeleteFailureAndMappingRetrySafety(t *testing.T) {
 	if err := base.DeleteCharacterRoom(ctx, "c1", room1.Room.ID); err != nil {
 		t.Fatalf("stale DeleteCharacterRoom(room1): %v", err)
 	}
-	if err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); !errors.Is(err, gvg.ErrRoomNotFound) {
+	if _, err := svc.LeaveRoom(ctx, "c1", room1.Room.ID); !errors.Is(err, gvg.ErrRoomNotFound) {
 		t.Fatalf("stale LeaveRoom(room1) = %v, want ErrRoomNotFound", err)
 	}
 	if got, err := base.GetCharacterRoom(ctx, "c1"); err != nil || got != room2.Room.ID {
@@ -778,13 +778,13 @@ func TestLeaveRoom_DeleteFailureAndMappingRetrySafety(t *testing.T) {
 
 	// 3. Last member DeleteCharacterRoom failure after DeleteRoom -> retry succeeds cleanly.
 	delCharWrap.failDeleteCharRoom.Store(true)
-	if err := svc.LeaveRoom(ctx, "c1", room2.Room.ID); !errors.Is(err, delCharErr) {
+	if _, err := svc.LeaveRoom(ctx, "c1", room2.Room.ID); !errors.Is(err, delCharErr) {
 		t.Fatalf("c1 LeaveRoom(room2) = %v, want %v", err, delCharErr)
 	}
 	if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Blocked3"}); !errors.Is(err, gvg.ErrAlreadyInRoom) {
 		t.Fatalf("c1 CreateRoom while mapping cleanup pending = %v, want ErrAlreadyInRoom", err)
 	}
-	if err := svc.LeaveRoom(ctx, "c1", room2.Room.ID); err != nil {
+	if _, err := svc.LeaveRoom(ctx, "c1", room2.Room.ID); err != nil {
 		t.Fatalf("c1 LeaveRoom(room2) mapping retry failed: %v", err)
 	}
 	if _, err := svc.GetCharacterRoom(ctx, "c1"); !errors.Is(err, gvg.ErrRoomNotFound) {
@@ -843,7 +843,7 @@ func TestLeaveRoom_AbortsWhenTransitionLookupFails(t *testing.T) {
 
 	lookupErr := errors.New("sql transition read failure")
 	standings.findErr = lookupErr
-	if err := svc.LeaveRoom(ctx, "c2", detail.Room.ID); !errors.Is(err, lookupErr) {
+	if _, err := svc.LeaveRoom(ctx, "c2", detail.Room.ID); !errors.Is(err, lookupErr) {
 		t.Fatalf("LeaveRoom error = %v, want %v", err, lookupErr)
 	}
 	if settler.calls != 0 || len(claims.claims) != 0 {

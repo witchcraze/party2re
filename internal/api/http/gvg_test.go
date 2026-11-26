@@ -25,7 +25,6 @@ type stubGvGService struct {
 	getRoomFn        func(ctx context.Context, roomID string) (gvg.RoomDetail, error)
 	listRoomsFn      func(ctx context.Context) ([]gvg.RoomSummary, error)
 	joinRoomFn       func(ctx context.Context, charID string, roomID string, password string) (gvg.RoomDetail, error)
-	leaveRoomFn      func(ctx context.Context, charID string, roomID string) error
 	startMatchFn     func(ctx context.Context, leaderID string, roomID string) (gvg.RoomDetail, error)
 	advanceRoundFn   func(ctx context.Context, leaderID string, roomID string, expectedRound int) (gvg.RoundResolution, error)
 	getStandingFn    func(ctx context.Context, guildID string) (gvg.GvGStanding, error)
@@ -107,14 +106,11 @@ func (s *stubGvGService) JoinRoom(ctx context.Context, charID string, roomID str
 	}, nil
 }
 
-func (s *stubGvGService) LeaveRoom(ctx context.Context, charID string, roomID string) error {
-	if s.leaveRoomFn != nil {
-		return s.leaveRoomFn(ctx, charID, roomID)
-	}
+func (s *stubGvGService) LeaveRoom(ctx context.Context, charID string, roomID string) (gvg.LeaveResult, error) {
 	if roomID != "gvg-room-1" {
-		return gvg.ErrRoomNotFound
+		return gvg.LeaveResult{}, gvg.ErrRoomNotFound
 	}
-	return nil
+	return gvg.LeaveResult{}, nil
 }
 
 func (s *stubGvGService) StartMatch(ctx context.Context, leaderID string, roomID string) (gvg.RoomDetail, error) {
@@ -285,17 +281,6 @@ func TestGvGEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/gvg/rooms/{room_id}/leave - success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/gvg/rooms/gvg-room-1/leave", `{}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 

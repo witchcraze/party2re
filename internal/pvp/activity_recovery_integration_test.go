@@ -507,7 +507,8 @@ func TestPvPActivityStaleVersionAndConcurrentCleanupIntegration(t *testing.T) {
 		af.setNow(timeoutAt)
 		result := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 			if worker%2 == 0 {
-				return af.service.LeaveRoom(ctx, af.member.ID, roomID)
+				_, err := af.service.LeaveRoom(ctx, af.member.ID, roomID)
+				return err
 			}
 			_, err := af.service.AdvanceRound(ctx, af.leader.ID, roomID)
 			if errors.Is(err, pvp.ErrRoomNotFound) {

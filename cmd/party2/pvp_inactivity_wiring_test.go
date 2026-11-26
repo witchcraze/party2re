@@ -89,7 +89,7 @@ func TestPvPInactivityProductionWiring(t *testing.T) {
 	}
 
 	// LeaveRoom triggers genuine inactivity cleanup with production timer + Home penalty reader.
-	if err := f.cmbt.pvp.LeaveRoom(ctx, f.char.ID, room.Room.ID); err != nil {
+	if _, err := f.cmbt.pvp.LeaveRoom(ctx, f.char.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom timeout: %v", err)
 	}
 
@@ -150,7 +150,7 @@ func TestPvPInactivityProductionWiring(t *testing.T) {
 	}
 
 	// Complete pending recovery, then Home.Wake succeeds and restores vitality.
-	if err := f.cmbt.pvp.LeaveRoom(ctx, f.char.ID, room.Room.ID); err != nil {
+	if _, err := f.cmbt.pvp.LeaveRoom(ctx, f.char.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom finish pending: %v", err)
 	}
 	woke, err := f.soc.home.Wake(ctx, f.char.ID)

@@ -177,7 +177,7 @@ func TestGvGPasswordVerifierRoundTripIntegration(t *testing.T) {
 	}
 
 	// Non-leader leave rewrites recruiting room.
-	if err := svc2.LeaveRoom(ctx, joinerID, created.Room.ID); err != nil {
+	if _, err := svc2.LeaveRoom(ctx, joinerID, created.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom(joiner): %v", err)
 	}
 	if afterLeave, err := repo2.GetRoom(ctx, created.Room.ID); err != nil || afterLeave.Room.PasswordHash != wantHash {
@@ -188,7 +188,7 @@ func TestGvGPasswordVerifierRoundTripIntegration(t *testing.T) {
 	if _, err := svc2.JoinRoom(ctx, joinerID, created.Room.ID, "secret"); err != nil {
 		t.Fatalf("re-JoinRoom(protected): %v", err)
 	}
-	if err := svc2.LeaveRoom(ctx, leaderID, created.Room.ID); err != nil {
+	if _, err := svc2.LeaveRoom(ctx, leaderID, created.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom(leader): %v", err)
 	}
 	if afterTransfer, err := repo2.GetRoom(ctx, created.Room.ID); err != nil || afterTransfer.Room.PasswordHash != wantHash {
@@ -224,7 +224,7 @@ func TestGvGPasswordVerifierRoundTripIntegration(t *testing.T) {
 	if _, err := svc2.JoinRoom(ctx, openJoinerID, openRoom.Room.ID, ""); err != nil {
 		t.Fatalf("JoinRoom(open): %v", err)
 	}
-	if err := svc2.LeaveRoom(ctx, openJoinerID, openRoom.Room.ID); err != nil {
+	if _, err := svc2.LeaveRoom(ctx, openJoinerID, openRoom.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom(open): %v", err)
 	}
 	if afterOpenLeave, err := repo2.GetRoom(ctx, openRoom.Room.ID); err != nil || afterOpenLeave.Room.PasswordHash != "" {

@@ -18,7 +18,6 @@ type stubColosseumPvPService struct {
 	getRoomFn      func(ctx context.Context, roomID string) (pvp.RoomDetail, error)
 	listRoomsFn    func(ctx context.Context) ([]pvp.RoomSummary, error)
 	joinRoomFn     func(ctx context.Context, characterID string, roomID string, password string) (pvp.RoomDetail, error)
-	leaveRoomFn    func(ctx context.Context, characterID string, roomID string) error
 	kickMemberFn   func(ctx context.Context, roomID string, leaderID string, targetID string) (pvp.KickResult, error)
 	selectTeamFn   func(ctx context.Context, characterID string, roomID string, teamColor string) (pvp.RoomDetail, error)
 	startMatchFn   func(ctx context.Context, leaderID string, roomID string) (pvp.RoomDetail, error)
@@ -100,14 +99,11 @@ func (s *stubColosseumPvPService) JoinRoom(ctx context.Context, characterID stri
 	}, nil
 }
 
-func (s *stubColosseumPvPService) LeaveRoom(ctx context.Context, characterID string, roomID string) error {
-	if s.leaveRoomFn != nil {
-		return s.leaveRoomFn(ctx, characterID, roomID)
-	}
+func (s *stubColosseumPvPService) LeaveRoom(ctx context.Context, characterID string, roomID string) (pvp.LeaveResult, error) {
 	if roomID != "room-1" {
-		return pvp.ErrRoomNotFound
+		return pvp.LeaveResult{}, pvp.ErrRoomNotFound
 	}
-	return nil
+	return pvp.LeaveResult{}, nil
 }
 
 func (s *stubColosseumPvPService) KickMember(ctx context.Context, roomID string, leaderID string, targetID string) (pvp.KickResult, error) {
@@ -406,33 +402,6 @@ func TestColosseumPvPEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 BadRequest, got %d", rec.Code)
-		}
-	})
-
-	t.Run("POST /characters/{id}/pvp/rooms/{room_id}/leave - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/pvp/rooms/room-1/leave", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
-		}
-	})
-
-	t.Run("POST /characters/{id}/pvp/rooms/{room_id}/leave - not in room 422", func(t *testing.T) {
-		stubPvP.leaveRoomFn = func(_ context.Context, _ string, _ string) error {
-			return pvp.ErrCharacterNotInRoom
-		}
-		defer func() { stubPvP.leaveRoomFn = nil }()
-
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/pvp/rooms/room-1/leave", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusUnprocessableEntity {
-			t.Fatalf("expected 422 UnprocessableEntity, got %d", rec.Code)
 		}
 	})
 

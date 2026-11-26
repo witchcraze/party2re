@@ -17,7 +17,7 @@ type GvGService interface {
 	GetRoom(ctx context.Context, roomID string) (gvg.RoomDetail, error)
 	ListRooms(ctx context.Context) ([]gvg.RoomSummary, error)
 	JoinRoom(ctx context.Context, charID string, roomID string, password string) (gvg.RoomDetail, error)
-	LeaveRoom(ctx context.Context, charID string, roomID string) error
+	LeaveRoom(ctx context.Context, charID string, roomID string) (gvg.LeaveResult, error)
 	StartMatch(ctx context.Context, leaderID string, roomID string) (gvg.RoomDetail, error)
 	AdvanceRound(ctx context.Context, leaderID string, roomID string, expectedRound int) (gvg.RoundResolution, error)
 	GetStanding(ctx context.Context, guildID string) (gvg.GvGStanding, error)
@@ -28,6 +28,7 @@ type GvGService interface {
 func WithGvG(g GvGService) Option {
 	return func(h *Handler) {
 		h.gvg = g
+		gvgLeaveCommand(g)(h)
 	}
 }
 
@@ -51,10 +52,6 @@ type gvgJoinRoomRequest struct {
 
 type gvgRoomsResponse struct {
 	Rooms []gvg.RoomSummary `json:"rooms"`
-}
-
-type gvgMessageResponse struct {
-	Message string `json:"message"`
 }
 
 type gvgLeaderboardResponse struct {
@@ -189,33 +186,6 @@ func (h *Handler) handleJoinGvGRoom(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, detail)
-	})
-}
-
-func (h *Handler) handleLeaveGvGRoom(w http.ResponseWriter, r *http.Request) {
-	if h.gvg == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("gvg service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		err := h.gvg.LeaveRoom(r.Context(), char.ID, roomID)
-		if err != nil {
-			if errors.Is(err, gvg.ErrRoomNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, gvg.ErrCharacterNotInRoom) || errors.Is(err, gvg.ErrMatchNotInProgress) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, gvgMessageResponse{Message: "left gvg room successfully"})
 	})
 }
 

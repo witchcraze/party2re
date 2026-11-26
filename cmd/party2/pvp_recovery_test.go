@@ -59,7 +59,7 @@ func TestPvPRecoveryClearsContextAndRescueActivity(t *testing.T) {
 	if _, err := rescues.EmergencyRescue(ctx, "hero", "stuck", time.Now()); !errors.Is(err, rescue.ErrActivityRemaining) {
 		t.Fatalf("rescue bypassed PvP recovery: %v", err)
 	}
-	if err := service.LeaveRoom(ctx, "hero", room.Room.ID); err != nil {
+	if _, err := service.LeaveRoom(ctx, "hero", room.Room.ID); err != nil {
 		t.Fatal(err)
 	}
 	if facts, err := readers.read(ctx, "owner", "hero"); err != nil || len(facts) != 0 {

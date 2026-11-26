@@ -152,6 +152,17 @@ type RoomDetail struct {
 	Members []GvGMember `json:"members"`
 }
 
+// DeliveryOutcome records the structured result of settling a standing Tavern delivery on exit.
+type DeliveryOutcome struct {
+	ItemName string
+	Paid     bool
+}
+
+// LeaveResult records the structured outcome of leaving a room.
+type LeaveResult struct {
+	Delivery *DeliveryOutcome
+}
+
 // RoomSummary provides concise listing information.
 type RoomSummary struct {
 	ID                string `json:"id"`

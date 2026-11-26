@@ -125,10 +125,10 @@ func TestGvGExpectedRoundHTTPReplayIntegration(t *testing.T) {
 					if err := f.rooms.SaveRoom(ctx, saved.Detail.Room, saved.Detail.Members); err != nil {
 						t.Fatal(err)
 					}
-					if err := f.service.LeaveRoom(ctx, leader.ID, f.detail.Room.ID); err != nil {
+					if _, err := f.service.LeaveRoom(ctx, leader.ID, f.detail.Room.ID); err != nil {
 						t.Fatal(err)
 					}
-					if err := f.service.LeaveRoom(ctx, opponent.ID, f.detail.Room.ID); err != nil {
+					if _, err := f.service.LeaveRoom(ctx, opponent.ID, f.detail.Room.ID); err != nil {
 						t.Fatal(err)
 					}
 				}

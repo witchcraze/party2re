@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/pvp"
@@ -23,10 +24,19 @@ func pvpLeaveCommand(service PvPService) Option {
 		return withActionCommand[pvpLeaveParams]("pvp_leave", nil, nil)
 	}
 	return withActionCommand("pvp_leave", func(ctx context.Context, actor string, p pvpLeaveParams) (any, error) {
-		if err := service.LeaveRoom(ctx, actor, p.RoomID); err != nil {
+		res, err := service.LeaveRoom(ctx, actor, p.RoomID)
+		if err != nil {
 			return nil, err
 		}
-		return pvpMessageResponse{Message: "left room successfully"}, nil
+		resp := leaveResponse{Message: escapeMessage}
+		if res.RefundedBet > 0 {
+			// Pre-start refund notice from _battle.cgi:1230-1234.
+			resp.Message += "\n賭け金の " + strconv.Itoa(res.RefundedBet) + " Gが返金されました"
+		}
+		if d := res.Delivery; d != nil {
+			resp.DeliveryNotice = deliveryNoticeText(d.ItemName, d.Paid)
+		}
+		return resp, nil
 	}, pvpLeaveRejection)
 }
 
@@ -41,7 +51,7 @@ func pvpKickCommand(service PvPService) Option {
 				return nil, err
 			}
 			h.appendKickPlaceLog(ctx, placelog.Place{Kind: placelog.KindFacility, ID: "quest"}, res.RoomName, res.LeaderName, p.TargetCharacterID)
-			return pvpMessageResponse{Message: "kicked member successfully"}, nil
+			return pvpMessageResponse{Message: kickMessage(res.TargetName)}, nil
 		}, pvpKickRejection)(h)
 	}
 }
@@ -64,13 +74,13 @@ func pvpKickRejection(err error) (int, ErrorDetail) {
 	case errors.Is(err, pvp.ErrRoomNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "PVP_ROOM_NOT_FOUND", Message: "PvP room not found."}
 	case errors.Is(err, pvp.ErrNotRoomLeader):
-		return http.StatusForbidden, ErrorDetail{Code: "PVP_NOT_LEADER", Message: "Only the room leader can kick members."}
+		return http.StatusForbidden, ErrorDetail{Code: "PVP_NOT_LEADER", Message: kickNotLeaderMessage}
 	case errors.Is(err, pvp.ErrCannotKickSelf):
-		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PVP_CANNOT_KICK_SELF", Message: "Leader cannot kick self."}
+		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PVP_CANNOT_KICK_SELF", Message: kickSelfMessage}
 	case errors.Is(err, pvp.ErrCharacterNotInRoom):
 		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PVP_NOT_IN_ROOM", Message: "Character is not in this PvP room."}
 	case errors.Is(err, pvp.ErrMatchAlreadyStarted):
-		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PVP_MATCH_ALREADY_STARTED", Message: "Cannot kick members after the match starts."}
+		return http.StatusUnprocessableEntity, ErrorDetail{Code: "PVP_MATCH_ALREADY_STARTED", Message: kickStartedMessage}
 	case errors.Is(err, pvp.ErrRoomInactive):
 		return http.StatusConflict, ErrorDetail{Code: "PVP_ROOM_INACTIVE", Message: "PvP room expired due to inactivity."}
 	case errors.Is(err, pvp.ErrTransitionConflict):

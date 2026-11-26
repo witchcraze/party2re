@@ -337,7 +337,8 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 		}
 
 		// Absent targets are ErrCharacterNotInParty; storage failures propagate.
-		if _, err := s.repo.GetMember(txCtx, partyID, targetCharID); err != nil {
+		target, err := s.repo.GetMember(txCtx, partyID, targetCharID)
+		if err != nil {
 			return err
 		}
 		leader, err := s.repo.GetMember(txCtx, partyID, leaderCharID)
@@ -356,7 +357,7 @@ func (s *Service) KickMember(ctx context.Context, partyID, leaderCharID, targetC
 		if err := s.repo.RemoveMember(txCtx, partyID, targetCharID); err != nil {
 			return err
 		}
-		result = KickResult{PartyName: p.Name, LeaderName: leader.CharacterName}
+		result = KickResult{PartyName: p.Name, LeaderName: leader.CharacterName, TargetName: target.CharacterName}
 		return nil
 	})
 	if err != nil {

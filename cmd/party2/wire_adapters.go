@@ -64,17 +64,34 @@ func (a partyTavernExitAdapter) ResetFullness(ctx context.Context, characterID s
 }
 
 func (a partyTavernExitAdapter) SettleDelivery(ctx context.Context, characterID string) (*party.DeliveryOutcome, error) {
-	result, err := a.tavern.ClaimDelivery(ctx, characterID)
+	return settleExitDelivery(ctx, a.tavern, characterID, func(itemName string, paid bool) *party.DeliveryOutcome {
+		return &party.DeliveryOutcome{ItemName: itemName, Paid: paid}
+	})
+}
+
+// settleExitDelivery claims a standing Tavern delivery as the feature's outcome type; nil when none stands.
+func settleExitDelivery[T any](ctx context.Context, t postAdventureTavern, characterID string, outcome func(itemName string, paid bool) *T) (*T, error) {
+	result, err := t.ClaimDelivery(ctx, characterID)
 	if errors.Is(err, tavern.ErrNoActiveDelivery) {
 		return nil, nil
 	}
 	if unpaid, ok := errors.AsType[tavern.UnaffordableDeliveryError](err); ok {
-		return &party.DeliveryOutcome{ItemName: unpaid.ItemName, Paid: false}, nil
+		return outcome(unpaid.ItemName, false), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &party.DeliveryOutcome{ItemName: result.Item.Name, Paid: true}, nil
+	return outcome(result.Item.Name, true), nil
+}
+
+// buildRoomExitHook resets fullness and settles the standing delivery when a member leaves a PvP or GvG room.
+func buildRoomExitHook[T any](t postAdventureTavern, outcome func(itemName string, paid bool) *T) func(context.Context, string) (*T, error) {
+	return func(ctx context.Context, characterID string) (*T, error) {
+		if err := t.ResetFullness(ctx, characterID); err != nil {
+			return nil, err
+		}
+		return settleExitDelivery(ctx, t, characterID, outcome)
+	}
 }
 
 type contestGuildAdapter struct {

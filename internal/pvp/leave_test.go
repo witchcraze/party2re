@@ -123,9 +123,9 @@ func TestPvPLeaveSideEffects(t *testing.T) {
 			roomRepo, charRepo, mockBattleEngine{},
 			pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 			pvp.WithPostBattleSettler(settler),
-			pvp.WithPostExitHook(func(_ context.Context, characterID string) (string, error) {
+			pvp.WithPostExitHook(func(_ context.Context, characterID string) (*pvp.DeliveryOutcome, error) {
 				hookCalls = append(hookCalls, characterID)
-				return "", nil
+				return &pvp.DeliveryOutcome{ItemName: "soup", Paid: true}, nil
 			}),
 		)
 		if err != nil {
@@ -139,8 +139,12 @@ func TestPvPLeaveSideEffects(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); err != nil {
+		res, err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID)
+		if err != nil {
 			t.Fatalf("LeaveRoom: %v", err)
+		}
+		if res.RefundedBet != 50 || res.Delivery == nil || res.Delivery.ItemName != "soup" || !res.Delivery.Paid {
+			t.Fatalf("LeaveRoom result = %+v", res)
 		}
 		if len(settler.requests) != 1 {
 			t.Fatalf("settler calls = %d, want 1", len(settler.requests))
@@ -229,10 +233,10 @@ func TestPvPLeaveSideEffects(t *testing.T) {
 			t.Fatalf("expected round 2 builder to receive c1 consumed items, got %+v", builder.calls)
 		}
 
-		if err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); err != nil {
-			t.Fatalf("c1 LeaveRoom: %v", err)
+		if res, err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); err != nil || res.RefundedBet != 0 {
+			t.Fatalf("c1 LeaveRoom = %+v, %v; want no refund after the start", res, err)
 		}
-		if err := svc.LeaveRoom(ctx, c2.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, c2.ID, room.Room.ID); err != nil {
 			t.Fatalf("c2 LeaveRoom: %v", err)
 		}
 		if len(settler.requests) != 2 {
@@ -259,7 +263,7 @@ func TestPvPLeaveSideEffects(t *testing.T) {
 			roomRepo, charRepo, mockBattleEngine{},
 			pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 			pvp.WithPostBattleSettler(settler),
-			pvp.WithPostExitHook(func(context.Context, string) (string, error) { hookCalls++; return "", nil }),
+			pvp.WithPostExitHook(func(context.Context, string) (*pvp.DeliveryOutcome, error) { hookCalls++; return nil, nil }),
 			pvp.WithTimerService(timers),
 			pvp.WithClock(func() time.Time { return now }),
 		)
@@ -270,7 +274,7 @@ func TestPvPLeaveSideEffects(t *testing.T) {
 		charRepo.add(c1)
 		room, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Lost", Bet: 50})
 		_ = roomRepo.DeleteRoom(ctx, room.Room.ID)
-		if err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, c1.ID, room.Room.ID); err != nil {
 			t.Fatalf("abandonLostRoom: %v", err)
 		}
 		if len(settler.requests) != 0 || hookCalls != 0 {
@@ -281,7 +285,7 @@ func TestPvPLeaveSideEffects(t *testing.T) {
 		charRepo.add(c2)
 		room2, _ := svc.CreateRoom(ctx, c2.ID, pvp.CreateRoomRequest{Name: "Timeout", Bet: 50})
 		now = now.Add(pvp.InactivityTimeout + time.Second)
-		if err := svc.LeaveRoom(ctx, c2.ID, room2.Room.ID); err != nil {
+		if _, err := svc.LeaveRoom(ctx, c2.ID, room2.Room.ID); err != nil {
 			t.Fatalf("timeout LeaveRoom: %v", err)
 		}
 		if len(settler.requests) != 0 || hookCalls != 0 {
@@ -304,7 +308,7 @@ func TestPvPKickMember(t *testing.T) {
 			roomRepo, charRepo, mockBattleEngine{},
 			pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
 			pvp.WithPostBattleSettler(settler),
-			pvp.WithPostExitHook(func(context.Context, string) (string, error) { hookCalls++; return "", nil }),
+			pvp.WithPostExitHook(func(context.Context, string) (*pvp.DeliveryOutcome, error) { hookCalls++; return nil, nil }),
 			pvp.WithActionWait(waits),
 			pvp.WithClock(func() time.Time { return now }),
 		)
@@ -335,8 +339,8 @@ func TestPvPKickMember(t *testing.T) {
 		if err != nil {
 			t.Fatalf("KickMember: %v", err)
 		}
-		if res.RoomName != "Lobby" || res.LeaderName != "Alice" {
-			t.Fatalf("KickResult = %+v, want RoomName=Lobby LeaderName=Alice", res)
+		if res.RoomName != "Lobby" || res.LeaderName != "Alice" || res.TargetName != "Bob" {
+			t.Fatalf("KickResult = %+v, want RoomName=Lobby LeaderName=Alice TargetName=Bob", res)
 		}
 
 		gotPeer, _ := charRepo.FindByID(ctx, peer.ID)
@@ -359,7 +363,7 @@ func TestPvPKickMember(t *testing.T) {
 		if _, err := svc.GetCharacterRoom(ctx, peer.ID); !errors.Is(err, pvp.ErrRoomNotFound) {
 			t.Fatalf("expected peer GetCharacterRoom ErrRoomNotFound, got %v", err)
 		}
-		if err := svc.LeaveRoom(ctx, peer.ID, room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+		if _, err := svc.LeaveRoom(ctx, peer.ID, room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 			t.Fatalf("kicked peer LeaveRoom = %v, want ErrCharacterNotInRoom", err)
 		}
 	})
@@ -380,6 +384,30 @@ func TestPvPKickMember(t *testing.T) {
 
 		if _, err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID); !errors.Is(err, pvp.ErrMatchAlreadyStarted) {
 			t.Fatalf("post-start kick = %v, want ErrMatchAlreadyStarted", err)
+		}
+	})
+
+	t.Run("kick retry after a pending wait failure replays the target name", func(t *testing.T) {
+		charRepo := newMockCharRepo()
+		waits := &recordingActionWait{err: errors.New("wait store down")}
+		svc, _ := pvp.NewService(
+			pvp.NewMemoryRoomRepository(), charRepo, mockBattleEngine{},
+			pvp.WithTransitionRepository(pvp.NewMemoryTransitionRepository()),
+			pvp.WithActionWait(waits),
+		)
+		c1 := createTestCharacter("c1", "Alice", 500)
+		c2 := createTestCharacter("c2", "Bob", 500)
+		charRepo.add(c1)
+		charRepo.add(c2)
+		room, _ := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "Replay", Bet: 50})
+		_, _ = svc.JoinRoom(ctx, c2.ID, room.Room.ID, "")
+		if _, err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID); err == nil {
+			t.Fatal("expected KickMember error when wait write fails")
+		}
+		waits.err = nil
+		res, err := svc.KickMember(ctx, room.Room.ID, c1.ID, c2.ID)
+		if err != nil || res.TargetName != "Bob" || res.RoomName != "Replay" {
+			t.Fatalf("replayed KickMember = %+v, %v", res, err)
 		}
 	})
 

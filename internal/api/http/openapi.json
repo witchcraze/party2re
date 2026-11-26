@@ -11368,18 +11368,6 @@
         ],
         "type": "object"
       },
-      "GvGMessageResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "type": "object"
-      },
       "GvGRoom": {
         "additionalProperties": false,
         "properties": {
@@ -14288,18 +14276,6 @@
             "type": "string"
           }
         },
-        "type": "object"
-      },
-      "PvPMessageResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
         "type": "object"
       },
       "PvPRoomDetail": {
@@ -22223,80 +22199,6 @@
         ]
       }
     },
-    "/characters/{id}/gvg/rooms/{room_id}/leave": {
-      "post": {
-        "operationId": "postCharactersIdGvgRoomsRoomIdLeave",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "room_id parameter",
-            "in": "path",
-            "name": "room_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GvGMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Leave GvGRoom",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
     "/characters/{id}/gvg/rooms/{room_id}/start": {
       "post": {
         "operationId": "postCharactersIdGvgRoomsRoomIdStart",
@@ -22854,81 +22756,6 @@
           }
         ],
         "summary": "Join PvPRoom",
-        "tags": [
-          "Combat"
-        ]
-      }
-    },
-    "/characters/{id}/pvp/rooms/{room_id}/leave": {
-      "post": {
-        "description": "Leave a live room across recruiting, in-progress, or completed phases, or recover a SQL participation claim after published live state is lost. Pre-start departure refunds only the departing participant's bet and transfers leadership if needed; post-start and post-completion departure leave without refunding bets. Missing-room recovery closes all room claims without refunding bets, in both recruiting and in-progress phases. Pending financial publication is recovered first. The Gateway pvp_leave command exposes the same operation for all live phases and recovery_pending activity.",
-        "operationId": "postCharactersIdPvpRoomsRoomIdLeave",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "room_id parameter",
-            "in": "path",
-            "name": "room_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PvPMessageResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Leave PvPRoom",
         "tags": [
           "Combat"
         ]

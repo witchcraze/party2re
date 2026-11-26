@@ -12946,18 +12946,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "GvGMessageResponse": {
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
       "HomeUsableItem": {
         "properties": {
           "attack": {
@@ -15519,18 +15507,6 @@
             "type": "string"
           }
         },
-        "type": "object",
-        "additionalProperties": false
-      },
-      "PvPMessageResponse": {
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
         "type": "object",
         "additionalProperties": false
       },

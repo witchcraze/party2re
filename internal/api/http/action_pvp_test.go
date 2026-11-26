@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -36,10 +37,10 @@ func (f *pvpLeaveFixture) Update(_ context.Context, char corecharacter.Character
 	return nil
 }
 
-func (f *pvpLeaveFixture) LeaveRoom(ctx context.Context, actor, room string) error {
+func (f *pvpLeaveFixture) LeaveRoom(ctx context.Context, actor, room string) (pvp.LeaveResult, error) {
 	f.executions++
 	if f.executionErr != nil {
-		return f.executionErr
+		return pvp.LeaveResult{}, f.executionErr
 	}
 	return f.service.LeaveRoom(ctx, actor, room)
 }
@@ -192,7 +193,7 @@ func TestPvPLeaveInProgressGateway(t *testing.T) {
 	if status != 403 {
 		t.Fatalf("expected 403 for unrelated actor, got %d", status)
 	}
-	if err := svc.LeaveRoom(ctx, "outsider", room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
+	if _, err := svc.LeaveRoom(ctx, "outsider", room.Room.ID); !errors.Is(err, pvp.ErrCharacterNotInRoom) {
 		t.Fatalf("expected ErrCharacterNotInRoom for unrelated actor, got %v", err)
 	}
 
@@ -544,15 +545,15 @@ func TestPvPKickPlaceLog(t *testing.T) {
 	}
 
 	// Rejected self-kick writes no log row.
-	if status, _ := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"hero"}}`, nil); status != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 self-kick, got %d", status)
+	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"hero"}}`, nil); status != http.StatusUnprocessableEntity || !strings.Contains(string(raw["error"]), "自分をきっくすることはできません") {
+		t.Fatalf("expected 422 self-kick with legacy text, got %d %s", status, raw)
 	}
 	if len(placeLog.byPlace) != 0 {
 		t.Fatalf("rejected kick wrote log %+v", placeLog.byPlace)
 	}
 
 	// Valid kick appends private NPC notice to the quest lobby place log only.
-	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"peer"}}`, nil); status != http.StatusOK {
+	if status, raw := gatewayRequest(t, router, "hero", "p-hero", "application/json", `{"action":"pvp_kick","params":{"room_id":"`+room.Room.ID+`","target_character_id":"peer"}}`, nil); status != http.StatusOK || !strings.Contains(string(raw["result"]), "Peerをきっくしました") {
 		t.Fatalf("kick failed: %d %s", status, raw)
 	}
 	getCtx := func(actor, token string) PlayerContextResponse {
