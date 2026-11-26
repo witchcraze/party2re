@@ -163,8 +163,8 @@ type ActorRun struct {
 	Recipient    Recipient
 }
 
-// RetainedEarnings is an unpaid unconditional balance that a timed-out run left
-// in its recipient ledger after the active room was disposed.
+// RetainedEarnings is an unpaid unconditional balance left in a recipient
+// ledger by a timed-out run after its room was disposed, or by a Dejon removal.
 type RetainedEarnings struct {
 	RunID     string
 	Recipient Recipient
@@ -187,8 +187,10 @@ type SystemStore[R any] interface {
 	// FindSlot returns the live run holding slot, or "".
 	FindSlot(ctx context.Context, slot string) (string, error)
 	// JoinRun enrolls actor into the locked run, replacing a recipient row the
-	// actor left by exit. It fails with ErrBusy when actor is enrolled elsewhere.
-	JoinRun(ctx context.Context, runID, actor string, order int, recipient Recipient) error
+	// actor left by exit or Dejon and adding that row's unreleased earnings to
+	// recipient; it returns the stored recipient. It fails with ErrBusy when
+	// actor is enrolled elsewhere. Lock Order: after the actor's character row.
+	JoinRun(ctx context.Context, runID, actor string, order int, recipient Recipient) (Recipient, error)
 }
 
 // Store keeps receipts and recipient dispositions beyond active state
@@ -288,6 +290,9 @@ type SystemRoom[R any] interface {
 	Join(r *R, c *corecharacter.Character) error
 	// Retain reports whether r survives its last member's exit.
 	Retain(r *R) bool
+	// Banish applies the room's effects to a member a room NPC banished
+	// (vs_king.cgi dejon); the host removes the member without settlement.
+	Banish(r *R, c *corecharacter.Character) error
 }
 
 // Effects are one command's new earnings, consumption and settlement facts.
@@ -302,6 +307,9 @@ type Effects struct {
 	Inspections     []Inspection
 	// Settled writes the room's own records after settlement (Rank 8).
 	Settled func(context.Context) error
+	// Committed runs once after this command's own commit, never on replay
+	// or an unconfirmed commit (best-effort side effects outside SQL).
+	Committed func(context.Context)
 }
 
 type Config[R any] struct {

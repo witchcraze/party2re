@@ -48,7 +48,6 @@ readiness. Introducing Cluster requires resolving those multi-key placements.
 | `party2:party:lobbies` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `party_id`, Score: `CreatedAt.Unix()` | `internal/party` | `SaveParty` (ZADD), `DeleteParty` (ZREM), `ListParties` (ZREVRANGE / ZRANGE). |
 | `party2:party:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Party ID (`string`) | `internal/party` | `AddMember` (SET EX), `RemoveMember` / `DeleteParty` (DEL), `GetActivePartyByCharacter` (GET). O(1) single-party membership check. |
 | `party2:party:ready:<party_id>:<character_id>` | Valkey Master | `String` | 60 seconds (`60s` countdown) | Flag (`"1"`) | `internal/party` | `UpdateMemberReady` (SET EX 60 or DEL), `GetMembers` (EXISTS). Automatic ready countdown timeout. |
-| `party2:party:sealing:<stage_id>` | Valkey Master | `String` | None; one per king stage, replaced once its lobby is gone | Party ID (`string`) | `internal/party` | `OpenSystemRoom` (`lua/open_system_room.lua`: compares the claim, checks the claimed lobby, then writes the new lobby, claim and `party2:party:lobbies` entry). Keeps one system-owned sealing room per stage. |
 | `party2:party:lock:adventure:<party_id>` | Valkey Master | `String` | 10 seconds (`10s`) safety TTL | Lock token (`id.New()`) | `internal/party` | Distributed lock for atomic adventure crawl execution serialization and concurrent start gating (Issue #653). Acquired via `SET NX EX 10`; released via atomic token-safe Lua script. |
 | `party2:timer:<category>:<id>` | Valkey Master | `String` | Dynamic (e.g. 60s–180s for sleep, 5d–20d for house estate lease, 365d for asleep cache; persistent without TTL when duration <= 0) | Flag (`"1"`) | `internal/core/timer` | `SetLock` (SET EX, SET without TTL when duration <= 0, or conditional `set_with_claim.lua` when `WithClaim` is present on context), `SetLockUntil` (SET PXAT), `ExtendLockUntil` (SET NX PXAT, PEXPIREAT GT), `ImposeLockUntil` (`impose_lock_until.lua`), `IsLocked` (EXISTS), `GetRemainingLock` (TTL), `ReleaseLock` (DEL), `ReleaseLockWithClaim` (`release_with_claim.lua`). Legacy action wait (`action_wait`, `PARTY2_ACTION_WAIT_SECONDS`, [place log](place-log.md#action-wait)), sleep locks, asleep cache (durable recovery backed by MariaDB `characters.pending_wake`, Issue #1118), and house estate lease cache. |
 | `party2:placelog:<kind>:<id>` | Valkey Master | `List` | Idle TTL (`PARTY2_PLACE_LOG_TTL_HOURS`, default 7 days), refreshed on every append | JSON rows, newest first, capped (`PARTY2_PLACE_LOG_LIMIT`, default 30) | `internal/placelog` | `Append` (`lua/append.lua`: LPUSH + LTRIM + EXPIRE), `Read` (LRANGE, viewer-filtered). Display-only place log; loss on Valkey failure is accepted. Contract: [place log](place-log.md). |
@@ -76,11 +75,6 @@ Dungeon and Challenge additionally use the hash-tagged state/reward keys in
 `party2:ranking:refresh` is a scheduled **action type**, not a separately stored
 Valkey key. The withdrawn Candidate E `party2:boss:` keys and `boss_damage`
 script are documented only in [the historical note](transient-boss-hp.md).
-
-Boss sealing deletes lobby, Ready and reverse-mapping keys only after its SQL
-receipt commits. Its saved roster supports partial-cleanup retries after lobby
-loss, and reverse-mapping deletion compares the room ID. See
-[Boss completion recovery](transient-run-state.md#boss-completion-recovery).
 
 ## Scheduled terminal persistence and recovery
 

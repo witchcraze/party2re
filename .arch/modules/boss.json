@@ -1,47 +1,56 @@
 {
   "module": "boss",
   "tier": 2,
-  "description": "Sealing settlement commits participant assets and a room receipt in SQL, then retries Valkey cleanup from that receipt without repeating battle.",
+  "description": "Sealing room library (vs_king) on the shared run host: unseal opens one system run per king stage; joining, explicit combat, ＠ふういん, chest inspection, Dejon removal and exit run in the host's per-command transaction (C1, C2 through runhost).",
   "package": "internal/boss",
   "dependencies": [
     {
-      "name": "settlements",
-      "target_module": "database",
+      "name": "run_host",
+      "target_module": "runhost",
       "relation_type": "contract_interface",
-      "source_ref": "internal/boss/settlement.go#SealingSettlementRepository"
-    },
-    {
-      "name": "rooms",
-      "target_module": "party",
-      "relation_type": "contract_interface",
-      "source_ref": "internal/boss/boss.go#PartyRepository"
+      "source_ref": "internal/boss/run.go#RunService"
     },
     {
       "name": "unseal_clock",
       "target_module": "database",
       "relation_type": "contract_interface",
-      "source_ref": "internal/boss/boss.go#UnsealClockReader"
+      "source_ref": "internal/boss/run.go#UnsealClockReader"
+    },
+    {
+      "name": "news",
+      "target_module": "notification",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/boss/run.go#NewsPublisher"
     }
   ],
   "transaction_boundaries": [
     {
-      "method": "completeSealingBattle",
-      "source_ref": "internal/boss/settlement.go#Service.completeSealingBattle",
-      "transaction_type": "RunInTx",
-      "lock_sequence": [
-        {
-          "table": "boss_room_settlements",
-          "tier": 0,
-          "mode": "INSERT / SELECT ... FOR UPDATE",
-          "note": "Serialize room settlement and confirm uncertain commit outcomes. Valkey cleanup follows this SQL boundary."
-        },
-        {
-          "table": "characters",
-          "tier": 2,
-          "mode": "SELECT ... FOR UPDATE (ascending character ID)",
-          "note": "Lock the whole roster before participant assets, Collection and loot delivery."
-        }
-      ]
+      "method": "OpenSealingRooms",
+      "source_ref": "internal/boss/rooms.go#RunService.OpenSealingRooms",
+      "transaction_type": "Delegated",
+      "lock_sequence": [],
+      "note": "One runhost Open per stage (runs row only, no character locks) after the unseal commits; unseal news follows outside any transaction."
+    },
+    {
+      "method": "Act",
+      "source_ref": "internal/boss/run_room.go#sealingRoom.Act",
+      "transaction_type": "Delegated",
+      "lock_sequence": [],
+      "note": "＠ふういん under runhost Command, which already holds the run and the sorted roster character locks: updates Hero Count, creates chests and returns the news write (Effects.Settled, after the Settler) and the celebration (Effects.Committed, after commit only)."
+    },
+    {
+      "method": "Banish",
+      "source_ref": "internal/boss/run_room.go#sealingRoom.Banish",
+      "transaction_type": "Delegated",
+      "lock_sequence": [],
+      "note": "Dejon fatigue applied by runhost Command to an already-locked character after the Settler; the host releases the member's enrollment."
+    },
+    {
+      "method": "Rooms",
+      "source_ref": "internal/boss/rooms.go#RunService.Rooms",
+      "transaction_type": "Delegated",
+      "lock_sequence": [],
+      "note": "Slot reads; an empty idle room is deleted through runhost DisposeIdle (runs row only)."
     }
   ]
 }

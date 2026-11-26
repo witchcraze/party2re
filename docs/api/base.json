@@ -1166,15 +1166,7 @@
           "id": {
             "type": "string"
           },
-          "kind": {
-            "description": "\"sealing\" for a system-owned sealing room led by an NPC (no character leader); omitted for ordinary lobbies.",
-            "type": "string"
-          },
           "leader_character_id": {
-            "type": "string"
-          },
-          "leader_name": {
-            "description": "NPC leader of a system-owned room.",
             "type": "string"
           },
           "max_level": {
@@ -11215,10 +11207,6 @@
           "id": {
             "type": "string"
           },
-          "kind": {
-            "description": "\"sealing\" for a system-owned sealing room led by an NPC (no character leader); omitted for ordinary lobbies.",
-            "type": "string"
-          },
           "leader_character_id": {
             "type": "string"
           },
@@ -11656,68 +11644,6 @@
           "storage_capacity",
           "deposits"
         ]
-      },
-      "BossSealingBattleResult": {
-        "properties": {
-          "banished_member_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "banquet_held": {
-            "type": "boolean"
-          },
-          "battle_result": {
-            "$ref": "#/components/schemas/BattlePartyBattleResult"
-          },
-          "hero_count_gained": {
-            "type": "integer"
-          },
-          "news_message": {
-            "type": "string"
-          },
-          "outcome": {
-            "type": "string"
-          },
-          "reward_crystals": {
-            "type": "integer"
-          },
-          "reward_exp": {
-            "type": "integer"
-          },
-          "reward_gold": {
-            "type": "integer"
-          },
-          "reward_item_id": {
-            "type": "string"
-          },
-          "stage_id": {
-            "type": "string"
-          },
-          "stage_name": {
-            "type": "string"
-          },
-          "turns": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "stage_id",
-          "stage_name",
-          "outcome",
-          "turns",
-          "reward_exp",
-          "reward_gold",
-          "hero_count_gained",
-          "banquet_held",
-          "battle_result"
-        ],
-        "type": "object",
-        "additionalProperties": false
       },
       "ChallengeHallOfFameEntry": {
         "properties": {
@@ -12609,34 +12535,72 @@
       "GuildListing": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["generated_at", "guilds"],
+        "required": [
+          "generated_at",
+          "guilds"
+        ],
         "properties": {
-          "generated_at": { "type": ["string", "null"], "format": "date-time" },
+          "generated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
           "guilds": {
             "type": "array",
             "description": "Rank order; rank is the 1-based position.",
-            "items": { "$ref": "#/components/schemas/GuildListingEntry" }
+            "items": {
+              "$ref": "#/components/schemas/GuildListingEntry"
+            }
           }
         }
       },
       "GuildListingEntry": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "mark", "color", "message", "points", "members"],
+        "required": [
+          "name",
+          "mark",
+          "color",
+          "message",
+          "points",
+          "members"
+        ],
         "properties": {
-          "name": { "type": "string" },
-          "mark": { "type": "string" },
-          "color": { "type": "string" },
-          "message": { "type": "string" },
-          "points": { "type": "integer" },
+          "name": {
+            "type": "string"
+          },
+          "mark": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "points": {
+            "type": "integer"
+          },
           "members": {
             "type": "array",
             "description": "Active members in roster order; the member count is its length.",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["name", "title"],
-              "properties": { "name": { "type": "string" }, "title": { "type": "string" } }
+              "required": [
+                "name",
+                "title"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              }
             }
           }
         }
@@ -15314,27 +15278,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "SealingBattleResponse": {
-        "properties": {
-          "result": {
-            "$ref": "#/components/schemas/BossSealingBattleResult"
-          }
-        },
-        "required": [
-          "result"
-        ],
-        "type": "object",
-        "additionalProperties": false
-      },
-      "StartSealingBattleRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "additionalProperties": false
-      },
       "PvPRoomDetail": {
         "properties": {
           "members": {
@@ -16088,17 +16031,46 @@
         "additionalProperties": false,
         "description": "Result of the store_build Gateway command: store facts and an HTTP-owned confirmation message.",
         "properties": {
-          "character_id": { "type": "string" },
-          "owner_name": { "type": "string" },
-          "town_id": { "type": "string" },
-          "town_name": { "type": "string" },
-          "store_name": { "type": "string" },
-          "house_style": { "type": "string" },
-          "wallpaper": { "type": "string" },
-          "expires_at": { "type": "string", "format": "date-time" },
-          "message": { "type": "string" }
+          "character_id": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "town_id": {
+            "type": "string"
+          },
+          "town_name": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "house_style": {
+            "type": "string"
+          },
+          "wallpaper": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string"
+          }
         },
-        "required": ["character_id", "owner_name", "town_id", "town_name", "store_name", "house_style", "wallpaper", "expires_at", "message"]
+        "required": [
+          "character_id",
+          "owner_name",
+          "town_id",
+          "town_name",
+          "store_name",
+          "house_style",
+          "wallpaper",
+          "expires_at",
+          "message"
+        ]
       },
       "StoreDetails": {
         "properties": {

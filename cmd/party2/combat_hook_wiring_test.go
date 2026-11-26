@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/battle"
+	"github.com/witchcraze/party2re/internal/boss"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -16,6 +17,8 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/pvp"
+	"github.com/witchcraze/party2re/internal/runhost"
+	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -62,15 +65,29 @@ func TestBossVictoryBanquetProductionHook(t *testing.T) {
 	if err := wireHooks(f.core, f.cmbt, f.econ, f.misc, f.soc); err != nil {
 		t.Fatal(err)
 	}
+	// Joining checks pending scheduled actions; recurring schedules stay unregistered.
+	f.soc.sched = scheduling.NewService(f.soc.schedRepo)
 	ctx := context.Background()
-	f.char.Level, f.char.Stats.HP, f.char.Stats.MaxHP = 99, 500000, 500000
-	f.char.Stats.Attack, f.char.Stats.Defense, f.char.Stats.Agility = 999999, 99999, 9999
+	f.char.Stats.HP, f.char.Stats.MaxHP = 500, 500
 	if err := f.core.charRepo.Update(ctx, f.char); err != nil {
 		t.Fatal(err)
 	}
-	result, err := f.cmbt.boss.StartSealingBattle(ctx, openTestSealingRoom(t, client, f.char), f.char.ID)
-	if err != nil || result.Outcome != corebattle.OutcomeWin {
-		t.Fatalf("boss victory = %+v, %v", result, err)
+	// A private slot keeps this room apart from the shared stage rooms; its enemies are already defeated.
+	runID, err := f.cmbt.boss.Open(ctx, "test:"+id.New(), runhost.Admission{StageID: "king1", Name: "test", Speed: 12}, func(r *boss.Run) { r.Round = 1 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined, err := f.cmbt.boss.Join(ctx, f.char.PlayerID, f.char.ID, runID, id.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := runhost.Command{PlayerID: f.char.PlayerID, ActorID: f.char.ID, RunID: runID, ID: id.New(), Version: joined.Version, Action: "seal"}
+	if _, err := f.cmbt.boss.Command(ctx, cmd); err != nil {
+		t.Fatalf("seal: %v", err)
+	}
+	// A replay returns the receipt without celebrating again.
+	if _, err := f.cmbt.boss.Command(ctx, cmd); err != nil {
+		t.Fatal(err)
 	}
 	if tracker.calls != 1 {
 		t.Fatalf("production banquet calls = %d", tracker.calls)

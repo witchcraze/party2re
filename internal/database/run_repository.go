@@ -161,25 +161,43 @@ func (r *RunRepository[R, P]) FindSlot(ctx context.Context, slot string) (string
 }
 
 // JoinRun pairs the enrollment and recipient writes for one joiner.
-func (r *RunRepository[R, P]) JoinRun(ctx context.Context, id, actor string, order int, recipient runhost.Recipient) error {
+func (r *RunRepository[R, P]) JoinRun(ctx context.Context, id, actor string, order int, recipient runhost.Recipient) (runhost.Recipient, error) {
 	if ctx.Value(runLock{}) != id {
-		return runhost.ErrConflict
+		return runhost.Recipient{}, runhost.ErrConflict
 	}
 	e := ExecutorFromContext(ctx, r.db)
 	if _, err := e.ExecContext(ctx, `INSERT INTO run_enrollments (character_id,run_id) VALUES (?,?)`, actor, id); err != nil {
 		var duplicate *mysql.MySQLError
 		if errors.As(err, &duplicate) && duplicate.Number == 1062 {
-			return runhost.ErrBusy
+			return runhost.Recipient{}, runhost.ErrBusy
 		}
-		return err
+		return runhost.Recipient{}, err
 	}
-	data, err := json.Marshal(recipient)
-	if err != nil {
-		return err
+	// The ledger row, not the run snapshot, holds what a retained claim left unpaid.
+	var data []byte
+	err := e.QueryRowContext(ctx, `SELECT recipient_json FROM run_recipients WHERE run_id=? AND character_id=? FOR UPDATE`, id, actor).Scan(&data)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+	case err != nil:
+		return runhost.Recipient{}, err
+	default:
+		var left runhost.Recipient
+		if err := json.Unmarshal(data, &left); err != nil {
+			return runhost.Recipient{}, err
+		}
+		if left.Disposition != "exit" && left.Disposition != "dejon" || left.Conditional != (runhost.Earnings{}) {
+			return runhost.Recipient{}, runhost.ErrConflict
+		}
+		if recipient.Pending, err = runhost.AddEarnings(recipient.Pending, left.Pending); err != nil {
+			return runhost.Recipient{}, err
+		}
+	}
+	if data, err = json.Marshal(recipient); err != nil {
+		return runhost.Recipient{}, err
 	}
 	_, err = e.ExecContext(ctx, `INSERT INTO run_recipients (run_id,character_id,roster_order,recipient_json) VALUES (?,?,?,?)
 		ON DUPLICATE KEY UPDATE roster_order=VALUES(roster_order),disposition='',penalty_until=NULL,recipient_json=VALUES(recipient_json)`, id, actor, order, data)
-	return err
+	return recipient, err
 }
 
 func (r *RunRepository[R, P]) EnrollRun(ctx context.Context, run runhost.State) error {
@@ -239,7 +257,7 @@ func (r *RunRepository[R, P]) SaveRunRecipient(ctx context.Context, id, actor st
 			return err
 		}
 	}
-	if recipient.Disposition == "exit" || (recipient.Disposition == "timeout" && !recipient.TimerPending) {
+	if recipient.Disposition == "exit" || recipient.Disposition == "dejon" || (recipient.Disposition == "timeout" && !recipient.TimerPending) {
 		if _, err := e.ExecContext(ctx, `DELETE FROM run_enrollments WHERE run_id=? AND character_id=?`, id, actor); err != nil {
 			return err
 		}
@@ -307,13 +325,13 @@ func (r *RunRepository[R, P]) FindActorRun(ctx context.Context, actor string) (*
 	return &runhost.ActorRun{RunID: id, PartyID: run.Admission.PartyID, Version: run.Version, Round: run.Round, LeaderID: run.LeaderID, Role: role, LastActivity: run.LastActivity, Recipient: p}, nil
 }
 
-// FindRetainedEarnings returns every released timeout ledger row of the actor
+// FindRetainedEarnings returns every released timeout or dejon ledger row of the actor
 // with unpaid unconditional earnings, oldest first; FindPenalty's latest-row read
 // cannot see older balances. It is a plain read that precedes settlement; the
 // rows are locked and re-verified by SaveRetainedRecipient after the settler.
 func (r *RunRepository[R, P]) FindRetainedEarnings(ctx context.Context, actor string) ([]runhost.RetainedEarnings, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `SELECT p.run_id,p.recipient_json FROM run_recipients p
-WHERE p.character_id=? AND p.disposition='timeout'
+WHERE p.character_id=? AND p.disposition IN ('timeout','dejon')
 AND (JSON_EXTRACT(p.recipient_json,'$.pending.experience')>0 OR JSON_EXTRACT(p.recipient_json,'$.pending.gold')>0 OR JSON_EXTRACT(p.recipient_json,'$.pending.crystals')>0)
 AND NOT EXISTS (SELECT 1 FROM run_enrollments e WHERE e.character_id=p.character_id AND e.run_id=p.run_id)
 ORDER BY p.penalty_until, p.run_id`, actor)
@@ -336,7 +354,7 @@ ORDER BY p.penalty_until, p.run_id`, actor)
 	return found, rows.Err()
 }
 
-// SaveRetainedRecipient rewrites only a released timeout ledger row, preserving
+// SaveRetainedRecipient rewrites only a released timeout or dejon ledger row, preserving
 // its disposition and committed penalty deadline. It locks the row and requires
 // the unpaid balance that was credited, so a changed ledger fails the command
 // instead of paying twice or losing stock.
@@ -348,7 +366,7 @@ func (r *RunRepository[R, P]) SaveRetainedRecipient(ctx context.Context, runID, 
 	e := ExecutorFromContext(ctx, r.db)
 	var current []byte
 	err := e.QueryRowContext(ctx, `SELECT p.recipient_json FROM run_recipients p
-WHERE p.run_id=? AND p.character_id=? AND p.disposition='timeout'
+WHERE p.run_id=? AND p.character_id=? AND p.disposition IN ('timeout','dejon')
 AND NOT EXISTS (SELECT 1 FROM run_enrollments e WHERE e.character_id=p.character_id AND e.run_id=p.run_id)
 FOR UPDATE`, runID, actor).Scan(&current)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -368,7 +386,7 @@ FOR UPDATE`, runID, actor).Scan(&current)
 	if err != nil {
 		return err
 	}
-	_, err = e.ExecContext(ctx, `UPDATE run_recipients SET recipient_json=? WHERE run_id=? AND character_id=? AND disposition='timeout'`, data, runID, actor)
+	_, err = e.ExecContext(ctx, `UPDATE run_recipients SET recipient_json=? WHERE run_id=? AND character_id=? AND disposition IN ('timeout','dejon')`, data, runID, actor)
 	return err
 }
 

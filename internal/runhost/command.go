@@ -26,6 +26,8 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 	var result Receipt
 	var unsealers []corebattle.LifetimeActor
 	var runName string
+	var committed func(context.Context)
+	var banished []string
 	err := s.cfg.Store.WithRunForUpdate(ctx, cmd.RunID, false, func(ctx context.Context) error {
 		old, err := s.cfg.Store.FindRunReceipt(ctx, cmd.RunID, cmd.ID)
 		if err != nil {
@@ -130,6 +132,10 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 				if effects, err = s.cfg.Room.Act(ctx, run, cmd); err != nil {
 					return err
 				}
+				// Act may update locked characters (Hero Count); the action tail must not save a stale copy.
+				if requester, err = s.cfg.Characters.FindByID(ctx, cmd.ActorID); err != nil {
+					return err
+				}
 				request.UnsealDemonKing = effects.UnsealDemonKing
 				tail = true
 			}
@@ -203,6 +209,9 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 					return err
 				}
 			}
+			if banished, err = s.banish(ctx, run); err != nil {
+				return err
+			}
 			if cmd.Action == "exit" {
 				if err := s.finishExit(ctx, run, cmd.ActorID); err != nil {
 					return err
@@ -213,6 +222,7 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		if effects.UnsealDemonKing {
 			unsealers, runName = r.unsealingParty(chars), r.Admission.Name
 		}
+		committed = effects.Committed
 		if effects.RoomActivity && (len(r.Roster) > 0 || r.Retained) {
 			r.LastActivity = now
 		}
@@ -226,6 +236,11 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 		}
 		slices.Sort(recipients)
 		for _, id := range recipients {
+			// After its removal the ledger row owns a Dejon recipient's stock: a retained
+			// claim or a rejoin changes the row, never this snapshot.
+			if r.Recipients[id].Disposition == "dejon" && !slices.Contains(banished, id) {
+				continue
+			}
 			if err := s.cfg.Store.SaveRunRecipient(ctx, r.ID, id, r.Recipients[id]); err != nil {
 				return err
 			}
@@ -238,6 +253,9 @@ func (s *Service[R, P]) Command(ctx context.Context, cmd Command) (Receipt, erro
 	})
 	if err == nil && len(unsealers) > 0 && s.cfg.Unsealed != nil {
 		s.cfg.Unsealed(ctx, runName, unsealers)
+	}
+	if err == nil && committed != nil {
+		committed(ctx)
 	}
 	result, err = s.resolveReceipt(ctx, cmd, result, err)
 	if err == nil && cmd.Action == "cleanup" {

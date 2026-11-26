@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
-	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/challenge"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
@@ -94,17 +93,6 @@ func (s *stubChallengeService) ListHallOfFame(ctx context.Context) ([]challenge.
 	return []challenge.HallOfFameEntry{{TierID: "novice", HighestRound: 10, PartyName: "TopParty"}}, nil
 }
 
-type stubBossService struct {
-	startSealingBattleFn func(ctx context.Context, partyID, leaderCharID string) (boss.SealingBattleResult, error)
-}
-
-func (s *stubBossService) StartSealingBattle(ctx context.Context, partyID, leaderCharID string) (boss.SealingBattleResult, error) {
-	if s.startSealingBattleFn != nil {
-		return s.startSealingBattleFn(ctx, partyID, leaderCharID)
-	}
-	return boss.SealingBattleResult{StageID: "king1", Outcome: "win"}, nil
-}
-
 type stubDungeonService struct {
 	fightFn           func(context.Context, string) (dungeon.ExpeditionStepResult, error)
 	startExpeditionFn func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
@@ -174,7 +162,6 @@ func TestCombatEndpoints(t *testing.T) {
 		&stubAdventureService{},
 		&stubShopService{},
 		apihttp.WithChallenge(&stubChallengeService{}),
-		apihttp.WithBoss(&stubBossService{}),
 		apihttp.WithDungeon(&stubDungeonService{}),
 	)
 	router := h.Router()
@@ -299,31 +286,8 @@ func TestCombatEndpoints(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d (body: %s)", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /parties/{id}/sealing-battle - room already claimed", func(t *testing.T) {
-		hClaimed := newTestHandler(
-			t,
-			pService,
-			cService,
-			&stubAdventureService{},
-			&stubShopService{},
-			apihttp.WithBoss(&stubBossService{
-				startSealingBattleFn: func(context.Context, string, string) (boss.SealingBattleResult, error) {
-					return boss.SealingBattleResult{}, boss.ErrPartyNotRecruiting
-				},
-			}),
-		)
-		req := jsonRequest(t, http.MethodPost, "/parties/party-1/sealing-battle", `{"character_id":"c1"}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		hClaimed.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusUnprocessableEntity {
-			t.Fatalf("expected 422, got %d (body: %s)", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected removed auto-resolving sealing route 404, got %d", rec.Code)
 		}
 	})
 

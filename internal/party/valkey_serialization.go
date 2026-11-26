@@ -16,39 +16,16 @@ type LobbyState struct {
 type storedParty struct {
 	Party
 	PasswordHash string `json:"password_hash,omitempty"`
-	// EnemiesJSON stays a string so Lua re-encoding cannot turn empty arrays into objects.
-	EnemiesJSON string `json:"enemies_json,omitempty"`
 }
 
-func newStoredParty(p Party) (storedParty, error) {
-	sp := storedParty{Party: p, PasswordHash: p.PasswordHash}
-	if len(p.Enemies) > 0 {
-		data, err := json.Marshal(p.Enemies)
-		if err != nil {
-			return storedParty{}, err
-		}
-		sp.EnemiesJSON = string(data)
-	}
-	return sp, nil
+func newStoredParty(p Party) storedParty {
+	return storedParty{Party: p, PasswordHash: p.PasswordHash}
 }
 
-func marshalStoredParty(p Party) ([]byte, error) {
-	sp, err := newStoredParty(p)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(sp)
-}
-
-func (sp storedParty) toParty() (Party, error) {
+func (sp storedParty) toParty() Party {
 	p := sp.Party
 	p.PasswordHash = sp.PasswordHash
-	if sp.EnemiesJSON != "" {
-		if err := json.Unmarshal([]byte(sp.EnemiesJSON), &p.Enemies); err != nil {
-			return Party{}, err
-		}
-	}
-	return p, nil
+	return p
 }
 
 type storedMember struct {

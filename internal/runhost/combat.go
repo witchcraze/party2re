@@ -2,6 +2,7 @@ package runhost
 
 import (
 	"context"
+	"maps"
 	"slices"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -293,8 +294,13 @@ func (s *Service[R, P]) respond(run *R, npc, requesterID string, requester *core
 			callbacks.JobAssets = &corebattle.JobAssetContext{DamageContext: p.damage, DefeatContext: p.defeat, Roster: callbacks.Roster}
 		}
 		d.RegisterNPCCallbacks(callbacks, f)
+		maps.Copy(d.Invocations.Entries, room.NPCEntries)
 	}
-	res, err := skill.ApplyNPCOperation(&saved, op, skill.NPCDefaultSeed(), register, s.cfg.RNG)
+	seed := skill.NPCDefaultSeed()
+	if room.NPCSkills != nil {
+		seed = room.NPCSkills
+	}
+	res, err := skill.ApplyNPCOperation(&saved, op, seed, register, s.cfg.RNG)
 	if err != nil {
 		return err
 	}

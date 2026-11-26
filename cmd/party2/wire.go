@@ -102,7 +102,7 @@ func wireHooks(
 	misc *miscServices,
 	soc *socServices,
 ) error {
-	cmbt.boss.SetVictoryBanquetHook(buildVictoryBanquetHook(misc.eventplaza))
+	cmbt.boss.SetBanquet(buildVictoryBanquetHook(misc.eventplaza))
 	misc.rescue.SetActivityReader(newContextActivityReaders(cmbt, misc))
 
 	if misc.collection != nil {
@@ -137,9 +137,6 @@ func wireHooks(
 		}
 		if misc.collection != nil {
 			cmbt.battle.SetMonsterDefeatRecorder(battleMonsterDefeatAdapter{svc: misc.collection})
-			if cmbt.boss != nil {
-				cmbt.boss.SetMonsterDefeatRecorder(bossMonsterDefeatAdapter{svc: misc.collection})
-			}
 		}
 	}
 	if misc.helper != nil {
@@ -161,6 +158,9 @@ func wireHooks(
 		if cmbt.normal != nil {
 			cmbt.normal.SetExitEffects(misc.tavern.ResetFullness)
 		}
+		if cmbt.boss != nil {
+			cmbt.boss.SetExitEffects(misc.tavern.ResetFullness)
+		}
 		if cmbt.party != nil {
 			cmbt.party.SetPostAdventureHook(postAdventureHook)
 		}
@@ -181,6 +181,9 @@ func wireHooks(
 		soc.home.SetBlessingCleaner(misc.chapel)
 		if cmbt.normal != nil {
 			cmbt.normal.SetBlessings(chapelBlessingAdapter{svc: misc.chapel})
+		}
+		if cmbt.boss != nil {
+			cmbt.boss.SetBlessings(chapelBlessingAdapter{svc: misc.chapel})
 		}
 	}
 	if econ.alchemy != nil {
@@ -330,7 +333,6 @@ func newHTTPHandler(
 		http.WithLottery(misc.lottery),
 		http.WithCasino(misc.casino),
 		http.WithChallenge(cmbt.challenge),
-		http.WithBoss(cmbt.boss),
 		http.WithDungeon(cmbt.dungeon),
 		http.WithPvP(cmbt.pvp),
 		http.WithGvG(cmbt.gvg),

@@ -1916,68 +1916,6 @@
         ],
         "type": "object"
       },
-      "BossSealingBattleResult": {
-        "additionalProperties": false,
-        "properties": {
-          "banished_member_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "banquet_held": {
-            "type": "boolean"
-          },
-          "battle_result": {
-            "$ref": "#/components/schemas/BattlePartyBattleResult"
-          },
-          "hero_count_gained": {
-            "type": "integer"
-          },
-          "news_message": {
-            "type": "string"
-          },
-          "outcome": {
-            "type": "string"
-          },
-          "reward_crystals": {
-            "type": "integer"
-          },
-          "reward_exp": {
-            "type": "integer"
-          },
-          "reward_gold": {
-            "type": "integer"
-          },
-          "reward_item_id": {
-            "type": "string"
-          },
-          "stage_id": {
-            "type": "string"
-          },
-          "stage_name": {
-            "type": "string"
-          },
-          "turns": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "stage_id",
-          "stage_name",
-          "outcome",
-          "turns",
-          "reward_exp",
-          "reward_gold",
-          "hero_count_gained",
-          "banquet_held",
-          "battle_result"
-        ],
-        "type": "object"
-      },
       "CasinoLobbyRoom": {
         "additionalProperties": false,
         "properties": {
@@ -13363,15 +13301,7 @@
           "id": {
             "type": "string"
           },
-          "kind": {
-            "description": "\"sealing\" for a system-owned sealing room led by an NPC (no character leader); omitted for ordinary lobbies.",
-            "type": "string"
-          },
           "leader_character_id": {
-            "type": "string"
-          },
-          "leader_name": {
-            "description": "NPC leader of a system-owned room.",
             "type": "string"
           },
           "max_level": {
@@ -13655,10 +13585,6 @@
             "type": "boolean"
           },
           "id": {
-            "type": "string"
-          },
-          "kind": {
-            "description": "\"sealing\" for a system-owned sealing room led by an NPC (no character leader); omitted for ordinary lobbies.",
             "type": "string"
           },
           "leader_character_id": {
@@ -17256,18 +17182,6 @@
         ],
         "type": "object"
       },
-      "SealingBattleResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "result": {
-            "$ref": "#/components/schemas/BossSealingBattleResult"
-          }
-        },
-        "required": [
-          "result"
-        ],
-        "type": "object"
-      },
       "SecretShopCatalogSceneData": {
         "additionalProperties": false,
         "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Status and purchase REST operations are retired; NPC interaction REST operations remain registered.",
@@ -18088,15 +18002,6 @@
         "required": [
           "expedition"
         ],
-        "type": "object"
-      },
-      "StartSealingBattleRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          }
-        },
         "type": "object"
       },
       "Store": {
@@ -25819,7 +25724,7 @@
     },
     "/parties/{id}/join": {
       "post": {
-        "description": "Joins an existing recruiting party. Joining a sealing room ignores the password and adds 20 Tired with the join.",
+        "description": "Joins an existing recruiting party.",
         "operationId": "joinParty",
         "parameters": [
           {
@@ -26146,90 +26051,6 @@
           }
         ],
         "summary": "Set party member ready state",
-        "tags": [
-          "Party"
-        ]
-      }
-    },
-    "/parties/{id}/sealing-battle": {
-      "post": {
-        "description": "Resolve a sealing room's battle against its stored enemy roster; any room member may start it. Retrying the same room as one of its saved members returns the committed result and retries remaining lobby cleanup without repeating combat or rewards. Cleanup failures return an error while retaining the committed result for retry.",
-        "operationId": "postPartiesIdSealingBattle",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StartSealingBattleRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SealingBattleResponse"
-                }
-              }
-            },
-            "description": "Successful operation"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad request"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error",
-            "description": "Conflict"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unprocessable Content"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal server error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Start Sealing Battle",
         "tags": [
           "Party"
         ]
