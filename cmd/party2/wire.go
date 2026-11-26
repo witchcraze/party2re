@@ -377,6 +377,7 @@ func newHTTPHandler(
 		http.WithGuild(soc.guild),
 		http.WithParty(cmbt.party),
 		http.WithQuestStages(cmbt.stages),
+		http.WithQuestRuns(cmbt.normal),
 		http.WithNormalRuns(cmbt.normal),
 		http.WithAltar(misc.altar),
 		http.WithWishingWell(misc.wishingwell),

@@ -6,13 +6,18 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/pvp"
+	"github.com/witchcraze/party2re/internal/runhost"
 )
 
-// QuestStageLister supplies the ＠つくる form's stage choices for the actor.
+// QuestStageLister supplies the ＠つくる form's stage choices for the actor
+// and the stage names of listed runs.
 type QuestStageLister interface {
 	AvailableStages(corecharacter.Character) []adventure.Stage
+	FindByID(string) (adventure.Stage, error)
 }
 
 // WithQuestStages connects the quest scene's stage choices.
@@ -20,9 +25,25 @@ func WithQuestStages(stages QuestStageLister) Option {
 	return func(h *Handler) { h.questStages = stages }
 }
 
+// QuestRunLister lists in-progress normal runs for the quest list.
+type QuestRunLister interface {
+	ListQuestRooms(context.Context) ([]runhost.QuestRoom, error)
+}
+
+// WithQuestRuns connects the quest scene's in-progress normal runs.
+func WithQuestRuns(runs QuestRunLister) Option {
+	return func(h *Handler) { h.questRuns = runs }
+}
+
 type QuestStage struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+// QuestRun is an in-progress normal run's public row.
+type QuestRun struct {
+	runhost.QuestRoom
+	StageName string `json:"stage_name"`
 }
 
 type QuestParty struct {
@@ -30,12 +51,16 @@ type QuestParty struct {
 	SelectParams playercontext.Subject `json:"select_params"`
 }
 
-// QuestSceneData is the quest place (quest.cgi): creatable stages and waiting lobbies.
+// QuestSceneData is the quest place (quest.cgi): creatable stages, waiting
+// Party lobbies, in-progress normal runs and PvP/GvG waiting rooms.
 type QuestSceneData struct {
-	Parent  string       `json:"parent"`
-	Stages  []QuestStage `json:"stages"`
-	Parties []QuestParty `json:"parties"`
-	Page    ScenePage    `json:"page"`
+	Parent       string            `json:"parent"`
+	Stages       []QuestStage      `json:"stages"`
+	Parties      []QuestParty      `json:"parties"`
+	Runs         []QuestRun        `json:"runs"`
+	Arenas       []pvp.RoomSummary `json:"arenas"`
+	GuildBattles []gvg.RoomSummary `json:"guild_battles"`
+	Page         ScenePage         `json:"page"`
 }
 
 type QuestPartyParams struct {
@@ -85,7 +110,47 @@ func (h *Handler) questSceneData(ctx context.Context, r playercontext.Result) (a
 	for _, st := range available {
 		stages = append(stages, QuestStage{ID: st.ID, Name: st.Name})
 	}
-	return QuestSceneData{Parent: "town", Stages: stages, Parties: rows, Page: scenePage}, nil
+	data := QuestSceneData{Parent: "town", Stages: stages, Parties: rows, Runs: []QuestRun{}, Arenas: []pvp.RoomSummary{}, GuildBattles: []gvg.RoomSummary{}, Page: scenePage}
+	// Only Party lobbies page; the other rooms are few and listed on the first page.
+	if n.Offset == 0 {
+		if err := h.questOtherRooms(ctx, &data); err != nil {
+			return nil, err
+		}
+	}
+	return data, nil
+}
+
+// questOtherRooms adds the room kinds other than Party lobbies (quest.cgi:80–170).
+// Their entry is not a Gateway command yet, so the scene offers none for them.
+func (h *Handler) questOtherRooms(ctx context.Context, data *QuestSceneData) error {
+	if h.questRuns != nil {
+		rooms, err := h.questRuns.ListQuestRooms(ctx)
+		if err != nil {
+			return err
+		}
+		for _, room := range rooms {
+			run := QuestRun{QuestRoom: room}
+			if st, err := h.questStages.FindByID(room.StageID); err == nil {
+				run.StageName = st.Name
+			}
+			data.Runs = append(data.Runs, run)
+		}
+	}
+	if h.pvp != nil {
+		rooms, err := h.pvp.ListRooms(ctx)
+		if err != nil {
+			return err
+		}
+		data.Arenas = append(data.Arenas, rooms...)
+	}
+	if h.gvg != nil {
+		rooms, err := h.gvg.ListRooms(ctx)
+		if err != nil {
+			return err
+		}
+		data.GuildBattles = append(data.GuildBattles, rooms...)
+	}
+	return nil
 }
 
 // questFacility is 冒険に出る (config.cgi @places, lib/quest.cgi): solo and

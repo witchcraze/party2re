@@ -203,6 +203,39 @@ func (f *normalFixture) send(t *testing.T, runID string, actor int, action, targ
 	return result
 }
 
+// The quest list reads live runs of this kind only, from the shared runs table.
+func TestNormalRunListQuestRooms(t *testing.T) {
+	f := newNormalFixture(t, 1)
+	entry := f.enter(t, "normal")
+	c := f.actors[0]
+	rooms, err := f.svc.ListQuestRooms(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := runhost.QuestRoom{Name: "solo-quest", Speed: 3, StageID: adventure.StarterAdventure, Mode: "normal", LeaderName: c.Name, MemberNames: []string{c.Name}, MaxMembers: 1}
+	found := 0
+	for _, room := range rooms {
+		if reflect.DeepEqual(room.MemberNames, []string{c.Name}) {
+			found++
+			if !reflect.DeepEqual(room, want) {
+				t.Fatalf("room %+v, want %+v", room, want)
+			}
+		}
+	}
+	if found != 1 {
+		t.Fatalf("own run listed %d times", found)
+	}
+	other, err := f.store.ListRuns(context.Background(), "other-kind")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range other {
+		if r.ID == entry.Command.RunID {
+			t.Fatal("run listed under another kind")
+		}
+	}
+}
+
 func TestNormalRunAdmissionReceiptRestart(t *testing.T) {
 	f := newNormalFixture(t, 1)
 	entry := f.enter(t, "normal")

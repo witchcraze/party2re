@@ -159,6 +159,7 @@ type Handler struct {
 	contest        ContestService
 	parties        PartyService
 	questStages    QuestStageLister
+	questRuns      QuestRunLister
 	runs           NormalRunService
 	altar          AltarService
 	bank           BankService

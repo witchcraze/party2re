@@ -14567,6 +14567,16 @@
           },
           "target_wins": {
             "type": "integer"
+          },
+          "member_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Leader first, then members in join order."
+          },
+          "need_join": {
+            "type": "string"
           }
         },
         "required": [
@@ -14574,6 +14584,7 @@
           "name",
           "leader_character_id",
           "leader_name",
+          "member_names",
           "speed",
           "stage",
           "current_members",
@@ -15434,6 +15445,16 @@
           },
           "target_wins": {
             "type": "integer"
+          },
+          "member_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Leader first, then members in join order."
+          },
+          "need_join": {
+            "type": "string"
           }
         },
         "required": [
@@ -15441,6 +15462,7 @@
           "name",
           "leader_character_id",
           "leader_name",
+          "member_names",
           "speed",
           "stage",
           "current_members",
@@ -18841,6 +18863,27 @@
               "$ref": "#/components/schemas/QuestParty"
             }
           },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestRun"
+            },
+            "description": "In-progress normal runs, newest first; listed on the first page only."
+          },
+          "arenas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PvPRoomSummary"
+            },
+            "description": "Recruiting PvP (闘技場) rooms; listed on the first page only."
+          },
+          "guild_battles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GvGRoomSummary"
+            },
+            "description": "Recruiting GvG rooms; listed on the first page only."
+          },
           "page": {
             "$ref": "#/components/schemas/ScenePage"
           }
@@ -18849,9 +18892,12 @@
           "parent",
           "stages",
           "parties",
+          "runs",
+          "arenas",
+          "guild_battles",
           "page"
         ],
-        "description": "The quest place (冒険に出る): creatable stages and recruiting Party lobbies, newest first. Reading admits no one."
+        "description": "The quest place (冒険に出る): creatable stages, recruiting Party lobbies (newest first, paged), in-progress normal runs and recruiting PvP/GvG rooms. Only Party lobbies offer a command here. Reading admits no one."
       },
       "QuestSelectedSceneData": {
         "type": "object",
@@ -18873,6 +18919,57 @@
           "join_params"
         ],
         "description": "One lobby's public row; selecting is not joining. Password and join conditions are enforced by party_join."
+      },
+      "QuestRun": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "An in-progress normal run's public quest-list row.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "stage_name": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "need_join": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "leader_name": {
+            "type": "string"
+          },
+          "member_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Leader first, then members in join order."
+          },
+          "max_members": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "speed",
+          "stage_id",
+          "stage_name",
+          "round",
+          "leader_name",
+          "member_names",
+          "max_members"
+        ]
       }
     },
     "securitySchemes": {

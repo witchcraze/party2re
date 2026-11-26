@@ -82,6 +82,7 @@ func (s *stubGvGService) ListRooms(ctx context.Context) ([]gvg.RoomSummary, erro
 			Name:              "Test GvG Room",
 			LeaderCharacterID: "c1",
 			LeaderName:        "Hero",
+			MemberNames:       []string{"Hero"},
 			CurrentMembers:    1,
 			MaxMembers:        8,
 			PrizePool:         2,

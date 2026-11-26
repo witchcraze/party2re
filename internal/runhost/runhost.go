@@ -92,6 +92,10 @@ type Admission struct {
 	Speed        int                        `json:"speed"`
 	// Name is the quest name players gave the room (legacy $p_name).
 	Name string `json:"name,omitempty"`
+	// MaxMembers and NeedJoin are the room's legacy $p_join and $need_join,
+	// shown on the public quest list.
+	MaxMembers int    `json:"max_members,omitempty"`
+	NeedJoin   string `json:"need_join,omitempty"`
 }
 
 type Earnings struct {
@@ -205,6 +209,7 @@ type SystemStore[R any] interface {
 type Store[R any] interface {
 	RetainedEarningsStore
 	SystemStore[R]
+	RoomStore
 	WithRunForUpdate(context.Context, string, bool, func(context.Context) error) error
 	FindRun(context.Context, string) (*R, error)
 	SaveRun(context.Context, R, int) error

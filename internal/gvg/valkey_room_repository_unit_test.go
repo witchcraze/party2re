@@ -293,6 +293,10 @@ func TestValkeyRoomRepository_ListRooms(t *testing.T) {
 		cmdParts := cmd.Commands()
 		switch cmdParts[0] {
 		case "ZREVRANGE":
+			// Legacy lists every room (quest.cgi:80–170): the whole index, no cap.
+			if got := cmdParts[2:]; len(got) != 2 || got[0] != "0" || got[1] != "-1" {
+				t.Errorf("index range = %v, want the whole index", got)
+			}
 			return valkeytest.MakeStringSliceResult([]string{"gvg-1", "gvg-2", "gvg-expired", "gvg-3"})
 		case "GET":
 			switch cmdParts[1] {

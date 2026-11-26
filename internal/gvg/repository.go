@@ -154,22 +154,7 @@ func (m *MemoryRoomRepository) ListRooms(_ context.Context) ([]RoomSummary, erro
 		if d.Room.Status != StatusRecruiting {
 			continue
 		}
-		summaries = append(summaries, RoomSummary{
-			ID:                d.Room.ID,
-			Name:              d.Room.Name,
-			LeaderCharacterID: d.Room.LeaderCharacterID,
-			LeaderName:        d.Room.LeaderName,
-			Speed:             d.Room.Speed,
-			Stage:             d.Room.Stage,
-			CurrentMembers:    len(d.Members),
-			MaxMembers:        d.Room.MaxMembers,
-			PrizePool:         d.Room.PrizePool,
-			TargetWins:        d.Room.TargetWins,
-			HasPassword:       d.Room.PasswordHash != "",
-			Status:            d.Room.Status,
-			Round:             d.Room.Round,
-			CreatedAt:         d.Room.CreatedAt,
-		})
+		summaries = append(summaries, newRoomSummary(d))
 	}
 
 	sort.Slice(summaries, func(i, j int) bool {
@@ -322,7 +307,7 @@ func (v *ValkeyRoomRepository) ListRooms(ctx context.Context) ([]RoomSummary, er
 	remCmd := v.client.B().Zremrangebyscore().Key(DefaultRoomsActiveIndexKey).Min("-inf").Max(strconv.FormatFloat(cutoff, 'f', 0, 64)).Build()
 	_ = v.client.Do(ctx, remCmd)
 
-	cmd := v.client.B().Zrevrange().Key(DefaultRoomsActiveIndexKey).Start(0).Stop(50).Build()
+	cmd := v.client.B().Zrevrange().Key(DefaultRoomsActiveIndexKey).Start(0).Stop(-1).Build()
 	res := v.client.Do(ctx, cmd)
 	if err := res.Error(); err != nil {
 		return nil, err
@@ -343,22 +328,7 @@ func (v *ValkeyRoomRepository) ListRooms(ctx context.Context) ([]RoomSummary, er
 		if detail.Room.Status != StatusRecruiting {
 			continue
 		}
-		summaries = append(summaries, RoomSummary{
-			ID:                detail.Room.ID,
-			Name:              detail.Room.Name,
-			LeaderCharacterID: detail.Room.LeaderCharacterID,
-			LeaderName:        detail.Room.LeaderName,
-			Speed:             detail.Room.Speed,
-			Stage:             detail.Room.Stage,
-			CurrentMembers:    len(detail.Members),
-			MaxMembers:        detail.Room.MaxMembers,
-			PrizePool:         detail.Room.PrizePool,
-			TargetWins:        detail.Room.TargetWins,
-			HasPassword:       detail.Room.PasswordHash != "",
-			Status:            detail.Room.Status,
-			Round:             detail.Room.Round,
-			CreatedAt:         detail.Room.CreatedAt,
-		})
+		summaries = append(summaries, newRoomSummary(detail))
 	}
 	return summaries, nil
 }

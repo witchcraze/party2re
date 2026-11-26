@@ -76,7 +76,7 @@ func TestRosterRejectsCorruptMembership(t *testing.T) {
 
 func TestWithNormalRosterAndAdmissionFromRoster(t *testing.T) {
 	svc, repo, _, _ := setupTestService(t)
-	repo.parties["p"] = Party{ID: "p", Name: "Quest", LeaderCharacterID: "leader", StageID: "stage-01", Mode: "normal", Speed: 3, Status: StatusRecruiting}
+	repo.parties["p"] = Party{ID: "p", Name: "Quest", LeaderCharacterID: "leader", StageID: "stage-01", Mode: "normal", Speed: 3, MaxMembers: 3, NeedJoin: "hp_100_o", Status: StatusRecruiting}
 	repo.members["p"] = map[string]Member{
 		"member": {
 			PartyID: "p", CharacterID: "member",
@@ -98,8 +98,8 @@ func TestWithNormalRosterAndAdmissionFromRoster(t *testing.T) {
 		if len(adm.Actors) != 2 || adm.Actors[0].MaxHP != 220 || adm.Actors[1].MaxMP != 120 {
 			t.Fatalf("unexpected NormalAdmission actors: %+v", adm.Actors)
 		}
-		if adm.Name != "Quest" {
-			t.Fatalf("admission name = %q, want the lobby name", adm.Name)
+		if adm.Name != "Quest" || adm.MaxMembers != p.MaxMembers || adm.NeedJoin != p.NeedJoin {
+			t.Fatalf("admission name/capacity/condition = %q/%d/%q, want the lobby's", adm.Name, adm.MaxMembers, adm.NeedJoin)
 		}
 		return nil
 	}); err != nil || !called {
