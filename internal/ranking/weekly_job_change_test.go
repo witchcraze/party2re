@@ -45,16 +45,13 @@ func TestService_WeeklyJobChange(t *testing.T) {
 	}
 	repo.weeklyJobChangeTotal = 2
 
-	// 2. Query live active weekly rankings (snapshot=false)
-	page, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0, false)
+	// 2. Before the first weekly rotation, public reads never expose active counters.
+	unpublishedPage, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0)
 	if err != nil {
-		t.Fatalf("GetWeeklyJobChangeRanking live failed: %v", err)
+		t.Fatalf("GetWeeklyJobChangeRanking before rotation failed: %v", err)
 	}
-	if page.Total != 2 || len(page.Entries) != 2 {
-		t.Fatalf("expected 2 entries, got %d", page.Total)
-	}
-	if page.Entries[0].CharacterID != "char-1" || page.Entries[0].Score != 2 {
-		t.Fatalf("unexpected entry: %+v", page.Entries[0])
+	if unpublishedPage.Total != 0 || len(unpublishedPage.Entries) != 0 || unpublishedPage.Entries == nil || unpublishedPage.IsSnapshot {
+		t.Fatalf("expected empty unpublished weekly ranking before rotation, got %+v", unpublishedPage)
 	}
 
 	// 3. Weekly rotation: freezes active into snapshot and resets active counts
@@ -74,16 +71,20 @@ func TestService_WeeklyJobChange(t *testing.T) {
 		t.Fatalf("expected snapshot total count 2, got %d", snap.TotalCount)
 	}
 
-	// 4. Query snapshot weekly rankings (snapshot=true)
-	cachedPage, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0, true)
+	// 4. Query published weekly rankings (returns finalized previous week only)
+	repo.weeklyJobChangeRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "char-3", CharacterName: "NewWeekActive", Score: 99},
+	}
+	repo.weeklyJobChangeTotal = 1
+	cachedPage, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetWeeklyJobChangeRanking cached failed: %v", err)
 	}
 	if !cachedPage.IsSnapshot {
 		t.Fatal("expected IsSnapshot to be true")
 	}
-	if len(cachedPage.Entries) != 2 {
-		t.Fatalf("expected 2 entries from cached snapshot, got %d", len(cachedPage.Entries))
+	if len(cachedPage.Entries) != 2 || cachedPage.Entries[0].CharacterID != "char-1" {
+		t.Fatalf("expected finalized previous week entries, got %+v", cachedPage.Entries)
 	}
 }
 
@@ -209,7 +210,7 @@ func TestService_WeeklyJobChange_RollbackOnResetFailure(t *testing.T) {
 	}
 
 	// 3. Cache should NOT be published
-	cachedPage, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0, true)
+	cachedPage, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0)
 	if err == nil && cachedPage.IsSnapshot && cachedPage.Total > 0 {
 		t.Fatal("expected cache to not be populated after failed rotation")
 	}

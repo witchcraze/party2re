@@ -28,25 +28,32 @@ func TestService_CasinoWinsAndAlchemy(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 1. Direct service methods
-	casPage, err := svc.GetCasinoWinsRanking(ctx, 10, 0, false)
+	// 1. Snapshot refreshes publish boards
+	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeCasinoWins); err != nil {
+		t.Fatalf("RefreshSnapshot(casino_wins) failed: %v", err)
+	}
+	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeAlchemy); err != nil {
+		t.Fatalf("RefreshSnapshot(alchemy) failed: %v", err)
+	}
+
+	casPage, err := svc.GetCasinoWinsRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetCasinoWinsRanking failed: %v", err)
 	}
-	if casPage.Total != 1 || casPage.Entries[0].CharacterID != "c-gambler" {
+	if !casPage.IsSnapshot || casPage.Total != 1 || casPage.Entries[0].CharacterID != "c-gambler" {
 		t.Fatalf("unexpected casino wins ranking: %+v", casPage)
 	}
 
-	alcPage, err := svc.GetAlchemyRanking(ctx, 10, 0, false)
+	alcPage, err := svc.GetAlchemyRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetAlchemyRanking failed: %v", err)
 	}
-	if alcPage.Total != 1 || alcPage.Entries[0].CharacterID != "c-alchemist" {
+	if !alcPage.IsSnapshot || alcPage.Total != 1 || alcPage.Entries[0].CharacterID != "c-alchemist" {
 		t.Fatalf("unexpected alchemy ranking: %+v", alcPage)
 	}
 
 	// 2. Dynamic GetRankingByType with canonical and legacy aliases
-	dynCas, err := svc.GetRankingByType(ctx, ranking.RankingTypeCasinoWins, 10, 0, false)
+	dynCas, err := svc.GetRankingByType(ctx, ranking.RankingTypeCasinoWins, 10, 0)
 	if err != nil {
 		t.Fatalf("GetRankingByType(casino_wins) failed: %v", err)
 	}
@@ -54,7 +61,7 @@ func TestService_CasinoWinsAndAlchemy(t *testing.T) {
 		t.Fatalf("unexpected dynamic casino ranking: %+v", dynCas)
 	}
 
-	dynCasAlias, err := svc.GetRankingByType(ctx, "cas_c", 10, 0, false)
+	dynCasAlias, err := svc.GetRankingByType(ctx, "cas_c", 10, 0)
 	if err != nil {
 		t.Fatalf("GetRankingByType(cas_c) failed: %v", err)
 	}
@@ -62,7 +69,7 @@ func TestService_CasinoWinsAndAlchemy(t *testing.T) {
 		t.Fatalf("unexpected dynamic cas_c ranking: %+v", dynCasAlias)
 	}
 
-	dynAlc, err := svc.GetRankingByType(ctx, ranking.RankingTypeAlchemy, 10, 0, false)
+	dynAlc, err := svc.GetRankingByType(ctx, ranking.RankingTypeAlchemy, 10, 0)
 	if err != nil {
 		t.Fatalf("GetRankingByType(alchemy) failed: %v", err)
 	}
@@ -70,7 +77,7 @@ func TestService_CasinoWinsAndAlchemy(t *testing.T) {
 		t.Fatalf("unexpected dynamic alchemy ranking: %+v", dynAlc)
 	}
 
-	dynAlcAlias, err := svc.GetRankingByType(ctx, "alc_c", 10, 0, false)
+	dynAlcAlias, err := svc.GetRankingByType(ctx, "alc_c", 10, 0)
 	if err != nil {
 		t.Fatalf("GetRankingByType(alc_c) failed: %v", err)
 	}
@@ -78,15 +85,9 @@ func TestService_CasinoWinsAndAlchemy(t *testing.T) {
 		t.Fatalf("unexpected dynamic alc_c ranking: %+v", dynAlcAlias)
 	}
 
-	// 3. Snapshot refreshes
-	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeCasinoWins); err != nil {
-		t.Fatalf("RefreshSnapshot(casino_wins) failed: %v", err)
-	}
+	// 3. Alias snapshot refreshes
 	if err := svc.RefreshSnapshot(ctx, "cas_c"); err != nil {
 		t.Fatalf("RefreshSnapshot(cas_c) failed: %v", err)
-	}
-	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeAlchemy); err != nil {
-		t.Fatalf("RefreshSnapshot(alchemy) failed: %v", err)
 	}
 	if err := svc.RefreshSnapshot(ctx, "alc_c"); err != nil {
 		t.Fatalf("RefreshSnapshot(alc_c) failed: %v", err)

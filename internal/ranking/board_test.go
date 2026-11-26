@@ -49,7 +49,7 @@ func TestBoards_ExcludeLeadersOfPairedBoard(t *testing.T) {
 	cases := []struct {
 		name  string
 		setup func(m *mockRankingRepository)
-		get   func(*ranking.Service, context.Context, int, int, bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+		get   func(*ranking.Service, context.Context, int, int) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	}{
 		{"monster_kills excludes pvp_victory top 10", func(m *mockRankingRepository) {
 			m.pvpRankings, m.monsterKillsRankings = rankedEntries(leaders...), rankedEntries(candidates...)
@@ -67,9 +67,17 @@ func TestBoards_ExcludeLeadersOfPairedBoard(t *testing.T) {
 				t.Fatal(err)
 			}
 			ctx := context.Background()
-			page, err := tc.get(svc, ctx, 20, 0, false)
-			if err != nil {
+			// Before publication, public reads do not fall back to live queries.
+			unpublished, err := tc.get(svc, ctx, 20, 0)
+			if err != nil || unpublished.Total != 0 || len(unpublished.Entries) != 0 {
+				t.Fatalf("unpublished = %+v, %v; want empty", unpublished, err)
+			}
+			if err := svc.RefreshAllSnapshots(ctx); err != nil {
 				t.Fatal(err)
+			}
+			page, err := tc.get(svc, ctx, 20, 0)
+			if err != nil || !page.IsSnapshot {
+				t.Fatalf("published = %+v, %v", page, err)
 			}
 			if got := boardIDs(t, page.Entries, 1); fmt.Sprint(got) != fmt.Sprint(want) {
 				t.Fatalf("board = %v, want %v", got, want)
@@ -77,23 +85,12 @@ func TestBoards_ExcludeLeadersOfPairedBoard(t *testing.T) {
 			if page.Total != 10 {
 				t.Fatalf("total = %d, want 10", page.Total)
 			}
-			// Pagination and snapshots page the same excluded board.
-			paged, err := tc.get(svc, ctx, 2, 8, false)
-			if err != nil {
+			paged, err := tc.get(svc, ctx, 2, 8)
+			if err != nil || !paged.IsSnapshot {
 				t.Fatal(err)
 			}
 			if got := boardIDs(t, paged.Entries, 9); fmt.Sprint(got) != "[N09 N10]" {
 				t.Fatalf("page 9-10 = %v", got)
-			}
-			if err := svc.RefreshAllSnapshots(ctx); err != nil {
-				t.Fatal(err)
-			}
-			cached, err := tc.get(svc, ctx, 20, 0, true)
-			if err != nil || !cached.IsSnapshot || cached.Total != 10 {
-				t.Fatalf("snapshot page = %+v, %v", cached, err)
-			}
-			if got := boardIDs(t, cached.Entries, 1); fmt.Sprint(got) != fmt.Sprint(want) {
-				t.Fatalf("snapshot board = %v, want %v", got, want)
 			}
 		})
 	}
@@ -108,7 +105,11 @@ func TestBoards_SmallServerLeavesExcludedBoardEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := svc.GetMonsterKillsRanking(context.Background(), 20, 0, false)
+	ctx := context.Background()
+	if err := svc.RefreshAllSnapshots(ctx); err != nil {
+		t.Fatal(err)
+	}
+	page, err := svc.GetMonsterKillsRanking(ctx, 20, 0)
 	if err != nil || page.Total != 0 || page.Entries == nil || len(page.Entries) != 0 {
 		t.Fatalf("page = %+v, %v; want empty non-nil board", page, err)
 	}
@@ -121,11 +122,15 @@ func TestBoards_CapAtTen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := svc.GetCasinoWinsRanking(context.Background(), 100, 0, false)
+	ctx := context.Background()
+	if err := svc.RefreshAllSnapshots(ctx); err != nil {
+		t.Fatal(err)
+	}
+	page, err := svc.GetCasinoWinsRanking(ctx, 100, 0)
 	if err != nil || page.Total != 10 || len(page.Entries) != 10 {
 		t.Fatalf("page = %+v, %v; want 10 entries", page, err)
 	}
-	beyond, err := svc.GetCasinoWinsRanking(context.Background(), 5, 10, false)
+	beyond, err := svc.GetCasinoWinsRanking(ctx, 5, 10)
 	if err != nil || len(beyond.Entries) != 0 || beyond.Total != 10 {
 		t.Fatalf("beyond board = %+v, %v", beyond, err)
 	}

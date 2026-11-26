@@ -27,47 +27,7 @@ func TestRankingServiceIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. Live queries
-	pvpPage, err := svc.GetPvPVictoryRanking(ctx, 10, 0, false)
-	if err != nil {
-		t.Fatalf("GetPvPVictoryRanking failed: %v", err)
-	}
-	if pvpPage.RankingType != ranking.RankingTypePvPVictory {
-		t.Errorf("expected pvp_victory ranking type, got %s", pvpPage.RankingType)
-	}
-
-	helpPage, err := svc.GetHelperRanking(ctx, 10, 0, false)
-	if err != nil {
-		t.Fatalf("GetHelperRanking failed: %v", err)
-	}
-	if helpPage.RankingType != ranking.RankingTypeHelper {
-		t.Errorf("expected helper ranking type, got %s", helpPage.RankingType)
-	}
-
-	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, false)
-	if err != nil {
-		t.Fatalf("GetMonsterKillsRanking failed: %v", err)
-	}
-	if mkPage.RankingType != ranking.RankingTypeMonsterKills {
-		t.Errorf("expected monster_kills ranking type, got %s", mkPage.RankingType)
-	}
-
-	maoPage, err := svc.GetMaoCountRanking(ctx, 10, 0, false)
-	if err != nil {
-		t.Fatalf("GetMaoCountRanking failed: %v", err)
-	}
-	if maoPage.RankingType != ranking.RankingTypeMaoCount {
-		t.Errorf("expected mao_count ranking type, got %s", maoPage.RankingType)
-	}
-
-	heroPage, err := svc.GetHeroCountRanking(ctx, 10, 0, false)
-	if err != nil {
-		t.Fatalf("GetHeroCountRanking failed: %v", err)
-	}
-	if heroPage.RankingType != ranking.RankingTypeHeroCount {
-		t.Errorf("expected hero_count ranking type, got %s", heroPage.RankingType)
-	}
-
+	// 1. Record job popularity and refresh all snapshots
 	if err := svc.RecordJobPopularity(ctx, "job-01", "m", 15); err != nil {
 		t.Fatalf("RecordJobPopularity male failed: %v", err)
 	}
@@ -75,12 +35,56 @@ func TestRankingServiceIntegration(t *testing.T) {
 		t.Fatalf("RecordJobPopularity female failed: %v", err)
 	}
 
-	jobPopPage, err := svc.GetJobPopularityRanking(ctx, false)
+	if err := svc.RefreshAllSnapshots(ctx); err != nil {
+		t.Fatalf("RefreshAllSnapshots failed: %v", err)
+	}
+
+	pvpPage, err := svc.GetPvPVictoryRanking(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("GetPvPVictoryRanking failed: %v", err)
+	}
+	if pvpPage.RankingType != ranking.RankingTypePvPVictory || !pvpPage.IsSnapshot {
+		t.Errorf("expected pvp_victory snapshot page, got %+v", pvpPage)
+	}
+
+	helpPage, err := svc.GetHelperRanking(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("GetHelperRanking failed: %v", err)
+	}
+	if helpPage.RankingType != ranking.RankingTypeHelper || !helpPage.IsSnapshot {
+		t.Errorf("expected helper snapshot page, got %+v", helpPage)
+	}
+
+	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("GetMonsterKillsRanking failed: %v", err)
+	}
+	if mkPage.RankingType != ranking.RankingTypeMonsterKills || !mkPage.IsSnapshot {
+		t.Errorf("expected monster_kills snapshot page, got %+v", mkPage)
+	}
+
+	maoPage, err := svc.GetMaoCountRanking(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("GetMaoCountRanking failed: %v", err)
+	}
+	if maoPage.RankingType != ranking.RankingTypeMaoCount || !maoPage.IsSnapshot {
+		t.Errorf("expected mao_count snapshot page, got %+v", maoPage)
+	}
+
+	heroPage, err := svc.GetHeroCountRanking(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("GetHeroCountRanking failed: %v", err)
+	}
+	if heroPage.RankingType != ranking.RankingTypeHeroCount || !heroPage.IsSnapshot {
+		t.Errorf("expected hero_count snapshot page, got %+v", heroPage)
+	}
+
+	jobPopPage, err := svc.GetJobPopularityRanking(ctx)
 	if err != nil {
 		t.Fatalf("GetJobPopularityRanking failed: %v", err)
 	}
-	if jobPopPage.RankingType != ranking.RankingTypeJobPopularity {
-		t.Errorf("expected job_popularity ranking type, got %s", jobPopPage.RankingType)
+	if jobPopPage.RankingType != ranking.RankingTypeJobPopularity || !jobPopPage.IsSnapshot {
+		t.Errorf("expected job_popularity snapshot page, got %+v", jobPopPage)
 	}
 	if len(jobPopPage.Entries) == 0 {
 		t.Errorf("expected at least 1 job popularity entry")
@@ -98,20 +102,7 @@ func TestRankingServiceIntegration(t *testing.T) {
 		t.Errorf("expected job-01 in job popularity entries")
 	}
 
-	// 2. Snapshot refresh and cached queries
-	if err := svc.RefreshAllSnapshots(ctx); err != nil {
-		t.Fatalf("RefreshAllSnapshots failed: %v", err)
-	}
-
-	cachedMKPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
-	if err != nil {
-		t.Fatalf("GetMonsterKillsRanking (cached) failed: %v", err)
-	}
-	if !cachedMKPage.IsSnapshot {
-		t.Errorf("expected IsSnapshot=true for cached page")
-	}
-
-	// 3. Snapshot retrieval
+	// 2. Snapshot retrieval
 	snap, err := svc.GetSnapshot(ctx, ranking.RankingTypeMonsterKills)
 	if err != nil {
 		t.Fatalf("GetSnapshot failed: %v", err)
@@ -129,20 +120,20 @@ func TestRankingServiceIntegration(t *testing.T) {
 	}
 
 	// 3b. Casino wins and Alchemy rankings
-	casPage, err := svc.GetCasinoWinsRanking(ctx, 10, 0, false)
+	casPage, err := svc.GetCasinoWinsRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetCasinoWinsRanking failed: %v", err)
 	}
-	if casPage.RankingType != ranking.RankingTypeCasinoWins {
-		t.Errorf("expected casino_wins ranking type, got %s", casPage.RankingType)
+	if casPage.RankingType != ranking.RankingTypeCasinoWins || !casPage.IsSnapshot {
+		t.Errorf("expected casino_wins snapshot page, got %+v", casPage)
 	}
 
-	alcPage, err := svc.GetAlchemyRanking(ctx, 10, 0, false)
+	alcPage, err := svc.GetAlchemyRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetAlchemyRanking failed: %v", err)
 	}
-	if alcPage.RankingType != ranking.RankingTypeAlchemy {
-		t.Errorf("expected alchemy ranking type, got %s", alcPage.RankingType)
+	if alcPage.RankingType != ranking.RankingTypeAlchemy || !alcPage.IsSnapshot {
+		t.Errorf("expected alchemy snapshot page, got %+v", alcPage)
 	}
 
 	// 3c. Weekly job changes and rotation
@@ -154,7 +145,7 @@ func TestRankingServiceIntegration(t *testing.T) {
 	if _, err := weeklySvc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
 	}
-	weeklyPage, err := weeklySvc.GetWeeklyJobChangeRanking(ctx, 10, 0, true)
+	weeklyPage, err := weeklySvc.GetWeeklyJobChangeRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetWeeklyJobChangeRanking failed: %v", err)
 	}
@@ -184,25 +175,12 @@ func TestRankingServiceIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	coldMKPage, err := freshSvc.GetMonsterKillsRanking(ctx, 10, 0, true)
+	coldMKPage, err := freshSvc.GetMonsterKillsRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetMonsterKillsRanking (cold snapshot fallback) failed: %v", err)
 	}
 	if !coldMKPage.IsSnapshot {
 		t.Errorf("expected IsSnapshot=true for cold start snapshot query")
-	}
-
-	// 5. Warmup cache on fresh instance
-	warmupSvc, err := ranking.NewService(rankingRepo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := warmupSvc.WarmupCache(ctx); err != nil {
-		t.Fatalf("WarmupCache failed: %v", err)
-	}
-	warmMKPage, err := warmupSvc.GetMonsterKillsRanking(ctx, 10, 0, true)
-	if err != nil || !warmMKPage.IsSnapshot {
-		t.Fatalf("expected cached ranking after warmup: %v, %+v", err, warmMKPage)
 	}
 }
 

@@ -79,8 +79,8 @@ func TestService_ValkeyCache_HitAndInvalidation(t *testing.T) {
 		t.Errorf("expected total count 1 in cached snapshot, got %d", snap.TotalCount)
 	}
 
-	// 2. Query with useSnapshot = true -> returns from cache
-	page, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
+	// 2. Query returns published snapshot from cache
+	page, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("GetMonsterKillsRanking: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestService_Singleflight_PreventsCacheStampede(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			page, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
+			page, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
 			if err != nil {
 				errCh <- err
 				return

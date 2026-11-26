@@ -52,32 +52,22 @@ func TestService_GetPvPVictoryRanking(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// Live query
-	page, err := svc.GetPvPVictoryRanking(ctx, 10, 0, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if page.Total != 1 || len(page.Entries) != 1 || page.Entries[0].Score != 50 {
-		t.Fatalf("unexpected live page: %+v", page)
-	}
-
 	// Snapshot cache read
 	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypePvPVictory); err != nil {
 		t.Fatalf("failed to refresh snapshot: %v", err)
 	}
-	cachedPage, err := svc.GetPvPVictoryRanking(ctx, 10, 0, true)
+	cachedPage, err := svc.GetPvPVictoryRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !cachedPage.IsSnapshot || cachedPage.Total != 1 {
+	if !cachedPage.IsSnapshot || cachedPage.Total != 1 || cachedPage.Entries[0].Score != 50 {
 		t.Fatalf("unexpected cached page: %+v", cachedPage)
 	}
 
-	// Error path
+	// Refresh error path
 	repo.err = errors.New("pvp query error")
-	_, err = svc.GetPvPVictoryRanking(ctx, 10, 0, false)
-	if err == nil {
-		t.Fatalf("expected error on repo failure")
+	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypePvPVictory); err == nil {
+		t.Fatalf("expected error on repo failure during refresh")
 	}
 }
 
@@ -94,32 +84,22 @@ func TestService_GetHelperRanking(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// Live query
-	page, err := svc.GetHelperRanking(ctx, 10, 0, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if page.Total != 1 || len(page.Entries) != 1 || page.Entries[0].Score != 45 {
-		t.Fatalf("unexpected live page: %+v", page)
-	}
-
 	// Snapshot cache read
 	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeHelper); err != nil {
 		t.Fatalf("failed to refresh snapshot: %v", err)
 	}
-	cachedPage, err := svc.GetHelperRanking(ctx, 10, 0, true)
+	cachedPage, err := svc.GetHelperRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !cachedPage.IsSnapshot || cachedPage.Total != 1 {
+	if !cachedPage.IsSnapshot || cachedPage.Total != 1 || cachedPage.Entries[0].Score != 45 {
 		t.Fatalf("unexpected cached page: %+v", cachedPage)
 	}
 
-	// Error path
+	// Refresh error path
 	repo.err = errors.New("helper query error")
-	_, err = svc.GetHelperRanking(ctx, 10, 0, false)
-	if err == nil {
-		t.Fatalf("expected error on repo failure")
+	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeHelper); err == nil {
+		t.Fatalf("expected error on repo failure during refresh")
 	}
 }
 
@@ -140,7 +120,7 @@ func TestService_AdditionalCoverageBranches(t *testing.T) {
 	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeMonsterKills); err != nil {
 		t.Fatalf("refresh monster kills snapshot: %v", err)
 	}
-	mkCached, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
+	mkCached, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
 	if err != nil || !mkCached.IsSnapshot {
 		t.Fatalf("expected cached monster kills ranking: %+v, %v", mkCached, err)
 	}
@@ -159,7 +139,7 @@ func TestService_AdditionalCoverageBranches(t *testing.T) {
 	}
 
 	for _, rt := range rankingTypes {
-		res, err := svc.GetRankingByType(ctx, rt, 10, 0, false)
+		res, err := svc.GetRankingByType(ctx, rt, 10, 0)
 		if err != nil {
 			t.Fatalf("GetRankingByType(%s) failed: %v", rt, err)
 		}
@@ -179,7 +159,7 @@ func TestService_AdditionalCoverageBranches(t *testing.T) {
 		"small_medals",
 	}
 	for _, rt := range removedTypes {
-		if _, err := svc.GetRankingByType(ctx, rt, 10, 0, false); !errors.Is(err, ranking.ErrInvalidRankingType) {
+		if _, err := svc.GetRankingByType(ctx, rt, 10, 0); !errors.Is(err, ranking.ErrInvalidRankingType) {
 			t.Fatalf("GetRankingByType(%s): expected ErrInvalidRankingType, got %v", rt, err)
 		}
 		if err := svc.RefreshSnapshot(ctx, rt); !errors.Is(err, ranking.ErrInvalidRankingType) {
@@ -187,18 +167,16 @@ func TestService_AdditionalCoverageBranches(t *testing.T) {
 		}
 	}
 
-	// Error branches
+	// Error branches during refresh
 	repo.err = errors.New("generic error")
-	if _, err := svc.GetMonsterKillsRanking(ctx, 10, 0, false); err == nil {
-		t.Fatalf("expected error for monster kills")
-	}
-	if _, err := svc.GetMaoCountRanking(ctx, 10, 0, false); err == nil {
-		t.Fatalf("expected error for mao count")
-	}
-	if _, err := svc.GetHeroCountRanking(ctx, 10, 0, false); err == nil {
-		t.Fatalf("expected error for hero count")
-	}
-	if _, err := svc.GetJobPopularityRanking(ctx, false); err == nil {
-		t.Fatalf("expected error for job popularity")
+	for _, rt := range []ranking.RankingType{
+		ranking.RankingTypeMonsterKills,
+		ranking.RankingTypeMaoCount,
+		ranking.RankingTypeHeroCount,
+		ranking.RankingTypeJobPopularity,
+	} {
+		if err := svc.RefreshSnapshot(ctx, rt); err == nil {
+			t.Fatalf("expected error refreshing %s", rt)
+		}
 	}
 }

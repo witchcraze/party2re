@@ -2,23 +2,56 @@ package ranking_test
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"testing"
+	"time"
 
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/ranking"
 )
 
+func TestNextMidnightJST(t *testing.T) {
+	jst := time.FixedZone("Asia/Tokyo", 9*60*60)
+
+	midday := time.Date(2026, 11, 26, 15, 0, 0, 0, jst)
+	wantNext := time.Date(2026, 11, 27, 0, 0, 0, 0, jst).UTC()
+	if got := ranking.NextMidnightJST(midday); !got.Equal(wantNext) {
+		t.Fatalf("midday next = %v, want %v", got, wantNext)
+	}
+
+	atMidnight := time.Date(2026, 11, 26, 0, 0, 0, 0, jst)
+	if got := ranking.NextMidnightJST(atMidnight); !got.Equal(wantNext) {
+		t.Fatalf("midnight next = %v, want %v", got, wantNext)
+	}
+
+	beforeMidnight := time.Date(2026, 11, 26, 23, 59, 59, 0, jst)
+	if got := ranking.NextMidnightJST(beforeMidnight); !got.Equal(wantNext) {
+		t.Fatalf("23:59:59 next = %v, want %v", got, wantNext)
+	}
+}
+
+func TestDailyRefreshActionIDUsesJSTDate(t *testing.T) {
+	utc := time.Date(2026, 11, 26, 15, 0, 0, 0, time.UTC) // 2026-11-27 00:00 JST
+	for _, instant := range []time.Time{utc, utc.In(time.FixedZone("other", -5*60*60))} {
+		if got := ranking.DailyRefreshActionID(instant); got != "ranking:daily_refresh:2026-11-27" {
+			t.Fatalf("ID = %q", got)
+		}
+	}
+}
+
 func TestRefreshHandler_HandleAll(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockRepo()
-	svc, err := ranking.NewService(repo)
+	now := time.Date(2026, 11, 26, 6, 0, 0, 0, time.UTC) // 15:00 JST
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return now }))
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
 
-	handler := ranking.NewRefreshHandler(svc)
+	sched := &weeklyScheduler{}
+	handler := ranking.NewRefreshHandler(svc, ranking.WithRefreshScheduler(sched))
 
-	// Refresh ALL
 	action := core_scheduling.ScheduledAction{
 		ID:         "act-1",
 		ActionType: ranking.RankingActionTypeRefresh,
@@ -29,13 +62,18 @@ func TestRefreshHandler_HandleAll(t *testing.T) {
 		t.Fatalf("Handle(ALL): %v", err)
 	}
 
-	// Verify all snapshots were saved
 	snapshots, err := svc.GetAllSnapshots(ctx)
 	if err != nil {
 		t.Fatalf("GetAllSnapshots: %v", err)
 	}
 	if len(snapshots) != 8 {
 		t.Errorf("expected 8 snapshots, got %d", len(snapshots))
+	}
+	if sched.writes != 1 || len(sched.actions) != 1 {
+		t.Fatalf("expected 1 scheduled next daily refresh, got writes=%d len=%d", sched.writes, len(sched.actions))
+	}
+	if !sched.actions[0].ExecuteAt.Equal(ranking.NextMidnightJST(now)) || sched.actions[0].ActorID != "ranking:daily" {
+		t.Fatalf("unexpected scheduled action: %+v", sched.actions[0])
 	}
 }
 
@@ -49,7 +87,6 @@ func TestRefreshHandler_HandleSingleType(t *testing.T) {
 
 	handler := ranking.NewRefreshHandler(svc)
 
-	// Refresh MONSTER_KILLS only
 	action := core_scheduling.ScheduledAction{
 		ID:         "act-2",
 		ActionType: ranking.RankingActionTypeRefresh,
@@ -83,5 +120,105 @@ func TestRefreshHandler_HandleInvalidType(t *testing.T) {
 
 	if err := handler.Handle(ctx, action); err == nil {
 		t.Errorf("expected error for invalid ranking type, got nil")
+	}
+}
+
+func TestRefreshHandler_ReconcileLifecycle(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockRepo()
+	repo.monsterKillsRankings = []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", CharacterName: "Initial", Score: 10}}
+
+	now := time.Date(2026, 11, 26, 6, 0, 0, 0, time.UTC) // 15:00 JST
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sched := &weeklyScheduler{}
+	handler := ranking.NewRefreshHandler(svc, ranking.WithRefreshScheduler(sched))
+
+	// 1. Cold start: publishes all 8 boards and schedules next JST midnight.
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("cold Reconcile: %v", err)
+	}
+	if len(repo.snapshots) != 8 || sched.writes != 1 {
+		t.Fatalf("cold start snapshots=%d writes=%d", len(repo.snapshots), sched.writes)
+	}
+	firstCalc := repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt
+	if !firstCalc.Equal(now) {
+		t.Fatalf("calculated_at=%v, want %v", firstCalc, now)
+	}
+
+	// 2. Same-day repeat/restart: updates to repo do not republish until next JST day, and reservation is kept.
+	repo.monsterKillsRankings = []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", CharacterName: "Updated", Score: 99}}
+	now = now.Add(2 * time.Hour) // 17:00 JST same day
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("same-day Reconcile: %v", err)
+	}
+	if sched.writes != 1 || !repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt.Equal(firstCalc) {
+		t.Fatalf("same-day reconcile unnecessarily refreshed or scheduled: writes=%d calc=%v", sched.writes, repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt)
+	}
+	page, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].Score != 10 {
+		t.Fatalf("expected yesterday/earlier same-day published score 10, got %+v, %v", page, err)
+	}
+
+	// 3. Lost Valkey reservation on same day: restores schedule without re-querying/re-publishing boards.
+	sched.actions = nil
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("lost-reservation Reconcile: %v", err)
+	}
+	if sched.writes != 2 || !repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt.Equal(firstCalc) {
+		t.Fatalf("lost reservation did not restore without republishing: writes=%d calc=%v", sched.writes, repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt)
+	}
+
+	// 4. Restart after missing one or more daily boundaries: republishes immediately and schedules next JST midnight.
+	now = ranking.NextMidnightJST(now).Add(3 * time.Hour) // next day 03:00 JST
+	sched.actions = nil
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatalf("overdue Reconcile: %v", err)
+	}
+	if sched.writes != 3 || !repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt.Equal(now) {
+		t.Fatalf("overdue reconcile did not republish: writes=%d calc=%v", sched.writes, repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt)
+	}
+	page, err = svc.GetMonsterKillsRanking(ctx, 10, 0)
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].Score != 99 {
+		t.Fatalf("expected republished score 99, got %+v, %v", page, err)
+	}
+}
+
+func TestRefreshHandler_ReconcilePreservesUncertainProcessingAndPropagatesErrors(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockRepo()
+	now := time.Date(2026, 11, 26, 6, 0, 0, 0, time.UTC)
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RefreshAllSnapshots(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	next := ranking.NextMidnightJST(now)
+	uncertain := core_scheduling.ScheduledAction{
+		ID:         ranking.DailyRefreshActionID(next),
+		ActionType: ranking.RankingActionTypeRefresh,
+		ActorID:    "ranking:daily",
+		ExecuteAt:  next,
+		State:      core_scheduling.StateProcessing,
+	}
+	sched := &weeklyScheduler{actions: []core_scheduling.ScheduledAction{uncertain}}
+	handler := ranking.NewRefreshHandler(svc, ranking.WithRefreshScheduler(sched))
+
+	if err := handler.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(sched.actions) != 2 || !reflect.DeepEqual(sched.actions[0], uncertain) || sched.actions[1].ID == uncertain.ID {
+		t.Fatalf("reconcile modified uncertain Processing reservation: %+v", sched.actions)
+	}
+
+	// Scheduler read failure propagates.
+	schedFail := &weeklyScheduler{readErr: errors.New("valkey down")}
+	if err := ranking.NewRefreshHandler(svc, ranking.WithRefreshScheduler(schedFail)).Reconcile(ctx); !errors.Is(err, schedFail.readErr) {
+		t.Fatalf("expected scheduler read error, got %v", err)
 	}
 }

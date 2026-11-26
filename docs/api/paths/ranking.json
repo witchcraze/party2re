@@ -20,15 +20,6 @@
           "schema": {
             "type": "integer"
           }
-        },
-        {
-          "description": "Use snapshot cache",
-          "in": "query",
-          "name": "snapshot",
-          "required": false,
-          "schema": {
-            "type": "boolean"
-          }
         }
       ],
       "responses": {
@@ -94,15 +85,6 @@
           "required": false,
           "schema": {
             "type": "integer"
-          }
-        },
-        {
-          "description": "Use snapshot cache",
-          "in": "query",
-          "name": "snapshot",
-          "required": false,
-          "schema": {
-            "type": "boolean"
           }
         }
       ],
@@ -227,15 +209,6 @@
           "schema": {
             "type": "integer"
           }
-        },
-        {
-          "description": "Use snapshot cache",
-          "in": "query",
-          "name": "snapshot",
-          "required": false,
-          "schema": {
-            "type": "boolean"
-          }
         }
       ],
       "responses": {
@@ -348,15 +321,6 @@
           "schema": {
             "type": "integer"
           }
-        },
-        {
-          "description": "Use snapshot cache",
-          "in": "query",
-          "name": "snapshot",
-          "required": false,
-          "schema": {
-            "type": "boolean"
-          }
         }
       ],
       "responses": {
@@ -422,15 +386,6 @@
           "required": false,
           "schema": {
             "type": "integer"
-          }
-        },
-        {
-          "description": "Use snapshot cache",
-          "in": "query",
-          "name": "snapshot",
-          "required": false,
-          "schema": {
-            "type": "boolean"
           }
         }
       ],
@@ -577,15 +532,6 @@
           "required": false,
           "schema": {
             "type": "integer"
-          }
-        },
-        {
-          "description": "Use snapshot cache",
-          "in": "query",
-          "name": "snapshot",
-          "required": false,
-          "schema": {
-            "type": "boolean"
           }
         }
       ],
