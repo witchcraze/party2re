@@ -64,10 +64,13 @@ type sysPenalty struct{}
 
 func (sysPenalty) ProjectRunPenalty(context.Context, string, time.Time) error { return nil }
 
-// lossyStore reports one committed run transaction as failed (a lost acknowledgement).
+// lossyStore reports one committed run transaction as failed (a lost acknowledgement)
+// and can inject mid-transaction save or receipt-lookup failures in tests.
 type lossyStore struct {
 	runhost.Store[sysRun]
-	lose *atomic.Bool
+	lose        *atomic.Bool
+	failSave    *atomic.Bool
+	failReceipt *atomic.Bool
 }
 
 func (s lossyStore) WithRunForUpdate(ctx context.Context, id string, create bool, fn func(context.Context) error) error {
@@ -78,13 +81,29 @@ func (s lossyStore) WithRunForUpdate(ctx context.Context, id string, create bool
 	return err
 }
 
+func (s lossyStore) SaveRun(ctx context.Context, value sysRun, expected int) error {
+	if s.failSave != nil && s.failSave.CompareAndSwap(true, false) {
+		return errors.New("injected save failure")
+	}
+	return s.Store.SaveRun(ctx, value, expected)
+}
+
+func (s lossyStore) FindRunReceipt(ctx context.Context, id, key string) (*runhost.Receipt, error) {
+	if s.failReceipt != nil && s.failReceipt.CompareAndSwap(true, false) {
+		return nil, errors.New("injected receipt read failure")
+	}
+	return s.Store.FindRunReceipt(ctx, id, key)
+}
+
 type sysFixture struct {
-	db     *sql.DB
-	chars  *database.CharacterRepository
-	clock  *sysClock
-	retain atomic.Bool
-	lose   atomic.Bool
-	svc    *runhost.Service[sysRun, *sysRun]
+	db          *sql.DB
+	chars       *database.CharacterRepository
+	clock       *sysClock
+	retain      atomic.Bool
+	lose        atomic.Bool
+	failSave    atomic.Bool
+	failReceipt atomic.Bool
+	svc         *runhost.Service[sysRun, *sysRun]
 }
 
 func newSysFixture(t *testing.T, capacity int) *sysFixture {
@@ -128,7 +147,7 @@ func newSysFixture(t *testing.T, capacity int) *sysFixture {
 	adapter := battle.NewService(battle.WithCharacterRepository(f.chars), battle.WithCustomSkillRepository(customs), battle.WithInventoryRepository(invs), battle.WithDepotRepository(depots), battle.WithEquipmentRepository(equips), battle.WithJobHistoryRepository(history), battle.WithTransactionProvider(tx), battle.WithTransactionRunner(runner))
 	room := sysRoom{capacity: capacity, retain: &f.retain}
 	f.svc, err = runhost.NewService[sysRun](runhost.Config[sysRun]{
-		Kind: "system-test", MaxMembers: 6, Store: lossyStore{Store: store, lose: &f.lose}, Characters: f.chars, Inventories: invs,
+		Kind: "system-test", MaxMembers: 6, Store: lossyStore{Store: store, lose: &f.lose, failSave: &f.failSave, failReceipt: &f.failReceipt}, Characters: f.chars, Inventories: invs,
 		Builder: adapter, Settler: adapter, Penalty: sysPenalty{}, Clock: f.clock, Room: room, SystemRoom: room,
 		ExitEffects: func(context.Context, string) error { return nil },
 	})
@@ -448,5 +467,52 @@ func TestSystemRunConcurrentOpenIntegration(t *testing.T) {
 		if runID != first || runID == "" {
 			t.Fatalf("concurrent opens returned %q and %q", first, runID)
 		}
+	}
+}
+
+func TestSystemRunJoinRollbackAndRecoveryIntegration(t *testing.T) {
+	f := newSysFixture(t, 6)
+	ctx := context.Background()
+	slot := "test:" + id.New()
+	runID := f.open(t, slot)
+	a, b := f.character(t), f.character(t)
+
+	// A SQL failure after Characters.Update rolls back both fatigue and membership.
+	f.failSave.Store(true)
+	if _, err := f.svc.Join(ctx, a.PlayerID, a.ID, runID, "join-a"); err == nil {
+		t.Fatal("expected injected SaveRun error")
+	}
+	if got := f.tired(t, a.ID); got != a.Tired {
+		t.Fatalf("rolled-back join changed tired %d -> %d", a.Tired, got)
+	}
+	if r := f.room(t, slot); len(r.Roster) != 0 {
+		t.Fatalf("rolled-back join left roster %v", r.Roster)
+	}
+
+	// Retrying with the same key commits once, and a different key rejects without a second charge.
+	receipt, err := f.svc.Join(ctx, a.PlayerID, a.ID, runID, "join-a")
+	if err != nil {
+		t.Fatalf("retry after rollback = %v", err)
+	}
+	if _, err := f.svc.Join(ctx, a.PlayerID, a.ID, runID, "join-a-other"); !errors.Is(err, runhost.ErrBusy) {
+		t.Fatalf("duplicate join with new key = %v, want ErrBusy", err)
+	}
+	if got := f.tired(t, a.ID); got != a.Tired+20 {
+		t.Fatalf("tired after retry and duplicate = %d, want %d", got, a.Tired+20)
+	}
+
+	// When both the commit acknowledgement and receipt lookup fail, ErrRecovery is returned
+	// without leaving an extra charge; a subsequent replay returns the committed receipt.
+	f.lose.Store(true)
+	f.failReceipt.Store(true)
+	if _, err := f.svc.Join(ctx, b.PlayerID, b.ID, runID, "join-b"); !errors.Is(err, runhost.ErrRecovery) {
+		t.Fatalf("unreadable join outcome = %v, want ErrRecovery", err)
+	}
+	replay, err := f.svc.Join(ctx, b.PlayerID, b.ID, runID, "join-b")
+	if err != nil || replay.Command.ActorID != b.ID || replay.Version == receipt.Version {
+		t.Fatalf("replay after ErrRecovery = %+v, %v", replay, err)
+	}
+	if got := f.tired(t, b.ID); got != b.Tired+20 {
+		t.Fatalf("tired after ErrRecovery replay = %d, want %d", got, b.Tired+20)
 	}
 }

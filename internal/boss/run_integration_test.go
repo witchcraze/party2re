@@ -574,3 +574,27 @@ func TestSealingRoomDoublesFieldDuration(t *testing.T) {
 		t.Fatalf("sealing burn field = %+v, want burn with 9 turns and DoubleTurns=true", r.Battle.Fields)
 	}
 }
+
+func TestSealingRoomJoinLostAcknowledgement(t *testing.T) {
+	f := newSealFixture(t, random.Default())
+	ctx := context.Background()
+	runID := f.open(t)
+	a := f.hero(t)
+	key := id.New()
+
+	f.lose.Store(true)
+	first, err := f.svc.Join(ctx, a.PlayerID, a.ID, runID, key)
+	if err != nil {
+		t.Fatalf("recovered join = %v", err)
+	}
+	replay, err := f.svc.Join(ctx, a.PlayerID, a.ID, runID, key)
+	if err != nil || replay.Version != first.Version {
+		t.Fatalf("replay join = %+v, %v", replay, err)
+	}
+	if got := f.character(t, a.ID).Tired; got != a.Tired+20 {
+		t.Fatalf("join tired = %d, want %d once", got, a.Tired+20)
+	}
+	if r := f.room(t); len(r.Roster) != 1 || r.Roster[0] != a.ID {
+		t.Fatalf("roster = %v, want [%s]", r.Roster, a.ID)
+	}
+}
