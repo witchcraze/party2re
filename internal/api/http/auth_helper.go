@@ -161,11 +161,7 @@ func (h *Handler) sleepingCharacterMessage(ctx context.Context, charID string) (
 		return "", err
 	}
 	if status.Sleeping {
-		msg := status.Message
-		if msg == "" {
-			msg = "お休み中「Zzz...」"
-		}
-		return msg, nil
+		return sleepingMessage(status.RemainingSeconds), nil
 	}
 	if status.CanWake {
 		return "お休み中「Zzz...」 目を覚ましてください", nil

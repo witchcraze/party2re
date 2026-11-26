@@ -173,11 +173,11 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 	if status != 200 || f.executions != 1 || f.updates != 1 {
 		t.Fatalf("sleep status=%d calls=%d: %s", status, f.executions, got)
 	}
-	var result home.SleepResult
+	var result homeSleepResponse
 	if err := json.Unmarshal(got["result"], &result); err != nil {
 		t.Fatal(err)
 	}
-	if !result.Sleeping || result.DurationSeconds != 300 || result.HomeCharacterID != "hero" || result.Message != f.returnedSleep.Message {
+	if !result.Sleeping || result.DurationSeconds != 300 || result.HomeCharacterID != "hero" || result.Message != f.char.Name+"はベッドにもぐりこんだ！" {
 		t.Fatalf("lost service defaults/result: %+v", result)
 	}
 	observation := homeObservation(t, got)
@@ -227,7 +227,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 	if err := json.Unmarshal(got["result"], &wake); err != nil {
 		t.Fatal(err)
 	}
-	if !wake.Success || wake.Character != toCharacterResponse(f.char) || wake.Message != f.returnedWake.Message {
+	if !wake.Recovered || wake.Character != toCharacterResponse(f.char) || wake.Message != f.char.Name+"のHP・MP・疲労度が回復した！" {
 		t.Fatalf("lost wake result: %+v", wake)
 	}
 	observation = homeObservation(t, got)
@@ -368,7 +368,7 @@ func TestHomeGatewayWakeHookFailure_ReportsExecutionFailed_AndDoesNotClearAsleep
 	if err := json.Unmarshal(got["result"], &wake); err != nil {
 		t.Fatal(err)
 	}
-	if !wake.Success {
+	if !wake.Recovered {
 		t.Fatalf("expected wake success, got: %+v", wake)
 	}
 

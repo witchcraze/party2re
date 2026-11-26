@@ -3,7 +3,7 @@ package home
 import (
 	"context"
 	"errors"
-	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -216,8 +216,8 @@ func TestItemUsage(t *testing.T) {
 		if resWea.Action != "inspect" || resWea.Consumed {
 			t.Errorf("expected inspect and not consumed, got %+v", resWea)
 		}
-		if !strings.Contains(resWea.Message, "重さ：") || !strings.Contains(resWea.Message, "強さ：") || !strings.Contains(resWea.Message, "価格：") {
-			t.Errorf("unexpected weapon inspect message format: %s", resWea.Message)
+		if resWea.Inspection == nil || resWea.Outcome != nil {
+			t.Errorf("weapon inspect lost its inspection facts: %+v", resWea)
 		}
 
 		resArm, err := svc.UseHomeItem(ctx, "char-1", "inst-arm", "depot")
@@ -227,8 +227,8 @@ func TestItemUsage(t *testing.T) {
 		if resArm.Action != "inspect" || resArm.Consumed {
 			t.Errorf("expected inspect and not consumed, got %+v", resArm)
 		}
-		if !strings.Contains(resArm.Message, "重さ：") || !strings.Contains(resArm.Message, "強さ：") || !strings.Contains(resArm.Message, "価格：") {
-			t.Errorf("unexpected armor inspect message format: %s", resArm.Message)
+		if resArm.Inspection == nil || resArm.Outcome != nil {
+			t.Errorf("armor inspect lost its inspection facts: %+v", resArm)
 		}
 	})
 
@@ -309,8 +309,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-1"].Experience != 250 {
 			t.Errorf("expected 250 experience, got %d", chars["char-1"].Experience)
 		}
-		if res.Message != "次のクエスト時にレベルアップ！" {
-			t.Errorf("unexpected message: %s", res.Message)
+		if got := outcomeOf(res); got.Effect != HomeItemEffectLevelUpReserved {
+			t.Errorf("unexpected outcome: %+v", got)
 		}
 	})
 
@@ -329,9 +329,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-1"].Tired != 0 {
 			t.Errorf("expected fatigue 0, got %d", chars["char-1"].Tired)
 		}
-		expectedMsg := "元気全快！Heroの疲労が回復した！"
-		if res.Message != expectedMsg {
-			t.Errorf("expected message %q, got %q", expectedMsg, res.Message)
+		if got := outcomeOf(res); got.Effect != HomeItemEffectTiredReset {
+			t.Errorf("unexpected outcome: %+v", got)
 		}
 
 		// Also verify 気合の霊薬
@@ -346,8 +345,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-1"].Tired != 0 {
 			t.Errorf("expected fatigue 0 after 気合の霊薬, got %d", chars["char-1"].Tired)
 		}
-		if res2.Message != expectedMsg {
-			t.Errorf("expected message %q, got %q", expectedMsg, res2.Message)
+		if got := outcomeOf(res2); got.Effect != HomeItemEffectTiredReset {
+			t.Errorf("unexpected outcome: %+v", got)
 		}
 	})
 
@@ -363,8 +362,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-over"].Stats.MaxHP != oldStats.MaxHP {
 			t.Errorf("expected MaxHP unchanged, got %d (was %d)", chars["char-over"].Stats.MaxHP, oldStats.MaxHP)
 		}
-		if !strings.Contains(resHP.Message, "0 あがった！") {
-			t.Errorf("expected 0 increase message, got %s", resHP.Message)
+		if got := outcomeOf(resHP); !reflect.DeepEqual(got, HomeItemOutcome{Effect: HomeItemEffectStatGain, Stat: HomeStatMaxHP}) {
+			t.Errorf("expected zero HomeStatMaxHP gain, got %+v", got)
 		}
 
 		// 不思議な木の実
@@ -376,8 +375,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-over"].Stats.MaxMP != oldStats.MaxMP {
 			t.Errorf("expected MaxMP unchanged, got %d (was %d)", chars["char-over"].Stats.MaxMP, oldStats.MaxMP)
 		}
-		if !strings.Contains(resMP.Message, "0 あがった！") {
-			t.Errorf("expected 0 increase message, got %s", resMP.Message)
+		if got := outcomeOf(resMP); !reflect.DeepEqual(got, HomeItemOutcome{Effect: HomeItemEffectStatGain, Stat: HomeStatMaxMP}) {
+			t.Errorf("expected zero HomeStatMaxMP gain, got %+v", got)
 		}
 
 		// 力の種
@@ -389,8 +388,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-over"].Stats.Attack != oldStats.Attack {
 			t.Errorf("expected Attack unchanged, got %d (was %d)", chars["char-over"].Stats.Attack, oldStats.Attack)
 		}
-		if !strings.Contains(resAtk.Message, "0 あがった！") {
-			t.Errorf("expected 0 increase message, got %s", resAtk.Message)
+		if got := outcomeOf(resAtk); !reflect.DeepEqual(got, HomeItemOutcome{Effect: HomeItemEffectStatGain, Stat: HomeStatAttack}) {
+			t.Errorf("expected zero HomeStatAttack gain, got %+v", got)
 		}
 
 		// 守りの種
@@ -402,8 +401,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-over"].Stats.Defense != oldStats.Defense {
 			t.Errorf("expected Defense unchanged, got %d (was %d)", chars["char-over"].Stats.Defense, oldStats.Defense)
 		}
-		if !strings.Contains(resDef.Message, "0 あがった！") {
-			t.Errorf("expected 0 increase message, got %s", resDef.Message)
+		if got := outcomeOf(resDef); !reflect.DeepEqual(got, HomeItemOutcome{Effect: HomeItemEffectStatGain, Stat: HomeStatDefense}) {
+			t.Errorf("expected zero HomeStatDefense gain, got %+v", got)
 		}
 
 		// 素早さの種
@@ -415,8 +414,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-over"].Stats.Agility != oldStats.Agility {
 			t.Errorf("expected Agility unchanged, got %d (was %d)", chars["char-over"].Stats.Agility, oldStats.Agility)
 		}
-		if !strings.Contains(resAgi.Message, "0 あがった！") {
-			t.Errorf("expected 0 increase message, got %s", resAgi.Message)
+		if got := outcomeOf(resAgi); !reflect.DeepEqual(got, HomeItemOutcome{Effect: HomeItemEffectStatGain, Stat: HomeStatAgility}) {
+			t.Errorf("expected zero HomeStatAgility gain, got %+v", got)
 		}
 
 		// スキルの種 is NOT clamped by OverLevel
@@ -429,8 +428,8 @@ func TestItemUsage(t *testing.T) {
 		if chars["char-over"].SP <= oldSP {
 			t.Errorf("expected SP to increase from %d, got %d", oldSP, chars["char-over"].SP)
 		}
-		if strings.Contains(resSP.Message, "0 あがった！") {
-			t.Errorf("expected non-zero increase message for SP seed, got %s", resSP.Message)
+		if got := outcomeOf(resSP); got.Stat != HomeStatSP || got.Amount == 0 {
+			t.Errorf("expected nonzero SP gain outcome, got %+v", got)
 		}
 	})
 
@@ -449,26 +448,28 @@ func TestItemUsage(t *testing.T) {
 			t.Run(itemCase.name, func(t *testing.T) {
 				seedHand(t, "char-1", itemCase.instID)
 				res, err := svc.UseHomeItem(ctx, "char-1", itemCase.instID, "inventory")
-				if !errors.Is(err, ErrCannotUseHere) {
-					t.Fatalf("expected ErrCannotUseHere, got res=%+v, err=%v", res, err)
-				}
-				expectedSubstr := fmt.Sprintf("%sは戦闘中でしか使えません", itemCase.name)
-				if !strings.Contains(err.Error(), expectedSubstr) {
-					t.Errorf("expected error message to contain %q, got %q", expectedSubstr, err.Error())
+				if err != (ItemRefusal{ItemName: itemCase.name, CombatOnly: true}) || !errors.Is(err, ErrCannotUseHere) {
+					t.Fatalf("expected held combat-only refusal, got res=%+v, err=%v", res, err)
 				}
 			})
+		}
+	})
+
+	t.Run("Depot combat-only item gets the generic refusal", func(t *testing.T) {
+		dp := depotMgr.depots["char-1"]
+		dp.Items = append(dp.Items, coreitem.Instance{ID: "inst-depot-herb", DefinitionID: "item-herb", Quantity: 1})
+		depotMgr.depots["char-1"] = dp
+		res, err := svc.UseHomeItem(ctx, "char-1", "inst-depot-herb", "depot")
+		if err != (ItemRefusal{ItemName: "薬草"}) {
+			t.Fatalf("expected generic refusal, got res=%+v, err=%v", res, err)
 		}
 	})
 
 	t.Run("cannot use non-usable item in home", func(t *testing.T) {
 		seedHand(t, "char-1", "inst-other")
 		res, err := svc.UseHomeItem(ctx, "char-1", "inst-other", "inventory")
-		if !errors.Is(err, ErrCannotUseHere) {
-			t.Fatalf("expected ErrCannotUseHere, got res=%+v, err=%v", res, err)
-		}
-		expectedSubstr := "爆弾岩の破片はここでは使えません"
-		if !strings.Contains(err.Error(), expectedSubstr) {
-			t.Errorf("expected error message to contain %q, got %q", expectedSubstr, err.Error())
+		if err != (ItemRefusal{ItemName: "爆弾岩の破片"}) {
+			t.Fatalf("expected generic refusal, got res=%+v, err=%v", res, err)
 		}
 	})
 }
@@ -521,12 +522,8 @@ func TestUseHomeItem_AuthenticCatalogMatrix(t *testing.T) {
 					}
 
 					res, err := svc.UseHomeItem(ctx, char.ID, "inst-"+def.ID, "inventory")
-					if !errors.Is(err, ErrCannotUseHere) {
-						t.Fatalf("[%s] expected ErrCannotUseHere, got res=%+v, err=%v", def.ID, res, err)
-					}
-					expectedSubstr := fmt.Sprintf("%sは戦闘中でしか使えません", def.Name)
-					if !strings.Contains(err.Error(), expectedSubstr) {
-						t.Errorf("[%s] expected error message to contain %q, got %q", def.ID, expectedSubstr, err.Error())
+					if err != (ItemRefusal{ItemName: def.Name, CombatOnly: true}) {
+						t.Fatalf("[%s] expected held combat-only refusal, got res=%+v, err=%v", def.ID, res, err)
 					}
 					// Verify item was not consumed
 					currentInv, _ := invMgr.FindByCharacterID(ctx, char.ID)
@@ -1058,8 +1055,8 @@ func TestUseHomeItem_CrystalOre(t *testing.T) {
 	if !res1.Consumed {
 		t.Errorf("expected item to be consumed")
 	}
-	if !strings.Contains(res1.Message, "25 個回収した") {
-		t.Errorf("unexpected message: %s", res1.Message)
+	if got := outcomeOf(res1); !reflect.DeepEqual(got, HomeItemOutcome{Effect: HomeItemEffectSealRemoved, Amount: 25}) {
+		t.Errorf("unexpected outcome: %+v", got)
 	}
 	if chars["char-seal1"].WeaponSeal != 0 {
 		t.Errorf("expected WeaponSeal reset to 0, got %d", chars["char-seal1"].WeaponSeal)
@@ -1091,8 +1088,8 @@ func TestUseHomeItem_CrystalOre(t *testing.T) {
 	if res3.Consumed {
 		t.Errorf("expected item NOT to be consumed when no seal is engraved")
 	}
-	if res3.Message != "しかし、何も起こらなかった…" {
-		t.Errorf("expected 'しかし、何も起こらなかった…', got %s", res3.Message)
+	if res3.Action != "no_effect" || outcomeOf(res3).Effect != HomeItemEffectNoEffect {
+		t.Errorf("expected no-effect outcome, got %+v", res3)
 	}
 	if chars["char-noseal"].Crystal != 50 {
 		t.Errorf("expected Crystal unchanged at 50, got %d", chars["char-noseal"].Crystal)
@@ -1151,38 +1148,33 @@ func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
 	weaponTests := []struct {
 		instID       string
 		definitionID string
-		expectedMsg  string
-		disallowed   string // old Price/10 + 1 or Price/20 + 1
+		name         string
+		want         HomeItemInspection
 	}{
 		{
 			instID:       "inst-bamboo",
 			definitionID: "weapon-02",
-			expectedMsg:  "武器名：竹の槍 / 強さ：4 / 重さ：2 / 価格：30G",
-			disallowed:   "",
+			name:         "竹の槍", want: HomeItemInspection{Power: 4, Weight: 2, Price: 30},
 		},
 		{
 			instID:       "inst-copper",
 			definitionID: "weapon-08",
-			expectedMsg:  "武器名：銅の剣 / 強さ：14 / 重さ：9 / 価格：400G",
-			disallowed:   "強さ：41", // old price/10+1 = 41
+			name:         "銅の剣", want: HomeItemInspection{Power: 14, Weight: 9, Price: 400},
 		},
 		{
 			instID:       "inst-steel",
 			definitionID: "weapon-13",
-			expectedMsg:  "武器名：鋼鉄の剣 / 強さ：30 / 重さ：20 / 価格：1800G",
-			disallowed:   "強さ：181", // old price/10+1 = 181
+			name:         "鋼鉄の剣", want: HomeItemInspection{Power: 30, Weight: 20, Price: 1800},
 		},
 		{
 			instID:       "inst-zombie",
 			definitionID: "weapon-15",
-			expectedMsg:  "武器名：不死殺しの剣 / 強さ：44 / 重さ：24 / 価格：3500G",
-			disallowed:   "強さ：351", // old price/10+1 = 351
+			name:         "不死殺しの剣", want: HomeItemInspection{Power: 44, Weight: 24, Price: 3500},
 		},
 		{
 			instID:       "inst-hagure-w",
 			definitionID: "weapon-40",
-			expectedMsg:  "武器名：流銀の剣 / 強さ：150 / 重さ：75 / 価格：30000G",
-			disallowed:   "強さ：3001", // old price/10+1 = 3001
+			name:         "流銀の剣", want: HomeItemInspection{Power: 150, Weight: 75, Price: 30000},
 		},
 	}
 
@@ -1200,49 +1192,40 @@ func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
 			if res.Action != "inspect" || res.Consumed {
 				t.Errorf("expected inspect action without consumption, got %+v", res)
 			}
-			if res.Message != tt.expectedMsg {
-				t.Errorf("Message = %q, want %q", res.Message, tt.expectedMsg)
-			}
-			if tt.disallowed != "" && strings.Contains(res.Message, tt.disallowed) {
-				t.Errorf("Message contains obsolete Price/10 calculation %q: %s", tt.disallowed, res.Message)
+			if res.ItemName != tt.name || res.Inspection == nil || *res.Inspection != tt.want {
+				t.Errorf("inspection = %s %+v, want %s %+v", res.ItemName, res.Inspection, tt.name, tt.want)
 			}
 		})
 	}
 
 	armorTests := []struct {
-		instID      string
-		expectedMsg string
-		disallowed  string
+		instID string
+		name   string
+		want   HomeItemInspection
 	}{
 		{
-			instID:      "inst-cloth",
-			expectedMsg: "防具名：布の服 / 強さ：3 / 重さ：0 / 価格：20G",
-			disallowed:  "重さ：2", // old price/20+1 = 2
+			instID: "inst-cloth",
+			name:   "布の服", want: HomeItemInspection{Power: 3, Weight: 0, Price: 20},
 		},
 		{
-			instID:      "inst-leather",
-			expectedMsg: "防具名：皮の鎧 / 強さ：12 / 重さ：4 / 価格：150G",
-			disallowed:  "強さ：16", // old price/10+1 = 16
+			instID: "inst-leather",
+			name:   "皮の鎧", want: HomeItemInspection{Power: 12, Weight: 4, Price: 150},
 		},
 		{
-			instID:      "inst-chain",
-			expectedMsg: "防具名：鎖かたびら / 強さ：24 / 重さ：8 / 価格：540G",
-			disallowed:  "強さ：55", // old price/10+1 = 55
+			instID: "inst-chain",
+			name:   "鎖かたびら", want: HomeItemInspection{Power: 24, Weight: 8, Price: 540},
 		},
 		{
-			instID:      "inst-iron-a",
-			expectedMsg: "防具名：鉄の鎧 / 強さ：43 / 重さ：17 / 価格：1200G",
-			disallowed:  "強さ：121", // old price/10+1 = 121
+			instID: "inst-iron-a",
+			name:   "鉄の鎧", want: HomeItemInspection{Power: 43, Weight: 17, Price: 1200},
 		},
 		{
-			instID:      "inst-steel-a",
-			expectedMsg: "防具名：鋼鉄の鎧 / 強さ：52 / 重さ：20 / 価格：3700G",
-			disallowed:  "強さ：371", // old price/10+1 = 371
+			instID: "inst-steel-a",
+			name:   "鋼鉄の鎧", want: HomeItemInspection{Power: 52, Weight: 20, Price: 3700},
 		},
 		{
-			instID:      "inst-hagure-a",
-			expectedMsg: "防具名：流銀の鎧 / 強さ：150 / 重さ：45 / 価格：30000G",
-			disallowed:  "強さ：3001", // old price/10+1 = 3001
+			instID: "inst-hagure-a",
+			name:   "流銀の鎧", want: HomeItemInspection{Power: 150, Weight: 45, Price: 30000},
 		},
 	}
 
@@ -1255,11 +1238,8 @@ func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
 			if res.Action != "inspect" || res.Consumed {
 				t.Errorf("expected inspect action without consumption, got %+v", res)
 			}
-			if res.Message != tt.expectedMsg {
-				t.Errorf("Message = %q, want %q", res.Message, tt.expectedMsg)
-			}
-			if tt.disallowed != "" && strings.Contains(res.Message, tt.disallowed) {
-				t.Errorf("Message contains obsolete Price/10 calculation %q: %s", tt.disallowed, res.Message)
+			if res.ItemName != tt.name || res.Inspection == nil || *res.Inspection != tt.want {
+				t.Errorf("inspection = %s %+v, want %s %+v", res.ItemName, res.Inspection, tt.name, tt.want)
 			}
 		})
 	}
@@ -1295,7 +1275,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 		expectedHP    int
 		expectedMaxMP int
 		expectedMP    int
-		expectedMsg   string
+		expectedStat  string
 	}{
 		{
 			name:          "命の木の実 inventory min roll (3) increases MaxHP only",
@@ -1311,7 +1291,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			expectedHP:    50,
 			expectedMaxMP: 50,
 			expectedMP:    20,
-			expectedMsg:   "TesterのHPが 3 あがった！",
+			expectedStat:  HomeStatMaxHP,
 		},
 		{
 			name:          "命の木の実 depot max roll (6) increases MaxHP only",
@@ -1327,7 +1307,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			expectedHP:    50,
 			expectedMaxMP: 50,
 			expectedMP:    20,
-			expectedMsg:   "TesterのHPが 6 あがった！",
+			expectedStat:  HomeStatMaxHP,
 		},
 		{
 			name:          "命の木の実 OverLevel clamp gives 0 increase and preserves vitality",
@@ -1344,7 +1324,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			expectedHP:    200,
 			expectedMaxMP: 300,
 			expectedMP:    100,
-			expectedMsg:   "TesterのHPが 0 あがった！",
+			expectedStat:  HomeStatMaxHP,
 		},
 		{
 			name:          "命の木の実 ceiling clamp at 999 preserves vitality",
@@ -1360,7 +1340,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			expectedHP:    500,
 			expectedMaxMP: 50,
 			expectedMP:    20,
-			expectedMsg:   "TesterのHPが 6 あがった！",
+			expectedStat:  HomeStatMaxHP,
 		},
 		{
 			name:          "不思議な木の実 inventory min roll (3) increases MaxMP only",
@@ -1376,7 +1356,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			expectedHP:    50,
 			expectedMaxMP: 53,
 			expectedMP:    20,
-			expectedMsg:   "TesterのMPが 3 あがった！",
+			expectedStat:  HomeStatMaxMP,
 		},
 		{
 			name:          "不思議な木の実 depot max roll (6) increases MaxMP only",
@@ -1392,7 +1372,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			expectedHP:    50,
 			expectedMaxMP: 56,
 			expectedMP:    20,
-			expectedMsg:   "TesterのMPが 6 あがった！",
+			expectedStat:  HomeStatMaxMP,
 		},
 		{
 			name:          "不思議な木の実 OverLevel clamp gives 0 increase and preserves vitality",
@@ -1409,7 +1389,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			expectedHP:    200,
 			expectedMaxMP: 300,
 			expectedMP:    100,
-			expectedMsg:   "TesterのMPが 0 あがった！",
+			expectedStat:  HomeStatMaxMP,
 		},
 		{
 			name:          "不思議な木の実 ceiling clamp at 999 preserves vitality",
@@ -1425,7 +1405,7 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			expectedHP:    50,
 			expectedMaxMP: 999,
 			expectedMP:    300,
-			expectedMsg:   "TesterのMPが 6 あがった！",
+			expectedStat:  HomeStatMaxMP,
 		},
 	}
 
@@ -1488,8 +1468,8 @@ func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
 			if !res.Consumed || res.Action != "consumed" {
 				t.Fatalf("expected consumed action, got %+v", res)
 			}
-			if res.Message != tc.expectedMsg {
-				t.Errorf("expected message %q, got %q", tc.expectedMsg, res.Message)
+			if got := outcomeOf(res); !reflect.DeepEqual(got, HomeItemOutcome{Effect: HomeItemEffectStatGain, Stat: tc.expectedStat, Amount: tc.expectedGain}) {
+				t.Errorf("unexpected outcome: %+v", got)
 			}
 
 			// Verify character stats
@@ -1559,4 +1539,12 @@ func TestUseHomeItem_RejectsWithoutRunnerOrDispatch(t *testing.T) {
 	if _, err := newSvc(WithTransactionRunner(runner)).UseHomeItem(context.Background(), "c", "x", "inventory"); !errors.Is(err, ErrCannotUseHere) || runner.calls != 0 {
 		t.Fatalf("want rejection before the runner, got %v (calls=%d)", err, runner.calls)
 	}
+}
+
+// outcomeOf returns the callback outcome, or the zero outcome for inspections.
+func outcomeOf(res *UseHomeItemResult) HomeItemOutcome {
+	if res == nil || res.Outcome == nil {
+		return HomeItemOutcome{}
+	}
+	return *res.Outcome
 }

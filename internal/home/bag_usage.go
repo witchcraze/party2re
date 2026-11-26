@@ -3,7 +3,6 @@ package home
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -14,7 +13,6 @@ import (
 type rewardBag struct {
 	slots    []int
 	min, max int
-	format   string
 }
 
 func numberRange(from, to int) []int {
@@ -39,16 +37,16 @@ var rewardBags = map[string]rewardBag{
 		slots: joinSlots([]int{1, 1, 1, 1, 1, 1, 7}, numberRange(7, 10), numberRange(1, 26),
 			numberRange(41, 56), numberRange(72, 87), numberRange(101, 103), numberRange(125, 128),
 			[]int{130, 130, 130}, numberRange(130, 134)),
-		min: 1, max: 1, format: "なんと、福袋の中身は %s だった！",
+		min: 1, max: 1,
 	},
 	"幸福袋": {
 		slots: joinSlots(numberRange(128, 134), numberRange(128, 136)),
-		min:   1, max: 1, format: "なんと、幸福袋の中身は %s だった！",
+		min:   1, max: 1,
 	},
 	"太古の財宝": {
 		slots: []int{23, 23, 23, 23, 24, 24, 24, 24, 25, 25, 25, 25, 26, 26, 26, 105, 106, 134, 134,
 			12, 12, 15, 15, 43, 147, 147, 150, 151, 151, 168, 193, 193, 193, 196, 215, 215, 238, 249},
-		min: 2, max: 5, format: "なんと、太古の財宝 は %s だった！",
+		min: 2, max: 5,
 	},
 }
 
@@ -64,15 +62,15 @@ func (b rewardBag) draw(intn func(int) int) []int {
 
 // applyRewardBag delivers every reward to the owner's Depot as separate
 // instances, ignoring capacity, inside the caller's transaction.
-func (s *Service) applyRewardBag(ctx context.Context, char *corecharacter.Character, bag rewardBag) (string, error) {
+func (s *Service) applyRewardBag(ctx context.Context, char *corecharacter.Character, bag rewardBag) (HomeItemOutcome, error) {
 	if s.depotMgr == nil || s.catalog == nil {
-		return "", ErrCannotUseHere
+		return HomeItemOutcome{}, ErrCannotUseHere
 	}
 	names, err := s.deliverItemNumbers(ctx, char.ID, bag.draw(s.randomInt))
 	if err != nil {
-		return "", err
+		return HomeItemOutcome{}, err
 	}
-	return fmt.Sprintf(bag.format, strings.Join(names, "、")), nil
+	return HomeItemOutcome{Effect: HomeItemEffectRewardItems, Items: names}, nil
 }
 
 // deliverItemNumbers appends one instance per legacy item number to the

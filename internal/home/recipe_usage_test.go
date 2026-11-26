@@ -161,9 +161,9 @@ func TestRecipeScroll_BasicRecipe_Learn(t *testing.T) {
 	if !res.Consumed {
 		t.Errorf("expected item to be consumed")
 	}
-	expectedMsg := "勇者 は錬金レシピを読んだ！【薬草 × 薬草 ＝ ？？？】の錬金方法を習得した！"
-	if res.Message != expectedMsg {
-		t.Errorf("expected message %q, got %q", expectedMsg, res.Message)
+	want := HomeItemOutcome{Effect: HomeItemEffectRecipeLearned, Recipe: &LearnedRecipe{BaseName: "薬草", MaterialName: "薬草"}}
+	if got := outcomeOf(res); !reflect.DeepEqual(got, want) {
+		t.Errorf("outcome = %+v, want %+v", got, want)
 	}
 
 	if learner.lastCharID != "char-hero" {
@@ -214,9 +214,9 @@ func TestRecipeScroll_AdvancedRecipe_Learn(t *testing.T) {
 	if !res.Consumed {
 		t.Errorf("expected item to be consumed")
 	}
-	expectedMsg := "勇者 は錬金レシピを読んだ！【霊樹の葉 × 魔法の聖水 ＝ ？？？】の錬金方法を習得した！"
-	if res.Message != expectedMsg {
-		t.Errorf("expected message %q, got %q", expectedMsg, res.Message)
+	want := HomeItemOutcome{Effect: HomeItemEffectRecipeLearned, Recipe: &LearnedRecipe{BaseName: "霊樹の葉", MaterialName: "魔法の聖水"}}
+	if got := outcomeOf(res); !reflect.DeepEqual(got, want) {
+		t.Errorf("outcome = %+v, want %+v", got, want)
 	}
 
 	if !reflect.DeepEqual(learner.lastPool, advancedRecipePool) {
@@ -257,9 +257,9 @@ func TestRecipeScroll_GodRecipe_Learn(t *testing.T) {
 	if !res.Consumed {
 		t.Errorf("expected item to be consumed")
 	}
-	expectedMsg := "勇者 は錬金レシピを読んだ！【幸せの帽子 × 幸せの種 ＝ ？？？】の錬金方法を習得した！"
-	if res.Message != expectedMsg {
-		t.Errorf("expected message %q, got %q", expectedMsg, res.Message)
+	want := HomeItemOutcome{Effect: HomeItemEffectRecipeLearned, Recipe: &LearnedRecipe{BaseName: "幸せの帽子", MaterialName: "幸せの種"}}
+	if got := outcomeOf(res); !reflect.DeepEqual(got, want) {
+		t.Errorf("outcome = %+v, want %+v", got, want)
 	}
 
 	if learner.lastPool != nil {
@@ -300,9 +300,8 @@ func TestRecipeScroll_ExhaustedPool_StillConsumesItem(t *testing.T) {
 	if !res.Consumed {
 		t.Errorf("expected item to be consumed even when pool exhausted")
 	}
-	expectedMsg := "この錬金レシピからこれ以上習得できる錬金方法はないようだ…"
-	if res.Message != expectedMsg {
-		t.Errorf("expected message %q, got %q", expectedMsg, res.Message)
+	if got := outcomeOf(res); got.Effect != HomeItemEffectRecipeExhausted {
+		t.Errorf("outcome = %+v, want recipe_exhausted", got)
 	}
 
 	// Verify inventory consumed
@@ -423,9 +422,9 @@ func TestRecipeScroll_WithTransactionRunner(t *testing.T) {
 	if !res.Consumed {
 		t.Errorf("expected consumed = true")
 	}
-	expectedMsg := "勇者 は錬金レシピを読んだ！【ひのきの棒 × こんぼう ＝ ？？？】の錬金方法を習得した！"
-	if res.Message != expectedMsg {
-		t.Errorf("expected %q, got %q", expectedMsg, res.Message)
+	want := HomeItemOutcome{Effect: HomeItemEffectRecipeLearned, Recipe: &LearnedRecipe{BaseName: "ひのきの棒", MaterialName: "こんぼう"}}
+	if got := outcomeOf(res); !reflect.DeepEqual(got, want) {
+		t.Errorf("outcome = %+v, want %+v", got, want)
 	}
 
 	// Exhausted with runner
@@ -442,8 +441,8 @@ func TestRecipeScroll_WithTransactionRunner(t *testing.T) {
 	if !res2.Consumed {
 		t.Errorf("expected consumed = true on exhausted")
 	}
-	if res2.Message != "この錬金レシピからこれ以上習得できる錬金方法はないようだ…" {
-		t.Errorf("unexpected message: %q", res2.Message)
+	if got := outcomeOf(res2); got.Effect != HomeItemEffectRecipeExhausted {
+		t.Errorf("unexpected outcome: %+v", got)
 	}
 }
 

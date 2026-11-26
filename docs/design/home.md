@@ -49,7 +49,7 @@ Resident companions combine ranch monsters at home and Heaven Wish NPC companion
 
 #### Legacy dispatch and consumption contract
 
-**Decision (#1124):** retain observable legacy behavior, including the no-stat consumption of 113/114 and the source-dependent missing-box result. Own Home alone registers `つかう`. By name it prefers held weapon, armor, then tool, then the first matching Depot entry (`home.cgi:237–340`); Go uses explicit source and instance IDs instead. All 53 category-2 and 3 category-4 entries are accounted for.
+**Decision (#1124):** retain observable legacy behavior, including the no-stat consumption of 113/114 and the source-dependent missing-box result. Own Home alone registers `つかう`. By name it prefers held weapon, armor, then tool, then the first matching Depot entry (`home.cgi:237–340`); Go uses explicit source and instance IDs instead.
 
 - **H2/H4 — held tool** (`284–292`): call without arguments; a nonempty `mes` stops consumption, otherwise clear the held tool. The return value is ignored, and changes made before setting `mes` are not undone.
 - **D2 — Depot category 2** (`298–348`): call while scanning the Depot, before removing the row. `mes` returns without removing it.

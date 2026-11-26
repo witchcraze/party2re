@@ -33,15 +33,14 @@ type SleepResult struct {
 	DurationSeconds  int    `json:"duration_seconds"`
 	RemainingSeconds int    `json:"remaining_seconds"`
 	HomeCharacterID  string `json:"home_character_id"`
-	Message          string `json:"message"`
+	CharacterName    string `json:"character_name"`
 }
 
 // SleepStatus represents current sleeping state.
 type SleepStatus struct {
-	Sleeping         bool   `json:"sleeping"`
-	RemainingSeconds int    `json:"remaining_seconds"`
-	CanWake          bool   `json:"can_wake"`
-	Message          string `json:"message"`
+	Sleeping         bool `json:"sleeping"`
+	RemainingSeconds int  `json:"remaining_seconds"`
+	CanWake          bool `json:"can_wake"`
 }
 
 // CalculateSleepDuration calculates sleep duration scaled by concurrent online player count.
@@ -187,7 +186,7 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 		DurationSeconds:  int(duration.Seconds()),
 		RemainingSeconds: int(duration.Seconds()),
 		HomeCharacterID:  targetHomeID,
-		Message:          fmt.Sprintf("%sはベッドにもぐりこんだ！", char.Name),
+		CharacterName:    char.Name,
 	}, nil
 }
 
@@ -297,7 +296,7 @@ func (s *Service) revertPendingWake(ctx context.Context, characterID string, kee
 // GetSleepStatus checks whether the character is currently sleeping or ready to wake.
 func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (SleepStatus, error) {
 	if s.timer == nil {
-		return SleepStatus{Sleeping: false, RemainingSeconds: 0, CanWake: false, Message: "起きています"}, nil
+		return SleepStatus{}, nil
 	}
 
 	rem, pending, err := s.GetRemainingSleep(ctx, characterID)
@@ -306,14 +305,7 @@ func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (Sleep
 	}
 
 	if rem > 0 || pending {
-		mins := int(rem.Minutes())
-		secs := int(rem.Seconds()) % 60
-		return SleepStatus{
-			Sleeping:         true,
-			RemainingSeconds: int(rem.Seconds()),
-			CanWake:          false,
-			Message:          fmt.Sprintf("お休み中「Zzz...」 目覚めるまで %d分%02d秒", mins, secs),
-		}, nil
+		return SleepStatus{Sleeping: true, RemainingSeconds: int(rem.Seconds())}, nil
 	}
 
 	var isPendingWake bool
@@ -337,20 +329,10 @@ func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (Sleep
 		}
 	}
 	if isPendingWake {
-		return SleepStatus{
-			Sleeping:         false,
-			RemainingSeconds: 0,
-			CanWake:          true,
-			Message:          "目を覚ます準備ができました",
-		}, nil
+		return SleepStatus{CanWake: true}, nil
 	}
 
-	return SleepStatus{
-		Sleeping:         false,
-		RemainingSeconds: 0,
-		CanWake:          false,
-		Message:          "起きています",
-	}, nil
+	return SleepStatus{}, nil
 }
 
 func (s *Service) checkNotSleeping(ctx context.Context, characterID string) error {

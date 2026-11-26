@@ -20,7 +20,8 @@ func (f *homeSceneFixture) SetCharacterColor(_ context.Context, actor, color str
 	return f.record("color " + actor + " " + color)
 }
 func (f *homeSceneFixture) UseHomeItem(_ context.Context, actor, instance, source string) (*home.UseHomeItemResult, error) {
-	return &home.UseHomeItemResult{Action: "consumed", Consumed: true}, f.record("use " + actor + " " + instance + "/" + source)
+	return &home.UseHomeItemResult{Action: "consumed", ItemName: "小さなメダル", Kind: 3, Consumed: true,
+		Outcome: &home.HomeItemOutcome{Effect: home.HomeItemEffectSmallMedal}}, f.record("use " + actor + " " + instance + "/" + source)
 }
 func (f *homeSceneFixture) TeachCompanionPhrase(_ context.Context, actor, phrase string) (home.CompanionPhrase, error) {
 	return home.CompanionPhrase{ID: "p1", Phrase: phrase}, f.record("teach " + actor + " " + phrase)
@@ -72,6 +73,9 @@ func TestHomeOwnerLivingCommandsAndVisitorBoundary(t *testing.T) {
 		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"`+tc.action+`","params":`+tc.params+`}`, nil)
 		if status != 200 || !slices.Equal(f.living, []string{tc.call}) {
 			t.Fatalf("%s: %d %s %v", tc.action, status, raw, f.living)
+		}
+		if tc.action == "home_item_use" && !strings.Contains(string(raw["result"]), `"message":"小さなメダルをつかった！メダル伯爵にメダルを１枚献上しました"`) {
+			t.Fatalf("item use lost its composed message: %s", raw["result"])
 		}
 	}
 	f.living, f.livingErr = nil, corecharacter.ErrInvalidColor

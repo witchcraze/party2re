@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/home"
 )
 
 func (f bagFixture) setOrb(t *testing.T, orb string) {
@@ -55,8 +56,8 @@ func TestHomeOrb_Integration_OffersEachOrbFromEitherSource(t *testing.T) {
 				if _, left := f.state(t); !res.Consumed || left != 0 || f.orb(t) != string(rune) {
 					t.Fatalf("consumed=%v left=%d orb=%q, want consumed, 0, %q", res.Consumed, left, f.orb(t), string(rune))
 				}
-				if res.Message != res.ItemName+"を復活の祭壇にささげた！" {
-					t.Fatalf("message = %q", res.Message)
+				if res.Outcome == nil || res.Outcome.Effect != home.HomeItemEffectOrbOffered {
+					t.Fatalf("outcome = %+v", res.Outcome)
 				}
 			})
 		}
@@ -70,8 +71,8 @@ func TestHomeOrb_Integration_DuplicateKeepsItem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, left := f.state(t); res.Consumed || left != 1 || f.orb(t) != "sr" || res.Message != "すでにささげられています" {
-		t.Fatalf("consumed=%v left=%d orb=%q msg=%q, want kept item and unchanged orbs", res.Consumed, left, f.orb(t), res.Message)
+	if _, left := f.state(t); res.Consumed || left != 1 || f.orb(t) != "sr" || res.Outcome == nil || res.Outcome.Effect != home.HomeItemEffectOrbAlreadyOffered {
+		t.Fatalf("consumed=%v left=%d orb=%q outcome=%+v, want kept item and unchanged orbs", res.Consumed, left, f.orb(t), res.Outcome)
 	}
 }
 

@@ -209,7 +209,7 @@ func TestHomeFutureMemory_Integration_BothSourcesAndOverFutureBoundary(t *testin
 			if err != nil {
 				t.Fatalf("depot save: %v", err)
 			}
-			if !res.Consumed || res.Message != "未来のカケラに記憶が写った！" {
+			if !res.Consumed || res.Outcome == nil || res.Outcome.Effect != home.HomeItemEffectFutureMemory {
 				t.Fatalf("unexpected result %+v", res)
 			}
 			if f.owns(t, "depot", f.id("fm-dep-1")) {
@@ -249,8 +249,8 @@ func TestHomeFutureMemory_Integration_BothSourcesAndOverFutureBoundary(t *testin
 				}
 				fragmentID = fragment.ID
 			}
-			if _, err := f.svc.UseHomeItem(ctx, f.char.ID, fragmentID, "inventory"); !errors.Is(err, home.ErrCannotUseHere) {
-				t.Fatalf("want slot rejection, got %v", err)
+			if res, err := f.svc.UseHomeItem(ctx, f.char.ID, fragmentID, "inventory"); !futureMemoryFull(res, err) {
+				t.Fatalf("want slot rejection, got %+v %v", res, err)
 			}
 			if !f.owns(t, "inventory", fragmentID) {
 				t.Fatal("rejected item-207 must remain")
@@ -274,8 +274,8 @@ func TestHomeFutureMemory_Integration_RejectsActiveJobMemory(t *testing.T) {
 					t.Fatal(err)
 				}
 				id := f.id(map[string]string{"inventory": "jm-inv", "depot": "jm-dep"}[source])
-				if _, err := f.svc.UseHomeItem(ctx, c.ID, id, source); !errors.Is(err, home.ErrCannotUseHere) {
-					t.Fatalf("want rejection, got %v", err)
+				if res, err := f.svc.UseHomeItem(ctx, c.ID, id, source); !futureMemoryFull(res, err) {
+					t.Fatalf("want rejection, got %+v %v", res, err)
 				}
 				if !f.owns(t, source, id) || len(f.memories(t)) != 0 {
 					t.Fatal("rejected save must keep the item and store nothing")
@@ -293,12 +293,12 @@ func TestHomeFutureMemory_Integration_ConcurrentLastSlot(t *testing.T) {
 	var saved, rejected int32
 	uses := [][2]string{{"cc-inv", "inventory"}, {"cc-dep", "depot"}}
 	res := testutil.RunConcurrentStressTest(t, testutil.ConcurrencyStressConfig{Workers: 2, OpsPerWorker: 1}, func(w, _ int) error {
-		_, err := f.svc.UseHomeItem(ctx, f.char.ID, f.id(uses[w][0]), uses[w][1])
+		res, err := f.svc.UseHomeItem(ctx, f.char.ID, f.id(uses[w][0]), uses[w][1])
 		switch {
+		case futureMemoryFull(res, err):
+			atomic.AddInt32(&rejected, 1)
 		case err == nil:
 			atomic.AddInt32(&saved, 1)
-		case errors.Is(err, home.ErrCannotUseHere):
-			atomic.AddInt32(&rejected, 1)
 		default:
 			return err
 		}
@@ -351,4 +351,9 @@ func TestHomeFutureMemory_Integration_FailureRollsBackAndRetrySucceeds(t *testin
 			}
 		})
 	}
+}
+
+// futureMemoryFull reports legacy's kept-item reply to a full or unavailable save.
+func futureMemoryFull(res *home.UseHomeItemResult, err error) bool {
+	return err == nil && res.Action == "no_effect" && !res.Consumed && res.Outcome != nil && res.Outcome.Effect == home.HomeItemEffectFutureMemoryFull
 }

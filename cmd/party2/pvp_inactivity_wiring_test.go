@@ -154,7 +154,7 @@ func TestPvPInactivityProductionWiring(t *testing.T) {
 		t.Fatalf("LeaveRoom finish pending: %v", err)
 	}
 	woke, err := f.soc.home.Wake(ctx, f.char.ID)
-	if err != nil || !woke.Success || woke.Character.PendingWake || woke.Character.Stats.HP != woke.Character.Stats.MaxHP || woke.Character.Tired != 0 {
+	if err != nil || !woke.Recovered || woke.Character.PendingWake || woke.Character.Stats.HP != woke.Character.Stats.MaxHP || woke.Character.Tired != 0 {
 		t.Fatalf("Wake after completed PvP timeout: %+v err=%v", woke, err)
 	}
 }

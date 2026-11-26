@@ -55,7 +55,7 @@ func TestSleep_PendingWakePersistedAndSurvivesValkeyExpiry(t *testing.T) {
 
 	// Wake must successfully recover vitality and clear PendingWake in SQL
 	res, err := svc.Wake(ctx, "c1")
-	if err != nil || !res.Success {
+	if err != nil || !res.Recovered {
 		t.Fatalf("Wake = %+v, %v", res, err)
 	}
 	got := repo.chars["c1"]
@@ -80,7 +80,7 @@ func TestSleepAndWake_RecoversZeroHPSurvivor(t *testing.T) {
 	delete(mt.locks, timer.CategorySleep+":c0")
 	delete(mt.locks, timer.CategoryAsleep+":c0")
 	res, err := svc.Wake(ctx, "c0")
-	if err != nil || !res.Success {
+	if err != nil || !res.Recovered {
 		t.Fatalf("Wake = %+v, %v", res, err)
 	}
 	got := repo.chars["c0"]
@@ -145,7 +145,7 @@ func TestWake_ConcurrentWakeIsSerialized(t *testing.T) {
 
 	// Post-completion Wake is idempotent and reports already awake
 	res, err := svc.Wake(ctx, "c1")
-	if err != nil || !res.Success {
+	if err != nil || res.Recovered {
 		t.Fatalf("post-completion Wake = %+v, %v", res, err)
 	}
 	if n := hook.calls.Load(); n != 1 {
@@ -181,7 +181,7 @@ func TestWake_HookFailureRetainsPendingWakeInSQL(t *testing.T) {
 	// Error clears; Attempt 2 succeeds
 	fullness.err = nil
 	res, err := svc.Wake(ctx, "c1")
-	if err != nil || !res.Success {
+	if err != nil || !res.Recovered {
 		t.Fatalf("attempt 2 Wake failed: %v", err)
 	}
 	if repo.chars["c1"].PendingWake {
@@ -266,7 +266,7 @@ func TestSleep_RejectedDuringWakeAndPreservesSubsequentSleepCycle(t *testing.T) 
 		t.Fatalf("status after second Sleep expiry = %+v, err = %v; want CanWake=true", status, err)
 	}
 	res, err := svc.Wake(ctx, "c1")
-	if err != nil || !res.Success {
+	if err != nil || !res.Recovered {
 		t.Fatalf("second Wake = %+v, %v", res, err)
 	}
 	got := repo.chars["c1"]
@@ -917,7 +917,7 @@ func TestWake_CostumeClearedOnSuccessfulWake_MemoryRepository(t *testing.T) {
 	}, time.Hour)
 
 	res, err := svc.Wake(ctx, "c1")
-	if err != nil || !res.Success {
+	if err != nil || !res.Recovered {
 		t.Fatalf("Wake failed: %+v, %v", res, err)
 	}
 
@@ -1008,7 +1008,7 @@ func TestWake_LegacyCostumeResetter_ExecutesOnValidWake(t *testing.T) {
 	}
 
 	res, err := svc.Wake(ctx, "c1")
-	if err != nil || !res.Success {
+	if err != nil || !res.Recovered {
 		t.Fatalf("Wake failed: %+v, %v", res, err)
 	}
 	if !legacyHook.called.Load() {
@@ -1340,7 +1340,7 @@ func TestSleep_ExpiredClaimPreservesSuccessorSleepState(t *testing.T) {
 
 			// Successor Wake acquires a new waking claim and completes recovery
 			wakeRes, err := svc2.Wake(ctx, "c1")
-			if err != nil || !wakeRes.Success {
+			if err != nil || !wakeRes.Recovered {
 				t.Fatalf("successor Wake failed: %+v, %v", wakeRes, err)
 			}
 

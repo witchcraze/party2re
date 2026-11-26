@@ -43,7 +43,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 		gender     string
 		wantItemNo int
 		wantIcon   string
-		wantMsgSub string
+		wantEffect HomeItemEffect
 	}{
 		{
 			name:       "Pink skirt (44)",
@@ -51,7 +51,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "female",
 			wantItemNo: 44,
 			wantIcon:   "chr/001.gif",
-			wantMsgSub: "ピンクスカートのコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Butler costume (46) - Male",
@@ -59,7 +59,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "male",
 			wantItemNo: 46,
 			wantIcon:   "chr/012.gif",
-			wantMsgSub: "チョビヒゲタクシードのコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Maid costume (46) - Female",
@@ -67,7 +67,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "female",
 			wantItemNo: 46,
 			wantIcon:   "chr/007.gif",
-			wantMsgSub: "チョビヒゲタクシードのコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Cleric costume (55) - Male",
@@ -75,7 +75,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "m",
 			wantItemNo: 55,
 			wantIcon:   "chr/016.gif",
-			wantMsgSub: "聖職者のコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Cleric costume (55) - Female",
@@ -83,7 +83,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "f",
 			wantItemNo: 55,
 			wantIcon:   "chr/017.gif",
-			wantMsgSub: "聖職者のコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Royal costume (56) - Male",
@@ -91,7 +91,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "m",
 			wantItemNo: 56,
 			wantIcon:   "chr/002.gif",
-			wantMsgSub: "王様のコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Royal costume (56) - Female",
@@ -99,7 +99,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "f",
 			wantItemNo: 56,
 			wantIcon:   "chr/018.gif",
-			wantMsgSub: "王様のコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Hero costume (140) - Male",
@@ -107,7 +107,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "male",
 			wantItemNo: 140,
 			wantIcon:   "chr/034.gif",
-			wantMsgSub: "英雄のコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Hero costume (140) - Female",
@@ -115,7 +115,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "female",
 			wantItemNo: 140,
 			wantIcon:   "chr/028.gif",
-			wantMsgSub: "英雄のコスプレをした！",
+			wantEffect: HomeItemEffectCostume,
 		},
 		{
 			name:       "Transformation scroll (141)",
@@ -123,7 +123,7 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			gender:     "male",
 			wantItemNo: 141,
 			wantIcon:   "chr/", // prefix matches random roll
-			wantMsgSub: "変身の巻物を読んだ！",
+			wantEffect: HomeItemEffectTransformScroll,
 		},
 	}
 
@@ -180,8 +180,8 @@ func TestUseHomeItem_CostumeConsumption(t *testing.T) {
 			if !res.Consumed {
 				t.Errorf("expected item to be consumed")
 			}
-			if !strings.Contains(res.Message, tt.wantMsgSub) {
-				t.Errorf("expected message to contain %q, got %q", tt.wantMsgSub, res.Message)
+			if got := outcomeOf(res); got.Effect != tt.wantEffect {
+				t.Errorf("effect = %q, want %q", got.Effect, tt.wantEffect)
 			}
 
 			if len(applier.applied) != 1 {

@@ -136,7 +136,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		router := setupFacilitySleepGuardTest(t, home.SleepStatus{
 			Sleeping:         true,
 			RemainingSeconds: 300,
-			Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
 		})
 
 		for _, tc := range testCases {
@@ -166,7 +165,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			Sleeping:         false,
 			CanWake:          true,
 			RemainingSeconds: 0,
-			Message:          "お休み中「Zzz...」 目を覚ましてください",
 		})
 
 		for _, tc := range testCases {
@@ -195,7 +193,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		router := setupFacilitySleepGuardTest(t, home.SleepStatus{
 			Sleeping: false,
 			CanWake:  false,
-			Message:  "起きています",
 		})
 
 		for _, tc := range testCases {
@@ -247,8 +244,8 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 
 	t.Run("explicit wake recovery command is exempt from action guard when sleeping or can_wake", func(t *testing.T) {
 		for _, status := range []home.SleepStatus{
-			{Sleeping: true, RemainingSeconds: 300, Message: "お休み中「Zzz...」"},
-			{Sleeping: false, CanWake: true, RemainingSeconds: 0, Message: "お休み中「Zzz...」 目を覚ましてください"},
+			{Sleeping: true, RemainingSeconds: 300},
+			{Sleeping: false, CanWake: true, RemainingSeconds: 0},
 		} {
 			router := setupFacilitySleepGuardTest(t, status)
 			req := httptest.NewRequest(http.MethodPost, "/characters/char-1/home/wake", nil)
@@ -270,8 +267,8 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 			sleepErr     error
 			expectedCode int
 		}{
-			{"sleeping", home.SleepStatus{Sleeping: true, RemainingSeconds: 300, Message: "お休み中「Zzz...」"}, nil, http.StatusConflict},
-			{"can_wake", home.SleepStatus{CanWake: true, Message: "お休み中「Zzz...」 目を覚ましてください"}, nil, http.StatusConflict},
+			{"sleeping", home.SleepStatus{Sleeping: true, RemainingSeconds: 300}, nil, http.StatusConflict},
+			{"can_wake", home.SleepStatus{CanWake: true}, nil, http.StatusConflict},
 			{"lookup_error", home.SleepStatus{}, errors.New("sleep lookup failed"), http.StatusInternalServerError},
 		}
 
@@ -369,7 +366,6 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		router := setupFacilitySleepGuardTest(t, home.SleepStatus{
 			Sleeping:         true,
 			RemainingSeconds: 300,
-			Message:          "お休み中「Zzz...」",
 		})
 
 		readRoutes := []string{

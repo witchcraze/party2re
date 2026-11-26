@@ -141,7 +141,7 @@ func TestHomeGatewaySuccessSurvivesRefreshFailure(t *testing.T) {
 				if action == "home_sleep" && !strings.Contains(string(got["result"]), `"duration_seconds":300`) {
 					t.Fatal("lost sleep result")
 				}
-				if action == "home_wake" && (f.updates != 1 || f.char.Stats.HP != 100 || !strings.Contains(string(got["result"]), `"success":true`)) {
+				if action == "home_wake" && (f.updates != 1 || f.char.Stats.HP != 100 || !strings.Contains(string(got["result"]), `"recovered":true`)) {
 					t.Fatal("lost wake recovery/result")
 				}
 			})
