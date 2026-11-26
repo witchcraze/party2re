@@ -18,6 +18,7 @@ const (
 	RankingActionTypeRotateWeekly = "party2:ranking:rotate_weekly"
 
 	dailyRefreshActorID = "ranking:daily"
+	weeklyRotateActorID = "ranking:weekly"
 )
 
 // DailyRefreshActionID generates the deterministic JST date prefix for daily refresh wake-up IDs.
@@ -86,13 +87,9 @@ func (h *RefreshHandler) Reconcile(ctx context.Context) error {
 	boundary := currentDailyBoundaryJST(now)
 	next := NextMidnightJST(now)
 
-	hasPendingNext := false
-	if h.scheduler != nil {
-		var err error
-		hasPendingNext, err = h.hasPendingDailySchedule(ctx, next)
-		if err != nil {
-			return err
-		}
+	hasPendingNext, err := hasPendingRankingSchedule(ctx, h.scheduler, dailyRefreshActorID, RankingActionTypeRefresh, next)
+	if err != nil {
+		return fmt.Errorf("discover daily ranking refresh reservation: %w", err)
 	}
 
 	if h.verifiedBoundary.Before(boundary) || !hasPendingNext {
@@ -114,13 +111,16 @@ func (h *RefreshHandler) Reconcile(ctx context.Context) error {
 	return h.scheduleDailyRefresh(ctx, next)
 }
 
-func (h *RefreshHandler) hasPendingDailySchedule(ctx context.Context, next time.Time) (bool, error) {
-	actions, err := h.scheduler.FindPendingByActorID(ctx, dailyRefreshActorID)
+func hasPendingRankingSchedule(ctx context.Context, scheduler WeeklyRotationScheduler, actorID, actionType string, next time.Time) (bool, error) {
+	if scheduler == nil {
+		return false, nil
+	}
+	actions, err := scheduler.FindPendingByActorID(ctx, actorID)
 	if err != nil {
-		return false, fmt.Errorf("discover daily ranking refresh reservation: %w", err)
+		return false, err
 	}
 	for _, action := range actions {
-		if action.ActionType == RankingActionTypeRefresh && action.ExecuteAt.Equal(next) && action.State == core_scheduling.StatePending {
+		if action.ActionType == actionType && action.ExecuteAt.Equal(next) && action.State == core_scheduling.StatePending {
 			return true, nil
 		}
 	}
@@ -151,8 +151,10 @@ func dailySnapshotsNeedRefresh(snapshots map[RankingType]RankingSnapshot, bounda
 
 // RotateWeeklyHandler implements scheduling.ActionHandler to execute weekly job change ranking rotation.
 type RotateWeeklyHandler struct {
-	service   *Service
-	scheduler WeeklyRotationScheduler
+	reconcileMu sync.Mutex
+	service     *Service
+	scheduler   WeeklyRotationScheduler
+	verifiedDue time.Time
 }
 
 // WeeklyRotationScheduler manages the ranking wake-up reservation; SQL owns settlement progress.
@@ -175,26 +177,35 @@ func (h *RotateWeeklyHandler) Handle(ctx context.Context, action core_scheduling
 	return h.Reconcile(ctx)
 }
 
-// Reconcile settles overdue counters once, then restores the next reservation, also on startup.
-// Enqueue errors occur after SQL commit; retrying reconciliation never repeats that settlement.
+// Reconcile settles overdue counters once, then restores the next reservation, also on startup and worker ticks.
+// Enqueue errors occur after SQL commit; retrying reconciliation never repeats that settlement or hits SQL on healthy ticks.
 func (h *RotateWeeklyHandler) Reconcile(ctx context.Context) error {
-	next, err := h.service.RotateWeeklyJobChangeRanking(ctx)
-	if err != nil {
-		return err
+	h.reconcileMu.Lock()
+	defer h.reconcileMu.Unlock()
+
+	now := h.service.nowFunc().UTC()
+	next := h.verifiedDue
+	if !next.After(now) {
+		var err error
+		next, err = h.service.RotateWeeklyJobChangeRanking(ctx)
+		if err != nil {
+			return err
+		}
+		h.verifiedDue = next
 	}
-	const actorID = "ranking:weekly"
-	actions, err := h.scheduler.FindPendingByActorID(ctx, actorID)
+	if h.scheduler == nil {
+		return nil
+	}
+	hasPending, err := hasPendingRankingSchedule(ctx, h.scheduler, weeklyRotateActorID, RankingActionTypeRotateWeekly, next)
 	if err != nil {
 		return fmt.Errorf("discover weekly rotation reservation after SQL reconciliation: %w", err)
 	}
-	for _, action := range actions {
-		if action.ActionType == RankingActionTypeRotateWeekly && action.ExecuteAt.Equal(next) && action.State == core_scheduling.StatePending {
-			return nil
-		}
+	if hasPending {
+		return nil
 	}
 	// Discovery and enqueue are not atomic: a fresh ID cannot overwrite another worker's Processing payload.
 	actionID := WeeklyRotateActionID(next) + ":" + id.New()
-	if err := h.scheduler.ScheduleWithID(ctx, actionID, RankingActionTypeRotateWeekly, actorID, nil, next); err != nil {
+	if err := h.scheduler.ScheduleWithID(ctx, actionID, RankingActionTypeRotateWeekly, weeklyRotateActorID, nil, next); err != nil {
 		return fmt.Errorf("enqueue weekly rotation after SQL reconciliation: %w", err)
 	}
 	return nil

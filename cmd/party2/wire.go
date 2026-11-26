@@ -51,17 +51,9 @@ func wireApp(
 	if err != nil {
 		return nil, err
 	}
-	weekly := ranking.NewRotateWeeklyHandler(soc.ranking, soc.sched)
-	if err := weekly.Reconcile(context.Background()); err != nil {
+	if err := registerRankingWorker(soc); err != nil {
 		return nil, err
 	}
-	soc.worker.RegisterHandler(ranking.RankingActionTypeRotateWeekly, weekly)
-	daily := ranking.NewRefreshHandler(soc.ranking, ranking.WithRefreshScheduler(soc.sched))
-	if err := daily.Reconcile(context.Background()); err != nil {
-		return nil, err
-	}
-	soc.worker.RegisterHandler(ranking.RankingActionTypeRefresh, daily)
-	soc.worker.RegisterReconciler(ranking.RankingActionTypeRefresh, daily.Reconcile)
 	soc.home.SetCompanionPhraseLimit(cfg.Home.CompanionPhraseLimit)
 	soc.home.SetLetterLimits(cfg.Home.LetterLogLimit, cfg.Home.LetterMaxLength)
 	home.WithBaseSleepDuration(cfg.Home.SleepBase)(soc.home)
@@ -285,6 +277,22 @@ func wireGuildPointDecay(sched *scheduling.Service) {
 // wireTakarakujiDrawing enqueues the recurring Takarakuji drawing action if not already scheduled.
 func wireTakarakujiDrawing(sched *scheduling.Service, lotterySvc *lottery.Service) error {
 	return lottery.NewDrawHandler(lotterySvc, lottery.WithScheduler(sched)).Reconcile(context.Background())
+}
+
+func registerRankingWorker(soc *socServices) error {
+	weekly := ranking.NewRotateWeeklyHandler(soc.ranking, soc.sched)
+	if err := weekly.Reconcile(context.Background()); err != nil {
+		return err
+	}
+	soc.worker.RegisterHandler(ranking.RankingActionTypeRotateWeekly, weekly)
+	soc.worker.RegisterReconciler(ranking.RankingActionTypeRotateWeekly, weekly.Reconcile)
+	daily := ranking.NewRefreshHandler(soc.ranking, ranking.WithRefreshScheduler(soc.sched))
+	if err := daily.Reconcile(context.Background()); err != nil {
+		return err
+	}
+	soc.worker.RegisterHandler(ranking.RankingActionTypeRefresh, daily)
+	soc.worker.RegisterReconciler(ranking.RankingActionTypeRefresh, daily.Reconcile)
+	return nil
 }
 
 func newHTTPHandler(
