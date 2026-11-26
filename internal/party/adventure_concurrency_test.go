@@ -194,6 +194,7 @@ func testConcurrentAdventureSerialization(t *testing.T, partyRepo party.Reposito
 	_ = charRepo.Update(ctx, member)
 
 	pDetail, err := svc.CreateParty(ctx, leader.ID, party.CreatePartyRequest{
+		Speed:      18,
 		Name:       "ConcurrencyParty",
 		StageID:    "stage-01",
 		MaxMembers: 2,

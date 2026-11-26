@@ -201,19 +201,11 @@ func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, 
 	if char.Tired >= 100 {
 		return ErrCharacterExhausted
 	}
-	if err := s.stages.CanAccessStage(char, p.StageID); err != nil {
-		return err
-	}
+	// Only the creator passes the stage gate (quest.cgi:518–524 vs add_member).
 	if p.NeedJoin != "" {
 		if err := ValidateNeedJoin(p.NeedJoin, char); err != nil {
 			return err
 		}
-	}
-	if char.Level < p.MinLevel || char.Level > p.MaxLevel {
-		return ErrLevelRequirementNotMet
-	}
-	if char.Stats.MaxHP < p.MinHP {
-		return ErrHPRequirementNotMet
 	}
 
 	battleActor, err := s.buildBattleActor(txCtx, char.ID)

@@ -233,6 +233,11 @@ type scenarioContext struct {
 					Notices []home.DeliveryNotice `json:"notices"`
 				} `json:"private"`
 			} `json:"view"`
+			Parties []struct {
+				Name         string         `json:"name"`
+				MemberNames  []string       `json:"member_names"`
+				SelectParams map[string]any `json:"select_params"`
+			} `json:"parties"`
 			Deposit   int64 `json:"deposit"`
 			SaleOffer *struct {
 				ItemInstanceID   string `json:"item_instance_id"`

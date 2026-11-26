@@ -44,7 +44,7 @@ func TestStartPartyAdventure_Stage19UnsealOpensRoomsAfterCommit(t *testing.T) {
 		member := corecharacter.Character{ID: "a-member", Name: "Member", Level: 80, JobLevel: 30, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000}}
 		leader := corecharacter.Character{ID: "z-leader", Name: "Leader", Level: 99, JobLevel: 40, Stats: corecharacter.Stats{HP: 50000, MaxHP: 50000}}
 		charRepo.chars[member.ID], charRepo.chars[leader.ID] = member, leader
-		detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{Name: "封印隊", StageID: "stage-19", MaxMembers: 2})
+		detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{Speed: 18, Name: "封印隊", StageID: "stage-19", MaxMembers: 2})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -232,14 +232,11 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 			continue
 		}
 
-		var leaderName string
-		for _, m := range state.Members {
-			if m.IsLeader {
-				leaderName = m.CharacterName
-				break
-			}
+		members := make([]Member, len(state.Members))
+		for i, m := range state.Members {
+			members[i] = m.Member
 		}
-		summaries = append(summaries, newSummary(p, leaderName, len(state.Members)))
+		summaries = append(summaries, newSummary(p, members))
 	}
 
 	total := len(summaries)

@@ -3206,6 +3206,118 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "party_create"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "max_members": {
+                      "maximum": 4,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "name": {
+                      "description": "Quest name (1 to 50 characters, no whitespace or , ; \" ' \u0026 \u003c \u003e \\ / @ ＠).",
+                      "type": "string"
+                    },
+                    "need_join": {
+                      "description": "Join condition (quest.cgi 参加条件); omit for none.",
+                      "enum": [
+                        "joblv_3_u",
+                        "joblv_3_o",
+                        "joblv_10_o",
+                        "hp_100_u",
+                        "hp_100_o",
+                        "hp_200_u",
+                        "hp_200_o",
+                        "hp_300_u",
+                        "hp_300_o",
+                        "hp_400_u",
+                        "hp_400_o"
+                      ],
+                      "type": "string"
+                    },
+                    "password": {
+                      "description": "合言葉; omit for none.",
+                      "type": "string"
+                    },
+                    "speed": {
+                      "description": "Per-actor action interval in seconds.",
+                      "enum": [
+                        3,
+                        18,
+                        25
+                      ],
+                      "type": "integer"
+                    },
+                    "stage_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "stage_id",
+                    "speed",
+                    "max_members"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "party_join"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "party_id": {
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                      "type": "string"
+                    },
+                    "password": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "party_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "rescue_request"
                 }
               },
@@ -3760,6 +3872,7 @@
                         "home_custom_skill",
                         "home_image",
                         "casino",
+                        "quest",
                         "secretshop",
                         "town1",
                         "town2",
@@ -3810,7 +3923,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "target_id": {
-                      "description": "Public Home, available shop item, Casino room or town store ID, validated by the selected adapter. Room selection never grants admission.",
+                      "description": "Public Home, available shop item, Casino room, Party lobby or town store ID, validated by the selected adapter. Room selection never grants admission.",
                       "pattern": "^[a-zA-Z0-9_-]{1,128}$",
                       "type": "string"
                     },
@@ -3819,7 +3932,8 @@
                         "item",
                         "home",
                         "room",
-                        "store"
+                        "store",
+                        "party"
                       ],
                       "type": "string"
                     }
@@ -3915,6 +4029,7 @@
                         "home_custom_skill",
                         "home_image",
                         "casino",
+                        "quest",
                         "secretshop",
                         "town1",
                         "town2",
@@ -9217,50 +9332,6 @@
         ],
         "type": "object"
       },
-      "CreatePartyRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "max_level": {
-            "type": "integer"
-          },
-          "max_members": {
-            "type": "integer"
-          },
-          "min_hp": {
-            "type": "integer"
-          },
-          "min_level": {
-            "type": "integer"
-          },
-          "mode": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "need_join": {
-            "type": "string"
-          },
-          "password": {
-            "type": "string"
-          },
-          "speed": {
-            "type": "integer"
-          },
-          "stage_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "name",
-          "stage_id"
-        ],
-        "type": "object"
-      },
       "CursorPageReplayHeader": {
         "properties": {
           "has_more": {
@@ -12287,20 +12358,6 @@
         ],
         "type": "object"
       },
-      "JoinPartyRequest": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "password": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id"
-        ],
-        "type": "object"
-      },
       "Letter": {
         "properties": {
           "color": {
@@ -13126,35 +13183,6 @@
         ],
         "type": "object"
       },
-      "PagePartySummary": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/PartySummary"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "description": "Page size limit",
-            "type": "integer"
-          },
-          "offset": {
-            "description": "Offset from beginning of result set",
-            "type": "integer"
-          },
-          "total": {
-            "description": "Total number of records matching the query",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
       "PaginationCursorPageAdventureAdventureHistoryEntry": {
         "additionalProperties": false,
         "properties": {
@@ -13255,138 +13283,8 @@
         ],
         "type": "object"
       },
-      "Party": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "leader_character_id": {
-            "type": "string"
-          },
-          "max_level": {
-            "type": "integer"
-          },
-          "max_members": {
-            "type": "integer"
-          },
-          "min_hp": {
-            "type": "integer"
-          },
-          "min_level": {
-            "type": "integer"
-          },
-          "mode": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "need_join": {
-            "type": "string"
-          },
-          "season": {
-            "type": "string"
-          },
-          "speed": {
-            "type": "integer"
-          },
-          "stage_id": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "leader_character_id",
-          "name",
-          "stage_id",
-          "speed",
-          "max_members",
-          "min_level",
-          "max_level",
-          "min_hp",
-          "status",
-          "created_at",
-          "updated_at"
-        ],
-        "type": "object"
-      },
-      "PartyDetail": {
-        "properties": {
-          "members": {
-            "items": {
-              "$ref": "#/components/schemas/PartyMember"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "party": {
-            "$ref": "#/components/schemas/Party"
-          }
-        },
-        "required": [
-          "party",
-          "members"
-        ],
-        "type": "object"
-      },
-      "PartyMember": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "character_name": {
-            "type": "string"
-          },
-          "hp": {
-            "type": "integer"
-          },
-          "is_leader": {
-            "type": "boolean"
-          },
-          "job_id": {
-            "type": "string"
-          },
-          "joined_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "level": {
-            "type": "integer"
-          },
-          "max_hp": {
-            "type": "integer"
-          },
-          "party_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "party_id",
-          "character_id",
-          "character_name",
-          "job_id",
-          "level",
-          "hp",
-          "max_hp",
-          "is_leader",
-          "joined_at"
-        ],
-        "type": "object"
-      },
       "PartySummary": {
+        "additionalProperties": false,
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -13407,17 +13305,15 @@
           "leader_name": {
             "type": "string"
           },
-          "max_level": {
-            "type": "integer"
-          },
           "max_members": {
             "type": "integer"
           },
-          "min_hp": {
-            "type": "integer"
-          },
-          "min_level": {
-            "type": "integer"
+          "member_names": {
+            "description": "Leader first, then members in join order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "name": {
             "type": "string"
@@ -13443,15 +13339,13 @@
           "name",
           "leader_character_id",
           "leader_name",
+          "member_names",
           "stage_id",
           "stage_name",
           "speed",
           "current_members",
           "max_members",
           "has_password",
-          "min_level",
-          "max_level",
-          "min_hp",
           "status",
           "created_at"
         ],
@@ -14470,6 +14364,160 @@
         ],
         "type": "object"
       },
+      "QuestParty": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current_members": {
+            "type": "integer"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "leader_character_id": {
+            "type": "string"
+          },
+          "leader_name": {
+            "type": "string"
+          },
+          "max_members": {
+            "type": "integer"
+          },
+          "member_names": {
+            "description": "Leader first, then members in join order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "need_join": {
+            "type": "string"
+          },
+          "select_params": {
+            "$ref": "#/components/schemas/SelectedSceneSubject"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "stage_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "leader_character_id",
+          "leader_name",
+          "member_names",
+          "stage_id",
+          "stage_name",
+          "speed",
+          "current_members",
+          "max_members",
+          "has_password",
+          "status",
+          "created_at",
+          "select_params"
+        ],
+        "type": "object"
+      },
+      "QuestPartyParams": {
+        "additionalProperties": false,
+        "properties": {
+          "party_id": {
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "party_id"
+        ],
+        "type": "object"
+      },
+      "QuestSceneData": {
+        "additionalProperties": false,
+        "description": "The quest place (冒険に出る): creatable stages and recruiting Party lobbies, newest first. Reading admits no one.",
+        "properties": {
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "parent": {
+            "const": "town"
+          },
+          "parties": {
+            "items": {
+              "$ref": "#/components/schemas/QuestParty"
+            },
+            "type": "array"
+          },
+          "stages": {
+            "description": "Stages the actor can create a solo or Party quest on.",
+            "items": {
+              "$ref": "#/components/schemas/QuestStage"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent",
+          "stages",
+          "parties",
+          "page"
+        ],
+        "type": "object"
+      },
+      "QuestSelectedSceneData": {
+        "additionalProperties": false,
+        "description": "One lobby's public row; selecting is not joining. Password and join conditions are enforced by party_join.",
+        "properties": {
+          "join_params": {
+            "$ref": "#/components/schemas/QuestPartyParams"
+          },
+          "parent": {
+            "const": "town"
+          },
+          "party": {
+            "$ref": "#/components/schemas/PartySummary"
+          }
+        },
+        "required": [
+          "parent",
+          "party",
+          "join_params"
+        ],
+        "type": "object"
+      },
+      "QuestStage": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "RankingCharacterRankingEntry": {
         "additionalProperties": false,
         "properties": {
@@ -15280,6 +15328,7 @@
                   "home_custom_skill",
                   "home_image",
                   "casino",
+                  "quest",
                   "secretshop",
                   "town1",
                   "town2",
@@ -15494,6 +15543,7 @@
               "home_custom_skill",
               "home_image",
               "casino",
+              "quest",
               "secretshop",
               "town1",
               "town2",
@@ -15623,6 +15673,9 @@
                       "$ref": "#/components/schemas/CasinoLobbySceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/QuestSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/SecretShopCatalogSceneData"
                     },
                     {
@@ -15746,6 +15799,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/CasinoSelectedSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/QuestSelectedSceneData"
                     },
                     {
                       "$ref": "#/components/schemas/SecretShopProductSceneData"
@@ -16195,6 +16251,36 @@
             "if": {
               "properties": {
                 "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "quest"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/QuestSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
                   "const": "subject"
                 },
                 "location_id": {
@@ -16210,6 +16296,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/CasinoSelectedSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subject"
+                },
+                "location_id": {
+                  "const": "quest"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/QuestSelectedSceneData"
                 },
                 "support": {
                   "properties": {
@@ -25362,270 +25478,6 @@
         "summary": "Get OpenAPI 3.1 specification",
         "tags": [
           "System"
-        ]
-      }
-    },
-    "/parties": {
-      "get": {
-        "description": "Lists recruiting or active multiplayer parties.",
-        "operationId": "listParties",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "status",
-            "schema": {
-              "default": "recruiting",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "default": 50,
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "schema": {
-              "default": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagePartySummary"
-                }
-              }
-            },
-            "description": "List of parties"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "List parties",
-        "tags": [
-          "Party"
-        ]
-      },
-      "post": {
-        "description": "Creates a new multiplayer party with the authenticated character as leader.",
-        "operationId": "createParty",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreatePartyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PartyDetail"
-                }
-              }
-            },
-            "description": "Party created successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Invalid party parameters or character already in party"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Stage is not currently available"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create party",
-        "tags": [
-          "Party"
-        ]
-      }
-    },
-    "/parties/{id}": {
-      "get": {
-        "description": "Retrieves detailed information and member list for a party.",
-        "operationId": "getPartyDetail",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PartyDetail"
-                }
-              }
-            },
-            "description": "Party details"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Bad Request"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Party not found"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [],
-        "summary": "Get party detail",
-        "tags": [
-          "Party"
-        ]
-      }
-    },
-    "/parties/{id}/join": {
-      "post": {
-        "description": "Joins an existing recruiting party.",
-        "operationId": "joinParty",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JoinPartyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PartyDetail"
-                }
-              }
-            },
-            "description": "Joined party successfully"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error",
-            "description": "Party full, invalid password, requirement not met, or already in party"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error",
-            "description": "Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error",
-            "description": "Party not found"
-          },
-          "415": {
-            "$ref": "#/components/responses/Error",
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Stage is not currently available"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error",
-            "description": "Internal Server Error"
-          },
-          "501": {
-            "$ref": "#/components/responses/Error",
-            "description": "Not Implemented"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Join party",
-        "tags": [
-          "Party"
         ]
       }
     },

@@ -38,11 +38,8 @@ func TestMemoryRepository_Lifecycle(t *testing.T) {
 		LeaderCharacterID: "char-1",
 		Name:              "勇敢なる旅人たち",
 		StageID:           "stage-1",
-		Speed:             party.DefaultSpeed,
+		Speed:             18,
 		MaxMembers:        4,
-		MinLevel:          1,
-		MaxLevel:          99,
-		MinHP:             10,
 		Status:            party.StatusRecruiting,
 		CreatedAt:         now,
 		UpdatedAt:         now,
@@ -309,9 +306,6 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 		StageID:           "stage-1",
 		Speed:             3,
 		MaxMembers:        4,
-		MinLevel:          1,
-		MaxLevel:          99,
-		MinHP:             10,
 		Status:            party.StatusRecruiting,
 		CreatedAt:         now,
 		UpdatedAt:         now,
@@ -894,6 +888,7 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 
 	// 1. Create password-protected party
 	detail, err := svc.CreateParty(ctx, leaderID, party.CreatePartyRequest{
+		Speed:      18,
 		Name:       "合言葉パーティ",
 		StageID:    "stage-1",
 		Password:   "secret",

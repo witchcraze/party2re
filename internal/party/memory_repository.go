@@ -83,15 +83,12 @@ func (r *MemoryRepository) ListParties(_ context.Context, status string, limit, 
 		if status != "" && p.Status != status {
 			continue
 		}
-		var leaderName string
-		memCount := len(r.memMembers[id])
+		members := make([]Member, 0, len(r.memMembers[id]))
 		for _, m := range r.memMembers[id] {
-			if m.IsLeader {
-				leaderName = m.CharacterName
-				break
-			}
+			members = append(members, m)
 		}
-		activeList = append(activeList, newSummary(p, leaderName, memCount))
+		sort.Slice(members, func(i, j int) bool { return members[i].JoinedAt.Before(members[j].JoinedAt) })
+		activeList = append(activeList, newSummary(p, members))
 	}
 
 	// Sort newest first

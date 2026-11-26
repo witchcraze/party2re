@@ -391,6 +391,7 @@ func TestParty_Stage26SeasonalClear(t *testing.T) {
 
 	// 1. Create party with Spring season
 	pDetailSpring, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "SpringParty",
 		StageID:    stage26.ID,
 		MaxMembers: 1,
@@ -421,6 +422,7 @@ func TestParty_Stage26SeasonalClear(t *testing.T) {
 
 	// 2. Create party with Summer season
 	pDetailSummer, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Speed:      18,
 		Name:       "SummerParty",
 		StageID:    stage26.ID,
 		MaxMembers: 1,

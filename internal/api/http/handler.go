@@ -158,6 +158,7 @@ type Handler struct {
 	monster        MonsterService
 	contest        ContestService
 	parties        PartyService
+	questStages    QuestStageLister
 	runs           NormalRunService
 	altar          AltarService
 	bank           BankService
@@ -440,10 +441,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/photos", h.handleSaveCharacterPhoto)
 
 	// Multiplayer Party System (quest.cgi, party.cgi)
-	mux.HandleFunc("GET /parties", h.handleListParties)
-	mux.HandleFunc("POST /parties", h.handleCreateParty)
-	mux.HandleFunc("GET /parties/{id}", h.handleGetParty)
-	mux.HandleFunc("POST /parties/{id}/join", h.handleJoinParty)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }
