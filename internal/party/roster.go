@@ -146,5 +146,7 @@ func NormalAdmissionFromRoster(actor string, p Party, members []Member) runhost.
 		Mode:         p.Mode,
 		Speed:        p.Speed,
 		Name:         p.Name,
+		MaxMembers:   p.MaxMembers,
+		NeedJoin:     p.NeedJoin,
 	}
 }

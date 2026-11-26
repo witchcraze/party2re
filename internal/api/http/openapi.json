@@ -11273,7 +11273,17 @@
           "max_members": {
             "type": "integer"
           },
+          "member_names": {
+            "description": "Leader first, then members in join order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "name": {
+            "type": "string"
+          },
+          "need_join": {
             "type": "string"
           },
           "prize_pool": {
@@ -11300,6 +11310,7 @@
           "name",
           "leader_character_id",
           "leader_name",
+          "member_names",
           "speed",
           "stage",
           "current_members",
@@ -14232,7 +14243,17 @@
           "max_members": {
             "type": "integer"
           },
+          "member_names": {
+            "description": "Leader first, then members in join order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "name": {
+            "type": "string"
+          },
+          "need_join": {
             "type": "string"
           },
           "prize_pool": {
@@ -14259,6 +14280,7 @@
           "name",
           "leader_character_id",
           "leader_name",
+          "member_names",
           "speed",
           "stage",
           "current_members",
@@ -14449,10 +14471,75 @@
         ],
         "type": "object"
       },
+      "QuestRun": {
+        "additionalProperties": false,
+        "description": "An in-progress normal run's public quest-list row.",
+        "properties": {
+          "leader_name": {
+            "type": "string"
+          },
+          "max_members": {
+            "type": "integer"
+          },
+          "member_names": {
+            "description": "Leader first, then members in join order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "need_join": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "stage_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "speed",
+          "stage_id",
+          "stage_name",
+          "round",
+          "leader_name",
+          "member_names",
+          "max_members"
+        ],
+        "type": "object"
+      },
       "QuestSceneData": {
         "additionalProperties": false,
-        "description": "The quest place (冒険に出る): creatable stages and recruiting Party lobbies, newest first. Reading admits no one.",
+        "description": "The quest place (冒険に出る): creatable stages, recruiting Party lobbies (newest first, paged), in-progress normal runs and recruiting PvP/GvG rooms. Only Party lobbies offer a command here. Reading admits no one.",
         "properties": {
+          "arenas": {
+            "description": "Recruiting PvP (闘技場) rooms; listed on the first page only.",
+            "items": {
+              "$ref": "#/components/schemas/PvPRoomSummary"
+            },
+            "type": "array"
+          },
+          "guild_battles": {
+            "description": "Recruiting GvG rooms; listed on the first page only.",
+            "items": {
+              "$ref": "#/components/schemas/GvGRoomSummary"
+            },
+            "type": "array"
+          },
           "page": {
             "$ref": "#/components/schemas/ScenePage"
           },
@@ -14462,6 +14549,13 @@
           "parties": {
             "items": {
               "$ref": "#/components/schemas/QuestParty"
+            },
+            "type": "array"
+          },
+          "runs": {
+            "description": "In-progress normal runs, newest first; listed on the first page only.",
+            "items": {
+              "$ref": "#/components/schemas/QuestRun"
             },
             "type": "array"
           },
@@ -14477,6 +14571,9 @@
           "parent",
           "stages",
           "parties",
+          "runs",
+          "arenas",
+          "guild_battles",
           "page"
         ],
         "type": "object"

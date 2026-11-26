@@ -325,6 +325,28 @@ func (r *RunRepository[R, P]) FindActorRun(ctx context.Context, actor string) (*
 	return &runhost.ActorRun{RunID: id, PartyID: run.Admission.PartyID, Version: run.Version, Round: run.Round, LeaderID: run.LeaderID, Role: role, LastActivity: run.LastActivity, Recipient: p}, nil
 }
 
+// ListRuns returns the live (undisposed) runs of kind; the runs table is shared by every kind.
+func (r *RunRepository[R, P]) ListRuns(ctx context.Context, kind string) ([]runhost.State, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `SELECT state_json FROM runs WHERE state_json IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(state_json,'$.kind'))=?`, kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var runs []runhost.State
+	for rows.Next() {
+		var data []byte
+		if err := rows.Scan(&data); err != nil {
+			return nil, err
+		}
+		var run runhost.State
+		if err := json.Unmarshal(data, &run); err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+	return runs, rows.Err()
+}
+
 // FindRetainedEarnings returns every released timeout or dejon ledger row of the actor
 // with unpaid unconditional earnings, oldest first; FindPenalty's latest-row read
 // cannot see older balances. It is a plain read that precedes settlement; the

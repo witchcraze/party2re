@@ -154,20 +154,23 @@ type RoomDetail struct {
 
 // RoomSummary provides concise listing information.
 type RoomSummary struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	LeaderCharacterID string    `json:"leader_character_id"`
-	LeaderName        string    `json:"leader_name"`
-	Speed             int       `json:"speed"`
-	Stage             int       `json:"stage"`
-	CurrentMembers    int       `json:"current_members"`
-	MaxMembers        int       `json:"max_members"`
-	PrizePool         int       `json:"prize_pool"`
-	TargetWins        int       `json:"target_wins"`
-	HasPassword       bool      `json:"has_password"`
-	Status            string    `json:"status"`
-	Round             int       `json:"round"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	LeaderCharacterID string `json:"leader_character_id"`
+	LeaderName        string `json:"leader_name"`
+	// MemberNames lists the leader first, then members in join order (quest.cgi:98–106).
+	MemberNames    []string  `json:"member_names"`
+	Speed          int       `json:"speed"`
+	Stage          int       `json:"stage"`
+	CurrentMembers int       `json:"current_members"`
+	MaxMembers     int       `json:"max_members"`
+	PrizePool      int       `json:"prize_pool"`
+	TargetWins     int       `json:"target_wins"`
+	HasPassword    bool      `json:"has_password"`
+	NeedJoin       string    `json:"need_join,omitempty"`
+	Status         string    `json:"status"`
+	Round          int       `json:"round"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // RoundResolution represents the outcome of a GvG battle round.
@@ -195,4 +198,31 @@ type CreateRoomRequest struct {
 	MaxMembers int    `json:"max_members,omitempty"`
 	TargetWins int    `json:"target_wins,omitempty"`
 	NeedJoin   string `json:"need_join,omitempty"`
+}
+
+func newRoomSummary(d RoomDetail) RoomSummary {
+	names := []string{d.Room.LeaderName}
+	for _, m := range d.Members {
+		if m.CharacterID != d.Room.LeaderCharacterID {
+			names = append(names, m.CharacterName)
+		}
+	}
+	return RoomSummary{
+		ID:                d.Room.ID,
+		Name:              d.Room.Name,
+		LeaderCharacterID: d.Room.LeaderCharacterID,
+		LeaderName:        d.Room.LeaderName,
+		MemberNames:       names,
+		Speed:             d.Room.Speed,
+		Stage:             d.Room.Stage,
+		CurrentMembers:    len(d.Members),
+		MaxMembers:        d.Room.MaxMembers,
+		PrizePool:         d.Room.PrizePool,
+		TargetWins:        d.Room.TargetWins,
+		HasPassword:       d.Room.PasswordHash != "",
+		NeedJoin:          d.Room.NeedJoin,
+		Status:            d.Room.Status,
+		Round:             d.Room.Round,
+		CreatedAt:         d.Room.CreatedAt,
+	}
 }

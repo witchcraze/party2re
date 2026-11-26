@@ -3,6 +3,7 @@ package pvp_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -284,7 +285,7 @@ func TestColosseum_JoinAndLeaveRoom(t *testing.T) {
 		t.Fatalf("expected Bob (%s) promoted to leader with 200G pool, got room=%+v members=%+v", c2.Name, handed.Room, handed.Members)
 	}
 	listed, err := svc.ListRooms(ctx)
-	if err != nil || len(listed) != 1 || listed[0].LeaderCharacterID != c2.ID || listed[0].LeaderName != c2.Name {
+	if err != nil || len(listed) != 1 || listed[0].LeaderCharacterID != c2.ID || listed[0].LeaderName != c2.Name || !slices.Equal(listed[0].MemberNames, []string{c2.Name, c3.Name}) {
 		t.Fatalf("expected ListRooms to reflect new leader %s (%s), got %+v err=%v", c2.ID, c2.Name, listed, err)
 	}
 	outsider := createTestCharacter("outsider", "Outsider", 500)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -439,6 +440,9 @@ func TestJoinAndLeaveRoom(t *testing.T) {
 		}
 		if joined.Members[1].GuildColor != "#33CCFF" {
 			t.Errorf("expected joiner guild color #33CCFF, got %s", joined.Members[1].GuildColor)
+		}
+		if listed, err := svc.ListRooms(ctx); err != nil || len(listed) != 1 || !slices.Equal(listed[0].MemberNames, []string{"Leader", "Joiner"}) {
+			t.Fatalf("listed member names: %+v %v", listed, err)
 		}
 	})
 

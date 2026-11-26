@@ -261,6 +261,19 @@ func TestGameplayScenario_NormalAdventurePartyRun(t *testing.T) {
 	if observed.Scene.Data.Run == nil || observed.Scene.Data.Run.RunID != runID || len(observed.Scene.Data.Run.Actors) != 2 {
 		t.Fatalf("member does not observe the run: %+v", observed.Scene)
 	}
+	// An outsider at 冒険に出る sees the in-progress run's public row (quest.cgi:151–155).
+	watcherToken, watcher := a.register()
+	runs := a.enter(watcherToken, watcher, a.context(watcherToken, watcher), "quest").Scene.Data.Runs
+	if j := slices.IndexFunc(runs, func(r struct {
+		Name        string   `json:"name"`
+		StageName   string   `json:"stage_name"`
+		MemberNames []string `json:"member_names"`
+		MaxMembers  int      `json:"max_members"`
+	}) bool {
+		return r.Name == "scenario"
+	}); j < 0 || len(runs[j].MemberNames) != 2 || runs[j].MaxMembers != 4 || runs[j].StageName == "" {
+		t.Fatalf("run not listed: %+v", runs)
+	}
 	early := a.runCommand(memberToken, member, observed, "run_operation", map[string]any{"command_id": "m-advance", "operation": "advance"}, http.StatusForbidden)
 	if early.Error.Code != "RUN_FORBIDDEN" || early.Context.Scene.Data.Run.Version != observed.Scene.Data.Run.Version {
 		t.Fatalf("nonleader first advance: %+v", early)

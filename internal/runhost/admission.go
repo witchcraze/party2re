@@ -36,7 +36,7 @@ func (s *Service[R, P]) Enroll(ctx context.Context, player, key string, a Admiss
 	if strings.TrimSpace(key) == "" || len(key) > 128 {
 		return Receipt{}, ErrConflict
 	}
-	a.Generation, a.PartyID, a.CharacterIDs = "solo:"+a.ActorID+":"+key, "", []string{a.ActorID}
+	a.Generation, a.PartyID, a.CharacterIDs, a.MaxMembers = "solo:"+a.ActorID+":"+key, "", []string{a.ActorID}, 1
 	return s.enter(ctx, player, a)
 }
 

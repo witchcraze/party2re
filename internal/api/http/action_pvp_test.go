@@ -44,6 +44,10 @@ func (f *pvpLeaveFixture) LeaveRoom(ctx context.Context, actor, room string) err
 	return f.service.LeaveRoom(ctx, actor, room)
 }
 
+func (f *pvpLeaveFixture) ListRooms(ctx context.Context) ([]pvp.RoomSummary, error) {
+	return f.service.ListRooms(ctx)
+}
+
 func (f *pvpLeaveFixture) KickMember(ctx context.Context, roomID, leaderID, targetID string) (pvp.KickResult, error) {
 	f.executions++
 	if f.executionErr != nil {

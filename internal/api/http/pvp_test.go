@@ -75,6 +75,7 @@ func (s *stubColosseumPvPService) ListRooms(ctx context.Context) ([]pvp.RoomSumm
 			Name:              "Test Room",
 			LeaderCharacterID: "c1",
 			LeaderName:        "Hero",
+			MemberNames:       []string{"Hero"},
 			CurrentMembers:    1,
 			MaxMembers:        4,
 			Bet:               100,
