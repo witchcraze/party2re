@@ -67,55 +67,52 @@ func (s *Service) loadBoard(ctx context.Context, t RankingType) ([]CharacterRank
 	return board, nil
 }
 
-// getBoard pages a ranking.cgi board from its snapshot or, on a miss or request, from current data.
-func (s *Service) getBoard(ctx context.Context, t RankingType, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
+// getBoard pages a ranking.cgi board strictly from its published snapshot.
+func (s *Service) getBoard(ctx context.Context, t RankingType, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
-	page := RankingPage[CharacterRankingEntry]{RankingType: t, Limit: limit, Offset: offset}
-	if useSnapshot {
-		if entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, t, limit, offset); found {
-			page.Entries, page.Total, page.CalculatedAt, page.IsSnapshot = entries, total, calcTime, true
-			return page, nil
-		}
+	page := RankingPage[CharacterRankingEntry]{
+		RankingType: t,
+		Entries:     []CharacterRankingEntry{},
+		Limit:       limit,
+		Offset:      offset,
 	}
-	board, err := s.loadBoard(ctx, t)
-	if err != nil {
-		return RankingPage[CharacterRankingEntry]{}, err
+	if entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, t, limit, offset); found {
+		page.Entries, page.Total, page.CalculatedAt, page.IsSnapshot = entries, total, calcTime, true
 	}
-	page.Entries, page.Total, page.CalculatedAt = paginateSlice(board, limit, offset), len(board), s.nowFunc().UTC()
 	return page, nil
 }
 
 // GetPvPVictoryRanking returns the 王者 board (kill_p) by strong-opponent PvP defeats.
-func (s *Service) GetPvPVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	return s.getBoard(ctx, RankingTypePvPVictory, limit, offset, useSnapshot)
+func (s *Service) GetPvPVictoryRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
+	return s.getBoard(ctx, RankingTypePvPVictory, limit, offset)
 }
 
 // GetMonsterKillsRanking returns the 英雄 board (kill_m) by defeated strong enemies.
-func (s *Service) GetMonsterKillsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	return s.getBoard(ctx, RankingTypeMonsterKills, limit, offset, useSnapshot)
+func (s *Service) GetMonsterKillsRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
+	return s.getBoard(ctx, RankingTypeMonsterKills, limit, offset)
 }
 
 // GetMaoCountRanking returns the 魔王 board (mao_c) by unsealed demon king defeats.
-func (s *Service) GetMaoCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	return s.getBoard(ctx, RankingTypeMaoCount, limit, offset, useSnapshot)
+func (s *Service) GetMaoCountRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
+	return s.getBoard(ctx, RankingTypeMaoCount, limit, offset)
 }
 
 // GetHeroCountRanking returns the 勇者 board (hero_c) by hero achievements.
-func (s *Service) GetHeroCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	return s.getBoard(ctx, RankingTypeHeroCount, limit, offset, useSnapshot)
+func (s *Service) GetHeroCountRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
+	return s.getBoard(ctx, RankingTypeHeroCount, limit, offset)
 }
 
 // GetCasinoWinsRanking returns the 勝負師 board (cas_c) by casino showdown wins.
-func (s *Service) GetCasinoWinsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	return s.getBoard(ctx, RankingTypeCasinoWins, limit, offset, useSnapshot)
+func (s *Service) GetCasinoWinsRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
+	return s.getBoard(ctx, RankingTypeCasinoWins, limit, offset)
 }
 
 // GetHelperRanking returns the 手助け board (help_c) by completed helper quests.
-func (s *Service) GetHelperRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	return s.getBoard(ctx, RankingTypeHelper, limit, offset, useSnapshot)
+func (s *Service) GetHelperRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
+	return s.getBoard(ctx, RankingTypeHelper, limit, offset)
 }
 
 // GetAlchemyRanking returns the 錬金 board (alc_c) by alchemy syntheses.
-func (s *Service) GetAlchemyRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	return s.getBoard(ctx, RankingTypeAlchemy, limit, offset, useSnapshot)
+func (s *Service) GetAlchemyRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
+	return s.getBoard(ctx, RankingTypeAlchemy, limit, offset)
 }

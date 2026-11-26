@@ -24,7 +24,6 @@ type ActivityRankingRepository interface {
 	GetHelperRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetCasinoWinsRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetAlchemyRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
-	GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 }
 
 // CharacterRankingRepository composes data access operations for individual character leaderboards.

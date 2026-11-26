@@ -122,11 +122,6 @@ func (r *RankingRepository) GetActiveWeeklyJobChangeRanking(ctx context.Context,
 	return entries, total, nil
 }
 
-// GetWeeklyJobChangeRanking implements CharacterRankingRepository.
-func (r *RankingRepository) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
-	return r.GetActiveWeeklyJobChangeRanking(ctx, limit, offset)
-}
-
 // ResetWeeklyJobChanges clears all active weekly job change counts upon Sunday midnight rotation.
 func (r *RankingRepository) ResetWeeklyJobChanges(ctx context.Context) error {
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, "DELETE FROM weekly_job_changes")

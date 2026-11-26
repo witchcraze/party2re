@@ -125,14 +125,7 @@ cancellation, not automatic replay. Worker logs persistence/cleanup errors; Save
 returns them to direct callers. These guarantees concern scheduling metadata,
 not exactly-once feature execution or lossless SQL/Valkey settlement across a crash.
 
-Weekly ranking wake-ups use actor `ranking:weekly` and IDs with a JST-date prefix
-and fresh enqueue-attempt suffix within these existing scheduled keys. Their durable next boundary is owned by MariaDB
-`ranking_snapshots.weekly_rotation_due`, advanced atomically with counter settlement.
-Startup reconciles SQL directly and restores a missing future reservation, rather
-than replaying uncertain Processing actions. Queue discovery/enqueue errors are
-reported after SQL reconciliation; restarting or explicitly retrying that feature
-reconciliation repairs recurrence without repeating a committed settlement. See
-[ranking design](../design/ranking.md#weekly-job-change-ranking).
+Daily ranking publication wake-ups (`party2:ranking:refresh`) use actor `ranking:daily` and IDs `ranking:daily_refresh:<YYYY-MM-DD>:<nonce>` for **00:00 JST**, reconciled on startup and worker ticks against MariaDB `ranking_snapshots.calculated_at` to publish missing or pre-boundary snapshots and restore lost Valkey reservations. Weekly ranking wake-ups use actor `ranking:weekly` and IDs with a JST-date prefix and fresh enqueue-attempt suffix within these existing scheduled keys. Their durable next boundary is owned by MariaDB `ranking_snapshots.weekly_rotation_due`, advanced atomically with counter settlement. Startup reconciles SQL directly and restores a missing future reservation, rather than replaying uncertain Processing actions. Queue discovery/enqueue errors are reported after SQL reconciliation; restarting or explicitly retrying that feature reconciliation repairs recurrence without repeating a committed settlement. See [ranking design](../design/ranking.md#weekly-job-change-ranking).
 
 ## Approved navigation storage boundary
 

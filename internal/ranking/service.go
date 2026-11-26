@@ -94,27 +94,27 @@ func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
 	return s, nil
 }
 
-// GetRankingByType retrieves ranking for a dynamic type string.
-func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType, limit, offset int, useSnapshot bool) (any, error) {
+// GetRankingByType retrieves the published ranking for a dynamic type string.
+func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType, limit, offset int) (any, error) {
 	switch NormalizeRankingType(rankingType) {
 	case RankingTypePvPVictory:
-		return s.GetPvPVictoryRanking(ctx, limit, offset, useSnapshot)
+		return s.GetPvPVictoryRanking(ctx, limit, offset)
 	case RankingTypeJobPopularity:
-		return s.GetJobPopularityRanking(ctx, useSnapshot)
+		return s.GetJobPopularityRanking(ctx)
 	case RankingTypeHelper:
-		return s.GetHelperRanking(ctx, limit, offset, useSnapshot)
+		return s.GetHelperRanking(ctx, limit, offset)
 	case RankingTypeCasinoWins:
-		return s.GetCasinoWinsRanking(ctx, limit, offset, useSnapshot)
+		return s.GetCasinoWinsRanking(ctx, limit, offset)
 	case RankingTypeAlchemy:
-		return s.GetAlchemyRanking(ctx, limit, offset, useSnapshot)
+		return s.GetAlchemyRanking(ctx, limit, offset)
 	case RankingTypeWeeklyJobChange:
-		return s.GetWeeklyJobChangeRanking(ctx, limit, offset, useSnapshot)
+		return s.GetWeeklyJobChangeRanking(ctx, limit, offset)
 	case RankingTypeMonsterKills:
-		return s.GetMonsterKillsRanking(ctx, limit, offset, useSnapshot)
+		return s.GetMonsterKillsRanking(ctx, limit, offset)
 	case RankingTypeMaoCount:
-		return s.GetMaoCountRanking(ctx, limit, offset, useSnapshot)
+		return s.GetMaoCountRanking(ctx, limit, offset)
 	case RankingTypeHeroCount:
-		return s.GetHeroCountRanking(ctx, limit, offset, useSnapshot)
+		return s.GetHeroCountRanking(ctx, limit, offset)
 	default:
 		return nil, ErrInvalidRankingType
 	}

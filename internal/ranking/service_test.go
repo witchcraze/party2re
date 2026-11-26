@@ -185,13 +185,6 @@ func (m *mockRankingRepository) GetAlchemyRanking(ctx context.Context, limit, of
 	return paginateSlice(m.alchemyRankings, limit, offset), m.alchemyTotal, nil
 }
 
-func (m *mockRankingRepository) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
-	if m.err != nil {
-		return nil, 0, m.err
-	}
-	return paginateSlice(m.weeklyJobChangeRankings, limit, offset), m.weeklyJobChangeTotal, nil
-}
-
 func (m *mockRankingRepository) IncrementJobChangeCount(ctx context.Context, characterID string) error {
 	if m.err != nil {
 		return m.err
@@ -304,30 +297,39 @@ func TestService_GetAuthenticCombatRankings(t *testing.T) {
 	svc, _ := ranking.NewService(repo)
 	ctx := context.Background()
 
+	// Before snapshots are published, public queries return empty (never live data).
+	if mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0); err != nil || mkPage.Total != 0 || len(mkPage.Entries) != 0 || mkPage.IsSnapshot {
+		t.Fatalf("expected empty unpublished monster kills page, got %+v, %v", mkPage, err)
+	}
+
+	if err := svc.RefreshAllSnapshots(ctx); err != nil {
+		t.Fatalf("RefreshAllSnapshots failed: %v", err)
+	}
+
 	// Monster Kills (kill_m / 英雄ランキング)
-	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, false)
+	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error for monster kills: %v", err)
 	}
-	if mkPage.Total != 2 || mkPage.Entries[0].Score != 150 {
+	if !mkPage.IsSnapshot || mkPage.Total != 2 || mkPage.Entries[0].Score != 150 {
 		t.Fatalf("unexpected monster kills result: %+v", mkPage)
 	}
 
 	// Mao Count (mao_c / 魔王ランキング)
-	maoPage, err := svc.GetMaoCountRanking(ctx, 10, 0, false)
+	maoPage, err := svc.GetMaoCountRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error for mao count: %v", err)
 	}
-	if maoPage.Total != 1 || maoPage.Entries[0].Score != 5 {
+	if !maoPage.IsSnapshot || maoPage.Total != 1 || maoPage.Entries[0].Score != 5 {
 		t.Fatalf("unexpected mao count result: %+v", maoPage)
 	}
 
 	// Hero Count (hero_c / 勇者ランキング)
-	heroPage, err := svc.GetHeroCountRanking(ctx, 10, 0, false)
+	heroPage, err := svc.GetHeroCountRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error for hero count: %v", err)
 	}
-	if heroPage.Total != 1 || heroPage.Entries[0].Score != 12 {
+	if !heroPage.IsSnapshot || heroPage.Total != 1 || heroPage.Entries[0].Score != 12 {
 		t.Fatalf("unexpected hero count result: %+v", heroPage)
 	}
 }
@@ -342,11 +344,21 @@ func TestService_GetJobPopularity(t *testing.T) {
 	svc, _ := ranking.NewService(repo)
 	ctx := context.Background()
 
-	popPage, err := svc.GetJobPopularityRanking(ctx, false)
+	// Unpublished job popularity returns empty (never live reads).
+	unpublished, err := svc.GetJobPopularityRanking(ctx)
+	if err != nil || unpublished.Total != 0 || len(unpublished.Entries) != 0 || unpublished.IsSnapshot {
+		t.Fatalf("expected empty unpublished popularity page, got %+v, %v", unpublished, err)
+	}
+
+	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeJobPopularity); err != nil {
+		t.Fatalf("RefreshSnapshot(job_popularity) failed: %v", err)
+	}
+
+	popPage, err := svc.GetJobPopularityRanking(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if popPage.Total != 2 || popPage.Entries[0].JobID != "warrior" {
+	if !popPage.IsSnapshot || popPage.Total != 2 || popPage.Entries[0].JobID != "warrior" {
 		t.Fatalf("unexpected popularity page: %+v", popPage)
 	}
 }
@@ -360,8 +372,11 @@ func TestService_GetRankingByType(t *testing.T) {
 
 	svc, _ := ranking.NewService(repo)
 	ctx := context.Background()
+	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeMonsterKills); err != nil {
+		t.Fatalf("RefreshSnapshot failed: %v", err)
+	}
 
-	res, err := svc.GetRankingByType(ctx, ranking.RankingTypeMonsterKills, 10, 0, false)
+	res, err := svc.GetRankingByType(ctx, ranking.RankingTypeMonsterKills, 10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -370,7 +385,7 @@ func TestService_GetRankingByType(t *testing.T) {
 		t.Fatalf("unexpected type/content: %+v", res)
 	}
 
-	_, err = svc.GetRankingByType(ctx, ranking.RankingType("non_existent"), 10, 0, false)
+	_, err = svc.GetRankingByType(ctx, ranking.RankingType("non_existent"), 10, 0)
 	if err != ranking.ErrInvalidRankingType {
 		t.Fatalf("expected ErrInvalidRankingType, got %v", err)
 	}
@@ -466,7 +481,7 @@ func TestService_SnapshotDatabaseFallback_OnCacheMiss(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Character ranking snapshot DB fallback
-	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
+	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error for monster kills ranking: %v", err)
 	}
@@ -479,7 +494,7 @@ func TestService_SnapshotDatabaseFallback_OnCacheMiss(t *testing.T) {
 
 	// 2. Second read hits in-memory cache (modify repo snapshot to verify memory cache is used)
 	delete(repo.snapshots, ranking.RankingTypeMonsterKills)
-	cachedMKPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
+	cachedMKPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error for cached monster kills ranking: %v", err)
 	}
@@ -488,57 +503,12 @@ func TestService_SnapshotDatabaseFallback_OnCacheMiss(t *testing.T) {
 	}
 
 	// 3. Job popularity ranking snapshot DB fallback
-	jobPopPage, err := svc.GetJobPopularityRanking(ctx, true)
+	jobPopPage, err := svc.GetJobPopularityRanking(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error for job popularity: %v", err)
 	}
 	if !jobPopPage.IsSnapshot || jobPopPage.Total != 1 || jobPopPage.Entries[0].JobID != "hero" {
 		t.Fatalf("expected snapshot fallback for job popularity, got %+v", jobPopPage)
-	}
-}
-
-func TestService_WarmupCache(t *testing.T) {
-	repo := newMockRepo()
-	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
-
-	repo.snapshots[ranking.RankingTypeMonsterKills] = ranking.RankingSnapshot{
-		RankingType:  ranking.RankingTypeMonsterKills,
-		SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":99}]`,
-		TotalCount:   1,
-		CalculatedAt: fixedTime,
-		UpdatedAt:    fixedTime,
-	}
-	repo.snapshots[ranking.RankingTypeJobPopularity] = ranking.RankingSnapshot{
-		RankingType:  ranking.RankingTypeJobPopularity,
-		SnapshotData: `[{"rank":1,"job_id":"hero","total_count":10,"percentage":100.0}]`,
-		TotalCount:   1,
-		CalculatedAt: fixedTime,
-		UpdatedAt:    fixedTime,
-	}
-
-	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	ctx := context.Background()
-
-	// Warmup cache
-	if err := svc.WarmupCache(ctx); err != nil {
-		t.Fatalf("failed to warmup cache: %v", err)
-	}
-
-	// Delete from repo to verify all snapshots are served purely from in-memory cache
-	repo.snapshots = make(map[ranking.RankingType]ranking.RankingSnapshot)
-
-	mk, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
-	if err != nil || !mk.IsSnapshot || mk.Total != 1 {
-		t.Fatalf("expected monster kills ranking from prewarmed cache, got %+v (err: %v)", mk, err)
-	}
-
-	pop, err := svc.GetJobPopularityRanking(ctx, true)
-	if err != nil || !pop.IsSnapshot || pop.Total != 1 {
-		t.Fatalf("expected job popularity ranking from prewarmed cache, got %+v (err: %v)", pop, err)
 	}
 }
 

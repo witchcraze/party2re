@@ -6,25 +6,24 @@ Rankings (`internal/ranking`; legacy `ranking.cgi`, `job_ranking.cgi`, `week_ran
 
 ## `ranking.cgi` boards
 
-**Decision (#2540): legacy board content.** Each of the seven boards holds only the top 10 characters; `limit`/`offset` page within that board and `total` is its size. As in `party2/login.cgi` `write_ranking`, `kill_m` skips the characters on the `kill_p` board and `hero_c` skips those on the `mao_c` board, so one leader never occupies both boards of a pair.
+**Decision (#2540): legacy board content.** Each of the seven boards holds only the top 10 characters; `kill_m` skips the characters on the `kill_p` board and `hero_c` skips those on the `mao_c` board so one leader never occupies both boards of a pair (with ten or fewer characters, `kill_m` and `hero_c` are empty). Legacy ties follow unspecified directory-read order, so Go's tie order is a native choice.
 
-- The skipped set is the leading board's top 10 regardless of score, so with ten or fewer characters `kill_m` and `hero_c` are empty.
-- Legacy ties follow unspecified directory-read order, so Go's tie order is a native choice.
+**Decision (#2801): daily JST midnight publication.** Legacy `party2/login.cgi:11,112–114` republishes the boards on login when `player_list.html` is at least one day old (`$update_cycle_day = 1`) and `ranking.cgi` reads only those files. Go deliberately departs from the login-driven trigger by publishing once a day at **00:00 JST** via `party2:ranking:refresh` (reconciling missing or pre-boundary snapshots on startup/recovery). Public reads return only published snapshots (empty before initial publication) and never query live counters.
 
 ## Weekly job-change ranking
 
-**Legacy timing.** `party2/login.cgi:14,112–120` rotates on a login when `log/week_ranking.cgi` is at least seven elapsed days old, and only when neither daily maintenance branch runs; `login.cgi:482–487` publishes and clears the active counts; `week_ranking.cgi:17–36` reads them. There is no calendar anchor, and delayed logins or maintenance extend the period beyond seven days.
+**Legacy timing.** `party2/login.cgi:14,112–120` rotates on a login when `log/week_ranking.cgi` is at least seven elapsed days old, and only when neither daily maintenance branch runs; `week_ranking.cgi` reads only that published file. There is no calendar anchor, and delayed logins or maintenance extend the period beyond seven days.
 
 **Decision (#1252, 2026-10-11): JST Sunday midnight with one consolidated delayed rotation.** This deliberately departs from the drifting login-dependent rule; scheduling seven days after each actual rotation was considered and rejected.
 
 - Weeks are `[Sunday 00:00 JST, next Sunday 00:00 JST)`, independent of host or player timezone.
 - The effective cutoff is when the rotation takes its exclusive lock, not individual event times; writes admitted before it close in the old week. Exact event-time partitioning is not claimed.
 - After downtime, all active counts are finalized once at recovery, including writes after the missed boundary. Separate results for missed weeks are never fabricated, and the next rotation is the first Sunday strictly after recovery.
-- A restart, duplicate action or retry for a settled boundary never rotates again. A failed rotation keeps its counts and the previous snapshot. A rotation with empty counts keeps a nonempty previous snapshot and still advances the deadline. The atomic rotation and writer isolation of #1242 apply.
+- Reads return only the finalized previous-week snapshot (empty before the first rotation; #2801).
 
 ## Job popularity
 
-Each job change credits floor(previous level × 0.5) points to the **previous** job and the character's gender (`lib/job_change.cgi:319`), inside the job-change transaction. **Decision:** past job changes cannot be reconstructed, so popularity starts at zero and accumulates only from changes after migration 097.
+**Decisions:** Past job changes cannot be reconstructed, so popularity starts at zero and accumulates only from changes after migration 097. Unlike legacy `job_ranking.cgi` (updated immediately on job change because its per-job log is small), Go publishes `job_popularity` in the same daily **00:00 JST** snapshot (`#2801`) so no public ranking endpoint exposes live reads.
 
 ## Hall of fame
 

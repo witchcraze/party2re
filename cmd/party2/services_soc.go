@@ -223,7 +223,6 @@ func (s *socServices) registerWorkerHandlers(activityService *activity.Service, 
 		if activityService != nil {
 			s.worker.RegisterHandler(activity.ActivityActionTypeTrainingComplete, activity.NewTrainingHandler(activityService))
 		}
-		s.worker.RegisterHandler(ranking.RankingActionTypeRefresh, ranking.NewRefreshHandler(s.ranking))
 		if chapelService != nil {
 			s.worker.RegisterHandler(chapel.ActionTypeChapelReset, chapel.NewResetHandler(chapelService, chapel.WithScheduler(s.sched)))
 		}

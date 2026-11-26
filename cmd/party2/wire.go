@@ -56,6 +56,12 @@ func wireApp(
 		return nil, err
 	}
 	soc.worker.RegisterHandler(ranking.RankingActionTypeRotateWeekly, weekly)
+	daily := ranking.NewRefreshHandler(soc.ranking, ranking.WithRefreshScheduler(soc.sched))
+	if err := daily.Reconcile(context.Background()); err != nil {
+		return nil, err
+	}
+	soc.worker.RegisterHandler(ranking.RankingActionTypeRefresh, daily)
+	soc.worker.RegisterReconciler(ranking.RankingActionTypeRefresh, daily.Reconcile)
 	soc.home.SetCompanionPhraseLimit(cfg.Home.CompanionPhraseLimit)
 	soc.home.SetLetterLimits(cfg.Home.LetterLogLimit, cfg.Home.LetterMaxLength)
 	home.WithBaseSleepDuration(cfg.Home.SleepBase)(soc.home)

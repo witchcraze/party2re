@@ -31,31 +31,31 @@ type mockHTTPRankingService struct {
 	refreshedAll      bool
 }
 
-func (m *mockHTTPRankingService) GetMonsterKillsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+func (m *mockHTTPRankingService) GetMonsterKillsRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.monsterKillsPage, nil
 }
-func (m *mockHTTPRankingService) GetMaoCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+func (m *mockHTTPRankingService) GetMaoCountRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.maoCountPage, nil
 }
-func (m *mockHTTPRankingService) GetHeroCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+func (m *mockHTTPRankingService) GetHeroCountRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.heroCountPage, nil
 }
-func (m *mockHTTPRankingService) GetPvPVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+func (m *mockHTTPRankingService) GetPvPVictoryRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.pvpVictoryPage, nil
 }
-func (m *mockHTTPRankingService) GetJobPopularityRanking(ctx context.Context, useSnapshot bool) (ranking.RankingPage[ranking.JobPopularityEntry], error) {
+func (m *mockHTTPRankingService) GetJobPopularityRanking(ctx context.Context) (ranking.RankingPage[ranking.JobPopularityEntry], error) {
 	return m.jobPopularityPage, nil
 }
-func (m *mockHTTPRankingService) GetHelperRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+func (m *mockHTTPRankingService) GetHelperRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.helperPage, nil
 }
-func (m *mockHTTPRankingService) GetCasinoWinsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+func (m *mockHTTPRankingService) GetCasinoWinsRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.casinoWinsPage, nil
 }
-func (m *mockHTTPRankingService) GetAlchemyRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+func (m *mockHTTPRankingService) GetAlchemyRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.alchemyPage, nil
 }
-func (m *mockHTTPRankingService) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+func (m *mockHTTPRankingService) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.weeklyJobPage, nil
 }
 func (m *mockHTTPRankingService) GetLegends(ctx context.Context) ([]ranking.LegendCategoryInfo, error) {
@@ -72,7 +72,7 @@ func (m *mockHTTPRankingService) GetLegendCategory(ctx context.Context, category
 	}
 	return ranking.LegendCategoryPage{Category: category}, nil
 }
-func (m *mockHTTPRankingService) GetRankingByType(ctx context.Context, rankingType ranking.RankingType, limit, offset int, useSnapshot bool) (any, error) {
+func (m *mockHTTPRankingService) GetRankingByType(ctx context.Context, rankingType ranking.RankingType, limit, offset int) (any, error) {
 	switch ranking.NormalizeRankingType(rankingType) {
 	case ranking.RankingTypePvPVictory:
 		return m.pvpVictoryPage, nil
@@ -201,16 +201,16 @@ func TestRankingEndpoints(t *testing.T) {
 		checkBody  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
-			name:       "GET /rankings/monster-kills",
+			name:       "GET /rankings/monster-kills (snapshot=false ignored)",
 			method:     http.MethodGet,
-			url:        "/rankings/monster-kills?limit=10&offset=0&snapshot=true",
+			url:        "/rankings/monster-kills?limit=10&offset=0&snapshot=false",
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				var res ranking.RankingPage[ranking.CharacterRankingEntry]
 				if err := json.NewDecoder(rr.Body).Decode(&res); err != nil {
 					t.Fatalf("decode failed: %v", err)
 				}
-				if res.Total != 1 || len(res.Entries) != 1 || res.Entries[0].CharacterName != "Hero" || res.Entries[0].Score != 42 {
+				if !res.IsSnapshot || res.Total != 1 || len(res.Entries) != 1 || res.Entries[0].CharacterName != "Hero" || res.Entries[0].Score != 42 {
 					t.Fatalf("unexpected body: %+v", res)
 				}
 			},

@@ -5,37 +5,26 @@ import (
 	"errors"
 )
 
-// GetJobPopularityRanking returns distribution statistics for all jobs.
-func (s *Service) GetJobPopularityRanking(ctx context.Context, useSnapshot bool) (RankingPage[JobPopularityEntry], error) {
-	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedJobPopularityRanking(ctx)
-		if found {
-			return RankingPage[JobPopularityEntry]{
-				RankingType:  RankingTypeJobPopularity,
-				Entries:      entries,
-				Total:        total,
-				Limit:        len(entries),
-				Offset:       0,
-				CalculatedAt: calcTime,
-				IsSnapshot:   true,
-			}, nil
+// GetJobPopularityRanking returns distribution statistics for all jobs from the published snapshot.
+func (s *Service) GetJobPopularityRanking(ctx context.Context) (RankingPage[JobPopularityEntry], error) {
+	if entries, total, calcTime, found := s.getCachedJobPopularityRanking(ctx); found {
+		if entries == nil {
+			entries = []JobPopularityEntry{}
 		}
+		return RankingPage[JobPopularityEntry]{
+			RankingType:  RankingTypeJobPopularity,
+			Entries:      entries,
+			Total:        total,
+			Limit:        len(entries),
+			Offset:       0,
+			CalculatedAt: calcTime,
+			IsSnapshot:   true,
+		}, nil
 	}
 
-	entries, err := s.repo.GetJobPopularityRanking(ctx)
-	if err != nil {
-		return RankingPage[JobPopularityEntry]{}, err
-	}
-
-	now := s.nowFunc().UTC()
 	return RankingPage[JobPopularityEntry]{
-		RankingType:  RankingTypeJobPopularity,
-		Entries:      entries,
-		Total:        len(entries),
-		Limit:        len(entries),
-		Offset:       0,
-		CalculatedAt: now,
-		IsSnapshot:   false,
+		RankingType: RankingTypeJobPopularity,
+		Entries:     []JobPopularityEntry{},
 	}, nil
 }
 

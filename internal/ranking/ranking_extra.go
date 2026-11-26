@@ -10,6 +10,17 @@ import (
 
 var jstLocation = time.FixedZone("Asia/Tokyo", 9*60*60)
 
+// NextMidnightJST returns the next 00:00:00 JST strictly after t, in UTC.
+func NextMidnightJST(t time.Time) time.Time {
+	inJST := t.In(jstLocation)
+	return time.Date(inJST.Year(), inJST.Month(), inJST.Day()+1, 0, 0, 0, 0, jstLocation).UTC()
+}
+
+func currentDailyBoundaryJST(t time.Time) time.Time {
+	inJST := t.In(jstLocation)
+	return time.Date(inJST.Year(), inJST.Month(), inJST.Day(), 0, 0, 0, 0, jstLocation).UTC()
+}
+
 // NextSundayMidnightJST calculates the next Sunday 00:00:00 JST occurrence strictly after t.
 func NextSundayMidnightJST(t time.Time) time.Time {
 	inJST := t.In(jstLocation)
@@ -21,38 +32,26 @@ func NextSundayMidnightJST(t time.Time) time.Time {
 	return midnight.UTC()
 }
 
-// GetWeeklyJobChangeRanking returns character rankings sorted by weekly job change counts.
-func (s *Service) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
+// GetWeeklyJobChangeRanking returns the finalized previous-week job change ranking snapshot.
+func (s *Service) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
-	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeWeeklyJobChange, limit, offset)
-		if found {
-			return RankingPage[CharacterRankingEntry]{
-				RankingType:  RankingTypeWeeklyJobChange,
-				Entries:      entries,
-				Total:        total,
-				Limit:        limit,
-				Offset:       offset,
-				CalculatedAt: calcTime,
-				IsSnapshot:   true,
-			}, nil
-		}
+	if entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeWeeklyJobChange, limit, offset); found {
+		return RankingPage[CharacterRankingEntry]{
+			RankingType:  RankingTypeWeeklyJobChange,
+			Entries:      entries,
+			Total:        total,
+			Limit:        limit,
+			Offset:       offset,
+			CalculatedAt: calcTime,
+			IsSnapshot:   true,
+		}, nil
 	}
 
-	entries, total, err := s.repo.GetWeeklyJobChangeRanking(ctx, limit, offset)
-	if err != nil {
-		return RankingPage[CharacterRankingEntry]{}, err
-	}
-
-	now := s.nowFunc().UTC()
 	return RankingPage[CharacterRankingEntry]{
-		RankingType:  RankingTypeWeeklyJobChange,
-		Entries:      entries,
-		Total:        total,
-		Limit:        limit,
-		Offset:       offset,
-		CalculatedAt: now,
-		IsSnapshot:   false,
+		RankingType: RankingTypeWeeklyJobChange,
+		Entries:     []CharacterRankingEntry{},
+		Limit:       limit,
+		Offset:      offset,
 	}, nil
 }
 

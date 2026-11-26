@@ -68,20 +68,20 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 	return nil
 }
 
-// RefreshAllSnapshots recalculates and updates snapshots for all supported ranking types.
-func (s *Service) RefreshAllSnapshots(ctx context.Context) error {
-	types := []RankingType{
-		RankingTypePvPVictory,
-		RankingTypeJobPopularity,
-		RankingTypeHelper,
-		RankingTypeCasinoWins,
-		RankingTypeAlchemy,
-		RankingTypeMonsterKills,
-		RankingTypeMaoCount,
-		RankingTypeHeroCount,
-	}
+var dailyRefreshTypes = []RankingType{
+	RankingTypePvPVictory,
+	RankingTypeJobPopularity,
+	RankingTypeHelper,
+	RankingTypeCasinoWins,
+	RankingTypeAlchemy,
+	RankingTypeMonsterKills,
+	RankingTypeMaoCount,
+	RankingTypeHeroCount,
+}
 
-	for _, t := range types {
+// RefreshAllSnapshots recalculates and updates snapshots for all daily-published ranking types.
+func (s *Service) RefreshAllSnapshots(ctx context.Context) error {
+	for _, t := range dailyRefreshTypes {
 		if err := s.RefreshSnapshot(ctx, t); err != nil {
 			return err
 		}
@@ -100,37 +100,4 @@ func (s *Service) GetSnapshot(ctx context.Context, rankingType RankingType) (Ran
 // GetAllSnapshots retrieves all raw persistent snapshots from the database repository.
 func (s *Service) GetAllSnapshots(ctx context.Context) (map[RankingType]RankingSnapshot, error) {
 	return s.repo.GetAllSnapshots(ctx)
-}
-
-// WarmupCache preloads all persistent snapshots from the database repository into the in-memory cache and Valkey cache.
-func (s *Service) WarmupCache(ctx context.Context) error {
-	snapshots, err := s.repo.GetAllSnapshots(ctx)
-	if err != nil {
-		return err
-	}
-	now := s.nowFunc().UTC()
-	for rankingType, snapshot := range snapshots {
-		if !IsValidRankingType(rankingType) || snapshot.SnapshotData == "" {
-			continue
-		}
-		parsedData, err := unmarshalSnapshotData(rankingType, snapshot.SnapshotData)
-		if err != nil {
-			continue
-		}
-
-		if parsedData != nil {
-			s.mu.Lock()
-			s.cache[rankingType] = cacheEntry{
-				data:      parsedData,
-				total:     snapshot.TotalCount,
-				expiresAt: now.Add(s.cacheTTL),
-				updatedAt: snapshot.CalculatedAt,
-			}
-			s.mu.Unlock()
-			if s.valkeyCache != nil {
-				_ = s.valkeyCache.Set(ctx, rankingType, snapshot, s.cacheTTL)
-			}
-		}
-	}
-	return nil
 }
