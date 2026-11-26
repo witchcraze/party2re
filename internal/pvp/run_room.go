@@ -34,6 +34,9 @@ func (room matchRoom) Open(ctx context.Context, r *Run) (func(context.Context) e
 		return nil, ErrTransitionConflict
 	}
 	r.Teams, r.TargetWins, r.Pool, r.Wins = true, t.Detail.Room.TargetWins, t.Detail.Room.PrizePool, map[string]int{}
+	// vs_player doubles created field durations (_battle.cgi:1615) and still
+	// exercises named-field tails with npc_turn disabled (_battle.cgi:1718).
+	r.Battle.Fields.DoubleTurns, r.Battle.Fields.ExerciseWithoutResponse = true, true
 	for _, m := range t.Detail.Members {
 		a := r.Actor(m.CharacterID)
 		if a == nil {

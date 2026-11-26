@@ -30,6 +30,8 @@ func (s *RunService) OpenSealingRooms(ctx context.Context, partyName string, uns
 		if _, err := s.Open(ctx, slot(stage.ID), a, func(r *Run) {
 			// make_vs_king writes round 1: the room is a running battle from the start.
 			r.Round, r.Leader, r.Battle.Actors = 1, leader, roster
+			// vs_king doubles created field durations (_battle.cgi:1615).
+			r.Battle.Fields.DoubleTurns = true
 			for _, e := range roster {
 				r.Enemies = append(r.Enemies, e.ID)
 			}

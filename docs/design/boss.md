@@ -24,5 +24,4 @@ The trigger is every stage19 ordinary floor-11 treasure creation ([Adventure](ad
 
 - Joining, room commands, observations and the listing (join for an open room, watch-only for a full or sealed one, `quest.cgi:149–153`) have no transport yet (#2783).
 - The king2 and king5 leaders carry NPC jobs 101 and 96, which have no callback table, so those rooms reject commands once the leader responds (#2789).
-- Fields created in a sealing battle do not last twice as long (`_battle.cgi:1615`; #2787).
 - Unseal news of a batch crawl or solo normal run has an empty party name (#2757).
