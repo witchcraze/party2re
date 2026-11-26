@@ -241,24 +241,3 @@ func TestParseTrustedProxies(t *testing.T) {
 		}
 	})
 }
-
-func TestWithTrustedProxiesFromEnv(t *testing.T) {
-	t.Setenv("TEST_TRUSTED_PROXIES", "127.0.0.1/32, 10.0.0.0/8")
-
-	h := &Handler{}
-	opt := WithTrustedProxiesFromEnv("TEST_TRUSTED_PROXIES")
-	opt(h)
-
-	if len(h.trustedProxies) != 2 {
-		t.Fatalf("expected 2 trusted proxy prefixes, got %d", len(h.trustedProxies))
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.RemoteAddr = "127.0.0.1:12345"
-	req.Header.Set("X-Forwarded-For", "203.0.113.5")
-
-	got := h.extractClientIP(req)
-	if got != "203.0.113.5" {
-		t.Fatalf("expected 203.0.113.5, got %s", got)
-	}
-}

@@ -929,24 +929,6 @@ func TestCORS_ParseCORSOrigins(t *testing.T) {
 	}
 }
 
-func TestCORS_WithAllowedOriginsFromEnv(t *testing.T) {
-	t.Setenv("TEST_CORS_ORIGINS", "https://env.party2.game, https://localhost:4000")
-	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
-		apihttp.WithAllowedOriginsFromEnv("TEST_CORS_ORIGINS"),
-	)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	req.Header.Set("Origin", "https://env.party2.game")
-	h.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://env.party2.game" {
-		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "https://env.party2.game")
-	}
-}
-
 func TestPlayerDeletionEndpoints(t *testing.T) {
 	var deletedPlayerID string
 	playerSvc := &stubPlayerService{

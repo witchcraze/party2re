@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strconv"
 	"strings"
 	"testing"
@@ -212,7 +213,7 @@ func TestRateLimitMiddleware_TrustedProxyForwardingHonorsClientIP(t *testing.T) 
 
 	handler := newTestHandler(t, playerSvc, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
 		apihttp.WithRateLimiter(memLimiter, cfg),
-		apihttp.WithTrustedProxyCIDRs("10.0.0.0/8"),
+		apihttp.WithTrustedProxies(netip.MustParsePrefix("10.0.0.0/8")),
 	)
 	router := handler.Router()
 
