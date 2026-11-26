@@ -3,6 +3,7 @@ package casino_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/casino"
@@ -28,15 +29,82 @@ func TestCasinoRoomLobby(t *testing.T) {
 
 	// 1. Create room validation errors
 	t.Run("Room Name Validation", func(t *testing.T) {
-		_, err := svc.CreateRoom(ctx, charLeader, casino.CreateRoomRequest{
-			Name:       "Bad Room Name", // space is illegal
+		invalidNames := []string{
+			"",
+			"   ",
+			"  Poker  ",
+			" Poker",
+			"Poker ",
+			"Bad Room Name",
+			"Bad\tRoom",
+			"Bad\nRoom",
+			"カジノ　部屋",
+			"　Poker",
+			"Poker　",
+			"room\u00A0name",
+			strings.Repeat("あ", 51),
+			"room,1",
+			"room;1",
+			`room"1`,
+			"room'1",
+			"room&1",
+			"room<1>",
+			`room\1`,
+			"room/1",
+			"room@1",
+			"＠カジノ",
+			"room\x001",
+			"room\u200B1",
+			"room\u202E1",
+			"Z\u0300\u0301\u0302",
+		}
+		for _, name := range invalidNames {
+			if err := casino.ValidateRoomName(name); !errors.Is(err, casino.ErrInvalidRoomName) {
+				t.Errorf("ValidateRoomName(%q) = %v, want ErrInvalidRoomName", name, err)
+			}
+			_, err := svc.CreateRoom(ctx, charLeader, casino.CreateRoomRequest{
+				Name:       name,
+				GameType:   casino.GameTypeIndian,
+				Speed:      casino.SpeedNormal,
+				MaxPlayers: 4,
+				Rate:       10,
+			})
+			if !errors.Is(err, casino.ErrInvalidRoomName) {
+				t.Errorf("CreateRoom(%q) = %v, want ErrInvalidRoomName", name, err)
+			}
+		}
+
+		if err := casino.ValidateRoomName(strings.Repeat("あ", 50)); err != nil {
+			t.Errorf("ValidateRoomName(50 runes) = %v, want nil", err)
+		}
+	})
+
+	t.Run("Create Room NFC Normalization and Duplicate Check", func(t *testing.T) {
+		nfcLeader := "char-nfc"
+		casinoRepo.accounts[nfcLeader] = casino.Account{CharacterID: nfcLeader, Coins: 500}
+		detail, err := svc.CreateRoom(ctx, nfcLeader, casino.CreateRoomRequest{
+			Name:       "Ka\u0301",
 			GameType:   casino.GameTypeIndian,
 			Speed:      casino.SpeedNormal,
 			MaxPlayers: 4,
 			Rate:       10,
 		})
-		if !errors.Is(err, casino.ErrInvalidRoomName) {
-			t.Errorf("expected ErrInvalidRoomName on spaces, got %v", err)
+		if err != nil {
+			t.Fatalf("CreateRoom NFC error: %v", err)
+		}
+		if detail.Room.Name != "Ká" {
+			t.Errorf("expected NFC-normalized room name %q, got %q", "Ká", detail.Room.Name)
+		}
+		nfcLeader2 := "char-nfc-2"
+		casinoRepo.accounts[nfcLeader2] = casino.Account{CharacterID: nfcLeader2, Coins: 500}
+		if _, err := svc.CreateRoom(ctx, nfcLeader2, casino.CreateRoomRequest{
+			Name:       "Ká",
+			GameType:   casino.GameTypeIndian,
+			Speed:      casino.SpeedNormal,
+			MaxPlayers: 4,
+			Rate:       10,
+		}); !errors.Is(err, casino.ErrRoomNameTaken) {
+			t.Errorf("expected ErrRoomNameTaken for NFC duplicate, got %v", err)
 		}
 	})
 
