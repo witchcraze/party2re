@@ -32,6 +32,10 @@ func retireDungeon(ctx context.Context, store dungeon.ActiveExpeditionStore, act
 	return store.DeleteActiveExpedition(ctx, actor, run.ID)
 }
 
+type noopMonsterTamer struct{}
+
+func (noopMonsterTamer) TameMonster(context.Context, string, string, string) error { return nil }
+
 func TestCombatAdmissionProduction(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("requires MariaDB and Valkey")
@@ -55,6 +59,8 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Map0 moves settle defeat credits under production RNG without wireHooks.
+	combat.battle.SetMonsterTamer(noopMonsterTamer{})
 	chars := make([]corecharacter.Character, 2)
 	for i := range chars {
 		char, err := database.CreateTestCharacterWithFunds(ctx, db, "Roster_"+id.New()[:8], 1000)
@@ -112,6 +118,24 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	})
 	for _, which := range []string{"dungeon", "challenge"} {
 		t.Run(which, func(t *testing.T) {
+			t.Cleanup(func() {
+				if err := soc.timer.ReleaseLock(ctx, timer.CategorySleep, member.ID); err != nil {
+					t.Error(err)
+				}
+				if which == "dungeon" {
+					for _, char := range chars {
+						if err := retireDungeon(ctx, ds, char.ID); err != nil {
+							t.Error(err)
+						}
+					}
+				} else {
+					for _, actor := range chars {
+						if err := retireChallenge(ctx, combat.challenge, actor.ID); err != nil {
+							t.Error(err)
+						}
+					}
+				}
+			})
 			start := func(actor string, ids []string) error {
 				if which == "dungeon" {
 					_, err := combat.dungeon.StartPartyExpedition(ctx, actor, ids, dungeon.NativeMap0ID, lobby.Party.ID)

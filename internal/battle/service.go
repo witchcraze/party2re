@@ -3,6 +3,7 @@ package battle
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -18,12 +19,13 @@ import (
 )
 
 var (
-	ErrCharacterNotFound     = errors.New("character not found")
-	ErrInvalidRequest        = errors.New("battle request is invalid")
-	ErrNilRequest            = errors.New("request is nil")
-	ErrInventoryNotFound     = errors.New("inventory not found")
-	ErrEquipmentNotFound     = errors.New("equipment not found")
-	ErrInsufficientResources = errors.New("insufficient character resources")
+	ErrCharacterNotFound         = errors.New("character not found")
+	ErrInvalidRequest            = errors.New("battle request is invalid")
+	ErrMonsterTamerNotConfigured = fmt.Errorf("%w: monster tamer is not configured", ErrInvalidRequest)
+	ErrNilRequest                = errors.New("request is nil")
+	ErrInventoryNotFound         = errors.New("inventory not found")
+	ErrEquipmentNotFound         = errors.New("equipment not found")
+	ErrInsufficientResources     = errors.New("insufficient character resources")
 )
 
 // CharacterRepository defines persistence operations on Character (Rank 2).

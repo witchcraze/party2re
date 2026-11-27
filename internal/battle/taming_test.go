@@ -842,3 +842,102 @@ func TestPostBattleMonsterTamingBlessingReadError(t *testing.T) {
 		})
 	}
 }
+
+func TestExplicitCaptureWithoutMonsterTamer(t *testing.T) {
+	setup := func(t *testing.T, multi bool) (*battle.Service, *markingTxProvider, []string) {
+		t.Helper()
+		ctx := context.Background()
+		charRepo := newMockCharRepo()
+		invRepo := newMockInvRepo()
+		equipRepo := newMockEquipRepo()
+		txProv := &markingTxProvider{}
+		ids := []string{"c1"}
+		if multi {
+			ids = []string{"c1", "c2"}
+		}
+		for _, cid := range ids {
+			_ = charRepo.Update(ctx, corecharacter.Character{
+				ID:    cid,
+				Name:  "Hero-" + cid,
+				JobID: "job-01",
+				Stats: corecharacter.Stats{HP: 100, MaxHP: 100},
+			})
+			inv, _ := coreinventory.New(cid)
+			_ = invRepo.Save(ctx, inv)
+			equip, _ := coreequipment.New(cid)
+			_ = equipRepo.Save(ctx, equip)
+		}
+		opts := []battle.Option{
+			battle.WithCharacterRepository(charRepo),
+			battle.WithInventoryRepository(invRepo),
+			battle.WithEquipmentRepository(equipRepo),
+		}
+		if multi {
+			opts = append(opts, battle.WithTransactionProvider(txProv))
+		} else {
+			runner, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+			if err != nil {
+				t.Fatal(err)
+			}
+			opts = append(opts, battle.WithTransactionRunner(runner))
+		}
+		return battle.NewService(opts...), txProv, ids
+	}
+
+	captureReq := func(ids []string, capture bool) battle.ApplyPostBattleRequest {
+		return battle.ApplyPostBattleRequest{
+			CharacterIDs:         ids,
+			RecipientCharacterID: ids[0],
+			RecipientRewards:     map[string]corebattle.Reward{ids[0]: {}},
+			BattleResult: corebattle.PartyBattleResult{
+				Outcome:     corebattle.OutcomeWin,
+				RemainingHP: map[string]int{ids[0]: 100},
+			},
+			ExplicitDefeats: []battle.ExplicitDefeat{{
+				Monster: battle.DefeatedMonsterRecord{MonsterID: "monster-002", MonsterName: "スライム"},
+				Capture: capture,
+			}},
+		}
+	}
+
+	for _, multi := range []bool{false, true} {
+		name := "single"
+		if multi {
+			name = "multi"
+		}
+		t.Run(name+"/missing_tamer_rejects_capture", func(t *testing.T) {
+			svc, txProv, ids := setup(t, multi)
+			_, err := svc.ApplyPostBattleResult(context.Background(), captureReq(ids, true))
+			if !errors.Is(err, battle.ErrMonsterTamerNotConfigured) || !errors.Is(err, battle.ErrInvalidRequest) {
+				t.Fatalf("error = %v, want ErrMonsterTamerNotConfigured wrapping ErrInvalidRequest", err)
+			}
+			if txProv.committed != 0 || txProv.rolledBack != 1 {
+				t.Fatalf("expected rollback, got committed=%d rolledBack=%d", txProv.committed, txProv.rolledBack)
+			}
+		})
+		t.Run(name+"/missing_tamer_allows_non_capture", func(t *testing.T) {
+			svc, txProv, ids := setup(t, multi)
+			if _, err := svc.ApplyPostBattleResult(context.Background(), captureReq(ids, false)); err != nil {
+				t.Fatalf("unexpected error without capture: %v", err)
+			}
+			if txProv.committed != 1 || txProv.rolledBack != 0 {
+				t.Fatalf("expected commit, got committed=%d rolledBack=%d", txProv.committed, txProv.rolledBack)
+			}
+		})
+		t.Run(name+"/configured_tamer_succeeds", func(t *testing.T) {
+			svc, txProv, ids := setup(t, multi)
+			tamer := &mockMonsterTamer{}
+			svc.SetMonsterTamer(tamer)
+			resp, err := svc.ApplyPostBattleResult(context.Background(), captureReq(ids, true))
+			if err != nil {
+				t.Fatalf("unexpected error with tamer: %v", err)
+			}
+			if len(tamer.calls) != 1 || len(resp.MonsterTames[ids[0]]) != 1 || !resp.MonsterTames[ids[0]][0].Success {
+				t.Fatalf("expected 1 tame call and result, calls=%v tames=%+v", tamer.calls, resp.MonsterTames)
+			}
+			if txProv.committed != 1 || txProv.rolledBack != 0 {
+				t.Fatalf("expected commit, got committed=%d rolledBack=%d", txProv.committed, txProv.rolledBack)
+			}
+		})
+	}
+}

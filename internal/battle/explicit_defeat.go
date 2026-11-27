@@ -40,7 +40,7 @@ func (s *Service) deliverExplicitCaptures(ctx context.Context, char corecharacte
 			continue
 		}
 		if s.monsterTamer == nil {
-			return ErrInvalidRequest
+			return ErrMonsterTamerNotConfigured
 		}
 		m := defeat.Monster
 		err := s.monsterTamer.TameMonster(ctx, char.ID, m.MonsterID, m.MonsterName)
