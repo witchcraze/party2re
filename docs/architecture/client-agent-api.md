@@ -348,10 +348,9 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Server-side capture is #2638; client rendering belongs to #140. Separator superseded by structured actions. |
 | Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes. Place logs, the action wait and per-place members follow the [place-log contract](place-log.md). No room join/leave, recovery or settlement is introduced here. |
 
-The full scoped Home action/call-path reconciliation and retained REST ownership
-are maintained in [Home design](../design/home.md#observation-visibility-and-navigation).
-This includes public/own dispatch, private mailbox paging, explicit Wake and
-render-time notice acknowledgment departures; it is not a formula parity claim.
+Home visibility, the explicit Wake decision and the render-time notice
+acknowledgment departure are in [Home design](../design/home.md#observation-visibility-and-navigation);
+it is not a formula parity claim.
 The [Shop reconciliation](../design/shops.md#scoped-legacy-actioncall-path-reconciliation)
 maps every registered Shop action to its Gateway command or navigation and lists
 the deferred differences.

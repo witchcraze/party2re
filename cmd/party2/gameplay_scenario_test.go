@@ -20,6 +20,7 @@ import (
 	valkeygo "github.com/valkey-io/valkey-go"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
@@ -30,6 +31,7 @@ import (
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/testutil"
+	"github.com/witchcraze/party2re/internal/town"
 	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -228,12 +230,18 @@ type scenarioContext struct {
 			Page struct {
 				Next json.RawMessage `json:"next"`
 			} `json:"page"`
-			View struct {
-				Private *struct {
-					Notices []home.DeliveryNotice `json:"notices"`
-				} `json:"private"`
-			} `json:"view"`
-			Parties []struct {
+			// Town district, Home, mailbox and Home record scenes.
+			Town         town.Town                `json:"town"`
+			Houses       []home.TownHouse         `json:"houses"`
+			View         home.HomeView            `json:"view"`
+			ColorSamples []struct{ Color string } `json:"color_samples"`
+			Letters      []home.Letter            `json:"letters"`
+			OwnerID      string                   `json:"owner_id"`
+			Mastery      struct {
+				CharacterID string `json:"character_id"`
+			} `json:"mastery"`
+			CustomSkill *customskill.CustomSkill `json:"custom_skill"`
+			Parties     []struct {
 				Name         string         `json:"name"`
 				MemberNames  []string       `json:"member_names"`
 				SelectParams map[string]any `json:"select_params"`

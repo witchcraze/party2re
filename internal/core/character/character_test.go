@@ -503,17 +503,20 @@ func TestCharacterColor(t *testing.T) {
 		t.Errorf("expected initial color %q, got %q", DefaultColor, char.Color)
 	}
 
-	validColors := []string{"#000000", "#FFFFFF", "#ff007f", "#123abc"}
-	for _, color := range validColors {
-		if err := char.SetColor(color); err != nil {
-			t.Errorf("SetColor(%q) unexpected error: %v", color, err)
+	// home.cgi color takes the first #RRGGBB in the input, case kept.
+	for input, want := range map[string]string{
+		"#000000": "#000000", "#FF3333": "#FF3333", "#ff007f": "#ff007f",
+		"赤 #FF0000 にする": "#FF0000", "#1234567": "#123456", "#12 #abcdef": "#abcdef",
+	} {
+		if err := char.SetColor(input); err != nil || char.Color != want {
+			t.Errorf("SetColor(%q) = %q, %v; want %q", input, char.Color, err, want)
 		}
 	}
 
-	invalidColors := []string{"", "red", "#12345", "#1234567", "#gggggg", "123456"}
-	for _, color := range invalidColors {
-		if err := char.SetColor(color); !errors.Is(err, ErrInvalidColor) {
-			t.Errorf("SetColor(%q) expected ErrInvalidColor, got %v", color, err)
+	for _, input := range []string{"", "red", "#12345", "#gggggg", "123456"} {
+		before := char.Color
+		if err := char.SetColor(input); !errors.Is(err, ErrInvalidColor) || char.Color != before {
+			t.Errorf("SetColor(%q) = %q, %v; want ErrInvalidColor and %q kept", input, char.Color, err, before)
 		}
 	}
 }

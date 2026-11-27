@@ -3418,7 +3418,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "color": {
-                      "description": "#RRGGBB colour code; color_samples lists the palette.",
+                      "description": "Text containing a #RRGGBB colour code; the first one becomes the colour as written. color_samples lists the palette.",
                       "type": "string"
                     }
                   },

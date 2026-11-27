@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -376,26 +377,15 @@ func (c *Character) ApplyJobChange(targetJobID string, targetSP int) error {
 	return nil
 }
 
-// IsValidColor checks if a string is a valid #RRGGBB hex color code.
-func IsValidColor(color string) bool {
-	if len(color) != 7 || color[0] != '#' {
-		return false
-	}
-	for i := 1; i < 7; i++ {
-		b := color[i]
-		if !((b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
+var colorCode = regexp.MustCompile(`#[0-9a-fA-F]{6}`)
 
-// SetColor updates the character's chat and display color (#RRGGBB).
-func (c *Character) SetColor(color string) error {
-	clean := strings.TrimSpace(color)
-	if !IsValidColor(clean) {
+// SetColor updates the character's chat and display color to the first
+// #RRGGBB in the input, kept as written (home.cgi color).
+func (c *Character) SetColor(input string) error {
+	code := colorCode.FindString(input)
+	if code == "" {
 		return ErrInvalidColor
 	}
-	c.Color = strings.ToLower(clean)
+	c.Color = code
 	return nil
 }
