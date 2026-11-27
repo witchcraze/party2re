@@ -261,14 +261,6 @@ func (r *MemoryRepository) GetMember(ctx context.Context, partyID, characterID s
 	return Member{}, ErrCharacterNotInParty
 }
 
-func (r *MemoryRepository) CountMembers(ctx context.Context, partyID string) (int, error) {
-	members, err := r.GetMembers(ctx, partyID)
-	if err != nil {
-		return 0, err
-	}
-	return len(members), nil
-}
-
 func (r *MemoryRepository) WithPartyAdventureLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error {
 	if partyID == "" {
 		return fn(ctx)

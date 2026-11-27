@@ -288,3 +288,163 @@ func TestKickMemberActionWaitAndConsistency(t *testing.T) {
 		}
 	})
 }
+
+type joinFaultRepo struct {
+	Repository
+	addErr           error
+	failMembersAfter bool
+	membersReadErr   error
+	addSucceeded     bool
+}
+
+func (r *joinFaultRepo) AddMember(ctx context.Context, m Member) error {
+	if r.addErr != nil {
+		return r.addErr
+	}
+	if err := r.Repository.AddMember(ctx, m); err != nil {
+		return err
+	}
+	r.addSucceeded = true
+	return nil
+}
+
+func (r *joinFaultRepo) GetMembers(ctx context.Context, partyID string) ([]Member, error) {
+	if r.failMembersAfter && r.addSucceeded {
+		return nil, r.membersReadErr
+	}
+	return r.Repository.GetMembers(ctx, partyID)
+}
+
+func TestJoinPartyPreservesAppliedMembershipWhenPostWriteRosterReadFails(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
+
+	t.Run("applied join succeeds and keeps membership when post-write roster read fails", func(t *testing.T) {
+		svc, baseRepo, charRepo, _ := setupTestService(t, WithClock(func() time.Time { return now }))
+		charRepo.chars["leader"] = corecharacter.Character{ID: "leader", Name: "Leader", JobID: "job-01", Level: 5, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
+		charRepo.chars["joiner"] = corecharacter.Character{ID: "joiner", Name: "Joiner", JobID: "job-02", Level: 4, Stats: corecharacter.Stats{HP: 40, MaxHP: 40}}
+
+		created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{
+			Name: "Quest", StageID: "forest", Speed: 3, MaxMembers: 4, Password: "secret",
+		})
+		if err != nil {
+			t.Fatalf("CreateParty failed: %v", err)
+		}
+
+		readErr := errors.New("valkey roster read timeout")
+		svc.repo = &joinFaultRepo{
+			Repository:       baseRepo,
+			failMembersAfter: true,
+			membersReadErr:   readErr,
+		}
+
+		joined, err := svc.JoinParty(ctx, created.Party.ID, "joiner", "secret")
+		if err != nil {
+			t.Fatalf("JoinParty failed despite acknowledged AddMember: %v", err)
+		}
+		if joined.Party.ID != created.Party.ID || len(joined.Members) != 2 {
+			t.Fatalf("unexpected joined detail: %+v", joined)
+		}
+		if joined.Members[0].CharacterID != "leader" || joined.Members[1].CharacterID != "joiner" {
+			t.Fatalf("unexpected member order: %+v", joined.Members)
+		}
+
+		members, err := baseRepo.GetMembers(ctx, created.Party.ID)
+		if err != nil || len(members) != 2 || members[1].CharacterID != "joiner" {
+			t.Fatalf("healthy roster = %+v, err=%v", members, err)
+		}
+		activeParty, activeMember, err := baseRepo.GetActivePartyByCharacter(ctx, "joiner")
+		if err != nil || activeParty.ID != created.Party.ID || activeMember.CharacterID != "joiner" {
+			t.Fatalf("healthy reverse lookup = %+v / %+v, err=%v", activeParty, activeMember, err)
+		}
+	})
+
+	t.Run("failed AddMember propagates error without adding membership", func(t *testing.T) {
+		svc, baseRepo, charRepo, _ := setupTestService(t, WithClock(func() time.Time { return now }))
+		charRepo.chars["leader"] = corecharacter.Character{ID: "leader", Name: "Leader", JobID: "job-01", Level: 5, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
+		charRepo.chars["joiner"] = corecharacter.Character{ID: "joiner", Name: "Joiner", JobID: "job-02", Level: 4, Stats: corecharacter.Stats{HP: 40, MaxHP: 40}}
+
+		created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{
+			Name: "Quest", StageID: "forest", Speed: 3, MaxMembers: 4,
+		})
+		if err != nil {
+			t.Fatalf("CreateParty failed: %v", err)
+		}
+
+		writeErr := errors.New("valkey write failed")
+		svc.repo = &joinFaultRepo{Repository: baseRepo, addErr: writeErr}
+
+		if _, err := svc.JoinParty(ctx, created.Party.ID, "joiner", ""); !errors.Is(err, writeErr) {
+			t.Fatalf("expected writeErr, got %v", err)
+		}
+		members, err := baseRepo.GetMembers(ctx, created.Party.ID)
+		if err != nil || len(members) != 1 || members[0].CharacterID != "leader" {
+			t.Fatalf("failed AddMember mutated roster: %+v, err=%v", members, err)
+		}
+		if _, _, err := baseRepo.GetActivePartyByCharacter(ctx, "joiner"); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("failed AddMember left reverse lookup: %v", err)
+		}
+	})
+}
+
+type activeLookupFaultRepo struct {
+	Repository
+	activeErr error
+	onSave    func()
+	onAdd     func()
+}
+
+func (r *activeLookupFaultRepo) GetActivePartyByCharacter(context.Context, string) (Party, Member, error) {
+	return Party{}, Member{}, r.activeErr
+}
+
+func (r *activeLookupFaultRepo) SaveParty(ctx context.Context, p Party) error {
+	if r.onSave != nil {
+		r.onSave()
+	}
+	return r.Repository.SaveParty(ctx, p)
+}
+
+func (r *activeLookupFaultRepo) AddMember(ctx context.Context, m Member) error {
+	if r.onAdd != nil {
+		r.onAdd()
+	}
+	return r.Repository.AddMember(ctx, m)
+}
+
+func TestLobbyEntryPropagatesActivePartyLookupErrors(t *testing.T) {
+	ctx := context.Background()
+	lookupErr := errors.New("valkey active lookup failed")
+
+	for _, testErr := range []error{lookupErr, ErrCharacterNotInParty} {
+		t.Run(testErr.Error(), func(t *testing.T) {
+			svc, baseRepo, charRepo, _ := setupTestService(t)
+			charRepo.chars["leader"] = corecharacter.Character{ID: "leader", Name: "Leader", JobID: "job-01", Level: 5, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}}
+			charRepo.chars["joiner"] = corecharacter.Character{ID: "joiner", Name: "Joiner", JobID: "job-02", Level: 4, Stats: corecharacter.Stats{HP: 40, MaxHP: 40}}
+
+			created, err := svc.CreateParty(ctx, "leader", CreatePartyRequest{
+				Name: "Quest", StageID: "forest", Speed: 3, MaxMembers: 4,
+			})
+			if err != nil {
+				t.Fatalf("CreateParty setup failed: %v", err)
+			}
+
+			svc.repo = &activeLookupFaultRepo{
+				Repository: baseRepo,
+				activeErr:  testErr,
+				onSave:     func() { t.Fatal("SaveParty must not run on active-party lookup error") },
+				onAdd:      func() { t.Fatal("AddMember must not run on active-party lookup error") },
+			}
+
+			if _, err := svc.CreateParty(ctx, "joiner", CreatePartyRequest{
+				Name: "Second", StageID: "forest", Speed: 3, MaxMembers: 4,
+			}); !errors.Is(err, testErr) {
+				t.Fatalf("CreateParty error = %v, want %v", err, testErr)
+			}
+
+			if _, err := svc.JoinParty(ctx, created.Party.ID, "joiner", ""); !errors.Is(err, testErr) {
+				t.Fatalf("JoinParty error = %v, want %v", err, testErr)
+			}
+		})
+	}
+}

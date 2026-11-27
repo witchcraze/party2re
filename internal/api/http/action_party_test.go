@@ -358,3 +358,203 @@ func TestPartyLeaveDeliveryNotice(t *testing.T) {
 		})
 	}
 }
+
+type gatewayJoinFaultRepo struct {
+	party.Repository
+	failReadsAfterAdd bool
+	addErr            error
+	addSucceeded      bool
+	readErr           error
+}
+
+func (r *gatewayJoinFaultRepo) AddMember(ctx context.Context, m party.Member) error {
+	if r.addErr != nil {
+		return r.addErr
+	}
+	if err := r.Repository.AddMember(ctx, m); err != nil {
+		return err
+	}
+	r.addSucceeded = true
+	return nil
+}
+
+func (r *gatewayJoinFaultRepo) GetMembers(ctx context.Context, partyID string) ([]party.Member, error) {
+	if r.failReadsAfterAdd && r.addSucceeded {
+		return nil, r.readErr
+	}
+	return r.Repository.GetMembers(ctx, partyID)
+}
+
+func (r *gatewayJoinFaultRepo) GetActivePartyByCharacter(ctx context.Context, characterID string) (party.Party, party.Member, error) {
+	if r.failReadsAfterAdd && r.addSucceeded {
+		return party.Party{}, party.Member{}, r.readErr
+	}
+	return r.Repository.GetActivePartyByCharacter(ctx, characterID)
+}
+
+func TestPartyJoinPreservesAppliedMembershipWhenRosterRefreshFails(t *testing.T) {
+	ctx := context.Background()
+	f := &multiPartyGatewayFixture{
+		chars: map[string]corecharacter.Character{
+			"hero":     {ID: "hero", PlayerID: "p-hero", Name: "Hero", JobID: "job-01", Level: 10, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
+			"ally":     {ID: "ally", PlayerID: "p-ally", Name: "Ally", JobID: "job-02", Level: 10, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
+			"other":    {ID: "other", PlayerID: "p-other", Name: "Other", JobID: "job-03", Level: 10, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
+			"rejected": {ID: "rejected", PlayerID: "p-rejected", Name: "Rejected", JobID: "job-04", Level: 10, Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
+		},
+	}
+
+	baseRepo := party.NewMemoryRepository()
+	faultRepo := &gatewayJoinFaultRepo{Repository: baseRepo, readErr: errors.New("valkey roster read failure")}
+	partySvc, err := party.NewService(faultRepo, f, nil, partyTestStageCatalog{}, partyTestMonsterCatalog{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := partySvc.CreateParty(ctx, "hero", party.CreatePartyRequest{
+		Name: "冒険の旅", StageID: "stage-00", Speed: 3, MaxMembers: 4, Password: "secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	waits := timer.NewService(nil)
+	nav := &gatewayNavigationStore{
+		selection: playercontext.Selection{
+			Destination: "quest",
+			Subject:     playercontext.Subject{Kind: "party", ID: created.Party.ID},
+		},
+	}
+	pc := playercontext.NewService(f, f, waits,
+		playercontext.WithActionWait(waits, playercontext.DefaultActionWait),
+		playercontext.WithNavigation(nav,
+			playercontext.SceneDefinition{ID: "town", Pageable: true},
+			playercontext.SceneDefinition{ID: "quest", Parent: "town", SubjectKind: "party", Pageable: true,
+				SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
+					_, err := partySvc.GetPartySummary(ctx, target)
+					if errors.Is(err, party.ErrNotFound) {
+						return false, nil
+					}
+					return err == nil, err
+				}},
+		),
+		playercontext.WithActivities(func(ctx context.Context, _, actor string) ([]playercontext.Activity, error) {
+			p, m, err := partySvc.GetActiveParty(ctx, actor)
+			if errors.Is(err, party.ErrNotFound) {
+				return nil, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			actions := []string{"party_leave"}
+			if m.IsLeader && p.LeaderCharacterID == actor && p.Status == party.StatusRecruiting {
+				actions = append(actions, "party_start", "party_kick")
+			}
+			return []playercontext.Activity{{Kind: "party", ID: p.ID, Phase: p.Status, Role: "member", Actions: actions}}, nil
+		}),
+	)
+	h, err := NewHandler(f, f, &struct{ AdventureService }{}, navigationShopService{},
+		WithParty(partySvc), WithQuestStages(partyTestStageCatalog{}), WithPlayerContext(pc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := h.Router()
+
+	joinBody := `{"action":"party_join","params":{"party_id":"` + created.Party.ID + `","password":"secret"}}`
+
+	// 1. Healthy contrast case: succeeds with refreshed activity context, membership, and action wait.
+	status, raw := gatewayRequest(t, router, "ally", "p-ally", "application/json", joinBody, nil)
+	if status != http.StatusOK || string(raw["success"]) != "true" {
+		t.Fatalf("healthy join failed: status=%d raw=%s", status, raw)
+	}
+	if _, hasErr := raw["context_error"]; hasErr {
+		t.Fatalf("unexpected context_error on healthy join: %s", raw["context_error"])
+	}
+	var healthyResult party.PartyDetail
+	if err := json.Unmarshal(raw["result"], &healthyResult); err != nil {
+		t.Fatalf("unmarshal healthy result: %v", err)
+	}
+	if healthyResult.Party.ID != created.Party.ID || len(healthyResult.Members) != 2 || healthyResult.Members[1].CharacterID != "ally" {
+		t.Fatalf("unexpected healthy join result: %+v", healthyResult)
+	}
+	var healthyCtx PlayerContextResponse
+	if err := json.Unmarshal(raw["context"], &healthyCtx); err != nil {
+		t.Fatalf("unmarshal healthy context: %v", err)
+	}
+	if healthyCtx.Scene.Kind != "activity" || healthyCtx.Scene.LocationID != "party" || healthyCtx.Character.ActionWaitMS <= 0 {
+		t.Fatalf("unexpected healthy context: %+v", healthyCtx)
+	}
+	if rem, err := waits.GetRemainingLock(ctx, timer.CategoryActionWait, "ally"); err != nil || rem <= 0 {
+		t.Fatalf("healthy join wait missing: rem=%v err=%v", rem, err)
+	}
+
+	// 2. Post-write roster read failure below party.Service: preserves 200 result, CONTEXT_REFRESH_FAILED, membership, and wait.
+	faultRepo.addSucceeded = false
+	faultRepo.failReadsAfterAdd = true
+	status, raw = gatewayRequest(t, router, "other", "p-other", "application/json", joinBody, nil)
+	if status != http.StatusOK || string(raw["success"]) != "true" {
+		t.Fatalf("applied join failed on post-write read error: status=%d raw=%s", status, raw)
+	}
+	if string(raw["context"]) != "null" {
+		t.Fatalf("expected null context on refresh failure, got %s", raw["context"])
+	}
+	var ctxErr ErrorDetail
+	if err := json.Unmarshal(raw["context_error"], &ctxErr); err != nil || ctxErr.Code != "CONTEXT_REFRESH_FAILED" {
+		t.Fatalf("expected CONTEXT_REFRESH_FAILED, got %s (err=%v)", raw["context_error"], err)
+	}
+	var faultResult party.PartyDetail
+	if err := json.Unmarshal(raw["result"], &faultResult); err != nil {
+		t.Fatalf("unmarshal result on refresh failure: %v", err)
+	}
+	if faultResult.Party.ID != created.Party.ID || len(faultResult.Members) != 3 || faultResult.Members[2].CharacterID != "other" {
+		t.Fatalf("unexpected result on refresh failure: %+v", faultResult)
+	}
+	if strings.Contains(string(raw["result"]), "password_hash") {
+		t.Fatalf("result leaked password_hash: %s", raw["result"])
+	}
+	if rem, err := waits.GetRemainingLock(ctx, timer.CategoryActionWait, "other"); err != nil || rem <= 0 {
+		t.Fatalf("applied join lost action wait: rem=%v err=%v", rem, err)
+	}
+	members, err := baseRepo.GetMembers(ctx, created.Party.ID)
+	if err != nil || len(members) != 3 || members[2].CharacterID != "other" {
+		t.Fatalf("healthy roster missing joiner: %+v err=%v", members, err)
+	}
+	if activeParty, activeMember, err := baseRepo.GetActivePartyByCharacter(ctx, "other"); err != nil || activeParty.ID != created.Party.ID || activeMember.CharacterID != "other" {
+		t.Fatalf("healthy reverse lookup mismatch: party=%+v member=%+v err=%v", activeParty, activeMember, err)
+	}
+
+	// Once read recovers, GET context observes the active party and action wait blocks subsequent commands.
+	faultRepo.failReadsAfterAdd = false
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/characters/other/context", nil)
+	req.Header.Set("Authorization", "Bearer p-other")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET context after recovery: %d %s", rec.Code, rec.Body.String())
+	}
+	var recoveredCtx PlayerContextResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &recoveredCtx); err != nil {
+		t.Fatal(err)
+	}
+	if recoveredCtx.Scene.Kind != "activity" || recoveredCtx.Scene.LocationID != "party" || recoveredCtx.Character.ActionWaitMS <= 0 {
+		t.Fatalf("expected party activity and wait after recovery, got %+v", recoveredCtx)
+	}
+	if status, waitRaw := gatewayRequest(t, router, "other", "p-other", "application/json", `{"action":"scene_back","params":{}}`, nil); status != http.StatusConflict || actionErrorCode(t, waitRaw) != "ACTION_WAIT" {
+		t.Fatalf("expected 409 ACTION_WAIT after preserved join, got %d %s", status, waitRaw)
+	}
+
+	// 3. Failed AddMember write propagates 500 EXECUTION_FAILED, releases wait, and adds no membership.
+	faultRepo.addErr = errors.New("valkey add_member write failed")
+	status, raw = gatewayRequest(t, router, "rejected", "p-rejected", "application/json", joinBody, nil)
+	if status != http.StatusInternalServerError || actionErrorCode(t, raw) != "EXECUTION_FAILED" {
+		t.Fatalf("expected 500 EXECUTION_FAILED on write failure, got %d %s", status, raw)
+	}
+	if rem, err := waits.GetRemainingLock(ctx, timer.CategoryActionWait, "rejected"); err != nil || rem != 0 {
+		t.Fatalf("failed AddMember kept action wait: rem=%v err=%v", rem, err)
+	}
+	members, err = baseRepo.GetMembers(ctx, created.Party.ID)
+	if err != nil || len(members) != 3 {
+		t.Fatalf("failed AddMember mutated roster: %+v err=%v", members, err)
+	}
+	if _, _, err := baseRepo.GetActivePartyByCharacter(ctx, "rejected"); !errors.Is(err, party.ErrNotFound) {
+		t.Fatalf("failed AddMember left reverse lookup: %v", err)
+	}
+}

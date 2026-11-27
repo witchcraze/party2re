@@ -448,12 +448,6 @@ func TestValkeyRepository_GetMembersAndGetMember(t *testing.T) {
 		t.Errorf("expected ErrCharacterNotInParty, got %v", err)
 	}
 
-	// Test CountMembers
-	count, err := repo.CountMembers(ctx, "party-m-1")
-	if err != nil || count != 2 {
-		t.Errorf("expected count 2, got %d, err=%v", count, err)
-	}
-
 	// 2. Not found / nil case
 	clientNil := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		return valkeytest.MakeNilResult()
