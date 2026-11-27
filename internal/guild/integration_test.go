@@ -463,19 +463,25 @@ func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", leaderA.ID)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", leaderA.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	leaderB, err := database.CreateTestCharacter(ctx, db, "SvcLdrB")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", leaderB.ID)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", leaderB.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	applicant, err := database.CreateTestCharacter(ctx, db, "SvcAppMulti")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", applicant.ID)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", applicant.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	guildNameA := fmt.Sprintf("MultiA_%s", leaderA.ID[:8])
 	gA, _, _, err := service.Create(ctx, leaderA.ID, guildNameA)
@@ -522,7 +528,9 @@ func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", applicant2.ID)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", applicant2.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := service.ApplyToJoin(ctx, gA.ID, applicant2.ID); err != nil {
 		t.Fatalf("ApplyToJoin A for applicant2 failed: %v", err)
 	}

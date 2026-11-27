@@ -313,19 +313,43 @@ func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
 	db := database.OpenTestDB(t)
 
 	ctx := context.Background()
-	charRepo, _ := database.NewCharacterRepository(db)
-	depotRepo, _ := database.NewDepotRepository(db)
-	alcRepo, _ := database.NewAlchemyRepository(db)
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alcRepo, err := database.NewAlchemyRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	txProvider := database.NewTransactionProvider(db)
 
-	charService, _ := character.NewService(charRepo)
-	player, _ := database.CreateTestPlayer(ctx, db)
-	char, _ := charService.Create(ctx, player.ID, id.New()[:8])
+	charService, err := character.NewService(charRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char, err := charService.Create(ctx, player.ID, id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	itemCatalog, _ := item.InitialCatalog()
-	recipeCatalog, _ := alchemy.InitialRecipeCatalog()
+	itemCatalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipeCatalog, err := alchemy.InitialRecipeCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	alcService, _ := alchemy.NewService(
+	alcService, err := alchemy.NewService(
 		charRepo,
 		depotRepo,
 		alcRepo,
@@ -333,14 +357,29 @@ func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
 		itemCatalog,
 		alchemy.WithTransactionProvider(txProvider),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	_ = alcService.UnlockRecipe(ctx, char.ID, "recipe-001")
+	if err := alcService.UnlockRecipe(ctx, char.ID, "recipe-001"); err != nil {
+		t.Fatal(err)
+	}
 
-	dep, _ := depot.NewDepot(char.ID)
+	dep, err := depot.NewDepot(char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dep.Capacity = 10
-	herbInst, _ := item.NewInstance("item-001", 10)
-	_ = dep.AddItem(herbInst)
-	_ = depotRepo.Save(ctx, dep)
+	herbInst, err := item.NewInstance("item-001", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dep.AddItem(herbInst); err != nil {
+		t.Fatal(err)
+	}
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
 
 	const goroutines = 5
 	var wg sync.WaitGroup
@@ -481,10 +520,12 @@ func TestAlchemyIntegrationViewRecipes_LegendRollbackAndRetry(t *testing.T) {
 	errLegendInjected := errors.New("legend write failure injected")
 	failingLegend := alchemy.LegendInductorFunc(func(txCtx context.Context, category, characterID string) error {
 		exec := database.ExecutorFromContext(txCtx, db)
-		_, _ = exec.ExecContext(txCtx, `
+		if _, err := exec.ExecContext(txCtx, `
 			INSERT INTO legend_records (category, character_id, character_name, guild_name, color, icon, message, inducted_at)
 			VALUES (?, ?, 'Test', '', '#ffffff', '', '', UTC_TIMESTAMP())
-		`, category, characterID)
+		`, category, characterID); err != nil {
+			return err
+		}
 		return errLegendInjected
 	})
 	alcService.SetLegendInductor(failingLegend)

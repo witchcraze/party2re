@@ -96,7 +96,10 @@ func TestCombatAdmissionProduction(t *testing.T) {
 	if _, err := combat.party.JoinParty(ctx, lobby.Party.ID, member.ID, ""); err != nil {
 		t.Fatal(err)
 	}
-	ds, _ := dungeon.NewValkeyExpeditionRepository(client)
+	ds, err := dungeon.NewValkeyExpeditionRepository(client)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		for _, char := range chars {
 			if err := retireDungeon(ctx, ds, char.ID); err != nil {
@@ -310,7 +313,9 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	char1.Stats.MaxHP = 9999
 	char1.Stats.Attack = 9999
 	char1.Stats.Defense = 9999
-	_ = core.charRepo.Update(ctx, char1)
+	if err := core.charRepo.Update(ctx, char1); err != nil {
+		t.Fatal(err)
+	}
 
 	char2, err := database.CreateTestCharacterWithFunds(ctx, db, "S26M_"+id.New()[:8], 1000)
 	if err != nil {
@@ -321,7 +326,9 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	char2.Stats.MaxHP = 9999
 	char2.Stats.Attack = 9999
 	char2.Stats.Defense = 9999
-	_ = core.charRepo.Update(ctx, char2)
+	if err := core.charRepo.Update(ctx, char2); err != nil {
+		t.Fatal(err)
+	}
 
 	// Clean up any lingering dungeon_once lock
 	t.Cleanup(func() {
@@ -409,7 +416,9 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("member should be allowed to create stage-26 party: %v", err)
 	}
-	_, _ = combat.party.LeaveParty(ctx, memberParty.Party.ID, char2.ID)
+	if _, err := combat.party.LeaveParty(ctx, memberParty.Party.ID, char2.ID); err != nil {
+		t.Fatalf("LeaveParty failed: %v", err)
+	}
 
 	// 3. Releasing lock (wake reset) allows leader entry again
 	if err := soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char1.ID); err != nil {
@@ -423,7 +432,9 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("leader should be allowed to create stage-26 party after wake: %v", err)
 	}
-	_, _ = combat.party.LeaveParty(ctx, p2.Party.ID, char1.ID)
+	if _, err := combat.party.LeaveParty(ctx, p2.Party.ID, char1.ID); err != nil {
+		t.Fatalf("LeaveParty failed: %v", err)
+	}
 }
 
 func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
@@ -459,7 +470,9 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 	char.Stats.MaxHP = 9999
 	char.Stats.Attack = 9999
 	char.Stats.Defense = 9999
-	_ = core.charRepo.Update(ctx, char)
+	if err := core.charRepo.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Cleanup(func() {
 		cleanupCtx := context.Background()
@@ -547,7 +560,9 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 
 	partyMu.Lock()
 	for _, pid := range createdPartyIDs {
-		_, _ = combat.party.LeaveParty(ctx, pid, char.ID)
+		if _, err := combat.party.LeaveParty(ctx, pid, char.ID); err != nil {
+			t.Errorf("cleanup LeaveParty %s: %v", pid, err)
+		}
 	}
 	partyMu.Unlock()
 
