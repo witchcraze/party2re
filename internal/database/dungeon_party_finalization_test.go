@@ -191,9 +191,13 @@ func TestDungeonRepository_FinalizeExpedition_PreservesConcurrentWalletUpdates(t
 	}
 
 	c1.Money = 2000
-	_ = charRepo.Update(ctx, c1)
+	if err := charRepo.Update(ctx, c1); err != nil {
+		t.Fatal(err)
+	}
 	c2.Money = 2000
-	_ = charRepo.Update(ctx, c2)
+	if err := charRepo.Update(ctx, c2); err != nil {
+		t.Fatal(err)
+	}
 
 	// In the background, ally receives a bank deposit or trade reward (+600 money)
 	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = money + 600 WHERE id = ?", c2.ID); err != nil {
@@ -250,7 +254,9 @@ func TestDungeonRepository_FinalizeExpedition_RollbackOnMemberFailure(t *testing
 	}
 	c1.Stats.HP = 100
 	c1.Money = 5000
-	_ = charRepo.Update(ctx, c1)
+	if err := charRepo.Update(ctx, c1); err != nil {
+		t.Fatal(err)
+	}
 
 	expID := id.New()
 	history := dungeon.DungeonExpeditionHistory{

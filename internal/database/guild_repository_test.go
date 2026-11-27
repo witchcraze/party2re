@@ -276,7 +276,9 @@ func TestGuildRepository_ConcurrentPoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create member char %d: %v", i+1, err)
 		}
-		_ = charRepo.Update(ctx, memChar)
+		if err := charRepo.Update(ctx, memChar); err != nil {
+			t.Fatal(err)
+		}
 
 		_, err = guildRepo.AddMember(ctx, guild.Member{
 			GuildID:     g.ID,

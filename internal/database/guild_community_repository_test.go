@@ -25,7 +25,9 @@ func TestGuildRepository_ApplicationsAndApprovals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 10000 WHERE id = ?", leaderChar.ID)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 10000 WHERE id = ?", leaderChar.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	appChar1, err := CreateTestCharacter(ctx, db, "Applicant1")
 	if err != nil {
@@ -156,7 +158,9 @@ func TestGuildRepository_CustomizationMarkAndWallpaper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 10000 WHERE id = ?", leaderChar.ID)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 10000 WHERE id = ?", leaderChar.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	guildID := id.New()
 	g, _, _, err := guildRepo.CreateGuild(ctx, guild.Guild{
