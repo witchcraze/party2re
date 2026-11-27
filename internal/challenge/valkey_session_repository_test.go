@@ -292,7 +292,10 @@ func TestValkeySessionRepository_LifecycleAndErrors(t *testing.T) {
 	}
 
 	existsCmd := client.Do(ctx, client.B().Exists().Key(sessionKey, rewardsKey).Build())
-	existCount, _ := existsCmd.AsInt64()
+	existCount, err := existsCmd.AsInt64()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if existCount != 0 {
 		t.Errorf("expected 0 keys existing after delete, got %d", existCount)
 	}

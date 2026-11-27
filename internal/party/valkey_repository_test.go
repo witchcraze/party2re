@@ -377,11 +377,17 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 		t.Fatalf("DeleteParty failed: %v", err)
 	}
 
-	exists, _ = client.Do(ctx, client.B().Exists().Key(testLobbyPrefix+partyID).Build()).AsInt64()
+	exists, err = client.Do(ctx, client.B().Exists().Key(testLobbyPrefix+partyID).Build()).AsInt64()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if exists != 0 {
 		t.Errorf("expected lobby key deleted, got exists=%d", exists)
 	}
-	charExists, _ := client.Do(ctx, client.B().Exists().Key(testCharPrefix+leaderID).Build()).AsInt64()
+	charExists, err := client.Do(ctx, client.B().Exists().Key(testCharPrefix+leaderID).Build()).AsInt64()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if charExists != 0 {
 		t.Errorf("expected character index deleted, got exists=%d", charExists)
 	}
