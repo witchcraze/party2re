@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 var (
@@ -22,10 +24,10 @@ func ValidateCustomName(name string) error {
 	if strings.ContainsAny(name, " \t\n\r") || strings.Contains(name, "　") {
 		return ErrNameWhitespace
 	}
-	if strings.ContainsAny(name, ",;\"'&<>") {
+	if strings.ContainsAny(name, validation.MarkupChars) {
 		return ErrNameForbiddenChar
 	}
-	if strings.ContainsAny(name, "@＠") {
+	if strings.ContainsAny(name, validation.TitleChars+validation.FullwidthAt) {
 		return ErrNameAtSymbol
 	}
 	if utf8.RuneCountInString(name) > 20 {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/contest"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type contestEnterRequest struct {
@@ -122,7 +123,7 @@ func entryTitleMessage(title string) string {
 		return "題名は40文字までです"
 	case strings.Contains(title, "＠"):
 		return "題名に不正な文字( ＠ )が含まれています"
-	case strings.ContainsAny(title, ",;\"'&<>@"):
+	case strings.ContainsAny(title, validation.TitleChars):
 		return "題名に不正な文字( ,;\"'&<>@ )が含まれています"
 	case strings.ContainsFunc(title, unicode.IsSpace):
 		return "題名に不正な空白が含まれています"

@@ -115,7 +115,7 @@ sleep deadlines, PlayerContext reads owned run facts and the Gateway's
 
 - **ID Generation (`internal/id`)**: Centralized 16-byte (32 hex characters) cryptographically secure identifiers (`id.New()`, `id.Sort2(a, b)`).
 - **Pagination (`internal/pagination`)**: Reusable offset and keyset cursor containers (`Page[T]`, `CursorPage[T]`) with token encoding/decoding (`EncodeCursor`, `DecodeCursor`).
-- **Validation (`internal/validation`)**: Standardized text sanitization and input validators (Unicode NFC normalization, automated whitespace trimming, C0/C1 control character rejection, zero-width space/BOM rejection, bidirectional override rejection, Zalgo diacritical mark capping $\le 2$, character name validation, and starter job/gender checks).
+- **Validation (`internal/validation`)**: Field-agnostic text safety and the legacy prohibited-character profiles. Services choose a field's profile at their boundary; the Gateway applies the safety check to every string parameter by its declared text kind ([security rule §6](../../.agents/rules/06-security.md#6-text-input-validation)).
 - **Random Number Generation (`internal/core/random`)**: Centralized thread-safe pseudo-random generator backed by `math/rand/v2` and deterministic seeded generator for reproducible tests. Direct imports of `math/rand` in production packages are prohibited by AST linter.
 - **Concurrency & Cancellation**: Cooperative context cancellation across services; raw `time.Sleep` is prohibited by AST linter.
 - **Database Infrastructure (`internal/database`)**: Ambient transaction propagation (`RunInTx`, `ExecutorFromContext`) and connection pool lifecycle management.

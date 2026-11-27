@@ -108,6 +108,27 @@ func TestShopBatchPurchaseAndSynthesisCommands(t *testing.T) {
 	}
 }
 
+// The pre-decode text check and typed decoding must read the same value: a
+// duplicate key whose later null typed decoding skips cannot hide unsafe text.
+func TestShopBatchPurchaseDuplicateKeyCannotBypassTextCheck(t *testing.T) {
+	stub := &shopCommandService{}
+	_, store, router := shopSceneRouter(t, func(h *Handler) {
+		stub.ShopService = h.shops
+		h.shops = stub
+	})
+	store.selection = playercontext.Selection{Destination: "shop_item"}
+	for _, items := range []string{
+		`[{"item_definition_id":"item-001\u202e","item_definition_id":null,"quantity":1}]`,
+		`[{"item_definition_id":"item-001\u202e","ITEM_DEFINITION_ID":null,"quantity":1}]`,
+	} {
+		status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_batch_purchase","params":{"shop_type":"item","items":`+items+`}}`, nil)
+		if status != 400 || stub.batch != nil {
+			t.Fatalf("%s: %d %s, executed %+v", items, status, raw, stub.batch)
+		}
+		assertGatewayError(t, raw, "INVALID_ACTION_PARAMS")
+	}
+}
+
 // Missing materials are a logged reply that changes nothing (accessory.cgi:204-206).
 func TestShopSynthesisMissingMaterialsIsALoggedReply(t *testing.T) {
 	log := &fakePlaceLog{}

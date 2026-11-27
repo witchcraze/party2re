@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type testPayload struct {
@@ -149,5 +151,33 @@ func TestDecodeOptionalJSON_ChunkedEmptyBody(t *testing.T) {
 	ok := decodeOptionalJSON(rec, req, &got)
 	if !ok {
 		t.Fatalf("expected chunked empty body to be accepted as optional, got ok=false (code=%d)", rec.Code)
+	}
+}
+
+func TestCheckTextParams(t *testing.T) {
+	kinds := map[string]validation.TextKind{"name": validation.TextLine, "body": validation.TextComment}
+	for _, tc := range []struct {
+		raw string
+		ok  bool
+	}{
+		{``, true},
+		{`[]`, true},
+		{`{"name":"a,;<>","body":"a\r\nb","count":1}`, true},
+		{`{"name":"a\nb"}`, false},
+		{`{"other":"a\nb"}`, false}, // undeclared strings are lines
+		{`{"body":"a\u0007b"}`, false},
+		{`{"body":"a\u202eb"}`, false},
+		{`{"name":["ok","a\u200bb"]}`, false},
+		{`{"name":[{"id":"a\u0085b"}]}`, false},
+		{"{\"name\":\"\xff\"}", false},
+		{`{"name":"a\u202eb","name":null}`, false},
+		{`{"name":"ok","NAME":"ok"}`, false},
+		{`{"name":[{"id":"ok","id":null}]}`, false},
+		{`{"name":[{"id":"ok","ID":"ok"}]}`, false},
+		{`{"name":`, false},
+	} {
+		if err := checkTextParams([]byte(tc.raw), kinds); (err == nil) != tc.ok {
+			t.Errorf("checkTextParams(%q) = %v; want ok=%v", tc.raw, err, tc.ok)
+		}
 	}
 }

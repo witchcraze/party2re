@@ -545,13 +545,16 @@ such as `target_home_id` remain valid. Use the standard ownership wrapper and
 propagate the request context to every service/read call.
 
 `params` is a JSON object when present. It may be omitted for commands with no
-required inputs. Missing/null required values, incorrect types, unknown fields,
-and actor overrides return `400 INVALID_ACTION_PARAMS` without executing a
-command. Preserve strict JSON decoding, the 64 KiB limit and existing transport
-errors for authentication, ownership, content type and malformed envelopes.
-Unknown actions return `404 ACTION_NOT_FOUND`; known but unconnected commands or
-unconfigured services return `501 ACTION_NOT_IMPLEMENTED`. These failures perform
-no command and expose no context.
+required inputs. Missing/null required values, incorrect types, unknown or
+duplicate (case-insensitive) fields, actor overrides, malformed UTF-8 and
+strings with control (CR/LF excepted in comment text), zero-width, bidi-override
+or excessive combining characters return `400 INVALID_ACTION_PARAMS` without
+executing a command. Preserve strict JSON decoding, the 64 KiB limit and
+existing transport errors for authentication, ownership, content type and
+malformed envelopes. Unknown actions return `404 ACTION_NOT_FOUND`; known but
+unconnected commands or unconfigured services return `501
+ACTION_NOT_IMPLEMENTED`. These failures perform no command and expose no
+context.
 
 Catalog entries migrated to `executeCharacterAction` validate against their own
 `CharacterActionRequest.allOf` condition in OpenAPI, selected by

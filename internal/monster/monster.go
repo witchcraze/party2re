@@ -10,6 +10,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 var (
@@ -132,7 +133,7 @@ func ValidateMonsterName(name string) error {
 		return ErrInvalidName
 	}
 	for _, r := range name {
-		if unicode.IsSpace(r) || r == '\u3000' || strings.ContainsRune(",;\"'&<>＠", r) {
+		if unicode.IsSpace(r) || r == '\u3000' || strings.ContainsRune(validation.MarkupChars+validation.FullwidthAt, r) {
 			return ErrInvalidName
 		}
 	}
@@ -213,7 +214,7 @@ func (s *Service) TameMonster(ctx context.Context, characterID, monsterID, custo
 	}
 	for _, r := range customName {
 		// Server-owned encounter names can contain ordinary spaces.
-		if (r != ' ' && unicode.IsSpace(r)) || strings.ContainsRune(",;\"'&<>@", r) {
+		if (r != ' ' && unicode.IsSpace(r)) || strings.ContainsRune(validation.TitleChars, r) {
 			return MonsterInstance{}, ErrInvalidName
 		}
 	}

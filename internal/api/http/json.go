@@ -7,6 +7,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // maxRequestBodyBytes is the maximum accepted request body size (64 KiB).
@@ -91,4 +94,60 @@ func decodeActionParams(raw json.RawMessage, required []string, dst any) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	return dec.Decode(dst)
+}
+
+// checkTextParams applies the field-agnostic text check to every string token
+// in the params, nested values included, by its top-level parameter's declared
+// kind (TextLine when undeclared). It walks tokens rather than a decoded map and
+// rejects duplicate keys, so the strings checked are the ones typed decoding keeps.
+func checkTextParams(raw json.RawMessage, kinds map[string]validation.TextKind) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	if !utf8.Valid(raw) {
+		return errors.New("params are not valid UTF-8")
+	}
+	return checkTextValue(json.NewDecoder(bytes.NewReader(raw)), kinds, validation.TextLine)
+}
+
+// checkTextValue reads one JSON value. Only the top-level object (kinds != nil)
+// assigns member kinds; nested values inherit theirs.
+func checkTextValue(dec *json.Decoder, kinds map[string]validation.TextKind, kind validation.TextKind) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	switch t := tok.(type) {
+	case string:
+		return validation.CheckText(kind, t)
+	case json.Delim:
+		seen := map[string]bool{}
+		for dec.More() {
+			member := kind
+			if t == '{' {
+				key, err := dec.Token()
+				if err != nil {
+					return err
+				}
+				name, _ := key.(string)
+				// Typed decoding matches field names case-insensitively, keeping the last.
+				folded := strings.ToLower(name)
+				if seen[folded] {
+					return errors.New("duplicate action parameter")
+				}
+				seen[folded] = true
+				if kinds != nil {
+					if member = kinds[name]; member == "" {
+						member = validation.TextLine
+					}
+				}
+			}
+			if err := checkTextValue(dec, nil, member); err != nil {
+				return err
+			}
+		}
+		_, err = dec.Token()
+		return err
+	}
+	return nil
 }
