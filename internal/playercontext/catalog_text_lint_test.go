@@ -72,6 +72,15 @@ func holdsString(t *testing.T, spec *openAPISpec, schema openAPISchema) bool {
 			return true
 		}
 	}
+	if len(schema.AdditionalProperties) > 0 && schema.AdditionalProperties[0] == '{' {
+		var values openAPISchema
+		if err := json.Unmarshal(schema.AdditionalProperties, &values); err != nil {
+			t.Fatal(err)
+		}
+		if holdsString(t, spec, values) {
+			return true
+		}
+	}
 	for _, child := range schema.AllOf {
 		if holdsString(t, spec, child) {
 			return true

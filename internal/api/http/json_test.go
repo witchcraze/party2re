@@ -170,6 +170,11 @@ func TestCheckTextParams(t *testing.T) {
 		{`{"name":["ok","a\u200bb"]}`, false},
 		{`{"name":[{"id":"a\u0085b"}]}`, false},
 		{"{\"name\":\"\xff\"}", false},
+		{`{"name":"a\u202eb","name":null}`, false},
+		{`{"name":"ok","NAME":"ok"}`, false},
+		{`{"name":[{"id":"ok","id":null}]}`, false},
+		{`{"name":[{"id":"ok","ID":"ok"}]}`, false},
+		{`{"name":`, false},
 	} {
 		if err := checkTextParams([]byte(tc.raw), kinds); (err == nil) != tc.ok {
 			t.Errorf("checkTextParams(%q) = %v; want ok=%v", tc.raw, err, tc.ok)

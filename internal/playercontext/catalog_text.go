@@ -76,6 +76,7 @@ var TextKinds = map[string]map[string]validation.TextKind{
 	"home_notice_ack":         {"notice_ids": textLine},
 	"home_phrase_forget":      {"phrase_id": textLine},
 	"home_phrase_teach":       {"phrase": textLine},
+	"home_profile_update":     {"bio_data": textLine},
 	"home_sleep":              {"target_home_id": textLine},
 	"house_build":             {"house_style": textLine, "town_id": textLine},
 	"job_change":              {"job_id": textLine},
