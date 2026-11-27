@@ -118,7 +118,8 @@ func TestShopSynthesisMissingMaterialsIsALoggedReply(t *testing.T) {
 	}, WithPlaceLog(log))
 	store.selection = playercontext.Selection{Destination: "shop_accessory"}
 	recipe := shop.AllSynthesisRecipes()[0]
-	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_synthesize","params":{"recipe_target":"`+recipe.Target+`"}}`, nil)
+	// Any accepted selector logs the legacy target, never the internal ID.
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_synthesize","params":{"recipe_target":"`+recipe.ID+`"}}`, nil)
 	want := recipe.Material1Name + " と " + recipe.Material2Name + " が預り所にないみたいよ"
 	if status != 200 || len(log.rows) != 2 || log.rows[0].Text != want || log.rows[1].Text != "＠ごうせい>"+recipe.Target {
 		t.Fatalf("%d %s rows %+v", status, raw["error"], log.rows)

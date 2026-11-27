@@ -175,11 +175,9 @@ func shopCommands() Option {
 			res, err := h.shops.Synthesize(ctx, actor, p.RecipeTarget)
 			if errors.Is(err, shop.ErrMaterialsNotFound) {
 				// Missing materials are a logged $npc_com that changes nothing (accessory.cgi:204-206).
-				for _, recipe := range shop.AllSynthesisRecipes() {
-					if recipe.Target == p.RecipeTarget {
-						message := fmt.Sprintf("%s と %s が預り所にないみたいよ", recipe.Material1Name, recipe.Material2Name)
-						return shopSynthesizeResponse{SynthesisResult: shop.SynthesisResult{Recipe: recipe}, NPCMessage: message, commandEcho: commandEcho{target: p.RecipeTarget, reply: message}}, nil
-					}
+				if recipe, findErr := shop.FindSynthesisRecipe(p.RecipeTarget); findErr == nil {
+					message := fmt.Sprintf("%s と %s が預り所にないみたいよ", recipe.Material1Name, recipe.Material2Name)
+					return shopSynthesizeResponse{SynthesisResult: shop.SynthesisResult{Recipe: recipe}, NPCMessage: message, commandEcho: commandEcho{target: recipe.Target, reply: message}}, nil
 				}
 			}
 			if err != nil {
@@ -192,7 +190,7 @@ func shopCommands() Option {
 					message = "合成の秘薬を使って、" + message
 				}
 			}
-			return shopSynthesizeResponse{SynthesisResult: res, NPCMessage: message, commandEcho: commandEcho{target: p.RecipeTarget, reply: message}}, nil
+			return shopSynthesizeResponse{SynthesisResult: res, NPCMessage: message, commandEcho: commandEcho{target: res.Recipe.Target, reply: message}}, nil
 		}, shopActionRejection)(h)
 	}
 }

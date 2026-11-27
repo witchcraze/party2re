@@ -69,14 +69,17 @@ func WithAlchemy(service AlchemyService) Option {
 		}
 		withEchoCommand("alchemy_synthesize", func(ctx context.Context, actor string, p alchemySynthesizeRequest) (AlchemySynthesisResult, error) {
 			res, err := service.Synthesize(ctx, actor, p.RecipeID)
+			// Legacy answers both refusals with a logged $npc_com that changes nothing (alchemy.cgi:126,140).
 			var refused *alchemy.RefusalError
 			if errors.As(err, &refused) {
-				// Legacy answers both refusals with a logged $npc_com that changes nothing (alchemy.cgi:126,140).
-				msg := "錬金レシピで習得したものしか錬金することはできんぞ"
-				if errors.Is(err, alchemy.ErrInsufficientMaterials) {
-					msg = "残念ながら " + strings.Join(refused.IngredientNames, " と ") + " の材料が預り所にないようじゃ"
-				}
+				msg := "残念ながら " + strings.Join(refused.IngredientNames, " と ") + " の材料が預り所にないようじゃ"
 				return AlchemySynthesisResult{Message: msg, commandEcho: commandEcho{target: alchemyTarget(refused.IngredientNames), reply: msg}}, nil
+			}
+			if errors.Is(err, alchemy.ErrRecipeNotLearned) {
+				// Legacy logs the player's typed names; the Gateway's input is an ID, and
+				// naming an unlearned recipe would disclose it, so the row is the bare verb.
+				const msg = "錬金レシピで習得したものしか錬金することはできんぞ"
+				return AlchemySynthesisResult{Message: msg, commandEcho: commandEcho{reply: msg}}, nil
 			}
 			if err != nil {
 				return AlchemySynthesisResult{}, err

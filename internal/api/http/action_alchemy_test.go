@@ -238,18 +238,19 @@ func TestAlchemyRetiredRoutesAreUnreachable(t *testing.T) {
 // Legacy answers both refusals with a logged reply that changes nothing (alchemy.cgi:126,140).
 func TestAlchemyRefusalsAreLoggedReplies(t *testing.T) {
 	for _, tc := range []struct {
-		err   error
-		reply string
+		err          error
+		actor, reply string
 	}{
-		{alchemy.ErrInsufficientMaterials, "残念ながら 薬草 と 聖水 の材料が預り所にないようじゃ"},
-		{alchemy.ErrRecipeNotLearned, "錬金レシピで習得したものしか錬金することはできんぞ"},
+		{&alchemy.RefusalError{Err: alchemy.ErrInsufficientMaterials, IngredientNames: []string{"薬草", "薬草"}}, "＠れんきん>薬草＠そざい>薬草", "残念ながら 薬草 と 薬草 の材料が預り所にないようじゃ"},
+		// An unlearned recipe is not named, so the row discloses nothing.
+		{alchemy.ErrRecipeNotLearned, "＠れんきん", "錬金レシピで習得したものしか錬金することはできんぞ"},
 	} {
 		t.Run(tc.err.Error(), func(t *testing.T) {
 			log := &fakePlaceLog{}
 			f := &alchemyGatewayFixture{gatewayFixture: newGatewayFixture(t)}
-			f.executionErr = &alchemy.RefusalError{Err: tc.err, IngredientNames: []string{"薬草", "聖水"}}
+			f.executionErr = tc.err
 			status, got := gatewayRequest(t, f.router(t, timer.NewService(nil), WithPlaceLog(log)), "hero", "session", "application/json", saleGatewayBody("alchemy_synthesize", alchemySynthesizeParams), nil)
-			if status != 200 || len(log.rows) != 2 || log.rows[0].Text != tc.reply || log.rows[1].Text != "＠れんきん>薬草＠そざい>聖水" {
+			if status != 200 || len(log.rows) != 2 || log.rows[0].Text != tc.reply || log.rows[1].Text != tc.actor {
 				t.Fatalf("%d %s rows %+v", status, got["error"], log.rows)
 			}
 		})
