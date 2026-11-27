@@ -187,6 +187,8 @@ func TestDepotCommandsEchoIntoThePlaceLog(t *testing.T) {
 		{"depot_withdraw", `{"item_id":"one"}`, depot.Receipt{ItemName: "やくそう", ReturnedName: "どくけし"}, "＠ひきだす>やくそう", "どくけしをお預かりしました。やくそうをお返しします"},
 		{"depot_send_item", `{"item_id":"one","recipient_character_id":"r"}`, depot.Receipt{ItemName: "やくそう", RecipientName: "Ann"}, "＠おくる>やくそう＠あいて>Ann", "やくそうをAnnに送りました"},
 		{"depot_send_money", `{"amount":300,"recipient_character_id":"r"}`, depot.Receipt{RecipientName: "Ann"}, "＠おくる>300G＠あいて>Ann", "300 Gを Ann に送りました"},
+		// A name that looks like a placeholder is shown verbatim.
+		{"depot_send_money", `{"amount":300,"recipient_character_id":"r"}`, depot.Receipt{RecipientName: "{name}"}, "＠おくる>300G＠あいて>{name}", "300 Gを {name} に送りました"},
 		{"depot_sort", "", depot.Receipt{}, "＠せいとん", "預かっているアイテムをせいとんした"},
 		{"depot_expand", "", depot.Receipt{}, "＠かくちょう>はい", "Heroの倉庫を拡張しました"},
 		{"depot_sell", `{"item_id":"one"}`, depot.Receipt{Sales: []depot.Sale{{Name: "やくそう", Price: 150}}}, "＠うる>やくそう", "やくそう の買取代の 150 Gです！"},

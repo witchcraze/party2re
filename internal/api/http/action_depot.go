@@ -55,7 +55,7 @@ func WithDepot(service DepotService) Option {
 			if err != nil {
 				return depotEchoResponse{}, err
 			}
-			return depotEchoResponse{toDepotResponse(value.Depot), commandEcho{value.ItemName, value.ItemName + "をお預かりしました"}}, nil
+			return depotEchoResponse{toDepotResponse(value.Depot), commandEcho{target: value.ItemName, reply: value.ItemName + "をお預かりしました"}}, nil
 		}, depotActionRejection)(h)
 		withEchoCommand("depot_withdraw", func(ctx context.Context, actorID string, params withdrawItemRequest) (withdrawResponse, error) {
 			value, collected, err := service.WithdrawItem(ctx, actorID, params.ItemID)
@@ -68,7 +68,7 @@ func WithDepot(service DepotService) Option {
 				if value.ReturnedName != "" {
 					reply = value.ReturnedName + "をお預かりしました。" + reply
 				}
-				res.commandEcho = commandEcho{value.ItemName, reply}
+				res.commandEcho = commandEcho{target: value.ItemName, reply: reply}
 			}
 			return res, nil
 		}, depotActionRejection)(h)
@@ -78,7 +78,7 @@ func WithDepot(service DepotService) Option {
 			if err != nil {
 				return sendItemResponse{}, err
 			}
-			echo := commandEcho{value.ItemName + "＠あいて>" + value.RecipientName, value.ItemName + "を" + value.RecipientName + "に送りました"}
+			echo := commandEcho{target: value.ItemName + "＠あいて>" + value.RecipientName, reply: value.ItemName + "を" + value.RecipientName + "に送りました"}
 			return sendItemResponse{Depot: toDepotResponse(value.Depot), RecipientCharacterID: recipientID, ItemID: itemID, commandEcho: echo}, nil
 		}, depotActionRejection)(h)
 		withEchoCommand("depot_send_money", func(ctx context.Context, actorID string, params sendMoneyRequest) (sendMoneyResponse, error) {
@@ -87,7 +87,7 @@ func WithDepot(service DepotService) Option {
 			if err != nil {
 				return sendMoneyResponse{}, err
 			}
-			echo := commandEcho{fmt.Sprintf("%dG＠あいて>%s", params.Amount, value.RecipientName), fmt.Sprintf("%d Gを %s に送りました", params.Amount, value.RecipientName)}
+			echo := commandEcho{target: fmt.Sprintf("%dG＠あいて>%s", params.Amount, value.RecipientName), reply: fmt.Sprintf("%d Gを %s に送りました", params.Amount, value.RecipientName)}
 			return sendMoneyResponse{Depot: toDepotResponse(value.Depot), RecipientCharacterID: recipientID, Amount: params.Amount, commandEcho: echo}, nil
 		}, depotActionRejection)(h)
 		withEchoCommand("depot_sort", func(ctx context.Context, actorID string, _ struct{}) (depotEchoResponse, error) {
@@ -95,7 +95,7 @@ func WithDepot(service DepotService) Option {
 			if err != nil {
 				return depotEchoResponse{}, err
 			}
-			return depotEchoResponse{toDepotResponse(value), commandEcho{"", "預かっているアイテムをせいとんした"}}, nil
+			return depotEchoResponse{toDepotResponse(value), commandEcho{reply: "預かっているアイテムをせいとんした"}}, nil
 		}, depotActionRejection)(h)
 		withEchoCommand("depot_expand", func(ctx context.Context, actorID string, _ struct{}) (depotEchoResponse, error) {
 			value, err := service.Expand(ctx, actorID)
@@ -103,7 +103,7 @@ func WithDepot(service DepotService) Option {
 				return depotEchoResponse{}, err
 			}
 			// Gateway expansion is the confirmed ＠かくちょう>はい (depot.cgi:527-534).
-			return depotEchoResponse{toDepotResponse(value), commandEcho{"はい", "{name}の倉庫を拡張しました"}}, nil
+			return depotEchoResponse{toDepotResponse(value), commandEcho{target: "はい", reply: "の倉庫を拡張しました", actorFirst: true}}, nil
 		}, depotActionRejection)(h)
 		withEchoCommand("depot_sell", func(ctx context.Context, actorID string, params sellDepotItemRequest) (sellDepotResponse, error) {
 			value, earned, err := service.SellItem(ctx, actorID, params.ItemID)
@@ -114,7 +114,7 @@ func WithDepot(service DepotService) Option {
 			if len(value.Sales) > 0 {
 				name = value.Sales[0].Name
 			}
-			return sellDepotResponse{toDepotResponse(value.Depot), earned, commandEcho{name, fmt.Sprintf("%s の買取代の %d Gです！", name, earned)}}, nil
+			return sellDepotResponse{toDepotResponse(value.Depot), earned, commandEcho{target: name, reply: fmt.Sprintf("%s の買取代の %d Gです！", name, earned)}}, nil
 		}, depotActionRejection)(h)
 		withEchoCommand("depot_sell_batch", func(ctx context.Context, actorID string, params depotSaleBatchRequest) (sellDepotResponse, error) {
 			value, earned, err := service.SellItems(ctx, actorID, params.ItemIDs)
@@ -142,7 +142,7 @@ func batchSaleEcho(sales []depot.Sale, earned int) commandEcho {
 		fmt.Fprintf(&reply, "%s%s %d G\n", strings.Repeat("\u00a0", 12), sale.Name, sale.Price)
 	}
 	reply.WriteString("---------------------")
-	return commandEcho{target.String(), reply.String()}
+	return commandEcho{target: target.String(), reply: reply.String()}
 }
 
 func depotActionRejection(err error) (int, ErrorDetail) {

@@ -59,10 +59,13 @@ func withActionCommand[P any](id string, execute func(context.Context, string, P
 }
 
 // commandEcho is a successful command's place-log echo: the target display
-// (names and amounts, never IDs) and the facility's $npc_com reply, where
-// "{name}" stands for the actor. The zero value is a private $mes outcome. Results
-// embed it unexported, so it is never serialized.
-type commandEcho struct{ target, reply string }
+// (names and amounts, never IDs) and the facility's $npc_com reply, which
+// actorFirst prefixes with the actor's name ($m). The zero value is a private
+// $mes outcome. Results embed it unexported, so it is never serialized.
+type commandEcho struct {
+	target, reply string
+	actorFirst    bool
+}
 
 func (e commandEcho) placeEcho() commandEcho { return e }
 
@@ -292,7 +295,11 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				if npc != nil {
 					name = npc.name
 				}
-				h.appendNPCLog(r.Context(), current, row, name, strings.ReplaceAll(e.reply, "{name}", char.Name), "")
+				reply := e.reply
+				if e.actorFirst {
+					reply = char.Name + reply
+				}
+				h.appendNPCLog(r.Context(), current, row, name, reply, "")
 			}
 		}
 		observation, refreshError := h.refreshActionContext(r.Context(), player.ID, char.ID)
