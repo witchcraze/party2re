@@ -1012,7 +1012,11 @@ func TestValkeyRoomRenewal_CrossRoomConcurrentSameCharacterInvariants(t *testing
 		t.Fatalf("after deterministic pre-claim CAS race: %v", err)
 	}
 	// Reset mover to roomA for Interleaving B.
-	if mapped, _ := repo.GetCharacterRoom(ctx, mover); mapped == roomB {
+	mapped, err := repo.GetCharacterRoom(ctx, mover)
+	if err != nil && !errors.Is(err, casino.ErrRoomNotFound) {
+		t.Fatal(err)
+	}
+	if mapped == roomB {
 		if err := svc.LeaveRoom(ctx, roomB, mover); err != nil {
 			t.Fatal(err)
 		}

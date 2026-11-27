@@ -183,7 +183,10 @@ func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
 	}
 
 	// Ensure sess1 removed from player sorted set
-	membersAfterRevoke, _ := client.Do(ctx, client.B().Zrange().Key(testPlayerPrefix+"vk-player-1").Min("0").Max("-1").Build()).AsStrSlice()
+	membersAfterRevoke, err := client.Do(ctx, client.B().Zrange().Key(testPlayerPrefix+"vk-player-1").Min("0").Max("-1").Build()).AsStrSlice()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(membersAfterRevoke) != 1 || membersAfterRevoke[0] != sess2.ID {
 		t.Errorf("expected only sess2 in player sorted set, got %v", membersAfterRevoke)
 	}
@@ -195,7 +198,10 @@ func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
 	if _, err := repo.FindByID(ctx, sess2.ID); !errors.Is(err, coreplayer.ErrInvalidSession) {
 		t.Errorf("expected sess2 deleted by player deletion, got %v", err)
 	}
-	exists, _ := client.Do(ctx, client.B().Exists().Key(testPlayerPrefix+"vk-player-1").Build()).AsInt64()
+	exists, err := client.Do(ctx, client.B().Exists().Key(testPlayerPrefix+"vk-player-1").Build()).AsInt64()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if exists != 0 {
 		t.Errorf("expected player sessions set deleted, exists = %d", exists)
 	}
@@ -357,7 +363,10 @@ func TestValkeySessionRepository_WrongTypeRecovery(t *testing.T) {
 		t.Fatalf("Save should recover from WRONGTYPE, got: %v", err)
 	}
 
-	keyType, _ := client.Do(ctx, client.B().Type().Key(playerKey).Build()).ToString()
+	keyType, err := client.Do(ctx, client.B().Type().Key(playerKey).Build()).ToString()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if keyType != "zset" {
 		t.Errorf("expected key type 'zset' after upgrade, got %q", keyType)
 	}

@@ -217,7 +217,10 @@ func TestValkeyRepository_FetchDue_MalformedJSONRemovedFromQueue(t *testing.T) {
 		}
 	}
 
-	members, _ := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	members, err := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, m := range members {
 		if m == id {
 			t.Errorf("malformed action %q should be removed from pending ZSET", id)
@@ -261,7 +264,10 @@ func TestValkeyRepository_FetchDue_InvalidValidateRemovedFromQueue(t *testing.T)
 		}
 	}
 
-	members, _ := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	members, err := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, m := range members {
 		if m == id {
 			t.Errorf("invalid action %q should be removed from pending ZSET", id)
@@ -291,7 +297,10 @@ func TestValkeyRepository_FetchDue_StaleQueueEntryCleanedUp(t *testing.T) {
 		}
 	}
 
-	members, _ := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	members, err := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, m := range members {
 		if m == id {
 			t.Errorf("stale queue entry %q should be removed from pending ZSET", id)
@@ -382,7 +391,10 @@ func TestValkeyRepository_Save_CompletedRemovesFromQueueAndSetsRetainTTL(t *test
 		t.Fatalf("Save(completed): %v", err)
 	}
 
-	members, _ := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	members, err := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, m := range members {
 		if m == id {
 			t.Errorf("completed action %q should be removed from pending ZSET", id)
@@ -422,7 +434,10 @@ func TestValkeyRepository_Save_FailedRemovesFromQueueAndSetsRetainTTL(t *testing
 		t.Fatalf("Save(failed): %v", err)
 	}
 
-	members, _ := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	members, err := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, m := range members {
 		if m == id {
 			t.Errorf("failed action %q should be removed from pending ZSET", id)
@@ -459,7 +474,10 @@ func TestValkeyRepository_Save_ProcessingUpdatesKeyWithoutRemovingFromQueue(t *t
 		t.Fatalf("Save(processing): %v", err)
 	}
 
-	members, _ := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	members, err := client.Do(ctx, client.B().Zrange().Key("party2:scheduled:pending").Min("-inf").Max("+inf").Byscore().Build()).AsStrSlice()
+	if err != nil {
+		t.Fatal(err)
+	}
 	found := false
 	for _, m := range members {
 		if m == id {
@@ -517,12 +535,12 @@ func TestValkeyRepository_CancelByActorID(t *testing.T) {
 
 	// Verify a1 and a2 are removed from pending queue and action keys
 	_, err = client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+id1).Build()).AsBytes()
-	if err == nil {
-		t.Errorf("action %s should be deleted", id1)
+	if !valkey.IsValkeyNil(err) {
+		t.Errorf("action %s should be deleted, got err=%v", id1, err)
 	}
 	_, err = client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+id2).Build()).AsBytes()
-	if err == nil {
-		t.Errorf("action %s should be deleted", id2)
+	if !valkey.IsValkeyNil(err) {
+		t.Errorf("action %s should be deleted, got err=%v", id2, err)
 	}
 
 	// a3 should still exist
