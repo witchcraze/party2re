@@ -43,13 +43,6 @@ func protectiveMagicInvocation(c *corebattle.ProtectiveMagicContext, id string) 
 			}
 			return s.ValidateProtectiveMagic(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			child, err := context(f)
-			if err != nil {
-				return false, err
-			}
-			return s.ProjectProtectiveMagic(&child, id)
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

@@ -32,14 +32,6 @@ func rangedInvocation(c *corebattle.RangedContext, id string) corebattle.Callbac
 			child.TargetContext, child.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			return s.ValidateRanged(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			if c == nil {
-				return false, corebattle.ErrUnsupportedEffect
-			}
-			child := *c
-			child.TargetContext, child.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
-			return s.ProjectRanged(&child, id)
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

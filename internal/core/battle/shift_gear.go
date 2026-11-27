@@ -37,13 +37,6 @@ func ShiftGearCallback(previous bool) CallbackDefinition {
 	}
 	return CallbackDefinition{
 		Validate: validate,
-		Project: func(s *LifetimeState, c *CallbackContext) (bool, error) {
-			if err := validate(s, c); err != nil {
-				return false, err
-			}
-			apply(s, c)
-			return true, nil
-		},
 		Execute: func(s *LifetimeState, c *CallbackContext, _ random.Generator) error {
 			if err := validate(s, c); err != nil {
 				return err

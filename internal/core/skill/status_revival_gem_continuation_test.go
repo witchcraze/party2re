@@ -40,7 +40,7 @@ func TestStatusRevivalGemsAdmitOrderedContinuation(t *testing.T) {
 }
 
 // Numeric oracles: ff97fc5:_data.cgi:2158–2169; _skill.cgi:9193–9233,9360–9419.
-func TestStatusGemConcreteProjectionAndChanceBoundaries(t *testing.T) {
+func TestStatusGemChanceBoundaries(t *testing.T) {
 	for _, tc := range []struct {
 		id, status  string
 		chance      float64
@@ -68,14 +68,6 @@ func TestStatusGemConcreteProjectionAndChanceBoundaries(t *testing.T) {
 				}}
 				d.RegisterStatuses(&c, nil)
 				f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
-				def := d.Invocations.Entries[tc.id]
-				if def.ProjectBranches == nil {
-					t.Fatal("missing concrete producer")
-				}
-				branches, err := def.ProjectBranches(&s, &f)
-				if err != nil || len(branches) != 2 || applied != 0 {
-					t.Fatal(len(branches), err, c, applied)
-				}
 				draw := tc.chance / 100
 				if !equal {
 					draw -= .00001
@@ -104,21 +96,12 @@ func TestStatusGemConcreteProjectionAndChanceBoundaries(t *testing.T) {
 						t.Fatal(f.Status, applied)
 					}
 				}
-				matched := false
-				for _, branch := range branches {
-					if reflect.DeepEqual(branch.State, s) {
-						matched = true
-					}
-				}
-				if !matched {
-					t.Fatal("runtime state absent from pure alternatives", s)
-				}
 			})
 		}
 	}
 }
 
-func TestCureGemConcreteProjectionAndStatusCMP(t *testing.T) {
+func TestCureGemStatusCMP(t *testing.T) {
 	for _, tc := range []struct{ id, status string }{
 		{"gem_cure_poison", corebattle.StatusPoison}, {"gem_cure_poison", corebattle.StatusVirulentPoison},
 		{"gem_cure_paralysis", corebattle.StatusParalyze}, {"gem_cure_sleep", corebattle.StatusSleep},
@@ -133,13 +116,6 @@ func TestCureGemConcreteProjectionAndStatusCMP(t *testing.T) {
 			d.RegisterStatuses(&c, nil)
 			d.RegisterResources(&corebattle.DamageContext{})
 			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"self", "tail"}}
-			branches, err := d.Invocations.Entries[tc.id].ProjectBranches(&s, &f)
-			if err != nil || len(branches) == 0 {
-				t.Fatal(len(branches), err)
-			}
-			if branches[0].State.Actors[0].Status != "" || s.Actors[0].Status != tc.status {
-				t.Fatal("cure not isolated", branches[0].State, s)
-			}
 			ops, err := d.InvocationAction(&s, &f, []string{tc.id, "gem_status_cmp_3"}, noArithmeticDraws{t})
 			if err != nil {
 				t.Fatal(err)
@@ -273,10 +249,11 @@ func TestStatusRevivalGemUnsupportedTailIsAtomicAndUnknownStaysGated(t *testing.
 			t.Fatal(err)
 		}
 		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: first}, {Kind: "entry", EntryID: "gem_instant_death_1"}}
-		if err = s.ValidateInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		if err = s.ValidateInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); err != nil {
 			t.Fatal(first, err)
 		}
-		if err = s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		// The later death gem lacks defeat context; execution rejects and rolls back.
+		if err = s.ApplyInvocations(&f, d.Invocations, ops, &npcSelectionRNG{value: .5}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(first, err)
 		}
 		after, err := json.Marshal(s)
@@ -295,7 +272,7 @@ func TestStatusRevivalGemUnsupportedTailIsAtomicAndUnknownStaysGated(t *testing.
 	assertAtomicAfterUnknown(t, &s, &f, d, "unknown", "gem_revive_sky_1")
 }
 
-func TestRegisteredInstantDeathRejectsUnsupportedAwakenedResetTailBeforeMutation(t *testing.T) {
+func TestRegisteredInstantDeathRejectsUnsupportedAwakenedResetTailAtomically(t *testing.T) {
 	s, revival, d := revivalRegistryFixture()
 	self, enemy := &s.Actors[0], &s.Actors[1]
 	self.Extended = corebattle.ExtendedAwakening
@@ -327,11 +304,12 @@ func TestRegisteredInstantDeathRejectsUnsupportedAwakenedResetTailBeforeMutation
 	}
 	frameBefore, statusBefore, defeatBefore := frame, status, *defeat
 	ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_instant_death_1"}, {Kind: "entry", EntryID: "audit-tail"}}
-	if _, err = d.InvocationAction(&s, &frame, []string{"gem_instant_death_1", "audit-tail"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal("registered discovery admitted unsupported continuation", err)
+	if _, err = d.InvocationAction(&s, &frame, []string{"gem_instant_death_1", "audit-tail"}, noArithmeticDraws{t}); err != nil {
+		t.Fatal("registered discovery rejected a registered later slot", err)
 	}
-	if err = s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-		t.Fatal("registered execution admission accepted unsupported continuation", err)
+	// The tail sees the actual awakened reset at execution and rolls back.
+	if err = s.ApplyInvocations(&frame, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{0, .9, .9}}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		t.Fatal("execution accepted unsupported continuation", err)
 	}
 	stateAfter, err := json.Marshal(s)
 	if err != nil || string(stateBefore) != string(stateAfter) || !reflect.DeepEqual(frameBefore, frame) ||
@@ -361,7 +339,7 @@ func TestRegisteredInstantDeathRejectsUnsupportedAwakenedResetTailBeforeMutation
 	rng := &damageGemDraws{t: t, draws: []float64{0, .9, .9}}
 	if err = s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || rng.used != 3 ||
 		s.Actors[1].HP != 101 || s.Actors[1].MP != 40 || s.Actors[1].Attack != 295 {
-		t.Fatal("registered instant-death continuation missed the projected maximum", err, s, status, rng.used)
+		t.Fatal("registered instant-death missed the maximum reset outcome", err, s, status, rng.used)
 	}
 }
 
@@ -377,8 +355,12 @@ func TestRevivalGemSealAlternativesAndItem195RejectUncheckedLaterDefense(t *test
 		if err != nil {
 			t.Fatal(err)
 		}
-		// A failed cure leaves magic sealed: unchecked gem41 must reject.
-		if _, err = d.InvocationAction(&s, &f, []string{"gem_revive_sky_1", "gem_nullify_phys"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		// A failed cure leaves magic sealed: unchecked gem41 rejects at execution.
+		ops, err := d.InvocationAction(&s, &f, []string{"gem_revive_sky_1", "gem_nullify_phys"}, noArithmeticDraws{t})
+		if err != nil {
+			t.Fatal(activate, err)
+		}
+		if err = s.ApplyInvocations(&f, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{.25}}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(activate, err)
 		}
 		after, err := json.Marshal(s)
@@ -426,19 +408,15 @@ func TestSacrificeGemNativeContinuationAndEarlyRejection(t *testing.T) {
 			before := s
 			before.Actors = append([]corebattle.LifetimeActor(nil), s.Actors...)
 			ids := []string{"gem_sacrifice_soul", "missing"}
-			_, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
-			if protect {
-				if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-					t.Fatal(err)
-				}
-				if err = s.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_sacrifice_soul"}, {Kind: "entry", EntryID: "missing"}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-					t.Fatal(err)
-				}
-				if !reflect.DeepEqual(before, s) || c.NativeDefeat.Cursor != (corebattle.TargetCursor{}) {
-					t.Fatal("rejection mutated caller")
-				}
-			} else if err != nil {
-				t.Fatal("dead branch must skip unsupported later slot", err)
+			// Later slots need registration even when the actor may die first.
+			if _, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+				t.Fatal(err)
+			}
+			if err := s.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_sacrifice_soul"}, {Kind: "entry", EntryID: "missing"}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(before, s) || c.NativeDefeat.Cursor != (corebattle.TargetCursor{}) {
+				t.Fatal("rejection mutated caller")
 			}
 			ids = []string{"gem_sacrifice_soul", "gem_cure_sleep"}
 			ops, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})

@@ -75,21 +75,15 @@ func TestProtectiveMagicEarlierBarrierChangesLaterEligibility(t *testing.T) {
 		}
 		ids := []string{"job-32-entry-3", "job-34-entry-1"}
 		ops, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
+		if err != nil || s.Actors[0].Temporary != corebattle.TemporaryNullMagic || c.Arguments != nil {
+			t.Fatal("admission rejected or mutated caller", err, s, c)
+		}
 		if !supported {
-			if !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Temporary != corebattle.TemporaryNullMagic || c.Arguments != nil {
-				t.Fatal(err, s, c)
-			}
-			ops = []corebattle.CallbackInvocation{{Kind: "entry", EntryID: ids[0]}, {Kind: "entry", EntryID: ids[1]}}
+			// The barrier exposes the damage descendant only at execution.
 			if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Temporary != corebattle.TemporaryNullMagic {
 				t.Fatal(err, s)
 			}
 			continue
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		if s.Actors[0].Temporary != corebattle.TemporaryNullMagic {
-			t.Fatal("projection mutated caller")
 		}
 		rng := &damageGemDraws{t: t, draws: []float64{0}}
 		if err := s.ApplyInvocations(&f, d.Invocations, ops, rng); err != nil || rng.used != 1 {

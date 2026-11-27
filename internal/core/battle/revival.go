@@ -88,8 +88,7 @@ func (s *LifetimeState) ValidateRevival(c *RevivalContext, id, targetID string, 
 		}
 	}
 	if id == "gem_sacrifice_soul" && c.NativeDefeat != nil {
-		_, err := s.ProjectRevivalGemBranches(c, id, targetID)
-		return err
+		return s.validateSacrificeDefeat(c)
 	}
 	if b.mode == "death-sacrifice" {
 		if c.Deaths == nil || c.Deaths.Validate == nil || c.Deaths.Execute == nil {

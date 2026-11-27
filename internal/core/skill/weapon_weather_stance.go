@@ -42,13 +42,6 @@ func weaponWeatherStanceInvocation(c *corebattle.WeaponWeatherStanceContext, id 
 			}
 			return s.ValidateWeaponWeatherStance(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			child, err := context(f)
-			if err != nil {
-				return false, err
-			}
-			return s.ProjectWeaponWeatherStance(&child, id)
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

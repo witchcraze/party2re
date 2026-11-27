@@ -20,10 +20,6 @@ var npcSkills = append(skill.NPCDefaultSeed(), corebattle.CallbackBinding{
 // banished members from the room after the command.
 var dejon = corebattle.CallbackDefinition{
 	Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-	Project: func(s *corebattle.LifetimeState, _ *corebattle.CallbackContext) (bool, error) {
-		banishFallen(s)
-		return true, nil
-	},
 	Execute: func(s *corebattle.LifetimeState, _ *corebattle.CallbackContext, _ random.Generator) error {
 		banishFallen(s)
 		return nil

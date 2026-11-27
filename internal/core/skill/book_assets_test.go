@@ -189,10 +189,6 @@ func doubleChild(calls *[]string) corebattle.CallbackDefinition {
 	}
 	return corebattle.CallbackDefinition{
 		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			apply(s, f)
-			return true, nil
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, _ random.Generator) error {
 			*calls = append(*calls, f.Arguments[0])
 			apply(s, f)

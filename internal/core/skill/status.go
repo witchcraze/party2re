@@ -87,27 +87,6 @@ func (d BattleDefinitions) StatusInvocation(c *corebattle.StatusContext, reset *
 			_, err := d.StatusAction(s, &child, reset, id, target, random.Default())
 			return err
 		},
-		ProjectBranches: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-			if c == nil || !d.StatusSkills[id] {
-				return nil, corebattle.ErrUnsupportedEffect
-			}
-			child := context(frame)
-			target := ""
-			if len(frame.Arguments) > 0 {
-				target = frame.Arguments[0]
-			}
-			states, err := s.ProjectStatusGemBranches(&child, id, target)
-			if err != nil {
-				return nil, err
-			}
-			var branches []corebattle.CallbackContinuation
-			for _, state := range states {
-				next := *frame
-				write(&next, state.Context)
-				branches = append(branches, corebattle.CallbackContinuation{State: state.State, Context: next})
-			}
-			return branches, nil
-		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

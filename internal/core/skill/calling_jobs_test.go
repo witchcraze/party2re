@@ -86,7 +86,6 @@ func TestCallingProjectedCopyDeathAndSpawnSelectCurrentEligibility(t *testing.T)
 			}
 			d.Invocations.Entries["prior"] = corebattle.CallbackDefinition{
 				Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-				Project:  transition,
 				Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, _ random.Generator) error {
 					_, err := transition(s, f)
 					return err
@@ -99,7 +98,7 @@ func TestCallingProjectedCopyDeathAndSpawnSelectCurrentEligibility(t *testing.T)
 			d.Invocations.Entries["calling"] = corebattle.CallbackDefinition{Invocation: corebattle.CallbackInvocation{Kind: kind}}
 			ops, err := d.InvocationAction(&s, &frame, []string{"prior", "calling"}, noArithmeticDraws{t})
 			if err != nil || len(s.Actors) != 2 || s.Actors[0].HP != 50 || s.Actors[0].Jobs.OldJobID != "job-59" {
-				t.Fatal("projection changed caller", err, s)
+				t.Fatal("admission changed caller", err, s)
 			}
 			if err := s.ApplyInvocations(&frame, d.Invocations, ops, random.NewDeterministic(1)); err != nil {
 				t.Fatal(err)

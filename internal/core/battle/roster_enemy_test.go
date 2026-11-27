@@ -58,10 +58,6 @@ func TestEnemySummonDoesNothingUnderWin(t *testing.T) {
 	if r, err := s.ApplyRoster(&c, "gem_summon_sky", "", &targetRNG{t: t}); err != nil || r.Applied || len(s.Actors) != before {
 		t.Fatal(r, err)
 	}
-	frame := &CallbackContext{TargetContext: c.TargetContext}
-	if branches, err := s.ProjectEnemySummon(&c, frame); err != nil || len(branches) != 1 {
-		t.Fatal(branches, err)
-	}
 }
 
 func TestEnemySummonSizeGemGuardAndNPCSide(t *testing.T) {

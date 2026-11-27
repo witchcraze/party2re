@@ -101,15 +101,3 @@ func (s *LifetimeState) ValidateRanged(c *RangedContext, id string, rng random.G
 	}
 	return nil
 }
-
-// ProjectRanged carries only deterministic inline writes into later admission.
-func (s *LifetimeState) ProjectRanged(c *RangedContext, id string) (bool, error) {
-	if err := s.ValidateRanged(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	if id == "job-11-entry-2" || id == "job-54-entry-2" {
-		s.actor(c.ActorID).Hit = 95
-		return true, nil
-	}
-	return false, nil
-}

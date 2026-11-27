@@ -102,15 +102,16 @@ func TestHighPowerRevivalChangesLaterEligibility(t *testing.T) {
 		}
 		ids := []string{"job-48-entry-5", "job-47-entry-0"}
 		frame := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
-		_, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t})
+		ops, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t})
+		if err != nil {
+			t.Fatal(err)
+		}
 		if reject {
-			if !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[1].HP != 0 || s.Actors[0].Status != corebattle.StatusPoison {
+			// The revived later target needs defeat context only at execution.
+			if err := s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[1].HP != 0 || s.Actors[0].Status != corebattle.StatusPoison {
 				t.Fatal(err, s)
 			}
 			continue
-		}
-		if err != nil {
-			t.Fatal(err)
 		}
 		executeHighPower(t, &s, c, d, ids, []string{"enemy"}, 0)
 		if s.Actors[1].HP != 0 || s.Actors[2].HP != 1 || s.Actors[0].Status != "" || s.Actors[1].Extended != "" || s.Actors[1].Tension != 3 || s.Actors[2].Tension != 5 || s.Actors[0].Temporary != corebattle.TemporaryAbsorbMagic {

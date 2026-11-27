@@ -75,17 +75,3 @@ func (s *LifetimeState) validateProtectiveGroup(c *ProtectiveMagicContext, rng r
 	}
 	return nil
 }
-
-// Only unsealed direct temporary writes have an exact transition without RNG.
-func (s *LifetimeState) ProjectProtectiveMagic(c *ProtectiveMagicContext, id string) (bool, error) {
-	if err := s.ValidateProtectiveMagic(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	if protectiveMagicTemporary(id) == "" || s.actor(c.ActorID).categorySealed(CategoryMagic) {
-		return false, nil
-	}
-	if err := s.ApplyProtectiveMagic(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	return true, nil
-}

@@ -104,3 +104,12 @@ func (s *LifetimeState) projectSymbolicTargets(c TargetContext, e TargetEffect, 
 	}
 	return results, nil
 }
+func (s LifetimeState) tensionConfusionBranches(c EffectContext) []LifetimeState {
+	branches := []LifetimeState{s.callbackCopy()}
+	if c.Item195Activated && s.actor(c.ActorID).Status == "" {
+		child := s.callbackCopy()
+		child.actor(c.ActorID).Status = StatusConfusion
+		branches = append(branches, child)
+	}
+	return branches
+}

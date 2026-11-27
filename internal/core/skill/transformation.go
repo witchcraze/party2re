@@ -72,13 +72,6 @@ func (d BattleDefinitions) TransformationInvocation(c *corebattle.Transformation
 			}
 			return d.transformationGate(s, &child, id, target, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {
-			child, target, err := context(frame)
-			if err != nil || !d.TransformationSkills[id] {
-				return false, corebattle.ErrUnsupportedEffect
-			}
-			return s.ProjectTransformation(&child, id, target)
-		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			_, target, err := context(frame)
 			if err != nil {

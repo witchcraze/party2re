@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 // Complete native registration, with the actual copy and defense bodies.
@@ -76,7 +77,9 @@ func TestInvocationWrapperNativeRepeatedExtendedHandledWithoutPorts(t *testing.T
 	s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-73", OldJobID: "job-86", OldSP: 999}
 	s.Actors[0].MP, s.Actors[0].Attack = 2, 998
 	var d BattleDefinitions
-	d.RegisterPlayerCallbacks(PlayerCallbackContexts{}, len(c.PartyIDs))
+	// Later slots check registration across every form table, which needs the
+	// transformation context that selects job79's variant.
+	d.RegisterPlayerCallbacks(PlayerCallbackContexts{Transformations: &c}, len(c.PartyIDs))
 	d.RegisterNonJobInvocations()
 	d.RegisterDefenseGems()
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext}
@@ -107,45 +110,25 @@ func TestInvocationWrapperNativeDismissAndMergeRetainDeadActor(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ops, err := d.InvocationAction(&s, &f, []string{row.gem, "missing"}, noArithmeticDraws{t})
+			d.Invocations.Entries["later"] = corebattle.CallbackDefinition{
+				Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
+				Execute: func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error {
+					t.Fatal("later slot ran after the actor died")
+					return nil
+				},
+			}
+			ops, err := d.InvocationAction(&s, &f, []string{row.gem, "later"}, noArithmeticDraws{t})
 			if err != nil {
-				t.Fatal("native dead-actor projection lost its actor record", err)
+				t.Fatal(err)
 			}
 			after, err := json.Marshal(s)
 			if err != nil || string(before) != string(after) {
 				t.Fatal("admission changed caller state", err)
 			}
-			// Check the actual registered projection as well as enclosing admission:
-			// dismissal/merge mark the acting helper dead; they do not prune it.
-			var projected corebattle.LifetimeState
-			if err := json.Unmarshal(before, &projected); err != nil {
-				t.Fatal(err)
-			}
-			frame := f
-			known, err := d.Invocations.Entries[row.id].Project(&projected, &frame)
-			if err != nil || !known || frame.ActorID != "self" || len(projected.Actors) != 2 || projected.Actors[0].ID != frame.ActorID || projected.Actors[0].HP != 0 || projected.Actors[0].MP != row.wantMP || !projected.Actors[0].RosterDetached {
-				t.Fatal(known, err, projected, frame)
-			}
-			if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); err != nil || !reflect.DeepEqual(s, projected) {
-				t.Fatal("execution pruned a projected actor or reached the later missing slot", err, s)
+			// Dismissal/merge mark the acting helper dead; they do not prune it.
+			if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); err != nil || f.ActorID != "self" || len(s.Actors) != 2 || s.Actors[0].ID != f.ActorID || s.Actors[0].HP != 0 || s.Actors[0].MP != row.wantMP || !s.Actors[0].RosterDetached {
+				t.Fatal("execution pruned the dead actor", err, s, f)
 			}
 		})
-	}
-}
-
-func TestInvocationWrapperNativeBranchedProjectionRetainsActor(t *testing.T) {
-	s, c := recoveryGemFixture(false)
-	s.Actors[0].Status = corebattle.StatusMagicSeal
-	var d BattleDefinitions
-	d.RegisterDefenseGems()
-	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"ally"}}
-	branches, err := d.Invocations.Entries["gem_guard_sky"].ProjectBranches(&s, &f)
-	if err != nil || len(branches) != 2 {
-		t.Fatal(branches, err)
-	}
-	for _, branch := range branches {
-		if branch.Context.ActorID != f.ActorID || len(branch.State.Actors) != len(s.Actors) || branch.State.Actors[0].ID != f.ActorID || branch.State.Actors[0].HP != s.Actors[0].HP {
-			t.Fatal("native seal cure/failure removed the actor", branch)
-		}
 	}
 }

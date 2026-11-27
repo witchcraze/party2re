@@ -5,8 +5,6 @@ import (
 	"errors"
 	"reflect"
 	"testing"
-
-	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 func TestNamedFieldSavedTailAndQueueMatchUninterrupted(t *testing.T) {
@@ -87,36 +85,5 @@ func TestNamedFieldBurnRejectsBeforeCreationAndReset(t *testing.T) {
 	before := reloadLifetime(t, s)
 	if err := s.ApplyNamedField(&c, "job-84-entry-4", &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(before, s) || c.DamageCalls != 0 {
 		t.Fatal(err, s, c)
-	}
-}
-
-func TestNamedFieldInvocationProjectionOwnsOperationFacts(t *testing.T) {
-	s, c := namedFieldFixture()
-	c.End.RecordDarkness(80)
-	frame := CallbackContext{TargetContext: c.TargetContext, Damage: &c.DamageContext}
-	d := CallbackCatalog{Entries: map[string]CallbackDefinition{
-		"prepare": {
-			Validate: func(*LifetimeState, *CallbackContext) error { return nil },
-			Execute:  func(*LifetimeState, *CallbackContext, random.Generator) error { return nil },
-			Project: func(_ *LifetimeState, f *CallbackContext) (bool, error) {
-				f.Damage.DamageCalls = 7
-				f.Damage.PartyIDs[0] = "private"
-				*f.Damage.RequesterLevel = 1
-				*f.Damage.End.DarknessDebit = 3
-				return true, nil
-			},
-		},
-		"observe": {
-			Validate: func(_ *LifetimeState, f *CallbackContext) error {
-				if f.Damage.DamageCalls != 7 || f.Damage.PartyIDs[0] != "private" || *f.Damage.RequesterLevel != 1 || *f.Damage.End.DarknessDebit != 3 {
-					t.Fatal(f.Damage)
-				}
-				return nil
-			},
-			Execute: func(*LifetimeState, *CallbackContext, random.Generator) error { return nil },
-		},
-	}}
-	if err := s.ValidateInvocations(&frame, d, []CallbackInvocation{{Kind: "entry", EntryID: "prepare"}, {Kind: "entry", EntryID: "observe"}}, &targetRNG{t: t}); err != nil || c.DamageCalls != 0 || c.PartyIDs[0] != "self" || *c.RequesterLevel != 70 || *c.End.DarknessDebit != 40 {
-		t.Fatal(err, c)
 	}
 }

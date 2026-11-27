@@ -28,12 +28,6 @@ func TestDefenseGemProjectionBeforeLaterCallbacks(t *testing.T) {
 	if err := s.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_guard_2"}, {Kind: "entry", EntryID: "missing"}}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(s.Actors[2], before) {
 		t.Fatal(err, s)
 	}
-	// Absorption has random MP effects, so Project must return unknown without
-	// writing even the deterministic incoming defense into the validation state.
-	project := d.Invocations.Entries["gem_guard_2"].Project
-	if known, err := project(&s, &f); err != nil || known || !reflect.DeepEqual(s.Actors[2], before) || !reflect.DeepEqual(f.Arguments, []string{"ally"}) {
-		t.Fatal(known, err, s, f)
-	}
 }
 
 func TestDefenseGemCustomFallbackAndPhysicalSeal(t *testing.T) {

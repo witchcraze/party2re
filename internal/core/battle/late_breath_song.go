@@ -109,31 +109,12 @@ func (s *LifetimeState) applyManaRitual(c *EffectContext, rng random.Generator) 
 	return err
 }
 
-// ProjectLateBreathSong carries complete deterministic inline bodies into
-// later admission. It leaves all state and arguments unchanged for other IDs.
-func (s *LifetimeState) ProjectLateBreathSong(c *LateBreathSongContext, id string) bool {
-	a := s.actor(c.ActorID)
-	switch id {
-	case "job-84-entry-0":
-		a.Hit, a.Temporary = 95, TemporaryReduceBreath
-	case "job-85-entry-2":
-		t := s.actor(c.shift())
-		if t == nil {
-			t = a
-		}
-		t.Status, t.Temporary = "", ""
-	default:
-		return false
-	}
-	return true
-}
-
 // ApplyLateBreathSong executes intrinsic bodies without ordinary MP costs.
 func (s *LifetimeState) ApplyLateBreathSong(c *LateBreathSongContext, id string, rng random.Generator) error {
 	if err := s.ValidateLateBreathSong(c, id, rng); err != nil {
 		return err
 	}
-	if s.ProjectLateBreathSong(c, id) {
+	if s.applyExactLateBreathSong(c, id) {
 		return nil
 	}
 	defer s.ownTargetResources(&c.EffectContext)()
@@ -196,4 +177,23 @@ func (s *LifetimeState) ApplyLateBreathSong(c *LateBreathSongContext, id string,
 		return err
 	}
 	return nil
+}
+
+// applyExactLateBreathSong applies the deterministic inline bodies; false leaves
+// the entry to the general executor.
+func (s *LifetimeState) applyExactLateBreathSong(c *LateBreathSongContext, id string) bool {
+	a := s.actor(c.ActorID)
+	switch id {
+	case "job-84-entry-0":
+		a.Hit, a.Temporary = 95, TemporaryReduceBreath
+	case "job-85-entry-2":
+		t := s.actor(c.shift())
+		if t == nil {
+			t = a
+		}
+		t.Status, t.Temporary = "", ""
+	default:
+		return false
+	}
+	return true
 }

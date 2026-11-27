@@ -49,10 +49,6 @@ func ordinaryToolInvocation(c *corebattle.OrdinaryToolContext, id string, tool b
 			child.Inspection = mergeOrdinaryInspection(c.Inspection, f.Inspection)
 			return s.ValidateOrdinaryTool(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			// Inspection and comment bodies leave combat and cursor unchanged.
-			return !tool || id == "tool-130" || id == "tool-151", nil
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

@@ -43,13 +43,6 @@ func counterResetInvocation(c *corebattle.CounterResetContext, id string) coreba
 			}
 			return s.ValidateCounterReset(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			child, err := context(f)
-			if err != nil {
-				return false, err
-			}
-			return s.ProjectCounterReset(&child, id)
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

@@ -120,8 +120,7 @@ func TestTransformationAdmissionDoesNotTouchSourceReferences(t *testing.T) {
 	contextBefore := c
 	for _, last := range []string{"job-82-form", "job-79-speed"} {
 		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "job-36-copy"}, {Kind: "entry", EntryID: last}}
-		err := s.ValidateInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t})
-		if (err == nil) != (last == "job-82-form") {
+		if err := s.ValidateInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); err != nil {
 			t.Fatal(last, err)
 		}
 		after, err := json.Marshal(s)

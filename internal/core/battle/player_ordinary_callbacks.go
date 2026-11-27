@@ -47,10 +47,6 @@ func FormationCallback(front bool) CallbackDefinition {
 			}
 			return s.validateTargetContext(c.TargetContext, random.Default())
 		},
-		Project: func(s *LifetimeState, c *CallbackContext) (bool, error) {
-			move(s, c)
-			return true, nil
-		},
 		Execute: func(s *LifetimeState, c *CallbackContext, _ random.Generator) error {
 			move(s, c)
 			return nil

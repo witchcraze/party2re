@@ -69,20 +69,6 @@ func (d BattleDefinitions) ArithmeticInvocation(c *corebattle.ArithmeticContext,
 			_, err = d.ArithmeticAction(s, &child, id, target, random.Default())
 			return err
 		},
-		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {
-			child, target, err := context(frame)
-			if err != nil {
-				return false, err
-			}
-			known, err := s.ProjectArithmetic(&child, id, target)
-			if known && err == nil {
-				frame.ArithmeticDivisor = child.Divisor
-				if id == "job-31-reverse" && len(frame.Arguments) > 0 {
-					frame.Arguments = frame.Arguments[1:]
-				}
-			}
-			return known, err
-		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			child, target, err := context(frame)
 			if err != nil {

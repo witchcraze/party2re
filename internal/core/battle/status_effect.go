@@ -173,8 +173,7 @@ func (s *LifetimeState) ValidateAreaStatus(c *StatusContext, e TargetEffect, cha
 	}
 	if death {
 		if c.symbolicConversion && e.Category == CategoryMagic && e.Payload.Symbol == "death" && chance == 20 && !bypass {
-			_, err := s.projectStatusGemBranches(c, "gem_instant_death_sky", "", false)
-			return err
+			return s.validateDeathGem(c)
 		}
 		_, err := s.projectAreaDeath(c, e, chance, bypass, false, rng)
 		return err

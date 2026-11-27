@@ -40,13 +40,6 @@ func highPowerInvocation(c *corebattle.HighPowerContext, id string) corebattle.C
 			}
 			return s.ValidateHighPower(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			child, err := context(f)
-			if err != nil {
-				return false, err
-			}
-			return s.ProjectHighPower(&child, id)
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

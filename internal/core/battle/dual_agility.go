@@ -71,15 +71,6 @@ func applyDualAgilityInline(s *LifetimeState, c *DualAgilityContext, id string) 
 	return true
 }
 
-// ProjectDualAgility carries exact inline state writes into later admission.
-// Random damage/death transitions remain with the existing effect owners.
-func (s *LifetimeState) ProjectDualAgility(c *DualAgilityContext, id string) (bool, error) {
-	if err := s.ValidateDualAgility(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	return applyDualAgilityInline(s, c, id), nil
-}
-
 // ApplyDualAgility executes intrinsic callbacks only. Ordinary listed costs and
 // random/delegated MP restoration remain with the enclosing invocation owner.
 func (s *LifetimeState) ApplyDualAgility(c *DualAgilityContext, id string, rng random.Generator) error {

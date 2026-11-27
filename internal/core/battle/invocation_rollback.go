@@ -20,6 +20,7 @@ type actorPtrSnapshot struct {
 	custom       *CustomLoadout
 	npcLoadout   *NPCLoadout
 	jobHistory   map[string]*int
+	jobSP        map[string]*int
 }
 
 func snapshotState(s *LifetimeState) stateSnapshot {
@@ -37,6 +38,7 @@ func snapshotState(s *LifetimeState) stateSnapshot {
 			custom:       a.Custom,
 			npcLoadout:   a.NPCLoadout,
 			jobHistory:   a.JobHistory,
+			jobSP:        maps.Clone(a.JobHistory),
 		}
 	}
 	return stateSnapshot{
@@ -96,6 +98,12 @@ func (snap stateSnapshot) restore(s *LifetimeState) {
 		if ptr.npcLoadout != nil && a.NPCLoadout != nil {
 			*ptr.npcLoadout = *a.NPCLoadout
 			a.NPCLoadout = ptr.npcLoadout
+		}
+		for id, sp := range a.JobHistory {
+			if orig := ptr.jobSP[id]; orig != nil && sp != nil {
+				*orig = *sp
+				a.JobHistory[id] = orig
+			}
 		}
 		if ptr.jobHistory != nil {
 			clear(ptr.jobHistory)

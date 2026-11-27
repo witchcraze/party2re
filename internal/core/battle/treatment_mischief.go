@@ -52,25 +52,13 @@ func treatmentAreaDamage(id string, a *LifetimeActor) (TargetEffect, bool) {
 	return e, true
 }
 
-// ProjectTreatmentMischief supplies only the exact, unconditional inline body.
-// Random transitions stay unknown.
-func (s *LifetimeState) ProjectTreatmentMischief(c *TreatmentMischiefContext, id string) bool {
-	if id != "job-51-entry-1" {
-		return false
-	}
-	for _, target := range c.PartyIDs {
-		s.actor(target).Hit = 95
-	}
-	return true
-}
-
 // ApplyTreatmentMischief executes intrinsic bodies; enclosing invocation owns
 // listed MP charges and random/delegated MP decrease restoration.
 func (s *LifetimeState) ApplyTreatmentMischief(c *TreatmentMischiefContext, id string, rng random.Generator) error {
 	if err := s.ValidateTreatmentMischief(c, id, rng); err != nil {
 		return err
 	}
-	if s.ProjectTreatmentMischief(c, id) {
+	if s.applyExactTreatmentMischief(c, id) {
 		return nil
 	}
 	defer s.ownTargetResources(&c.EffectContext)()
@@ -212,4 +200,16 @@ func (s *LifetimeState) ApplyTreatmentMischief(c *TreatmentMischiefContext, id s
 		return err
 	}
 	return nil
+}
+
+// applyExactTreatmentMischief applies the unconditional inline body; false
+// leaves the entry to the general executor.
+func (s *LifetimeState) applyExactTreatmentMischief(c *TreatmentMischiefContext, id string) bool {
+	if id != "job-51-entry-1" {
+		return false
+	}
+	for _, target := range c.PartyIDs {
+		s.actor(target).Hit = 95
+	}
+	return true
 }

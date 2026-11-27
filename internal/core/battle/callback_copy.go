@@ -116,7 +116,7 @@ func (s LifetimeState) executionCopy() LifetimeState {
 	return copy
 }
 
-// Clone isolates mutable encounter/template facts and admission projections.
+// Clone isolates mutable encounter/template facts from validation copies.
 func (actor LifetimeActor) Clone() LifetimeActor {
 	a := &actor
 	if a.HeldToolID != nil {
@@ -156,74 +156,4 @@ func (actor LifetimeActor) Clone() LifetimeActor {
 		}
 	}
 	return actor
-}
-
-// Unknown projections cannot leak tentative writes into conservative admission.
-func (p *callbackAdmission) project(op CallbackInvocation) ([]CallbackContinuation, error) {
-	state := p.s.callbackCopy()
-	context := cloneCallbackContext(*p.c)
-	copy := *p
-	copy.s, copy.c = &state, &context
-	return copy.projectAfter(op, make(map[CallbackInvocation]bool))
-}
-
-func (p *callbackAdmission) projectAfter(op CallbackInvocation, seen map[CallbackInvocation]bool) ([]CallbackContinuation, error) {
-	if seen[op] {
-		return nil, nil
-	}
-	seen[op] = true
-	defer delete(seen, op)
-	if op.Kind == "entry" {
-		if op.GeneratedChildID != "" {
-			if op.GeneratedChildMP > p.s.actor(p.c.ActorID).MP {
-				return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil
-			}
-			return p.projectAfter(CallbackInvocation{Kind: "entry", EntryID: op.GeneratedChildID}, seen)
-		}
-		def := p.d.Entries[op.EntryID]
-		if def.ProjectBranches != nil {
-			return def.ProjectBranches(p.s, p.c)
-		}
-		if def.Project != nil {
-			known, err := def.Project(p.s, p.c)
-			if err != nil || !known {
-				return nil, err
-			}
-			return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil
-		}
-		if def.Invocation.Kind != "" {
-			return p.projectAfter(def.Invocation, seen)
-		}
-		return nil, nil
-	}
-	switch op.Kind {
-	case "random", "tool-84":
-		return p.projectRandom(op.Kind, seen)
-	case "job-82-generated":
-		child, err := p.s.generatedCallback(p.c, p.d)
-		if err != nil {
-			return nil, err
-		}
-		return p.projectSelection(callbackSelection{child: &child}, false, seen)
-	case "gem_secret_art_sky":
-		return p.projectExtended(seen)
-	}
-	name, calling := callingCommand(op.Kind)
-	if !calling {
-		return nil, nil
-	}
-	job := callingJob(p.s.actor(p.c.ActorID).Jobs)
-	if job == 0 {
-		return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil
-	}
-	entries, err := p.s.callbackTable(p.c, p.d, job)
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range entries {
-		if callingMatch(entry.CallbackEntry, name) {
-			return p.projectSelection(entry, true, seen)
-		}
-	}
-	return []CallbackContinuation{{State: *p.s, Context: *p.c}}, nil
 }

@@ -46,20 +46,6 @@ func incidentalRaw(id string) bool {
 	return id == "job-8-entry-2" || id == "job-8-entry-3" || id == "job-8-entry-4" || id == "job-8-entry-7" || id == "job-8-entry-8"
 }
 
-// ProjectIncidentalJob projects the exact enemy tension reset only.
-func (s *LifetimeState) ProjectIncidentalJob(c *IncidentalJobContext, id string) (bool, error) {
-	if err := s.ValidateIncidentalJob(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	if id != "job-8-entry-8" {
-		return false, nil
-	}
-	for _, target := range c.EnemyIDs {
-		s.actor(target).Tension = 1
-	}
-	return true, nil
-}
-
 // ApplyIncidentalJob executes intrinsic bodies; the invocation/consumer owns
 // ordinary costs, random MP restoration and committed receipt replay.
 func (s *LifetimeState) ApplyIncidentalJob(c *IncidentalJobContext, id string, rng random.Generator) error {

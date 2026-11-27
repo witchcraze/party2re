@@ -3,7 +3,6 @@ package skill
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -42,33 +41,6 @@ func TestStatusProjectionRegisteredSequentialLoad(t *testing.T) {
 	for _, a := range s.Actors[1:] {
 		if a.Status != corebattle.StatusDeadlyPoison {
 			t.Fatal(a)
-		}
-	}
-}
-
-func TestStatusProjectionRegisteredCumulativeBudgetRejectsAtomically(t *testing.T) {
-	for _, intrinsicTail := range []bool{false, true} {
-		s, f, d, c := statusLoadRegistry(2, 2)
-		if intrinsicTail {
-			s.Actors[0].NPC = true
-			c.Defeat = &corebattle.DefeatContext{EquipmentResetContext: corebattle.EquipmentResetContext{TargetContext: f.TargetContext}}
-		}
-		before := s
-		before.Actors = append([]corebattle.LifetimeActor(nil), s.Actors...)
-		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_inflict_confusion"}, {Kind: "entry", EntryID: "gem_inflict_confusion"}, {Kind: "entry", EntryID: "gem_guard_1"}}
-		ids := []string{"gem_inflict_confusion", "gem_inflict_confusion", "gem_guard_1"}
-		if intrinsicTail {
-			ids = []string{"gem_inflict_confusion", "gem_instant_death_sky"}
-			ops = []corebattle.CallbackInvocation{{Kind: "entry", EntryID: ids[0]}, {Kind: "entry", EntryID: ids[1]}}
-		}
-		if _, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-			t.Fatal(err)
-		}
-		if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(before, s) || f.Damage != nil || f.Status != nil || !reflect.DeepEqual(f.Arguments, []string{"self", "tail"}) {
-			t.Fatal("budget rejection changed caller")
 		}
 	}
 }

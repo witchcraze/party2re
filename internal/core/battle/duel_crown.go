@@ -30,19 +30,6 @@ func (c *DuelCrownContext) shift() string {
 	return id
 }
 
-// ProjectDuelCrown projects only the exact inline stance; random outcomes stay
-// unknown.
-func (s *LifetimeState) ProjectDuelCrown(c *DuelCrownContext, id string) (bool, error) {
-	if err := s.ValidateDuelCrown(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	if id != "job-74-entry-1" {
-		return false, nil
-	}
-	s.actor(c.ActorID).Temporary = TemporaryReduceAttack
-	return true, nil
-}
-
 // ApplyDuelCrown executes intrinsic bodies. Listed costs belong to the outer
 // command; delegated/random invocations keep their existing cost semantics.
 func (s *LifetimeState) ApplyDuelCrown(c *DuelCrownContext, id string, rng random.Generator) error {

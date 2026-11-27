@@ -99,7 +99,8 @@ func TestSongDanceDrainWholeActionRejection(t *testing.T) {
 			}
 			f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
 			args := f.Arguments
-			if _, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+			// A later slot's state-dependent rejection waits for execution.
+			if _, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t}); (bad == "later-hit") != (err == nil) || err != nil && !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 				t.Fatal(ids, err)
 			}
 			var ops []corebattle.CallbackInvocation
@@ -127,11 +128,12 @@ func TestSongDanceDrainWholeActionRejection(t *testing.T) {
 	if _, err := d.InvocationAction(&s, &f, []string{"job-20-entry-1"}, noArithmeticDraws{t}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.InvocationAction(&s, &f, []string{"job-20-entry-2", "job-20-entry-1"}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+	ops, err := d.InvocationAction(&s, &f, []string{"job-20-entry-2", "job-20-entry-1"}, noArithmeticDraws{t})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Actors[0].Temporary != corebattle.TemporaryOneHitDefense {
-		t.Fatal("projection escaped", s)
+	if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Temporary != corebattle.TemporaryOneHitDefense {
+		t.Fatal("exposed later target was not rejected atomically", err, s)
 	}
 }
 

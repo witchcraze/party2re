@@ -81,11 +81,3 @@ func (s *LifetimeState) ValidateWeaponWeatherStance(c *WeaponWeatherStanceContex
 	}
 	return ErrUnsupportedEffect
 }
-
-// Only raw deterministic assignments project exactly across callback boundaries.
-func (s *LifetimeState) ProjectWeaponWeatherStance(c *WeaponWeatherStanceContext, id string) (bool, error) {
-	if err := s.ValidateWeaponWeatherStance(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	return s.applyWeaponStanceRaw(c, id), nil
-}

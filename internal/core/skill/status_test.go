@@ -89,14 +89,16 @@ func TestStatusRegistryConcreteBindingsAndWholeInvocationAdmission(t *testing.T)
 		t.Fatal(err)
 	}
 	for _, ids := range [][]string{{"gem_instant_death_1"}, {"delegated"}, {"random"}, {"gem_cure_poison", "gem_instant_death_1"}, {"tool-110"}} {
-		if _, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		// A later slot's missing context is found at execution, then rolled back.
+		later := len(ids) > 1
+		if _, err := d.InvocationAction(&s, &frame, ids, noArithmeticDraws{t}); later != (err == nil) || !later && !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(ids, err)
 		}
 		var ops []corebattle.CallbackInvocation
 		for _, id := range ids {
 			ops = append(ops, corebattle.CallbackInvocation{Kind: "entry", EntryID: id})
 		}
-		if err := s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		if err := s.ApplyInvocations(&frame, d.Invocations, ops, &npcSelectionRNG{value: .5}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(ids, err)
 		}
 	}
