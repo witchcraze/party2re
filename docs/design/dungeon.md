@@ -96,7 +96,7 @@ position displays the party marker. There is no source-backed permanent reveal
 flag (`map/0/1.cgi:14–16`, `vs_dungeon.cgi:114–129`); map5's `I` is
 [revealed by its lever](#map5-lever-temple).
 
-Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Participant combat (#1865) and individual exit (#1956) need their own approved contracts, not an incidental change in a map implementation.
+Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Participant combat and individual exit come with the [run-host room library](../architecture/transient-run-state.md#dungeon-on-the-run-host-2121), not as incidental changes in a map implementation.
 
 ### Legacy action reconciliation
 
@@ -114,13 +114,13 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 | `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
 | Treasure `しらべる` → `shiraberu(target)` (`45–48`) | Participant inspection under the [treasure contract](#treasure-inspection-and-delivery). Map0 [#2119](https://github.com/witchcraze/party2re/issues/2119), map3 [#2374](https://github.com/witchcraze/party2re/issues/2374). |
 | `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Open: map16 mining (#1777) |
-| Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Leader Escape settles every member as `nigeru`, at the saved round. The menu never offers calm mode (commented out, `quest.cgi:41,46,319`), so its fatigue halving does not apply. Open: per-character departure (#1956); whole-party Escape is not equivalent |
+| Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Leader Escape settles every member as `nigeru`, at the saved round. The menu never offers calm mode (commented out, `quest.cgi:41,46,319`), so its fatigue halving does not apply. Open: per-character departure ([#2888](https://github.com/witchcraze/party2re/issues/2888)); whole-party Escape is not equivalent |
 
 ### Treasure inspection and delivery
 
 **Decision (#1762, 2026-11-13).** Players get what the original gave them: each
-member opens a chest themselves and receives its item at once. The project owner
-delegated the mechanism; it is the [claim boundary](../architecture/transient-run-state.md#dungeon-treasure-claims).
+member opens a chest themselves and receives its item at once, in the run host's
+command transaction ([#2121](../architecture/transient-run-state.md#dungeon-on-the-run-host-2121)).
 Not yet implemented ([#2119](https://github.com/witchcraze/party2re/issues/2119)).
 
 - **Creation.** The treasure step creates one chest per living roster member. An

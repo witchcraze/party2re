@@ -128,7 +128,8 @@ Legacy `vs_guild.cgi:31–38,44–154` and `system.cgi:456–469` have no reques
 
 ## Candidate D: In-Progress Run Buffers
 
-Dungeon and Challenge use Valkey as the live authority. Dungeon uses character-keyed
+Dungeon and Challenge use Valkey as the live authority until their cutovers to the
+run host (Challenge #1866, [Dungeon](#dungeon-on-the-run-host-2121)). Dungeon uses character-keyed
 state/reward/revealed buffers; Challenge uses immutable run-keyed session/reward
 hashes. The [keyspace owner](valkey-keyspace.md) defines their 7200-second activity
 lifetime and run-qualified member references.
@@ -235,27 +236,46 @@ settles them before freezing, so the settlement claim deletes the run's
 receipts, and a stale credit for a claimed run is ignored. The battle outcome
 stays single-sourced in Valkey; a party wipe never reverts a committed credit.
 
-### Dungeon treasure claims
+### Dungeon on the run host (#2121)
 
-**Decision (#1762), target; implementation [#2119](https://github.com/witchcraze/party2re/issues/2119).**
-Chest delivery is immediate ([gameplay](../design/dungeon.md#treasure-inspection-and-delivery)),
-so it cannot wait for Two-Phase Settlement. One SQL transaction locks the actor
-(Rank 2) and inserts a claim receipt that is unique per run and chest and records
-the actor, event, the event's allowance key and the result. The same transaction
-debits item 215 and delivers to the hand or Depot (Rank 3/5) and the Collection
-(Rank 8). The allowance compares the event's key with the key of the actor's
-latest receipt in the run, read under the actor lock and never from the possibly
-stale live run. Hand eligibility uses in-run state: the transaction debits the actor's
-pending consumed items, and publication removes them from the run so settlement
-does not debit them twice.
+**Decision (user-approved 2026-11-27).** Dungeon moves to the
+[run host](#run-host-durable-command-boundary-1325) as a room library, as Challenge
+did under #1866; the sections above describe the Valkey engine until its cutover
+deletes them. Legacy runs Dungeon as the `vs_dungeon` room mode over the shared
+battle routines (`quest.cgi:655,1052`), and the host already owns what Dungeon's
+planned changes need: a run identity independent of the leader, personal exit with
+leader handover, actor receipts, explicit combat with intervals, and kill rewards
+and chest delivery committed with the command. Defeat earnings, chests and map6
+wallet changes therefore share one transaction per command, and no Dungeon-specific
+publication or recovery protocol is built. Rejected: Valkey authority with one
+common mid-run SQL boundary, which rebuilds the host's receipts, intervals and
+recovery and keeps leader keying; re-keying Valkey by run ID, which solves only
+handover.
 
-After commit, a revision-checked step marks the chest opened in the Valkey run.
-Every later Dungeon mutation, settlement included, first publishes committed
-receipts the run does not show yet. An identical retry returns its receipt. A
-failure before commit changes nothing. A lost commit acknowledgement is resolved
-from the receipt with a bounded context; unreadable evidence reports an unknown
-outcome and keeps state. Valkey loss never regrants a receipt, and the receipts
-do not reconstruct the run.
+- **Cost.** A local serial measurement (Docker MariaDB and Valkey) took about
+  0.7 ms per Valkey `Move` and 14–20 ms per host command. Commands are player-paced;
+  no SQL bottleneck has been measured at that rate.
+- **Recovery.** A failed command rolls back state, assets and receipt together, so
+  no accepted command waits for settlement. The current engine's failure mode, an
+  accepted step whose credit settlement failed and was then lost with the expired
+  run, has no counterpart. Idle rooms follow the host's legacy 30-minute cleanup,
+  which `quest.cgi#auto_delete_quest` applies to every quest room, instead of the
+  Valkey two-hour expiry; unpaid stock stays in the recipient ledger.
+- **Observation.** A lost acknowledgement is resolved through the owned receipt
+  reader: a receipt means the command and all its effects committed, and none
+  means it was not accepted. A rejection persists nothing and returns its error in
+  the response. Receipts stay with the disposed admission, so late recovery still
+  finds them; their retirement is a host-wide rule
+  ([#2891](https://github.com/witchcraze/party2re/issues/2891)).
+- **Room seams.** The host's `しらべる` covers only shared `shiraberu`'s non-map
+  branch. Dungeon needs its map branch, whose allowance compares map symbols
+  ([allowance](../design/dungeon.md#treasure-inspection-and-delivery)).
+- **Cutover order.** The room library with participant departure
+  ([#2888](https://github.com/witchcraze/party2re/issues/2888)) comes first. Map0
+  treasure inspection (#2119) and the map-specific combat facts (#1865) build on it.
+  The Gateway cutover ([#2890](https://github.com/witchcraze/party2re/issues/2890))
+  then deletes the Valkey engine, the defeat-credit receipts and the
+  `dungeon_expedition_history` claim.
 
 ### Challenge finalization
 
