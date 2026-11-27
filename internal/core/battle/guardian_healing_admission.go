@@ -103,17 +103,3 @@ func (s *LifetimeState) validateRestorationStrike(c *GuardianHealingContext, rng
 	}
 	return nil
 }
-
-// ProjectGuardianHealing exposes only the exact unsealed party barrier write.
-func (s *LifetimeState) ProjectGuardianHealing(c *GuardianHealingContext, id string) (bool, error) {
-	if err := s.ValidateGuardianHealing(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	if id != "job-17-entry-2" || s.actor(c.ActorID).categorySealed(CategoryMagic) {
-		return false, nil
-	}
-	if err := s.ApplyGuardianHealing(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	return true, nil
-}

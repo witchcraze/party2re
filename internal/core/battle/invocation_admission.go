@@ -23,19 +23,18 @@ func (s *LifetimeState) admitInvocations(c *CallbackContext, d CallbackCatalog, 
 	for i := range arguments {
 		arguments[i] = c.Arguments
 	}
-	return s.admitSequence(c, d, ops, arguments, known, rng, nil)
+	return s.admitSequence(c, d, ops, arguments, known, rng)
 }
 
 // validateSequence is ValidateInvocations with each slot's own arguments.
 func (s *LifetimeState) validateSequence(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, rng random.Generator) error {
-	return s.admitSequence(c, d, ops, arguments, true, rng, nil)
+	return s.admitSequence(c, d, ops, arguments, true, rng)
 }
 
-func (s *LifetimeState) validateSequenceThen(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, rng random.Generator, after func(*LifetimeState, *CallbackContext) error) error {
-	return s.admitSequence(c, d, ops, arguments, true, rng, after)
-}
-
-func (s *LifetimeState) admitSequence(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, known bool, rng random.Generator, after func(*LifetimeState, *CallbackContext) error) error {
+// admitSequence validates the first slot against the current state. Every later
+// slot follows an effect, so only its registration is checked here; the executor
+// validates it against the actual state and rolls back on rejection.
+func (s *LifetimeState) admitSequence(c *CallbackContext, d CallbackCatalog, ops []CallbackInvocation, arguments [][]string, known bool, rng random.Generator) error {
 	if s == nil || c == nil || len(ops) == 0 || len(arguments) != len(ops) {
 		return ErrInvalidRequest
 	}
@@ -46,57 +45,13 @@ func (s *LifetimeState) admitSequence(c *CallbackContext, d CallbackCatalog, ops
 	context := cloneCallbackContext(*c)
 	remaining := maxInvocationContinuations
 	context.admissionBudget = &remaining
-	p := callbackAdmission{s: &state, c: &context, d: d, remaining: &remaining}
-	return p.sequence(ops, arguments, known, after)
-}
-
-func (p *callbackAdmission) sequence(ops []CallbackInvocation, arguments [][]string, known bool, after func(*LifetimeState, *CallbackContext) error) error {
-	p.c.admissionBudget = p.remaining
+	p := callbackAdmission{s: &state, c: &context, d: d}
 	for i, op := range ops {
-		// Visits depend on the projected state, not just entry identity.
 		p.seen = map[callbackVisit]bool{}
 		p.c.Arguments = append([]string(nil), arguments[i]...)
-		if err := p.visit(op, !known); err != nil {
+		if err := p.visit(op, !known || i > 0); err != nil {
 			return err
 		}
-		if known && (i+1 < len(ops) || after != nil) {
-			branches, err := p.project(op)
-			if err != nil {
-				return err
-			}
-			if len(branches) == 0 {
-				known = false
-				continue
-			}
-			if len(branches) > *p.remaining {
-				return ErrUnsupportedEffect
-			}
-			*p.remaining -= len(branches)
-			for _, branch := range branches {
-				state := branch.State.callbackCopy()
-				context := cloneCallbackContext(branch.Context)
-				actor := state.actor(context.ActorID)
-				if actor == nil {
-					return ErrInvalidParticipant
-				}
-				if actor.HP <= 0 {
-					if after != nil {
-						if err := after(&state, &context); err != nil {
-							return err
-						}
-					}
-					continue
-				}
-				child := callbackAdmission{s: &state, c: &context, d: p.d, remaining: p.remaining}
-				if err := child.sequence(ops[i+1:], arguments[i+1:], true, after); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}
-	if known && after != nil {
-		return after(p.s, p.c)
 	}
 	return nil
 }
@@ -113,11 +68,9 @@ type callbackAdmission struct {
 	d              CallbackCatalog
 	seen           map[callbackVisit]bool
 	explicitTarget bool
-	remaining      *int
 }
 
-// One shared budget covers all prefixes and later slots, rather than resetting
-// the work allowance for each independently projected predecessor.
+// One shared budget bounds the intra-callback outcomes validators enumerate.
 const maxInvocationContinuations = 16384
 
 func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) error {
@@ -138,7 +91,7 @@ func (p *callbackAdmission) visit(op CallbackInvocation, afterEffects bool) erro
 			}
 		}
 		c := *p.c
-		// After an unknown predecessor only registration is checked here; the
+		// After an earlier effect only registration is checked here; the
 		// executor validates each callback against the actual state.
 		if def.Validate != nil && !afterEffects {
 			if err := def.Validate(p.s, &c); err != nil {

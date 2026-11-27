@@ -43,17 +43,3 @@ func (s *LifetimeState) ValidateCounterReset(c *CounterResetContext, id string, 
 	}
 	return ErrUnsupportedEffect
 }
-
-// Only deterministic writes have an exact projection for later callbacks.
-func (s *LifetimeState) ProjectCounterReset(c *CounterResetContext, id string) (bool, error) {
-	if err := s.ValidateCounterReset(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	if counterResetTemporary(id) == "" && id != "job-37-entry-3" {
-		return false, nil
-	}
-	if err := s.ApplyCounterReset(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	return true, nil
-}

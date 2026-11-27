@@ -56,32 +56,13 @@ func (c *SongDanceDrainContext) shift() string {
 	return id
 }
 
-// ProjectSongDanceDrain carries only the complete deterministic inline writes
-// into later admission. Neither body has a category/living caster guard.
-func (s *LifetimeState) ProjectSongDanceDrain(c *SongDanceDrainContext, id string) bool {
-	switch id {
-	case "job-14-entry-2":
-		s.actor(c.ActorID).Temporary = TemporaryDeflect
-	case "job-20-entry-2":
-		// Source20.2 omits the magic-seal check present in guardian17.2.
-		for _, target := range c.PartyIDs {
-			if t := s.actor(target); t.HP > 0 {
-				t.Temporary = TemporaryReduceMagic
-			}
-		}
-	default:
-		return false
-	}
-	return true
-}
-
 // ApplySongDanceDrain executes intrinsic bodies only. Ordinary listed charges
 // and random/delegated cost handling remain with the invocation/consumer owner.
 func (s *LifetimeState) ApplySongDanceDrain(c *SongDanceDrainContext, id string, rng random.Generator) error {
 	if err := s.ValidateSongDanceDrain(c, id, rng); err != nil {
 		return err
 	}
-	if s.ProjectSongDanceDrain(c, id) {
+	if s.applyExactSongDanceDrain(c, id) {
 		return nil
 	}
 	defer s.ownTargetResources(&c.EffectContext)()
@@ -163,4 +144,23 @@ func (s *LifetimeState) ApplySongDanceDrain(c *SongDanceDrainContext, id string,
 		c.EffectContext = child.EffectContext
 		return err
 	}
+}
+
+// applyExactSongDanceDrain applies the deterministic bodies; false leaves the
+// entry to the general executor. Neither body has a category/living caster guard.
+func (s *LifetimeState) applyExactSongDanceDrain(c *SongDanceDrainContext, id string) bool {
+	switch id {
+	case "job-14-entry-2":
+		s.actor(c.ActorID).Temporary = TemporaryDeflect
+	case "job-20-entry-2":
+		// Source20.2 omits the magic-seal check present in guardian17.2.
+		for _, target := range c.PartyIDs {
+			if t := s.actor(target); t.HP > 0 {
+				t.Temporary = TemporaryReduceMagic
+			}
+		}
+	default:
+		return false
+	}
+	return true
 }

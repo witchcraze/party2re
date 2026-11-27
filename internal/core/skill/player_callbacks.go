@@ -115,7 +115,6 @@ func (d *BattleDefinitions) RegisterPlayerCallbacks(c PlayerCallbackContexts, pa
 	d.Invocations.Entries["between-encounter-survival"] = corebattle.BetweenEncounterSurvivalCallback()
 	d.Invocations.Entries["br"] = corebattle.CallbackDefinition{
 		Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil },
-		Project:  func(*corebattle.LifetimeState, *corebattle.CallbackContext) (bool, error) { return true, nil },
 		Execute:  func(*corebattle.LifetimeState, *corebattle.CallbackContext, random.Generator) error { return nil },
 	}
 }

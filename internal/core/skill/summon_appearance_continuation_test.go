@@ -48,17 +48,17 @@ func TestSummonGemRegisteredSkippedAndMissingPool(t *testing.T) {
 	}
 }
 
-func TestSummonAppearanceRegisteredProjectionNeverRunsPorts(t *testing.T) {
+func TestSummonAppearanceAdmissionNeverRunsPorts(t *testing.T) {
 	s, c, tc, d := summonAppearanceFixture()
 	apply := func(corebattle.TargetContext, corebattle.TargetEffect, random.Generator) error {
-		t.Fatal("projection executed external Apply port")
+		t.Fatal("admission executed external Apply port")
 		return nil
 	}
 	c.Damage = apply
-	c.Defeat = func(string) error { t.Fatal("projection executed defeat"); return nil }
+	c.Defeat = func(string) error { t.Fatal("admission executed defeat"); return nil }
 	tc.Damage = apply
 	tc.AreaDamage = func(corebattle.TargetContext, float64, corebattle.CallbackCategory, bool, random.Generator) error {
-		t.Fatal("projection executed area damage")
+		t.Fatal("admission executed area damage")
 		return nil
 	}
 	c.DamageCalls, c.TensionCalls = 7, 3
@@ -71,34 +71,11 @@ func TestSummonAppearanceRegisteredProjectionNeverRunsPorts(t *testing.T) {
 		if _, err := d.InvocationAction(&s, &f, []string{id, "gem_guard_1"}, noArithmeticDraws{t}); err != nil {
 			t.Fatal(id, err)
 		}
-		branches, err := d.Invocations.Entries[id].ProjectBranches(&s, &f)
-		if err != nil || len(branches) < 2 {
-			t.Fatal(id, err)
-		}
-		first := &branches[0]
-		if first.Context.Damage.DamageCalls != 7 || first.Context.Damage.TensionCalls != 3 || first.Context.ArithmeticDivisor != 11 {
-			t.Fatal("lost enclosing operation counters", id, first)
-		}
-		if id == "gem_summon_sky" {
-			a := &first.State.Actors[2]
-			*a.Gear.WeaponAttack = 999
-			*a.JobHistory["job-7"] = 999
-			a.CustomSkills[0].Gems[0].Kind = "changed"
-			if *branches[1].State.Actors[2].Gear.WeaponAttack != 12 || *branches[1].State.Actors[2].JobHistory["job-7"] != 17 || branches[1].State.Actors[2].CustomSkills[0].Gems[0].Kind != "unresolved" {
-				t.Fatal("sibling shared payload referents")
-			}
-		}
-		*first.Context.Damage.RequesterLevel = 999
-		first.Context.Arguments[0] = "changed"
-		first.Context.EnemyIDs[0] = "changed"
-		if *branches[1].Context.Damage.RequesterLevel != 70 || branches[1].Context.Arguments[0] != "self" || branches[1].Context.EnemyIDs[0] != "enemy" {
-			t.Fatal("sibling shared frame referents")
-		}
 	}
 	after, _ := json.Marshal(s)
 	poolAfter, _ := json.Marshal(c.EnemyPool)
 	if string(before) != string(after) || string(poolBefore) != string(poolAfter) || c.DamageCalls != 7 || c.TensionCalls != 3 || *c.RequesterLevel != 70 || f.Arguments[0] != "self" || c.EnemyIDs[0] != "enemy" {
-		t.Fatal("registered projection changed caller facts", s, c, f)
+		t.Fatal("admission changed caller facts", s, c, f)
 	}
 }
 

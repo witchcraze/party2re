@@ -20,8 +20,6 @@ func (d BattleDefinitions) RosterAction(s *corebattle.LifetimeState, c *corebatt
 
 // RosterInvocation connects the existing indirect executor to the same native
 // gate. The operation owner supplies requester/gear/reset/defeat prerequisites.
-// A preceding arbitrary callback can change helpers, stats or appearances;
-// without its transition projection the enclosing continuation stays rejected.
 func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id string) corebattle.CallbackDefinition {
 	return corebattle.CallbackDefinition{
 		Delegates: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) []corebattle.CallbackInvocation {
@@ -44,14 +42,6 @@ func (d BattleDefinitions) RosterInvocation(c *corebattle.RosterContext, id stri
 				return corebattle.ErrUnsupportedEffect
 			}
 			return s.ValidateRoster(&child, id, target, random.Default())
-		},
-		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {
-			if c == nil || !d.RosterSkills[id] {
-				return false, corebattle.ErrUnsupportedEffect
-			}
-			child := *c
-			child.TargetContext = frame.TargetContext
-			return s.ProjectRoster(&child, id)
 		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {

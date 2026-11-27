@@ -251,7 +251,7 @@ boundary diagnosis does not wait for them or use them as the numerical oracle.
 | Many axes with no known shared-state dependency | A small explicit pairwise table, or t-wise table for an identified interaction of t axes; document axes, valid constraints and tuples covered |
 | An earlier effect changes later eligibility or target | Deterministic multi-step scenario at the enclosing boundary, with a nearby accepted/no-effect and rejected case where applicable |
 | Action and tail have different eligibility predicates | Table the enclosing player/NPC guards separately; exercise skipped action with eligible tail, and excluded tail, through the actual operation |
-| Finite projection or large valid numeric range | Bounded property/state-transition test comparing admitted executions with projection plus independent specification vectors |
+| Enumerated validator outcomes or large valid numeric range | Bounded property/state-transition test comparing admitted executions with the enumerated bounds plus independent specification vectors |
 | Input encoding or a reproducible generated sequence exposes gaps | Go standard fuzz with valid seed corpus, bounded decoding/sequence length and a specific invariant; keep intentional invalid-context cases separate |
 | Two executions have a specification-backed relationship | Metamorphic test, e.g. uninterrupted vs save/reload continuation with rebuilt context and the same remaining draw tape |
 
@@ -263,9 +263,9 @@ HP changes need their actual multi-step sequence, including three or more effect
 when an intermediate transition enables the last one. Small finite domains can
 be enumerated; no requirement follows to enumerate the full combat catalog.
 
-For property tests, use assertions such as: admitted executions never encounter
-`ErrUnsupportedEffect` after a prefix; actual supported outcomes lie within the
-projected bounds; validation repeated twice leaves all caller inputs untouched.
+For property tests, use assertions such as: actual supported outcomes lie within
+a validator's enumerated bounds; an execution-time rejection leaves caller state
+unchanged; validation repeated twice leaves all caller inputs untouched.
 These check relationships, not independent correctness of a damage formula.
 Keep hand-derived source vectors alongside them. Do not recompute the production
 predictor as the expected answer. An admitted external transaction may still fail
@@ -287,7 +287,7 @@ These examples illustrate test selection, not additional gameplay specifications
 | Damage or HP/MP recovery boundary | Independent numeric vectors, full/zero/cap and living/fallen classes; ordered area healing where the first recipient consumes actor tension. See [recovery tests](../../internal/core/battle/recovery_test.go) and [damage composition](../../internal/core/battle/damage_composition_test.go). A recovery helper does not certify MP producers. |
 | Status, defeat and revival | Nonlethal acceptance beside lethal rejection; two individually survivable hits that become lethal together; one-use defense then a second hit; revival reset before later target/defense resolution. See [ordered defeat tests](../../internal/core/battle/defeat_ordered_test.go). |
 | Job/skill invocation | Each changed concrete binding/cost and its discovery/execution path, unsupported reachable child before any cost/draw, then a prior effect changing the job/table used by the next slot. See [generated invocation tests](../../internal/core/battle/invocation_generated_test.go), [status registry tests](../../internal/core/skill/status_test.go) and [adapter invocation](../../internal/battle/invocation_test.go). Synthetic job tables are not full catalog certification. |
-| New resource/custom producers | Derive cases from their owning specifications: internal MP/CMP writes before enclosing charge, signed costs and role-specific clamps where specified; distinguish requested/returned amount from actual delta and assert unaffected HP. Follow earlier slots that change state, roster or caster survival into later slot admission. |
+| New resource/custom producers | Derive cases from their owning specifications: internal MP/CMP writes before enclosing charge, signed costs and role-specific clamps where specified; distinguish requested/returned amount from actual delta and assert unaffected HP. Follow earlier slots that change state, roster or caster survival into later slot execution and its rollback on rejection. |
 | Equipment tails and persisted consumer | Test the actual player/NPC eligibility boundary and snapshots taken before the action, not only the tail helper. Then verify real-store failure/retry/receipt and reload at the consumer; a Core JSON round trip cannot establish committed retry behavior. |
 
 Apply the same table to planned entries before their bodies exist: derive cases

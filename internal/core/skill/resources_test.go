@@ -114,7 +114,7 @@ func TestResourceCMPOrderedChargeAndReload(t *testing.T) {
 			s.Actors[0].CMP = 9
 			return true, nil
 		}
-		d.Invocations.Entries["earlier"] = corebattle.CallbackDefinition{Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil }, Project: change, Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, _ random.Generator) error {
+		d.Invocations.Entries["earlier"] = corebattle.CallbackDefinition{Validate: func(*corebattle.LifetimeState, *corebattle.CallbackContext) error { return nil }, Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, _ random.Generator) error {
 			_, err := change(s, f)
 			return err
 		}}
@@ -124,7 +124,7 @@ func TestResourceCMPOrderedChargeAndReload(t *testing.T) {
 		ops, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
 		after, _ := json.Marshal(s)
 		if err != nil || string(before) != string(after) {
-			t.Fatal(err, "impure projection")
+			t.Fatal(err, "impure admission")
 		}
 		if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); err != nil || s.Actors[0].CMP != 0 || s.Actors[0].Status != corebattle.StatusPoison {
 			t.Fatal(err, s.Actors)
@@ -181,8 +181,12 @@ func TestResourceBurstRejectsMissingDamageContextBeforeEffects(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"gem_mp_burst", "gem_cmp_burst"} {
-		_, err := d.InvocationAction(&s, &f, []string{"gem_status_cmp_3", id}, noArithmeticDraws{t})
-		if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		// The later burst follows an effect, so execution rejects and rolls back.
+		ops, err := d.InvocationAction(&s, &f, []string{"gem_status_cmp_3", id}, noArithmeticDraws{t})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(err)
 		}
 		if _, err := s.ApplyResource(&c, id, "", noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {

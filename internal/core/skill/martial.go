@@ -39,13 +39,6 @@ func martialInvocation(c *corebattle.MartialContext, id string) corebattle.Callb
 			}
 			return s.ValidateMartial(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			child, err := context(f)
-			if err != nil {
-				return false, err
-			}
-			return s.ProjectMartial(&child, id)
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

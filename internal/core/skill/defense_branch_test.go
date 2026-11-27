@@ -75,7 +75,7 @@ func TestDefenseBranchesComposeRegisteredSealOutcomes(t *testing.T) {
 	}
 }
 
-func TestDefenseBranchesCheckFailedCureBeforeUncheckedLaterBody(t *testing.T) {
+func TestDefenseBranchesFailedCureRejectsLaterBodyAtExecution(t *testing.T) {
 	s, c := recoveryGemFixture(false)
 	s.Actors[0].Status = corebattle.StatusMagicSeal
 	var d BattleDefinitions
@@ -84,7 +84,9 @@ func TestDefenseBranchesCheckFailedCureBeforeUncheckedLaterBody(t *testing.T) {
 	before, _ := json.Marshal(s)
 	for _, later := range []string{"gem_nullify_phys", "gem_nullify_magic_1", "gem_counter_phys_sky", "missing"} {
 		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_guard_2"}, {Kind: "entry", EntryID: later}}
-		if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+		// A registered later body rejects at execution, after the failed cure draw.
+		rng := &queuedRecoveryGemRNG{t: t, draws: []float64{.25}}
+		if err := s.ApplyInvocations(&f, d.Invocations, ops, rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
 			t.Fatal(later, err)
 		}
 		after, _ := json.Marshal(s)
@@ -149,6 +151,7 @@ func TestDefenseBranchesAdmitSkippedExtendedWithoutChildContext(t *testing.T) {
 		var d BattleDefinitions
 		d.RegisterDefenseGems()
 		d.RegisterNonJobInvocations()
+		fillEmptyJobTables(&d)
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"ally"}}
 		ops, err := d.InvocationAction(&s, &f, []string{"gem_guard_2", "gem_secret_art_sky"}, noArithmeticDraws{t})
 		if err != nil {

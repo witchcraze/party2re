@@ -32,14 +32,6 @@ func resourceInvocation(c *corebattle.DamageContext, e corebattle.ResourceEntry)
 			child.TargetContext = f.TargetContext
 			return s.ValidateResource(&child, e.ID, target(f), random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			if c == nil {
-				return false, corebattle.ErrUnsupportedEffect
-			}
-			child := *c
-			child.TargetContext = f.TargetContext
-			return s.ProjectResource(&child, e.ID), nil
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

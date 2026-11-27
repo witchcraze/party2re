@@ -80,25 +80,11 @@ func (s *LifetimeState) ValidateResource(c *DamageContext, id, targetID string, 
 	return nil
 }
 
-// ProjectResource applies only deterministic103/104 bodies on private state.
-// They inspect the current status; they never assign poison or consume a target.
-func (s *LifetimeState) ProjectResource(c *DamageContext, id string) bool {
-	entry, ok := resourceEntry(id)
-	if !ok || (entry.SourceID != 103 && entry.SourceID != 104) {
-		return false
-	}
-	a := s.actor(c.ActorID)
-	if a.Status != "" {
-		a.CMP = max(0, a.CMP+entry.CMPCost)
-	}
-	return true
-}
-
 func (s *LifetimeState) ApplyResource(c *DamageContext, id, targetID string, rng random.Generator) ([]EffectApplication, error) {
 	if err := s.ValidateResource(c, id, targetID, rng); err != nil {
 		return nil, err
 	}
-	if s.ProjectResource(c, id) {
+	if s.applyExactResource(c, id) {
 		return nil, nil
 	}
 	entry, _ := resourceEntry(id)
@@ -145,4 +131,19 @@ func (s *LifetimeState) ApplyResource(c *DamageContext, id, targetID string, rng
 		return r, nil
 	}
 	return nil, ErrUnsupportedEffect
+}
+
+// applyExactResource applies the deterministic 103/104 bodies; false leaves the
+// entry to the general executor. They inspect the current status; they never
+// assign poison or consume a target.
+func (s *LifetimeState) applyExactResource(c *DamageContext, id string) bool {
+	entry, ok := resourceEntry(id)
+	if !ok || (entry.SourceID != 103 && entry.SourceID != 104) {
+		return false
+	}
+	a := s.actor(c.ActorID)
+	if a.Status != "" {
+		a.CMP = max(0, a.CMP+entry.CMPCost)
+	}
+	return true
 }

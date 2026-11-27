@@ -11,95 +11,36 @@ type StatusContinuation struct {
 	Context StatusContext
 }
 
-// ProjectStatusGemBranches supplies complete intrinsic status/cure alternatives.
-// The job dispel body retains its independent reset owner and unknown projection.
-func (s *LifetimeState) ProjectStatusGemBranches(c *StatusContext, id, targetID string) ([]StatusContinuation, error) {
-	return s.projectStatusGemBranches(c, id, targetID, true)
-}
-
-func (s *LifetimeState) projectStatusGemBranches(c *StatusContext, id, targetID string, followed bool) ([]StatusContinuation, error) {
+// validateDeathGem enumerates gem71's per-enemy death outcomes so each later
+// target is checked after earlier absorption, revival and defeat facts.
+func (s *LifetimeState) validateDeathGem(c *StatusContext) error {
 	if s == nil || c == nil {
-		return nil, ErrInvalidRequest
-	}
-	source := 0
-	for _, e := range StatusEntries() {
-		if e.ID == id {
-			source = e.SourceID
-			break
-		}
-	}
-	if source == 0 {
-		return nil, nil
+		return ErrInvalidRequest
 	}
 	if err := s.validateTargetContext(c.TargetContext, random.Default()); err != nil {
-		return nil, err
+		return err
 	}
-	if c.Custom && s.actor(targetID) == nil {
-		targetID = c.ActorID
-	}
-	e, chance := statusEntryEffect(source, targetID)
+	e, chance := statusEntryEffect(71, "")
 	branches := []StatusContinuation{{State: s.callbackCopy(), Context: *cloneCallbackContext(CallbackContext{Status: c}).Status}}
-	if source == 62 {
-		first, err := s.projectSymbolicTargets(c.TargetContext, e, false)
-		if err != nil {
-			return nil, err
-		}
-		results := statusContinuations{remaining: c.admissionBudget}
-		for _, branch := range first {
-			if !branch.Resolution.Resolved {
-				if err := results.add(branch.State, *c); err != nil {
-					return nil, err
-				}
-				continue
-			}
-			child := branch.Resolution.TargetEffect
-			child.Payload.Symbol = branch.State.actor(child.TargetID).Status
-			next, err := branch.State.projectGemCure(*c, child)
-			if err != nil {
-				return nil, err
-			}
-			for _, n := range next {
-				if err := results.add(n.State, n.Context); err != nil {
-					return nil, err
-				}
-			}
-		}
-		return results.branches, nil
-	}
-	ids := c.EnemyIDs
-	if source < 62 {
-		ids = c.PartyIDs
-		branches[0].Context.AdditionalEffect = true
-	}
-	if source == 70 {
-		ids = []string{targetID}
-	}
+	// The shared budget also counts each distinct final outcome.
 	results := statusContinuations{remaining: c.admissionBudget}
-	if source >= 71 {
-		if branches[0].State.actor(c.ActorID).categorySealed(e.Category) {
-			if err := results.add(branches[0].State, branches[0].Context); err != nil {
-				return nil, err
-			}
-			branches[0].State.actor(c.ActorID).Status = ""
+	if branches[0].State.actor(c.ActorID).categorySealed(e.Category) {
+		if err := results.add(branches[0].State, branches[0].Context); err != nil {
+			return err
 		}
+		branches[0].State.actor(c.ActorID).Status = ""
 	}
-	for index, target := range ids {
+	for index, target := range c.EnemyIDs {
 		e.TargetID = target
 		next := statusContinuations{remaining: c.admissionBudget}
 		for _, branch := range branches {
-			var children []StatusContinuation
-			var err error
-			if source < 62 {
-				children, err = branch.State.projectGemCure(branch.Context, e)
-			} else {
-				children, err = branch.State.projectGemStatus(branch.Context, e, chance, source == 70 || source == 71, followed || index+1 < len(ids))
-			}
+			children, err := branch.State.projectGemStatus(branch.Context, e, chance, true, index+1 < len(c.EnemyIDs))
 			if err != nil {
-				return nil, err
+				return err
 			}
 			for _, child := range children {
 				if err := next.add(child.State, child.Context); err != nil {
-					return nil, err
+					return err
 				}
 			}
 		}
@@ -107,32 +48,10 @@ func (s *LifetimeState) projectStatusGemBranches(c *StatusContext, id, targetID 
 	}
 	for _, branch := range branches {
 		if err := results.add(branch.State, branch.Context); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return results.branches, nil
-}
-
-func (s *LifetimeState) projectGemCure(c StatusContext, e TargetEffect) ([]StatusContinuation, error) {
-	targets, err := s.projectSymbolicTargets(c.TargetContext, e, false)
-	if err != nil {
-		return nil, err
-	}
-	results := statusContinuations{remaining: c.admissionBudget}
-	for _, branch := range targets {
-		child := c
-		r := branch.Resolution
-		if r.Resolved && r.Payload.Symbol != "" && branch.State.actor(r.TargetID).HP > 0 {
-			t := branch.State.actor(r.TargetID)
-			if t.Status == r.Payload.Symbol || r.Payload.Symbol == StatusDeadlyPoison && (t.Status == StatusPoison || t.Status == StatusVirulentPoison) {
-				t.Status = ""
-			}
-		}
-		if err := results.add(branch.State, child); err != nil {
-			return nil, err
-		}
-	}
-	return results.branches, nil
+	return nil
 }
 
 func (s *LifetimeState) projectGemStatus(c StatusContext, e TargetEffect, chance float64, death, followed bool) ([]StatusContinuation, error) {

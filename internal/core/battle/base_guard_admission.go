@@ -91,15 +91,3 @@ func (s *LifetimeState) ValidateBaseGuard(c *BaseGuardContext, id string, rng ra
 	}
 	return p.ValidateDamage(&child.DamageContext, e, rng)
 }
-
-// ProjectBaseGuard carries exact unconditional writes into later admission.
-func (s *LifetimeState) ProjectBaseGuard(c *BaseGuardContext, id string) (bool, error) {
-	if err := s.ValidateBaseGuard(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	if tmp := baseGuardTemporary(id); tmp != "" {
-		s.actor(c.ActorID).Temporary = tmp
-		return true, nil
-	}
-	return false, nil
-}

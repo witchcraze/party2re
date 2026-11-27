@@ -41,7 +41,7 @@ func TestSummonAppearanceGemBindingsAndGates(t *testing.T) {
 	f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy", "tail"}}
 	for _, e := range want {
 		def := d.Invocations.Entries[e.ID]
-		if def.Validate == nil || def.Execute == nil || def.ProjectBranches == nil {
+		if def.Validate == nil || def.Execute == nil {
 			t.Fatal(e, "missing binding")
 		}
 		if _, err := d.InvocationAction(&s, &f, []string{e.ID}, noArithmeticDraws{t}); err != nil {
@@ -88,7 +88,7 @@ func TestSummonGemBeforeRegisteredTargetHelper(t *testing.T) {
 	}
 }
 
-func TestSummonGemRejectsNewUnsupportedTargetBeforePrefix(t *testing.T) {
+func TestSummonGemRejectsNewUnsupportedTargetAtomically(t *testing.T) {
 	s, c, tc, d := summonAppearanceFixture()
 	// An NPC adds to its own party. The new appearance opens a calling helper
 	// whose requester-level prerequisite was unreachable in the original roster.
@@ -113,10 +113,15 @@ func TestSummonGemRejectsNewUnsupportedTargetBeforePrefix(t *testing.T) {
 		ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem_summon_sky"}, {Kind: "entry", EntryID: "job-69-small"}}
 		var err error
 		if discovery {
-			_, err = d.InvocationAction(&s, &f, []string{"gem_summon_sky", "job-69-small"}, noArithmeticDraws{t})
-		} else {
-			err = s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t})
+			// The summoned target exists only after execution, so discovery accepts.
+			if _, err = d.InvocationAction(&s, &f, []string{"gem_summon_sky", "job-69-small"}, noArithmeticDraws{t}); err != nil {
+				t.Fatal(err)
+			}
+			continue
 		}
+		// Suffix draw 0, then position draw .5 selects pool entry 3, whose calling
+		// helper lacks requester level.
+		err = s.ApplyInvocations(&f, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{0, .5}})
 		after, _ := json.Marshal(s)
 		if !errors.Is(err, corebattle.ErrUnsupportedEffect) || string(before) != string(after) || len(c.EnemyIDs) != 1 || c.DamageCalls != 0 || len(f.EnemyIDs) != 1 {
 			t.Fatal(discovery, err, s, c, f)
@@ -132,27 +137,18 @@ func TestAppearanceGemAllPositionsChangeOnlyIcon(t *testing.T) {
 	}
 	tc.MonsterIcons[53] = ""
 	d.RegisterSummonAppearanceGems(&c, &tc)
-	branches, err := d.Invocations.Entries["gem-100-appearance"].ProjectBranches(&s, &f)
-	if err != nil || len(branches) != 108 {
-		t.Fatal(err, len(branches))
-	}
 	for position := range 108 {
 		want := tc.MonsterIcons[position]
 		if want == "" {
 			want = "assets/images/placeholders/battle/monster-default.svg"
 		}
-		if branches[position].State.Actors[0].Icon != want {
-			t.Fatal(position, branches[position])
-		}
 		// An independent icon-only oracle protects every other state/context fact.
 		expected := s
 		expected.Actors = append([]corebattle.LifetimeActor(nil), s.Actors...)
 		expected.Actors[0].Icon = want
-		if !reflect.DeepEqual(branches[position].State, expected) || !reflect.DeepEqual(branches[position].Context, f) {
-			t.Fatal(position, "appearance changed other facts")
-		}
+		frame := f
 		rng := &damageGemDraws{t: t, draws: []float64{(float64(position) + .5) / 108}}
-		if err := s.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem-100-appearance"}}, rng); err != nil || rng.used != 1 || s.Actors[0].Icon != want {
+		if err := s.ApplyInvocations(&f, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "gem-100-appearance"}}, rng); err != nil || rng.used != 1 || !reflect.DeepEqual(s, expected) || !reflect.DeepEqual(f, frame) {
 			t.Fatal(position, err, rng, s)
 		}
 	}
@@ -197,18 +193,15 @@ func TestAppearanceGemBeforeRegisteredCallingHelper(t *testing.T) {
 		}
 		ids := []string{"gem-100-appearance", "helper-bridge"}
 		ops, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
+		if err != nil {
+			t.Fatal(err)
+		}
 		if unsupported {
-			if !errors.Is(err, corebattle.ErrUnsupportedEffect) {
-				t.Fatal("appearance reopened missing requester descendant", err)
-			}
-			ops = []corebattle.CallbackInvocation{{Kind: "entry", EntryID: ids[0]}, {Kind: "entry", EntryID: ids[1]}}
-			if err := s.ApplyInvocations(&f, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Icon != "" || s.Actors[0].Temporary != "" || c.DamageCalls != 0 {
+			// The job69 appearance exposes the missing requester level at execution.
+			if err := s.ApplyInvocations(&f, d.Invocations, ops, &damageGemDraws{t: t, draws: []float64{.999}}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || s.Actors[0].Icon != "" || s.Actors[0].Temporary != "" || c.DamageCalls != 0 {
 				t.Fatal("rejected after a prefix", err, s, c)
 			}
 			continue
-		}
-		if err != nil {
-			t.Fatal(err)
 		}
 		rng := &damageGemDraws{t: t, draws: []float64{.999}}
 		if err := s.ApplyInvocations(&f, d.Invocations, ops, rng); err != nil || rng.used != 1 || s.Actors[0].Temporary != corebattle.TemporaryDefense || s.Actors[2].Temporary != "" {

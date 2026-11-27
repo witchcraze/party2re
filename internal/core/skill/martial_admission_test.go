@@ -127,12 +127,12 @@ func TestMartialExactCoverProjectionProtectsLaterAdmission(t *testing.T) {
 	if err := s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); err != nil || s.Actors[0].Temporary != corebattle.TemporaryStrongDefense || s.Actors[1].HP != 1000 {
 		t.Fatal(err, s)
 	}
-	// Cover's exact projection overwrites even a fallen ally's temporary.
+	// Cover overwrites even a fallen ally's temporary.
 	s, c, d = martialFixture()
 	s.Actors[2].Temporary = corebattle.TemporaryReflectMagic
 	frame = corebattle.CallbackContext{TargetContext: c.TargetContext}
-	known, err := d.Invocations.Entries["job-25-entry-6"].Project(&s, &frame)
-	if err != nil || !known || s.Actors[2].Temporary != corebattle.TemporaryCover || s.Actors[0].Temporary != corebattle.TemporaryCovering {
+	err = s.ApplyInvocations(&frame, d.Invocations, []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "job-25-entry-6"}}, noArithmeticDraws{t})
+	if err != nil || s.Actors[2].Temporary != corebattle.TemporaryCover || s.Actors[0].Temporary != corebattle.TemporaryCovering {
 		t.Fatal(err, s)
 	}
 }

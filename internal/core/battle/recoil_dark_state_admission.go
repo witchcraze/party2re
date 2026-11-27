@@ -114,22 +114,3 @@ func (s *LifetimeState) validateRawRecoilStrike(c *RecoilDarkStateContext, rng r
 	}
 	return nil
 }
-
-// Only exact inline transitions are projected across an enclosing invocation.
-// Damage/random results stay unknown.
-func (s *LifetimeState) ProjectRecoilDarkState(c *RecoilDarkStateContext, id string) (bool, error) {
-	if err := s.ValidateRecoilDarkState(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	switch id {
-	case "job-21-entry-1":
-		s.actor(c.ActorID).Temporary = TemporaryDeflect
-		return true, nil
-	case "job-38-entry-2":
-		if !s.actor(c.ActorID).categorySealed(CategoryMagic) {
-			s.actor(c.ActorID).Temporary = TemporaryNullMagic
-			return true, nil
-		}
-	}
-	return false, nil
-}

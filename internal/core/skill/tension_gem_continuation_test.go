@@ -60,16 +60,17 @@ func TestTensionGemRegisteredFallenContinuation(t *testing.T) {
 		before := append([]corebattle.LifetimeActor(nil), s.Actors...)
 		ids := []string{"gem_mind_eye", "gem_calm_orb", "gem_divine_tension_sky"}
 		ops, err := d.InvocationAction(&s, &f, ids, noArithmeticDraws{t})
-		if !requester {
-			if !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(before, s.Actors) || c.TensionCalls != 0 {
-				t.Fatal("fallen no-effect lost", err, s, c)
-			}
-			continue
-		}
 		if err != nil {
 			t.Fatal(err)
 		}
 		rng := &queuedRecoveryGemRNG{t: t, draws: []float64{.9, 0}}
+		if !requester {
+			// The later slot needs requester level only on the actual path.
+			if err := s.ApplyInvocations(&f, d.Invocations, ops, rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(before, s.Actors) || c.TensionCalls != 0 {
+				t.Fatal("fallen no-effect lost", err, s, c)
+			}
+			continue
+		}
 		if err := s.ApplyInvocations(&f, d.Invocations, ops, rng); err != nil || len(rng.draws) != 0 || s.Actors[0].Tension != 8 || s.Actors[1].Hit != 95 || c.TensionCalls != 2 {
 			t.Fatal(err, s, c, rng.draws)
 		}
@@ -108,7 +109,7 @@ func TestTensionGemSharesOperationCountersAcrossRegistrations(t *testing.T) {
 	}
 }
 
-func TestTensionGemCoverReplacementChangesLaterAdmission(t *testing.T) {
+func TestTensionGemCoverReplacementChangesLaterEligibility(t *testing.T) {
 	for _, requester := range []bool{false, true} {
 		s, c := recoveryGemFixture(false)
 		s.Actors[0].Tension, s.Actors[0].Temporary = 5, corebattle.TemporaryCover
@@ -123,16 +124,17 @@ func TestTensionGemCoverReplacementChangesLaterAdmission(t *testing.T) {
 		f := corebattle.CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
 		before := append([]corebattle.LifetimeActor(nil), s.Actors...)
 		ops, err := d.InvocationAction(&s, &f, []string{"gem_inspire_sky", "gem_awakening_1", "gem_inspire_sky"}, noArithmeticDraws{t})
-		if !requester {
-			if !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(before, s.Actors) || c.TensionCalls != 0 {
-				t.Fatal("161 can reopen the actor's high-stage branch", err, s, c)
-			}
-			continue
-		}
 		if err != nil {
 			t.Fatal(err)
 		}
 		rng := &queuedRecoveryGemRNG{t: t, draws: []float64{0, 0, .9, 0, 0}}
+		if !requester {
+			// Item161 reopens the actor's high-stage branch, found at execution.
+			if err := s.ApplyInvocations(&f, d.Invocations, ops, rng); !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(before, s.Actors) || c.TensionCalls != 0 {
+				t.Fatal("161 can reopen the actor's high-stage branch", err, s, c)
+			}
+			continue
+		}
 		if err := s.ApplyInvocations(&f, d.Invocations, ops, rng); err != nil || len(rng.draws) != 0 || s.Actors[0].Tension != 8 || s.Actors[2].Tension != 3 || s.Actors[2].Temporary != corebattle.TemporaryDefense || c.TensionCalls != 2 {
 			t.Fatal(err, s, c, rng.draws)
 		}

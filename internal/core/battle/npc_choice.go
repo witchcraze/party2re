@@ -110,7 +110,8 @@ func (s *LifetimeState) validateNPCChoices(c *CallbackContext, plan NPCActionPla
 		for i := range invocations {
 			arguments[i] = frame.Arguments
 		}
-		if err := s.validateSequenceThen(&frame, plan.Catalog, invocations, arguments, rng, continuation); err != nil {
+		// The invocation's effects make later facts unknown; execution validates them.
+		if err := s.validateSequence(&frame, plan.Catalog, invocations, arguments, rng); err != nil {
 			return err
 		}
 	}

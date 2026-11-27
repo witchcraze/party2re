@@ -10,7 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
-func TestArithmeticProjectsEarlierIntrinsicEligibility(t *testing.T) {
+func TestArithmeticEarlierIntrinsicChangesLaterEligibility(t *testing.T) {
 	for _, tc := range []struct {
 		prior, later string
 		hp, mp       int
@@ -35,7 +35,8 @@ func TestArithmeticProjectsEarlierIntrinsicEligibility(t *testing.T) {
 			before := append([]corebattle.LifetimeActor(nil), s.Actors...)
 			args := frame.Arguments
 			ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: tc.prior}, {Kind: "entry", EntryID: tc.later}}
-			if _, err := d.InvocationAction(&s, &frame, []string{tc.prior, tc.later}, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) {
+			// The later slot follows an effect, so only execution sees its context gap.
+			if _, err := d.InvocationAction(&s, &frame, []string{tc.prior, tc.later}, noArithmeticDraws{t}); err != nil {
 				t.Fatal(err)
 			}
 			if err := s.ApplyInvocations(&frame, d.Invocations, ops, noArithmeticDraws{t}); !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(before, s.Actors) || args[0] != "enemy" || frame.PartyIDs[0] != "self" || c.Divisor != 0 {
@@ -52,7 +53,7 @@ func TestArithmeticProjectsEarlierIntrinsicEligibility(t *testing.T) {
 				rng.draws = []float64{0}
 			}
 			if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || s.Actors[2].HP != 0 || defeats != 1 || rng.used != len(rng.draws) {
-				t.Fatal("ordered execution disagrees with projected eligibility", err, s, defeats)
+				t.Fatal("ordered execution lost earlier eligibility change", err, s, defeats)
 			}
 		})
 	}

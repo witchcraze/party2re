@@ -20,6 +20,14 @@ type actorPtrSnapshot struct {
 	custom       *CustomLoadout
 	npcLoadout   *NPCLoadout
 	jobHistory   map[string]*int
+	jobSP        map[string]*int
+	abilities    []string
+	items        []string
+	consumed     []ConsumedItem
+	skills       []ActionSkill
+	actionItems  []ActionItem
+	customSkills []ActionCustomSkill
+	gems         [][]GemEffect
 }
 
 func snapshotState(s *LifetimeState) stateSnapshot {
@@ -37,6 +45,16 @@ func snapshotState(s *LifetimeState) stateSnapshot {
 			custom:       a.Custom,
 			npcLoadout:   a.NPCLoadout,
 			jobHistory:   a.JobHistory,
+			jobSP:        maps.Clone(a.JobHistory),
+			abilities:    a.Abilities,
+			items:        a.ItemDefinitionIDs,
+			consumed:     a.ConsumedItems,
+			skills:       a.Skills,
+			actionItems:  a.ActionItems,
+			customSkills: a.CustomSkills,
+		}
+		for _, custom := range a.CustomSkills {
+			ptrs[i].gems = append(ptrs[i].gems, custom.Gems)
 		}
 	}
 	return stateSnapshot{
@@ -49,6 +67,16 @@ func snapshotState(s *LifetimeState) stateSnapshot {
 		origStoredHistory: s.StoredToolHistory,
 		origStoredInners:  maps.Clone(s.StoredToolHistory),
 	}
+}
+
+// restoreSlice writes saved values back into the caller's original backing
+// array; saved was cloned from it, so both have the same length.
+func restoreSlice[T any](orig, saved []T) []T {
+	if orig == nil {
+		return saved
+	}
+	copy(orig, saved)
+	return orig
 }
 
 func restoreNestedBoolMaps(origOuter, savedOuter, origInners map[string]map[string]bool) map[string]map[string]bool {
@@ -97,6 +125,21 @@ func (snap stateSnapshot) restore(s *LifetimeState) {
 			*ptr.npcLoadout = *a.NPCLoadout
 			a.NPCLoadout = ptr.npcLoadout
 		}
+		for id, sp := range a.JobHistory {
+			if orig := ptr.jobSP[id]; orig != nil && sp != nil {
+				*orig = *sp
+				a.JobHistory[id] = orig
+			}
+		}
+		a.Abilities = restoreSlice(ptr.abilities, a.Abilities)
+		a.ItemDefinitionIDs = restoreSlice(ptr.items, a.ItemDefinitionIDs)
+		a.ConsumedItems = restoreSlice(ptr.consumed, a.ConsumedItems)
+		a.Skills = restoreSlice(ptr.skills, a.Skills)
+		a.ActionItems = restoreSlice(ptr.actionItems, a.ActionItems)
+		for j := range a.CustomSkills {
+			a.CustomSkills[j].Gems = restoreSlice(ptr.gems[j], a.CustomSkills[j].Gems)
+		}
+		a.CustomSkills = restoreSlice(ptr.customSkills, a.CustomSkills)
 		if ptr.jobHistory != nil {
 			clear(ptr.jobHistory)
 			maps.Copy(ptr.jobHistory, a.JobHistory)

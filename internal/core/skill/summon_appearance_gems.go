@@ -16,7 +16,7 @@ func SummonAppearanceGemEntries() []SummonAppearanceGemEntry {
 	return []SummonAppearanceGemEntry{{"gem_summon_sky", 82, 18}, {"gem-100-appearance", 100, 0}}
 }
 
-// RegisterSummonAppearanceGems binds the existing bodies and pure alternatives.
+// RegisterSummonAppearanceGems binds the existing bodies.
 // Rebuild operation ports from frozen stage/appearance facts after reload.
 func (d *BattleDefinitions) RegisterSummonAppearanceGems(roster *corebattle.RosterContext, appearance *corebattle.TransformationContext) {
 	if d.Invocations.Entries == nil {
@@ -26,14 +26,7 @@ func (d *BattleDefinitions) RegisterSummonAppearanceGems(roster *corebattle.Rost
 		d.RosterSkills = make(map[string]bool)
 	}
 	d.RosterSkills["gem_summon_sky"] = true
-	summon := d.RosterInvocation(roster, "gem_summon_sky")
-	summon.ProjectBranches = func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-		if roster == nil {
-			return nil, corebattle.ErrUnsupportedEffect
-		}
-		return s.ProjectEnemySummon(roster, f)
-	}
-	d.Invocations.Entries["gem_summon_sky"] = summon
+	d.Invocations.Entries["gem_summon_sky"] = d.RosterInvocation(roster, "gem_summon_sky")
 	d.Invocations.Entries["gem-100-appearance"] = corebattle.CallbackDefinition{
 		Validate: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) error {
 			if appearance == nil {
@@ -42,12 +35,6 @@ func (d *BattleDefinitions) RegisterSummonAppearanceGems(roster *corebattle.Rost
 			child := *appearance
 			child.TargetContext = f.TargetContext
 			return s.ValidateTransformation(&child, "gem-100-appearance", "", random.Default())
-		},
-		ProjectBranches: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-			if appearance == nil {
-				return nil, corebattle.ErrUnsupportedEffect
-			}
-			return s.ProjectAppearanceGem(appearance, f)
 		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if appearance == nil {

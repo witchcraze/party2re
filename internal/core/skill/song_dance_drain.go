@@ -35,14 +35,6 @@ func songDanceDrainInvocation(c *corebattle.SongDanceDrainContext, id string) co
 			child.TargetContext, child.Arguments = f.TargetContext, append([]string(nil), f.Arguments...)
 			return s.ValidateSongDanceDrain(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext) (bool, error) {
-			if c == nil {
-				return false, corebattle.ErrUnsupportedEffect
-			}
-			child := *c
-			child.TargetContext = f.TargetContext
-			return s.ProjectSongDanceDrain(&child, id), nil
-		},
 		Execute: func(s *corebattle.LifetimeState, f *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

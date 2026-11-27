@@ -77,11 +77,3 @@ func (s *LifetimeState) ValidateMartial(c *MartialContext, id string, rng random
 	// physical category; it adds no context beyond a reachable damage helper.
 	return p.admitDamageSequence(&child.DamageContext, effects, rng)
 }
-
-// ProjectMartial carries only exact inline transitions to later admission.
-func (s *LifetimeState) ProjectMartial(c *MartialContext, id string) (bool, error) {
-	if err := s.ValidateMartial(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	return applyMartialInline(s, c, id), nil
-}

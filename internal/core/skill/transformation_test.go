@@ -33,15 +33,16 @@ func TestTransformationCurrentJobDelegationRebuildsAfterFormWithoutCharging(t *t
 		t.Fatal("unselected damage body executed")
 		return nil
 	}
-	d.RegisterTransformations(&c)
+	// The later tool-84 checks registration across every table.
+	d.RegisterPlayerCallbacks(PlayerCallbackContexts{Transformations: &c}, len(c.PartyIDs))
 	frame := corebattle.CallbackContext{TargetContext: c.TargetContext}
 	ops := []corebattle.CallbackInvocation{{Kind: "entry", EntryID: "job-82-form"}, {Kind: "tool-84"}}
 	rng := &damageGemDraws{t: t, draws: []float64{0, 0, .99}}
 	if err := s.ApplyInvocations(&frame, d.Invocations, ops, rng); err != nil || rng.used != 3 || s.Actors[0].Jobs.JobID != "job-300" || s.Actors[0].MP != 0 || s.Actors[0].Attack != 150 || s.Actors[0].Agility != 150 {
 		t.Fatal(err, s, rng)
 	}
-	// The same selected tune cannot bypass missing descendants elsewhere in
-	// the full transformed table; preflight rejects before selecting a child.
+	// The later tool-84 cannot bypass unregistered tables elsewhere in its
+	// domain; preflight rejects before the form switch or any draw.
 	s, c, d = transformationRegistryFixture()
 	d.RegisterTransformations(&c)
 	frame.TargetContext = c.TargetContext

@@ -123,31 +123,3 @@ func (s *LifetimeState) ValidateHighPower(c *HighPowerContext, id string, rng ra
 	}
 	return nil
 }
-
-func (s *LifetimeState) ProjectHighPower(c *HighPowerContext, id string) (bool, error) {
-	if err := s.ValidateHighPower(c, id, random.Default()); err != nil {
-		return false, err
-	}
-	switch id {
-	case "job-47-entry-5":
-		s.highPowerWeapon(c)
-		return true, nil
-	case "job-48-entry-5":
-		// Equipment callbacks can draw or change the package target cursor.
-		// Without their exact transition, the projection stays unknown.
-		for _, a := range s.Actors {
-			if a.Gear.AccessoryID != "" || a.Gear.WeaponID == "weapon-71" {
-				return false, nil
-			}
-		}
-		p, child := s.callbackCopy(), *c
-		reset := *c.EquipmentReset
-		child.EquipmentReset = &reset
-		if err := p.highPowerReset(&child, resetBoundary(0)); err != nil {
-			return false, err
-		}
-		*s = p
-		return true, nil
-	}
-	return false, nil
-}

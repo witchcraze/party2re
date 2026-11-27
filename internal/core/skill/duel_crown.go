@@ -39,13 +39,6 @@ func duelCrownInvocation(c *corebattle.DuelCrownContext, id string) corebattle.C
 			}
 			return s.ValidateDuelCrown(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {
-			child, err := context(frame)
-			if err != nil {
-				return false, err
-			}
-			return s.ProjectDuelCrown(&child, id)
-		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

@@ -63,12 +63,13 @@ func TestNPCOperationWholePoolRejectionIsPure(t *testing.T) {
 	}
 }
 
-func TestNPCOperationPreflightsKnownTailsAndReachableDefeat(t *testing.T) {
+func TestNPCOperationRejectsUnsupportedTailsAndReachableDefeat(t *testing.T) {
 	s, op := runNPCFixture(t)
 	s.Actors[0].ItemDefinitionIDs = []string{"item-164"}
 	s.Actors[0].Tension = 5
 	seed := []battle.CallbackBinding{responseBinding("job-0-entry-4")}
-	_, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, &npcJobRNG{t: t})
+	// The tail after an invocation is validated at execution, then rolled back.
+	_, err := ApplyNPCOperation(&s, op, seed, registerNPCFixture, &npcSelectionRNG{value: 0})
 	if !errors.Is(err, battle.ErrUnsupportedEffect) || s.Actors[0].Temporary != "" || s.Actors[0].Tension != 5 {
 		t.Fatalf("known equipment tail state %+v error %v", s.Actors[0], err)
 	}

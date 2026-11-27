@@ -54,13 +54,6 @@ func dualAgilityInvocation(c *corebattle.DualAgilityContext, id string) corebatt
 			}
 			return s.ValidateDualAgility(&child, id, random.Default())
 		},
-		Project: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) (bool, error) {
-			child, err := context(frame)
-			if err != nil {
-				return false, err
-			}
-			return s.ProjectDualAgility(&child, id)
-		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
 				return corebattle.ErrUnsupportedEffect

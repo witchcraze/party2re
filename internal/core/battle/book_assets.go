@@ -91,7 +91,7 @@ func (s *LifetimeState) validateBookAssets(c *JobAssetContext, id string, rng ra
 		if err != nil {
 			return err
 		}
-		// An unprojected first use leaves the second to execution-time validation.
+		// The second use follows an effect, so execution validates it.
 		op := CallbackInvocation{Kind: "entry", EntryID: entry}
 		return s.validateSequence(&frame, c.Catalog, []CallbackInvocation{op, op}, [][]string{targets[:1], targets[1:]}, rng)
 	}

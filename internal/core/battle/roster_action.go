@@ -336,3 +336,18 @@ func (s *LifetimeState) ApplyRoster(c *RosterContext, id, targetID string, rng r
 	r.Applied = r.Applied || len(r.Effects) > 0
 	return r, err
 }
+
+func (s *LifetimeState) reviveCallingParty(c *RosterContext) bool {
+	applied := false
+	for _, id := range c.PartyIDs {
+		a := s.actor(id)
+		if a.HP <= 0 {
+			a.HP = int(float64(a.MaxHP) * .42)
+			a.Attack += 300
+			a.Agility += 300
+			a.Icon = "assets/images/placeholders/battle/helpers.svg#revived"
+			applied = true
+		}
+	}
+	return applied
+}

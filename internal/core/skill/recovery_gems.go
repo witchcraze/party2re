@@ -56,8 +56,7 @@ func (d BattleDefinitions) RecoveryStatAction(s *corebattle.LifetimeState, c *co
 }
 
 // RecoveryStatInvocation binds an entire ordered custom body to the existing
-// invocation engine. Arbitrary preceding callbacks need their own transition
-// projection; the finite slot sequence is admitted together inside this body.
+// invocation engine. The finite slot sequence is admitted together inside this body.
 func (d BattleDefinitions) RecoveryStatInvocation(c *corebattle.EffectContext, ids []string) corebattle.CallbackDefinition {
 	ids = slices.Clone(ids)
 	context := func(frame *corebattle.CallbackContext) corebattle.EffectContext {
@@ -86,42 +85,6 @@ func (d BattleDefinitions) RecoveryStatInvocation(c *corebattle.EffectContext, i
 			}
 			_, err := d.RecoveryStatAction(s, &child, ids, target, random.Default())
 			return err
-		},
-		ProjectBranches: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext) ([]corebattle.CallbackContinuation, error) {
-			if c == nil {
-				return nil, corebattle.ErrUnsupportedEffect
-			}
-			child := context(frame)
-			target := ""
-			if len(frame.Arguments) > 0 {
-				target = frame.Arguments[0]
-			}
-			entries, err := d.RecoveryStatAction(s, &child, ids, target, random.Default())
-			if err != nil {
-				return nil, err
-			}
-			var sources []int
-			for _, entry := range entries {
-				sources = append(sources, entry.SourceID)
-			}
-			states, err := s.ProjectRecoveryStatGemBranches(sources, &child, target)
-			if err != nil {
-				return nil, err
-			}
-			var branches []corebattle.CallbackContinuation
-			for _, state := range states {
-				next := *frame
-				damage := corebattle.DamageContext{}
-				if frame.Damage != nil {
-					damage = *frame.Damage
-				}
-				damage.EffectContext = state.Context
-				next.Damage = &damage
-				next.TargetContext = state.Context.TargetContext
-				consume(&next, entries)
-				branches = append(branches, corebattle.CallbackContinuation{State: state.State, Context: next})
-			}
-			return branches, nil
 		},
 		Execute: func(s *corebattle.LifetimeState, frame *corebattle.CallbackContext, rng random.Generator) error {
 			if c == nil {
