@@ -240,7 +240,9 @@ func TestValkeyMembersCorruptProfileFailsRead(t *testing.T) {
 	if err := s.Refresh(ctx, p, a, now); err != nil {
 		t.Fatal(err)
 	}
-	client.Do(ctx, client.B().Hset().Key("party2:placemember:{test:"+p.ID+"}:profile").FieldValue().FieldValue(a.CharacterID, "{bad").Build())
+	if err := client.Do(ctx, client.B().Hset().Key("party2:placemember:{test:"+p.ID+"}:profile").FieldValue().FieldValue(a.CharacterID, "{bad").Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.Read(ctx, p, now); err == nil {
 		t.Fatal("corrupt profile must fail the read")
 	}

@@ -118,7 +118,9 @@ func TestValkeyCorruptRowFailsRead(t *testing.T) {
 	log, client := realLog(t, placelog.Config{})
 	ctx := context.Background()
 	p := testPlace(t, client)
-	client.Do(ctx, client.B().Lpush().Key("party2:placelog:test:"+p.ID).Element("{not json").Build())
+	if err := client.Do(ctx, client.B().Lpush().Key("party2:placelog:test:"+p.ID).Element("{not json").Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := log.Read(ctx, p, "a"); err == nil {
 		t.Fatal("corrupt row must fail the read")
 	}

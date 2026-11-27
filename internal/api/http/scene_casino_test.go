@@ -452,7 +452,9 @@ func TestCasinoGatewayPreservesAdmissionAndEntryGatesAcrossRenewal(t *testing.T)
 	roomID := prefix + "-room"
 	peerID := prefix + "-peer"
 	for _, actor := range []string{"hero", peerID} {
-		_ = client.Do(ctx, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+actor).Build())
+		if err := client.Do(ctx, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+actor).Build()).Error(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Cleanup(func() {
 		bg := context.Background()
