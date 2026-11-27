@@ -269,7 +269,7 @@ func activeReferralRun(t *testing.T, f referralFixture) (*database.RunRepository
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if active, err := runRepo.FindActorRun(ctx, f.referrer.ID); err != nil || active == nil || active.RunID != run.ID {
+	if active, err := runRepo.FindActorRun(ctx, f.referrer.ID); err != nil || active == nil || active.ID != run.ID {
 		t.Fatalf("expected SQL enrollment in active run %q, got %+v (err=%v)", run.ID, active, err)
 	}
 	f.core.normalGuard = normalService.CheckMutation
@@ -321,7 +321,7 @@ func TestRegistrationReferralToActiveRunRecipient(t *testing.T) {
 				t.Fatalf("referral changed the recipient's active run: before=%+v after=%+v err=%v", before, after, err)
 			}
 			active, err := runRepo.FindActorRun(ctx, f.referrer.ID)
-			if err != nil || active == nil || active.RunID != before.ID {
+			if err != nil || active == nil || active.ID != before.ID {
 				t.Fatalf("referral changed SQL run enrollment: active=%+v err=%v", active, err)
 			}
 		})

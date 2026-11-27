@@ -252,19 +252,49 @@ func (s *Service[R, P]) resolveReceipt(ctx context.Context, cmd Command, result 
 	return *saved, nil
 }
 
-func (s *Service[R, P]) GetActorRun(ctx context.Context, player, actor string) (*ActorRun, error) {
+func actorRun(r *State, actor string, now time.Time) *ActorRun {
+	role := "member"
+	if r.LeaderID == actor {
+		role = "leader"
+	}
+	return &ActorRun{
+		RunID:        r.ID,
+		PartyID:      r.Admission.PartyID,
+		Version:      r.Version,
+		Round:        r.Round,
+		LeaderID:     r.LeaderID,
+		Role:         role,
+		IdleDue:      now.After(r.LastActivity.Add(idleTimeout)),
+		LastActivity: r.LastActivity,
+		Recipient:    r.Recipients[actor],
+	}
+}
+
+func (s *Service[R, P]) ownedActorRun(ctx context.Context, player, actor string) (*R, *State, error) {
 	if err := s.authorize(ctx, player, actor); err != nil {
+		return nil, nil, err
+	}
+	run, err := s.cfg.Store.FindActorRun(ctx, actor)
+	if err != nil || run == nil {
+		return nil, nil, err
+	}
+	r := P(run).Host()
+	p, ok := r.Recipients[actor]
+	if !ok || !slices.Contains(r.Roster, actor) {
+		return nil, nil, ErrRecovery
+	}
+	if p.PlayerID != player {
+		return nil, nil, ErrForbidden
+	}
+	return run, r, nil
+}
+
+func (s *Service[R, P]) GetActorRun(ctx context.Context, player, actor string) (*ActorRun, error) {
+	_, r, err := s.ownedActorRun(ctx, player, actor)
+	if err != nil || r == nil {
 		return nil, err
 	}
-	state, err := s.cfg.Store.FindActorRun(ctx, actor)
-	if err != nil || state == nil {
-		return state, err
-	}
-	if state.Recipient.PlayerID != player {
-		return nil, ErrForbidden
-	}
-	state.IdleDue = s.cfg.Clock.Now().After(state.LastActivity.Add(idleTimeout))
-	return state, nil
+	return actorRun(r, actor, s.cfg.Clock.Now()), nil
 }
 
 // HasActiveRun exposes admission only; full run observations still require ownership.
