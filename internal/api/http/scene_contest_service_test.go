@@ -136,7 +136,8 @@ func TestContestNormalizedRepliesRealService(t *testing.T) {
 						key, id, want = "entry_id", "e9", "夕焼けに投票しました"
 					}
 					if padded {
-						id = " \t\u3000" + id + "\n "
+						// Control characters never reach the service (security rule §6).
+						id = " \u3000" + id + " "
 					}
 					params, err := json.Marshal(map[string]string{key: id})
 					if err != nil {

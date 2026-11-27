@@ -7,6 +7,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // maxRequestBodyBytes is the maximum accepted request body size (64 KiB).
@@ -91,4 +94,47 @@ func decodeActionParams(raw json.RawMessage, required []string, dst any) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	return dec.Decode(dst)
+}
+
+// checkTextParams applies the field-agnostic text check to every string in the
+// params object, nested values included, by its top-level parameter's declared
+// kind (TextLine when undeclared). Malformed params are left to decodeActionParams.
+func checkTextParams(raw json.RawMessage, kinds map[string]validation.TextKind) error {
+	if !utf8.Valid(raw) {
+		return errors.New("params are not valid UTF-8")
+	}
+	var fields map[string]any
+	if json.Unmarshal(raw, &fields) != nil {
+		return nil
+	}
+	for name, value := range fields {
+		kind, ok := kinds[name]
+		if !ok {
+			kind = validation.TextLine
+		}
+		if err := checkTextValue(kind, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkTextValue(kind validation.TextKind, value any) error {
+	switch v := value.(type) {
+	case string:
+		return validation.CheckText(kind, v)
+	case []any:
+		for _, item := range v {
+			if err := checkTextValue(kind, item); err != nil {
+				return err
+			}
+		}
+	case map[string]any:
+		for _, item := range v {
+			if err := checkTextValue(kind, item); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

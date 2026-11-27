@@ -261,6 +261,39 @@ func TestActionGatewayStrictParams(t *testing.T) {
 	}
 }
 
+func TestActionGatewayTextSafety(t *testing.T) {
+	for _, tc := range []struct {
+		reason string
+		ok     bool
+	}{
+		{`"a\r\nb"`, true}, // rescue_request's reason is a comment
+		{`"a\u202eb"`, false},
+		{`"a\u0007b"`, false},
+		{"\"a\xffb\"", false},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			f := newGatewayFixture(t)
+			timers := timer.NewService(nil)
+			if err := timers.SetLock(context.Background(), timer.CategorySleep, "hero", time.Hour); err != nil {
+				t.Fatal(err)
+			}
+			f.actions = []scheduling.ScheduledAction{{ID: "work", State: scheduling.StatePending}}
+			f.sleepErr = errors.New("shared sleep guard must be bypassed")
+			status, got := gatewayRequest(t, f.router("rescue_request", timers), "hero", "session", "application/json", `{"action":"rescue_request","params":{"reason":`+tc.reason+`}}`, nil)
+			if tc.ok {
+				if status != 200 || f.executions != 1 {
+					t.Fatalf("status=%d response=%s", status, got)
+				}
+				return
+			}
+			if status != 400 || f.executions != 0 || f.queryCalls != 0 {
+				t.Fatalf("status=%d executions=%d response=%s", status, f.executions, got)
+			}
+			assertGatewayError(t, got, "INVALID_ACTION_PARAMS")
+		})
+	}
+}
+
 func TestActionGatewayOutcomeAndRefresh(t *testing.T) {
 	for _, rejection := range []bool{false, true} {
 		for _, failure := range []string{"", "query", "profile", "owner", "profile owner", "character", "sleep timer", "wake timer"} {

@@ -122,7 +122,7 @@ func ValidateRoleTitle(title string) (string, error) {
 		}
 		return "", ErrInvalidRoleTitle
 	}
-	if strings.ContainsAny(normalized, ",;\"'&<>@＠") {
+	if strings.ContainsAny(normalized, validation.TitleChars+validation.FullwidthAt) {
 		return "", ErrInvalidRoleTitle
 	}
 	if normalized == "参加申請中" || normalized == "ギルマス" {

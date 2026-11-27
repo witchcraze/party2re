@@ -10,6 +10,7 @@ import (
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/gemstore"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 func (s *Service) GetCustomSkill(ctx context.Context, characterID string) (*CustomSkill, error) {
@@ -129,7 +130,7 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 }
 
 func validateText(value string, name bool) error {
-	if utf8.RuneCountInString(value) > 60 || strings.ContainsAny(value, ";<>") {
+	if utf8.RuneCountInString(value) > 60 || strings.ContainsAny(value, validation.TagChars) {
 		if name {
 			return ErrInvalidSkillName
 		}

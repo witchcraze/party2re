@@ -157,7 +157,11 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusNotImplemented, "ACTION_NOT_IMPLEMENTED", "Action service not configured.")
 			return
 		}
-		execute, err := command.prepare(req.Params)
+		err := checkTextParams(req.Params, playercontext.TextKinds[req.Action])
+		var execute func(context.Context, string, string, playercontext.Result) (any, error)
+		if err == nil {
+			execute, err = command.prepare(req.Params)
+		}
 		if err != nil {
 			writeActionFailure(w, http.StatusBadRequest, "INVALID_ACTION_PARAMS", "Invalid action parameters.")
 			return

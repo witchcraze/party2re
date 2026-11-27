@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 var (
@@ -151,12 +152,8 @@ func ValidateTitle(title string) error {
 	if utf8.RuneCountInString(trimmed) > MaxTitleLength {
 		return ErrTitleTooLong
 	}
-	// Check forbidden characters: , ; " ' & < > @ ＠ and full-width space
-	for _, r := range trimmed {
-		switch r {
-		case ',', ';', '"', '\'', '&', '<', '>', '@', '＠', '\t', '\n', '\r':
-			return ErrInvalidTitle
-		}
+	if strings.ContainsAny(trimmed, validation.TitleChars+validation.FullwidthAt+"\t\n\r") {
+		return ErrInvalidTitle
 	}
 	return nil
 }

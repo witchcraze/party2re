@@ -6,6 +6,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 const (
@@ -163,7 +165,7 @@ func MaxListings(overStore int) int {
 // ValidateStoreName applies the legacy ＠かんばん rules: 1..8 characters, no
 // whitespace and none of , ; " ' & < > \ / @ ＠.
 func ValidateStoreName(name string) error {
-	if !validLegacyName(name, MaxStoreNameLen, ",;\"'&<>\\/@＠") {
+	if !validLegacyName(name, MaxStoreNameLen, validation.NameChars+validation.FullwidthAt) {
 		return ErrInvalidStoreName
 	}
 	return nil
@@ -172,7 +174,7 @@ func ValidateStoreName(name string) error {
 // ValidateInteriorName applies the legacy ＠なづける rules: 1..8 characters,
 // no whitespace and none of , ; " ' & < > ＠ (ASCII @ and / are allowed).
 func ValidateInteriorName(name string) error {
-	if !validLegacyName(name, MaxInteriorNameLen, ",;\"'&<>＠") {
+	if !validLegacyName(name, MaxInteriorNameLen, validation.MarkupChars+validation.FullwidthAt) {
 		return ErrInvalidInteriorName
 	}
 	return nil

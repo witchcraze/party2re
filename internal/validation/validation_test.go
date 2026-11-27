@@ -180,51 +180,28 @@ func TestValidateSingleLine(t *testing.T) {
 	}
 }
 
-func TestValidateMultiLine(t *testing.T) {
+func TestCheckText(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		maxRunes   int
-		wantErr    error
-		wantOutput string
+		name    string
+		kind    validation.TextKind
+		input   string
+		wantErr error
 	}{
-		{
-			name:       "allows newlines",
-			input:      "Hello\nWorld\r\nAgain",
-			maxRunes:   50,
-			wantErr:    nil,
-			wantOutput: "Hello\nWorld\r\nAgain",
-		},
-		{
-			name:       "rejects C0 control characters other than newline and cr",
-			input:      "Hello\x07World",
-			maxRunes:   50,
-			wantErr:    validation.ErrControlCharacter,
-			wantOutput: "",
-		},
-		{
-			name:       "rejects zalgo text",
-			input:      "Hello\nZ\u0300\u0301\u0302algo",
-			maxRunes:   50,
-			wantErr:    validation.ErrZalgo,
-			wantOutput: "",
-		},
+		{"line accepts plain text unchanged", validation.TextLine, " a,;<>＠ ", nil},
+		{"line rejects LF", validation.TextLine, "a\nb", validation.ErrControlCharacter},
+		{"line rejects tab", validation.TextLine, "a\tb", validation.ErrControlCharacter},
+		{"comment accepts CR LF", validation.TextComment, "a\r\nb", nil},
+		{"comment rejects other controls", validation.TextComment, "a\x07b", validation.ErrControlCharacter},
+		{"comment rejects C1 control", validation.TextComment, "a\u0085b", validation.ErrControlCharacter},
+		{"rejects zero-width", validation.TextComment, "a\u200bb", validation.ErrZeroWidth},
+		{"rejects bidi override", validation.TextLine, "a\u202eb", validation.ErrBidiOverride},
+		{"line break resets combining run", validation.TextComment, "e\u0301\u0301\ne\u0301\u0301", nil},
+		{"rejects zalgo", validation.TextLine, "Z\u0300\u0301\u0302", validation.ErrZalgo},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := validation.ValidateMultiLine(tc.input, tc.maxRunes)
-			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("ValidateMultiLine error = %v; want %v", err, tc.wantErr)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("ValidateMultiLine unexpected error = %v", err)
-				}
-				if got != tc.wantOutput {
-					t.Errorf("ValidateMultiLine = %q; want %q", got, tc.wantOutput)
-				}
+			if err := validation.CheckText(tc.kind, tc.input); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("CheckText(%q, %q) = %v; want %v", tc.kind, tc.input, err, tc.wantErr)
 			}
 		})
 	}

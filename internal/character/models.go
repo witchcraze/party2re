@@ -113,7 +113,7 @@ func ValidateBioData(bio map[string]string) error {
 		if !slices.Contains(ProfileFields, k) {
 			return ErrUnknownBioField
 		}
-		if strings.ContainsAny(v, ";<>") {
+		if strings.ContainsAny(v, validation.TagChars) {
 			return ErrBioValueInvalid
 		}
 		// Legacy counts the submitted value untrimmed (#1098), as stored.

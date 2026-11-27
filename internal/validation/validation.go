@@ -3,7 +3,6 @@ package validation
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -26,7 +25,20 @@ var (
 	ErrInvalidGender       = errors.New("gender must be 'm' or 'f'")
 )
 
-var prohibitedNameChars = regexp.MustCompile(`[,;\"\'&<>\\\/@＠]`)
+// Legacy prohibited-character sets. Each field's rule pairs one with its own
+// whitespace, length and error checks; features use these instead of their own sets.
+const (
+	// MarkupChars: , ; " ' & < > (lib/guild.cgi:123, lib/farm.cgi:279, lib/store.cgi:678, lib/blacksmith.cgi:65).
+	MarkupChars = ",;\"'&<>"
+	// TitleChars adds ASCII @ (lib/guild.cgi:173, lib/photo.cgi:123, lib/join_guild.cgi:247, new_entry.cgi:111).
+	TitleChars = MarkupChars + "@"
+	// NameChars adds \ and / (lib/quest.cgi:559, lib/casino.cgi:291, lib/store.cgi:300, lib/name_change.cgi:122).
+	NameChars = TitleChars + "\\/"
+	// FullwidthAt is the ＠ that named fields reject alongside their set.
+	FullwidthAt = "＠"
+	// TagChars: ; < > (lib/profile.cgi:121, lib/custom_skill.cgi:149,156).
+	TagChars = ";<>"
+)
 
 // SanitizeText returns the Unicode NFC normalized and whitespace-trimmed version of the input.
 func SanitizeText(s string) string {
@@ -55,16 +67,13 @@ func ValidateSingleLine(input string, maxRunes int) (string, error) {
 	return sanitized, nil
 }
 
-// markupChars are the characters legacy free-text settings reject (guild.cgi message).
-const markupChars = ",;\"'&<>"
-
-// ValidatePlainLine applies ValidateSingleLine and rejects the legacy markup characters , ; " ' & < >.
+// ValidatePlainLine applies ValidateSingleLine and rejects MarkupChars.
 func ValidatePlainLine(input string, maxRunes int) (string, error) {
 	sanitized, err := ValidateSingleLine(input, maxRunes)
 	if err != nil {
 		return "", err
 	}
-	if strings.ContainsAny(sanitized, markupChars) {
+	if strings.ContainsAny(sanitized, MarkupChars) {
 		return "", ErrProhibitedCharacter
 	}
 	return sanitized, nil
@@ -97,32 +106,6 @@ func ValidateLegacyComment(input string, maxLength int) (string, error) {
 	return sanitized, nil
 }
 
-// ValidateMultiLine validates multi-line text input (such as comments or bio fields).
-// It permits newlines (\n) and carriage returns (\r), while rejecting other control characters,
-// zero-width characters, bidi overrides, and excessive combining marks.
-func ValidateMultiLine(input string, maxRunes int) (string, error) {
-	sanitized := SanitizeText(input)
-	if sanitized == "" {
-		return "", ErrEmpty
-	}
-	if utf8.RuneCountInString(sanitized) > maxRunes {
-		return "", ErrTooLong
-	}
-
-	consecutiveCombining := 0
-	for _, r := range sanitized {
-		if r == '\n' || r == '\r' {
-			consecutiveCombining = 0
-			continue
-		}
-		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
-			return "", err
-		}
-	}
-
-	return sanitized, nil
-}
-
 // ValidateVerbatimLine validates text that is stored exactly as given: no trimming,
 // normalization or repair, and empty input is allowed. It applies the shared
 // safety checks plus malformed UTF-8 and Unicode line/paragraph separators.
@@ -145,6 +128,33 @@ func ValidateVerbatimLine(input string, maxRunes int) error {
 	return nil
 }
 
+// TextKind selects the field-agnostic check every Gateway string parameter
+// receives before its service applies the field's legacy profile.
+type TextKind string
+
+const (
+	// TextLine is single-line text or an identifier: every control character is rejected.
+	TextLine TextKind = "line"
+	// TextComment is body text whose service removes or keeps line breaks, so CR and LF pass.
+	TextComment TextKind = "comment"
+)
+
+// CheckText rejects control (CR/LF excepted for TextComment), zero-width,
+// bidi-override and Zalgo characters without normalizing the text.
+func CheckText(kind TextKind, s string) error {
+	consecutiveCombining := 0
+	for _, r := range s {
+		if kind == TextComment && (r == '\r' || r == '\n') {
+			consecutiveCombining = 0
+			continue
+		}
+		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // MaxQuestNameLen is the legacy $max_title limit for quest/party names (quest.cgi:18).
 const MaxQuestNameLen = 50
 
@@ -158,7 +168,7 @@ func validateName(name string, maxRunes int) (string, error) {
 	if normalized == "" {
 		return "", ErrEmpty
 	}
-	if prohibitedNameChars.MatchString(normalized) {
+	if strings.ContainsAny(normalized, NameChars+FullwidthAt) {
 		return "", ErrProhibitedCharacter
 	}
 

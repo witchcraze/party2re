@@ -24,3 +24,7 @@ Check a new dependency's known vulnerabilities before adding it (see `01-develop
 - Tokens, API keys and credentials MUST be compared in constant time (`subtle.ConstantTimeCompare`, `bcrypt.CompareHashAndPassword`).
 - Tests of registration, hashing or authentication MUST use real production hashing. Other tests MAY reuse a pre-hashed template made once at production cost; MUST NOT lower the cost or add low-cost hooks to production APIs.
 - Enforced by `internal/architecture/crypto_lint_test.go`.
+
+## 6. Text Input Validation
+- Every string Gateway parameter MUST declare a text kind in `internal/playercontext/catalog_text.go`; the Gateway rejects unsafe text by that kind before decoding. Enforced by `internal/playercontext/catalog_text_lint_test.go`.
+- Legacy prohibited-character sets MUST come from the `internal/validation` profiles, chosen at the service boundary so non-HTTP callers get them too. Enforced by `internal/architecture/prohibited_chars_lint_test.go`.
