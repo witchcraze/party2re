@@ -57,6 +57,8 @@ func TestInvocationExecutionRejectionRestoresNestedStateAndContext(t *testing.T)
 	a.Abilities = []string{"original"}
 	a.ItemDefinitionIDs = []string{"item-1"}
 	a.CustomSkills = []ActionCustomSkill{{Gems: []GemEffect{{Kind: "heal"}}}}
+	// Callers can hold these slices independently of the actor record.
+	abilities, items, customs, gems := a.Abilities, a.ItemDefinitionIDs, a.CustomSkills, a.CustomSkills[0].Gems
 	s.SkillBans = map[string]int{"original": 3}
 	s.SkillHistory = map[string]map[string]bool{"self": {"original": true}}
 	frame := CallbackContext{TargetContext: c.TargetContext, Arguments: []string{"enemy"}}
@@ -80,6 +82,9 @@ func TestInvocationExecutionRejectionRestoresNestedStateAndContext(t *testing.T)
 	ops := []CallbackInvocation{{Kind: "entry", EntryID: "prior"}, {Kind: "entry", EntryID: "later"}}
 	if err := s.ApplyInvocations(&frame, d, ops, &targetRNG{t: t}); !errors.Is(err, ErrUnsupportedEffect) {
 		t.Fatal(err)
+	}
+	if abilities[0] != "original" || items[0] != "item-1" || gems[0].Kind != "heal" || &customs[0].Gems[0] != &gems[0] {
+		t.Fatal("rejection kept a change in an independently held slice", abilities, items, customs, gems)
 	}
 	if weapon != 123 || sp != 150 || a.Abilities[0] != "original" || a.ItemDefinitionIDs[0] != "item-1" || a.CustomSkills[0].Gems[0].Kind != "heal" || s.SkillBans["original"] != 3 || !s.SkillHistory["self"]["original"] || !reflect.DeepEqual(frame.PartyIDs, []string{"player"}) || frame.EnemyIDs[0] != "enemy" || frame.Arguments[0] != "enemy" {
 		t.Fatal("rejection kept an independently observed referent change", s, frame)
