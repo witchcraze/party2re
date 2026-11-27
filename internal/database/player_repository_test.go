@@ -101,11 +101,19 @@ func TestPlayerRepositoryListAndBan(t *testing.T) {
 	if err := repository.Save(ctx, p1); err != nil {
 		t.Fatal(err)
 	}
-	defer repository.Delete(ctx, p1.ID)
+	defer func() {
+		if err := repository.Delete(ctx, p1.ID); err != nil {
+			t.Errorf("cleanup Delete %s: %v", p1.ID, err)
+		}
+	}()
 	if err := repository.Save(ctx, p2); err != nil {
 		t.Fatal(err)
 	}
-	defer repository.Delete(ctx, p2.ID)
+	defer func() {
+		if err := repository.Delete(ctx, p2.ID); err != nil {
+			t.Errorf("cleanup Delete %s: %v", p2.ID, err)
+		}
+	}()
 
 	// Test UpdateLastLogin
 	newIP := "192.168.1.100"
@@ -181,7 +189,11 @@ func TestPlayerRepositoryCountActiveAndLock(t *testing.T) {
 	if err := repository.Save(ctx, p); err != nil {
 		t.Fatal(err)
 	}
-	defer repository.Delete(ctx, p.ID)
+	defer func() {
+		if err := repository.Delete(ctx, p.ID); err != nil {
+			t.Errorf("cleanup Delete %s: %v", p.ID, err)
+		}
+	}()
 
 	afterSaveCount, err := repository.CountActive(ctx)
 	if err != nil {

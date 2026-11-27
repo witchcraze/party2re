@@ -39,7 +39,11 @@ func TestPlayerAPITokenRepositoryOperations(t *testing.T) {
 	if err := playerRepo.Save(ctx, p1); err != nil {
 		t.Fatal(err)
 	}
-	defer playerRepo.Delete(ctx, p1.ID)
+	defer func() {
+		if err := playerRepo.Delete(ctx, p1.ID); err != nil {
+			t.Errorf("cleanup Delete %s: %v", p1.ID, err)
+		}
+	}()
 
 	p2, err := coreplayer.New("tok_test_p2_"+now.Format("150405"), "password123", now)
 	if err != nil {
@@ -48,7 +52,11 @@ func TestPlayerAPITokenRepositoryOperations(t *testing.T) {
 	if err := playerRepo.Save(ctx, p2); err != nil {
 		t.Fatal(err)
 	}
-	defer playerRepo.Delete(ctx, p2.ID)
+	defer func() {
+		if err := playerRepo.Delete(ctx, p2.ID); err != nil {
+			t.Errorf("cleanup Delete %s: %v", p2.ID, err)
+		}
+	}()
 
 	// Create tokens for p1
 	expires := now.Add(48 * time.Hour)
