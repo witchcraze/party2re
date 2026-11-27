@@ -20,6 +20,7 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/testutil"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
 func contestIntegrationDB(t *testing.T) (*sql.DB, *database.ContestRepository, *database.CharacterRepository, database.TransactionProvider) {
@@ -421,28 +422,36 @@ func TestContestSettlement_SchedulingFailureAndReconciliation_DatabaseIntegratio
 	}
 }
 
-func cleanupValkeyAction(ctx context.Context, client valkey.Client, actorID, actionID string) {
-	_ = client.Do(ctx, client.B().Del().Key("party2:scheduled:action:"+actionID).Build())
-	_ = client.Do(ctx, client.B().Del().Key("party2:scheduled:lock:"+actionID).Build())
-	_ = client.Do(ctx, client.B().Zrem().Key("party2:scheduled:pending").Member(actionID).Build())
+func cleanupValkeyAction(ctx context.Context, t testing.TB, client valkey.Client, actorID, actionID string) {
+	t.Helper()
+	run := func(op string, cmd valkey.Completed) {
+		if err := client.Do(ctx, cmd).Error(); err != nil {
+			t.Errorf("cleanup %s: %v", op, err)
+		}
+	}
+	run("DEL party2:scheduled:action:"+actionID, client.B().Del().Key("party2:scheduled:action:"+actionID).Build())
+	run("DEL party2:scheduled:lock:"+actionID, client.B().Del().Key("party2:scheduled:lock:"+actionID).Build())
+	run("ZREM party2:scheduled:pending "+actionID, client.B().Zrem().Key("party2:scheduled:pending").Member(actionID).Build())
 	if actorID != "" {
-		_ = client.Do(ctx, client.B().Srem().Key("party2:scheduled:actor:"+actorID).Member(actionID).Build())
+		run("SREM party2:scheduled:actor:"+actorID+" "+actionID, client.B().Srem().Key("party2:scheduled:actor:"+actorID).Member(actionID).Build())
 	}
 }
 
-func cleanupValkeyActor(ctx context.Context, client valkey.Client, actorID string, extraActionIDs ...string) {
-	members, err := client.Do(ctx, client.B().Smembers().Key("party2:scheduled:actor:"+actorID).Build()).AsStrSlice()
-	if err == nil {
-		for _, m := range members {
-			cleanupValkeyAction(ctx, client, actorID, m)
-		}
+func cleanupValkeyActor(ctx context.Context, t testing.TB, client valkey.Client, actorID string, extraActionIDs ...string) {
+	t.Helper()
+	actorKey := "party2:scheduled:actor:" + actorID
+	members, err := client.Do(ctx, client.B().Smembers().Key(actorKey).Build()).AsStrSlice()
+	if err != nil {
+		t.Errorf("cleanup SMEMBERS %s: %v", actorKey, err)
 	}
-	for _, actID := range extraActionIDs {
+	for _, actID := range append(members, extraActionIDs...) {
 		if actID != "" {
-			cleanupValkeyAction(ctx, client, actorID, actID)
+			cleanupValkeyAction(ctx, t, client, actorID, actID)
 		}
 	}
-	_ = client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+	if err := client.Do(ctx, client.B().Del().Key(actorKey).Build()).Error(); err != nil {
+		t.Errorf("cleanup DEL %s: %v", actorKey, err)
+	}
 }
 
 func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integration(t *testing.T) {
@@ -465,7 +474,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 		trackMu.Lock()
 		ids := append([]string(nil), trackedActions...)
 		trackMu.Unlock()
-		cleanupValkeyActor(cleanupCtx, vkClient, testActorID, ids...)
+		cleanupValkeyActor(cleanupCtx, t, vkClient, testActorID, ids...)
 	})
 
 	schedRepo := scheduling.NewValkeyRepository(vkClient)
@@ -587,7 +596,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	}
 	legacyActionID := fmt.Sprintf("%s:%s", contest.SettlementActionID(2, legacyEndTime), id.New())
 	t.Cleanup(func() {
-		cleanupValkeyAction(context.Background(), vkClient, "system", legacyActionID)
+		cleanupValkeyAction(context.Background(), t, vkClient, "system", legacyActionID)
 	})
 	legacyAction := core_scheduling.ScheduledAction{
 		ID:          legacyActionID,
@@ -629,7 +638,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	// Clean up legacy round so round 1 remains target
 	rLegacy.Status = contest.StatusSettled
 	_ = contestRepo.SaveRound(ctx, rLegacy)
-	cleanupValkeyAction(ctx, vkClient, "system", legacyActionID)
+	cleanupValkeyAction(ctx, t, vkClient, "system", legacyActionID)
 
 	// -------------------------------------------------------------
 	// 2d. Different Round with Matching EndTime Not Confused:
@@ -650,7 +659,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 		t.Fatalf("Schedule other round action failed: %v", err)
 	}
 	// Temporarily remove act1 from Valkey so round 1 has no reservation
-	cleanupValkeyAction(ctx, vkClient, testActorID, act1.ID)
+	cleanupValkeyAction(ctx, t, vkClient, testActorID, act1.ID)
 
 	// Reconcile must recognize Round 1 needs a reservation despite Round 99's action sharing EndTime
 	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
@@ -674,7 +683,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	trackAction(newAct1.ID)
 	act1 = *newAct1
 	// Clean up Round 99 action
-	cleanupValkeyAction(ctx, vkClient, testActorID, otherActionID)
+	cleanupValkeyAction(ctx, t, vkClient, testActorID, otherActionID)
 
 	// -------------------------------------------------------------
 	// 3. Processing State Protection: action being processed is NOT overwritten
@@ -772,7 +781,7 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 		trackMu.Lock()
 		ids := append([]string(nil), trackedActions...)
 		trackMu.Unlock()
-		cleanupValkeyActor(cleanupCtx, vkClient, testActorID, ids...)
+		cleanupValkeyActor(cleanupCtx, t, vkClient, testActorID, ids...)
 	})
 
 	schedRepo := scheduling.NewValkeyRepository(vkClient)
@@ -1275,4 +1284,34 @@ func TestContestSettlement_GetOverview_SchedulingFailureAndReconciliation_Databa
 	if activeCount != 1 {
 		t.Fatalf("expected 1 reserved round preserved in SQL, got %d", activeCount)
 	}
+}
+
+func TestCleanupHelperReportsValkeyErrors(t *testing.T) {
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(context.Context, valkey.Completed) valkey.ValkeyResult {
+		return valkey.NewErrorResult(errors.New("injected cleanup failure"))
+	}))
+	spy := &cleanupSpyTB{TB: t}
+	cleanupValkeyActor(context.Background(), spy, client, "actor1", "act1")
+	if got := len(client.RecordedCommands()); got != 6 {
+		t.Fatalf("cleanup attempted %d commands, want all 6 despite failures", got)
+	}
+	if len(spy.errs) != 6 {
+		t.Fatalf("cleanup reported %d errors, want 6: %q", len(spy.errs), spy.errs)
+	}
+	for i, key := range []string{"SMEMBERS party2:scheduled:actor:actor1", "DEL party2:scheduled:action:act1", "DEL party2:scheduled:lock:act1", "ZREM party2:scheduled:pending act1", "SREM party2:scheduled:actor:actor1 act1", "DEL party2:scheduled:actor:actor1"} {
+		if !strings.Contains(spy.errs[i], key) || !strings.Contains(spy.errs[i], "injected cleanup failure") {
+			t.Errorf("error %d = %q, want key %q and cause", i, spy.errs[i], key)
+		}
+	}
+}
+
+type cleanupSpyTB struct {
+	testing.TB
+	errs []string
+}
+
+func (s *cleanupSpyTB) Helper() {}
+
+func (s *cleanupSpyTB) Errorf(format string, args ...any) {
+	s.errs = append(s.errs, fmt.Sprintf(format, args...))
 }
