@@ -198,9 +198,13 @@ func TestValkeyRepository_FetchDue_MalformedJSONRemovedFromQueue(t *testing.T) {
 	defer cleanupKeys(t, client, id)
 
 	ctx := context.Background()
-	client.Do(ctx, client.B().Set().Key("party2:scheduled:action:"+id).Value("not-valid-json").Build())
+	if err := client.Do(ctx, client.B().Set().Key("party2:scheduled:action:"+id).Value("not-valid-json").Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 	score := float64(time.Now().Add(-time.Minute).Unix())
-	client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build())
+	if err := client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 
 	repo := scheduling.NewValkeyRepository(client)
 	actions, err := repo.FetchDue(ctx, time.Now().UTC(), 10)
@@ -234,10 +238,17 @@ func TestValkeyRepository_FetchDue_InvalidValidateRemovedFromQueue(t *testing.T)
 		ExecuteAt: time.Now().Add(-time.Minute).UTC(),
 		// ActionType intentionally empty → Validate() fails
 	}
-	data, _ := json.Marshal(invalid)
-	client.Do(ctx, client.B().Set().Key("party2:scheduled:action:"+id).Value(string(data)).Build())
+	data, err := json.Marshal(invalid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Do(ctx, client.B().Set().Key("party2:scheduled:action:"+id).Value(string(data)).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 	score := float64(time.Now().Add(-time.Minute).Unix())
-	client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build())
+	if err := client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 
 	repo := scheduling.NewValkeyRepository(client)
 	actions, err := repo.FetchDue(ctx, time.Now().UTC(), 10)
@@ -265,7 +276,9 @@ func TestValkeyRepository_FetchDue_StaleQueueEntryCleanedUp(t *testing.T) {
 
 	ctx := context.Background()
 	score := float64(time.Now().Add(-time.Minute).Unix())
-	client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build())
+	if err := client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 
 	repo := scheduling.NewValkeyRepository(client)
 	actions, err := repo.FetchDue(ctx, time.Now().UTC(), 10)

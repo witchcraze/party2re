@@ -744,7 +744,9 @@ func TestValkeyRoomRenewal_LifecycleCleanupAndCrossRoomIsolation(t *testing.T) {
 	if view, err := svc.GetCharacterRoomView(ctx, "owner-"+specA, specA); view != nil || !errors.Is(err, casino.ErrInvalidRoomMapping) {
 		t.Fatalf("expected ErrInvalidRoomMapping from GetCharacterRoomView, got view=%+v err=%v", view, err)
 	}
-	_ = rawClient.Do(ctx, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+specA).Build())
+	if err := rawClient.Do(ctx, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+specA).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 	if err := rawClient.Do(ctx, rawClient.B().Hset().Key(casino.DefaultCharacterKeyPrefix+specA).FieldValue().FieldValue("bad", "type").Build()).Error(); err != nil {
 		t.Fatal(err)
 	}
@@ -1285,10 +1287,13 @@ func TestValkeyRoomRenewal_CreateRoomClaimConflictBlocksJoinAndPropagatesErrors(
 	// and fail the compensatory DEL/SET during rollback.
 	failRollbackRoomID := prefix + "-failrollback"
 	createdRooms = append(createdRooms, failRollbackRoomID)
+	var hookSeedErr error
 	hookClient.beforeDo = func(cmds []string) error {
 		if len(cmds) == 7 && (cmds[0] == "EVAL" || cmds[0] == "EVALSHA") && cmds[3] == casino.DefaultCharacterKeyPrefix+joinerD {
 			// Concurrent admission into wID won the race right before claim_character_room.lua:
-			_ = rawClient.Do(ctx, rawClient.B().Set().Key(casino.DefaultCharacterKeyPrefix+joinerD).Value(wID).Ex(casino.DefaultLobbyTTL).Build()).Error()
+			if err := rawClient.Do(ctx, rawClient.B().Set().Key(casino.DefaultCharacterKeyPrefix+joinerD).Value(wID).Ex(casino.DefaultLobbyTTL).Build()).Error(); err != nil && hookSeedErr == nil {
+				hookSeedErr = err
+			}
 			injectRollbackErr.Store(true)
 		}
 		if injectRollbackErr.Load() && len(cmds) >= 2 && cmds[0] == "DEL" && cmds[1] == casino.DefaultRoomKeyPrefix+failRollbackRoomID {
@@ -1306,6 +1311,9 @@ func TestValkeyRoomRenewal_CreateRoomClaimConflictBlocksJoinAndPropagatesErrors(
 		Speed: casino.SpeedFast, MaxPlayers: 2, Rate: 10, Status: casino.RoomStatusWaiting, CreatedAt: now, UpdatedAt: now,
 	}, casino.RoomMember{RoomID: failRollbackRoomID, CharacterID: joinerD, JoinedAt: now, UpdatedAt: now})
 	injectRollbackErr.Store(false)
+	if hookSeedErr != nil {
+		t.Fatal(hookSeedErr)
+	}
 	if !errors.Is(createRollbackErr, casino.ErrAlreadyInRoom) || !errors.Is(createRollbackErr, errCompensatoryFault) {
 		t.Fatalf("expected CreateRoom rollback error to join ErrAlreadyInRoom and compensatory fault, got %v", createRollbackErr)
 	}
@@ -1313,9 +1321,14 @@ func TestValkeyRoomRenewal_CreateRoomClaimConflictBlocksJoinAndPropagatesErrors(
 		t.Fatalf("expected CreateRoom rollback error not to match ErrSecondarySync, got %v", createRollbackErr)
 	}
 
-	_ = rawClient.Do(ctx, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+joinerD).Build())
+	if err := rawClient.Do(ctx, rawClient.B().Del().Key(casino.DefaultCharacterKeyPrefix+joinerD).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
 	addRollbackErr := repo.AddMember(ctx, casino.RoomMember{RoomID: otherRoomID, CharacterID: joinerD, JoinedAt: now, UpdatedAt: now})
 	injectRollbackErr.Store(false)
+	if hookSeedErr != nil {
+		t.Fatal(hookSeedErr)
+	}
 	if !errors.Is(addRollbackErr, casino.ErrAlreadyInRoom) || !errors.Is(addRollbackErr, errCompensatoryFault) {
 		t.Fatalf("expected AddMember rollback error to join ErrAlreadyInRoom and compensatory fault, got %v", addRollbackErr)
 	}
