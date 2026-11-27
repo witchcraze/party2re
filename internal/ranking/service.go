@@ -32,6 +32,7 @@ type Service struct {
 	sf          group
 	nowFunc     func() time.Time
 	cacheTTL    time.Duration
+	refreshMu   sync.Mutex
 	mu          sync.RWMutex
 	cache       map[RankingType]cacheEntry
 	txProvider  TransactionProvider
@@ -141,6 +142,10 @@ func unmarshalSnapshotData(t RankingType, raw string) (any, error) {
 func (s *Service) storeCache(t RankingType, data any, total int, calculatedAt time.Time) {
 	now := s.nowFunc().UTC()
 	s.mu.Lock()
+	if existing, ok := s.cache[t]; ok && existing.updatedAt.After(calculatedAt) {
+		s.mu.Unlock()
+		return
+	}
 	s.cache[t] = cacheEntry{
 		data:      data,
 		total:     total,

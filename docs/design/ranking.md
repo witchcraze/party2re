@@ -6,7 +6,7 @@ Rankings (`internal/ranking`; legacy `ranking.cgi`, `job_ranking.cgi`, `week_ran
 
 ## `ranking.cgi` boards
 
-**Decision (#2540): legacy board content.** Each of the seven boards holds only the top 10 characters; `kill_m` skips the characters on the `kill_p` board and `hero_c` skips those on the `mao_c` board so one leader never occupies both boards of a pair (with ten or fewer characters, `kill_m` and `hero_c` are empty). Legacy ties follow unspecified directory-read order, so Go's tie order is a native choice.
+**Decision (#2540): legacy board content.** Each of the seven boards holds only the top 10 characters; `kill_m` skips the characters on the `kill_p` board and `hero_c` skips those on the `mao_c` board so one leader never occupies both boards of a pair (with ten or fewer characters, `kill_m` and `hero_c` are empty). Legacy ties follow unspecified directory-read order, so Go's tie order is a native choice. Each exclusion pair is published atomically from one leader query, so single-board administrative refreshes (`POST /rankings/refresh`) update the whole pair together (`weekly_job_change` keeps its separate rotation owner).
 
 **Decision (#2801): daily JST midnight publication.** Legacy `party2/login.cgi:11,112–114` republishes the boards on login when `player_list.html` is at least one day old (`$update_cycle_day = 1`) and `ranking.cgi` reads only those files. Go deliberately departs from the login-driven trigger by publishing once a day at **00:00 JST** via `party2:ranking:refresh` (reconciling missing or pre-boundary snapshots on startup/recovery). Public reads return only published snapshots (empty before initial publication) and never query live counters.
 
@@ -27,10 +27,4 @@ Rankings (`internal/ranking`; legacy `ranking.cgi`, `job_ranking.cgi`, `week_ran
 
 ## Hall of fame
 
-Completion of all jobs, the monster book, the weapon, armor and item encyclopedias, or all alchemy recipes inducts a character permanently and once per category, in induction order.
-
-- **Icon fallback:** When an induction caller omits `icon`, `RecordLegend` derives `job/<n>_<sex>.gif` from the character's current job and gender (matching the default legacy `$m{icon}`); temporary costume and God-wish overrides ([#1837](https://github.com/witchcraze/party2re/issues/1837), [#1924](https://github.com/witchcraze/party2re/issues/1924)) are not applied until appearance persistence is unified.
-
-## `kill_p` (王者) Counter Rule
-
-- Ranking category `pvp_victory` orders `characters.pvp_wins` (`kill_p`), credited per stronger-opponent combat defeat rather than Colosseum match wins as specified in [PvP](pvp.md) and [GvG](gvg.md).
+- **Known gap ([#1837](https://github.com/witchcraze/party2re/issues/1837), [#1924](https://github.com/witchcraze/party2re/issues/1924)):** Temporary costume and God-wish appearance overrides are not yet applied to Hall of Fame icons until appearance persistence is unified.
