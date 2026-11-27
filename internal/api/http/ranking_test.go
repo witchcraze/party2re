@@ -30,6 +30,8 @@ type mockHTTPRankingService struct {
 	legendPages       map[ranking.LegendCategory]ranking.LegendCategoryPage
 	refreshedTypes    []ranking.RankingType
 	refreshedAll      bool
+	lastLimit         int
+	lastOffset        int
 }
 
 func (m *mockHTTPRankingService) GetMonsterKillsRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
@@ -48,7 +50,12 @@ func (m *mockHTTPRankingService) GetJobPopularityRanking(ctx context.Context) (r
 	return m.jobPopularityPage, nil
 }
 func (m *mockHTTPRankingService) GetHelperRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.helperPage, nil
+	m.lastLimit = limit
+	m.lastOffset = offset
+	page := m.helperPage
+	page.Limit = limit
+	page.Offset = offset
+	return page, nil
 }
 func (m *mockHTTPRankingService) GetCasinoWinsRanking(ctx context.Context, limit, offset int) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.casinoWinsPage, nil
@@ -74,6 +81,8 @@ func (m *mockHTTPRankingService) GetLegendCategory(ctx context.Context, category
 	return ranking.LegendCategoryPage{Category: category}, nil
 }
 func (m *mockHTTPRankingService) GetRankingByType(ctx context.Context, rankingType ranking.RankingType, limit, offset int) (any, error) {
+	m.lastLimit = limit
+	m.lastOffset = offset
 	switch ranking.NormalizeRankingType(rankingType) {
 	case ranking.RankingTypePvPVictory:
 		return m.pvpVictoryPage, nil
@@ -88,7 +97,10 @@ func (m *mockHTTPRankingService) GetRankingByType(ctx context.Context, rankingTy
 	case ranking.RankingTypeWeeklyJobChange:
 		return m.weeklyJobPage, nil
 	case ranking.RankingTypeMonsterKills:
-		return m.monsterKillsPage, nil
+		page := m.monsterKillsPage
+		page.Limit = limit
+		page.Offset = offset
+		return page, nil
 	case ranking.RankingTypeMaoCount:
 		return m.maoCountPage, nil
 	case ranking.RankingTypeHeroCount:
@@ -235,10 +247,19 @@ func TestRankingEndpoints(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "GET /rankings/helpers",
+			name:       "GET /rankings/helpers (limit and offset)",
 			method:     http.MethodGet,
-			url:        "/rankings/helpers",
+			url:        "/rankings/helpers?limit=5&offset=2",
 			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var res ranking.RankingPage[ranking.CharacterRankingEntry]
+				if err := json.NewDecoder(rr.Body).Decode(&res); err != nil {
+					t.Fatalf("decode failed: %v", err)
+				}
+				if res.Limit != 5 || res.Offset != 2 || mock.lastLimit != 5 || mock.lastOffset != 2 {
+					t.Fatalf("expected limit=5 offset=2, got page=(%d,%d) mock=(%d,%d)", res.Limit, res.Offset, mock.lastLimit, mock.lastOffset)
+				}
+			},
 		},
 		{
 			name:       "GET /rankings/pvp_victory (dynamic route)",
@@ -259,10 +280,19 @@ func TestRankingEndpoints(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "GET /rankings/monster_kills (dynamic route)",
+			name:       "GET /rankings/monster_kills (dynamic route with limit and offset)",
 			method:     http.MethodGet,
-			url:        "/rankings/monster_kills",
+			url:        "/rankings/monster_kills?limit=3&offset=4",
 			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				var res ranking.RankingPage[ranking.CharacterRankingEntry]
+				if err := json.NewDecoder(rr.Body).Decode(&res); err != nil {
+					t.Fatalf("decode failed: %v", err)
+				}
+				if res.Limit != 3 || res.Offset != 4 || mock.lastLimit != 3 || mock.lastOffset != 4 {
+					t.Fatalf("expected limit=3 offset=4, got page=(%d,%d) mock=(%d,%d)", res.Limit, res.Offset, mock.lastLimit, mock.lastOffset)
+				}
+			},
 		},
 		{
 			name:       "GET /rankings/kill_m (legacy alias dynamic route)",

@@ -7,51 +7,56 @@ const boardSize = 10
 
 type boardQuery func(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 
-// boardQueries returns a ranking.cgi board's ordered query and, when the board excludes
-// another board's leaders, that leaders' query.
-func (s *Service) boardQueries(t RankingType) (query, leaders boardQuery, ok bool) {
-	switch t {
-	case RankingTypePvPVictory:
-		return s.repo.GetPvPVictoryRanking, nil, true
-	case RankingTypeMonsterKills:
-		return s.repo.GetMonsterKillsRanking, s.repo.GetPvPVictoryRanking, true
-	case RankingTypeMaoCount:
-		return s.repo.GetMaoCountRanking, nil, true
-	case RankingTypeHeroCount:
-		return s.repo.GetHeroCountRanking, s.repo.GetMaoCountRanking, true
-	case RankingTypeCasinoWins:
-		return s.repo.GetCasinoWinsRanking, nil, true
-	case RankingTypeHelper:
-		return s.repo.GetHelperRanking, nil, true
-	case RankingTypeAlchemy:
-		return s.repo.GetAlchemyRanking, nil, true
-	default:
-		return nil, nil, false
+type pairedBoardDef struct {
+	leaderType     RankingType
+	dependentType  RankingType
+	leaderQuery    boardQuery
+	dependentQuery boardQuery
+}
+
+func (s *Service) pairedBoardDefs() []pairedBoardDef {
+	return []pairedBoardDef{
+		{
+			leaderType:     RankingTypePvPVictory,
+			dependentType:  RankingTypeMonsterKills,
+			leaderQuery:    s.repo.GetPvPVictoryRanking,
+			dependentQuery: s.repo.GetMonsterKillsRanking,
+		},
+		{
+			leaderType:     RankingTypeMaoCount,
+			dependentType:  RankingTypeHeroCount,
+			leaderQuery:    s.repo.GetMaoCountRanking,
+			dependentQuery: s.repo.GetHeroCountRanking,
+		},
 	}
 }
 
-// loadBoard computes a ranking.cgi board from current data.
-func (s *Service) loadBoard(ctx context.Context, t RankingType) ([]CharacterRankingEntry, error) {
-	query, leaders, ok := s.boardQueries(t)
-	if !ok {
-		return nil, ErrInvalidRankingType
+func (s *Service) pairedBoardFor(t RankingType) (pairedBoardDef, bool) {
+	for _, pair := range s.pairedBoardDefs() {
+		if t == pair.leaderType || t == pair.dependentType {
+			return pair, true
+		}
 	}
-	if leaders == nil {
-		entries, _, err := query(ctx, boardSize, 0)
-		return entries, err
+	return pairedBoardDef{}, false
+}
+
+func (s *Service) standaloneBoardQuery(t RankingType) (boardQuery, bool) {
+	switch t {
+	case RankingTypeHelper:
+		return s.repo.GetHelperRanking, true
+	case RankingTypeCasinoWins:
+		return s.repo.GetCasinoWinsRanking, true
+	case RankingTypeAlchemy:
+		return s.repo.GetAlchemyRanking, true
+	default:
+		return nil, false
 	}
-	top, _, err := leaders(ctx, boardSize, 0)
-	if err != nil {
-		return nil, err
-	}
-	excluded := make(map[string]bool, len(top))
-	for _, e := range top {
+}
+
+func filterDependentBoard(leaders, candidates []CharacterRankingEntry) []CharacterRankingEntry {
+	excluded := make(map[string]bool, len(leaders))
+	for _, e := range leaders {
 		excluded[e.CharacterID] = true
-	}
-	// At most boardSize candidates are excluded, so twice the board always fills it.
-	candidates, _, err := query(ctx, 2*boardSize, 0)
-	if err != nil {
-		return nil, err
 	}
 	board := make([]CharacterRankingEntry, 0, boardSize)
 	for _, e := range candidates {
@@ -64,7 +69,36 @@ func (s *Service) loadBoard(ctx context.Context, t RankingType) ([]CharacterRank
 			break
 		}
 	}
-	return board, nil
+	return board
+}
+
+// loadPairedBoards computes a leader board and its dependent board from that single leader query.
+func (s *Service) loadPairedBoards(ctx context.Context, leaderQuery, dependentQuery boardQuery) ([]CharacterRankingEntry, []CharacterRankingEntry, error) {
+	leaders, _, err := leaderQuery(ctx, boardSize, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	if leaders == nil {
+		leaders = []CharacterRankingEntry{}
+	}
+	// At most boardSize candidates are excluded, so twice the board always fills it.
+	candidates, _, err := dependentQuery(ctx, 2*boardSize, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	return leaders, filterDependentBoard(leaders, candidates), nil
+}
+
+// loadSingleBoard computes an independent ranking.cgi board from current data.
+func (s *Service) loadSingleBoard(ctx context.Context, query boardQuery) ([]CharacterRankingEntry, error) {
+	entries, _, err := query(ctx, boardSize, 0)
+	if err != nil {
+		return nil, err
+	}
+	if entries == nil {
+		entries = []CharacterRankingEntry{}
+	}
+	return entries, nil
 }
 
 // getBoard pages a ranking.cgi board strictly from its published snapshot.

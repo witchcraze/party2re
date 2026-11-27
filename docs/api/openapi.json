@@ -25661,6 +25661,15 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "description": "Offset",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -25952,6 +25961,7 @@
     },
     "/rankings/refresh": {
       "post": {
+        "description": "Refreshes all 8 daily-published ranking snapshots when ranking_type is omitted. When ranking_type targets either board of a cross-board exclusion pair (pvp_victory/monster_kills or mao_count/hero_count, including legacy aliases), both boards of that pair are refreshed atomically from the same leader rows. weekly_job_change is managed exclusively by the weekly rotation.",
         "operationId": "refreshRankings",
         "requestBody": {
           "content": {
@@ -26113,6 +26123,15 @@
             "description": "Limit",
             "in": "query",
             "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Offset",
+            "in": "query",
+            "name": "offset",
             "required": false,
             "schema": {
               "type": "integer"
