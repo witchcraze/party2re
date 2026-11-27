@@ -167,7 +167,11 @@ func TestValkeyRepository_RealValkeyIntegration(t *testing.T) {
 
 	ctx := context.Background()
 	testKey := "party2:test:maintenance:status"
-	defer client.Do(ctx, client.B().Del().Key(testKey).Build())
+	defer func() {
+		if err := client.Do(ctx, client.B().Del().Key(testKey).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %s: %v", testKey, err)
+		}
+	}()
 
 	fallback := &countingFallbackRepo{
 		status: maintenance.Status{
