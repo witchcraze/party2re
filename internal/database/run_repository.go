@@ -294,7 +294,7 @@ func (r *RunRepository[R, P]) SaveRunReceipt(ctx context.Context, receipt runhos
 	return err
 }
 
-func (r *RunRepository[R, P]) FindActorRun(ctx context.Context, actor string) (*runhost.ActorRun, error) {
+func (r *RunRepository[R, P]) FindActorRun(ctx context.Context, actor string) (*R, error) {
 	var id string
 	var data []byte
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `SELECT e.run_id,r.state_json FROM run_enrollments e LEFT JOIN runs r ON r.run_id=e.run_id WHERE e.character_id=?`, actor).Scan(&id, &data)
@@ -307,22 +307,18 @@ func (r *RunRepository[R, P]) FindActorRun(ctx context.Context, actor string) (*
 	if len(data) == 0 {
 		return nil, runhost.ErrRecovery
 	}
-	var run runhost.State
+	var run R
 	if err := json.Unmarshal(data, &run); err != nil {
 		return nil, err
 	}
-	if run.ID != id || run.Encoding != 1 {
+	h := P(&run).Host()
+	if h.ID != id || h.Encoding != 1 {
 		return nil, runhost.ErrRecovery
 	}
-	p, ok := run.Recipients[actor]
-	if !ok || !slices.Contains(run.Roster, actor) {
+	if _, ok := h.Recipients[actor]; !ok || !slices.Contains(h.Roster, actor) {
 		return nil, runhost.ErrRecovery
 	}
-	role := "member"
-	if run.LeaderID == actor {
-		role = "leader"
-	}
-	return &runhost.ActorRun{RunID: id, PartyID: run.Admission.PartyID, Version: run.Version, Round: run.Round, LeaderID: run.LeaderID, Role: role, LastActivity: run.LastActivity, Recipient: p}, nil
+	return &run, nil
 }
 
 // ListRuns returns the live (undisposed) runs of kind; the runs table is shared by every kind.

@@ -115,23 +115,21 @@ type ObservedBox struct {
 // ObserveRun reads actor's run without a lock and without changing it.
 // Discovery runs on a decoded copy; nil means no owned run.
 func (s *Service[R, P]) ObserveRun(ctx context.Context, player, actor string) (*Observation, error) {
-	owned, err := s.GetActorRun(ctx, player, actor)
-	if err != nil || owned == nil {
+	run, r, err := s.ownedActorRun(ctx, player, actor)
+	if err != nil || run == nil {
 		return nil, err
 	}
-	obs := &Observation{ActorRun: *owned, Now: s.cfg.Clock.Now()}
-	run, err := s.cfg.Store.FindRun(ctx, owned.RunID)
-	if err != nil {
-		return nil, err
+	if r.Kind != s.cfg.Kind {
+		return nil, nil
 	}
-	if run == nil {
-		return obs, nil
+	now := s.cfg.Clock.Now()
+	obs := &Observation{
+		ActorRun: *actorRun(r, actor, now),
+		Speed:    r.Admission.Speed,
+		ReadyAt:  r.LastActions[actor].Add(time.Duration(r.Admission.Speed) * time.Second),
+		IdleAt:   r.LastActivity.Add(idleTimeout),
+		Now:      now,
 	}
-	r := P(run).Host()
-	// One snapshot supplies every encounter fact, so its version matches them.
-	obs.Version, obs.Round, obs.LeaderID, obs.Speed = r.Version, r.Round, r.LeaderID, r.Admission.Speed
-	obs.ReadyAt = r.LastActions[actor].Add(time.Duration(r.Admission.Speed) * time.Second)
-	obs.IdleAt = r.LastActivity.Add(idleTimeout)
 	for _, a := range r.Battle.Actors {
 		obs.Actors = append(obs.Actors, ObservedActor{
 			ID: a.ID, Name: a.Name, TeamID: a.TeamID, HP: a.HP, MaxHP: a.MaxHP, MP: a.MP, MaxMP: a.MaxMP,
@@ -145,7 +143,7 @@ func (s *Service[R, P]) ObserveRun(ctx context.Context, player, actor string) (*
 		}
 		obs.Boxes = append(obs.Boxes, box)
 	}
-	if r.TimedOut || !slices.Contains(r.Roster, actor) {
+	if r.TimedOut {
 		return obs, nil
 	}
 	requester, err := s.cfg.Characters.FindByID(ctx, actor)

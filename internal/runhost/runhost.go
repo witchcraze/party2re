@@ -217,7 +217,7 @@ type Store[R any] interface {
 	SaveRunReceipt(context.Context, Receipt) error
 	EnrollRun(context.Context, State) error
 	SaveRunRecipient(context.Context, string, string, Recipient) error
-	FindActorRun(context.Context, string) (*ActorRun, error)
+	FindActorRun(context.Context, string) (*R, error)
 	FindAdmission(context.Context, string) (*Admission, error)
 	FindPenalty(context.Context, string) (*ActorRun, error)
 }
@@ -413,7 +413,7 @@ func (s *Service[R, P]) CheckMutation(ctx context.Context, actor string) error {
 	if err != nil {
 		return err
 	}
-	if run != nil && !inCommand(ctx, run.RunID) {
+	if run != nil && !inCommand(ctx, P(run).Host().ID) {
 		return ErrBusy
 	}
 	return nil
