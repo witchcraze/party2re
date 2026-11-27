@@ -59,9 +59,13 @@ func withActionCommand[P any](id string, execute func(context.Context, string, P
 }
 
 // commandEcho is a successful command's place-log echo: the target display
-// (names and amounts, never IDs) and the facility's $npc_com reply. Results embed
-// it unexported, so it is never serialized.
-type commandEcho struct{ target, reply string }
+// (names and amounts, never IDs) and the facility's $npc_com reply, which
+// actorFirst prefixes with the actor's name ($m). The zero value is a private
+// $mes outcome. Results embed it unexported, so it is never serialized.
+type commandEcho struct {
+	target, reply string
+	actorFirst    bool
+}
 
 func (e commandEcho) placeEcho() commandEcho { return e }
 
@@ -277,15 +281,26 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if echo, ok := result.(echoResult); ok && def.LegacyVerb != "" {
-			e, row := echo.placeEcho(), "＠"+def.LegacyVerb
-			if e.target != "" {
-				row += ">" + e.target
+			if e := echo.placeEcho(); e == (commandEcho{}) {
+				// A private $mes writes no log and starts no wait (lib/system.cgi:651).
+				if releaseErr := claim.Release(r.Context()); releaseErr != nil {
+					slog.WarnContext(r.Context(), "action wait not released", slog.String("action", req.Action), slog.String("error", releaseErr.Error()))
+				}
+			} else {
+				row := "＠" + def.LegacyVerb
+				if e.target != "" {
+					row += ">" + e.target
+				}
+				name := ""
+				if npc != nil {
+					name = npc.name
+				}
+				reply := e.reply
+				if e.actorFirst {
+					reply = char.Name + reply
+				}
+				h.appendNPCLog(r.Context(), current, row, name, reply, "")
 			}
-			name := ""
-			if npc != nil {
-				name = npc.name
-			}
-			h.appendNPCLog(r.Context(), current, row, name, e.reply, "")
 		}
 		observation, refreshError := h.refreshActionContext(r.Context(), player.ID, char.ID)
 		writeJSON(w, http.StatusOK, actionSuccessResponse{Success: true, Result: result, Context: observation, ContextError: refreshError})

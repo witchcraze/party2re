@@ -220,6 +220,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "かくちょう",
 	},
 	{
 		ID:             "depot_sell",
@@ -228,6 +229,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"item_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "うる",
 	},
 	{
 		ID:             "depot_sell_batch",
@@ -236,6 +238,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"item_ids"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "まとめてうる",
 	},
 	{
 		ID:             "depot_sort",
@@ -244,6 +247,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "せいとん",
 	},
 	{
 		ID:             "depot_deposit",
@@ -252,6 +256,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"item_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "あずける",
 	},
 	{
 		ID:             "depot_send_item",
@@ -260,8 +265,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"item_id", "recipient_character_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "おくる",
 	},
-	{ID: "depot_send_money", Label: "相手へゴールドを送る", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"amount", "recipient_character_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
+	{ID: "depot_send_money", Label: "相手へゴールドを送る", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"amount", "recipient_character_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck, LegacyVerb: "おくる"},
 	{
 		ID:             "depot_withdraw",
 		Label:          "預かり所からアイテムを引き出す",
@@ -269,6 +275,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{}, // item_id is optional while held gold is collected first.
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "ひきだす",
 	},
 	{ID: "fleamarket_list", Label: "フリーマーケット出品", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "price"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "fleamarket_purchase", Label: "フリーマーケット購入", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},

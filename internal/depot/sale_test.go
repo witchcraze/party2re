@@ -95,7 +95,7 @@ func TestSaleExactBasePrice(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var dep Depot
+			var dep Receipt
 			var earned int
 			if single {
 				dep, earned, err = svc.SellItem(context.Background(), "char", stored.ID)

@@ -25,7 +25,7 @@ Gateway entry eligibility uses six gates evaluated in order: dead → fatigue �
 
      | Disposition | Actions | Legacy evidence |
      | --- | --- | --- |
-     | Starts the wait (default) | Every facility, town and entry command | Success paths set `$npc_com` or log the input; the `act_time = 0` sites in `lib/*.cgi` are the no-target list views, which Go replaces with scene observation. |
+     | Starts the wait (default) | Every facility, town and entry command | Success paths set `$npc_com` or log the input; the `act_time = 0` sites in `lib/*.cgi` are the no-target list views, which Go replaces with scene observation. A success answered by a private `$mes` releases the wait ([place log](../architecture/place-log.md#writers)). |
      | `navigation` | `scene_enter`, `scene_select`, `scene_page`, `scene_back` | `いどう`/`まち` set `$mes` or `act_time = 0` (`lib/system.cgi:289,316`); list views set `act_time = 0`. |
      | `recovery` (never blocked) | `home_wake`, `rescue_request` | `sleep.cgi` and `rescue.cgi` run outside the `party.cgi` action path. |
      | `speech` (never blocked) | `place_say` | Plain input skips `action` and is written by `write_comment` (`party.cgi:20-26`). |

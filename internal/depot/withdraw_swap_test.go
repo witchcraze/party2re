@@ -116,6 +116,12 @@ func TestWithdrawItem_SwapsSameLegacyHand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	catalog, _ := item.InitialCatalog()
+	withdrawn, _ := catalog.FindByID(newSword.DefinitionID)
+	returned, _ := catalog.FindByID(oldSword.DefinitionID)
+	if dep.ItemName != withdrawn.Name || dep.ReturnedName != returned.Name || dep.ItemName == "" {
+		t.Fatalf("echo names = %q/%q", dep.ItemName, dep.ReturnedName)
+	}
 	// The old weapon takes the withdrawn row's position, enhancement intact.
 	if !equalIDs(dep.Items, "before", "old-sword", "after") || dep.Items[1].EnhancementLevel != 4 {
 		t.Fatalf("depot = %+v", dep.Items)

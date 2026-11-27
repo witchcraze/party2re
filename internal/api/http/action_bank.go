@@ -56,13 +56,13 @@ func bankDepositCommand(service BankService) Option {
 			if err != nil {
 				return BankDepositResult{}, err
 			}
-			return BankDepositResult{bank.DepositResult{CharacterID: state.CharacterID, Money: state.Money, Deposit: state.Deposit}, bankDepositLimitReply, commandEcho{target, bankDepositLimitReply}}, nil
+			return BankDepositResult{bank.DepositResult{CharacterID: state.CharacterID, Money: state.Money, Deposit: state.Deposit}, bankDepositLimitReply, commandEcho{target: target, reply: bankDepositLimitReply}}, nil
 		}
 		if err != nil {
 			return BankDepositResult{}, err
 		}
 		reply := fmt.Sprintf("%d Gお預かりいたしました", res.Amount)
-		return BankDepositResult{res, reply, commandEcho{target, reply}}, nil
+		return BankDepositResult{res, reply, commandEcho{target: target, reply: reply}}, nil
 	}, bankActionRejection)
 }
 
@@ -76,7 +76,7 @@ func bankWithdrawCommand(service BankService) Option {
 			return BankWithdrawResult{}, err
 		}
 		reply := fmt.Sprintf("%d Gお返しいたします", res.Amount)
-		return BankWithdrawResult{res, reply, commandEcho{fmt.Sprintf("%dG", res.Amount), reply}}, nil
+		return BankWithdrawResult{res, reply, commandEcho{target: fmt.Sprintf("%dG", res.Amount), reply: reply}}, nil
 	}, bankActionRejection)
 }
 

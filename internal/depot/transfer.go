@@ -11,24 +11,25 @@ import (
 
 // SendMoney moves gold from the sender's wallet into a remittance held for the
 // recipient, under 2-character ascending row locks, then Depot(5) and notice rows(8).
-func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID string, amount int) (Depot, error) {
+func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID string, amount int) (Receipt, error) {
 	fromCharacterID = strings.TrimSpace(fromCharacterID)
 	toCharacterID = strings.TrimSpace(toCharacterID)
 	if fromCharacterID == "" || toCharacterID == "" {
-		return Depot{}, ErrInvalidCharacterID
+		return Receipt{}, ErrInvalidCharacterID
 	}
 	if fromCharacterID == toCharacterID {
-		return Depot{}, ErrSelfTransferNotAllowed
+		return Receipt{}, ErrSelfTransferNotAllowed
 	}
 	if amount <= 0 {
-		return Depot{}, ErrInvalidAmount
+		return Receipt{}, ErrInvalidAmount
 	}
 	if s.remittances == nil {
-		return Depot{}, errRemittancesUnconfigured
+		return Receipt{}, errRemittancesUnconfigured
 	}
 
 	firstID, secondID := id.Sort2(fromCharacterID, toCharacterID)
 	var senderDepot Depot
+	var recipientName string
 
 	runInTx := s.txProvider.RunInTx
 	err := runInTx(ctx, func(txCtx context.Context) error {
@@ -57,6 +58,7 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 		} else {
 			sender, recipient = c2, c1
 		}
+		recipientName = recipient.Name
 
 		// okuru rejects a full recipient Depot before gold too (depot.cgi:349-353).
 		recDepot, err := s.findOrCreateDepot(txCtx, toCharacterID, recipient)
@@ -90,31 +92,32 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 		return s.notifyMoneySent(txCtx, toCharacterID)
 	})
 	if err != nil {
-		return Depot{}, err
+		return Receipt{}, err
 	}
-	return senderDepot, nil
+	return Receipt{Depot: senderDepot, RecipientName: recipientName}, nil
 }
 
 // SendItem transfers an item from sender's inventory to recipient's depot using strict lock hierarchy:
 // Transaction: RunInTx.
 // Lock Order: characters(2, ascending IDs) -> sender inventory/equipment(3) -> recipient/sender Depot(5) -> notice insert.
-func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, itemInstanceID string) (Depot, error) {
+func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, itemInstanceID string) (Receipt, error) {
 	fromCharacterID = strings.TrimSpace(fromCharacterID)
 	toCharacterID = strings.TrimSpace(toCharacterID)
 	itemInstanceID = strings.TrimSpace(itemInstanceID)
 
 	if fromCharacterID == "" || toCharacterID == "" {
-		return Depot{}, ErrInvalidCharacterID
+		return Receipt{}, ErrInvalidCharacterID
 	}
 	if fromCharacterID == toCharacterID {
-		return Depot{}, ErrSelfTransferNotAllowed
+		return Receipt{}, ErrSelfTransferNotAllowed
 	}
 	if itemInstanceID == "" {
-		return Depot{}, ErrInvalidItemInstanceID
+		return Receipt{}, ErrInvalidItemInstanceID
 	}
 
 	firstID, secondID := id.Sort2(fromCharacterID, toCharacterID)
 	var senderDepot Depot
+	var itemName, recipientName string
 
 	runInTx := s.txProvider.RunInTx
 	err := runInTx(ctx, func(txCtx context.Context) error {
@@ -144,6 +147,7 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 		} else {
 			sender, recipient = c2, c1
 		}
+		recipientName = recipient.Name
 
 		// Rank 3: Sender inventory
 		senderInv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, fromCharacterID)
@@ -154,6 +158,7 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 		if !found {
 			return ErrItemNotFound
 		}
+		itemName = s.itemName(itemInst.DefinitionID)
 		detached, err := s.detachEquipment(txCtx, &sender, itemInstanceID)
 		if err != nil {
 			return err
@@ -194,7 +199,7 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 		return s.notifyItemSent(txCtx, toCharacterID, sender.Name, itemInst)
 	})
 	if err != nil {
-		return Depot{}, err
+		return Receipt{}, err
 	}
-	return senderDepot, nil
+	return Receipt{Depot: senderDepot, ItemName: itemName, RecipientName: recipientName}, nil
 }

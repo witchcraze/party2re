@@ -92,6 +92,34 @@ func (s *Service) legacyDefinition(op, definitionID string) (item.Definition, in
 	return def, kind, no, nil
 }
 
+// Receipt is a command's resulting Depot with the catalog names its place-log
+// echo shows (depot.cgi $npc_com).
+type Receipt struct {
+	Depot
+	ItemName      string // deposited, withdrawn or sent definition
+	ReturnedName  string // withdrawal: the hand occupant returned to storage
+	RecipientName string
+	Sales         []Sale
+}
+
+// Sale is one sold instance and its price.
+type Sale struct {
+	Name  string
+	Price int
+}
+
+// itemName is display-only, so a missing catalog leaves it empty.
+func (s *Service) itemName(definitionID string) string {
+	if s.itemDefs == nil {
+		return ""
+	}
+	def, err := s.itemDefs.FindByID(definitionID)
+	if err != nil {
+		return ""
+	}
+	return def.Name
+}
+
 // GetDepot returns the current depot state for the given character, computing dynamic capacity.
 func (s *Service) GetDepot(ctx context.Context, characterID string) (Depot, error) {
 	if strings.TrimSpace(characterID) == "" {
@@ -121,11 +149,12 @@ func (s *Service) GetDepot(ctx context.Context, characterID string) (Depot, erro
 // DepositItem deposits an item from character inventory into the depot.
 // Transaction: ExecuteTransaction.
 // Lock Order: characters(2) -> inventory_items/equipment_slots(3) -> character_depots/depot_items(5).
-func (s *Service) DepositItem(ctx context.Context, characterID string, itemInstanceID string) (Depot, error) {
+func (s *Service) DepositItem(ctx context.Context, characterID string, itemInstanceID string) (Receipt, error) {
 	if err := validateItemOp(characterID, itemInstanceID); err != nil {
-		return Depot{}, err
+		return Receipt{}, err
 	}
 	var resultDepot Depot
+	var name string
 	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: true}
 	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
 		itemInstance, found := tc.Inventory.Find(itemInstanceID)
@@ -142,6 +171,7 @@ func (s *Service) DepositItem(ctx context.Context, characterID string, itemInsta
 		if err := dep.AddItem(itemInstance); err != nil {
 			return err
 		}
+		name = s.itemName(itemInstance.DefinitionID)
 		if err := tc.Inventory.Consume(itemInstanceID, itemInstance.Quantity); err != nil {
 			return err
 		}
@@ -152,9 +182,9 @@ func (s *Service) DepositItem(ctx context.Context, characterID string, itemInsta
 		return nil
 	})
 	if err != nil {
-		return Depot{}, mapEconomyError(err)
+		return Receipt{}, mapEconomyError(err)
 	}
-	return resultDepot, nil
+	return Receipt{Depot: resultDepot, ItemName: name}, nil
 }
 
 // WithdrawItem swaps one unit of a depot row into the matching legacy hand
@@ -165,14 +195,16 @@ func (s *Service) DepositItem(ctx context.Context, characterID string, itemInsta
 // hikidasu collects it instead (depot.cgi:211–215): the collected amounts are
 // returned, items are untouched and itemInstanceID may be empty.
 // Lock Order: characters(2) -> inventory_items/equipment_slots(3) -> character_depots/depot_items(5).
-func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInstanceID string) (Depot, []Remittance, error) {
+func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInstanceID string) (Receipt, []Remittance, error) {
 	if strings.TrimSpace(characterID) == "" {
-		return Depot{}, nil, ErrInvalidCharacterID
+		return Receipt{}, nil, ErrInvalidCharacterID
 	}
+	var result Receipt
 	var resultDepot Depot
 	var collected []Remittance
 	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: true}
 	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		result = Receipt{}
 		var err error
 		if collected, err = s.collectRemittances(tc.Context, &tc.Character); err != nil || len(collected) > 0 {
 			if err == nil {
@@ -202,13 +234,15 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 			return err
 		}
 		var occupants []item.Instance
+		result.ItemName = def.Name
 		for _, held := range tc.Inventory.Items {
-			_, heldKind, _, err := s.legacyDefinition("withdraw", held.DefinitionID)
+			heldDef, heldKind, _, err := s.legacyDefinition("withdraw", held.DefinitionID)
 			if err != nil {
 				return err
 			}
 			if heldKind == kind {
 				occupants = append(occupants, held)
+				result.ReturnedName = heldDef.Name
 			}
 		}
 		if len(occupants) > 1 {
@@ -279,17 +313,18 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 		return nil
 	})
 	if err != nil {
-		return Depot{}, nil, mapEconomyError(err)
+		return Receipt{}, nil, mapEconomyError(err)
 	}
-	return resultDepot, collected, nil
+	result.Depot = resultDepot
+	return result, collected, nil
 }
 
 // SellItem sells a single item from the depot for 50% of its base catalog price.
 // Transaction: delegates to SellItems (ExecuteTransaction).
 // Lock Order: characters(2) -> character_depots/depot_items(5).
-func (s *Service) SellItem(ctx context.Context, characterID string, itemInstanceID string) (Depot, int, error) {
+func (s *Service) SellItem(ctx context.Context, characterID string, itemInstanceID string) (Receipt, int, error) {
 	if err := validateItemOp(characterID, itemInstanceID); err != nil {
-		return Depot{}, 0, err
+		return Receipt{}, 0, err
 	}
 	return s.SellItems(ctx, characterID, []string{itemInstanceID})
 }
@@ -297,14 +332,15 @@ func (s *Service) SellItem(ctx context.Context, characterID string, itemInstance
 // SellItems sells multiple items from the depot in an atomic batch.
 // Transaction: ExecuteTransaction.
 // Lock Order: characters(2) -> character_depots/depot_items(5).
-func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanceIDs []string) (Depot, int, error) {
+func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanceIDs []string) (Receipt, int, error) {
 	if strings.TrimSpace(characterID) == "" {
-		return Depot{}, 0, ErrInvalidCharacterID
+		return Receipt{}, 0, ErrInvalidCharacterID
 	}
 	if len(itemInstanceIDs) == 0 {
-		return Depot{}, 0, ErrEmptyItemList
+		return Receipt{}, 0, ErrEmptyItemList
 	}
 	var resultDepot Depot
+	var sales []Sale
 	var totalGoldEarned int
 	req := economy.TransactionRequest{CharacterID: characterID}
 	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
@@ -313,6 +349,7 @@ func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanc
 			return err
 		}
 		// Validate every target and its valuation before deleting any assets.
+		sales = sales[:0]
 		seen := make(map[string]bool, len(itemInstanceIDs))
 		for _, targetID := range itemInstanceIDs {
 			if seen[targetID] {
@@ -343,6 +380,7 @@ func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanc
 					if err != nil {
 						return err
 					}
+					sales = append(sales, Sale{Name: def.Name, Price: price})
 					found = true
 					break
 				}
@@ -366,9 +404,9 @@ func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanc
 		return nil
 	})
 	if err != nil {
-		return Depot{}, 0, mapEconomyError(err)
+		return Receipt{}, 0, mapEconomyError(err)
 	}
-	return resultDepot, totalGoldEarned, nil
+	return Receipt{Depot: resultDepot, Sales: sales}, totalGoldEarned, nil
 }
 
 // SortItems orders depot items by the original stored kind (1 weapon, 2 armor,

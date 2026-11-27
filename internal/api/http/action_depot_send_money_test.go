@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/core/timer"
@@ -20,9 +21,9 @@ type depotSendMoneyFixture struct {
 	amount int
 }
 
-func (f *depotSendMoneyFixture) SendMoney(ctx context.Context, actor, recipient string, amount int) (depot.Depot, error) {
+func (f *depotSendMoneyFixture) SendMoney(ctx context.Context, actor, recipient string, amount int) (depot.Receipt, error) {
 	f.recipient, f.amount = recipient, amount
-	return f.Expand(ctx, actor)
+	return f.receipt(ctx, actor)
 }
 
 type depotSendMoneyRig struct {
@@ -36,13 +37,19 @@ func (r depotSendMoneyRig) send(params string) (int, map[string]json.RawMessage)
 	return gatewayRequest(r.t, r.router, "hero", "session", "application/json", saleGatewayBody("depot_send_money", params), nil)
 }
 
-func depotSendMoneyRouter(t *testing.T) depotSendMoneyRig {
+func depotSendMoneyRouter(t *testing.T, opts ...Option) depotSendMoneyRig {
+	t.Helper()
+	return depotSendMoneyRouterWith(t, nil, opts...)
+}
+
+func depotSendMoneyRouterWith(t *testing.T, pcOpts []func(*playercontext.Service), opts ...Option) depotSendMoneyRig {
 	t.Helper()
 	f := &depotSendMoneyFixture{depotSaleFixture: &depotSaleFixture{depotExpansionFixture: &depotExpansionFixture{gatewayFixture: newGatewayFixture(t), dep: depot.Depot{CharacterID: "hero", Capacity: 10}}}}
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "depot"}}
-	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
-		playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "depot", Parent: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"}, playercontext.SceneDefinition{ID: "auction", Parent: "town"}))
-	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithDepot(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture })
+	timers := timer.NewService(nil)
+	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers, append([]func(*playercontext.Service){playercontext.WithNavigation(store,
+		playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "depot", Parent: "town", Pageable: true}, playercontext.SceneDefinition{ID: "bank", Parent: "town"}, playercontext.SceneDefinition{ID: "auction", Parent: "town"})}, pcOpts...)...)
+	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, append([]Option{WithDepot(f), WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,5 +171,74 @@ func TestDepotSendMoneyGatewayGuardsAndDiscovery(t *testing.T) {
 	}
 	if f.executions != 1 || f.store.writes != 0 {
 		t.Fatal("GET mutated state")
+	}
+}
+
+// Each Depot success logs its legacy ＠verb>target and $npc_com (depot.cgi:105-542).
+func TestDepotCommandsEchoIntoThePlaceLog(t *testing.T) {
+	nbsp := strings.Repeat(" ", 12)
+	for _, tc := range []struct {
+		action, params string
+		names          depot.Receipt
+		actor, reply   string
+	}{
+		{"depot_deposit", `{"item_id":"one"}`, depot.Receipt{ItemName: "どうのつるぎ"}, "＠あずける>どうのつるぎ", "どうのつるぎをお預かりしました"},
+		{"depot_withdraw", `{"item_id":"one"}`, depot.Receipt{ItemName: "やくそう"}, "＠ひきだす>やくそう", "やくそうをお返しします"},
+		{"depot_withdraw", `{"item_id":"one"}`, depot.Receipt{ItemName: "やくそう", ReturnedName: "どくけし"}, "＠ひきだす>やくそう", "どくけしをお預かりしました。やくそうをお返しします"},
+		{"depot_send_item", `{"item_id":"one","recipient_character_id":"r"}`, depot.Receipt{ItemName: "やくそう", RecipientName: "Ann"}, "＠おくる>やくそう＠あいて>Ann", "やくそうをAnnに送りました"},
+		{"depot_send_money", `{"amount":300,"recipient_character_id":"r"}`, depot.Receipt{RecipientName: "Ann"}, "＠おくる>300G＠あいて>Ann", "300 Gを Ann に送りました"},
+		// A name that looks like a placeholder is shown verbatim.
+		{"depot_send_money", `{"amount":300,"recipient_character_id":"r"}`, depot.Receipt{RecipientName: "{name}"}, "＠おくる>300G＠あいて>{name}", "300 Gを {name} に送りました"},
+		{"depot_sort", "", depot.Receipt{}, "＠せいとん", "預かっているアイテムをせいとんした"},
+		{"depot_expand", "", depot.Receipt{}, "＠かくちょう>はい", "Heroの倉庫を拡張しました"},
+		{"depot_sell", `{"item_id":"one"}`, depot.Receipt{Sales: []depot.Sale{{Name: "やくそう", Price: 150}}}, "＠うる>やくそう", "やくそう の買取代の 150 Gです！"},
+		{"depot_sell_batch", `{"item_ids":["one","two"]}`, depot.Receipt{Sales: []depot.Sale{{Name: "やくそう", Price: 50}, {Name: "どくけし", Price: 100}}}, "＠まとめてうる>やくそう<>どくけし<>",
+			"買取代の 150 Gです！\n-------買取リスト-------\n" + nbsp + "やくそう 50 G\n" + nbsp + "どくけし 100 G\n---------------------"},
+	} {
+		t.Run(tc.action+"/"+tc.actor, func(t *testing.T) {
+			log := &fakePlaceLog{}
+			f := depotSendMoneyRouter(t, WithPlaceLog(log))
+			f.char.Name, f.char.Money, f.names = "Hero", 1000, tc.names
+			status, raw := gatewayRequest(t, f.router, "hero", "session", "application/json", saleGatewayBody(tc.action, tc.params), nil)
+			if status != 200 || log.writes != 1 || len(log.rows) != 2 {
+				t.Fatalf("%d %s rows %+v", status, raw["error"], log.rows)
+			}
+			if npc, actor := log.rows[0], log.rows[1]; npc.Name != depotFacility.npc.name || npc.Text != tc.reply || actor.Text != tc.actor || actor.Name != "Hero" {
+				t.Fatalf("rows: %+v", log.rows)
+			}
+		})
+	}
+}
+
+// Collecting held gold is a private $mes: no rows and no wait (depot.cgi:211-215, lib/system.cgi:651).
+func TestDepotWithdrawCollectionWritesNoLogAndStartsNoWait(t *testing.T) {
+	log := &fakePlaceLog{}
+	timers := timer.NewService(nil)
+	f := depotSendMoneyRouterWith(t, []func(*playercontext.Service){playercontext.WithActionWait(timers, playercontext.DefaultActionWait)}, WithPlaceLog(log))
+	f.collected = []depot.Remittance{{ID: "held", CharacterID: "hero", Amount: 150, Source: depot.RemittanceDepotTransfer, SenderName: "Ann"}}
+	for range 2 {
+		if status, raw := gatewayRequest(t, f.router, "hero", "session", "application/json", saleGatewayBody("depot_withdraw", ""), nil); status != 200 {
+			t.Fatalf("collection: %d %s", status, raw["error"])
+		}
+	}
+	if log.writes != 0 {
+		t.Fatalf("collection logged: %+v", log.rows)
+	}
+	if status, raw := gatewayRequest(t, f.router, "hero", "session", "application/json", saleGatewayBody("depot_sort", ""), nil); status != 200 {
+		t.Fatalf("sort after collection: %d %s", status, raw["error"])
+	}
+	if status, raw := gatewayRequest(t, f.router, "hero", "session", "application/json", saleGatewayBody("depot_sort", ""), nil); status != 409 || !strings.Contains(string(raw["error"]), "ACTION_WAIT") {
+		t.Fatalf("logged command did not start the wait: %d %s", status, raw["error"])
+	}
+}
+
+// The Auction venue's おくる is the same routine answered by its own NPC (auction.cgi:76).
+func TestAuctionSendMoneyEchoesWithTheAuctionNPC(t *testing.T) {
+	log := &fakePlaceLog{}
+	f := depotSendMoneyRouter(t, WithPlaceLog(log))
+	f.store.selection.Destination, f.char.Money, f.names = "auction", 1000, depot.Receipt{RecipientName: "Ann"}
+	status, raw := f.send(`{"amount":300,"recipient_character_id":"r"}`)
+	if status != 200 || len(log.rows) != 2 || log.rows[0].Name != auctionFacility.npc.name || log.rows[0].Text != "300 Gを Ann に送りました" {
+		t.Fatalf("%d %s rows %+v", status, raw["error"], log.rows)
 	}
 }
