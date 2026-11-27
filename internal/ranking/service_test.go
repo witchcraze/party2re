@@ -2,6 +2,7 @@ package ranking_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -561,4 +562,170 @@ func TestService_RecordJobPopularity(t *testing.T) {
 	if entries[0].FemaleCount != 15 {
 		t.Errorf("expected female 15, got %d", entries[0].FemaleCount)
 	}
+}
+
+func TestService_SnapshotReadDistinguishesAbsenceFromFailures(t *testing.T) {
+	ctx := context.Background()
+	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+
+	characterGetters := []struct {
+		name        string
+		rankingType ranking.RankingType
+		get         func(*ranking.Service, context.Context, int, int) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+	}{
+		{"pvp_victory", ranking.RankingTypePvPVictory, (*ranking.Service).GetPvPVictoryRanking},
+		{"monster_kills", ranking.RankingTypeMonsterKills, (*ranking.Service).GetMonsterKillsRanking},
+		{"mao_count", ranking.RankingTypeMaoCount, (*ranking.Service).GetMaoCountRanking},
+		{"hero_count", ranking.RankingTypeHeroCount, (*ranking.Service).GetHeroCountRanking},
+		{"casino_wins", ranking.RankingTypeCasinoWins, (*ranking.Service).GetCasinoWinsRanking},
+		{"helper", ranking.RankingTypeHelper, (*ranking.Service).GetHelperRanking},
+		{"alchemy", ranking.RankingTypeAlchemy, (*ranking.Service).GetAlchemyRanking},
+		{"weekly_job_change", ranking.RankingTypeWeeklyJobChange, (*ranking.Service).GetWeeklyJobChangeRanking},
+	}
+
+	t.Run("absent snapshot returns empty non-snapshot page even when live data exists", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.pvpRankings = []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 10}}
+		repo.monsterKillsRankings = repo.pvpRankings
+		repo.maoCountRankings = repo.pvpRankings
+		repo.heroCountRankings = repo.pvpRankings
+		repo.casinoWinsRankings = repo.pvpRankings
+		repo.helperRankings = repo.pvpRankings
+		repo.alchemyRankings = repo.pvpRankings
+		repo.weeklyJobChangeRankings = repo.pvpRankings
+		repo.jobPopularityRankings = []ranking.JobPopularityEntry{{Rank: 1, JobID: "warrior", TotalCount: 5}}
+
+		svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+		if err != nil {
+			t.Fatalf("NewService: %v", err)
+		}
+
+		for _, cg := range characterGetters {
+			page, err := cg.get(svc, ctx, 10, 0)
+			if err != nil {
+				t.Fatalf("%s: expected nil error on ErrSnapshotNotFound, got %v", cg.name, err)
+			}
+			if page.IsSnapshot || page.Total != 0 || page.Entries == nil || len(page.Entries) != 0 {
+				t.Fatalf("%s: expected empty non-snapshot page, got %+v", cg.name, page)
+			}
+			raw, err := svc.GetRankingByType(ctx, cg.rankingType, 10, 0)
+			if err != nil {
+				t.Fatalf("GetRankingByType(%s): expected nil error, got %v", cg.rankingType, err)
+			}
+			if p, ok := raw.(ranking.RankingPage[ranking.CharacterRankingEntry]); !ok || p.IsSnapshot || len(p.Entries) != 0 {
+				t.Fatalf("GetRankingByType(%s): unexpected page %+v", cg.rankingType, raw)
+			}
+		}
+
+		popPage, err := svc.GetJobPopularityRanking(ctx)
+		if err != nil {
+			t.Fatalf("job_popularity: expected nil error on ErrSnapshotNotFound, got %v", err)
+		}
+		if popPage.IsSnapshot || popPage.Total != 0 || popPage.Entries == nil || len(popPage.Entries) != 0 {
+			t.Fatalf("job_popularity: expected empty non-snapshot page, got %+v", popPage)
+		}
+	})
+
+	t.Run("sql error propagates without poisoning caches", func(t *testing.T) {
+		sqlErr := errors.New("database connection lost")
+		repo := newMockRepo()
+		repo.getSnapshotErr = sqlErr
+		cache := newMockSnapshotCache()
+
+		svc, err := ranking.NewService(
+			repo,
+			ranking.WithSnapshotCache(cache),
+			ranking.WithNowFunc(func() time.Time { return fixedTime }),
+		)
+		if err != nil {
+			t.Fatalf("NewService: %v", err)
+		}
+
+		for _, cg := range characterGetters {
+			if _, err := cg.get(svc, ctx, 10, 0); !errors.Is(err, sqlErr) {
+				t.Fatalf("%s: expected %v, got %v", cg.name, sqlErr, err)
+			}
+			if _, err := svc.GetRankingByType(ctx, cg.rankingType, 10, 0); !errors.Is(err, sqlErr) {
+				t.Fatalf("GetRankingByType(%s): expected %v, got %v", cg.rankingType, sqlErr, err)
+			}
+		}
+		if _, err := svc.GetJobPopularityRanking(ctx); !errors.Is(err, sqlErr) {
+			t.Fatalf("job_popularity: expected %v, got %v", sqlErr, err)
+		}
+		if _, err := svc.GetRankingByType(ctx, ranking.RankingTypeJobPopularity, 10, 0); !errors.Is(err, sqlErr) {
+			t.Fatalf("GetRankingByType(job_popularity): expected %v, got %v", sqlErr, err)
+		}
+
+		// Clearing the SQL failure with a valid snapshot succeeds on the next read.
+		repo.getSnapshotErr = nil
+		repo.snapshots[ranking.RankingTypeMonsterKills] = ranking.RankingSnapshot{
+			RankingType:  ranking.RankingTypeMonsterKills,
+			SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":5}]`,
+			TotalCount:   1,
+			CalculatedAt: fixedTime,
+			UpdatedAt:    fixedTime,
+		}
+		page, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
+		if err != nil || !page.IsSnapshot || page.Total != 1 {
+			t.Fatalf("expected recovery after SQL failure cleared, got %+v, %v", page, err)
+		}
+	})
+
+	t.Run("invalid sql snapshot json propagates without poisoning caches", func(t *testing.T) {
+		for _, badJSON := range []string{"", "{invalid", "[123]"} {
+			repo := newMockRepo()
+			cache := newMockSnapshotCache()
+			for _, cg := range characterGetters {
+				repo.snapshots[cg.rankingType] = ranking.RankingSnapshot{
+					RankingType:  cg.rankingType,
+					SnapshotData: badJSON,
+					TotalCount:   1,
+					CalculatedAt: fixedTime,
+					UpdatedAt:    fixedTime,
+				}
+			}
+			repo.snapshots[ranking.RankingTypeJobPopularity] = ranking.RankingSnapshot{
+				RankingType:  ranking.RankingTypeJobPopularity,
+				SnapshotData: badJSON,
+				TotalCount:   1,
+				CalculatedAt: fixedTime,
+				UpdatedAt:    fixedTime,
+			}
+
+			svc, err := ranking.NewService(
+				repo,
+				ranking.WithSnapshotCache(cache),
+				ranking.WithNowFunc(func() time.Time { return fixedTime }),
+			)
+			if err != nil {
+				t.Fatalf("NewService: %v", err)
+			}
+
+			for _, cg := range characterGetters {
+				_, err := cg.get(svc, ctx, 10, 0)
+				if err == nil || errors.Is(err, ranking.ErrSnapshotNotFound) {
+					t.Fatalf("%s (%q): expected decode error, got %v", cg.name, badJSON, err)
+				}
+			}
+			if _, err := svc.GetJobPopularityRanking(ctx); err == nil || errors.Is(err, ranking.ErrSnapshotNotFound) {
+				t.Fatalf("job_popularity (%q): expected decode error, got %v", badJSON, err)
+			}
+			if _, found, _ := cache.Get(ctx, ranking.RankingTypeMonsterKills); found {
+				t.Fatalf("invalid snapshot (%q) populated Valkey cache", badJSON)
+			}
+
+			// Repairing SQL snapshot allows subsequent read to succeed.
+			repo.snapshots[ranking.RankingTypeMonsterKills] = ranking.RankingSnapshot{
+				RankingType:  ranking.RankingTypeMonsterKills,
+				SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":5}]`,
+				TotalCount:   1,
+				CalculatedAt: fixedTime,
+				UpdatedAt:    fixedTime,
+			}
+			page, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
+			if err != nil || !page.IsSnapshot || page.Total != 1 {
+				t.Fatalf("expected valid SQL snapshot after repair (%q), got %+v, %v", badJSON, page, err)
+			}
+		}
+	})
 }

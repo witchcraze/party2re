@@ -69,17 +69,7 @@ func (s *Service) loadBoard(ctx context.Context, t RankingType) ([]CharacterRank
 
 // getBoard pages a ranking.cgi board strictly from its published snapshot.
 func (s *Service) getBoard(ctx context.Context, t RankingType, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
-	limit, offset = NormalizePagination(limit, offset)
-	page := RankingPage[CharacterRankingEntry]{
-		RankingType: t,
-		Entries:     []CharacterRankingEntry{},
-		Limit:       limit,
-		Offset:      offset,
-	}
-	if entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, t, limit, offset); found {
-		page.Entries, page.Total, page.CalculatedAt, page.IsSnapshot = entries, total, calcTime, true
-	}
-	return page, nil
+	return s.getCharacterRankingPage(ctx, t, limit, offset)
 }
 
 // GetPvPVictoryRanking returns the 王者 board (kill_p) by strong-opponent PvP defeats.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -105,7 +106,7 @@ func (m *mockHTTPRankingService) RefreshAllSnapshots(ctx context.Context) error 
 	return nil
 }
 
-func setupRankingHandler(mock *mockHTTPRankingService) *apihttp.Handler {
+func setupRankingHandler(rankings apihttp.RankingService) *apihttp.Handler {
 	players := &stubPlayerService{}
 	chars := &stubCharacterService{
 		getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
@@ -118,8 +119,8 @@ func setupRankingHandler(mock *mockHTTPRankingService) *apihttp.Handler {
 	opts := []apihttp.Option{
 		apihttp.WithAdminAPIKey("test-admin-key"),
 	}
-	if mock != nil {
-		opts = append(opts, apihttp.WithRanking(mock))
+	if rankings != nil {
+		opts = append(opts, apihttp.WithRanking(rankings))
 	}
 
 	h, _ := apihttp.NewHandler(players, chars, adventures, shops, opts...)
@@ -498,6 +499,101 @@ func TestRankingEndpoints_NotConfigured(t *testing.T) {
 
 	if rec.Code != http.StatusNotImplemented {
 		t.Fatalf("expected 501 Not Implemented, got %d", rec.Code)
+	}
+}
+
+type snapshotReadTestRepo struct {
+	ranking.Repository
+	getSnapshot func(ctx context.Context, rankingType ranking.RankingType) (ranking.RankingSnapshot, error)
+}
+
+func (r *snapshotReadTestRepo) GetSnapshot(ctx context.Context, rankingType ranking.RankingType) (ranking.RankingSnapshot, error) {
+	return r.getSnapshot(ctx, rankingType)
+}
+
+func TestRankingEndpoints_RealServiceSnapshotErrorsAndAbsence(t *testing.T) {
+	endpoints := []string{
+		"/rankings/monster-kills",
+		"/rankings/job-popularity",
+		"/rankings/weekly-job-change",
+		"/rankings/pvp_victory",
+		"/rankings/kill_m",
+	}
+
+	cases := []struct {
+		name       string
+		get        func(context.Context, ranking.RankingType) (ranking.RankingSnapshot, error)
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name: "unpublished snapshot returns 200 empty page",
+			get: func(context.Context, ranking.RankingType) (ranking.RankingSnapshot, error) {
+				return ranking.RankingSnapshot{}, ranking.ErrSnapshotNotFound
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "sql read failure returns 500 internal server error",
+			get: func(context.Context, ranking.RankingType) (ranking.RankingSnapshot, error) {
+				return ranking.RankingSnapshot{}, errors.New("db read failed")
+			},
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   "internal server error",
+		},
+		{
+			name: "invalid published snapshot json returns 500 internal server error",
+			get: func(ctx context.Context, rt ranking.RankingType) (ranking.RankingSnapshot, error) {
+				return ranking.RankingSnapshot{
+					RankingType:  rt,
+					SnapshotData: "{invalid-json",
+					TotalCount:   1,
+				}, nil
+			},
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   "internal server error",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, err := ranking.NewService(&snapshotReadTestRepo{getSnapshot: tc.get}, ranking.WithCacheTTL(0))
+			if err != nil {
+				t.Fatalf("ranking.NewService: %v", err)
+			}
+			router := setupRankingHandler(svc).Router()
+
+			for _, url := range endpoints {
+				req := httptest.NewRequest(http.MethodGet, url, nil)
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+
+				if rec.Code != tc.wantStatus {
+					t.Fatalf("%s: expected status %d, got %d (body: %s)", url, tc.wantStatus, rec.Code, rec.Body.String())
+				}
+				if tc.wantStatus == http.StatusOK {
+					var page struct {
+						Entries    []json.RawMessage `json:"entries"`
+						Total      int               `json:"total"`
+						IsSnapshot bool              `json:"is_snapshot"`
+					}
+					if err := json.NewDecoder(rec.Body).Decode(&page); err != nil {
+						t.Fatalf("%s: decode 200 body: %v", url, err)
+					}
+					if page.IsSnapshot || page.Total != 0 || page.Entries == nil || len(page.Entries) != 0 {
+						t.Fatalf("%s: expected empty unpublished page, got %+v", url, page)
+					}
+				} else {
+					var errBody map[string]string
+					if err := json.NewDecoder(rec.Body).Decode(&errBody); err != nil {
+						t.Fatalf("%s: decode error body: %v", url, err)
+					}
+					if errBody["error"] != tc.wantBody {
+						t.Fatalf("%s: expected error %q, got %q", url, tc.wantBody, errBody["error"])
+					}
+				}
+			}
+		})
 	}
 }
 
