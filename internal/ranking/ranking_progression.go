@@ -3,28 +3,36 @@ package ranking
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // GetJobPopularityRanking returns distribution statistics for all jobs from the published snapshot.
 func (s *Service) GetJobPopularityRanking(ctx context.Context) (RankingPage[JobPopularityEntry], error) {
-	if entries, total, calcTime, found := s.getCachedJobPopularityRanking(ctx); found {
-		if entries == nil {
-			entries = []JobPopularityEntry{}
+	data, total, calcTime, err := s.getOrLoadSnapshot(ctx, RankingTypeJobPopularity)
+	if err != nil {
+		if errors.Is(err, ErrSnapshotNotFound) {
+			return RankingPage[JobPopularityEntry]{
+				RankingType: RankingTypeJobPopularity,
+				Entries:     []JobPopularityEntry{},
+			}, nil
 		}
-		return RankingPage[JobPopularityEntry]{
-			RankingType:  RankingTypeJobPopularity,
-			Entries:      entries,
-			Total:        total,
-			Limit:        len(entries),
-			Offset:       0,
-			CalculatedAt: calcTime,
-			IsSnapshot:   true,
-		}, nil
+		return RankingPage[JobPopularityEntry]{}, err
 	}
-
+	entries, ok := data.([]JobPopularityEntry)
+	if !ok {
+		return RankingPage[JobPopularityEntry]{}, fmt.Errorf("unexpected snapshot data type %T for %s", data, RankingTypeJobPopularity)
+	}
+	if entries == nil {
+		entries = []JobPopularityEntry{}
+	}
 	return RankingPage[JobPopularityEntry]{
-		RankingType: RankingTypeJobPopularity,
-		Entries:     []JobPopularityEntry{},
+		RankingType:  RankingTypeJobPopularity,
+		Entries:      entries,
+		Total:        total,
+		Limit:        len(entries),
+		Offset:       0,
+		CalculatedAt: calcTime,
+		IsSnapshot:   true,
 	}, nil
 }
 

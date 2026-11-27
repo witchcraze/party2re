@@ -2,6 +2,7 @@ package ranking_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -13,8 +14,9 @@ import (
 )
 
 type mockSnapshotCache struct {
-	mu   sync.Mutex
-	data map[ranking.RankingType]ranking.RankingSnapshot
+	mu     sync.Mutex
+	data   map[ranking.RankingType]ranking.RankingSnapshot
+	getErr error
 }
 
 func newMockSnapshotCache() *mockSnapshotCache {
@@ -26,6 +28,9 @@ func newMockSnapshotCache() *mockSnapshotCache {
 func (m *mockSnapshotCache) Get(ctx context.Context, rankingType ranking.RankingType) (ranking.RankingSnapshot, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.getErr != nil {
+		return ranking.RankingSnapshot{}, false, m.getErr
+	}
 	snap, ok := m.data[rankingType]
 	if !ok {
 		return ranking.RankingSnapshot{}, false, nil
@@ -217,5 +222,97 @@ func TestValkeySnapshotCache_RealOrNop(t *testing.T) {
 	_, found, err = cache.Get(ctx, ranking.RankingTypeMonsterKills)
 	if err != nil || found {
 		t.Errorf("expected not found after delete, got found=%v, err=%v", found, err)
+	}
+}
+
+func TestService_SnapshotFallbackOnMissingOrUnusableValkey(t *testing.T) {
+	ctx := context.Background()
+	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+
+	sqlBoard := ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypeMonsterKills,
+		SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Alice","score":100}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+	sqlPop := ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypeJobPopularity,
+		SnapshotData: `[{"rank":1,"job_id":"warrior","total_count":10,"percentage":100}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+
+	cases := []struct {
+		name  string
+		setup func(c *mockSnapshotCache)
+	}{
+		{
+			name:  "cache miss",
+			setup: func(c *mockSnapshotCache) {},
+		},
+		{
+			name: "valkey read error",
+			setup: func(c *mockSnapshotCache) {
+				c.getErr = errors.New("valkey unavailable")
+			},
+		},
+		{
+			name: "empty snapshot_data in valkey",
+			setup: func(c *mockSnapshotCache) {
+				c.data[ranking.RankingTypeMonsterKills] = ranking.RankingSnapshot{RankingType: ranking.RankingTypeMonsterKills, SnapshotData: ""}
+				c.data[ranking.RankingTypeJobPopularity] = ranking.RankingSnapshot{RankingType: ranking.RankingTypeJobPopularity, SnapshotData: ""}
+			},
+		},
+		{
+			name: "corrupt json in valkey",
+			setup: func(c *mockSnapshotCache) {
+				c.data[ranking.RankingTypeMonsterKills] = ranking.RankingSnapshot{RankingType: ranking.RankingTypeMonsterKills, SnapshotData: "{corrupt"}
+				c.data[ranking.RankingTypeJobPopularity] = ranking.RankingSnapshot{RankingType: ranking.RankingTypeJobPopularity, SnapshotData: "{corrupt"}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := newMockRepo()
+			repo.snapshots[ranking.RankingTypeMonsterKills] = sqlBoard
+			repo.snapshots[ranking.RankingTypeJobPopularity] = sqlPop
+			cache := newMockSnapshotCache()
+			tc.setup(cache)
+
+			svc, err := ranking.NewService(
+				repo,
+				ranking.WithSnapshotCache(cache),
+				ranking.WithNowFunc(func() time.Time { return fixedTime }),
+			)
+			if err != nil {
+				t.Fatalf("NewService: %v", err)
+			}
+
+			boardPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
+			if err != nil {
+				t.Fatalf("GetMonsterKillsRanking failed: %v", err)
+			}
+			if !boardPage.IsSnapshot || boardPage.Total != 1 || len(boardPage.Entries) != 1 || boardPage.Entries[0].CharacterName != "Alice" {
+				t.Fatalf("unexpected board fallback page: %+v", boardPage)
+			}
+
+			popPage, err := svc.GetJobPopularityRanking(ctx)
+			if err != nil {
+				t.Fatalf("GetJobPopularityRanking failed: %v", err)
+			}
+			if !popPage.IsSnapshot || popPage.Total != 1 || len(popPage.Entries) != 1 || popPage.Entries[0].JobID != "warrior" {
+				t.Fatalf("unexpected popularity fallback page: %+v", popPage)
+			}
+
+			// Repaired cache entries serve subsequent reads after error is cleared.
+			cache.getErr = nil
+			repaired, found, err := cache.Get(ctx, ranking.RankingTypeMonsterKills)
+			if err != nil || !found || repaired.SnapshotData != sqlBoard.SnapshotData {
+				t.Fatalf("expected Valkey cache to be repaired from SQL, got found=%v err=%v snap=%+v", found, err, repaired)
+			}
+		})
 	}
 }

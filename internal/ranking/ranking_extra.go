@@ -34,25 +34,7 @@ func NextSundayMidnightJST(t time.Time) time.Time {
 
 // GetWeeklyJobChangeRanking returns the finalized previous-week job change ranking snapshot.
 func (s *Service) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
-	limit, offset = NormalizePagination(limit, offset)
-	if entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeWeeklyJobChange, limit, offset); found {
-		return RankingPage[CharacterRankingEntry]{
-			RankingType:  RankingTypeWeeklyJobChange,
-			Entries:      entries,
-			Total:        total,
-			Limit:        limit,
-			Offset:       offset,
-			CalculatedAt: calcTime,
-			IsSnapshot:   true,
-		}, nil
-	}
-
-	return RankingPage[CharacterRankingEntry]{
-		RankingType: RankingTypeWeeklyJobChange,
-		Entries:     []CharacterRankingEntry{},
-		Limit:       limit,
-		Offset:      offset,
-	}, nil
+	return s.getCharacterRankingPage(ctx, RankingTypeWeeklyJobChange, limit, offset)
 }
 
 // RecordJobChange increments the active weekly job change count for a character.

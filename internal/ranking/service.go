@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -149,13 +150,19 @@ func (s *Service) storeCache(t RankingType, data any, total int, calculatedAt ti
 	s.mu.Unlock()
 }
 
-func (s *Service) getOrLoadSnapshot(ctx context.Context, t RankingType) (any, int, time.Time, bool) {
+type loadedSnapshot struct {
+	data         any
+	total        int
+	calculatedAt time.Time
+}
+
+func (s *Service) getOrLoadSnapshot(ctx context.Context, t RankingType) (any, int, time.Time, error) {
 	s.mu.RLock()
 	cached, exists := s.cache[t]
 	s.mu.RUnlock()
 
 	if exists && cached.expiresAt.After(s.nowFunc()) {
-		return cached.data, cached.total, cached.updatedAt, true
+		return cached.data, cached.total, cached.updatedAt, nil
 	}
 
 	// 1. Check Valkey distributed cache
@@ -163,7 +170,7 @@ func (s *Service) getOrLoadSnapshot(ctx context.Context, t RankingType) (any, in
 		if snap, found, err := s.valkeyCache.Get(ctx, t); err == nil && found && snap.SnapshotData != "" {
 			if data, err := unmarshalSnapshotData(t, snap.SnapshotData); err == nil {
 				s.storeCache(t, data, snap.TotalCount, snap.CalculatedAt)
-				return data, snap.TotalCount, snap.CalculatedAt, true
+				return data, snap.TotalCount, snap.CalculatedAt, nil
 			}
 		}
 	}
@@ -171,49 +178,55 @@ func (s *Service) getOrLoadSnapshot(ctx context.Context, t RankingType) (any, in
 	// 2. Cache miss: Singleflight database fallback to prevent cache stampede
 	res, err := s.sf.Do(string(t), func() (any, error) {
 		snap, err := s.repo.GetSnapshot(ctx, t)
-		if err == nil && snap.SnapshotData != "" {
-			if data, err := unmarshalSnapshotData(t, snap.SnapshotData); err == nil {
-				s.storeCache(t, data, snap.TotalCount, snap.CalculatedAt)
-				if s.valkeyCache != nil {
-					_ = s.valkeyCache.Set(ctx, t, snap, s.cacheTTL)
-				}
-				return snap, nil
-			}
+		if err != nil {
+			return nil, err
 		}
-		return nil, errors.New("no snapshot available")
+		data, err := unmarshalSnapshotData(t, snap.SnapshotData)
+		if err != nil {
+			return nil, fmt.Errorf("decode ranking snapshot %s: %w", t, err)
+		}
+		s.storeCache(t, data, snap.TotalCount, snap.CalculatedAt)
+		if s.valkeyCache != nil {
+			_ = s.valkeyCache.Set(ctx, t, snap, s.cacheTTL)
+		}
+		return loadedSnapshot{
+			data:         data,
+			total:        snap.TotalCount,
+			calculatedAt: snap.CalculatedAt,
+		}, nil
 	})
+	if err != nil {
+		return nil, 0, time.Time{}, err
+	}
 
-	if err == nil {
-		if snap, ok := res.(RankingSnapshot); ok {
-			if data, err := unmarshalSnapshotData(t, snap.SnapshotData); err == nil {
-				return data, snap.TotalCount, snap.CalculatedAt, true
-			}
+	loaded, ok := res.(loadedSnapshot)
+	if !ok {
+		return nil, 0, time.Time{}, fmt.Errorf("unexpected loaded snapshot result %T for %s", res, t)
+	}
+	return loaded.data, loaded.total, loaded.calculatedAt, nil
+}
+
+func (s *Service) getCharacterRankingPage(ctx context.Context, t RankingType, limit, offset int) (RankingPage[CharacterRankingEntry], error) {
+	limit, offset = NormalizePagination(limit, offset)
+	page := RankingPage[CharacterRankingEntry]{
+		RankingType: t,
+		Entries:     []CharacterRankingEntry{},
+		Limit:       limit,
+		Offset:      offset,
+	}
+	data, total, calcTime, err := s.getOrLoadSnapshot(ctx, t)
+	if err != nil {
+		if errors.Is(err, ErrSnapshotNotFound) {
+			return page, nil
 		}
+		return RankingPage[CharacterRankingEntry]{}, err
 	}
-
-	return nil, 0, time.Time{}, false
-}
-
-func (s *Service) getCachedCharacterRanking(ctx context.Context, t RankingType, limit, offset int) ([]CharacterRankingEntry, int, time.Time, bool) {
-	data, total, calcTime, ok := s.getOrLoadSnapshot(ctx, t)
+	list, ok := data.([]CharacterRankingEntry)
 	if !ok {
-		return nil, 0, time.Time{}, false
+		return RankingPage[CharacterRankingEntry]{}, fmt.Errorf("unexpected snapshot data type %T for %s", data, t)
 	}
-	if list, ok := data.([]CharacterRankingEntry); ok {
-		return paginateSlice(list, limit, offset), total, calcTime, true
-	}
-	return nil, 0, time.Time{}, false
-}
-
-func (s *Service) getCachedJobPopularityRanking(ctx context.Context) ([]JobPopularityEntry, int, time.Time, bool) {
-	data, total, calcTime, ok := s.getOrLoadSnapshot(ctx, RankingTypeJobPopularity)
-	if !ok {
-		return nil, 0, time.Time{}, false
-	}
-	if list, ok := data.([]JobPopularityEntry); ok {
-		return list, total, calcTime, true
-	}
-	return nil, 0, time.Time{}, false
+	page.Entries, page.Total, page.CalculatedAt, page.IsSnapshot = paginateSlice(list, limit, offset), total, calcTime, true
+	return page, nil
 }
 
 func paginateSlice[T any](items []T, limit, offset int) []T {
