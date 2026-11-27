@@ -164,7 +164,11 @@ func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
 	if err := client.Do(ctx, client.B().Set().Key(rawTokenKey).Value("raw-player-id").ExSeconds(60).Build()).Error(); err != nil {
 		t.Fatalf("set raw token failed: %v", err)
 	}
-	defer client.Do(ctx, client.B().Del().Key(rawTokenKey).Build())
+	defer func() {
+		if err := client.Do(ctx, client.B().Del().Key(rawTokenKey).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %s: %v", rawTokenKey, err)
+		}
+	}()
 
 	rawSess, err := repo.FindByID(ctx, "raw-token")
 	if err != nil {

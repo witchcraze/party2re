@@ -105,7 +105,12 @@ func TestValkeyLimiter_Integration(t *testing.T) {
 	lim := ratelimit.NewValkeyLimiter(client, ratelimit.WithKeyPrefix("test:ratelimit:"))
 	ctx := context.Background()
 	testKey := "test-ip-1"
-	defer client.Do(ctx, client.B().Del().Key("test:ratelimit:"+testKey).Build())
+	cleanupKey := "test:ratelimit:" + testKey
+	defer func() {
+		if err := client.Do(ctx, client.B().Del().Key(cleanupKey).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %s: %v", cleanupKey, err)
+		}
+	}()
 
 	// 1. Initial hit
 	res, err := lim.Allow(ctx, testKey, 3, 2*time.Second)
