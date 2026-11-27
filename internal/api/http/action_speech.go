@@ -88,6 +88,7 @@ func (h *Handler) registerSpeech() {
 		return
 	}
 	whisperDef, _ := playercontext.GetAction("place_whisper")
+	whisperVerb := legacyVerb("place_whisper")
 	h.actionCommands["place_whisper"] = actionCommand{reject: speechRejection, prepare: func(raw json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
 		var p whisperParams
 		if err := decodeActionParams(raw, whisperDef.RequiredParams, &p); err != nil {
@@ -97,7 +98,7 @@ func (h *Handler) registerSpeech() {
 		if err != nil {
 			return nil, err
 		}
-		row := "＠ささやき>" + name
+		row := whisperVerb + ">" + name
 		// Legacy logs a whisper without a body as the bare command; a
 		// whitespace-only body still gets the character and length checks.
 		text, err := validation.ValidateLegacyComment(p.Text, maxSpeechLength)

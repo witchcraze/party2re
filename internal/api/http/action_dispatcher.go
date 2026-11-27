@@ -58,6 +58,41 @@ func withActionCommand[P any](id string, execute func(context.Context, string, P
 	}
 }
 
+// commandEcho is a successful command's place-log echo: the target display
+// (names and amounts, never IDs) and the facility's $npc_com reply. Results embed
+// it unexported, so it is never serialized.
+type commandEcho struct{ target, reply string }
+
+func (e commandEcho) placeEcho() commandEcho { return e }
+
+type echoResult interface{ placeEcho() commandEcho }
+
+// withEchoCommand registers a command whose success legacy logs as the actor's
+// ＠verb>target and the NPC reply (lib/system.cgi:660-676).
+func withEchoCommand[P any, R echoResult](id string, execute func(context.Context, string, P) (R, error), reject func(error) (int, ErrorDetail)) Option {
+	legacyVerb(id)
+	if execute == nil {
+		return withActionCommand[P](id, nil, reject)
+	}
+	return withActionCommand(id, func(ctx context.Context, actorID string, params P) (any, error) {
+		result, err := execute(ctx, actorID, params)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}, reject)
+}
+
+// legacyVerb renders the catalog verb of a command that writes the place log;
+// a missing verb fails registration.
+func legacyVerb(id string) string {
+	def, _ := actionDefinition(id)
+	if def.LegacyVerb == "" {
+		panic("logged action has no legacy verb: " + id)
+	}
+	return "＠" + def.LegacyVerb
+}
+
 func actionDefinition(id string) (playercontext.ActionDefinition, bool) {
 	for _, def := range playercontext.DefaultCatalog {
 		if def.ID == id {
@@ -240,6 +275,17 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			}
 			writeActionFailure(w, http.StatusInternalServerError, "EXECUTION_FAILED", "Action outcome could not be confirmed. Do not automatically retry.")
 			return
+		}
+		if echo, ok := result.(echoResult); ok && def.LegacyVerb != "" {
+			e, row := echo.placeEcho(), "＠"+def.LegacyVerb
+			if e.target != "" {
+				row += ">" + e.target
+			}
+			name := ""
+			if npc != nil {
+				name = npc.name
+			}
+			h.appendNPCLog(r.Context(), current, row, name, e.reply, "")
 		}
 		observation, refreshError := h.refreshActionContext(r.Context(), player.ID, char.ID)
 		writeJSON(w, http.StatusOK, actionSuccessResponse{Success: true, Result: result, Context: observation, ContextError: refreshError})

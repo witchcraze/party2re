@@ -51,8 +51,7 @@ each quest or casino room. Battle and quest-room logs stay with their own featur
 
 ### Writers
 
-Command echoes (the actor and NPC rows of facility commands) are open in [#1941](https://github.com/witchcraze/party2re/issues/1941).
-
+Each facility design lists its command echoes (the actor and NPC rows); facilities without them are open in [#1941](https://github.com/witchcraze/party2re/issues/1941).
 
 - **When rows are written**
   - Only a successful, effectful command writes.

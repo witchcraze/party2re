@@ -23,6 +23,13 @@ const (
 	npcNoWords        = "返事がない、ただのしかばねのようだ…"
 )
 
+var (
+	talkVerb     = legacyVerb("npc_talk")
+	inspectVerb  = legacyVerb("npc_inspect")
+	puffPuffVerb = legacyVerb("secretshop_puffpuff")
+	divinateVerb = legacyVerb("park_divinate")
+)
+
 type npcProfile struct {
 	name         string
 	words        []string
@@ -92,7 +99,7 @@ func (h *Handler) currentNPC(current playercontext.Result) (*npcProfile, corecha
 func (h *Handler) puffPuff(ctx context.Context, current playercontext.Result) (NPCResult, error) {
 	npc, char := h.currentNPC(current)
 	word := fmt.Sprintf(puffPuffDialogueFormat, char.Name)
-	h.appendNPCLog(ctx, current, "＠ぱふぱふ", npc.name, word, char.ID)
+	h.appendNPCLog(ctx, current, puffPuffVerb, npc.name, word, char.ID)
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
@@ -100,7 +107,7 @@ func (h *Handler) puffPuff(ctx context.Context, current playercontext.Result) (N
 func (h *Handler) divinate(ctx context.Context, current playercontext.Result) (NPCResult, error) {
 	npc, char := h.currentNPC(current)
 	word := divination(random.Intn, char.Name)
-	h.appendNPCLog(ctx, current, "＠うらない", npc.name, word, "")
+	h.appendNPCLog(ctx, current, divinateVerb, npc.name, word, "")
 	return NPCResult{NPCName: npc.name, Dialogue: word}, nil
 }
 
@@ -112,9 +119,9 @@ func (h *Handler) npcAct(ctx context.Context, current playercontext.Result, talk
 	if !talk && npc.silent {
 		return NPCResult{NPCName: npc.name, Private: true}, nil
 	}
-	command, words := "＠はなす", npc.words
+	command, words := talkVerb, npc.words
 	if !talk && len(npc.inspectWords) > 0 {
-		command, words = "＠しらべる>"+npc.name, npc.inspectWords
+		command, words = inspectVerb+">"+npc.name, npc.inspectWords
 	} else if !talk {
 		text := npcReplacer(h, char).Replace(npc.inspect)
 		if text == "" {

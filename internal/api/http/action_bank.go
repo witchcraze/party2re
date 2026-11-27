@@ -23,12 +23,16 @@ type bankWithdrawRequest struct {
 type BankDepositResult struct {
 	bank.DepositResult
 	Message string `json:"message"`
+	commandEcho
 }
 
 type BankWithdrawResult struct {
 	bank.WithdrawResult
 	Message string `json:"message"`
+	commandEcho
 }
+
+const bankDepositLimitReply = "これ以上お預かりできません"
 
 // WithBank configures the BankService and its deposit/withdraw Gateway commands.
 func WithBank(service BankService) Option {
@@ -41,27 +45,38 @@ func WithBank(service BankService) Option {
 
 func bankDepositCommand(service BankService) Option {
 	if service == nil {
-		return withActionCommand[bankDepositRequest]("bank_deposit", nil, nil)
+		return withEchoCommand[bankDepositRequest, BankDepositResult]("bank_deposit", nil, nil)
 	}
-	return withActionCommand("bank_deposit", func(ctx context.Context, actorID string, params bankDepositRequest) (any, error) {
+	return withEchoCommand("bank_deposit", func(ctx context.Context, actorID string, params bankDepositRequest) (BankDepositResult, error) {
+		target := fmt.Sprintf("%dG", params.Amount)
 		res, err := service.Deposit(ctx, actorID, params.Amount)
-		if err != nil {
-			return nil, err
+		if errors.Is(err, bank.ErrDepositLimitExceeded) {
+			// Legacy answers the limit with a logged $npc_com that changes nothing (bank.cgi:51-53).
+			state, err := service.GetState(ctx, actorID)
+			if err != nil {
+				return BankDepositResult{}, err
+			}
+			return BankDepositResult{bank.DepositResult{CharacterID: state.CharacterID, Money: state.Money, Deposit: state.Deposit}, bankDepositLimitReply, commandEcho{target, bankDepositLimitReply}}, nil
 		}
-		return BankDepositResult{res, fmt.Sprintf("%d Gお預かりいたしました", res.Amount)}, nil
+		if err != nil {
+			return BankDepositResult{}, err
+		}
+		reply := fmt.Sprintf("%d Gお預かりいたしました", res.Amount)
+		return BankDepositResult{res, reply, commandEcho{target, reply}}, nil
 	}, bankActionRejection)
 }
 
 func bankWithdrawCommand(service BankService) Option {
 	if service == nil {
-		return withActionCommand[bankWithdrawRequest]("bank_withdraw", nil, nil)
+		return withEchoCommand[bankWithdrawRequest, BankWithdrawResult]("bank_withdraw", nil, nil)
 	}
-	return withActionCommand("bank_withdraw", func(ctx context.Context, actorID string, params bankWithdrawRequest) (any, error) {
+	return withEchoCommand("bank_withdraw", func(ctx context.Context, actorID string, params bankWithdrawRequest) (BankWithdrawResult, error) {
 		res, err := service.Withdraw(ctx, actorID, params.Amount)
 		if err != nil {
-			return nil, err
+			return BankWithdrawResult{}, err
 		}
-		return BankWithdrawResult{res, fmt.Sprintf("%d Gお返しいたします", res.Amount)}, nil
+		reply := fmt.Sprintf("%d Gお返しいたします", res.Amount)
+		return BankWithdrawResult{res, reply, commandEcho{fmt.Sprintf("%dG", res.Amount), reply}}, nil
 	}, bankActionRejection)
 }
 
@@ -75,8 +90,6 @@ func bankActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "BANK_INSUFFICIENT_FUNDS", Message: "Insufficient wallet funds."}
 	case errors.Is(err, bank.ErrInsufficientBalance):
 		return http.StatusBadRequest, ErrorDetail{Code: "BANK_INSUFFICIENT_BALANCE", Message: "Insufficient bank balance."}
-	case errors.Is(err, bank.ErrDepositLimitExceeded):
-		return http.StatusBadRequest, ErrorDetail{Code: "BANK_DEPOSIT_LIMIT_EXCEEDED", Message: "Bank deposit limit exceeded."}
 	case errors.Is(err, corecharacter.ErrNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "CHARACTER_NOT_FOUND", Message: "Character not found."}
 	default:
