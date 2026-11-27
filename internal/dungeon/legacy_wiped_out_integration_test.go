@@ -203,12 +203,20 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 			if err := client.Do(cleanupCtx, client.B().Del().Key(key).Build()).Error(); err != nil {
 				t.Errorf("cleanup DEL %s: %v", key, err)
 			}
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM dungeon_expedition_history WHERE character_id IN (?, ?)", lead.ID, ally.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM dungeon_active_expeditions WHERE character_id IN (?, ?)", lead.ID, ally.ID)
-			_ = chars.Delete(cleanupCtx, lead.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", lead.PlayerID)
-			_ = chars.Delete(cleanupCtx, ally.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", ally.PlayerID)
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM dungeon_expedition_history WHERE character_id IN (?, ?)", lead.ID, ally.ID); err != nil {
+				t.Errorf("cleanup DELETE dungeon_expedition_history (%s, %s): %v", lead.ID, ally.ID, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM dungeon_active_expeditions WHERE character_id IN (?, ?)", lead.ID, ally.ID); err != nil {
+				t.Errorf("cleanup DELETE dungeon_active_expeditions (%s, %s): %v", lead.ID, ally.ID, err)
+			}
+			for _, c := range []corecharacter.Character{lead, ally} {
+				if err := chars.Delete(cleanupCtx, c.ID); err != nil {
+					t.Errorf("cleanup delete character %s: %v", c.ID, err)
+				}
+				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", c.PlayerID); err != nil {
+					t.Errorf("cleanup DELETE players %s: %v", c.PlayerID, err)
+				}
+			}
 		})
 
 		for _, c := range []*corecharacter.Character{&lead, &ally} {

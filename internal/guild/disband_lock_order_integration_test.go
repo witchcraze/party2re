@@ -54,7 +54,11 @@ func TestGuildDisband_LocksLeaderBeforeGuild_RealDB(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	defer func() { _, _ = holder.ExecContext(context.Background(), "ROLLBACK") }()
+	defer func() {
+		if _, err := holder.ExecContext(context.Background(), "ROLLBACK"); err != nil {
+			t.Errorf("cleanup ROLLBACK: %v", err)
+		}
+	}()
 	if _, err := holder.ExecContext(ctx, "SELECT id FROM characters WHERE id = ? FOR UPDATE", leader.ID); err != nil {
 		t.Fatal(err)
 	}

@@ -429,7 +429,9 @@ func TestMigrate_RealIsolatedDB(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = admin.ExecContext(context.Background(), "DROP DATABASE IF EXISTS `"+dbName+"`")
+		if _, err := admin.ExecContext(context.Background(), "DROP DATABASE IF EXISTS `"+dbName+"`"); err != nil {
+			t.Errorf("cleanup DROP DATABASE %s: %v", dbName, err)
+		}
 	})
 	if _, err := admin.ExecContext(ctx, "GRANT ALL PRIVILEGES ON `"+dbName+"`.* TO 'party2'@'%'"); err != nil {
 		t.Fatal(err)

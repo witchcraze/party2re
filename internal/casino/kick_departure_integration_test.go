@@ -203,7 +203,11 @@ func TestKickDepartureRecovery_PreservesLongerWaitAndSkipsExpired(t *testing.T) 
 	t.Run("preserves longer active wait", func(t *testing.T) {
 		f := departureFixture(t, ctx, db, raw)
 		leader, target := f.actors[0], f.actors[1]
-		t.Cleanup(func() { _ = realTimers.ReleaseLock(context.Background(), timer.CategoryActionWait, target) })
+		t.Cleanup(func() {
+			if err := realTimers.ReleaseLock(context.Background(), timer.CategoryActionWait, target); err != nil {
+				t.Errorf("cleanup ReleaseLock action_wait %s: %v", target, err)
+			}
+		})
 
 		state := f.state(t, ctx)
 		state.room.Status, state.room.Round = casino.RoomStatusWaiting, 0
@@ -234,7 +238,11 @@ func TestKickDepartureRecovery_PreservesLongerWaitAndSkipsExpired(t *testing.T) 
 	t.Run("expired wait deadline creates no timer on recovery", func(t *testing.T) {
 		f := departureFixture(t, ctx, db, raw)
 		leader, target := f.actors[0], f.actors[1]
-		t.Cleanup(func() { _ = realTimers.ReleaseLock(context.Background(), timer.CategoryActionWait, target) })
+		t.Cleanup(func() {
+			if err := realTimers.ReleaseLock(context.Background(), timer.CategoryActionWait, target); err != nil {
+				t.Errorf("cleanup ReleaseLock action_wait %s: %v", target, err)
+			}
+		})
 
 		state := f.state(t, ctx)
 		state.room.Status, state.room.Round = casino.RoomStatusWaiting, 0
@@ -287,7 +295,11 @@ func TestKickDepartureRecovery_RejectsStaleKickAfterNewAdmission(t *testing.T) {
 		}
 	}
 	leader, mover := source.actors[0], source.actors[1]
-	t.Cleanup(func() { _ = realTimers.ReleaseLock(context.Background(), timer.CategoryActionWait, mover) })
+	t.Cleanup(func() {
+		if err := realTimers.ReleaseLock(context.Background(), timer.CategoryActionWait, mover); err != nil {
+			t.Errorf("cleanup ReleaseLock action_wait %s: %v", mover, err)
+		}
+	})
 
 	pause := pausedDepartureCommit{DepartureRepository: source.accounts, staged: make(chan struct{}), resume: make(chan struct{})}
 	kicker := kickService(t, db, raw, pause, &kickWaitAdapter{timers: realTimers})
@@ -355,7 +367,11 @@ func TestKickDepartureRecovery_ConcurrentKickAndRejoin(t *testing.T) {
 		}
 	}
 	leader, peer := f.actors[0], f.actors[1]
-	t.Cleanup(func() { _ = realTimers.ReleaseLock(context.Background(), timer.CategoryActionWait, peer) })
+	t.Cleanup(func() {
+		if err := realTimers.ReleaseLock(context.Background(), timer.CategoryActionWait, peer); err != nil {
+			t.Errorf("cleanup ReleaseLock action_wait %s: %v", peer, err)
+		}
+	})
 
 	c1, c2 := openIsolatedTestValkey(t, 0), openIsolatedTestValkey(t, 0)
 	t.Cleanup(c1.Close)

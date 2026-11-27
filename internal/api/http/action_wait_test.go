@@ -123,8 +123,14 @@ func TestActionWaitWithRealValkey(t *testing.T) {
 	client := testutil.OpenValkey(t)
 	timers := timer.NewService(client)
 	ctx := context.Background()
-	_ = timers.ReleaseLock(ctx, timer.CategoryActionWait, "hero")
-	t.Cleanup(func() { _ = timers.ReleaseLock(context.Background(), timer.CategoryActionWait, "hero") })
+	if err := timers.ReleaseLock(ctx, timer.CategoryActionWait, "hero"); err != nil {
+		t.Fatalf("reset action_wait lock hero: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := timers.ReleaseLock(context.Background(), timer.CategoryActionWait, "hero"); err != nil {
+			t.Errorf("cleanup ReleaseLock action_wait hero: %v", err)
+		}
+	})
 	f, _, router := actionWaitRouterWith(t, "bank", timers, time.Second)
 
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"bank_deposit","params":{"amount":999999}}`, nil)

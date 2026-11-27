@@ -325,8 +325,12 @@ func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
 
 	// Clean up any lingering dungeon_once lock
 	t.Cleanup(func() {
-		_ = soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char1.ID)
-		_ = soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char2.ID)
+		cleanupCtx := context.Background()
+		for _, id := range []string{char1.ID, char2.ID} {
+			if err := soc.timer.ReleaseLock(cleanupCtx, timer.CategoryDungeonOnce, id); err != nil {
+				t.Errorf("cleanup ReleaseLock dungeon_once %s: %v", id, err)
+			}
+		}
 	})
 
 	// 1. Leader creates party on stage-26
@@ -458,9 +462,16 @@ func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
 	_ = core.charRepo.Update(ctx, char)
 
 	t.Cleanup(func() {
-		_ = soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, char.ID)
-		_ = core.charRepo.Delete(ctx, char.ID)
-		_ = core.playerRepo.Delete(ctx, char.PlayerID)
+		cleanupCtx := context.Background()
+		if err := soc.timer.ReleaseLock(cleanupCtx, timer.CategoryDungeonOnce, char.ID); err != nil {
+			t.Errorf("cleanup ReleaseLock dungeon_once %s: %v", char.ID, err)
+		}
+		if err := core.charRepo.Delete(cleanupCtx, char.ID); err != nil {
+			t.Errorf("cleanup delete character %s: %v", char.ID, err)
+		}
+		if err := core.playerRepo.Delete(cleanupCtx, char.PlayerID); err != nil {
+			t.Errorf("cleanup delete player %s: %v", char.PlayerID, err)
+		}
 	})
 
 	const attempts = 6

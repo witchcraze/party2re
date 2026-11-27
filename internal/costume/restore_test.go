@@ -15,7 +15,11 @@ func restoreContract(t *testing.T, repo costume.Repository) {
 	t.Helper()
 	ctx := context.Background()
 	char := "restore-" + id.New()
-	t.Cleanup(func() { _ = repo.ClearActiveCostume(ctx, char) })
+	t.Cleanup(func() {
+		if err := repo.ClearActiveCostume(ctx, char); err != nil {
+			t.Errorf("cleanup ClearActiveCostume %s: %v", char, err)
+		}
+	})
 	now := time.Now().UTC().Truncate(time.Second)
 	prev := costume.ActiveCostume{CharacterID: char, ItemNo: 44, ItemName: "prev", Icon: "a", RentedAt: now, ExpiresAt: now.Add(time.Hour)}
 	applied := costume.ActiveCostume{CharacterID: char, ItemNo: 58, ItemName: "book", Icon: "b", RentedAt: now, ExpiresAt: now.Add(time.Hour)}

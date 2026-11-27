@@ -40,9 +40,16 @@ func TestRescueServiceIntegration_ConcurrentRescueAddsOnePenalty(t *testing.T) {
 	schedService := scheduling.NewService(scheduling.NewValkeyRepository(valkeyClient))
 	timerSvc := timer.NewService(valkeyClient)
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), `DELETE FROM rescue_records WHERE character_id = ?`, char.ID)
-		_ = timerSvc.ReleaseLock(context.Background(), timer.CategorySleep, char.ID)
-		_, _ = schedService.CancelByActorID(context.Background(), char.ID)
+		cleanupCtx := context.Background()
+		if _, err := db.ExecContext(cleanupCtx, `DELETE FROM rescue_records WHERE character_id = ?`, char.ID); err != nil {
+			t.Errorf("cleanup DELETE rescue_records %s: %v", char.ID, err)
+		}
+		if err := timerSvc.ReleaseLock(cleanupCtx, timer.CategorySleep, char.ID); err != nil {
+			t.Errorf("cleanup ReleaseLock sleep %s: %v", char.ID, err)
+		}
+		if _, err := schedService.CancelByActorID(cleanupCtx, char.ID); err != nil {
+			t.Errorf("cleanup CancelByActorID %s: %v", char.ID, err)
+		}
 	})
 
 	if err := timerSvc.SetLock(ctx, timer.CategorySleep, char.ID, time.Hour); err != nil {

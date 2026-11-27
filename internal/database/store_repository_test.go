@@ -46,6 +46,11 @@ func TestStoreRepositorySaveAndFind(t *testing.T) {
 	if err := storeRepo.SaveStore(ctx, st); err != nil {
 		t.Fatalf("SaveStore() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := storeRepo.DeleteStore(context.Background(), st.ID); err != nil {
+			t.Errorf("cleanup DeleteStore %s: %v", st.ID, err)
+		}
+	})
 
 	// Find by character ID
 	found, err := storeRepo.GetStoreByCharacterID(ctx, char.ID)
@@ -92,6 +97,11 @@ func TestStoreRepositorySaveAndFind(t *testing.T) {
 	if err := storeRepo.SaveSale(ctx, sale); err != nil {
 		t.Fatalf("SaveSale() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := storeRepo.DeleteSale(context.Background(), sale.ID); err != nil {
+			t.Errorf("cleanup DeleteSale %s: %v", sale.ID, err)
+		}
+	})
 
 	sales, err := storeRepo.GetSalesByStoreID(ctx, st.ID)
 	if err != nil {
@@ -114,6 +124,11 @@ func TestStoreRepositorySaveAndFind(t *testing.T) {
 	if err := storeRepo.SaveInterior(ctx, interior); err != nil {
 		t.Fatalf("SaveInterior() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := storeRepo.DeleteInteriorsByStoreID(context.Background(), st.ID); err != nil {
+			t.Errorf("cleanup DeleteInteriorsByStoreID %s: %v", st.ID, err)
+		}
+	})
 
 	interiors, err := storeRepo.GetInteriorsByStoreID(ctx, st.ID)
 	if err != nil {
@@ -131,9 +146,4 @@ func TestStoreRepositorySaveAndFind(t *testing.T) {
 	if err := storeRepo.UpdateHomeWallpaper(ctx, char.ID, "goods.gif"); err != nil {
 		t.Fatalf("UpdateHomeWallpaper() error = %v", err)
 	}
-
-	// Cleanup
-	_ = storeRepo.DeleteSale(ctx, sale.ID)
-	_ = storeRepo.DeleteInteriorsByStoreID(ctx, st.ID)
-	_ = storeRepo.DeleteStore(ctx, st.ID)
 }

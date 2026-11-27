@@ -83,15 +83,23 @@ func newMutationLockFixture(t *testing.T) *mutationLockFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		ctx := context.Background()
-		_ = repo.DisbandGuild(ctx, g.ID)
+		cleanupCtx := context.Background()
+		if err := repo.DisbandGuild(cleanupCtx, g.ID); err != nil && !errors.Is(err, guild.ErrGuildNotFound) {
+			t.Errorf("cleanup DisbandGuild %s: %v", g.ID, err)
+		}
 		for _, c := range []corecharacter.Character{f.active, leader} {
 			if c.ID == "" {
 				continue
 			}
-			_, _ = f.db.Exec("DELETE FROM character_letters WHERE recipient_character_id = ? OR sender_character_id = ?", c.ID, c.ID)
-			_ = chars.Delete(ctx, c.ID)
-			_ = players.Delete(ctx, c.PlayerID)
+			if _, err := f.db.ExecContext(cleanupCtx, "DELETE FROM character_letters WHERE recipient_character_id = ? OR sender_character_id = ?", c.ID, c.ID); err != nil {
+				t.Errorf("cleanup DELETE character_letters %s: %v", c.ID, err)
+			}
+			if err := chars.Delete(cleanupCtx, c.ID); err != nil {
+				t.Errorf("cleanup delete character %s: %v", c.ID, err)
+			}
+			if err := players.Delete(cleanupCtx, c.PlayerID); err != nil {
+				t.Errorf("cleanup delete player %s: %v", c.PlayerID, err)
+			}
 		}
 	})
 	f.active, err = database.CreateTestCharacter(context.Background(), db, "MutAct_"+id.New()[:8])

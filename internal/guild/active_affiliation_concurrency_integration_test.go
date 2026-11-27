@@ -51,15 +51,24 @@ func (f *activeAffiliationFixture) createCharacter(t *testing.T, prefix string, 
 	}
 	t.Cleanup(func() {
 		cleanupCtx := context.Background()
-		_, _ = f.db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE character_id = ?", char.ID)
-		_, _ = f.db.ExecContext(cleanupCtx, "DELETE FROM character_letters WHERE recipient_character_id = ? OR sender_character_id = ?", char.ID, char.ID)
-		chars, _ := database.NewCharacterRepository(f.db)
-		if chars != nil {
-			_ = chars.Delete(cleanupCtx, char.ID)
+		if _, err := f.db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE character_id = ?", char.ID); err != nil {
+			t.Errorf("cleanup DELETE guild_members %s: %v", char.ID, err)
 		}
-		players, _ := database.NewPlayerRepository(f.db)
-		if players != nil {
-			_ = players.Delete(cleanupCtx, char.PlayerID)
+		if _, err := f.db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE leader_character_id = ?", char.ID); err != nil {
+			t.Errorf("cleanup DELETE guilds leader %s: %v", char.ID, err)
+		}
+		if _, err := f.db.ExecContext(cleanupCtx, "DELETE FROM character_letters WHERE recipient_character_id = ? OR sender_character_id = ?", char.ID, char.ID); err != nil {
+			t.Errorf("cleanup DELETE character_letters %s: %v", char.ID, err)
+		}
+		if chars, err := database.NewCharacterRepository(f.db); err != nil {
+			t.Errorf("cleanup NewCharacterRepository: %v", err)
+		} else if err := chars.Delete(cleanupCtx, char.ID); err != nil {
+			t.Errorf("cleanup delete character %s: %v", char.ID, err)
+		}
+		if players, err := database.NewPlayerRepository(f.db); err != nil {
+			t.Errorf("cleanup NewPlayerRepository: %v", err)
+		} else if err := players.Delete(cleanupCtx, char.PlayerID); err != nil {
+			t.Errorf("cleanup delete player %s: %v", char.PlayerID, err)
 		}
 	})
 	return char
