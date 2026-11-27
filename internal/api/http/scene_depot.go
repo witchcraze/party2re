@@ -3,7 +3,9 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -71,11 +73,23 @@ var depotFacility = facility{
 	present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
 		return scenePresentation{next: data.(DepotSceneData).Page.Next}
 	},
-	// Lines with capacities ($max_depot) are omitted until those facts are wired.
-	npc: &npcProfile{name: "@ニキータ", words: []string{
-		"ここは預かり所だけど、何か用かい？", "転職回数が増えるごとに預けられる個数も増えていくぜ",
+	npc: &npcProfile{name: "@ニキータ", wordsOf: depotWords},
+}
+
+// depotWords names the speaker's current capacity (depot.cgi @words).
+func depotWords(h *Handler, ctx context.Context, char corecharacter.Character) ([]string, error) {
+	if h.depot == nil {
+		return nil, nil
+	}
+	dep, err := h.depot.GetDepot(ctx, char.ID)
+	if err != nil {
+		return nil, err
+	}
+	return []string{
+		"ここは預かり所だけど、何か用かい？", fmt.Sprintf("{name}は、最大%d個まで預けることができるぜ", dep.Capacity),
+		"転職回数が増えるごとに預けられる個数も増えていくぜ",
 		"＠おくる時は、送るアイテムと相手の名前を教えてくれな", "＠せいとんすると、武器、防具、道具の順に整頓できるぜ",
 		"預かり所がまんぱんだと、相手からのアイテムが受け取れないぜ", "預かり所がまんぱんだと、クエストでの宝物を手に入れることができないぜ",
 		"ここで売るのも専門店で売るのも売値は変わらないぜ",
-	}},
+	}, nil
 }

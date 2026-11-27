@@ -160,7 +160,8 @@ func (s *Service) getOrCreateGemBoxForUpdate(ctx context.Context, char corechara
 	return box, nil
 }
 
-// SortGemBox sorts the gems in the character's gem box by catalog index ascending (party2: seiton).
+// SortGemBox sorts the gems in the character's gem box by catalog index, which
+// is the legacy gem number every stored kind-4 row sorts by (gem_store.cgi seiton).
 func (s *Service) SortGemBox(ctx context.Context, characterID string) (GemBox, error) {
 	characterID = strings.TrimSpace(characterID)
 	if characterID == "" {

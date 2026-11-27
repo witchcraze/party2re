@@ -96,7 +96,7 @@ graph TD
 - [`fleamarket.md`](fleamarket.md) — Player-to-player free market stalls (server-wide 120 listing ceiling, direct depot transfer).
 - [`bank.md`](bank.md) — Gold savings deposits and withdrawals with 999,999G wallet clamp.
 - [`black-market.md`](black-market.md) — Rare item sacrifice for Rare/U-Rare points and Depot-delivered prizes.
-- [`gemstore.md`](gemstore.md) — Dedicated gem box storage, 55+ synthesis formulas, and Depot orb appraisal.
+- [`gemstore.md`](gemstore.md) — Gem box capacity, sales tiers, synthesis and appraisal departures from legacy.
 - [`medal.md`](medal.md) — Medal castle: Small Medal exchange and clean-room names.
 
 ### 5. Living, Towns & Crafting

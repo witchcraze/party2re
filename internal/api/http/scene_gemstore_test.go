@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/gemstore"
@@ -31,7 +32,7 @@ func (s *gemStoreSceneService) GetGemBox(_ context.Context, actor string) (gemst
 
 func (s *gemStoreSceneService) GetCatalog(jobLevel int) []gemstore.Gem {
 	s.catalogLevel = jobLevel
-	return []gemstore.Gem{{ID: "gem_atk_1", Price: 60}}
+	return []gemstore.Gem{{ID: "gem_atk_1", Name: "攻撃の宝珠Ⅰ", Price: 60}}
 }
 
 func (s *gemStoreSceneService) GetRecipes() []gemstore.Recipe {
@@ -124,5 +125,13 @@ func TestGemStoreSceneUnconfigured(t *testing.T) {
 	_, store, router := gemStoreSceneRouter(t, nil, "gemstore")
 	if status, _ := navigationGET(t, router); status != http.StatusNotImplemented || store.writes != 0 {
 		t.Fatalf("missing service: %d", status)
+	}
+}
+
+func TestGemStoreWordsRecommendAGemOnSaleAtTheActorsTier(t *testing.T) {
+	service := &gemStoreSceneService{}
+	words, err := gemStoreWords(&Handler{gemstore: service}, context.Background(), corecharacter.Character{JobLevel: 30})
+	if err != nil || len(words) != 5 || words[4] != "{name}さんには 攻撃の宝珠Ⅰ が似合いそうですね" || service.catalogLevel != 30 {
+		t.Fatalf("words %q (catalog level %d): %v", words, service.catalogLevel, err)
 	}
 }

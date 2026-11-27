@@ -336,3 +336,19 @@ func TestDepotSceneRequiredReadOwnershipAndContext(t *testing.T) {
 		t.Fatalf("foreign owned snapshot read Depot: %d", status)
 	}
 }
+
+type depotWordsService struct{ DepotService }
+
+func (depotWordsService) GetDepot(_ context.Context, actor string) (depot.Depot, error) {
+	if actor != "hero" {
+		return depot.Depot{}, errors.New("wrong depot owner")
+	}
+	return depot.Depot{CharacterID: actor, Capacity: 65}, nil
+}
+
+func TestDepotWordsNameTheSpeakersCapacity(t *testing.T) {
+	words, err := depotWords(&Handler{depot: depotWordsService{}}, context.Background(), corecharacter.Character{ID: "hero"})
+	if err != nil || len(words) != 8 || words[1] != "{name}は、最大65個まで預けることができるぜ" {
+		t.Fatalf("words %q: %v", words, err)
+	}
+}

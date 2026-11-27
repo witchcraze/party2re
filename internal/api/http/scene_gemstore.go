@@ -3,6 +3,8 @@ package http
 import (
 	"context"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/gemstore"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -34,9 +36,20 @@ func (h *Handler) gemStoreSceneData(ctx context.Context, r playercontext.Result)
 var gemStoreFacility = facility{
 	title: "宝石店", commands: []string{"gemstore_buy", "gemstore_sell", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "gemstore_sort"},
 	read: (*Handler).gemStoreSceneData, placeLog: true,
-	// Lines with item recommendations ($gems) are omitted until those facts are wired.
-	npc: &npcProfile{name: "@ジェマ", words: []string{
+	npc: &npcProfile{name: "@ジェマ", wordsOf: gemStoreWords},
+}
+
+// gemStoreWords recommends a random gem on sale at the speaker's tier (gem_store.cgi @words).
+func gemStoreWords(h *Handler, _ context.Context, char corecharacter.Character) ([]string, error) {
+	words := []string{
 		"ここは宝石店です。色んな宝石を売っています", "どんな宝石がお好きですか？",
 		"アイテムや宝石を使って、新しい宝石に加工することもできますよ", "宝石ごとに不思議な力があるんです",
-	}},
+	}
+	if h.gemstore == nil {
+		return words, nil
+	}
+	if sales := h.gemstore.GetCatalog(char.JobLevel); len(sales) > 0 {
+		words = append(words, "{name}さんには "+sales[random.Intn(len(sales))].Name+" が似合いそうですね")
+	}
+	return words, nil
 }
