@@ -468,6 +468,11 @@ func TestSynthesize_RejectsShortfallAcrossDuplicateIngredients(t *testing.T) {
 	if !errors.Is(err, ErrInsufficientMaterials) {
 		t.Fatalf("expected ErrInsufficientMaterials, got %v", err)
 	}
+	// The refusal names the ingredients for the logged reply (alchemy.cgi:126).
+	var refused *RefusalError
+	if !errors.As(err, &refused) || len(refused.IngredientNames) != len(recipe.Ingredients) {
+		t.Fatalf("refusal names: %v", err)
+	}
 
 	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
 	if qty := updatedDepot.Quantity("weapon-06"); qty != 3 {

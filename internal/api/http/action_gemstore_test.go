@@ -50,13 +50,13 @@ type gemStoreGatewayFixture struct {
 func (f *gemStoreGatewayFixture) BuyGem(ctx context.Context, actor, gemID string) (gemstore.BuyResult, error) {
 	f.inputs = []string{gemID}
 	_, err := f.execute(ctx, actor, 0)
-	return gemstore.BuyResult{Character: f.char, GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Gem: gemstore.Gem{ID: "gem_atk_1"}, Cost: 300}, err
+	return gemstore.BuyResult{Character: f.char, GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Gem: gemstore.Gem{ID: "gem_atk_1", Name: "攻撃の天珠Ⅰ"}, Cost: 300}, err
 }
 
 func (f *gemStoreGatewayFixture) SendGem(ctx context.Context, actor, recipientID, itemID string) (gemstore.SendResult, error) {
 	f.inputs = []string{recipientID, itemID}
 	_, err := f.execute(ctx, actor, 0)
-	return gemstore.SendResult{SenderGemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Gem: gemstore.Gem{ID: "gem_atk_1"},
+	return gemstore.SendResult{SenderGemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Gem: gemstore.Gem{ID: "gem_atk_1", Name: "攻撃の天珠Ⅰ"},
 		SenderCharacter:    corecharacter.Character{ID: actor, PlayerID: "sender-player", Money: 12345},
 		RecipientCharacter: corecharacter.Character{ID: recipientID, Name: "Friend", PlayerID: "private-player", Money: 987654, Deposit: 555777},
 		RecipientGemBox:    gemstore.GemBox{CharacterID: recipientID, Capacity: 99, Items: []coreitem.Instance{{ID: "private-gem", DefinitionID: "gem_atk_9"}}}}, err
@@ -65,19 +65,19 @@ func (f *gemStoreGatewayFixture) SendGem(ctx context.Context, actor, recipientID
 func (f *gemStoreGatewayFixture) SynthesizeGem(ctx context.Context, actor, recipeID string) (gemstore.SynthesizeResult, error) {
 	f.inputs = []string{recipeID}
 	_, err := f.execute(ctx, actor, 0)
-	return gemstore.SynthesizeResult{GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, CreatedGem: gemstore.Gem{ID: "gem_atk_2"}, Recipe: gemstore.Recipe{ID: recipeID}}, err
+	return gemstore.SynthesizeResult{GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, CreatedGem: gemstore.Gem{ID: "gem_atk_2"}, Recipe: gemstore.Recipe{ID: recipeID, ResultName: "攻撃の天珠Ⅱ", Material1Name: "攻撃の天珠Ⅰ", Material2Name: "天馬のたづな"}}, err
 }
 
 func (f *gemStoreGatewayFixture) AppraiseItem(ctx context.Context, actor, itemID string) (gemstore.AppraiseResult, error) {
 	f.inputs = []string{itemID}
 	_, err := f.execute(ctx, actor, 0)
-	return gemstore.AppraiseResult{GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Character: f.char, IsGem: true, IdentifiedName: "攻撃の天珠Ⅰ"}, err
+	return gemstore.AppraiseResult{GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Character: f.char, IsGem: true, IdentifiedName: "攻撃の天珠Ⅰ", ItemName: "宝珠"}, err
 }
 
 func (f *gemStoreGatewayFixture) SellGem(ctx context.Context, actor, itemID string) (gemstore.SellResult, error) {
 	f.itemID = itemID
 	_, err := f.execute(ctx, actor, 0)
-	return gemstore.SellResult{Character: f.char, GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Gem: gemstore.Gem{ID: "gem_atk_1"}, Payout: 250}, err
+	return gemstore.SellResult{Character: f.char, GemBox: gemstore.GemBox{CharacterID: actor, Capacity: 5}, Gem: gemstore.Gem{ID: "gem_atk_1", Name: "攻撃の天珠Ⅰ"}, Payout: 250}, err
 }
 
 func (f *gemStoreGatewayFixture) SortGemBox(ctx context.Context, actor string) (gemstore.GemBox, error) {
@@ -128,16 +128,12 @@ func TestGemStoreGatewayMissingMaterialsNames(t *testing.T) {
 	f.executionErr = fmt.Errorf("wrapped: %w", &gemstore.InsufficientMaterialsError{Recipe: gemstore.Recipe{
 		Material1Name: "攻撃の天珠Ⅱ", Material2Name: "天馬のたづな",
 	}})
-	status, got := gatewayRequest(t, f.router(t, timer.NewService(nil)), "hero", "session", "application/json",
+	log := &fakePlaceLog{}
+	status, got := gatewayRequest(t, f.router(t, timer.NewService(nil), WithPlaceLog(log)), "hero", "session", "application/json",
 		saleGatewayBody("gemstore_synthesize", `{"recipe_id":"recipe_burst_sky"}`), nil)
-	if status != 400 {
-		t.Fatalf("status=%d: %s", status, got)
-	}
-	assertGatewayError(t, got, "GEMSTORE_INSUFFICIENT_MATERIALS")
-	for _, name := range []string{"攻撃の天珠Ⅱ", "天馬のたづな"} {
-		if !strings.Contains(string(got["error"]), name) {
-			t.Fatalf("missing material name %q: %s", name, got)
-		}
+	// Legacy answers missing materials with a logged reply that changes nothing (gem_store.cgi:312-315).
+	if status != 200 || len(log.rows) != 2 || log.rows[0].Text != "攻撃の天珠Ⅱ と 天馬のたづな をお持ちでないようですね" || log.rows[1].Text != "＠かこう>攻撃の天珠Ⅱ×天馬のたづな" {
+		t.Fatalf("status=%d %s rows %+v", status, got, log.rows)
 	}
 }
 
@@ -191,7 +187,7 @@ func TestGemStoreGatewayOutcomes(t *testing.T) {
 								t.Fatal(err)
 							}
 							keys := slices.Sorted(maps.Keys(fields))
-							if !slices.Equal(keys, []string{"gem", "gem_box", "recipient_character_id", "recipient_character_name"}) || result.Recipient != "friend" || result.RecipientNm != "Friend" {
+							if !slices.Equal(keys, []string{"gem", "gem_box", "message", "recipient_character_id", "recipient_character_name"}) || result.Recipient != "friend" || result.RecipientNm != "Friend" {
 								t.Fatalf("send result fields: %s", got["result"])
 							}
 							for _, private := range []string{"private-player", "sender-player", "987654", "555777", "12345", "private-gem", "PlayerID"} {
@@ -238,7 +234,6 @@ func TestGemStoreGatewayErrors(t *testing.T) {
 		{gemstore.ErrItemNotOwned, "GEMSTORE_ITEM_NOT_OWNED", 400},
 		{gemstore.ErrGemNotForSale, "GEMSTORE_GEM_NOT_FOR_SALE", 400},
 		{gemstore.ErrInsufficientFunds, "GEMSTORE_INSUFFICIENT_FUNDS", 400},
-		{gemstore.ErrInsufficientMaterials, "GEMSTORE_INSUFFICIENT_MATERIALS", 400},
 		{gemstore.ErrCannotSendToSelf, "GEMSTORE_SELF_TRANSFER", 400},
 		{gemstore.ErrGemBoxFull, "GEMSTORE_BOX_FULL", 400},
 		{gemstore.ErrRecipientGemBoxFull, "GEMSTORE_RECIPIENT_BOX_FULL", 400},

@@ -131,4 +131,5 @@ type AppraiseResult struct {
 	IsGem          bool                    `json:"is_gem"`
 	IdentifiedGem  *Gem                    `json:"identified_gem,omitempty"`
 	IdentifiedName string                  `json:"identified_name"`
+	ItemName       string                  `json:"item_name"` // the appraised item
 }

@@ -76,6 +76,8 @@ func (s *shopCommandService) Synthesize(_ context.Context, _ string, target stri
 	return shop.SynthesisResult{Recipe: shop.SynthesisRecipe{ProductName: "ルビーのうでわ"}, Success: true, UsedHiyaku: true}, s.err
 }
 
+var nbsp12 = strings.Repeat("\u00a0", 12)
+
 func TestShopBatchPurchaseAndSynthesisCommands(t *testing.T) {
 	stub := &shopCommandService{}
 	f, store, router := shopSceneRouter(t, func(h *Handler) {
@@ -86,7 +88,7 @@ func TestShopBatchPurchaseAndSynthesisCommands(t *testing.T) {
 	for _, tc := range []struct {
 		scene, body, message string
 	}{
-		{"shop_item", `{"action":"shop_batch_purchase","params":{"shop_type":"item","items":[{"item_definition_id":"item-001","quantity":2}]}}`, "Heroニャンの預かり所の方に投げましたニャ！"},
+		{"shop_item", `{"action":"shop_batch_purchase","params":{"shop_type":"item","items":[{"item_definition_id":"item-001","quantity":2}]}}`, "Heroニャンの預かり所の方に投げましたニャ！\n-------購入リスト-------\n" + nbsp12 + "薬草\n" + nbsp12 + "薬草\n---------------------\n" + nbsp12 + "計：40 G"},
 		{"shop_accessory", `{"action":"shop_synthesize","params":{"recipe_target":"ruby"}}`, "合成の秘薬を使って、ルビーのうでわ が完成したわ。預り所にあるはずよ"},
 	} {
 		store.selection = playercontext.Selection{Destination: tc.scene}
@@ -103,6 +105,23 @@ func TestShopBatchPurchaseAndSynthesisCommands(t *testing.T) {
 	}
 	if len(stub.batch) != 1 || stub.batch[0] != (shop.BatchPurchaseItemRequest{ItemDefinitionID: "item-001", Quantity: 2}) || stub.synthesize != "ruby" {
 		t.Fatalf("inputs: %+v %q", stub.batch, stub.synthesize)
+	}
+}
+
+// Missing materials are a logged reply that changes nothing (accessory.cgi:204-206).
+func TestShopSynthesisMissingMaterialsIsALoggedReply(t *testing.T) {
+	log := &fakePlaceLog{}
+	stub := &shopCommandService{err: shop.ErrMaterialsNotFound}
+	_, store, router := shopSceneRouter(t, func(h *Handler) {
+		stub.ShopService = h.shops
+		h.shops = stub
+	}, WithPlaceLog(log))
+	store.selection = playercontext.Selection{Destination: "shop_accessory"}
+	recipe := shop.AllSynthesisRecipes()[0]
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_synthesize","params":{"recipe_target":"`+recipe.Target+`"}}`, nil)
+	want := recipe.Material1Name + " と " + recipe.Material2Name + " が預り所にないみたいよ"
+	if status != 200 || len(log.rows) != 2 || log.rows[0].Text != want || log.rows[1].Text != "＠ごうせい>"+recipe.Target {
+		t.Fatalf("%d %s rows %+v", status, raw["error"], log.rows)
 	}
 }
 

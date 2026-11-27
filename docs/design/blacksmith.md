@@ -145,12 +145,10 @@ The shared `system.cgi` actions, including `はなす` and NPC `しらべる`, f
 [navigation reconciliation](../architecture/client-agent-api.md#scoped-legacy-navigation-reconciliation).
 
 Transport migration preserves existing service behavior, including equipped-item
-naming, leading/trailing whitespace trimming and ASCII `@` rejection. Legacy
-differs on these points, uses a wall-clock action cooldown and venue comment/NPC
-logs (`system.cgi:639–680`), and includes weapon names in storage dialogue.
-The Gateway applies the [action wait](../architecture/place-log.md#action-wait);
-the commands' log rows (#1941) and the naming differences (#2060) remain open,
-so there is no full gameplay-parity claim.
+naming, leading/trailing whitespace trimming and ASCII `@` rejection; legacy
+differs on these points (#2060). Each success logs the legacy `＠verb>target`
+row and the smith's reply. Withdrawing while a weapon is held is a logged reply
+that changes nothing (`blacksmith.cgi:206–209`).
 
 `WithdrawWeapon` checks only the main-hand slot and does not reject a full
 inventory, matching the legacy equipped-weapon check (`blacksmith.cgi:192–237`).

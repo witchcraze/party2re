@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -36,6 +37,7 @@ type shopPurchaseResponse struct {
 	TotalCost          int    `json:"total_cost"`
 	TransferredToDepot bool   `json:"transferred_to_depot"`
 	NPCMessage         string `json:"npc_message"`
+	commandEcho
 }
 
 type shopSaleResponse struct {
@@ -43,17 +45,20 @@ type shopSaleResponse struct {
 	Quantity       int    `json:"quantity"`
 	TotalPayout    int    `json:"total_payout"`
 	NPCMessage     string `json:"npc_message"`
+	commandEcho
 }
 
 type shopBatchPurchaseResponse struct {
 	TotalPrice     int    `json:"total_price"`
 	PurchasedCount int    `json:"purchased_count"`
 	NPCMessage     string `json:"npc_message"`
+	commandEcho
 }
 
 type shopSynthesizeResponse struct {
 	shop.SynthesisResult
 	NPCMessage string `json:"npc_message"`
+	commandEcho
 }
 
 // shopLines are each shop keeper's purchase (hand/depot) and sale lines.
@@ -94,19 +99,19 @@ var shopLines = map[shop.ShopType]struct {
 // shopCommands connects the four ordinary shops to the Action Gateway.
 func shopCommands() Option {
 	return func(h *Handler) {
-		withActionCommand("shop_purchase", func(ctx context.Context, actor string, p shopPurchaseRequest) (any, error) {
+		withEchoCommand("shop_purchase", func(ctx context.Context, actor string, p shopPurchaseRequest) (shopPurchaseResponse, error) {
 			lines, ok := shopLines[p.ShopType]
 			if !ok {
-				return nil, shop.ErrInvalidShopType
+				return shopPurchaseResponse{}, shop.ErrInvalidShopType
 			}
 			// Read presentation inputs before mutation to preserve a known outcome.
 			char, err := h.characters.Get(ctx, actor)
 			if err != nil {
-				return nil, err
+				return shopPurchaseResponse{}, err
 			}
 			catalog, err := h.shops.GetCatalog(ctx, p.ShopType, actor)
 			if err != nil {
-				return nil, err
+				return shopPurchaseResponse{}, err
 			}
 			name := p.ItemDefinitionID
 			for _, it := range catalog.Items {
@@ -116,51 +121,69 @@ func shopCommands() Option {
 			}
 			res, err := h.shops.PurchaseInShop(ctx, actor, p.ShopType, p.ItemDefinitionID, p.Quantity)
 			if err != nil {
-				return nil, err
+				return shopPurchaseResponse{}, err
 			}
 			message := lines.hand(name, char.Name)
 			if res.TransferredToDepot {
 				message = lines.depot(name, char.Name)
 			}
 			return shopPurchaseResponse{ItemDefinitionID: res.ItemInstance.DefinitionID, Quantity: res.ItemInstance.Quantity,
-				TotalCost: res.TotalPrice, TransferredToDepot: res.TransferredToDepot, NPCMessage: message}, nil
+				TotalCost: res.TotalPrice, TransferredToDepot: res.TransferredToDepot, NPCMessage: message, commandEcho: commandEcho{target: name, reply: message}}, nil
 		}, shopActionRejection)(h)
-		withActionCommand("shop_sell", func(ctx context.Context, actor string, p shopSellRequest) (any, error) {
+		withEchoCommand("shop_sell", func(ctx context.Context, actor string, p shopSellRequest) (shopSaleResponse, error) {
 			lines, ok := shopLines[p.ShopType]
 			if !ok {
-				return nil, shop.ErrInvalidShopType
+				return shopSaleResponse{}, shop.ErrInvalidShopType
 			}
 			offer, err := h.shops.GetSaleOffer(ctx, p.ShopType, actor)
 			if err != nil {
-				return nil, err
+				return shopSaleResponse{}, err
 			}
 			res, err := h.shops.Sell(ctx, actor, p.ShopType, p.ItemInstanceID, 1)
 			if err != nil {
-				return nil, err
+				return shopSaleResponse{}, err
 			}
 			name := res.SoldInstance.DefinitionID
 			if offer != nil && offer.ItemInstanceID == p.ItemInstanceID {
 				name = offer.Name
 			}
+			message := lines.sale(name, res.TotalPayout)
 			return shopSaleResponse{ItemInstanceID: res.SoldInstance.ID, Quantity: res.SoldInstance.Quantity,
-				TotalPayout: res.TotalPayout, NPCMessage: lines.sale(name, res.TotalPayout)}, nil
+				TotalPayout: res.TotalPayout, NPCMessage: message, commandEcho: commandEcho{target: name, reply: message}}, nil
 		}, shopActionRejection)(h)
-		withActionCommand("shop_batch_purchase", func(ctx context.Context, actor string, p shopBatchPurchaseRequest) (any, error) {
+		withEchoCommand("shop_batch_purchase", func(ctx context.Context, actor string, p shopBatchPurchaseRequest) (shopBatchPurchaseResponse, error) {
 			char, err := h.characters.Get(ctx, actor)
 			if err != nil {
-				return nil, err
+				return shopBatchPurchaseResponse{}, err
+			}
+			catalog, err := h.shops.GetCatalog(ctx, p.ShopType, actor)
+			if err != nil {
+				return shopBatchPurchaseResponse{}, err
 			}
 			res, err := h.shops.BatchPurchase(ctx, actor, p.ShopType, p.Items)
 			if err != nil {
-				return nil, err
+				return shopBatchPurchaseResponse{}, err
 			}
-			return shopBatchPurchaseResponse{TotalPrice: res.TotalPrice, PurchasedCount: len(res.Purchased),
-				NPCMessage: batchPurchaseNPCMessage(p.ShopType, char.Name)}, nil
+			names := make(map[string]string, len(catalog.Items))
+			for _, it := range catalog.Items {
+				names[it.ID] = it.Name
+			}
+			message, echo := batchPurchaseReply(batchPurchaseNPCMessage(p.ShopType, char.Name), p.Items, names, res.TotalPrice)
+			return shopBatchPurchaseResponse{TotalPrice: res.TotalPrice, PurchasedCount: len(res.Purchased), NPCMessage: message, commandEcho: echo}, nil
 		}, shopActionRejection)(h)
-		withActionCommand("shop_synthesize", func(ctx context.Context, actor string, p shopSynthesizeRequest) (any, error) {
+		withEchoCommand("shop_synthesize", func(ctx context.Context, actor string, p shopSynthesizeRequest) (shopSynthesizeResponse, error) {
 			res, err := h.shops.Synthesize(ctx, actor, p.RecipeTarget)
+			if errors.Is(err, shop.ErrMaterialsNotFound) {
+				// Missing materials are a logged $npc_com that changes nothing (accessory.cgi:204-206).
+				for _, recipe := range shop.AllSynthesisRecipes() {
+					if recipe.Target == p.RecipeTarget {
+						message := fmt.Sprintf("%s と %s が預り所にないみたいよ", recipe.Material1Name, recipe.Material2Name)
+						return shopSynthesizeResponse{SynthesisResult: shop.SynthesisResult{Recipe: recipe}, NPCMessage: message, commandEcho: commandEcho{target: p.RecipeTarget, reply: message}}, nil
+					}
+				}
+			}
 			if err != nil {
-				return nil, err
+				return shopSynthesizeResponse{}, err
 			}
 			message := "あー…。失敗しちゃったみたいね。ドンマイ！"
 			if res.Success {
@@ -169,9 +192,25 @@ func shopCommands() Option {
 					message = "合成の秘薬を使って、" + message
 				}
 			}
-			return shopSynthesizeResponse{SynthesisResult: res, NPCMessage: message}, nil
+			return shopSynthesizeResponse{SynthesisResult: res, NPCMessage: message, commandEcho: commandEcho{target: p.RecipeTarget, reply: message}}, nil
 		}, shopActionRejection)(h)
 	}
+}
+
+// batchPurchaseReply appends ＠まとめてかう's purchase list and total
+// (weapon.cgi:144-153); <br> becomes a line break and &nbsp; a no-break space.
+func batchPurchaseReply(first string, items []shop.BatchPurchaseItemRequest, names map[string]string, total int) (string, commandEcho) {
+	indent := strings.Repeat("\u00a0", 12)
+	var target, reply strings.Builder
+	reply.WriteString(first + "\n-------購入リスト-------\n")
+	for _, it := range items {
+		target.WriteString(names[it.ItemDefinitionID] + "<>")
+		for range it.Quantity { // legacy delivers and lists one item per line
+			reply.WriteString(indent + names[it.ItemDefinitionID] + "\n")
+		}
+	}
+	fmt.Fprintf(&reply, "---------------------\n%s計：%d G", indent, total)
+	return reply.String(), commandEcho{target: target.String(), reply: reply.String()}
 }
 
 func batchPurchaseNPCMessage(shopType shop.ShopType, characterName string) string {

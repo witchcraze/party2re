@@ -14,6 +14,32 @@ import (
 type GemStoreAppraiseResult struct {
 	gemstore.AppraiseResult
 	Message string `json:"message"`
+	commandEcho
+}
+
+// The other Gem Store results add the clerk's reply (gem_store.cgi:150,191,238,279,303).
+type GemStoreBuyResult struct {
+	gemstore.BuyResult
+	Message string `json:"message"`
+	commandEcho
+}
+
+type GemStoreSellResult struct {
+	gemstore.SellResult
+	Message string `json:"message"`
+	commandEcho
+}
+
+type GemStoreSynthesizeResult struct {
+	gemstore.SynthesizeResult
+	Message string `json:"message"`
+	commandEcho
+}
+
+type gemStoreSortResponse struct {
+	GemBox  gemstore.GemBox `json:"gem_box"`
+	Message string          `json:"message"`
+	commandEcho
 }
 
 func gemStoreAppraiseReply(res gemstore.AppraiseResult) GemStoreAppraiseResult {
@@ -21,7 +47,7 @@ func gemStoreAppraiseReply(res gemstore.AppraiseResult) GemStoreAppraiseResult {
 	if res.IsGem {
 		msg += "。" + res.Character.Name + "さんの宝石箱に入れておきました"
 	}
-	return GemStoreAppraiseResult{res, msg}
+	return GemStoreAppraiseResult{res, msg, commandEcho{target: res.ItemName, reply: msg}}
 }
 
 // GemStoreService is the Gem Store surface used by the scene and its commands.
@@ -61,6 +87,8 @@ type gemStoreSendResponse struct {
 	Gem                    gemstore.Gem    `json:"gem"`
 	RecipientCharacterID   string          `json:"recipient_character_id"`
 	RecipientCharacterName string          `json:"recipient_character_name"`
+	Message                string          `json:"message"`
+	commandEcho
 }
 
 // WithGemStore configures the gemstore scene observation and its commands.
@@ -68,44 +96,70 @@ func WithGemStore(service GemStoreService) Option {
 	return func(h *Handler) {
 		h.gemstore = service
 		if service == nil {
-			withActionCommand[gemStoreBuyRequest]("gemstore_buy", nil, nil)(h)
-			withActionCommand[gemStoreItemRequest]("gemstore_sell", nil, nil)(h)
-			withActionCommand[gemStoreSendRequest]("gemstore_send", nil, nil)(h)
-			withActionCommand[gemStoreSynthesizeRequest]("gemstore_synthesize", nil, nil)(h)
-			withActionCommand[gemStoreItemRequest]("gemstore_appraise", nil, nil)(h)
-			withActionCommand[struct{}]("gemstore_sort", nil, nil)(h)
+			withEchoCommand[gemStoreBuyRequest, GemStoreBuyResult]("gemstore_buy", nil, nil)(h)
+			withEchoCommand[gemStoreItemRequest, GemStoreSellResult]("gemstore_sell", nil, nil)(h)
+			withEchoCommand[gemStoreSendRequest, gemStoreSendResponse]("gemstore_send", nil, nil)(h)
+			withEchoCommand[gemStoreSynthesizeRequest, GemStoreSynthesizeResult]("gemstore_synthesize", nil, nil)(h)
+			withEchoCommand[gemStoreItemRequest, GemStoreAppraiseResult]("gemstore_appraise", nil, nil)(h)
+			withEchoCommand[struct{}, gemStoreSortResponse]("gemstore_sort", nil, nil)(h)
 			return
 		}
-		withActionCommand("gemstore_buy", func(ctx context.Context, actor string, p gemStoreBuyRequest) (any, error) {
-			return service.BuyGem(ctx, actor, p.GemID)
+		withEchoCommand("gemstore_buy", func(ctx context.Context, actor string, p gemStoreBuyRequest) (GemStoreBuyResult, error) {
+			res, err := service.BuyGem(ctx, actor, p.GemID)
+			if err != nil {
+				return GemStoreBuyResult{}, err
+			}
+			msg := res.Gem.Name + " を " + res.Character.Name + "さんの宝石箱に入れておきました"
+			return GemStoreBuyResult{res, msg, commandEcho{target: res.Gem.Name, reply: msg}}, nil
 		}, gemStoreActionRejection)(h)
-		withActionCommand("gemstore_sell", func(ctx context.Context, actor string, p gemStoreItemRequest) (any, error) {
-			return service.SellGem(ctx, actor, p.ItemID)
+		withEchoCommand("gemstore_sell", func(ctx context.Context, actor string, p gemStoreItemRequest) (GemStoreSellResult, error) {
+			res, err := service.SellGem(ctx, actor, p.ItemID)
+			if err != nil {
+				return GemStoreSellResult{}, err
+			}
+			msg := fmt.Sprintf("%s の代金%d Gです", res.Gem.Name, res.Payout)
+			return GemStoreSellResult{res, msg, commandEcho{target: res.Gem.Name, reply: msg}}, nil
 		}, gemStoreActionRejection)(h)
-		withActionCommand("gemstore_send", func(ctx context.Context, actor string, p gemStoreSendRequest) (any, error) {
+		withEchoCommand("gemstore_send", func(ctx context.Context, actor string, p gemStoreSendRequest) (gemStoreSendResponse, error) {
 			res, err := service.SendGem(ctx, actor, p.RecipientCharacterID, p.ItemID)
 			if err != nil {
-				return nil, err
+				return gemStoreSendResponse{}, err
 			}
-			return gemStoreSendResponse{GemBox: res.SenderGemBox, Gem: res.Gem,
-				RecipientCharacterID: res.RecipientCharacter.ID, RecipientCharacterName: res.RecipientCharacter.Name}, nil
+			name := res.RecipientCharacter.Name
+			msg := res.Gem.Name + " を" + name + "さんに送りました"
+			return gemStoreSendResponse{GemBox: res.SenderGemBox, Gem: res.Gem, RecipientCharacterID: res.RecipientCharacter.ID, RecipientCharacterName: name,
+				Message: msg, commandEcho: commandEcho{target: res.Gem.Name + "＠あいて>" + name, reply: msg}}, nil
 		}, gemStoreActionRejection)(h)
-		withActionCommand("gemstore_synthesize", func(ctx context.Context, actor string, p gemStoreSynthesizeRequest) (any, error) {
-			return service.SynthesizeGem(ctx, actor, p.RecipeID)
+		withEchoCommand("gemstore_synthesize", func(ctx context.Context, actor string, p gemStoreSynthesizeRequest) (GemStoreSynthesizeResult, error) {
+			res, err := service.SynthesizeGem(ctx, actor, p.RecipeID)
+			var missing *gemstore.InsufficientMaterialsError
+			if errors.As(err, &missing) {
+				// Missing materials are a logged $npc_com that changes nothing (gem_store.cgi:312-315).
+				r := missing.Recipe
+				msg := fmt.Sprintf("%s と %s をお持ちでないようですね", r.Material1Name, r.Material2Name)
+				return GemStoreSynthesizeResult{gemstore.SynthesizeResult{Recipe: r}, msg, commandEcho{target: r.Material1Name + "×" + r.Material2Name, reply: msg}}, nil
+			}
+			if err != nil {
+				return GemStoreSynthesizeResult{}, err
+			}
+			r := res.Recipe
+			msg := r.ResultName + " が完成しました。宝石箱に入れておきました"
+			return GemStoreSynthesizeResult{res, msg, commandEcho{target: r.Material1Name + "×" + r.Material2Name, reply: msg}}, nil
 		}, gemStoreActionRejection)(h)
-		withActionCommand("gemstore_appraise", func(ctx context.Context, actor string, p gemStoreItemRequest) (any, error) {
+		withEchoCommand("gemstore_appraise", func(ctx context.Context, actor string, p gemStoreItemRequest) (GemStoreAppraiseResult, error) {
 			res, err := service.AppraiseItem(ctx, actor, p.ItemID)
 			if err != nil {
-				return nil, err
+				return GemStoreAppraiseResult{}, err
 			}
 			return gemStoreAppraiseReply(res), nil
 		}, gemStoreActionRejection)(h)
-		withActionCommand("gemstore_sort", func(ctx context.Context, actor string, _ struct{}) (any, error) {
+		withEchoCommand("gemstore_sort", func(ctx context.Context, actor string, _ struct{}) (gemStoreSortResponse, error) {
 			box, err := service.SortGemBox(ctx, actor)
 			if err != nil {
-				return nil, err
+				return gemStoreSortResponse{}, err
 			}
-			return map[string]any{"gem_box": box, "message": "お預かりしている宝石をせいとんしました"}, nil
+			const msg = "お預かりしている宝石をせいとんしました"
+			return gemStoreSortResponse{box, msg, commandEcho{reply: msg}}, nil
 		}, gemStoreActionRejection)(h)
 	}
 }
@@ -132,12 +186,6 @@ func gemStoreActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_GEM_NOT_FOR_SALE", Message: "This gem is not on sale at your job level."}
 	case errors.Is(err, gemstore.ErrInsufficientFunds):
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_INSUFFICIENT_FUNDS", Message: "Insufficient wallet funds."}
-	case errors.Is(err, gemstore.ErrInsufficientMaterials):
-		var missing *gemstore.InsufficientMaterialsError
-		if errors.As(err, &missing) {
-			return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_INSUFFICIENT_MATERIALS", Message: fmt.Sprintf("%s と %s をお持ちでないようですね", missing.Recipe.Material1Name, missing.Recipe.Material2Name)}
-		}
-		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_INSUFFICIENT_MATERIALS", Message: "Recipe materials are not owned."}
 	case errors.Is(err, gemstore.ErrCannotSendToSelf):
 		return http.StatusBadRequest, ErrorDetail{Code: "GEMSTORE_SELF_TRANSFER", Message: "Cannot send a gem to yourself."}
 	case errors.Is(err, gemstore.ErrGemBoxFull):

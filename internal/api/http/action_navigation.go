@@ -73,13 +73,13 @@ func (h *Handler) registerNavigation(service *playercontext.Service) {
 	if service == nil || !service.NavigationConfigured() {
 		return
 	}
-	navigationCommand(h, "scene_enter", func(ctx context.Context, owner, actor string, p sceneEnterParams, _ playercontext.Result) (sceneEnterResult, error) {
+	navigationCommand(h, "scene_enter", func(ctx context.Context, owner, actor string, p sceneEnterParams, current playercontext.Result) (sceneEnterResult, error) {
 		selection, err := service.Enter(ctx, owner, actor, p.Destination)
 		if err != nil {
 			return sceneEnterResult{}, err
 		}
 		h.leavePlace(ctx, actor)
-		return h.deliverOnEntry(ctx, owner, actor, selection)
+		return h.deliverOnEntry(ctx, owner, actor, selection, current.Snapshot.Character)
 	})
 	navigationCommand(h, "scene_select", func(ctx context.Context, owner, actor string, p playercontext.Subject, current playercontext.Result) (playercontext.Selection, error) {
 		selection, err := service.Select(ctx, owner, actor, p)

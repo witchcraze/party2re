@@ -104,9 +104,9 @@ func (f *secretShopGatewayFixture) PurchaseItem(ctx context.Context, id, itemID 
 	return result, err
 }
 
-func (f *secretShopGatewayFixture) router(timers playercontext.TimerReader) http.Handler {
+func (f *secretShopGatewayFixture) router(timers playercontext.TimerReader, options ...Option) http.Handler {
 	h, err := NewHandler(f.gatewayFixture, f, &struct{ AdventureService }{}, &struct{ ShopService }{},
-		WithPlayerContext(playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers)), WithSecretShop(f), func(h *Handler) { h.homes = f.gatewayFixture })
+		append([]Option{WithPlayerContext(playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timers)), WithSecretShop(f), func(h *Handler) { h.homes = f.gatewayFixture }}, options...)...)
 	if err != nil {
 		f.t.Fatal(err)
 	}

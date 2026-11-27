@@ -14,18 +14,18 @@ func WithSecretShop(service SecretShopService) Option {
 	return func(h *Handler) {
 		h.secretshop = service
 		if service == nil {
-			withActionCommand[secretShopPurchaseRequest]("secretshop_purchase", nil, nil)(h)
+			withEchoCommand[secretShopPurchaseRequest, secretShopPurchaseResponse]("secretshop_purchase", nil, nil)(h)
 			return
 		}
-		withActionCommand("secretshop_purchase", func(ctx context.Context, actorID string, params secretShopPurchaseRequest) (any, error) {
+		withEchoCommand("secretshop_purchase", func(ctx context.Context, actorID string, params secretShopPurchaseRequest) (secretShopPurchaseResponse, error) {
 			// Read presentation inputs before mutation to preserve a known outcome.
 			char, err := h.characters.Get(ctx, actorID)
 			if err != nil {
-				return nil, err
+				return secretShopPurchaseResponse{}, err
 			}
 			result, err := service.PurchaseItem(ctx, actorID, params.ItemID, params.Quantity)
 			if err != nil {
-				return nil, err
+				return secretShopPurchaseResponse{}, err
 			}
 			return toSecretShopPurchaseResponse(result, char.Name), nil
 		}, secretShopActionRejection)(h)

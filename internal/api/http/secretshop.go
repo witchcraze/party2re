@@ -21,6 +21,7 @@ type secretShopPurchaseRequest struct {
 type secretShopPurchaseResponse struct {
 	*secretshop.PurchaseResult
 	NPCMessage string `json:"npc_message"`
+	commandEcho
 }
 
 func toSecretShopPurchaseResponse(result *secretshop.PurchaseResult, charName string) secretShopPurchaseResponse {
@@ -28,5 +29,5 @@ func toSecretShopPurchaseResponse(result *secretshop.PurchaseResult, charName st
 	if result.TransferredToDepot {
 		message = fmt.Sprintf("%sは%sメェ〜の預かり所の方に投げましたメェ〜", result.Item.Name, charName)
 	}
-	return secretShopPurchaseResponse{PurchaseResult: result, NPCMessage: message}
+	return secretShopPurchaseResponse{PurchaseResult: result, NPCMessage: message, commandEcho: commandEcho{target: result.Item.Name, reply: message}}
 }

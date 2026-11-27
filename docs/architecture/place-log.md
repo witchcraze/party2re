@@ -51,12 +51,13 @@ each quest or casino room. Battle and quest-room logs stay with their own featur
 
 ### Writers
 
-Each facility design lists its command echoes (the actor and NPC rows); facilities without them are open in [#1941](https://github.com/witchcraze/party2re/issues/1941).
+Each facility design lists its command echoes (the actor and NPC rows) and their departures.
 
 - **When rows are written**
   - Only a successful, effectful command writes.
   - Observation, navigation, list and prompt views (legacy `$mes`/`act_time=0`) and rejections never write.
   - A success that legacy answers with a private `$mes`, such as Depot gold collection, writes nothing and releases its wait claim.
+  - A refusal that legacy answers with a logged `$npc_com` and no change, such as missing synthesis materials, is a success without a state change: it logs and keeps the wait.
 - **The actor row**
   - The actor row is rendered on the server in the legacy look, for example `＠あずける>100G`.
   - The catalog declares the legacy verb once per action.

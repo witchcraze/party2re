@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -60,7 +61,7 @@ func alchemyTestService(entries int) *alchemySceneService {
 	return s
 }
 
-func alchemySceneRouter(t *testing.T, service AlchemyService, destination string) (*gatewayFixture, *gatewayNavigationStore, http.Handler) {
+func alchemySceneRouter(t *testing.T, service AlchemyService, destination string, extra ...Option) (*gatewayFixture, *gatewayNavigationStore, http.Handler) {
 	t.Helper()
 	f := newGatewayFixture(t)
 	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: destination}}
@@ -72,6 +73,7 @@ func alchemySceneRouter(t *testing.T, service AlchemyService, destination string
 	if service != nil {
 		options = append(options, WithAlchemy(service))
 	}
+	options = append(options, extra...)
 	h, err := NewHandler(f, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, options...)
 	if err != nil {
 		t.Fatal(err)
@@ -249,5 +251,22 @@ func TestAlchemyEntryOnlyClaimsForAcceptedAlchemyEntry(t *testing.T) {
 	}
 	if status, got := enterScene(t, h.Router(), "alchemy"); status != 500 || service.claims != 0 {
 		t.Fatalf("failed selection claimed: %d %s %d", status, got, service.claims)
+	}
+}
+
+// finish logs its fixed ＠ line and the reply in the Alchemy log (alchemy.cgi:17,185).
+func TestAlchemyEntryDeliveryLogsTheClaim(t *testing.T) {
+	log := &fakePlaceLog{}
+	service := alchemyTestService(0)
+	service.status.State = alchemy.StateCompleted
+	f, _, router := alchemySceneRouter(t, service, "town", WithPlaceLog(log))
+	f.char.Name = "Hero"
+	if status, got := enterScene(t, router, "alchemy"); status != 200 || service.claims != 1 {
+		t.Fatalf("entry: %d %s", status, got)
+	}
+	if log.writes != 1 || len(log.rows) != 2 || log.places[0] != (placelog.Place{Kind: placelog.KindFacility, ID: "alchemy"}) ||
+		log.rows[1].Text != alchemyClaimCommand || log.rows[1].Name != "Hero" ||
+		log.rows[0].Text != "まっておったぞ！薬草と聖水を錬金した エリクサー が完成したぞい！出来上がったアイテムは預かり所の方に送っておいたぞい！" {
+		t.Fatalf("claim rows: %+v at %+v", log.rows, log.places)
 	}
 }

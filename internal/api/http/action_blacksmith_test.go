@@ -52,6 +52,12 @@ func (f *blacksmithGatewayFixture) DepositWeapon(ctx context.Context, actor stri
 	return blacksmith.Deposit{ID: "stored", CharacterID: actor, Slot: 3, ItemDefinitionID: "weapon-01", SealID: 2, CustomName: "名剣"}, err
 }
 
+// Observe supplies the display names the deposit and withdrawal replies read first.
+func (f *blacksmithGatewayFixture) Observe(context.Context, string) (blacksmith.Observation, error) {
+	return blacksmith.Observation{Weapon: &blacksmith.EquippedItem{ItemDefinitionID: "weapon-01", Name: "名剣"},
+		Deposits: []blacksmith.StoredWeapon{{Deposit: blacksmith.Deposit{Slot: 3}, Name: "古剣"}}}, nil
+}
+
 func (f *blacksmithGatewayFixture) WithdrawWeapon(ctx context.Context, actor string, slot int) error {
 	f.slot = slot
 	_, err := f.execute(ctx, actor, 0)
@@ -137,11 +143,11 @@ func TestBlacksmithGatewayOutcomes(t *testing.T) {
 							}
 						case "blacksmith_deposit":
 							var dep blacksmith.Deposit
-							if err := json.Unmarshal(result["deposit"], &dep); err != nil || dep.Slot != 3 || dep.SealID != 2 || dep.CustomName != "名剣" || dep.CharacterID != "hero" {
+							if err := json.Unmarshal(result["deposit"], &dep); err != nil || dep.Slot != 3 || dep.SealID != 2 || dep.CustomName != "名剣" || dep.CharacterID != "hero" || string(result["message"]) != `"名剣をお預かっておくぜ"` {
 								t.Fatalf("deposit facts: %s", result)
 							}
 						case "blacksmith_withdraw":
-							if f.slot != 3 || string(result["slot"]) != "3" {
+							if f.slot != 3 || string(result["slot"]) != "3" || string(result["message"]) != `"古剣を返すぜ"` {
 								t.Fatalf("withdraw facts: %s", result)
 							}
 						}

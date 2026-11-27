@@ -316,11 +316,24 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 		_ = char
 		return nil
 	})
+	if errors.Is(err, ErrRecipeNotLearned) || errors.Is(err, ErrInsufficientMaterials) {
+		return SynthesisResult{}, &RefusalError{Err: err, IngredientNames: s.ingredientNames(recipe)}
+	}
 	if err != nil {
 		return SynthesisResult{}, err
 	}
 	return res, nil
 }
+
+// RefusalError carries the ingredient names of a refused synthesis, which
+// legacy answers by name (alchemy.cgi:126,140).
+type RefusalError struct {
+	Err             error
+	IngredientNames []string
+}
+
+func (e *RefusalError) Error() string { return e.Err.Error() }
+func (e *RefusalError) Unwrap() error { return e.Err }
 
 func (s *Service) GetStatus(ctx context.Context, characterID string) (Synthesis, error) {
 	characterID = strings.TrimSpace(characterID)

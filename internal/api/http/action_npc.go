@@ -156,13 +156,20 @@ func (h *Handler) appendNPCLog(ctx context.Context, current playercontext.Result
 	if h.placeLog == nil {
 		return
 	}
-	now := time.Now().UTC()
-	char := current.Snapshot.Character
 	place, err := h.scenePlace(ctx, current)
 	if err != nil {
 		slog.WarnContext(ctx, "place log place unresolved", slog.String("error", err.Error()))
 		return
 	}
+	h.appendPlaceLog(ctx, place, current.Snapshot.Character, command, npcName, word, recipient)
+}
+
+// appendPlaceLog writes appendNPCLog's rows to an explicit place.
+func (h *Handler) appendPlaceLog(ctx context.Context, place placelog.Place, char corecharacter.Character, command, npcName, word, recipient string) {
+	if h.placeLog == nil {
+		return
+	}
+	now := time.Now().UTC()
 	rows := []placelog.Entry{{OccurredAt: now, SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: char.ID, Name: char.Name, Color: char.Color, Text: command, RecipientCharacterID: recipient}}
 	if word != "" {
 		rows = append(rows, placelog.Entry{OccurredAt: now, SpeakerKind: placelog.SpeakerNPC, Name: npcName, Color: npcColor, Text: word, RecipientCharacterID: recipient})

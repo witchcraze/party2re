@@ -277,9 +277,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 		LegacyVerb:     "ひきだす",
 	},
-	{ID: "fleamarket_list", Label: "フリーマーケット出品", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "price"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "fleamarket_purchase", Label: "フリーマーケット購入", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
-	{ID: "fleamarket_cancel", Label: "フリーマーケット出品取消", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "fleamarket_list", Label: "フリーマーケット出品", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "price"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "しゅっぴん"},
+	{ID: "fleamarket_purchase", Label: "フリーマーケット購入", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck, LegacyVerb: "かう"},
+	{ID: "fleamarket_cancel", Label: "フリーマーケット出品取消", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"listing_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "もどす"},
 	{ID: "house_build", Label: "たてる", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"town_id", "house_style"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
 	{ID: "store_build", Label: "みせ", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"town_id", "house_style"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
 	{ID: "store_list_gold", Label: "しゅっぴん", Category: "economy", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id", "price"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
@@ -296,10 +296,10 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	// =========================================================================
 	// Category: shop (Commerce & Specialty Stores)
 	// =========================================================================
-	{ID: "shop_purchase", Label: "店でアイテム購入", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_definition_id", "quantity"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
-	{ID: "shop_sell", Label: "店にアイテム売却", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "shop_batch_purchase", Label: "まとめてかう", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "items"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
-	{ID: "shop_synthesize", Label: "装飾品合成", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_target"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "shop_purchase", Label: "店でアイテム購入", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_definition_id", "quantity"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck, LegacyVerb: "かう"},
+	{ID: "shop_sell", Label: "店にアイテム売却", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "うる"},
+	{ID: "shop_batch_purchase", Label: "まとめてかう", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "items"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck, LegacyVerb: "まとめてかう"},
+	{ID: "shop_synthesize", Label: "装飾品合成", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_target"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "ごうせい"},
 	{
 		ID:             "gemstore_sell",
 		Label:          "宝珠箱の宝石を売る",
@@ -307,6 +307,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"item_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "うる",
 	},
 	{
 		ID:             "gemstore_sort",
@@ -315,11 +316,12 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "せいとん",
 	},
-	{ID: "gemstore_buy", Label: "宝石購入", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"gem_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck},
-	{ID: "gemstore_send", Label: "宝石を送る", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipient_character_id", "item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "gemstore_synthesize", Label: "宝石加工", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "gemstore_appraise", Label: "宝珠鑑定", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "gemstore_buy", Label: "宝石購入", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"gem_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck, LegacyVerb: "かう"},
+	{ID: "gemstore_send", Label: "宝石を送る", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipient_character_id", "item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "おくる"},
+	{ID: "gemstore_synthesize", Label: "宝石加工", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "かこう"},
+	{ID: "gemstore_appraise", Label: "宝珠鑑定", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "かんてい"},
 	{
 		ID:             "secretshop_purchase",
 		Label:          "ヒミツの店で購入",
@@ -327,11 +329,12 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"item_id", "quantity"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		LegacyVerb:     "かう",
 	},
 	{ID: "park_divinate", Label: "うらない", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "うらない"},
 	{ID: "secretshop_puffpuff", Label: "ぱふぱふ", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "ぱふぱふ"},
-	{ID: "blackmarket_sacrifice", Label: "闇市でレアアイテムをささげる", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "blackmarket_trade", Label: "闇市景品交換", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"prize_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "blackmarket_sacrifice", Label: "闇市でレアアイテムをささげる", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "ささげる"},
+	{ID: "blackmarket_trade", Label: "闇市景品交換", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"prize_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "とりひき"},
 
 	// =========================================================================
 	// Category: crafting (Crafting, Synthesis & Cultivation)
@@ -343,6 +346,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"seal_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "こくいん",
 	},
 	{
 		ID:             "blacksmith_name",
@@ -351,6 +355,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"target", "name"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "なづける",
 	},
 	{
 		ID:             "blacksmith_deposit",
@@ -359,6 +364,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "あずける",
 	},
 	{
 		ID:             "blacksmith_withdraw",
@@ -367,8 +373,9 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"slot"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "ひきだす",
 	},
-	{ID: "alchemy_synthesize", Label: "錬金調合", Category: "crafting", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "alchemy_synthesize", Label: "錬金調合", Category: "crafting", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "れんきん"},
 	{ID: "alchemy_recipes", Label: "錬金レシピを見る", Category: "crafting", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitNavigation},
 	{
 		ID:             "custom_skill_set",
