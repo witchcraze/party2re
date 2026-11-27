@@ -30,6 +30,7 @@ type alchemyRecipesRequest struct{}
 type AlchemySynthesisResult struct {
 	alchemy.SynthesisResult
 	Message string `json:"message"`
+	commandEcho
 }
 
 type AlchemyClaimResult struct {
@@ -44,7 +45,12 @@ func alchemySynthesisReply(res alchemy.SynthesisResult) AlchemySynthesisResult {
 	} else {
 		msg += "おお、錬金可能なようじゃ！何が出来るか楽しみじゃな！一晩たてば完成するじゃろう。完成する頃にまた来るがよい"
 	}
-	return AlchemySynthesisResult{res, msg}
+	return AlchemySynthesisResult{res, msg, commandEcho{target: alchemyTarget(res.IngredientNames), reply: msg}}
+}
+
+// alchemyTarget renders ＠れんきん>base＠そざい>sozai (alchemy.cgi:68).
+func alchemyTarget(names []string) string {
+	return strings.Join(names, "＠そざい>")
 }
 
 func alchemyClaimReply(res alchemy.ClaimResult) AlchemyClaimResult {
@@ -57,14 +63,26 @@ func WithAlchemy(service AlchemyService) Option {
 	return func(h *Handler) {
 		h.alchemy = service
 		if service == nil {
-			withActionCommand[alchemySynthesizeRequest]("alchemy_synthesize", nil, nil)(h)
+			withEchoCommand[alchemySynthesizeRequest, AlchemySynthesisResult]("alchemy_synthesize", nil, nil)(h)
 			withActionCommand[alchemyRecipesRequest]("alchemy_recipes", nil, nil)(h)
 			return
 		}
-		withActionCommand("alchemy_synthesize", func(ctx context.Context, actor string, p alchemySynthesizeRequest) (any, error) {
+		withEchoCommand("alchemy_synthesize", func(ctx context.Context, actor string, p alchemySynthesizeRequest) (AlchemySynthesisResult, error) {
 			res, err := service.Synthesize(ctx, actor, p.RecipeID)
+			// Legacy answers both refusals with a logged $npc_com that changes nothing (alchemy.cgi:126,140).
+			var refused *alchemy.RefusalError
+			if errors.As(err, &refused) {
+				msg := "残念ながら " + strings.Join(refused.IngredientNames, " と ") + " の材料が預り所にないようじゃ"
+				return AlchemySynthesisResult{Message: msg, commandEcho: commandEcho{target: alchemyTarget(refused.IngredientNames), reply: msg}}, nil
+			}
+			if errors.Is(err, alchemy.ErrRecipeNotLearned) {
+				// Legacy logs the player's typed names; the Gateway's input is an ID, and
+				// naming an unlearned recipe would disclose it, so the row is the bare verb.
+				const msg = "錬金レシピで習得したものしか錬金することはできんぞ"
+				return AlchemySynthesisResult{Message: msg, commandEcho: commandEcho{reply: msg}}, nil
+			}
 			if err != nil {
-				return nil, err
+				return AlchemySynthesisResult{}, err
 			}
 			return alchemySynthesisReply(res), nil
 		}, alchemyActionRejection)(h)
@@ -82,10 +100,6 @@ func alchemyActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusNotFound, ErrorDetail{Code: "CHARACTER_NOT_FOUND", Message: "Character not found."}
 	case errors.Is(err, alchemy.ErrRecipeNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "ALCHEMY_RECIPE_NOT_FOUND", Message: "Recipe not found."}
-	case errors.Is(err, alchemy.ErrRecipeNotLearned):
-		return http.StatusUnprocessableEntity, ErrorDetail{Code: "ALCHEMY_RECIPE_NOT_LEARNED", Message: "Recipe has not been learned."}
-	case errors.Is(err, alchemy.ErrInsufficientMaterials):
-		return http.StatusUnprocessableEntity, ErrorDetail{Code: "ALCHEMY_INSUFFICIENT_MATERIALS", Message: "Materials are not in the depot."}
 	case errors.Is(err, alchemy.ErrSynthesisInProgress):
 		return http.StatusUnprocessableEntity, ErrorDetail{Code: "ALCHEMY_SYNTHESIS_IN_PROGRESS", Message: "Another synthesis is in progress."}
 	default:

@@ -20,7 +20,7 @@ Access requires job level 7 or more (`item.cgi:57–69`); the secret shop sells 
 
 ### 7.4. Purchase Transport and Remaining Migration
 
-Purchase uses the Gateway's `secretshop_purchase` with explicit item and quantity. Puff-puff uses `secretshop_puffpuff`, an NPC act with no inputs: like legacy `pafupafu` (`$to_name = $m`), its actor row and NPC row are private to the actor ([NPC interaction](../architecture/place-log.md#npc-interaction)). No SecretShop REST route remains. **Known difference:** legacy `kau` (`secret.cgi:34–82`) buys one item, while Go accepts 1–99 and sends bulk quantities to the Depot; this is not an approved replacement of the single-purchase rule.
+Purchase uses the Gateway's `secretshop_purchase` with explicit item and quantity, and logs `＠かう>item` with the keeper's reply. Puff-puff uses `secretshop_puffpuff`, an NPC act with no inputs: like legacy `pafupafu` (`$to_name = $m`), its actor row and NPC row are private to the actor ([NPC interaction](../architecture/place-log.md#npc-interaction)). No SecretShop REST route remains. **Known difference:** legacy `kau` (`secret.cgi:34–82`) buys one item, while Go accepts 1–99 and sends bulk quantities to the Depot; this is not an approved replacement of the single-purchase rule.
 
 ## 10. Shop scenes and commands
 
@@ -38,5 +38,7 @@ Shop files load through `party.cgi:14–30`; `system.cgi:9–24` registers share
 | `ひみつのみせ` (item shop) | `scene_enter` `secretshop` | Qualified navigation (job level 7). Legacy enters only from the item shop; Go enters from town. |
 | `ごうせい` (accessory, `accessory.cgi:100–101,172–292`) | `shop_synthesize` | The accessory scene lists the recipes; see [Accessory Shop](accessory-shop.md#synthesis). |
 | `はなす` / NPC `しらべる` | `npc_talk` / `npc_inspect` | Static dialogue omits legacy dynamic recommendations (such as the accessory shop's random item line); exact dialogue parity is not claimed. |
+
+Each success logs `＠verb>target` and the keeper's reply. `まとめてかう` logs the checked names joined by `<>`, with a purchase list and total (`weapon.cgi:144–153`); Go lists one line per unit. Missing `ごうせい` materials are a logged reply that changes nothing (`accessory.cgi:204–206`).
 
 `get_depot` is an uncalled utility, not an omitted action. No ordinary Shop REST route remains.

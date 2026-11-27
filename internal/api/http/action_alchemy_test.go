@@ -73,7 +73,7 @@ func TestAlchemyGatewayOutcomes(t *testing.T) {
 				f.expectedContext = context.WithValue(context.Background(), struct{}{}, "alchemy request")
 				want := 200
 				if rejected {
-					f.executionErr, want = fmt.Errorf("wrapped: %w", alchemy.ErrInsufficientMaterials), 422
+					f.executionErr, want = fmt.Errorf("wrapped: %w", alchemy.ErrSynthesisInProgress), 422
 				}
 				if refreshFailure {
 					f.afterExecute = func() { f.profileErr = errors.New("private profile failure") }
@@ -84,7 +84,7 @@ func TestAlchemyGatewayOutcomes(t *testing.T) {
 					t.Fatalf("lost outcome: %d %s", status, got)
 				}
 				if rejected {
-					assertGatewayError(t, got, "ALCHEMY_INSUFFICIENT_MATERIALS")
+					assertGatewayError(t, got, "ALCHEMY_SYNTHESIS_IN_PROGRESS")
 				} else if string(got["success"]) != "true" || !strings.Contains(string(got["result"]), `"message":"薬草 と 聖水 じゃな！おお、錬金可能なようじゃ！何が出来るか楽しみじゃな！一晩たてば完成するじゃろう。完成する頃にまた来るがよい"`) {
 					t.Fatalf("lost result facts: %s", got)
 				}
@@ -111,8 +111,6 @@ func TestAlchemyGatewayErrors(t *testing.T) {
 		{alchemy.ErrInvalidRecipeID, "ALCHEMY_INVALID_RECIPE", 400},
 		{alchemy.ErrRecipeNotFound, "ALCHEMY_RECIPE_NOT_FOUND", 404},
 		{corecharacter.ErrNotFound, "CHARACTER_NOT_FOUND", 404},
-		{alchemy.ErrRecipeNotLearned, "ALCHEMY_RECIPE_NOT_LEARNED", 422},
-		{alchemy.ErrInsufficientMaterials, "ALCHEMY_INSUFFICIENT_MATERIALS", 422},
 		{alchemy.ErrSynthesisInProgress, "ALCHEMY_SYNTHESIS_IN_PROGRESS", 422},
 		{errors.New("private storage failure"), "EXECUTION_FAILED", 500},
 		{context.Canceled, "EXECUTION_FAILED", 500},
@@ -234,5 +232,37 @@ func TestAlchemyRetiredRoutesAreUnreachable(t *testing.T) {
 	}
 	if f.executions != 0 {
 		t.Fatal("retired route executed")
+	}
+}
+
+// Legacy answers both refusals with a logged reply that changes nothing (alchemy.cgi:126,140).
+func TestAlchemyRefusalsAreLoggedReplies(t *testing.T) {
+	for _, tc := range []struct {
+		err          error
+		actor, reply string
+	}{
+		{&alchemy.RefusalError{Err: alchemy.ErrInsufficientMaterials, IngredientNames: []string{"薬草", "薬草"}}, "＠れんきん>薬草＠そざい>薬草", "残念ながら 薬草 と 薬草 の材料が預り所にないようじゃ"},
+		// An unlearned recipe is not named, so the row discloses nothing.
+		{alchemy.ErrRecipeNotLearned, "＠れんきん", "錬金レシピで習得したものしか錬金することはできんぞ"},
+	} {
+		t.Run(tc.err.Error(), func(t *testing.T) {
+			log := &fakePlaceLog{}
+			f := &alchemyGatewayFixture{gatewayFixture: newGatewayFixture(t)}
+			f.executionErr = tc.err
+			status, got := gatewayRequest(t, f.router(t, timer.NewService(nil), WithPlaceLog(log)), "hero", "session", "application/json", saleGatewayBody("alchemy_synthesize", alchemySynthesizeParams), nil)
+			if status != 200 || len(log.rows) != 2 || log.rows[0].Text != tc.reply || log.rows[1].Text != tc.actor {
+				t.Fatalf("%d %s rows %+v", status, got["error"], log.rows)
+			}
+		})
+	}
+}
+
+func TestAlchemySynthesisEchoes(t *testing.T) {
+	log := &fakePlaceLog{}
+	f := &alchemyGatewayFixture{gatewayFixture: newGatewayFixture(t)}
+	status, got := gatewayRequest(t, f.router(t, timer.NewService(nil), WithPlaceLog(log)), "hero", "session", "application/json", saleGatewayBody("alchemy_synthesize", alchemySynthesizeParams), nil)
+	if status != 200 || len(log.rows) != 2 || log.rows[1].Text != "＠れんきん>薬草＠そざい>聖水" ||
+		log.rows[0].Text != "薬草 と 聖水 じゃな！おお、錬金可能なようじゃ！何が出来るか楽しみじゃな！一晩たてば完成するじゃろう。完成する頃にまた来るがよい" {
+		t.Fatalf("%d %s rows %+v", status, got["error"], log.rows)
 	}
 }

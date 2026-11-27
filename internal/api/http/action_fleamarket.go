@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -33,21 +34,48 @@ func WithFleaMarket(service FleaMarketService) Option {
 	return func(h *Handler) {
 		h.fleamarket = service
 		if service == nil {
-			withActionCommand[fleaMarketListRequest]("fleamarket_list", nil, nil)(h)
-			withActionCommand[fleaMarketListingRequest]("fleamarket_purchase", nil, nil)(h)
-			withActionCommand[fleaMarketListingRequest]("fleamarket_cancel", nil, nil)(h)
+			withEchoCommand[fleaMarketListRequest, fleaMarketListingResult]("fleamarket_list", nil, nil)(h)
+			withEchoCommand[fleaMarketListingRequest, fleaMarketPurchaseResult]("fleamarket_purchase", nil, nil)(h)
+			withEchoCommand[fleaMarketListingRequest, fleaMarketListingResult]("fleamarket_cancel", nil, nil)(h)
 			return
 		}
-		withActionCommand("fleamarket_list", func(ctx context.Context, actor string, p fleaMarketListRequest) (any, error) {
-			return service.CreateListing(ctx, actor, p.ItemID, p.Price, time.Now().UTC())
+		withEchoCommand("fleamarket_list", func(ctx context.Context, actor string, p fleaMarketListRequest) (fleaMarketListingResult, error) {
+			listing, err := service.CreateListing(ctx, actor, p.ItemID, p.Price, time.Now().UTC())
+			if err != nil {
+				return fleaMarketListingResult{}, err
+			}
+			reply := fmt.Sprintf("%sを%d Gで出品しとくぞ", listing.ItemName, listing.Price)
+			return fleaMarketListingResult{listing, commandEcho{target: fmt.Sprintf("%s＠ねだん>%d", listing.ItemName, listing.Price), reply: reply}}, nil
 		}, fleaMarketActionRejection)(h)
-		withActionCommand("fleamarket_purchase", func(ctx context.Context, actor string, p fleaMarketListingRequest) (any, error) {
-			return service.PurchaseListing(ctx, actor, p.ListingID, time.Now().UTC())
+		// Legacy names a listing by its display number; Go listings have none, so
+		// the actor rows of purchase and cancel name the item instead.
+		withEchoCommand("fleamarket_purchase", func(ctx context.Context, actor string, p fleaMarketListingRequest) (fleaMarketPurchaseResult, error) {
+			res, err := service.PurchaseListing(ctx, actor, p.ListingID, time.Now().UTC())
+			if err != nil {
+				return fleaMarketPurchaseResult{}, err
+			}
+			return fleaMarketPurchaseResult{res, commandEcho{target: res.Listing.ItemName, reply: "まいどあり"}}, nil
 		}, fleaMarketActionRejection)(h)
-		withActionCommand("fleamarket_cancel", func(ctx context.Context, actor string, p fleaMarketListingRequest) (any, error) {
-			return service.CancelListing(ctx, actor, p.ListingID)
+		withEchoCommand("fleamarket_cancel", func(ctx context.Context, actor string, p fleaMarketListingRequest) (fleaMarketListingResult, error) {
+			listing, err := service.CancelListing(ctx, actor, p.ListingID)
+			if err != nil {
+				return fleaMarketListingResult{}, err
+			}
+			return fleaMarketListingResult{listing, commandEcho{target: listing.ItemName, reply: "そら、" + listing.ItemName + "だ"}}, nil
 		}, fleaMarketActionRejection)(h)
 	}
+}
+
+// Flea Market results keep their service shape and add the place-log echo
+// (free.cgi:90,163,229).
+type fleaMarketListingResult struct {
+	fleamarket.Listing
+	commandEcho
+}
+
+type fleaMarketPurchaseResult struct {
+	fleamarket.PurchaseResult
+	commandEcho
 }
 
 func fleaMarketActionRejection(err error) (int, ErrorDetail) {

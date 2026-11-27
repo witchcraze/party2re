@@ -186,6 +186,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 				IsGem:          true,
 				IdentifiedGem:  &gem,
 				IdentifiedName: gem.Name,
+				ItemName:       itemName,
 			}
 			return nil
 		}
@@ -197,6 +198,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 			Depot:          dep,
 			IsGem:          false,
 			IdentifiedName: itemName,
+			ItemName:       itemName,
 		}
 		return nil
 	}

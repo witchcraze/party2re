@@ -38,22 +38,23 @@ func WithBlacksmith(service BlacksmithService) Option {
 	return func(h *Handler) {
 		h.blacksmith = service
 		if service == nil {
-			withActionCommand[applySealRequest]("blacksmith_seal", nil, nil)(h)
-			withActionCommand[nameEquipmentRequest]("blacksmith_name", nil, nil)(h)
-			withActionCommand[struct{}]("blacksmith_deposit", nil, nil)(h)
-			withActionCommand[withdrawWeaponRequest]("blacksmith_withdraw", nil, nil)(h)
+			withEchoCommand[applySealRequest, blacksmithSealResult]("blacksmith_seal", nil, nil)(h)
+			withEchoCommand[nameEquipmentRequest, blacksmithNameResult]("blacksmith_name", nil, nil)(h)
+			withEchoCommand[struct{}, blacksmithDepositResult]("blacksmith_deposit", nil, nil)(h)
+			withEchoCommand[withdrawWeaponRequest, blacksmithWithdrawResult]("blacksmith_withdraw", nil, nil)(h)
 			return
 		}
-		withActionCommand("blacksmith_seal", func(ctx context.Context, actor string, p applySealRequest) (any, error) {
+		withEchoCommand("blacksmith_seal", func(ctx context.Context, actor string, p applySealRequest) (blacksmithSealResult, error) {
 			seal, err := service.ApplySeal(ctx, actor, p.SealID)
 			if err != nil {
-				return nil, err
+				return blacksmithSealResult{}, err
 			}
-			return map[string]any{"seal": seal, "message": "よっしゃ！武器に【" + seal.Name + "】を刻印したぜ！"}, nil
+			message := "よっしゃ！武器に【" + seal.Name + "】を刻印したぜ！"
+			return blacksmithSealResult{seal, message, commandEcho{target: seal.Name, reply: message}}, nil
 		}, blacksmithActionRejection)(h)
-		withActionCommand("blacksmith_name", func(ctx context.Context, actor string, p nameEquipmentRequest) (any, error) {
+		withEchoCommand("blacksmith_name", func(ctx context.Context, actor string, p nameEquipmentRequest) (blacksmithNameResult, error) {
 			if err := service.NameEquipment(ctx, actor, p.Target, p.Name); err != nil {
-				return nil, err
+				return blacksmithNameResult{}, err
 			}
 			target, label := "weapon", "武器"
 			switch strings.ToLower(strings.TrimSpace(p.Target)) {
@@ -65,22 +66,75 @@ func WithBlacksmith(service BlacksmithService) Option {
 			if name == "" {
 				message = label + "の名前を元に戻したぜ"
 			}
-			return map[string]any{"target": target, "name": name, "message": message}, nil
+			return blacksmithNameResult{target, name, message, commandEcho{target: label + "＠なまえ>" + name, reply: message}}, nil
 		}, blacksmithActionRejection)(h)
-		withActionCommand("blacksmith_deposit", func(ctx context.Context, actor string, _ struct{}) (any, error) {
+		withEchoCommand("blacksmith_deposit", func(ctx context.Context, actor string, _ struct{}) (blacksmithDepositResult, error) {
+			// Read the display name before mutation (blacksmith.cgi:177 get_weapon_name).
+			seen, err := service.Observe(ctx, actor)
+			if err != nil {
+				return blacksmithDepositResult{}, err
+			}
 			deposit, err := service.DepositWeapon(ctx, actor)
 			if err != nil {
-				return nil, err
+				return blacksmithDepositResult{}, err
 			}
-			return map[string]any{"deposit": deposit, "message": "武器をお預かっておくぜ"}, nil
+			name := ""
+			if seen.Weapon != nil {
+				name = seen.Weapon.Name // effective name
+			}
+			message := name + "をお預かっておくぜ"
+			return blacksmithDepositResult{deposit, message, commandEcho{target: "武器", reply: message}}, nil
 		}, blacksmithActionRejection)(h)
-		withActionCommand("blacksmith_withdraw", func(ctx context.Context, actor string, p withdrawWeaponRequest) (any, error) {
-			if err := service.WithdrawWeapon(ctx, actor, p.Slot); err != nil {
-				return nil, err
+		withEchoCommand("blacksmith_withdraw", func(ctx context.Context, actor string, p withdrawWeaponRequest) (blacksmithWithdrawResult, error) {
+			seen, err := service.Observe(ctx, actor)
+			if err != nil {
+				return blacksmithWithdrawResult{}, err
 			}
-			return map[string]any{"slot": p.Slot, "message": "武器を返すぜ"}, nil
+			name := ""
+			for _, stored := range seen.Deposits {
+				if stored.Slot == p.Slot {
+					name = stored.Name
+				}
+			}
+			err = service.WithdrawWeapon(ctx, actor, p.Slot)
+			if errors.Is(err, blacksmith.ErrWeaponSlotOccupied) && name != "" {
+				// Legacy answers a held weapon with a logged $npc_com that changes nothing (blacksmith.cgi:206-209).
+				const message = "おっと、武器を外してからにしてくれ！"
+				return blacksmithWithdrawResult{p.Slot, message, commandEcho{target: name, reply: message}}, nil
+			}
+			if err != nil {
+				return blacksmithWithdrawResult{}, err
+			}
+			message := name + "を返すぜ"
+			return blacksmithWithdrawResult{p.Slot, message, commandEcho{target: name, reply: message}}, nil
 		}, blacksmithActionRejection)(h)
 	}
+}
+
+// Blacksmith results carry the smith's reply (blacksmith.cgi:76,96,125,177,213).
+type blacksmithSealResult struct {
+	Seal    blacksmith.Seal `json:"seal"`
+	Message string          `json:"message"`
+	commandEcho
+}
+
+type blacksmithNameResult struct {
+	Target  string `json:"target"`
+	Name    string `json:"name"`
+	Message string `json:"message"`
+	commandEcho
+}
+
+type blacksmithDepositResult struct {
+	Deposit blacksmith.Deposit `json:"deposit"`
+	Message string             `json:"message"`
+	commandEcho
+}
+
+type blacksmithWithdrawResult struct {
+	Slot    int    `json:"slot"`
+	Message string `json:"message"`
+	commandEcho
 }
 
 func blacksmithActionRejection(err error) (int, ErrorDetail) {

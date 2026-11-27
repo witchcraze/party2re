@@ -587,7 +587,7 @@ func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
 	if resSword.IsGem {
 		t.Errorf("expected IsGem to be false for sword")
 	}
-	if resSword.IdentifiedName != "鉄の剣" {
+	if resSword.IdentifiedName != "鉄の剣" || resSword.ItemName != "鉄の剣" {
 		t.Errorf("expected identified name 鉄の剣, got %s", resSword.IdentifiedName)
 	}
 

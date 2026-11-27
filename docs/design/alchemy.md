@@ -24,4 +24,5 @@ Observation never claims or writes. Known differences from `lib/alchemy.cgi`:
 
 - Automatic `finish` on load (17, 183–202) happens at `scene_enter`; GET never claims, so a saved selection delivers on the next entry.
 - `れんきん` (99–144) takes an explicit recipe ID instead of base and material names.
-- Writing the commands' facility log rows is open (#1941).
+- Entry delivery logs `finish`'s fixed `＠れんきんでかんせいしたものをうけとる` row and the reply, and starts no wait, because that line is no registered action (17, 185; `party.cgi:20–25`).
+- Missing materials and an unlearned recipe are logged replies that change nothing (126, 140). Legacy logs the names the player typed; for an unlearned recipe the row is the bare `＠れんきん`, because naming it would disclose the combination. `れしぴ` sets `$mes`, so it never logs, even when it awards `comp_alc`.

@@ -225,11 +225,12 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 		}
 
 		// Rank 5: Lock Depot
+		// A missing Depot holds nothing, so the learned check still runs first (alchemy.cgi:114-140).
 		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
+		if errors.Is(err, depot.ErrNotFound) {
+			dep, err = depot.Depot{CharacterID: characterID}, nil
+		}
 		if err != nil {
-			if errors.Is(err, depot.ErrNotFound) {
-				return ErrInsufficientMaterials
-			}
 			return err
 		}
 
@@ -316,11 +317,25 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 		_ = char
 		return nil
 	})
+	// Only a learned recipe reaches the materials check, so naming it discloses nothing.
+	if errors.Is(err, ErrInsufficientMaterials) {
+		return SynthesisResult{}, &RefusalError{Err: err, IngredientNames: s.ingredientNames(recipe)}
+	}
 	if err != nil {
 		return SynthesisResult{}, err
 	}
 	return res, nil
 }
+
+// RefusalError carries the ingredient names of a learned recipe refused for
+// missing materials, which legacy answers by name (alchemy.cgi:126).
+type RefusalError struct {
+	Err             error
+	IngredientNames []string
+}
+
+func (e *RefusalError) Error() string { return e.Err.Error() }
+func (e *RefusalError) Unwrap() error { return e.Err }
 
 func (s *Service) GetStatus(ctx context.Context, characterID string) (Synthesis, error) {
 	characterID = strings.TrimSpace(characterID)
@@ -427,10 +442,13 @@ func (s *Service) itemName(definitionID string) string {
 	return definitionID
 }
 
+// ingredientNames lists each unit, so 薬草×2 reads as 薬草 and 薬草 (_alchemy_recipe.cgi base×material).
 func (s *Service) ingredientNames(recipe Recipe) []string {
-	names := make([]string, len(recipe.Ingredients))
-	for i, ing := range recipe.Ingredients {
-		names[i] = s.itemName(ing.DefinitionID)
+	var names []string
+	for _, ing := range recipe.Ingredients {
+		for range ing.Quantity {
+			names = append(names, s.itemName(ing.DefinitionID))
+		}
 	}
 	return names
 }

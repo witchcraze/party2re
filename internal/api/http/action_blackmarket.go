@@ -23,11 +23,13 @@ type blackMarketTradeRequest struct {
 type BlackMarketSacrificeResult struct {
 	*blackmarket.SacrificeResult
 	Message string `json:"message"`
+	commandEcho
 }
 
 type BlackMarketTradeResult struct {
 	*blackmarket.TradeResult
 	Message string `json:"message"`
+	commandEcho
 }
 
 // Legacy appends one reply per list the item is on.
@@ -39,7 +41,7 @@ func blackMarketSacrificeReply(res *blackmarket.SacrificeResult) BlackMarketSacr
 	if res.URarePointsGained > 0 {
 		msg += fmt.Sprintf("これは……! ……いいだろう…。お前の特別なレアポイントを%d加算しておこう…", res.URarePointsGained)
 	}
-	return BlackMarketSacrificeResult{res, msg}
+	return BlackMarketSacrificeResult{res, msg, commandEcho{target: res.ItemName, reply: msg}}
 }
 
 // WithBlackMarket configures the scene observation, retained NPC reads and two barter commands.
@@ -47,23 +49,24 @@ func WithBlackMarket(service BlackMarketService) Option {
 	return func(h *Handler) {
 		h.blackmarket = service
 		if service == nil {
-			withActionCommand[blackMarketSacrificeRequest]("blackmarket_sacrifice", nil, nil)(h)
-			withActionCommand[blackMarketTradeRequest]("blackmarket_trade", nil, nil)(h)
+			withEchoCommand[blackMarketSacrificeRequest, BlackMarketSacrificeResult]("blackmarket_sacrifice", nil, nil)(h)
+			withEchoCommand[blackMarketTradeRequest, BlackMarketTradeResult]("blackmarket_trade", nil, nil)(h)
 			return
 		}
-		withActionCommand("blackmarket_sacrifice", func(ctx context.Context, actor string, p blackMarketSacrificeRequest) (any, error) {
+		withEchoCommand("blackmarket_sacrifice", func(ctx context.Context, actor string, p blackMarketSacrificeRequest) (BlackMarketSacrificeResult, error) {
 			res, err := service.SacrificeItem(ctx, actor, p.ItemInstanceID)
 			if err != nil {
-				return nil, err
+				return BlackMarketSacrificeResult{}, err
 			}
 			return blackMarketSacrificeReply(res), nil
 		}, blackMarketActionRejection)(h)
-		withActionCommand("blackmarket_trade", func(ctx context.Context, actor string, p blackMarketTradeRequest) (any, error) {
+		withEchoCommand("blackmarket_trade", func(ctx context.Context, actor string, p blackMarketTradeRequest) (BlackMarketTradeResult, error) {
 			res, err := service.TradePrize(ctx, actor, p.PrizeID)
 			if err != nil {
-				return nil, err
+				return BlackMarketTradeResult{}, err
 			}
-			return BlackMarketTradeResult{res, "取引成立だ…。" + res.ItemName + " はお前の預かり所に送っておいた…"}, nil
+			reply := "取引成立だ…。" + res.ItemName + " はお前の預かり所に送っておいた…"
+			return BlackMarketTradeResult{res, reply, commandEcho{target: res.ItemName, reply: reply}}, nil
 		}, blackMarketActionRejection)(h)
 	}
 }

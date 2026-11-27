@@ -274,7 +274,7 @@ func TestSynthesize_RequiresZeroGoldFeeAndConsumesFromDepot(t *testing.T) {
 		t.Errorf("expected StateOngoing, got %v", res.State)
 	}
 	// An uncrafted recipe keeps its result unnamed for the reply.
-	if !slices.Equal(res.IngredientNames, []string{"Herb"}) || res.ResultItemName != "" {
+	if !slices.Equal(res.IngredientNames, []string{"Herb", "Herb"}) || res.ResultItemName != "" {
 		t.Errorf("reply facts = %v %q", res.IngredientNames, res.ResultItemName)
 	}
 
@@ -468,6 +468,11 @@ func TestSynthesize_RejectsShortfallAcrossDuplicateIngredients(t *testing.T) {
 	if !errors.Is(err, ErrInsufficientMaterials) {
 		t.Fatalf("expected ErrInsufficientMaterials, got %v", err)
 	}
+	// The refusal names every unit for the logged reply (alchemy.cgi:126).
+	var refused *RefusalError
+	if !errors.As(err, &refused) || len(refused.IngredientNames) != 4 || refused.IngredientNames[0] != refused.IngredientNames[3] {
+		t.Fatalf("refusal names: %v %v", err, refused)
+	}
 
 	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
 	if qty := updatedDepot.Quantity("weapon-06"); qty != 3 {
@@ -541,6 +546,12 @@ func TestSynthesize_FailsWhenRecipeNotLearned(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 	svc, _, depotRepo, _, char := setupTestService(t, &now)
+
+	// Without a Depot the learned check still comes first and names nothing.
+	var refused *RefusalError
+	if _, err := svc.Synthesize(ctx, char.ID, "rec-super-herb"); !errors.Is(err, ErrRecipeNotLearned) || errors.As(err, &refused) {
+		t.Fatalf("missing depot: got %v", err)
+	}
 
 	dep, _ := depot.NewDepot(char.ID)
 	dep.Capacity = 10
@@ -619,7 +630,7 @@ func TestSynthesize_CompletesOnlyThroughSleep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim failed after sleep: %v", err)
 	}
-	if claimRes.CreatedItem.DefinitionID != "item-002" || claimRes.ResultItemName != "Super Herb" || !slices.Equal(claimRes.IngredientNames, []string{"Herb"}) {
+	if claimRes.CreatedItem.DefinitionID != "item-002" || claimRes.ResultItemName != "Super Herb" || !slices.Equal(claimRes.IngredientNames, []string{"Herb", "Herb"}) {
 		t.Errorf("unexpected claim facts: %+v", claimRes)
 	}
 

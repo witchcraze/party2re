@@ -20,8 +20,7 @@ Legacy source: `party2/lib/free.cgi`. Commands use the [Action Gateway](../archi
 
 These are recorded, not approved departures:
 
-- **Action wait and facility log**: legacy successful commands keep the default action wait and write the facility log. The Gateway applies the [action wait](../architecture/place-log.md#action-wait); the commands' log rows remain [#1941](https://github.com/witchcraze/party2re/issues/1941).
-- **Listing number**: legacy shows the lowest free number. Go uses an opaque listing ID, and order ties use age then ID.
+- **Listing number**: legacy shows the lowest free number. Go uses an opaque listing ID, and order ties use age then ID. The facility log's `＠かう>` and `＠もどす>` rows therefore name the item, not the number (`free.cgi:185,278`).
 
 ## 2. Rules
 
