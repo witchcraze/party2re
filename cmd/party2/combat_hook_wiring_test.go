@@ -81,6 +81,15 @@ func TestBossVictoryBanquetProductionHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if obs, err := f.cmbt.normal.ObserveRun(ctx, f.char.PlayerID, f.char.ID); err != nil || obs != nil {
+		t.Fatalf("normal ObserveRun observed sealing run: obs=%+v err=%v", obs, err)
+	}
+	if obs, err := f.cmbt.boss.ObserveRun(ctx, f.char.PlayerID, f.char.ID); err != nil || obs == nil || obs.RunID != runID {
+		t.Fatalf("boss ObserveRun: obs=%+v err=%v", obs, err)
+	}
+	if active, err := f.cmbt.normal.GetActorRun(ctx, f.char.PlayerID, f.char.ID); err != nil || active == nil || active.RunID != runID {
+		t.Fatalf("normal GetActorRun lost shared enrollment: active=%+v err=%v", active, err)
+	}
 	cmd := runhost.Command{PlayerID: f.char.PlayerID, ActorID: f.char.ID, RunID: runID, ID: id.New(), Version: joined.Version, Action: "seal"}
 	if _, err := f.cmbt.boss.Command(ctx, cmd); err != nil {
 		t.Fatalf("seal: %v", err)

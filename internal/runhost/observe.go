@@ -119,6 +119,9 @@ func (s *Service[R, P]) ObserveRun(ctx context.Context, player, actor string) (*
 	if err != nil || run == nil {
 		return nil, err
 	}
+	if r.Kind != s.cfg.Kind {
+		return nil, nil
+	}
 	now := s.cfg.Clock.Now()
 	obs := &Observation{
 		ActorRun: *actorRun(r, actor, now),

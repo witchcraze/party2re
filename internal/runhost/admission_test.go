@@ -63,6 +63,7 @@ func TestObserveRunUsesSingleActorReadAndChecksOwnership(t *testing.T) {
 	now := time.Date(2026, 2, 1, 1, 0, 0, 0, time.UTC)
 	svc := func(run *testRun, err error) *Service[testRun, *testRun] {
 		return &Service[testRun, *testRun]{cfg: Config[testRun]{
+			Kind:       "normal",
 			Store:      publicRunStore{run: run, err: err},
 			Characters: stubChars{player: "owner"},
 			Clock:      fixedClock{now: now},
@@ -72,14 +73,25 @@ func TestObserveRunUsesSingleActorReadAndChecksOwnership(t *testing.T) {
 	if obs, err := svc(nil, nil).ObserveRun(context.Background(), "owner", "target"); err != nil || obs != nil {
 		t.Fatalf("no run: obs=%+v err=%v", obs, err)
 	}
-	if _, err := svc(&testRun{State: State{ID: "r1", Roster: []string{"other"}, Recipients: map[string]Recipient{"other": {PlayerID: "owner"}}}}, nil).ObserveRun(context.Background(), "owner", "target"); !errors.Is(err, ErrRecovery) {
+	if _, err := svc(&testRun{State: State{ID: "r1", Kind: "normal", Roster: []string{"other"}, Recipients: map[string]Recipient{"other": {PlayerID: "owner"}}}}, nil).ObserveRun(context.Background(), "owner", "target"); !errors.Is(err, ErrRecovery) {
 		t.Fatalf("missing roster member: %v", err)
 	}
-	if _, err := svc(&testRun{State: State{ID: "r1", Roster: []string{"target"}, Recipients: map[string]Recipient{"target": {PlayerID: "stranger"}}}}, nil).ObserveRun(context.Background(), "owner", "target"); !errors.Is(err, ErrForbidden) {
+	if _, err := svc(&testRun{State: State{ID: "r1", Kind: "normal", Roster: []string{"target"}, Recipients: map[string]Recipient{"target": {PlayerID: "stranger"}}}}, nil).ObserveRun(context.Background(), "owner", "target"); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("mismatched recipient owner: %v", err)
 	}
+	foreignKind := &testRun{State: State{ID: "r2", Kind: "sealing", Roster: []string{"target"}, Recipients: map[string]Recipient{"target": {PlayerID: "owner"}}}}
+	foreignSvc := svc(foreignKind, nil)
+	if obs, err := foreignSvc.ObserveRun(context.Background(), "owner", "target"); err != nil || obs != nil {
+		t.Fatalf("foreign kind ObserveRun: obs=%+v err=%v", obs, err)
+	}
+	if active, err := foreignSvc.GetActorRun(context.Background(), "owner", "target"); err != nil || active == nil || active.RunID != "r2" {
+		t.Fatalf("foreign kind GetActorRun: active=%+v err=%v", active, err)
+	}
+	if busy, err := foreignSvc.HasActiveRun(context.Background(), "target"); err != nil || !busy {
+		t.Fatalf("foreign kind HasActiveRun: busy=%v err=%v", busy, err)
+	}
 	timedOut := &testRun{State: State{
-		ID: "r1", Version: 4, Round: 2, LeaderID: "target", Roster: []string{"target"},
+		ID: "r1", Kind: "normal", Version: 4, Round: 2, LeaderID: "target", Roster: []string{"target"},
 		Admission:    Admission{Speed: 18},
 		LastActivity: now.Add(-1801 * time.Second),
 		LastActions:  map[string]time.Time{"target": now.Add(-10 * time.Second)},
