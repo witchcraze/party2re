@@ -76,7 +76,7 @@ func TestDepotLifecycle_Integration(t *testing.T) {
 	}
 
 	// 3. Expand depot capacity
-	dep, err = depotService.Expand(ctx, createdChar.ID)
+	dep.Depot, err = depotService.Expand(ctx, createdChar.ID)
 	if err != nil {
 		t.Fatalf("Expand error = %v", err)
 	}

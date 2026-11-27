@@ -56,6 +56,7 @@ Each facility design lists its command echoes (the actor and NPC rows); faciliti
 - **When rows are written**
   - Only a successful, effectful command writes.
   - Observation, navigation, list and prompt views (legacy `$mes`/`act_time=0`) and rejections never write.
+  - A success that legacy answers with a private `$mes`, such as Depot gold collection, writes nothing and releases its wait claim.
 - **The actor row**
   - The actor row is rendered on the server in the legacy look, for example `＠あずける>100G`.
   - The catalog declares the legacy verb once per action.

@@ -3,6 +3,7 @@ package depot
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -524,7 +525,7 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	// Withdraw from stack of 1 moves the row keeping its ID
 	singleItem, _ := item.NewInstance("item-002", 1)
 	dep.Items = []item.Instance{singleItem}
-	_ = depotRepo.Save(ctx, dep)
+	_ = depotRepo.Save(ctx, dep.Depot)
 	dep, _, err = service.WithdrawItem(ctx, char.ID, singleItem.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem N=1 error: %v", err)
@@ -671,7 +672,8 @@ func TestSellItemAndBatch(t *testing.T) {
 	_ = depotRepo.Save(ctx, dep)
 
 	// Single item sell: sword
-	dep, earned, err := service.SellItem(ctx, char.ID, sword.ID)
+	sold, earned, err := service.SellItem(ctx, char.ID, sword.ID)
+	dep = sold.Depot
 	if err != nil {
 		t.Fatalf("SellItem error: %v", err)
 	}
@@ -687,12 +689,16 @@ func TestSellItemAndBatch(t *testing.T) {
 	}
 
 	// Batch sell: shield and potions
-	dep, batchEarned, err := service.SellItems(ctx, char.ID, []string{shield.ID, potions.ID})
+	sold, batchEarned, err := service.SellItems(ctx, char.ID, []string{shield.ID, potions.ID})
+	dep = sold.Depot
 	if err != nil {
 		t.Fatalf("SellItems error: %v", err)
 	}
 	if batchEarned != 500 { // 400 + 100
 		t.Errorf("expected batchEarned 500, got %d", batchEarned)
+	}
+	if !reflect.DeepEqual(sold.Sales, []Sale{{Name: "Iron Shield", Price: 400}, {Name: "Herb", Price: 100}}) {
+		t.Errorf("sales = %+v", sold.Sales)
 	}
 	updatedChar, _ = charRepo.FindByID(ctx, char.ID)
 	if updatedChar.Money != 1100 {

@@ -132,4 +132,6 @@ Approved departure (#1109): collection takes entries oldest first only up to the
 
 ## Gateway Observation and Retained Operations
 
-Depot is a pageable town destination observed through character context (`depot.cgi:49–99`; capacity and occupied-row rule `system.cgi:1267–1288`). A stack occupies one slot. GET never creates or saves a Depot, sorts it or moves items. All Depot operations, including gold sending (`depot_send_money` with explicit `amount` and `recipient_character_id`), use Gateway commands; no Depot REST route remains. Command place-log echoes (#1941) and presence (#1943) remain open.
+Depot is a pageable town destination observed through character context (`depot.cgi:49–99`; capacity and occupied-row rule `system.cgi:1267–1288`). A stack occupies one slot. GET never creates or saves a Depot, sorts it or moves items. All Depot operations, including gold sending (`depot_send_money` with explicit `amount` and `recipient_character_id`), use Gateway commands; no Depot REST route remains.
+
+Each success logs the legacy `＠verb>target` row and the keeper's `$npc_com`. Prompts and `$mes` refusals log nothing, and neither does a withdrawal that collects held gold, which legacy answers privately (`depot.cgi:211–215`). `かくちょう` logs the confirmed `＠かくちょう>はい` (`depot.cgi:527–534`). `まとめてうる` logs the checked names joined by `<>` and a multi-line sale list (`depot.cgi:497–504`). A sale names the whole instance's price ([§3](#3-depot-item-sales-うる--まとめてうる)).

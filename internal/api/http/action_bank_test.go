@@ -658,5 +658,5 @@ func TestEchoCommandRequiresALegacyVerb(t *testing.T) {
 			t.Fatal("registered an echoed command without a legacy verb")
 		}
 	}()
-	withEchoCommand[struct{}, BankDepositResult]("depot_sort", nil, nil)
+	withEchoCommand[struct{}, BankDepositResult]("place_say", nil, nil)
 }

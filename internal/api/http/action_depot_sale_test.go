@@ -28,33 +28,41 @@ type depotSaleFixture struct {
 	recipient  string
 	activities []playercontext.Activity
 	collected  []depot.Remittance
+	names      depot.Receipt // echo names returned with the Depot
 }
 
-func (f *depotSaleFixture) DepositItem(ctx context.Context, actor, id string) (depot.Depot, error) {
-	f.ids, f.batch = []string{id}, false
-	return f.Expand(ctx, actor)
+func (f *depotSaleFixture) receipt(ctx context.Context, actor string) (depot.Receipt, error) {
+	r := f.names
+	var err error
+	r.Depot, err = f.Expand(ctx, actor)
+	return r, err
 }
 
-func (f *depotSaleFixture) WithdrawItem(ctx context.Context, actor, id string) (depot.Depot, []depot.Remittance, error) {
+func (f *depotSaleFixture) DepositItem(ctx context.Context, actor, id string) (depot.Receipt, error) {
 	f.ids, f.batch = []string{id}, false
-	dep, err := f.Expand(ctx, actor)
+	return f.receipt(ctx, actor)
+}
+
+func (f *depotSaleFixture) WithdrawItem(ctx context.Context, actor, id string) (depot.Receipt, []depot.Remittance, error) {
+	f.ids, f.batch = []string{id}, false
+	dep, err := f.receipt(ctx, actor)
 	return dep, f.collected, err
 }
 
-func (f *depotSaleFixture) SendItem(ctx context.Context, actor, recipient, id string) (depot.Depot, error) {
+func (f *depotSaleFixture) SendItem(ctx context.Context, actor, recipient, id string) (depot.Receipt, error) {
 	f.ids, f.batch, f.recipient = []string{id}, false, recipient
-	return f.Expand(ctx, actor)
+	return f.receipt(ctx, actor)
 }
 
-func (f *depotSaleFixture) SellItem(ctx context.Context, actor, id string) (depot.Depot, int, error) {
+func (f *depotSaleFixture) SellItem(ctx context.Context, actor, id string) (depot.Receipt, int, error) {
 	f.ids, f.batch = []string{id}, false
-	dep, err := f.Expand(ctx, actor)
+	dep, err := f.receipt(ctx, actor)
 	return dep, 150, err
 }
 
-func (f *depotSaleFixture) SellItems(ctx context.Context, actor string, ids []string) (depot.Depot, int, error) {
+func (f *depotSaleFixture) SellItems(ctx context.Context, actor string, ids []string) (depot.Receipt, int, error) {
 	f.ids, f.batch = ids, true
-	dep, err := f.Expand(ctx, actor)
+	dep, err := f.receipt(ctx, actor)
 	return dep, 150, err
 }
 

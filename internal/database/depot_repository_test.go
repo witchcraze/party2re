@@ -199,7 +199,7 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 	}
 
 	// 2. Expand depot
-	dep, err = service.Expand(ctx, char.ID)
+	dep.Depot, err = service.Expand(ctx, char.ID)
 	if err != nil {
 		t.Fatalf("Expand error: %v", err)
 	}

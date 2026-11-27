@@ -192,7 +192,7 @@ func TestDepotSalePersistenceAndRejections_Integration(t *testing.T) {
 					ids = []string{}
 				}
 			}
-			var gotDepot depot.Depot
+			var gotDepot depot.Receipt
 			var earned int
 			if tc.single {
 				gotDepot, earned, err = svc.SellItem(ctx, actor.ID, ids[0])
@@ -224,7 +224,7 @@ func TestDepotSalePersistenceAndRejections_Integration(t *testing.T) {
 				return
 			}
 			gotDepot.ItemDefs = nil
-			if wallet.Money != actor.Money+tc.wantEarn || !reflect.DeepEqual(gotDepot, after) {
+			if wallet.Money != actor.Money+tc.wantEarn || !reflect.DeepEqual(gotDepot.Depot, after) {
 				t.Fatalf("persisted sale mismatch: wallet=%d got=%+v after=%+v", wallet.Money, gotDepot, after)
 			}
 			remaining := map[string]item.Instance{}

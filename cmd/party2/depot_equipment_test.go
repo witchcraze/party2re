@@ -102,7 +102,7 @@ func newDepotEquipmentFixture(t *testing.T, slot item.Slot, equipped bool) depot
 	return depotEquipmentFixture{db, core, econ, sender, recipient, instance}
 }
 
-func (f depotEquipmentFixture) move(ctx context.Context, send bool) (depot.Depot, error) {
+func (f depotEquipmentFixture) move(ctx context.Context, send bool) (depot.Receipt, error) {
 	if send {
 		return f.econ.depot.SendItem(ctx, f.sender.ID, f.recipient.ID, f.instance.ID)
 	}
