@@ -119,7 +119,9 @@ func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
 	}
 
 	defer func() {
-		_ = repo.DeleteByPlayerID(ctx, "vk-player-1")
+		if err := repo.DeleteByPlayerID(ctx, "vk-player-1"); err != nil {
+			t.Errorf("cleanup DeleteByPlayerID vk-player-1: %v", err)
+		}
 	}()
 
 	// 1. Save sessions
@@ -262,7 +264,9 @@ func TestValkeySessionRepository_ZSet_TrackingAndLazyPurge(t *testing.T) {
 	)
 
 	defer func() {
-		_ = repo.DeleteByPlayerID(ctx, playerID)
+		if err := repo.DeleteByPlayerID(ctx, playerID); err != nil {
+			t.Errorf("cleanup DeleteByPlayerID %s: %v", playerID, err)
+		}
 	}()
 
 	now := time.Now().UTC()
@@ -330,7 +334,9 @@ func TestValkeySessionRepository_WrongTypeRecovery(t *testing.T) {
 	)
 
 	defer func() {
-		_ = repo.DeleteByPlayerID(ctx, playerID)
+		if err := repo.DeleteByPlayerID(ctx, playerID); err != nil {
+			t.Errorf("cleanup DeleteByPlayerID %s: %v", playerID, err)
+		}
 	}()
 
 	// 1. Manually create an old Set key holding a legacy token

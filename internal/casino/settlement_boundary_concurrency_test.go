@@ -148,8 +148,9 @@ func TestSettlementBoundary_ConcurrencyStress(t *testing.T) {
 		}
 		roomID := createdRoom.Room.ID
 		defer func() {
-			//lint:ignore error-swallow test room cleanup
-			_ = roomRepo.DeleteRoom(ctx, roomID)
+			if err := roomRepo.DeleteRoom(ctx, roomID); err != nil {
+				t.Errorf("cleanup DeleteRoom %s: %v", roomID, err)
+			}
 		}()
 
 		if _, err := svc.JoinRoom(ctx, roomID, p.charBID, "", 0); err != nil {

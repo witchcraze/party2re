@@ -178,7 +178,9 @@ func TestGvG_LeaveRoom_SideEffectsAndRetryIdempotency_Integration(t *testing.T) 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = baseRooms.DeleteRoom(ctx, detail.Room.ID)
+		if err := baseRooms.DeleteRoom(context.Background(), detail.Room.ID); err != nil {
+			t.Errorf("cleanup DeleteRoom %s: %v", detail.Room.ID, err)
+		}
 	})
 	if _, err := svc.JoinRoom(ctx, c2.ID, detail.Room.ID, ""); err != nil {
 		t.Fatal(err)
@@ -370,7 +372,9 @@ func TestGvG_LeaveRoom_RejoinAfterPreStartExit_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = baseRooms.DeleteRoom(ctx, detail.Room.ID)
+		if err := baseRooms.DeleteRoom(context.Background(), detail.Room.ID); err != nil {
+			t.Errorf("cleanup DeleteRoom %s: %v", detail.Room.ID, err)
+		}
 	})
 	if _, err := svc.JoinRoom(ctx, c2.ID, detail.Room.ID, ""); err != nil {
 		t.Fatal(err)
@@ -572,10 +576,15 @@ func TestGvG_LeaveRoom_PartialPublicationRecoveryAndAdmissionGuard_Integration(t
 
 	var roomIDs []string
 	t.Cleanup(func() {
+		cleanupCtx := context.Background()
 		for _, rid := range roomIDs {
-			_ = baseRooms.DeleteRoom(ctx, rid)
+			if err := baseRooms.DeleteRoom(cleanupCtx, rid); err != nil {
+				t.Errorf("cleanup DeleteRoom %s: %v", rid, err)
+			}
 			for _, cid := range []string{c1.ID, c2.ID, c3.ID} {
-				_ = baseRooms.DeleteCharacterRoom(ctx, cid, rid)
+				if err := baseRooms.DeleteCharacterRoom(cleanupCtx, cid, rid); err != nil {
+					t.Errorf("cleanup DeleteCharacterRoom (%s, %s): %v", cid, rid, err)
+				}
 			}
 		}
 	})
@@ -1235,11 +1244,17 @@ func TestGvG_LeaveRoom_RecoverCommittedRoundBeforeDeparture_Integration(t *testi
 		t.Cleanup(func() {
 			cleanupCtx := context.Background()
 			for _, gid := range []string{g1.ID, g2.ID} {
-				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid)
+				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid); err != nil {
+					t.Errorf("cleanup DELETE guilds %s: %v", gid, err)
+				}
 			}
 			for _, ch := range []struct{ id, playerID string }{{c1.ID, c1.PlayerID}, {c2.ID, c2.PlayerID}} {
-				_ = charRepo.Delete(cleanupCtx, ch.id)
-				_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", ch.playerID)
+				if err := charRepo.Delete(cleanupCtx, ch.id); err != nil {
+					t.Errorf("cleanup delete character %s: %v", ch.id, err)
+				}
+				if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", ch.playerID); err != nil {
+					t.Errorf("cleanup DELETE players %s: %v", ch.playerID, err)
+				}
 			}
 		})
 		if _, err := db.ExecContext(ctx, "UPDATE guilds SET color = '#FF3333' WHERE id = ?", g1.ID); err != nil {
@@ -1327,11 +1342,20 @@ func TestGvG_LeaveRoom_RecoverCommittedRoundBeforeDeparture_Integration(t *testi
 		}
 		t.Cleanup(func() {
 			cleanupCtx := context.Background()
-			_ = baseRooms.DeleteRoom(cleanupCtx, detail.Room.ID)
-			_ = baseRooms.DeleteCharacterRoom(cleanupCtx, c1.ID, detail.Room.ID)
-			_ = baseRooms.DeleteCharacterRoom(cleanupCtx, c2.ID, detail.Room.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM gvg_match_transitions WHERE room_id = ?", detail.Room.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM gvg_exit_claims WHERE room_id = ?", detail.Room.ID)
+			if err := baseRooms.DeleteRoom(cleanupCtx, detail.Room.ID); err != nil {
+				t.Errorf("cleanup DeleteRoom %s: %v", detail.Room.ID, err)
+			}
+			for _, cid := range []string{c1.ID, c2.ID} {
+				if err := baseRooms.DeleteCharacterRoom(cleanupCtx, cid, detail.Room.ID); err != nil {
+					t.Errorf("cleanup DeleteCharacterRoom (%s, %s): %v", cid, detail.Room.ID, err)
+				}
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_match_transitions WHERE room_id = ?", detail.Room.ID); err != nil {
+				t.Errorf("cleanup DELETE gvg_match_transitions %s: %v", detail.Room.ID, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM gvg_exit_claims WHERE room_id = ?", detail.Room.ID); err != nil {
+				t.Errorf("cleanup DELETE gvg_exit_claims %s: %v", detail.Room.ID, err)
+			}
 		})
 		if _, err := svc.JoinRoom(ctx, c2.ID, detail.Room.ID, ""); err != nil {
 			t.Fatal(err)

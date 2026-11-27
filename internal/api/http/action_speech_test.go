@@ -174,8 +174,14 @@ func TestSpeechWithRealValkey(t *testing.T) {
 	ctx := context.Background()
 	timers := timer.NewService(client)
 	log := placelog.New(client, placelog.Config{})
-	_ = timers.ReleaseLock(ctx, timer.CategoryActionWait, "hero")
-	t.Cleanup(func() { _ = timers.ReleaseLock(context.Background(), timer.CategoryActionWait, "hero") })
+	if err := timers.ReleaseLock(ctx, timer.CategoryActionWait, "hero"); err != nil {
+		t.Fatalf("reset action_wait lock hero: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := timers.ReleaseLock(context.Background(), timer.CategoryActionWait, "hero"); err != nil {
+			t.Errorf("cleanup ReleaseLock action_wait hero: %v", err)
+		}
+	})
 	bob, tag := "bob-"+id.New(), id.New()
 	_, _, router := actionWaitRouterWith(t, "bank", timers, time.Minute, WithPlaceLog(log), WithCharacterNames(fakeCharacterNames{"Bob": bob}))
 	if err := timers.SetLock(ctx, timer.CategoryActionWait, "hero", time.Minute); err != nil {

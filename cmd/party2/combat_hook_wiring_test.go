@@ -248,8 +248,12 @@ func TestPvPExitTavernProductionHook(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		cleanupCtx := context.Background()
-		_, _ = f.db.ExecContext(cleanupCtx, "DELETE FROM pvp_character_claims WHERE room_id = ?", room.Room.ID)
-		_, _ = f.db.ExecContext(cleanupCtx, "DELETE FROM pvp_room_transitions WHERE room_id = ?", room.Room.ID)
+		if _, err := f.db.ExecContext(cleanupCtx, "DELETE FROM pvp_character_claims WHERE room_id = ?", room.Room.ID); err != nil {
+			t.Errorf("cleanup DELETE pvp_character_claims %s: %v", room.Room.ID, err)
+		}
+		if _, err := f.db.ExecContext(cleanupCtx, "DELETE FROM pvp_room_transitions WHERE room_id = ?", room.Room.ID); err != nil {
+			t.Errorf("cleanup DELETE pvp_room_transitions %s: %v", room.Room.ID, err)
+		}
 	})
 	if _, err := f.cmbt.pvp.LeaveRoom(ctx, f.char.ID, room.Room.ID); err != nil {
 		t.Fatalf("LeaveRoom: %v", err)

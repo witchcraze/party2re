@@ -2,6 +2,7 @@ package pvp_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"testing"
@@ -32,6 +33,44 @@ type scriptedIntegrationEngine struct {
 
 func (e scriptedIntegrationEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
 	return e.fn(req)
+}
+
+func registerPvPCharacterCleanup(t *testing.T, db *sql.DB, store *database.PvPTransitionRepository, baseRooms *pvp.ValkeyRoomRepository, chars ...corecharacter.Character) {
+	t.Helper()
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		charRepo, err := database.NewCharacterRepository(db)
+		if err != nil {
+			t.Errorf("cleanup NewCharacterRepository: %v", err)
+		}
+		playerRepo, err := database.NewPlayerRepository(db)
+		if err != nil {
+			t.Errorf("cleanup NewPlayerRepository: %v", err)
+		}
+		for _, c := range chars {
+			rid, err := store.FindCharacterClaim(cleanupCtx, c.ID)
+			if err != nil {
+				t.Errorf("cleanup FindCharacterClaim %s: %v", c.ID, err)
+			} else if rid != "" {
+				if err := baseRooms.DeleteRoom(cleanupCtx, rid); err != nil {
+					t.Errorf("cleanup DeleteRoom %s: %v", rid, err)
+				}
+				if err := baseRooms.DeleteCharacterRoom(cleanupCtx, c.ID, rid); err != nil {
+					t.Errorf("cleanup DeleteCharacterRoom (%s, %s): %v", c.ID, rid, err)
+				}
+			}
+			if charRepo != nil {
+				if err := charRepo.Delete(cleanupCtx, c.ID); err != nil {
+					t.Errorf("cleanup delete character %s: %v", c.ID, err)
+				}
+			}
+			if playerRepo != nil {
+				if err := playerRepo.Delete(cleanupCtx, c.PlayerID); err != nil {
+					t.Errorf("cleanup delete player %s: %v", c.PlayerID, err)
+				}
+			}
+		}
+	})
 }
 
 func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
@@ -111,17 +150,7 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		for _, c := range []corecharacter.Character{c1, c2, c3} {
-			if rid, err := store.FindCharacterClaim(cleanupCtx, c.ID); err == nil && rid != "" {
-				_ = baseRooms.DeleteRoom(cleanupCtx, rid)
-				_ = baseRooms.DeleteCharacterRoom(cleanupCtx, c.ID, rid)
-			}
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", c.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", c.PlayerID)
-		}
-	})
+	registerPvPCharacterCleanup(t, db, store, baseRooms, c1, c2, c3)
 
 	// c1 holds the shoes, c2 holds the rooster, and c3 consumes a held tool.
 	shoes, err := coreitem.NewInstance("item-105", 1)
@@ -207,7 +236,9 @@ func TestPvPLeaveExitSideEffectsIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM pvp_room_transitions WHERE room_id = ?", room.Room.ID)
+		if _, err := db.ExecContext(context.Background(), "DELETE FROM pvp_room_transitions WHERE room_id = ?", room.Room.ID); err != nil {
+			t.Errorf("cleanup DELETE pvp_room_transitions %s: %v", room.Room.ID, err)
+		}
 	})
 	if _, err := svc.JoinRoom(ctx, c2.ID, room.Room.ID, ""); err != nil {
 		t.Fatal(err)
@@ -321,24 +352,16 @@ func TestPvPKickIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		for _, c := range []corecharacter.Character{c1, c2} {
-			if rid, err := store.FindCharacterClaim(cleanupCtx, c.ID); err == nil && rid != "" {
-				_ = baseRooms.DeleteRoom(cleanupCtx, rid)
-				_ = baseRooms.DeleteCharacterRoom(cleanupCtx, c.ID, rid)
-			}
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", c.ID)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", c.PlayerID)
-		}
-	})
+	registerPvPCharacterCleanup(t, db, store, baseRooms, c1, c2)
 
 	room, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{Name: "KickTest", Bet: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), "DELETE FROM pvp_room_transitions WHERE room_id = ?", room.Room.ID)
+		if _, err := db.ExecContext(context.Background(), "DELETE FROM pvp_room_transitions WHERE room_id = ?", room.Room.ID); err != nil {
+			t.Errorf("cleanup DELETE pvp_room_transitions %s: %v", room.Room.ID, err)
+		}
 	})
 	if _, err := svc.JoinRoom(ctx, c2.ID, room.Room.ID, ""); err != nil {
 		t.Fatal(err)

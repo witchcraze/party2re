@@ -788,9 +788,12 @@ func TestValkeyRepository_ConcurrentLeaderLeaveStress_LiveValkey(t *testing.T) {
 		partyID := fmt.Sprintf("leave-stress-%d-%d", time.Now().UnixNano(), round)
 		ids := []string{partyID + "-lead", partyID + "-a", partyID + "-b", partyID + "-c", partyID + "-stay"}
 		t.Cleanup(func() {
-			_ = repo.DeleteParty(context.Background(), partyID)
+			cleanupCtx := context.Background()
+			if err := repo.DeleteParty(cleanupCtx, partyID); err != nil {
+				t.Errorf("cleanup DeleteParty %s: %v", partyID, err)
+			}
 			for _, id := range ids {
-				if err := client.Do(context.Background(), client.B().Del().Key(charPrefix+id).Build()).Error(); err != nil {
+				if err := client.Do(cleanupCtx, client.B().Del().Key(charPrefix+id).Build()).Error(); err != nil {
 					t.Errorf("cleanup DEL %s: %v", charPrefix+id, err)
 				}
 			}

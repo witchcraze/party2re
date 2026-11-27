@@ -577,10 +577,16 @@ func TestGuildRepository_LockCharacterForUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		chars, _ := NewCharacterRepository(db)
-		players, _ := NewPlayerRepository(db)
-		_ = chars.Delete(ctx, char.ID)
-		_ = players.Delete(ctx, char.PlayerID)
+		if chars, err := NewCharacterRepository(db); err != nil {
+			t.Errorf("cleanup NewCharacterRepository: %v", err)
+		} else if err := chars.Delete(ctx, char.ID); err != nil {
+			t.Errorf("cleanup delete character %s: %v", char.ID, err)
+		}
+		if players, err := NewPlayerRepository(db); err != nil {
+			t.Errorf("cleanup NewPlayerRepository: %v", err)
+		} else if err := players.Delete(ctx, char.PlayerID); err != nil {
+			t.Errorf("cleanup delete player %s: %v", char.PlayerID, err)
+		}
 	}()
 
 	err = RunInTx(ctx, db, func(txCtx context.Context) error {

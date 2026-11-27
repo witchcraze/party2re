@@ -264,7 +264,11 @@ func seedActiveCostume(t *testing.T, repo costume.Repository, charID string) cos
 	if err := repo.SaveActiveCostume(ctx, prior, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = repo.ClearActiveCostume(context.Background(), charID) })
+	t.Cleanup(func() {
+		if err := repo.ClearActiveCostume(context.Background(), charID); err != nil {
+			t.Errorf("cleanup ClearActiveCostume %s: %v", charID, err)
+		}
+	})
 	return prior
 }
 

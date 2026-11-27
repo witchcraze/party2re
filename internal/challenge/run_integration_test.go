@@ -138,7 +138,9 @@ func newRunFixture(t *testing.T, count int) *runFixture {
 	}
 	f.restart(t)
 	t.Cleanup(func() {
-		_, _ = f.db.ExecContext(context.Background(), `DELETE FROM challenge_hall_of_fame WHERE tier_id = ?`, f.tier) //lint:ignore error-swallow best-effort cleanup of this test's record
+		if _, err := f.db.ExecContext(context.Background(), `DELETE FROM challenge_hall_of_fame WHERE tier_id = ?`, f.tier); err != nil {
+			t.Errorf("cleanup DELETE challenge_hall_of_fame %s: %v", f.tier, err)
+		}
 	})
 	return f
 }

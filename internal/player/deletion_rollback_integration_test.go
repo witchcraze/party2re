@@ -472,7 +472,11 @@ func beginLockOrderTx(t *testing.T, db *sql.DB) lockOrderTx {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = tx.Rollback() })
+	t.Cleanup(func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			t.Errorf("cleanup tx rollback: %v", err)
+		}
+	})
 	l := lockOrderTx{Tx: tx}
 	if err := tx.QueryRowContext(ctx, `SELECT CONNECTION_ID()`).Scan(&l.thread); err != nil {
 		t.Fatal(err)
@@ -549,7 +553,9 @@ func TestAccountDeletionSerializesWithBanLockOrder(t *testing.T) {
 		done <- f.accounts.DeleteAccount(ctx, owner.ID, "")
 	}()
 	t.Cleanup(func() {
-		_ = ban.Rollback()
+		if err := ban.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			t.Errorf("cleanup ban rollback: %v", err)
+		}
 		<-finished
 	})
 	ban.waitBlocked(t, monitor, done,
@@ -591,7 +597,9 @@ func TestCharacterDeletionSerializesWithListingPurchase(t *testing.T) {
 		done <- f.charSvc.Delete(ctx, seller.PlayerID, seller.ID)
 	}()
 	t.Cleanup(func() {
-		_ = purchase.Rollback()
+		if err := purchase.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			t.Errorf("cleanup purchase rollback: %v", err)
+		}
 		<-finished
 	})
 	purchase.waitBlocked(t, monitor, done, "DELETE FROM fleamarket_listings WHERE seller_character_id = ?")

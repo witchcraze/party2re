@@ -267,7 +267,9 @@ func (f *bookFixture) character(t *testing.T, gender string) corecharacter.Chara
 	}
 	c.Gender = gender
 	t.Cleanup(func() {
-		_ = f.costume.repo.ClearActiveCostume(context.Background(), c.ID)
+		if err := f.costume.repo.ClearActiveCostume(context.Background(), c.ID); err != nil {
+			t.Errorf("cleanup ClearActiveCostume %s: %v", c.ID, err)
+		}
 	})
 	return c
 }

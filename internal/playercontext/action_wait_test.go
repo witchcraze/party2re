@@ -219,7 +219,11 @@ func TestConcurrentActionWaitClaimsAdmitOne(t *testing.T) {
 	run := func(t *testing.T, timers timer.Service) {
 		ctx := context.Background()
 		charID := id.New()
-		t.Cleanup(func() { _ = timers.ReleaseLock(context.Background(), timer.CategoryActionWait, charID) })
+		t.Cleanup(func() {
+			if err := timers.ReleaseLock(context.Background(), timer.CategoryActionWait, charID); err != nil {
+				t.Errorf("cleanup ReleaseLock action_wait %s: %v", charID, err)
+			}
+		})
 		s := NewService(waitChars{}, waitActions{}, timers, WithActionWait(timers, time.Minute))
 		var wins atomic.Int32
 		fns := make([]func() error, 20)
