@@ -365,26 +365,7 @@ eligibility, and do not offer an unconnected command as executable. Each offered
 action supplies its strict `params_schema` and, where useful, `params_template`;
 `required_params` still lists the complete command's required fields. Previously
 selected values appear as constants/templates, so a client asks only for remaining
-inputs without guessing IDs or parameter types. For example, a selected Shop
-product offers (schema abbreviated):
-
-```json
-{
-  "action": "shop_purchase",
-  "required_params": ["shop_type", "item_definition_id", "quantity"],
-  "params_template": {"shop_type": "weapon", "item_definition_id": "weapon-01"},
-  "params_schema": {
-    "type": "object",
-    "additionalProperties": false,
-    "required": ["shop_type", "item_definition_id", "quantity"],
-    "properties": {
-      "shop_type": {"type": "string", "const": "weapon"},
-      "item_definition_id": {"type": "string", "const": "weapon-01"},
-      "quantity": {"type": "integer"}
-    }
-  }
-}
-```
+inputs without guessing IDs or parameter types.
 
 The mutation sends the full typed params. Never fill an omitted mutation target
 from mutable navigation, substitute a newer selection, or treat a template as
@@ -556,17 +537,6 @@ of those runtime deletion gates.
 
 The command outcome/recovery contract was approved in [#646](https://github.com/witchcraze/party2re/issues/646) on 2026-10-04. Service adapters preserve existing game rules and persistence while the HTTP boundary owns parameter decoding and response composition. Current coverage and route retirement are tracked separately from this contract.
 
-### Request Body
-
-```json
-{
-  "action": "bank_deposit",
-  "params": {
-    "amount": 5000
-  }
-}
-```
-
 ### Input and execution boundary
 
 The authenticated path character is the actor. Reject actor identity fields such
@@ -637,10 +607,6 @@ Bank, Shop, SecretShop, stage adventure, rescue and Home sleep/wake commands kee
 - `rescue_request` bypasses ordinary entry and Sleep/CanWake gates and does not guarantee that sleep is removed.
 - An early Wake reaches the service and returns its known rejection; an awake character has no eligible Wake.
 
-### SecretShop purchase command contract
-
-The command requires explicit `item_id` and `quantity`; it does not inherit the retired REST default of one.
-
 ### Normal-run commands and recovery
 
 These commands are the transport of Adventure's [durable run authority](transient-run-state.md#run-host-durable-command-boundary-1325); OpenAPI owns their inputs and results. `run_*` commands are mode-neutral, for later reuse by every run-host mode.
@@ -664,25 +630,7 @@ These commands are the transport of Adventure's [durable run authority](transien
 `error` and `context_error` use the existing `{ code, message }` error detail
 shape. Refresh errors use `CONTEXT_REFRESH_FAILED` with a safe public message;
 internal storage details are not exposed. Successful refresh omits
-`context_error`. For example, a completed bank deposit with a failed refresh is:
-
-```json
-{
-  "success": true,
-  "result": {
-    "character_id": "char-123",
-    "money": 7000,
-    "deposit": 15000,
-    "amount": 5000,
-    "message": "5000 Gお預かりいたしました"
-  },
-  "context": null,
-  "context_error": {
-    "code": "CONTEXT_REFRESH_FAILED",
-    "message": "操作は完了しました。状態を再取得してください。"
-  }
-}
-```
+`context_error`.
 
 This contract prevents a refresh failure from disguising a known successful
 mutation as a retryable command failure. It does **not** provide idempotency or
@@ -693,55 +641,7 @@ idempotency-key/result-storage design, outside this scope.
 
 ---
 
-## 4. Client Integration Models
-
-### 4.1 AI Agent (LLM Tool Calling)
-
-AI Agents interact with Party2 Re using **only two LLM Tools**:
-
-1. `get_character_context(character_id)`
-2. `execute_character_action(character_id, action, params)`
-
-```python
-# Minimal Agent Loop
-context = get_character_context(char_id)
-
-while True:
-    # Select from available_actions even while timers exist: wake/rescue
-    # can be eligible. A ready timer does not certify settled work.
-    # Poll with a bounded retry delay when no suitable action is chosen.
-    # LLM selects action from context.available_actions
-    chosen_action, params = llm.decide(context.available_actions)
-    
-    resp = execute_character_action(char_id, chosen_action, params)
-    context = resp.context or get_character_context(char_id)
-```
-
-**Benefits**:
-- Compact tool definitions: clients need not inject the entire REST specification into the model prompt.
-- Zero URL hallucination: the LLM only selects from the authoritative `available_actions` list.
-
-### 4.2 Web UI (Server-Driven UI)
-
-1. Initial load calls `GET /context` to populate the global state store (Pinia / Redux).
-2. Navigation and facility choices come from typed scene data and
-   `available_actions`; selected values prefill command templates. The approved
-   progressive model above replaces the initial globally broad catalog menu.
-3. Action buttons submit `{ action, params }` to `POST /actions` once.
-4. A non-null response context replaces the store's observation. If refresh
-   failed, preserve the command result/error and re-fetch GET context without
-   replaying POST. A transport failure does not authorize automatic replay.
-
-### 4.3 Line / Discord Bots
-
-Chatbot frameworks handle state transitions with zero routing boilerplate:
-- When a user clicks an interactive button (e.g. "預金する"), the bot sends `action="bank_deposit"` and `params={"amount": ...}` to `POST /actions`.
-- The bot replies with `result` and renders quick-reply buttons directly from the returned `context.available_actions`.
-- If an error occurs, the bot displays the error message alongside the recovery buttons.
-
----
-
-## 5. Architectural constraints
+## 4. Architectural constraints
 
 1. **Authentication & Ownership**:
    All gateway calls verify character ownership (`char.PlayerID == player.ID`) using `withAuthenticatedCharacter`.
@@ -754,7 +654,7 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 
 ---
 
-## 6. Related documents
+## 5. Related documents
 
 - [OpenAPI](../api/openapi.json): registered routes and transport schemas.
 - [Components](components.md#playercontext): observation/command responsibility boundaries.

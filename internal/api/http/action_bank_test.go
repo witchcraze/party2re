@@ -15,6 +15,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -176,7 +177,7 @@ func TestBankGatewaySuccessAndRefreshFailure(t *testing.T) {
 					if err := json.Unmarshal(got["result"], &result); err != nil {
 						t.Fatal(err)
 					}
-					want := BankDepositResult{bank.DepositResult{CharacterID: "hero", Money: tc.wantMoney, Deposit: tc.wantDeposit, Amount: tc.amount}, fmt.Sprintf("%d Gお預かりいたしました", tc.amount)}
+					want := BankDepositResult{bank.DepositResult{CharacterID: "hero", Money: tc.wantMoney, Deposit: tc.wantDeposit, Amount: tc.amount}, fmt.Sprintf("%d Gお預かりいたしました", tc.amount), commandEcho{}}
 					if result != want {
 						t.Fatalf("lost deposit result: %+v", result)
 					}
@@ -185,7 +186,7 @@ func TestBankGatewaySuccessAndRefreshFailure(t *testing.T) {
 					if err := json.Unmarshal(got["result"], &result); err != nil {
 						t.Fatal(err)
 					}
-					want := BankWithdrawResult{bank.WithdrawResult{CharacterID: "hero", Money: tc.wantMoney, Deposit: tc.wantDeposit, Amount: tc.amount, ActualWithdrawn: tc.actual, Refunded: tc.refunded}, fmt.Sprintf("%d Gお返しいたします", tc.amount)}
+					want := BankWithdrawResult{bank.WithdrawResult{CharacterID: "hero", Money: tc.wantMoney, Deposit: tc.wantDeposit, Amount: tc.amount, ActualWithdrawn: tc.actual, Refunded: tc.refunded}, fmt.Sprintf("%d Gお返しいたします", tc.amount), commandEcho{}}
 					if result != want {
 						t.Fatalf("lost withdrawal result: %+v", result)
 					}
@@ -221,7 +222,6 @@ func TestBankGatewayServiceValidation(t *testing.T) {
 		{"bank_withdraw", "BANK_INVALID_AMOUNT", -1, 1000},
 		{"bank_deposit", "BANK_INSUFFICIENT_FUNDS", 101, 1000},
 		{"bank_withdraw", "BANK_INSUFFICIENT_BALANCE", 1001, 1000},
-		{"bank_deposit", "BANK_DEPOSIT_LIMIT_EXCEEDED", 40, bank.MaxDeposit - 39},
 	} {
 		for _, refreshFails := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/%d/%t", tc.action, tc.amount, refreshFails), func(t *testing.T) {
@@ -347,7 +347,6 @@ func TestBankGatewayExplicitErrorMappings(t *testing.T) {
 			{bank.ErrInvalidAmount, 400, "BANK_INVALID_AMOUNT"},
 			{bank.ErrInsufficientFunds, 400, "BANK_INSUFFICIENT_FUNDS"},
 			{bank.ErrInsufficientBalance, 400, "BANK_INSUFFICIENT_BALANCE"},
-			{bank.ErrDepositLimitExceeded, 400, "BANK_DEPOSIT_LIMIT_EXCEEDED"},
 			{corecharacter.ErrNotFound, 404, "CHARACTER_NOT_FOUND"},
 			{errors.New("secret ambiguous store failure"), 500, "EXECUTION_FAILED"},
 		} {
@@ -597,4 +596,67 @@ func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
 	if observation.Character.IconURL != "https://i.imgur.com/AvBTest.gif" {
 		t.Fatalf("expected icon_url to match saved avatar, got %q", observation.Character.IconURL)
 	}
+}
+
+func TestBankCommandsEchoIntoThePlaceLog(t *testing.T) {
+	for _, tc := range []struct {
+		name, action, params string
+		deposit              int64
+		actor, reply         string
+		wantDeposit          int64
+	}{
+		{"deposit", "bank_deposit", `{"amount":40}`, 1000, "＠あずける>40G", "40 Gお預かりいたしました", 1040},
+		{"withdraw", "bank_withdraw", `{"amount":40}`, 1000, "＠ひきだす>40G", "40 Gお返しいたします", 960},
+		// bank.cgi:51-53 answers the limit before the wallet check, logged and unchanged.
+		{"deposit limit", "bank_deposit", `{"amount":500}`, bank.MaxDeposit - 39, "＠あずける>500G", "これ以上お預かりできません", bank.MaxDeposit - 39},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			log := &fakePlaceLog{}
+			f, _, _, router := bankSceneRouter(t, WithPlaceLog(log))
+			f.char.Name, f.char.Color, f.char.Deposit = "Hero", "#00ff00", tc.deposit
+			status, raw := gatewayRequest(t, router, "hero", "session", "application/json", fmt.Sprintf(`{"action":%q,"params":%s}`, tc.action, tc.params), nil)
+			if status != 200 || f.char.Deposit != tc.wantDeposit {
+				t.Fatalf("%s: %d deposit %d %s", tc.action, status, f.char.Deposit, raw["error"])
+			}
+			want := []placelog.Entry{
+				{SpeakerKind: placelog.SpeakerNPC, Name: bank.NPCName, Color: npcColor, Text: tc.reply},
+				{SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: "hero", Name: "Hero", Color: "#00ff00", Text: tc.actor},
+			}
+			if log.writes != 1 || len(log.rows) != 2 {
+				t.Fatalf("rows: %+v", log.rows)
+			}
+			for i := range want {
+				got := log.rows[i]
+				got.OccurredAt = time.Time{}
+				if got != want[i] {
+					t.Fatalf("row %d = %+v, want %+v", i, got, want[i])
+				}
+			}
+			var result struct{ Message string }
+			if err := json.Unmarshal(raw["result"], &result); err != nil || result.Message != tc.reply {
+				t.Fatalf("result: %s %v", raw["result"], err)
+			}
+		})
+	}
+}
+
+func TestBankRejectionWritesNoLogAndAppendFailureKeepsTheOutcome(t *testing.T) {
+	log := &fakePlaceLog{}
+	f, _, _, router := bankSceneRouter(t, WithPlaceLog(log))
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"bank_deposit","params":{"amount":101}}`, nil); status != 400 || log.writes != 0 {
+		t.Fatalf("rejection: %d writes %d %s", status, log.writes, raw["error"])
+	}
+	log.err = errors.New("valkey down")
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"bank_withdraw","params":{"amount":40}}`, nil); status != 200 || f.char.Deposit != 960 {
+		t.Fatalf("append failure changed the outcome: %d %s", status, raw["error"])
+	}
+}
+
+func TestEchoCommandRequiresALegacyVerb(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("registered an echoed command without a legacy verb")
+		}
+	}()
+	withEchoCommand[struct{}, BankDepositResult]("depot_sort", nil, nil)
 }

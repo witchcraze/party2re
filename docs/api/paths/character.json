@@ -54,7 +54,7 @@
               }
             }
           },
-          "description": "Malformed outer JSON uses the existing transport error. Invalid typed params return INVALID_ACTION_PARAMS without execution/context. Rescue service invalid actor ID returns RESCUE_INVALID_CHARACTER_ID with refreshed context when possible. Bank service rejections use BANK_INVALID_CHARACTER_ID, BANK_INVALID_AMOUNT, BANK_INSUFFICIENT_FUNDS, BANK_INSUFFICIENT_BALANCE and BANK_DEPOSIT_LIMIT_EXCEEDED; known rejections retain their code if refresh fails. Invalid navigation scene/subject/page returns INVALID_SELECTION with refresh; malformed typed inputs return INVALID_ACTION_PARAMS. Depot sale rejections use DEPOT_INVALID_CHARACTER_ID, DEPOT_INVALID_ITEM_INSTANCE_ID, DEPOT_EMPTY_ITEM_LIST, DEPOT_INVALID_AMOUNT and DEPOT_INVALID_QUANTITY."
+          "description": "Malformed outer JSON uses the existing transport error. Invalid typed params return INVALID_ACTION_PARAMS without execution/context. Rescue service invalid actor ID returns RESCUE_INVALID_CHARACTER_ID with refreshed context when possible. Bank service rejections use BANK_INVALID_CHARACTER_ID, BANK_INVALID_AMOUNT, BANK_INSUFFICIENT_FUNDS and BANK_INSUFFICIENT_BALANCE; known rejections retain their code if refresh fails. Invalid navigation scene/subject/page returns INVALID_SELECTION with refresh; malformed typed inputs return INVALID_ACTION_PARAMS. Depot sale rejections use DEPOT_INVALID_CHARACTER_ID, DEPOT_INVALID_ITEM_INSTANCE_ID, DEPOT_EMPTY_ITEM_LIST, DEPOT_INVALID_AMOUNT and DEPOT_INVALID_QUANTITY."
         },
         "401": {
           "content": {

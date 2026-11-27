@@ -53,6 +53,9 @@ type ActionDefinition struct {
 	// WaitExempt explains why success does not start the legacy action wait;
 	// empty means it does. WaitRecovery, WaitSpeech and WaitReload are also never blocked.
 	WaitExempt WaitExemption `json:"-"`
+	// LegacyVerb is the ＠ verb the place log shows for the actor's row; every
+	// command that writes the log declares it (lib/system.cgi:660-676).
+	LegacyVerb string `json:"-"`
 }
 
 // WaitExemption records the legacy reason an action does not start the wait.
@@ -175,10 +178,10 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	// Legacy shows delivery notices while rendering the own home and clears them then (home.cgi:49-68).
 	{ID: "home_notice_ack", Label: "おしらせを確認する", Category: "home", OperationID: "executeCharacterAction", RequiredParams: []string{"notice_ids"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitReload},
 	// Shared NPC interaction in the current facility (docs/architecture/place-log.md).
-	{ID: "npc_talk", Label: "はなす", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "npc_inspect", Label: "しらべる", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitPrivate},
+	{ID: "npc_talk", Label: "はなす", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "はなす"},
+	{ID: "npc_inspect", Label: "しらべる", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitPrivate, LegacyVerb: "しらべる"},
 	{ID: "place_say", Label: "発言する", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"text"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitSpeech},
-	{ID: "place_whisper", Label: "ささやく", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"recipient_name", "text"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitWhisper},
+	{ID: "place_whisper", Label: "ささやく", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"recipient_name", "text"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, WaitExempt: WaitWhisper, LegacyVerb: "ささやき"},
 	{
 		ID:             "chapel_pray",
 		Label:          "礼拝堂で祈る（祈願）",
@@ -199,6 +202,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"amount"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		LegacyVerb:     "あずける",
 	},
 	{
 		ID:             "bank_withdraw",
@@ -207,6 +211,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		OperationID:    "executeCharacterAction",
 		RequiredParams: []string{"amount"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		LegacyVerb:     "ひきだす",
 	},
 	{
 		ID:             "depot_expand",
@@ -316,8 +321,8 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		RequiredParams: []string{"item_id", "quantity"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
-	{ID: "park_divinate", Label: "うらない", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "secretshop_puffpuff", Label: "ぱふぱふ", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "park_divinate", Label: "うらない", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "うらない"},
+	{ID: "secretshop_puffpuff", Label: "ぱふぱふ", Category: "npc", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "ぱふぱふ"},
 	{ID: "blackmarket_sacrifice", Label: "闇市でレアアイテムをささげる", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "blackmarket_trade", Label: "闇市景品交換", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"prize_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 

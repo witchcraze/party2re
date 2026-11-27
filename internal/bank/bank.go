@@ -77,11 +77,12 @@ func CalculateDeposit(currentMoney int, currentDeposit int64, amount int64) (new
 	if amount <= 0 {
 		return 0, 0, ErrInvalidAmount
 	}
-	if int64(currentMoney) < amount {
-		return 0, 0, ErrInsufficientFunds
-	}
+	// Legacy checks the limit before the wallet (bank.cgi:51-54).
 	if currentDeposit > MaxDeposit-amount {
 		return 0, 0, ErrDepositLimitExceeded
+	}
+	if int64(currentMoney) < amount {
+		return 0, 0, ErrInsufficientFunds
 	}
 	return currentMoney - int(amount), currentDeposit + amount, nil
 }

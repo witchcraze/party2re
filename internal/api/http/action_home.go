@@ -179,7 +179,7 @@ func homeTalk(h *Handler, ctx context.Context, current playercontext.Result) (NP
 	if err != nil {
 		return NPCResult{}, err
 	}
-	h.appendNPCLog(ctx, current, "＠はなす", talk.PetName, talk.Phrase, "")
+	h.appendNPCLog(ctx, current, talkVerb, talk.PetName, talk.Phrase, "")
 	if talk.Phrase == "" {
 		return NPCResult{}, nil
 	}
