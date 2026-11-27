@@ -175,6 +175,7 @@ func (c *Catalog) AllGems() []Gem {
 }
 
 // GemRank returns the catalog index of the gem for sorting (lower is earlier).
+// gems.json lists gems in legacy @gems number order, so this is that order.
 func (c *Catalog) GemRank(idOrName string) int {
 	if rank, ok := c.gemRanks[strings.TrimSpace(idOrName)]; ok {
 		return rank

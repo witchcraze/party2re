@@ -134,10 +134,7 @@ func (s *Service) SellGem(ctx context.Context, characterID, itemInstanceOrDefID 
 			}
 		}
 
-		sellPrice := int(float64(gem.Price) * 0.5)
-		if sellPrice < 1 {
-			sellPrice = 1
-		}
+		sellPrice := gem.Price / 2
 
 		if err := char.AddMoney(sellPrice); err != nil {
 			return err
