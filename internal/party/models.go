@@ -264,7 +264,6 @@ type Repository interface {
 	GetMember(ctx context.Context, partyID, characterID string) (Member, error)
 	GetActivePartyByCharacter(ctx context.Context, characterID string) (Party, Member, error)
 	RemoveMember(ctx context.Context, partyID, characterID string) error
-	CountMembers(ctx context.Context, partyID string) (int, error)
 }
 
 // CharacterRepository defines character persistence required by Party service.

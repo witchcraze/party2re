@@ -162,11 +162,7 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 		if err != nil {
 			return err
 		}
-		if err := s.joinWaitingLobby(txCtx, p, characterID, password); err != nil {
-			return err
-		}
-
-		members, err := s.repo.GetMembers(txCtx, partyID)
+		members, err := s.joinWaitingLobby(txCtx, p, characterID, password)
 		if err != nil {
 			return err
 		}
@@ -183,62 +179,64 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 	return detail, nil
 }
 
-func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, password string) error {
+func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, password string) ([]Member, error) {
 	if p.Status != StatusRecruiting {
-		return ErrPartyNotRecruiting
+		return nil, ErrPartyNotRecruiting
 	}
 
-	count, err := s.repo.CountMembers(txCtx, p.ID)
+	members, err := s.repo.GetMembers(txCtx, p.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if count >= p.MaxMembers {
-		return ErrPartyFull
+	if len(members) >= p.MaxMembers {
+		return nil, ErrPartyFull
 	}
 
 	if p.PasswordHash != "" {
 		if hashPassword(password) != p.PasswordHash {
-			return ErrInvalidPassword
+			return nil, ErrInvalidPassword
 		}
 	}
 
 	char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Joins to different lobbies hold different lobby locks; the character row
 	// lock serializes them, so membership is read only after taking it.
-	if _, _, err := s.repo.GetActivePartyByCharacter(txCtx, characterID); err == nil {
-		return ErrAlreadyInParty
+	if err := s.ensureCharacterNotInParty(txCtx, characterID); err != nil {
+		return nil, err
 	}
 	if s.activityCheck != nil {
 		if err := s.activityCheck(txCtx, characterID); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if char.Stats.HP <= 0 {
-		return ErrCharacterUnconscious
+		return nil, ErrCharacterUnconscious
 	}
 	if char.Tired >= 100 {
-		return ErrCharacterExhausted
+		return nil, ErrCharacterExhausted
 	}
 	// Only the creator passes the stage gate (quest.cgi:518–524 vs add_member).
 	if p.NeedJoin != "" {
 		if err := ValidateNeedJoin(p.NeedJoin, char); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	battleActor, err := s.buildBattleActor(txCtx, char.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	maxHP := char.Stats.MaxHP
 	if battleActor != nil {
 		maxHP = battleActor.MaxHP
 	}
 
-	return s.repo.AddMember(txCtx, Member{
+	// Build the reply from the locked pre-write roster and accepted member so a
+	// post-write read failure never disguises an applied join as an unknown outcome.
+	joined := Member{
 		PartyID:       p.ID,
 		CharacterID:   char.ID,
 		CharacterName: char.Name,
@@ -247,9 +245,50 @@ func (s *Service) joinWaitingLobby(txCtx context.Context, p Party, characterID, 
 		HP:            char.Stats.HP,
 		MaxHP:         maxHP,
 		IsLeader:      false,
-		JoinedAt:      time.Now().UTC(),
+		JoinedAt:      s.now(),
 		BattleActor:   battleActor,
+	}
+	if err := s.repo.AddMember(txCtx, joined); err != nil {
+		return nil, err
+	}
+	return mergeJoinedMember(members, joined), nil
+}
+
+func (s *Service) ensureCharacterNotInParty(ctx context.Context, characterID string) error {
+	_, _, err := s.repo.GetActivePartyByCharacter(ctx, characterID)
+	if err == nil {
+		return ErrAlreadyInParty
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+func mergeJoinedMember(existing []Member, joined Member) []Member {
+	merged := make([]Member, 0, len(existing)+1)
+	replaced := false
+	for _, m := range existing {
+		if m.CharacterID == joined.CharacterID {
+			merged = append(merged, joined)
+			replaced = true
+			continue
+		}
+		merged = append(merged, m)
+	}
+	if !replaced {
+		merged = append(merged, joined)
+	}
+	slices.SortStableFunc(merged, func(a, b Member) int {
+		if a.IsLeader != b.IsLeader {
+			if a.IsLeader {
+				return -1
+			}
+			return 1
+		}
+		return a.JoinedAt.Compare(b.JoinedAt)
 	})
+	return merged
 }
 
 // LeaveParty removes the character from the lobby and applies the legacy

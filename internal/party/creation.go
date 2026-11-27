@@ -70,8 +70,8 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			return err
 		}
 		// Membership is read under the character row lock (see joinWaitingLobby).
-		if _, _, err := s.repo.GetActivePartyByCharacter(txCtx, leaderCharID); err == nil {
-			return ErrAlreadyInParty
+		if err := s.ensureCharacterNotInParty(txCtx, leaderCharID); err != nil {
+			return err
 		}
 		if s.activityCheck != nil {
 			if err := s.activityCheck(txCtx, leaderCharID); err != nil {

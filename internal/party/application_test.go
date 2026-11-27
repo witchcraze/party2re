@@ -224,10 +224,6 @@ func (r *mockPartyRepository) RemoveMember(_ context.Context, partyID, character
 	return nil
 }
 
-func (r *mockPartyRepository) CountMembers(_ context.Context, partyID string) (int, error) {
-	return len(r.members[partyID]), nil
-}
-
 func (r *mockPartyRepository) SaveAdventureLog(_ context.Context, log PartyAdventureLog) error {
 	if r.saveLogErr != nil {
 		return r.saveLogErr

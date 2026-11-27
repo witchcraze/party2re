@@ -390,15 +390,6 @@ func (r *ValkeyRepository) RemoveMember(ctx context.Context, partyID, characterI
 	return mapLuaError(res.Error())
 }
 
-// CountMembers returns the active member count for a party lobby.
-func (r *ValkeyRepository) CountMembers(ctx context.Context, partyID string) (int, error) {
-	members, err := r.GetMembers(ctx, partyID)
-	if err != nil {
-		return 0, err
-	}
-	return len(members), nil
-}
-
 // SaveAdventureLog persists durable adventure logs through the configured store.
 func (r *repositoryConfig) SaveAdventureLog(ctx context.Context, log PartyAdventureLog) error {
 	if r.logRepo == nil {

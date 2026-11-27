@@ -90,15 +90,7 @@ func TestMemoryRepository_Lifecycle(t *testing.T) {
 		t.Fatalf("AddMember member failed: %v", err)
 	}
 
-	// 4. CountMembers & GetMembers
-	count, err := repo.CountMembers(ctx, p.ID)
-	if err != nil {
-		t.Fatalf("CountMembers failed: %v", err)
-	}
-	if count != 2 {
-		t.Errorf("got member count %d, want 2", count)
-	}
-
+	// 4. GetMembers
 	members, err := repo.GetMembers(ctx, p.ID)
 	if err != nil {
 		t.Fatalf("GetMembers failed: %v", err)
@@ -135,9 +127,12 @@ func TestMemoryRepository_Lifecycle(t *testing.T) {
 	if err := repo.RemoveMember(ctx, p.ID, "char-2"); err != nil {
 		t.Fatalf("RemoveMember failed: %v", err)
 	}
-	count, _ = repo.CountMembers(ctx, p.ID)
-	if count != 1 {
-		t.Errorf("expected 1 member after remove, got %d", count)
+	members, err = repo.GetMembers(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("GetMembers after RemoveMember failed: %v", err)
+	}
+	if len(members) != 1 {
+		t.Errorf("expected 1 member after remove, got %d", len(members))
 	}
 	_, _, err = repo.GetActivePartyByCharacter(ctx, "char-2")
 	if err != party.ErrNotFound {
@@ -1006,5 +1001,117 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 	}
 	if _, err := svc.JoinParty(ctx, createdPartyID, memberID, "secret"); err != nil {
 		t.Fatalf("expected JoinParty with valid password to succeed after UpdateParty, got %v", err)
+	}
+}
+
+type liveJoinReadFaultRepo struct {
+	party.Repository
+	addSucceeded bool
+	readErr      error
+}
+
+func (r *liveJoinReadFaultRepo) AddMember(ctx context.Context, m party.Member) error {
+	if err := r.Repository.AddMember(ctx, m); err != nil {
+		return err
+	}
+	r.addSucceeded = true
+	return nil
+}
+
+func (r *liveJoinReadFaultRepo) GetMembers(ctx context.Context, partyID string) ([]party.Member, error) {
+	if r.addSucceeded {
+		return nil, r.readErr
+	}
+	return r.Repository.GetMembers(ctx, partyID)
+}
+
+func TestValkeyRepository_JoinPartyPreservesMembershipOnPostWriteReadFailure_LiveValkey(t *testing.T) {
+	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
+	if valkeyAddr == "" {
+		valkeyAddr = "127.0.0.1:6379"
+	}
+	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{valkeyAddr}})
+	if err != nil {
+		t.Skipf("skipping live Valkey test: %v", err)
+	}
+	t.Cleanup(client.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
+		t.Skipf("skipping live Valkey test (cannot ping Valkey at %s): %v", valkeyAddr, err)
+	}
+
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	lobbyPrefix := "party2:test:joinfault:" + suffix + ":lobby:"
+	charPrefix := "party2:test:joinfault:" + suffix + ":character:"
+	indexKey := "party2:test:joinfault:" + suffix + ":lobbies"
+
+	healthyRepo := party.NewValkeyRepository(client,
+		party.WithLobbyKeyPrefix(lobbyPrefix),
+		party.WithCharacterKeyPrefix(charPrefix),
+		party.WithLobbiesIndexKey(indexKey),
+	)
+
+	leaderID := "joinfault-leader-" + suffix
+	memberID := "joinfault-member-" + suffix
+	var createdPartyID string
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		if createdPartyID != "" {
+			if err := healthyRepo.DeleteParty(cleanupCtx, createdPartyID); err != nil {
+				t.Errorf("cleanup DeleteParty %s: %v", createdPartyID, err)
+			}
+		}
+		for _, id := range []string{leaderID, memberID} {
+			if err := client.Do(cleanupCtx, client.B().Del().Key(charPrefix+id).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", charPrefix+id, err)
+			}
+		}
+	})
+
+	charRepo := &liveTestCharRepo{
+		chars: map[string]corecharacter.Character{
+			leaderID: {ID: leaderID, Name: "Leader", JobID: "job-01", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+			memberID: {ID: memberID, Name: "Member", JobID: "job-02", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100}},
+		},
+	}
+
+	healthySvc, err := party.NewService(healthyRepo, charRepo, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil)
+	if err != nil {
+		t.Fatalf("NewService(healthy) failed: %v", err)
+	}
+	created, err := healthySvc.CreateParty(ctx, leaderID, party.CreatePartyRequest{
+		Speed: 18, Name: "JoinFaultLive", StageID: "stage-1", Password: "secret", MaxMembers: 4,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	createdPartyID = created.Party.ID
+
+	faultRepo := &liveJoinReadFaultRepo{
+		Repository: healthyRepo,
+		readErr:    errors.New("injected post-write roster read failure"),
+	}
+	faultSvc, err := party.NewService(faultRepo, charRepo, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil)
+	if err != nil {
+		t.Fatalf("NewService(fault) failed: %v", err)
+	}
+
+	joined, err := faultSvc.JoinParty(ctx, createdPartyID, memberID, "secret")
+	if err != nil {
+		t.Fatalf("JoinParty failed after Valkey AddMember succeeded: %v", err)
+	}
+	if len(joined.Members) != 2 || joined.Members[0].CharacterID != leaderID || joined.Members[1].CharacterID != memberID {
+		t.Fatalf("unexpected joined members: %+v", joined.Members)
+	}
+
+	members, err := healthyRepo.GetMembers(ctx, createdPartyID)
+	if err != nil || len(members) != 2 || members[1].CharacterID != memberID {
+		t.Fatalf("healthy Valkey GetMembers = %+v, err=%v", members, err)
+	}
+	activeParty, activeMember, err := healthyRepo.GetActivePartyByCharacter(ctx, memberID)
+	if err != nil || activeParty.ID != createdPartyID || activeMember.CharacterID != memberID {
+		t.Fatalf("healthy Valkey GetActivePartyByCharacter = %+v / %+v, err=%v", activeParty, activeMember, err)
 	}
 }
