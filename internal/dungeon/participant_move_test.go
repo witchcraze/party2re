@@ -80,7 +80,10 @@ func TestMove_ConcurrentMembersApplyOneStepPerRevision(t *testing.T) {
 		lead, ally := "pm-lead-"+suffix, "pm-ally-"+suffix
 		t.Cleanup(func() {
 			cleanupDungeonValkey(t, client, lead)
-			client.Do(context.Background(), client.B().Del().Key(fmt.Sprintf("party2:dungeon:{char:%s}:member", ally)).Build())
+			key := fmt.Sprintf("party2:dungeon:{char:%s}:member", ally)
+			if err := client.Do(context.Background(), client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
 		})
 		store, err := dungeon.NewValkeyExpeditionRepository(client)
 		if err != nil {
@@ -265,7 +268,10 @@ func TestMove_Item188RevivesFallenMembersOnMove(t *testing.T) {
 		t.Cleanup(func() {
 			cleanupDungeonValkey(t, client, ids[0])
 			for _, id := range ids[1:] {
-				client.Do(context.Background(), client.B().Del().Key(fmt.Sprintf("party2:dungeon:{char:%s}:member", id)).Build())
+				key := fmt.Sprintf("party2:dungeon:{char:%s}:member", id)
+				if err := client.Do(context.Background(), client.B().Del().Key(key).Build()).Error(); err != nil {
+					t.Errorf("cleanup DEL %s: %v", key, err)
+				}
 			}
 		})
 		store, err := dungeon.NewValkeyExpeditionRepository(client)

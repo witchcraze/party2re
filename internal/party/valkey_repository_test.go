@@ -290,10 +290,14 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 
 	// Cleanup before/after
 	cleanup := func() {
-		_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+partyID).Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+leaderID).Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+memberID).Build()).Error()
-		_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error()
+		if err := client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error(); err != nil {
+			t.Errorf("cleanup ZREM %s %s: %v", testIndexKey, partyID, err)
+		}
+		for _, key := range []string{testLobbyPrefix + partyID, testCharPrefix + leaderID, testCharPrefix + memberID} {
+			if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
+		}
 	}
 	cleanup()
 	defer cleanup()
@@ -461,11 +465,14 @@ func TestValkeyRepository_CapacityEnforcement_LiveValkey(t *testing.T) {
 
 	partyID := "test-party-cap-live"
 	cleanup := func() {
-		_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+partyID).Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+"lead").Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+"mem1").Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+"mem2").Build()).Error()
-		_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error()
+		if err := client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error(); err != nil {
+			t.Errorf("cleanup ZREM %s %s: %v", testIndexKey, partyID, err)
+		}
+		for _, key := range []string{testLobbyPrefix + partyID, testCharPrefix + "lead", testCharPrefix + "mem1", testCharPrefix + "mem2"} {
+			if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
+		}
 	}
 	cleanup()
 	defer cleanup()
@@ -624,12 +631,18 @@ func TestValkeyRepository_ConcurrentJoinStress_LiveValkey(t *testing.T) {
 	maxMembers := 4
 
 	cleanup := func() {
-		_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+partyID).Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+"stress-live-lead").Build()).Error()
+		keys := []string{testLobbyPrefix + partyID, testCharPrefix + "stress-live-lead"}
 		for i := 1; i <= 60; i++ {
-			_ = client.Do(ctx, client.B().Del().Key(fmt.Sprintf("%scontender-live-%d", testCharPrefix, i)).Build()).Error()
+			keys = append(keys, fmt.Sprintf("%scontender-live-%d", testCharPrefix, i))
 		}
-		_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error()
+		if err := client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error(); err != nil {
+			t.Errorf("cleanup ZREM %s %s: %v", testIndexKey, partyID, err)
+		}
+		for _, key := range keys {
+			if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
+		}
 	}
 	cleanup()
 	defer cleanup()
@@ -761,7 +774,7 @@ func TestValkeyRepository_ConcurrentLeaderLeaveStress_LiveValkey(t *testing.T) {
 	if err != nil {
 		t.Skipf("skipping live Valkey test: %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(client.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
@@ -777,7 +790,9 @@ func TestValkeyRepository_ConcurrentLeaderLeaveStress_LiveValkey(t *testing.T) {
 		t.Cleanup(func() {
 			_ = repo.DeleteParty(context.Background(), partyID)
 			for _, id := range ids {
-				_ = client.Do(context.Background(), client.B().Del().Key(charPrefix+id).Build()).Error()
+				if err := client.Do(context.Background(), client.B().Del().Key(charPrefix+id).Build()).Error(); err != nil {
+					t.Errorf("cleanup DEL %s: %v", charPrefix+id, err)
+				}
 			}
 		})
 		now := time.Now().UTC()
@@ -852,12 +867,18 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 	var createdPartyID string
 
 	cleanup := func() {
+		keys := []string{testCharPrefix + leaderID, testCharPrefix + memberID}
 		if createdPartyID != "" {
-			_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+createdPartyID).Build()).Error()
-			_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(createdPartyID).Build()).Error()
+			keys = append(keys, testLobbyPrefix+createdPartyID)
+			if err := client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(createdPartyID).Build()).Error(); err != nil {
+				t.Errorf("cleanup ZREM %s %s: %v", testIndexKey, createdPartyID, err)
+			}
 		}
-		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+leaderID).Build()).Error()
-		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+memberID).Build()).Error()
+		for _, key := range keys {
+			if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
+		}
 	}
 	cleanup()
 	defer cleanup()

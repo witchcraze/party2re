@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,16 +14,21 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/testutil"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
-func cleanupChallengeValkey(t *testing.T, client valkeygo.Client, charIDs ...string) {
+func cleanupChallengeValkey(t testing.TB, client valkeygo.Client, charIDs ...string) {
 	t.Helper()
 	ctx := context.Background()
 	for _, cid := range charIDs {
-		sKey := fmt.Sprintf("party2:challenge:{char:%s}:session", cid)
-		rKey := fmt.Sprintf("party2:challenge:{char:%s}:rewards", cid)
-		client.Do(ctx, client.B().Del().Key(sKey).Build())
-		client.Do(ctx, client.B().Del().Key(rKey).Build())
+		for _, key := range []string{
+			fmt.Sprintf("party2:challenge:{char:%s}:session", cid),
+			fmt.Sprintf("party2:challenge:{char:%s}:rewards", cid),
+		} {
+			if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
+		}
 	}
 }
 
@@ -581,6 +587,25 @@ func TestValkeySessionRepository_DiscardActiveSession_ReplacementPreserved(t *te
 		active, err := repo.GetActiveSession(ctx, id)
 		if err != nil || active == nil || active.ID != sess2.ID {
 			t.Fatalf("replacement session for %s was destroyed or lost: %+v %v", id, active, err)
+		}
+	}
+}
+
+func TestCleanupHelperReportsValkeyErrors(t *testing.T) {
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(context.Context, valkeygo.Completed) valkeygo.ValkeyResult {
+		return valkeygo.NewErrorResult(errors.New("injected cleanup failure"))
+	}))
+	spy := &deletionSpyTB{TB: t}
+	cleanupChallengeValkey(spy, client, "c1")
+	if got := len(client.RecordedCommands()); got != 2 {
+		t.Fatalf("cleanup attempted %d commands, want all 2 despite failures", got)
+	}
+	if len(spy.errs) != 2 {
+		t.Fatalf("cleanup reported %d errors, want 2: %q", len(spy.errs), spy.errs)
+	}
+	for i, key := range []string{"party2:challenge:{char:c1}:session", "party2:challenge:{char:c1}:rewards"} {
+		if !strings.Contains(spy.errs[i], key) || !strings.Contains(spy.errs[i], "injected cleanup failure") {
+			t.Errorf("error %d = %q, want key %q and cause", i, spy.errs[i], key)
 		}
 	}
 }

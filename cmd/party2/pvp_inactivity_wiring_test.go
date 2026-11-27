@@ -65,8 +65,11 @@ func TestPvPInactivityProductionWiring(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		_ = f.soc.timer.ReleaseLock(context.Background(), timer.CategorySleep, f.char.ID)
-		_ = client.Do(context.Background(), client.B().Del().Key(pvp.DefaultRoomKeyPrefix+room.Room.ID).Build()).Error()
-		_ = client.Do(context.Background(), client.B().Del().Key(pvp.DefaultCharacterKeyPrefix+f.char.ID).Build()).Error()
+		for _, key := range []string{pvp.DefaultRoomKeyPrefix + room.Room.ID, pvp.DefaultCharacterKeyPrefix + f.char.ID} {
+			if err := client.Do(context.Background(), client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
+		}
 		_, _ = f.db.ExecContext(context.Background(), `DELETE FROM pvp_room_transitions WHERE room_id = ?`, room.Room.ID)
 	})
 

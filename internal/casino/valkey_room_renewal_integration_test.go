@@ -88,8 +88,9 @@ func openIsolatedTestValkey(t *testing.T, dbIndex int) valkeygo.Client {
 
 func cleanupTestDB(t *testing.T, client valkeygo.Client) {
 	t.Helper()
-	ctx := context.Background()
-	_ = client.Do(ctx, client.B().Flushdb().Build())
+	if err := client.Do(context.Background(), client.B().Flushdb().Build()).Error(); err != nil {
+		t.Errorf("cleanup FLUSHDB isolated Valkey DB: %v", err)
+	}
 }
 
 // TestValkeyRoomRenewal_RealValkeyIndexFailureAndPartialEffect verifies the reproduction

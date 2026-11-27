@@ -38,7 +38,10 @@ func TestWorker_QueueTraversal_StarvationPrevention(t *testing.T) {
 	ctx := context.Background()
 	actorID := id.New()
 	t.Cleanup(func() {
-		client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+		key := "party2:scheduled:actor:" + actorID
+		if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %s: %v", key, err)
+		}
 	})
 
 	fault := &terminalFaultClient{Client: client}
@@ -157,7 +160,10 @@ func TestWorker_QueueTraversal_MultiPage(t *testing.T) {
 	ctx := context.Background()
 	actorID := id.New()
 	t.Cleanup(func() {
-		client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+		key := "party2:scheduled:actor:" + actorID
+		if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %s: %v", key, err)
+		}
 	})
 
 	fault := &terminalFaultClient{Client: client}
@@ -238,7 +244,10 @@ func TestWorker_QueueTraversal_HealthyContrast(t *testing.T) {
 	ctx := context.Background()
 	actorID := id.New()
 	t.Cleanup(func() {
-		client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+		key := "party2:scheduled:actor:" + actorID
+		if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %s: %v", key, err)
+		}
 	})
 
 	repo := scheduling.NewValkeyRepository(client)
@@ -305,7 +314,10 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 	ctx := context.Background()
 	actorID := id.New()
 	t.Cleanup(func() {
-		client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+		key := "party2:scheduled:actor:" + actorID
+		if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %s: %v", key, err)
+		}
 	})
 
 	fault := &terminalFaultClient{Client: client}
@@ -505,7 +517,10 @@ func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
 	ctx := context.Background()
 	actorID := id.New()
 	t.Cleanup(func() {
-		client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+		key := "party2:scheduled:actor:" + actorID
+		if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %s: %v", key, err)
+		}
 	})
 
 	repo := scheduling.NewValkeyRepository(client)
@@ -543,7 +558,9 @@ func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, sID := range staleIDs {
-			client.Do(ctx, client.B().Zrem().Key("party2:scheduled:pending").Member(sID).Build())
+			if err := client.Do(ctx, client.B().Zrem().Key("party2:scheduled:pending").Member(sID).Build()).Error(); err != nil {
+				t.Errorf("cleanup ZREM party2:scheduled:pending %s: %v", sID, err)
+			}
 		}
 	})
 

@@ -240,7 +240,9 @@ func TestPvPActivityPublicationAndRecoveryIntegration(t *testing.T) {
 						t.Fatal(err)
 					}
 					t.Cleanup(func() {
-						_ = af.client.Do(context.Background(), af.client.B().Del().Key(wrongTypeKey).Build())
+						if err := af.client.Do(context.Background(), af.client.B().Del().Key(wrongTypeKey).Build()).Error(); err != nil {
+							t.Errorf("cleanup DEL %s: %v", wrongTypeKey, err)
+						}
 					})
 					baseRooms = af.rooms.RoomRepository
 					faultClient := &pvpCommandFailure{

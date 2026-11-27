@@ -144,13 +144,22 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 		return c
 	}
 
-	cleanupKeys := func(partyID string, charIDs ...string) {
+	cleanupKeys := func(t *testing.T, partyID string, charIDs ...string) {
+		t.Helper()
+		keys := make([]string, 0, len(charIDs)+1)
 		if partyID != "" {
-			_ = client.Do(ctx, client.B().Del().Key(lobbyPrefix+partyID).Build()).Error()
-			_ = client.Do(ctx, client.B().Zrem().Key(indexKey).Member(partyID).Build()).Error()
+			keys = append(keys, lobbyPrefix+partyID)
+			if err := client.Do(ctx, client.B().Zrem().Key(indexKey).Member(partyID).Build()).Error(); err != nil {
+				t.Errorf("cleanup ZREM %s %s: %v", indexKey, partyID, err)
+			}
 		}
 		for _, cid := range charIDs {
-			_ = client.Do(ctx, client.B().Del().Key(charPrefix+cid).Build()).Error()
+			keys = append(keys, charPrefix+cid)
+		}
+		for _, key := range keys {
+			if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
 		}
 	}
 
@@ -164,7 +173,7 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { cleanupKeys(created.Party.ID, leader.ID, member.ID) })
+		t.Cleanup(func() { cleanupKeys(t, created.Party.ID, leader.ID, member.ID) })
 
 		if _, err := svc.JoinParty(ctx, created.Party.ID, member.ID, ""); err != nil {
 			t.Fatal(err)
@@ -253,7 +262,7 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { cleanupKeys(created.Party.ID, leader.ID) })
+		t.Cleanup(func() { cleanupKeys(t, created.Party.ID, leader.ID) })
 
 		p := created.Party
 		p.Mode = adventure.CrawlModeCalm
@@ -326,7 +335,7 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { cleanupKeys(createdPaid.Party.ID, paidChar.ID) })
+		t.Cleanup(func() { cleanupKeys(t, createdPaid.Party.ID, paidChar.ID) })
 
 		// Valkey removal failure rolls back ResetFullness and ClaimDelivery too.
 		valkeyErr := errors.New("injected valkey failure")
@@ -393,7 +402,7 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { cleanupKeys(createdUnpaid.Party.ID, unpaidChar.ID) })
+		t.Cleanup(func() { cleanupKeys(t, createdUnpaid.Party.ID, unpaidChar.ID) })
 
 		unpaidRes, err := leaveSvc.LeaveParty(ctx, createdUnpaid.Party.ID, unpaidChar.ID)
 		if err != nil {

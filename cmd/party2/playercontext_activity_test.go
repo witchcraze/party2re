@@ -390,7 +390,7 @@ func TestCasinoActivityReaderPreservesDiscoveryAcrossRoomRenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	t.Cleanup(client.Close)
 
 	ctx := context.Background()
 	prefix := "act1091-" + id.New()[:8]
@@ -430,10 +430,17 @@ func TestCasinoActivityReaderPreservesDiscoveryAcrossRoomRenewal(t *testing.T) {
 	roomID := created.Room.ID
 	t.Cleanup(func() {
 		bg := context.Background()
-		_ = client.Do(bg, client.B().Del().Key(casino.DefaultRoomKeyPrefix+roomID).Build())
-		_ = client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build())
+		keys := []string{casino.DefaultRoomKeyPrefix + roomID}
 		for _, actor := range []string{leader, peer, spec} {
-			_ = client.Do(bg, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+actor).Build())
+			keys = append(keys, casino.DefaultCharacterKeyPrefix+actor)
+		}
+		if err := client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build()).Error(); err != nil {
+			t.Errorf("cleanup ZREM %s %s: %v", casino.DefaultRoomsActiveIndexKey, roomID, err)
+		}
+		for _, key := range keys {
+			if err := client.Do(bg, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
 		}
 	})
 

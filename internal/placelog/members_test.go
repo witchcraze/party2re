@@ -32,7 +32,9 @@ func realMembers(t *testing.T) (*placelog.Members, valkey.Client, placelog.Place
 	p := placelog.Place{Kind: "test", ID: id.New()}
 	t.Cleanup(func() {
 		base := "party2:placemember:{test:" + p.ID + "}:"
-		client.Do(context.Background(), client.B().Del().Key(base+"joined", base+"expiry", base+"profile", base+"token").Build())
+		if err := client.Do(context.Background(), client.B().Del().Key(base+"joined", base+"expiry", base+"profile", base+"token").Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %v: %v", []string{base + "joined", base + "expiry", base + "profile", base + "token"}, err)
+		}
 	})
 	return placelog.NewMembers(client, 300*time.Second), client, p
 }
@@ -53,7 +55,9 @@ func memberIDs(t *testing.T, s *placelog.Members, p placelog.Place, now time.Tim
 func newMember(t *testing.T, client valkey.Client, name string) placelog.Member {
 	m := placelog.Member{CharacterID: id.New(), Name: name, Color: "#FFFFFF"}
 	t.Cleanup(func() {
-		client.Do(context.Background(), client.B().Del().Key("party2:placemember:character:"+m.CharacterID).Build())
+		if err := client.Do(context.Background(), client.B().Del().Key("party2:placemember:character:"+m.CharacterID).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %v: %v", []string{"party2:placemember:character:" + m.CharacterID}, err)
+		}
 	})
 	return m
 }
@@ -118,7 +122,9 @@ func TestValkeyMembersPhysicalTTLBoundary(t *testing.T) {
 		p := placelog.Place{Kind: "test", ID: id.New()}
 		t.Cleanup(func() {
 			base := "party2:placemember:{test:" + p.ID + "}:"
-			client.Do(context.Background(), client.B().Del().Key(base+"joined", base+"expiry", base+"profile", base+"token").Build())
+			if err := client.Do(context.Background(), client.B().Del().Key(base+"joined", base+"expiry", base+"profile", base+"token").Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %v: %v", []string{base + "joined", base + "expiry", base + "profile", base + "token"}, err)
+			}
 		})
 		return p
 	}
@@ -266,7 +272,9 @@ func TestValkeyMembersSameSecondArrivalOrder(t *testing.T) {
 	late, early := newMember(t, client, "Z"), newMember(t, client, "A")
 	late.CharacterID, early.CharacterID = "z"+late.CharacterID, "a"+early.CharacterID
 	t.Cleanup(func() {
-		client.Do(context.Background(), client.B().Del().Key("party2:placemember:character:"+late.CharacterID, "party2:placemember:character:"+early.CharacterID).Build())
+		if err := client.Do(context.Background(), client.B().Del().Key("party2:placemember:character:"+late.CharacterID, "party2:placemember:character:"+early.CharacterID).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %v: %v", []string{"party2:placemember:character:" + late.CharacterID, "party2:placemember:character:" + early.CharacterID}, err)
+		}
 	})
 	for _, m := range []placelog.Member{late, early, late} {
 		if err := s.Refresh(ctx, p, m, now); err != nil {
@@ -688,10 +696,9 @@ func BenchmarkValkeyMembersRefreshExpiredCohort(b *testing.B) {
 			base := "party2:placemember:{bench:" + p.ID + "}:"
 			actor := placelog.Member{CharacterID: "actor-" + id.New(), Name: "Actor", Color: "#FFFFFF"}
 			b.Cleanup(func() {
-				client.Do(context.Background(), client.B().Del().Key(
-					base+"joined", base+"expiry", base+"profile", base+"token",
-					"party2:placemember:character:"+actor.CharacterID,
-				).Build())
+				if err := client.Do(context.Background(), client.B().Del().Key(base+"joined", base+"expiry", base+"profile", base+"token", "party2:placemember:character:"+actor.CharacterID).Build()).Error(); err != nil {
+					b.Errorf("cleanup DEL %v: %v", []string{base + "joined", base + "expiry", base + "profile", base + "token", "party2:placemember:character:" + actor.CharacterID}, err)
+				}
 			})
 
 			s := placelog.NewMembers(client, 300*time.Second)

@@ -199,7 +199,10 @@ func TestDungeonIntegration_LegacyWipedOutSettlement_RealSQLAndValkey(t *testing
 		t.Cleanup(func() {
 			cleanupCtx := context.Background()
 			cleanupDungeonValkey(t, client, lead.ID)
-			_ = client.Do(cleanupCtx, client.B().Del().Key("party2:dungeon:{char:"+ally.ID+"}:member").Build()).Error()
+			key := "party2:dungeon:{char:" + ally.ID + "}:member"
+			if err := client.Do(cleanupCtx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
 			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM dungeon_expedition_history WHERE character_id IN (?, ?)", lead.ID, ally.ID)
 			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM dungeon_active_expeditions WHERE character_id IN (?, ?)", lead.ID, ally.ID)
 			_ = chars.Delete(cleanupCtx, lead.ID)

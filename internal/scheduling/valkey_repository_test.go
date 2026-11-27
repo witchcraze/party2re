@@ -3,6 +3,9 @@ package scheduling_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,15 +13,21 @@ import (
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/testutil"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
-func cleanupKeys(t *testing.T, client valkey.Client, ids ...string) {
+func cleanupKeys(t testing.TB, client valkey.Client, ids ...string) {
 	t.Helper()
 	ctx := context.Background()
 	for _, id := range ids {
-		client.Do(ctx, client.B().Del().Key("party2:scheduled:action:"+id).Build())
-		client.Do(ctx, client.B().Del().Key("party2:scheduled:lock:"+id).Build())
-		client.Do(ctx, client.B().Zrem().Key("party2:scheduled:pending").Member(id).Build())
+		for _, key := range []string{"party2:scheduled:action:" + id, "party2:scheduled:lock:" + id} {
+			if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
+		}
+		if err := client.Do(ctx, client.B().Zrem().Key("party2:scheduled:pending").Member(id).Build()).Error(); err != nil {
+			t.Errorf("cleanup ZREM party2:scheduled:pending %s: %v", id, err)
+		}
 	}
 }
 
@@ -508,4 +517,34 @@ func TestValkeyRepository_CancelByActorID(t *testing.T) {
 	if err != nil || len(val) == 0 {
 		t.Errorf("action %s should still exist", id3)
 	}
+}
+
+func TestCleanupHelperReportsValkeyErrors(t *testing.T) {
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(context.Context, valkey.Completed) valkey.ValkeyResult {
+		return valkey.NewErrorResult(errors.New("injected cleanup failure"))
+	}))
+	spy := &cleanupSpyTB{TB: t}
+	cleanupKeys(spy, client, "a1")
+	if got := len(client.RecordedCommands()); got != 3 {
+		t.Fatalf("cleanup attempted %d commands, want all 3 despite failures", got)
+	}
+	if len(spy.errs) != 3 {
+		t.Fatalf("cleanup reported %d errors, want 3: %q", len(spy.errs), spy.errs)
+	}
+	for i, key := range []string{"party2:scheduled:action:a1", "party2:scheduled:lock:a1", "party2:scheduled:pending a1"} {
+		if !strings.Contains(spy.errs[i], key) || !strings.Contains(spy.errs[i], "injected cleanup failure") {
+			t.Errorf("error %d = %q, want key %q and cause", i, spy.errs[i], key)
+		}
+	}
+}
+
+type cleanupSpyTB struct {
+	testing.TB
+	errs []string
+}
+
+func (s *cleanupSpyTB) Helper() {}
+
+func (s *cleanupSpyTB) Errorf(format string, args ...any) {
+	s.errs = append(s.errs, fmt.Sprintf(format, args...))
 }

@@ -433,7 +433,7 @@ func TestCasinoGatewayPreservesAdmissionAndEntryGatesAcrossRenewal(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	t.Cleanup(client.Close)
 
 	ctx := context.Background()
 	f := newCasinoSceneFixture(t)
@@ -456,10 +456,13 @@ func TestCasinoGatewayPreservesAdmissionAndEntryGatesAcrossRenewal(t *testing.T)
 	}
 	t.Cleanup(func() {
 		bg := context.Background()
-		_ = client.Do(bg, client.B().Del().Key(casino.DefaultRoomKeyPrefix+roomID).Build())
-		_ = client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build())
-		for _, actor := range []string{"hero", peerID} {
-			_ = client.Do(bg, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+actor).Build())
+		if err := client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build()).Error(); err != nil {
+			t.Errorf("cleanup ZREM %s %s: %v", casino.DefaultRoomsActiveIndexKey, roomID, err)
+		}
+		for _, key := range []string{casino.DefaultRoomKeyPrefix + roomID, casino.DefaultCharacterKeyPrefix + "hero", casino.DefaultCharacterKeyPrefix + peerID} {
+			if err := client.Do(bg, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
 		}
 	})
 

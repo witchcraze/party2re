@@ -16,16 +16,21 @@ import (
 	corerandom "github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/testutil"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
-func cleanupDungeonValkey(t *testing.T, client valkeygo.Client, charIDs ...string) {
+func cleanupDungeonValkey(t testing.TB, client valkeygo.Client, charIDs ...string) {
 	t.Helper()
 	ctx := context.Background()
 	for _, cid := range charIDs {
-		sKey := fmt.Sprintf("party2:dungeon:{char:%s}:state", cid)
-		rKey := fmt.Sprintf("party2:dungeon:{char:%s}:rewards", cid)
-		client.Do(ctx, client.B().Del().Key(sKey).Build())
-		client.Do(ctx, client.B().Del().Key(rKey).Build())
+		for _, key := range []string{
+			fmt.Sprintf("party2:dungeon:{char:%s}:state", cid),
+			fmt.Sprintf("party2:dungeon:{char:%s}:rewards", cid),
+		} {
+			if err := client.Do(ctx, client.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
+		}
 	}
 }
 
@@ -1241,4 +1246,34 @@ func TestValkeyExpeditionRepository_CorruptedARGVArgsFailClosed(t *testing.T) {
 			t.Fatalf("GetActiveExpedition mismatch after valid consumed_items Step: %+v err=%v", reloaded, err)
 		}
 	})
+}
+
+func TestCleanupHelperReportsValkeyErrors(t *testing.T) {
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(context.Context, valkeygo.Completed) valkeygo.ValkeyResult {
+		return valkeygo.NewErrorResult(errors.New("injected cleanup failure"))
+	}))
+	spy := &cleanupSpyTB{TB: t}
+	cleanupDungeonValkey(spy, client, "c1")
+	if got := len(client.RecordedCommands()); got != 2 {
+		t.Fatalf("cleanup attempted %d commands, want all 2 despite failures", got)
+	}
+	if len(spy.errs) != 2 {
+		t.Fatalf("cleanup reported %d errors, want 2: %q", len(spy.errs), spy.errs)
+	}
+	for i, key := range []string{"party2:dungeon:{char:c1}:state", "party2:dungeon:{char:c1}:rewards"} {
+		if !strings.Contains(spy.errs[i], key) || !strings.Contains(spy.errs[i], "injected cleanup failure") {
+			t.Errorf("error %d = %q, want key %q and cause", i, spy.errs[i], key)
+		}
+	}
+}
+
+type cleanupSpyTB struct {
+	testing.TB
+	errs []string
+}
+
+func (s *cleanupSpyTB) Helper() {}
+
+func (s *cleanupSpyTB) Errorf(format string, args ...any) {
+	s.errs = append(s.errs, fmt.Sprintf(format, args...))
 }

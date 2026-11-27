@@ -57,7 +57,9 @@ func realLog(t *testing.T, cfg placelog.Config) (*placelog.Log, valkey.Client) {
 func testPlace(t *testing.T, client valkey.Client) placelog.Place {
 	p := placelog.Place{Kind: "test", ID: id.New()}
 	t.Cleanup(func() {
-		client.Do(context.Background(), client.B().Del().Key("party2:placelog:test:"+p.ID).Build())
+		if err := client.Do(context.Background(), client.B().Del().Key("party2:placelog:test:"+p.ID).Build()).Error(); err != nil {
+			t.Errorf("cleanup DEL %v: %v", []string{"party2:placelog:test:" + p.ID}, err)
+		}
 	})
 	return p
 }

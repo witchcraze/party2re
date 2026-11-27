@@ -240,7 +240,10 @@ func TestDungeonMemberMP_CombatAndEscape_MemoryAndValkey(t *testing.T) {
 					store = vStore
 					t.Cleanup(func() {
 						cleanupDungeonValkey(t, valkeyClient, leadID)
-						_ = valkeyClient.Do(ctx, valkeyClient.B().Del().Key("party2:dungeon:{char:"+allyID+"}:member").Build()).Error()
+						key := "party2:dungeon:{char:" + allyID + "}:member"
+						if err := valkeyClient.Do(ctx, valkeyClient.B().Del().Key(key).Build()).Error(); err != nil {
+							t.Errorf("cleanup DEL %s: %v", key, err)
+						}
 					})
 				}
 
@@ -373,7 +376,10 @@ func TestDungeonIntegration_LegacyMemberMP_RealSQLAndValkey(t *testing.T) {
 		t.Cleanup(func() {
 			cleanupCtx := context.Background()
 			cleanupDungeonValkey(t, valkeyClient, lead.ID)
-			_ = valkeyClient.Do(cleanupCtx, valkeyClient.B().Del().Key("party2:dungeon:{char:"+ally.ID+"}:member").Build()).Error()
+			key := "party2:dungeon:{char:" + ally.ID + "}:member"
+			if err := valkeyClient.Do(cleanupCtx, valkeyClient.B().Del().Key(key).Build()).Error(); err != nil {
+				t.Errorf("cleanup DEL %s: %v", key, err)
+			}
 			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM dungeon_expedition_history WHERE character_id IN (?, ?)", lead.ID, ally.ID)
 			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM dungeon_active_expeditions WHERE character_id IN (?, ?)", lead.ID, ally.ID)
 			_ = charRepo.Delete(cleanupCtx, lead.ID)

@@ -730,11 +730,17 @@ func newRaceSafeKickLeaveSetup(t *testing.T, useValkey bool, wrap func(CasinoSer
 		t.Cleanup(client.Close)
 		t.Cleanup(func() {
 			bg := context.Background()
-			_ = client.Do(bg, client.B().Del().Key(casino.DefaultRoomKeyPrefix+roomID).Build())
-			_ = client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build())
+			if err := client.Do(bg, client.B().Zrem().Key(casino.DefaultRoomsActiveIndexKey).Member(roomID).Build()).Error(); err != nil {
+				t.Errorf("cleanup ZREM %s %s: %v", casino.DefaultRoomsActiveIndexKey, roomID, err)
+			}
+			keys := []string{casino.DefaultRoomKeyPrefix + roomID}
 			for _, actor := range []string{heroID, peerID} {
-				_ = client.Do(bg, client.B().Del().Key(casino.DefaultCharacterKeyPrefix+actor).Build())
-				_ = client.Do(bg, client.B().Del().Key(timer.PrefixTimer+timer.CategoryActionWait+":"+actor).Build())
+				keys = append(keys, casino.DefaultCharacterKeyPrefix+actor, timer.PrefixTimer+timer.CategoryActionWait+":"+actor)
+			}
+			for _, key := range keys {
+				if err := client.Do(bg, client.B().Del().Key(key).Build()).Error(); err != nil {
+					t.Errorf("cleanup DEL %s: %v", key, err)
+				}
 			}
 		})
 		roomRepo, err = casino.NewValkeyRoomRepository(client, casino.WithValkeyCharacterRepository(chars))
