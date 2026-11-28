@@ -55,7 +55,7 @@ func newRemovalFixture(t *testing.T, pending bool) *removalFixture {
 	}
 	t.Cleanup(func() {
 		ctx := context.Background()
-		if err := repo.DisbandGuild(ctx, g.ID); err != nil {
+		if err := repo.DisbandGuild(ctx, g.ID); err != nil && !errors.Is(err, guild.ErrGuildNotFound) {
 			t.Error(err)
 		}
 		for _, c := range []corecharacter.Character{f.target, leader} {
@@ -75,12 +75,9 @@ func newRemovalFixture(t *testing.T, pending bool) *removalFixture {
 		t.Fatal(err)
 	}
 	f.service = f.newService(t, repo)
-	if pending {
-		err = f.service.ApplyToJoin(context.Background(), g.ID, f.target.ID)
-	} else {
-		_, err = f.service.Join(context.Background(), g.ID, f.target.ID)
-	}
-	if err != nil {
+	if !pending {
+		addActiveMember(t, repo, g.ID, f.target.ID)
+	} else if err = f.service.ApplyToJoin(context.Background(), g.ID, f.target.ID); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -157,6 +154,8 @@ func (f *removalFixture) removalLetters(t *testing.T) []string {
 type removalGateRepo struct {
 	*database.GuildRepository
 	beforeLocked, afterRead func(context.Context)
+	// afterLocked skips Leave's unlocked roster discovery and fires once the guild row is locked.
+	afterLocked func(context.Context)
 }
 
 func (r *removalGateRepo) LockCharacterForUpdate(ctx context.Context, characterID string) error {
@@ -179,6 +178,9 @@ func (r *removalGateRepo) GetGuildForUpdate(ctx context.Context, guildID string)
 	if err == nil && r.afterRead != nil {
 		r.afterRead(ctx)
 	}
+	if err == nil && r.afterLocked != nil {
+		r.afterLocked(ctx)
+	}
 	return g, members, err
 }
 
@@ -191,7 +193,7 @@ func awaitRemovalSignal(t *testing.T, ch <-chan struct{}) {
 	}
 }
 
-func TestGuildRemoval_TransferFirst(t *testing.T) {
+func TestGuildRemoval_LeaderLeaveFirst(t *testing.T) {
 	for _, mode := range []struct {
 		name    string
 		pending bool
@@ -203,14 +205,15 @@ func TestGuildRemoval_TransferFirst(t *testing.T) {
 			locked, resume, removalStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			committed := make(chan struct{})
 			var started sync.Once
-			transferRepo := &removalGateRepo{GuildRepository: f.repo, afterRead: func(context.Context) {
-				close(locked)
+			var lockedOnce sync.Once
+			leaveRepo := &removalGateRepo{GuildRepository: f.repo, afterLocked: func(context.Context) {
+				lockedOnce.Do(func() { close(locked) })
 				select {
 				case <-resume:
 				case <-ctx.Done():
 				}
 			}}
-			transfer := f.newService(t, transferRepo)
+			leave := f.newService(t, leaveRepo)
 			removalRepo := &removalGateRepo{GuildRepository: f.repo,
 				beforeLocked: func(context.Context) { started.Do(func() { close(removalStarted) }) },
 				// On the old unlocked implementation, wait until its snapshot exists.
@@ -225,23 +228,23 @@ func TestGuildRemoval_TransferFirst(t *testing.T) {
 				},
 			}
 			removal := f.newService(t, removalRepo)
-			transferDone, removalDone := make(chan error, 1), make(chan error, 1)
+			leaveDone, removalDone := make(chan error, 1), make(chan error, 1)
 			go func() {
-				transferDone <- transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.target.ID)
+				leaveDone <- leave.Leave(ctx, f.g.ID, f.leader.ID)
 				close(committed)
 			}()
 			awaitRemovalSignal(t, locked)
 			go func() { removalDone <- f.remove(ctx, removal) }()
 			awaitRemovalSignal(t, removalStarted)
 			close(resume)
-			if err := <-transferDone; err != nil {
+			if err := <-leaveDone; err != nil {
 				t.Fatal(err)
 			}
 			if err := <-removalDone; !errors.Is(err, guild.ErrUnauthorized) {
 				t.Fatalf("former leader removal = %v, want unauthorized", err)
 			}
 			d := f.assertRoster(t)
-			if len(d.Members) != 2 || d.Guild.LeaderCharacterID != f.target.ID {
+			if len(d.Members) != 1 || d.Guild.LeaderCharacterID != f.target.ID {
 				t.Fatalf("unexpected roster: %+v", d)
 			}
 			if letters := f.removalLetters(t); len(letters) != 0 {
@@ -305,7 +308,7 @@ func TestGuildRemoval_RemovalFirst(t *testing.T) {
 			f := newRemovalFixture(t, mode.pending)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			locked, resume, transferStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			locked, resume, leaveStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			removalRepo := &removalGateRepo{GuildRepository: f.repo, afterRead: func(context.Context) {
 				close(locked)
 				select {
@@ -314,22 +317,24 @@ func TestGuildRemoval_RemovalFirst(t *testing.T) {
 				}
 			}}
 			removal := f.newService(t, removalRepo)
-			transferRepo := &removalGateRepo{GuildRepository: f.repo, beforeLocked: func(context.Context) { close(transferStarted) }}
-			transfer := f.newService(t, transferRepo)
-			removalDone, transferDone := make(chan error, 1), make(chan error, 1)
+			var startedOnce sync.Once
+			leaveRepo := &removalGateRepo{GuildRepository: f.repo, beforeLocked: func(context.Context) { startedOnce.Do(func() { close(leaveStarted) }) }}
+			leave := f.newService(t, leaveRepo)
+			removalDone, leaveDone := make(chan error, 1), make(chan error, 1)
 			go func() { removalDone <- f.remove(ctx, removal) }()
 			awaitRemovalSignal(t, locked)
-			go func() { transferDone <- transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.target.ID) }()
-			awaitRemovalSignal(t, transferStarted)
+			go func() { leaveDone <- leave.Leave(ctx, f.g.ID, f.leader.ID) }()
+			awaitRemovalSignal(t, leaveStarted)
 			close(resume)
 			if err := <-removalDone; err != nil {
 				t.Fatal(err)
 			}
-			if err := <-transferDone; !errors.Is(err, guild.ErrTargetNotMember) {
-				t.Fatalf("removed successor transfer = %v", err)
+			// The removed target was discovered before the locks but is no longer a successor.
+			if err := <-leaveDone; err != nil {
+				t.Fatalf("sole leader leave = %v", err)
 			}
-			if d := f.assertRoster(t); len(d.Members) != 1 || d.Guild.LeaderCharacterID != f.leader.ID {
-				t.Fatalf("unexpected roster: %+v", d)
+			if _, err := f.service.Get(context.Background(), f.g.ID); !errors.Is(err, guild.ErrGuildNotFound) {
+				t.Fatalf("guild after sole leader leave = %v, want disbanded", err)
 			}
 			if letters := f.removalLetters(t); len(letters) != 1 {
 				t.Fatalf("successful removal letters = %v", letters)
@@ -379,10 +384,11 @@ func TestGuildRemoval_Stress(t *testing.T) {
 			res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 				err1, err2 := testutil.RunRace2(
 					func() error { return f.remove(ctx, f.service) },
-					func() error { return f.service.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.target.ID) },
+					func() error { return f.service.Leave(ctx, f.g.ID, f.leader.ID) },
 				)
 				for _, err := range []error{err1, err2} {
-					if err != nil && !errors.Is(err, guild.ErrUnauthorized) && !errors.Is(err, guild.ErrTargetNotMember) {
+					if err != nil && !errors.Is(err, guild.ErrUnauthorized) && !errors.Is(err, guild.ErrTargetNotMember) &&
+						!errors.Is(err, guild.ErrCharacterNotInGuild) && !errors.Is(err, guild.ErrGuildNotFound) {
 						return err
 					}
 				}
@@ -391,14 +397,13 @@ func TestGuildRemoval_Stress(t *testing.T) {
 			if res.Failures != 0 {
 				t.Fatalf("unexpected stress failures: %+v", res)
 			}
-			d := f.assertRoster(t)
 			letters := f.removalLetters(t)
-			if d.Guild.LeaderCharacterID == f.target.ID {
-				if len(d.Members) != 2 || len(letters) != 0 {
-					t.Fatalf("transfer winner: roster=%+v letters=%v", d, letters)
+			if _, err := f.service.Get(context.Background(), f.g.ID); errors.Is(err, guild.ErrGuildNotFound) {
+				if len(letters) != 1 {
+					t.Fatalf("removal winner letters = %v", letters)
 				}
-			} else if len(d.Members) != 1 || len(letters) != 1 {
-				t.Fatalf("removal winner: roster=%+v letters=%v", d, letters)
+			} else if d := f.assertRoster(t); len(d.Members) != 1 || d.Guild.LeaderCharacterID != f.target.ID || len(letters) != 0 {
+				t.Fatalf("leave winner: roster=%+v letters=%v", d, letters)
 			}
 			t.Logf("%s: %+v", mode.name, res)
 		})

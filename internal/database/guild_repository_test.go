@@ -152,6 +152,10 @@ func TestGuildRepositoryLifecycle(t *testing.T) {
 	if err := guildRepo.UpdateNotice(ctx, guildID, "Updated Guild Notice!"); err != nil {
 		t.Fatalf("UpdateNotice failed: %v", err)
 	}
+	// Repeating it within the same second changes no row and must still succeed (#3011).
+	if err := guildRepo.UpdateNotice(ctx, guildID, "Updated Guild Notice!"); err != nil {
+		t.Fatalf("repeated UpdateNotice failed: %v", err)
+	}
 	gNotice, _, _ := guildRepo.GetGuild(ctx, guildID)
 	if gNotice.Notice != "Updated Guild Notice!" {
 		t.Errorf("notice = %q, want %q", gNotice.Notice, "Updated Guild Notice!")
@@ -173,6 +177,9 @@ func TestGuildRepositoryLifecycle(t *testing.T) {
 	testColor := fmt.Sprintf("#%06X", (time.Now().UnixNano()/1000)%0xFFFFFF)
 	if err := guildRepo.UpdateColor(ctx, guildID, testColor); err != nil {
 		t.Fatalf("UpdateColor failed: %v", err)
+	}
+	if err := guildRepo.UpdateColor(ctx, guildID, testColor); err != nil {
+		t.Fatalf("repeated UpdateColor failed: %v", err)
 	}
 	taken, err := guildRepo.IsColorTaken(ctx, testColor, "")
 	if err != nil || !taken {

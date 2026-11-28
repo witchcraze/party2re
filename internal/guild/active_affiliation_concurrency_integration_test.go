@@ -282,54 +282,6 @@ func TestGuildActiveAffiliation_CreateVsApproval(t *testing.T) {
 	}
 }
 
-func TestGuildActiveAffiliation_JoinVsCreate(t *testing.T) {
-	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	leader := f.createCharacter(t, "JvCLead", 20000)
-	target := f.createCharacter(t, "JvCTarget", 20000)
-
-	g1, _, _, err := f.service.Create(ctx, leader.ID, "JvCG1_"+id.New()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	newGuildName := "JvCNew_" + id.New()[:8]
-
-	// Target joins G1 directly while concurrently creating a new guild
-	err1, err2 := testutil.RunRace2(
-		func() error {
-			_, err := f.service.Join(ctx, g1.ID, target.ID)
-			return err
-		},
-		func() error {
-			_, _, _, err := f.service.Create(ctx, target.ID, newGuildName)
-			return err
-		},
-	)
-
-	var successCount, alreadyInGuildCount int
-	for _, err := range []error{err1, err2} {
-		if err == nil {
-			successCount++
-		} else if errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
-			alreadyInGuildCount++
-		} else {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}
-	if successCount != 1 || alreadyInGuildCount != 1 {
-		t.Fatalf("expected 1 success and 1 ErrCharacterAlreadyInGuild, got %d successes and %d alreadyInGuild (err1=%v, err2=%v)",
-			successCount, alreadyInGuildCount, err1, err2)
-	}
-
-	// Invariant: active affiliations must be exactly 1
-	if activeCount := f.countActiveAffiliations(t, target.ID); activeCount != 1 {
-		t.Errorf("active affiliation count = %d, want 1", activeCount)
-	}
-}
-
 func TestGuildActiveAffiliation_PendingSuccessionDisband(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
 	ctx := context.Background()
@@ -577,7 +529,7 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsCreateConcurrency(t *testing.T)
 	}
 }
 
-func TestGuildActiveAffiliation_SoleLeaderLeaveVsJoinConcurrency(t *testing.T) {
+func TestGuildActiveAffiliation_SoleLeaderLeaveVsApplyConcurrency(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -595,8 +547,7 @@ func TestGuildActiveAffiliation_SoleLeaderLeaveVsJoinConcurrency(t *testing.T) {
 			return f.service.Leave(ctx, g1.ID, leader.ID)
 		},
 		func() error {
-			_, err := f.service.Join(ctx, g1.ID, joiner.ID)
-			return err
+			return f.service.ApplyToJoin(ctx, g1.ID, joiner.ID)
 		},
 	)
 
@@ -605,24 +556,23 @@ func TestGuildActiveAffiliation_SoleLeaderLeaveVsJoinConcurrency(t *testing.T) {
 	}
 
 	if errJoin != nil && !errors.Is(errJoin, guild.ErrGuildNotFound) {
-		t.Fatalf("unexpected error from Join: %v", errJoin)
+		t.Fatalf("unexpected error from ApplyToJoin: %v", errJoin)
 	}
 
 	if errJoin == nil {
-		// Join succeeded: G1 MUST NOT be disbanded!
-		// Invariant: joiner must be active member and leader of G1!
+		// The application committed first, so the pending applicant succeeds to leadership.
 		if activeCount := f.countActiveAffiliations(t, joiner.ID); activeCount != 1 {
 			t.Errorf("active affiliation count for joiner = %d, want 1", activeCount)
 		}
 		g1Detail, err := f.service.Get(ctx, g1.ID)
 		if err != nil {
-			t.Fatalf("expected G1 to survive when Join succeeded, got error: %v", err)
+			t.Fatalf("expected G1 to survive when ApplyToJoin succeeded, got error: %v", err)
 		}
 		if g1Detail.Guild.LeaderCharacterID != joiner.ID {
 			t.Errorf("G1 leader = %s, want %s (joiner)", g1Detail.Guild.LeaderCharacterID, joiner.ID)
 		}
 	} else {
-		// Join failed because G1 was disbanded first:
+		// ApplyToJoin failed because G1 was disbanded first:
 		// G1 must be disbanded, joiner must have 0 affiliations.
 		if activeCount := f.countActiveAffiliations(t, joiner.ID); activeCount != 0 {
 			t.Errorf("active affiliation count for joiner = %d, want 0", activeCount)
@@ -651,9 +601,7 @@ func TestGuildActiveAffiliation_LeaderLeaveVsCandidateDepartureConcurrency(t *te
 		t.Fatal(err)
 	}
 
-	if _, err := f.service.Join(ctx, g1.ID, member.ID); err != nil {
-		t.Fatal(err)
-	}
+	addActiveMember(t, f.repo, g1.ID, member.ID)
 
 	// Both leader and member attempt to leave concurrently
 	errLeave1, errLeave2 := testutil.RunRace2(
@@ -701,14 +649,12 @@ func TestGuildActiveAffiliation_LeaderLeaveVsCandidateRosterChangesConcurrency(t
 		t.Fatal(err)
 	}
 
-	if _, err := f.service.Join(ctx, g1.ID, candidate1.ID); err != nil {
-		t.Fatal(err)
-	}
+	addActiveMember(t, f.repo, g1.ID, candidate1.ID)
 
 	// 3 concurrent operations:
 	// 1: Leader leaves G1
 	// 2: Candidate1 leaves G1
-	// 3: Candidate2 joins G1
+	// 3: Candidate2 applies to G1
 	errs := testutil.RunRace(
 		func() error {
 			return f.service.Leave(ctx, g1.ID, leader.ID)
@@ -717,8 +663,7 @@ func TestGuildActiveAffiliation_LeaderLeaveVsCandidateRosterChangesConcurrency(t
 			return f.service.Leave(ctx, g1.ID, candidate1.ID)
 		},
 		func() error {
-			_, err := f.service.Join(ctx, g1.ID, candidate2.ID)
-			return err
+			return f.service.ApplyToJoin(ctx, g1.ID, candidate2.ID)
 		},
 	)
 
@@ -733,7 +678,7 @@ func TestGuildActiveAffiliation_LeaderLeaveVsCandidateRosterChangesConcurrency(t
 		t.Fatalf("unexpected error from candidate1 Leave: %v", errLeaveCand1)
 	}
 	if errJoinCand2 != nil && !errors.Is(errJoinCand2, guild.ErrGuildNotFound) {
-		t.Fatalf("unexpected error from candidate2 Join: %v", errJoinCand2)
+		t.Fatalf("unexpected error from candidate2 ApplyToJoin: %v", errJoinCand2)
 	}
 
 	// Invariants:
@@ -745,7 +690,7 @@ func TestGuildActiveAffiliation_LeaderLeaveVsCandidateRosterChangesConcurrency(t
 		t.Errorf("active affiliation count for candidate1 = %d, want 0", c)
 	}
 
-	// If Candidate2 joined successfully:
+	// If Candidate2 applied successfully it is the last eligible successor:
 	if errJoinCand2 == nil {
 		// Guild must survive and Candidate2 must be active member and leader
 		if c := f.countActiveAffiliations(t, candidate2.ID); c != 1 {
@@ -759,7 +704,7 @@ func TestGuildActiveAffiliation_LeaderLeaveVsCandidateRosterChangesConcurrency(t
 			t.Errorf("G1 leader = %s, want %s (candidate2)", detail.Guild.LeaderCharacterID, candidate2.ID)
 		}
 	} else {
-		// Candidate2 join failed because G1 was disbanded:
+		// Candidate2's application failed because G1 was disbanded:
 		if c := f.countActiveAffiliations(t, candidate2.ID); c != 0 {
 			t.Errorf("active affiliation count for candidate2 = %d, want 0", c)
 		}

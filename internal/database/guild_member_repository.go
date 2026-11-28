@@ -204,42 +204,23 @@ func (r *GuildRepository) IsColorTaken(ctx context.Context, color string, exclud
 
 func (r *GuildRepository) UpdateNotice(ctx context.Context, guildID string, notice string) error {
 	now := time.Now().UTC()
-	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+	// The caller holds the guild row lock; an identical update changes no row.
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		UPDATE guilds
 		SET notice = ?, last_active_at = ?, updated_at = ?
 		WHERE id = ?
 	`, notice, now, now, guildID)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return guild.ErrGuildNotFound
-	}
-	return nil
+	return err
 }
 
 func (r *GuildRepository) UpdateColor(ctx context.Context, guildID string, color string) error {
 	now := time.Now().UTC()
-	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		UPDATE guilds
 		SET color = ?, last_active_at = ?, updated_at = ?
 		WHERE id = ?
 	`, color, now, now, guildID)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return guild.ErrGuildNotFound
-	}
-	return nil
+	return err
 }
 
 func (r *GuildRepository) DisbandGuild(ctx context.Context, guildID string) error {

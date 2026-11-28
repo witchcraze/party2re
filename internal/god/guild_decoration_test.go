@@ -230,7 +230,7 @@ func TestGodGuildDecoration_ConcurrentWishes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.guilds.Join(f.ctx, f.g.ID, c.ID); err != nil {
+		if _, err := f.repo.AddMember(f.ctx, guild.Member{GuildID: f.g.ID, CharacterID: c.ID, Role: guild.RoleMember}); err != nil {
 			t.Fatal(err)
 		}
 		characters[i] = c

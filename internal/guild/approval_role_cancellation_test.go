@@ -133,7 +133,7 @@ func TestApprovalRoleWorkerCleanup(t *testing.T) {
 }
 
 func TestGuildApprovalRole_Cancellation(t *testing.T) {
-	for _, first := range []string{"transfer", "mutation"} {
+	for _, first := range []string{"leave", "mutation"} {
 		for _, stage := range []string{"locked", "contender started"} {
 			t.Run(first+"/"+stage, func(t *testing.T) {
 				f := newApprovalRoleFixture(t)
@@ -143,7 +143,7 @@ func TestGuildApprovalRole_Cancellation(t *testing.T) {
 				}
 				locked, resume, started := make(chan struct{}), make(chan struct{}), make(chan struct{})
 				var once, startedOnce sync.Once
-				holder := f.newService(t, &approvalRoleGateRepo{GuildRepository: f.repo, t: t, afterRead: func(ctx context.Context) {
+				holder := f.newService(t, &approvalRoleGateRepo{GuildRepository: f.repo, t: t, afterLocked: func(ctx context.Context) {
 					once.Do(func() {
 						close(locked)
 						select {
@@ -155,15 +155,15 @@ func TestGuildApprovalRole_Cancellation(t *testing.T) {
 				contender := f.newService(t, &approvalRoleGateRepo{GuildRepository: f.repo, t: t, beforeLocked: func(context.Context) {
 					startedOnce.Do(func() { close(started) })
 				}})
-				transfer := func(s *guild.Service) error {
-					return s.TransferLeadership(f.ctx, f.g.ID, f.leader.ID, f.active.ID)
+				leave := func(s *guild.Service) error {
+					return s.Leave(f.ctx, f.g.ID, f.leader.ID)
 				}
 				mutation := func(s *guild.Service) error {
 					return f.executeOp(f.ctx, s, "approvePending", "CancelTitle")
 				}
-				firstOp, secondOp := transfer, mutation
+				firstOp, secondOp := leave, mutation
 				if first == "mutation" {
-					firstOp, secondOp = mutation, transfer
+					firstOp, secondOp = mutation, leave
 				}
 				joins := []func() error{f.startWorker(t, "holder", func() error { return firstOp(holder) })}
 				if err := awaitApprovalRoleSignal(f.ctx, locked); err != nil {
@@ -199,8 +199,8 @@ func TestGuildApprovalRole_Cancellation(t *testing.T) {
 				if letters != 0 {
 					t.Fatalf("cancelled operations sent %d letters", letters)
 				}
-				if err := f.service.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID); err != nil {
-					t.Fatalf("transfer after cancellation: %v", err)
+				if err := f.service.Leave(ctx, f.g.ID, f.leader.ID); err != nil {
+					t.Fatalf("leave after cancellation: %v", err)
 				}
 			})
 		}

@@ -11,6 +11,8 @@ import (
 
 // ApplyToJoin registers an applicant in the guild with is_pending = true (join_guild.cgi:sanka).
 // Sends an application notification letter to the guild master.
+// Transaction: RunInTx checks affiliation and the roster and inserts the application under locks.
+// Lock Order: characters(2) -> guilds(7) -> guild_members(7).
 func (s *Service) ApplyToJoin(ctx context.Context, guildID string, applicantID string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -21,41 +23,47 @@ func (s *Service) ApplyToJoin(ctx context.Context, guildID string, applicantID s
 		return ErrCharacterNotFound
 	}
 
-	// Verify applicant is not already in an active guild (join_guild.cgi:sanka)
-	if _, _, err := s.repo.GetGuildByCharacter(ctx, applicantID); err == nil {
-		return ErrCharacterAlreadyInGuild
-	} else if !errors.Is(err, ErrCharacterNotInGuild) {
-		return err
-	}
-
-	g, members, err := s.repo.GetGuild(ctx, guildID)
+	var g Guild
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockCharacterForUpdate(txCtx, applicantID); err != nil {
+			return err
+		}
+		// Verify applicant is not already in an active guild (join_guild.cgi:sanka)
+		if _, _, err := s.repo.GetGuildByCharacter(txCtx, applicantID); err == nil {
+			return ErrCharacterAlreadyInGuild
+		} else if !errors.Is(err, ErrCharacterNotInGuild) {
+			return err
+		}
+		var members []Member
+		var err error
+		if g, members, err = s.repo.GetGuildForUpdate(txCtx, guildID); err != nil {
+			return err
+		}
+		// Verify applicant does not already have a pending application or membership in this guild (join_guild.cgi:sanka)
+		for i := range members {
+			if members[i].CharacterID == applicantID {
+				if members[i].IsPending {
+					return ErrApplicationAlreadyPending
+				}
+				return ErrCharacterAlreadyInGuild
+			}
+		}
+		if _, err := s.repo.AddMember(txCtx, Member{
+			GuildID:     guildID,
+			CharacterID: applicantID,
+			Role:        RoleMember,
+			Title:       DefaultTitlePending,
+			IsPending:   true,
+			JoinedAt:    s.nowFunc().UTC(),
+		}); err != nil {
+			return err
+		}
+		s.touchActive(txCtx, guildID)
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-
-	// Verify applicant does not already have a pending application or membership in this guild (join_guild.cgi:sanka)
-	for i := range members {
-		if members[i].CharacterID == applicantID {
-			if members[i].IsPending {
-				return ErrApplicationAlreadyPending
-			}
-			return ErrCharacterAlreadyInGuild
-		}
-	}
-
-	m := Member{
-		GuildID:     guildID,
-		CharacterID: applicantID,
-		Role:        RoleMember,
-		Title:       DefaultTitlePending,
-		IsPending:   true,
-		JoinedAt:    s.nowFunc().UTC(),
-	}
-
-	if _, err := s.repo.AddMember(ctx, m); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
 
 	// Send application letter to the Guild Master (join_guild.cgi:216-219)
 	if s.letterSender != nil && s.charReader != nil {
