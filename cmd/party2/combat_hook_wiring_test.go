@@ -18,7 +18,6 @@ import (
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/runhost"
-	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -35,9 +34,7 @@ func TestMonsterTamerProductionHook(t *testing.T) {
 		battle.WithEquipmentRepository(f.econ.equipRepo),
 		battle.WithTransactionProvider(f.core.txProvider),
 		battle.WithRandomSource(tameWiringRandom{}))
-	if err := wireHooks(f.core, f.cmbt, f.econ, f.misc, f.soc); err != nil {
-		t.Fatal(err)
-	}
+	wireHooks(f.core, f.cmbt, f.econ, f.misc, f.soc)
 	ctx := context.Background()
 	if _, err := f.cmbt.battle.ApplyPostBattleResult(ctx, battle.ApplyPostBattleRequest{
 		CharacterIDs:    []string{f.char.ID},
@@ -62,11 +59,7 @@ func TestBossVictoryBanquetProductionHook(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.misc.eventplaza = plaza
-	if err := wireHooks(f.core, f.cmbt, f.econ, f.misc, f.soc); err != nil {
-		t.Fatal(err)
-	}
-	// Joining checks pending scheduled actions; recurring schedules stay unregistered.
-	f.soc.sched = scheduling.NewService(f.soc.schedRepo)
+	wireHooks(f.core, f.cmbt, f.econ, f.misc, f.soc)
 	ctx := context.Background()
 	f.char.Stats.HP, f.char.Stats.MaxHP = 500, 500
 	if err := f.core.charRepo.Update(ctx, f.char); err != nil {

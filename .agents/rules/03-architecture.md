@@ -38,7 +38,7 @@ Create an Issue before changing core responsibilities, component boundaries, dep
 - A PR that adds, renames or removes a production environment variable, or changes its default, alias or invalid-value behavior, MUST update [`environment-variables.md`](../../docs/development/environment-variables.md) (required ones also in the [README Compose example](../../README.md#docker-compose-での起動例)) with default, aliases and invalid-value behavior. Use placeholders for secrets; never real values. Test/tooling-only variables are not listed. Dynamic names need a literal or `//lint:ignore env-docs <reason>` (`env_docs_lint_test.go`).
 
 ## 9. File Size and Cohesion
-- Production `internal/**/*.go` ≤ 500 lines, `cmd/*/main.go` ≤ 150 (`file_size_lint_test.go`); interfaces ≤ 10 direct methods, composed by embedding (`interface_size_lint_test.go`). Oversized legacy entries are ratcheted: never grow them; remove an entry once it is under the limit.
+- Production Go files under `internal/` and `cmd/` ≤ 500 lines, except `main.go` under `cmd/` ≤ 150 (`file_size_lint_test.go`); interfaces ≤ 10 direct methods, composed by embedding (`interface_size_lint_test.go`). Oversized legacy entries are ratcheted: never grow them; remove an entry once it is under the limit.
 - Split large files into peer files by responsibility within the same package; add packages only for real layer boundaries.
 
 ## 10. Runtime Primitives

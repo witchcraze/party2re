@@ -332,9 +332,7 @@ func TestWirePartyLeaveTavernIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
-		t.Fatal(err)
-	}
+	wireHooks(core, cmbt, econ, misc, soc)
 	ctx := context.Background()
 	char.Money = 200
 	char.Stats.HP = 50

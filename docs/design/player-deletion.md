@@ -71,11 +71,8 @@ save clock, not an account authentication clock. `config.cgi_origin:55` gives
 **365 days as a reference default only**; the active legacy configuration is
 unavailable. The deletion branch has no administrator or ban exemption.
 
-The Go character model currently has no durable gameplay activity timestamp,
-and the recurring jobs in `cmd/party2/wire.go` / `services_soc.go` have no character
-expiry sweep. `player.Service.Login` can refresh account `updated_at` and `last_ip`
-when supplied an IP; neither proves character activity. Automatic deletion is
-therefore **not implemented or enabled**.
+Automatic deletion remains unimplemented pending a durable character gameplay
+clock. Account login metadata does not establish character activity.
 
 ### Adopted policy and activity ownership
 

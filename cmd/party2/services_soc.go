@@ -6,11 +6,8 @@ import (
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
-	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/api/http"
-	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/character"
-	"github.com/witchcraze/party2re/internal/contest"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
@@ -20,7 +17,6 @@ import (
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/inventory"
 	"github.com/witchcraze/party2re/internal/logging"
-	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/ranking"
@@ -216,29 +212,4 @@ func newSocServices(
 		worker:       worker,
 		timer:        timerService,
 	}, nil
-}
-
-func (s *socServices) registerWorkerHandlers(activityService *activity.Service, chapelService *chapel.Service, lotteryService *lottery.Service, contestService *contest.Service) {
-	if s.worker != nil {
-		if activityService != nil {
-			s.worker.RegisterHandler(activity.ActivityActionTypeTrainingComplete, activity.NewTrainingHandler(activityService))
-		}
-		if chapelService != nil {
-			s.worker.RegisterHandler(chapel.ActionTypeChapelReset, chapel.NewResetHandler(chapelService, chapel.WithScheduler(s.sched)))
-		}
-		if lotteryService != nil {
-			draw := lottery.NewDrawHandler(lotteryService, lottery.WithScheduler(s.sched))
-			s.worker.RegisterHandler(lottery.ActionTypeTakarakujiDraw, draw)
-			s.worker.RegisterReconciler(lottery.ActionTypeTakarakujiDraw, draw.Reconcile)
-		}
-		if s.guild != nil {
-			s.worker.RegisterHandler(guild.ActionTypeGuildInactivityCheck, guild.NewInactivityCheckHandler(s.guild, guild.WithScheduler(s.sched)))
-			s.worker.RegisterHandler(guild.ActionTypeGuildPointDecay, guild.NewPointDecayHandler(s.guild, guild.WithPointDecayScheduler(s.sched)))
-		}
-		if contestService != nil {
-			handler := contest.NewContestSettlementHandler(contestService, contest.WithScheduler(s.sched))
-			s.worker.RegisterHandler(contest.ActionTypeContestSettlement, handler)
-			s.worker.RegisterReconciler(contest.ActionTypeContestSettlement, handler.Reconcile)
-		}
-	}
 }

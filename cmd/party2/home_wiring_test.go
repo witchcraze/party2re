@@ -75,8 +75,6 @@ func newHookWiringFixture(t *testing.T, client valkeygo.Client) hookWiringFixtur
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Recurring schedules scan shared rounds; their registration has separate tests.
-	soc.sched = nil
 	misc, err := newMiscServices(db, core, soc, econ, client)
 	if err != nil {
 		t.Fatal(err)
@@ -86,9 +84,7 @@ func newHookWiringFixture(t *testing.T, client valkeygo.Client) hookWiringFixtur
 		t.Fatal(err)
 	}
 	econ.initStore(core, soc.guildRepo, soc.timer, client, storeDelivery{econ.depotRepo, soc.home, core.itemCatalog})
-	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
-		t.Fatal(err)
-	}
+	wireHooks(core, cmbt, econ, misc, soc)
 	return hookWiringFixture{db, char, core, econ, soc, misc, cmbt}
 }
 
