@@ -110,9 +110,7 @@ func TestAlchemyProductionWiring_LegendRollbackAndRetry(t *testing.T) {
 	}
 
 	// Restore production legend inductor and retry the view
-	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
-		t.Fatal(err)
-	}
+	wireHooks(core, cmbt, econ, misc, soc)
 	viewRes, err := econ.alchemy.ViewRecipes(ctx, char.ID)
 	if err != nil {
 		t.Fatalf("retry ViewRecipes failed: %v", err)

@@ -48,9 +48,7 @@ func TestPvPInactivityProductionWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	econ.initStore(core, soc.guildRepo, soc.timer, client, storeDelivery{econ.depotRepo, soc.home, core.itemCatalog})
-	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
-		t.Fatal(err)
-	}
+	wireHooks(core, cmbt, econ, misc, soc)
 	f := hookWiringFixture{db, char, core, econ, soc, misc, cmbt}
 	ctx := context.Background()
 

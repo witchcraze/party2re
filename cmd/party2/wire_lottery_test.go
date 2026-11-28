@@ -6,8 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/boss"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
+	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/scheduling"
 )
 
@@ -26,6 +29,26 @@ func (r wiringLotteryRepo) GetActiveTakarakujiRound(context.Context) (lottery.Ta
 		}
 	}
 	return r.round, r.err
+}
+
+func TestWireHooksDoesNotScheduleRecurringWork(t *testing.T) {
+	lotterySvc, err := lottery.NewService(wiringLotteryRepo{
+		round: lottery.TakarakujiRound{RoundID: 1, DrawDate: time.Now().Add(time.Hour)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queue := &mockSchedRepo{}
+	soc := &socServices{
+		home:   &home.Service{},
+		sched:  scheduling.NewService(queue),
+		worker: scheduling.NewWorker(queue, time.Second, logging.Nop()),
+	}
+	wireHooks(&coreServices{}, &cmbtServices{boss: &boss.RunService{}}, &econServices{},
+		&miscServices{rescue: &rescue.Service{}, lottery: lotterySvc}, soc)
+	if len(queue.actions) != 0 {
+		t.Fatalf("hook wiring scheduled recurring actions: %+v", queue.actions)
+	}
 }
 
 func TestWireTakarakujiDrawing(t *testing.T) {
