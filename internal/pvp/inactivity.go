@@ -3,6 +3,7 @@ package pvp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -182,4 +183,24 @@ func (s *Service) GetPendingSleepPenalty(ctx context.Context, characterID string
 		return t.PenaltyUntil, true, nil
 	}
 	return time.Time{}, false, nil
+}
+
+// sweepBatchLimit bounds the rooms one scheduled sweep tick cleans up.
+const sweepBatchLimit = 50
+
+// SweepInactiveRooms times out overdue rooms that no member touches, standing in for
+// legacy's cleanup on every quest-list view (quest.cgi:80-91) because GET stays read-only.
+// Each room is re-checked under its lock, so racing commands and repeated sweeps are safe.
+func (s *Service) SweepInactiveRooms(ctx context.Context) error {
+	roomIDs, err := s.transitions.ListOverdueRooms(ctx, s.now().Add(-InactivityTimeout), sweepBatchLimit)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, roomID := range roomIDs {
+		if _, err := s.recoverRoom(ctx, roomID, ""); err != nil {
+			errs = append(errs, fmt.Errorf("pvp room %s: %w", roomID, err))
+		}
+	}
+	return errors.Join(errs...)
 }

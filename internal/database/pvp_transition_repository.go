@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/pvp"
@@ -58,6 +59,27 @@ func (r *PvPTransitionRepository) FindCharacterClaim(ctx context.Context, charac
 		return "", nil
 	}
 	return roomID, err
+}
+
+// ListOverdueRooms also returns pending rooms so failed publication converges. It drives from claims, which only live rooms and unacknowledged departures hold,
+// so the scan stays bounded by participants rather than retained disbanded rows.
+func (r *PvPTransitionRepository) ListOverdueRooms(ctx context.Context, cutoff time.Time, limit int) ([]string, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `SELECT t.room_id FROM pvp_room_transitions t
+		WHERE (t.last_activity_at < ? OR t.pending) AND t.room_id IN (SELECT room_id FROM pvp_character_claims)
+		ORDER BY t.last_activity_at, t.room_id LIMIT ?`, cutoff.UTC(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // CommitTransition commits the financial mutation, unique participation and recovery state.

@@ -49,8 +49,8 @@ result until timeout.
 These SQL records have no automatic expiry. Valkey connectivity failures always
 propagate without settling or penalizing. For a published room missing before
 1800 seconds of inactivity, PvP leave settles as missing-room abandonment without
-refunding bets or adding sleep. When `now > last_activity_at + 1800s`, mutating
-PvP accesses commit timeout forfeiture, the SQL wake obligation, and the fixed
+refunding bets or adding sleep. When `now > last_activity_at + 1800s`, the
+scheduled worker sweep or a mutating PvP access commits timeout forfeiture, the SQL wake obligation, and the fixed
 `now + 3600s` sleep deadline before deleting Valkey keys and extending sleep
 locks (preserving longer sleep). Home's sleep reader observes unacknowledged PvP
 timeout penalties so failed timer publication blocks premature wake without
