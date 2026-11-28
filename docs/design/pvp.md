@@ -4,9 +4,7 @@ The Colosseum PvP module (`internal/pvp`) reconstructs `party2/lib/vs_player.cgi
 
 ## Rules and Open Gaps
 
-- **Lobby preparation actions (`vs_player.cgi:33–38`, `_skill.cgi:161–164,769–837`):**
-  - `@きっく` (`pvp_kick`): kicked members' bets remain in `prize_pool` (`_skill.cgi:796–837`; revisiting bet refund is tracked in [#2586](https://github.com/witchcraze/party2re/issues/2586)).
-  - `@さそう` (`_skill.cgi:769–791`, quest-lobby whisper) awaits the quest-lobby place log ([#2585](https://github.com/witchcraze/party2re/issues/2585)).
+- **`@きっく` (`pvp_kick`):** kicked members' bets remain in `prize_pool` (`_skill.cgi:796–837`; revisiting bet refund is tracked in [#2586](https://github.com/witchcraze/party2re/issues/2586)).
 - **Inactivity (`quest.cgi:86–91,172–184`, `_battle.cgi:453–461`):**
   - **Non-obvious legacy behavior:** `quest.cgi:928–1079` (`add_member`) writes join messages to `$logdir/quest.cgi` rather than the room's `log.cgi`, so joining does not refresh the inactivity clock.
   - **Decision (#2343):** GET stays read-only, so the scheduled worker sweeps overdue rooms in place of legacy's cleanup on every quest-list view (`quest.cgi:80–91`); mutating accesses still time out a room they reach first. Gap: the sleep hour counts from cleanup, not from each member's last save as `sleep.cgi:19` does ([#2987](https://github.com/witchcraze/party2re/issues/2987)).

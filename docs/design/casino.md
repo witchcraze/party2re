@@ -29,7 +29,7 @@ Settlement returns the room to waiting with round zero; there is no separate fin
 
 ### Scoped legacy dispatch reconciliation
 
-The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Open: in-room `すくしょ` waits for the server-side capture (#2638); the lobby invitation `さそう` is missing (#2645); and card-game bets stop at the balance instead of driving it negative (#2642).
+The `インディアン`/`ハイロウ`/`ドッペル` entries in the lobby dispatch are the game type of `casino_room_create`, not in-room actions (`casino.cgi:102–104,299–333`). Open: in-room `すくしょ` waits for the server-side capture (#2638); and card-game bets stop at the balance instead of driving it negative (#2642).
 
 ## Game rules
 

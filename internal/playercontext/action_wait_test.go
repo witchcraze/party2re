@@ -47,7 +47,8 @@ func TestCatalogWaitDispositions(t *testing.T) {
 	for _, def := range DefaultCatalog {
 		switch {
 		case def.ActivityKind != "":
-			if def.WaitExempt != WaitActivityPacing {
+			// ＠さそう sets act_time = 0 whatever the room's pace (_skill.cgi:772, _casino.cgi:127).
+			if def.WaitExempt != WaitActivityPacing && !(def.WaitExempt == WaitWhisper && def.LegacyVerb == "さそう") {
 				t.Errorf("%s: continuation pacing belongs to its activity owner", def.ID)
 			}
 		case def.Category == "navigation":

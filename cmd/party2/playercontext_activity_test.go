@@ -229,8 +229,8 @@ func TestActivityRoleAndPhaseControls(t *testing.T) {
 		{"party", party.StatusRecruiting, "leader", 0, []string{"party_leave", "party_start", "party_kick"}},
 		{"party", party.StatusRecruiting, "member", 0, []string{"party_leave"}},
 		{"party", party.StatusInProgress, "member", 0, []string{"party_leave"}},
-		{"pvp", pvp.StatusRecruiting, "leader", 0, []string{"pvp_leave", "pvp_team", "player_inspect", "pvp_start", "pvp_kick"}},
-		{"pvp", pvp.StatusRecruiting, "member", 0, []string{"pvp_leave", "pvp_team", "player_inspect"}},
+		{"pvp", pvp.StatusRecruiting, "leader", 0, []string{"pvp_leave", "pvp_team", "player_inspect", "pvp_invite", "pvp_start", "pvp_kick"}},
+		{"pvp", pvp.StatusRecruiting, "member", 0, []string{"pvp_leave", "pvp_team", "player_inspect", "pvp_invite"}},
 		{"pvp", pvp.StatusInProgress, "leader", 1, []string{"pvp_leave", "pvp_advance"}},
 		{"pvp", pvp.StatusInProgress, "member", 1, []string{"pvp_leave"}},
 		{"pvp", pvp.StatusCompleted, "member", 1, []string{"pvp_leave"}},
@@ -239,9 +239,10 @@ func TestActivityRoleAndPhaseControls(t *testing.T) {
 		{"gvg", gvg.StatusInProgress, "leader", 1, []string{"gvg_leave", "gvg_advance"}},
 		{"gvg", gvg.StatusInProgress, "member", 1, []string{"gvg_leave"}},
 		{"gvg", gvg.StatusCompleted, "member", 1, []string{"gvg_leave"}},
-		{"casino", string(casino.RoomStatusWaiting), "leader", 0, []string{"casino_room_leave", "place_say", "casino_room_start", "casino_room_kick"}},
-		{"casino", string(casino.RoomStatusWaiting), "member", 0, []string{"casino_room_leave", "place_say"}},
+		{"casino", string(casino.RoomStatusWaiting), "leader", 0, []string{"casino_room_leave", "place_say", "casino_room_start", "casino_room_kick", "casino_room_invite"}},
+		{"casino", string(casino.RoomStatusWaiting), "member", 0, []string{"casino_room_leave", "place_say", "casino_room_invite"}},
 		{"casino", string(casino.RoomStatusWaiting), "spectator", 0, []string{"casino_room_leave", "place_say"}},
+		{"casino", string(casino.RoomStatusInProgress), "member", 1, []string{"casino_room_leave", "place_say", "casino_room_action"}},
 	} {
 		t.Run(tc.kind+"/"+tc.phase+"/"+tc.role, func(t *testing.T) {
 			f, pv, gv := &activityFixtures{}, &pvpActivityFixture{}, &gvgActivityFixture{}

@@ -66,10 +66,11 @@ Each facility design lists its command echoes (the actor and NPC rows) and their
 - **The NPC row**
   - The command's NPC reply is appended together with the actor row, in one append after the command commits.
   - If the append fails, the server records the failure and the command outcome does not change. This is an accepted departure: legacy wrote the log in the same request.
-- **Speech and whisper**
+- **Speech, whisper and invitation**
   - `place_say` appends the text as a public character row in any place with a log. It never checks or starts the wait.
   - `place_whisper` takes a recipient name and appends `＠ささやき>name text` as a private row. An unknown name is rejected with the legacy `nameというプレイヤーが存在しません`. Like other `＠` actions it is rejected during the wait, but it does not start one (`act_time = 0`).
   - Text uses the legacy comment checks: line breaks removed, 500 characters after HTML escaping (`$max_comment`). The recipient name is not counted, as for letters. Empty speech is rejected, as legacy wrote nothing for empty input; a whisper without text logs the bare `＠ささやき>name`, as in legacy.
+  - Room invitations `pvp_invite` and `casino_room_invite` (`＠さそう`, `_skill.cgi:769-791`, `_casino.cgi:122-145`) write the same private row form, `＠さそう>name text`, to the lobby's log (the quest place or the casino lobby) instead of the room's. The room is neither renewed nor changed. Without a recipient they write nothing and list the characters present in the lobby, as legacy lists them. Legacy never checks that the recipient is in the lobby, so any existing character may be invited.
   - The row is the command's only effect, so an append failure is an unknown outcome (`500 EXECUTION_FAILED`), unlike the best-effort NPC row.
 
 ### Action wait
