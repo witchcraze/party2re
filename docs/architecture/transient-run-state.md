@@ -6,8 +6,8 @@ is in [the database rules](../../.agents/rules/05-database-and-caching.md).
 ## Candidate C: Ephemeral Turn & Session Lobby
 
 Valkey owns live Party lobbies and PvP, GvG, and Casino rooms. Durable
-`casino_accounts` stays in SQL. Listing rooms can take work proportional to the
-size of the activity index. See the [Valkey key inventory](valkey-keyspace.md#current-key-inventory)
+`casino_accounts` stays in SQL. Listing rooms can read every entry in the
+activity index. See the [Valkey key inventory](valkey-keyspace.md#current-key-inventory)
 for keys, lifetimes, and coordination locks.
 
 PlayerContext observes these owners through public service ports. Party's actor
@@ -16,10 +16,20 @@ deletion; missing live state remains absent. Casino discovers actual admission
 through its character-room mapping, then uses its authorized masked projection.
 Navigation has no authority over these lobbies and never joins or leaves them.
 
-Lobby TTL is an implementation lifetime, not proof of legacy timeout parity.
-Do not invent generic auto-fold, forfeiture/refund, turn-history keys, or a
-60-second post-game retention policy. Each owning game must define and verify
-its actual transitions against the original CGI.
+### Party waiting lobbies
+
+The scheduled worker checks up to 50 waiting lobbies per tick. Creation and
+successful roster or configuration changes renew the idle deadline. Quest-list
+reads leave it untouched. After more than 30 minutes of inactivity, the worker
+checks the latest lobby under the same locks as roster writers and run admission.
+It freezes the roster and records one sleep deadline, one hour from the start of
+cleanup. Each member's sleep is extended to at least that deadline before the
+lobby is removed.
+
+Sleep writes may become visible individually. A failed write leaves the frozen
+lobby available for retries against the recorded deadline. The
+[safety TTL](valkey-keyspace.md#current-key-inventory) bounds retention during
+prolonged failure, so recovery depends on Valkey retaining the lobby.
 
 ### PvP financial publication
 

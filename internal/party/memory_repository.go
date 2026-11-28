@@ -18,6 +18,7 @@ type MemoryRepository struct {
 	memMembers      map[string]map[string]Member
 	memCharParty    map[string]string
 	memLobbyExp     map[string]time.Time
+	memLobbyDue     map[string]int64
 	memPartyLocksMu sync.Mutex
 	memPartyLocks   map[string]string
 }
@@ -30,26 +31,51 @@ func NewMemoryRepository(opts ...ValkeyRepositoryOption) *MemoryRepository {
 		memMembers:       make(map[string]map[string]Member),
 		memCharParty:     make(map[string]string),
 		memLobbyExp:      make(map[string]time.Time),
+		memLobbyDue:      make(map[string]int64),
 		memPartyLocks:    make(map[string]string),
 	}
 }
 
-func (r *MemoryRepository) SaveParty(_ context.Context, p Party) error {
+func (r *MemoryRepository) SaveParty(_ context.Context, p Party, members ...Member) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.saveLocked(p)
+	if r.clock().Before(r.memLobbyExp[p.ID]) {
+		return nil
+	}
+	for _, member := range members {
+		if r.hasOtherLobbyLocked(p.ID, member.CharacterID) {
+			return ErrAlreadyInParty
+		}
+	}
+	r.memMembers[p.ID] = make(map[string]Member, len(members))
+	for _, member := range members {
+		member.BattleActor = cloneBattleActor(member.BattleActor)
+		r.memMembers[p.ID][member.CharacterID] = member
+		r.memCharParty[member.CharacterID] = p.ID
+	}
+	r.touchLocked(p)
 	return nil
 }
 
-func (r *MemoryRepository) saveLocked(p Party) {
-	now := time.Now().UTC()
+func (r *MemoryRepository) hasOtherLobbyLocked(id, actor string) bool {
+	owner := r.memCharParty[actor]
+	return owner != id && r.clock().Before(r.memLobbyExp[owner])
+}
+
+func (r *MemoryRepository) touchLocked(p Party) {
+	now := r.clock()
+	p.idleAt = now.Add(lobbyIdleTimeout).UnixMilli()
 	r.memLobbies[p.ID] = p
 	r.memLobbyExp[p.ID] = now.Add(r.lobbyTTL)
-	if p.LeaderCharacterID != "" {
-		r.memCharParty[p.LeaderCharacterID] = p.ID
+	if p.Status == StatusCompleted {
+		delete(r.memLobbyDue, p.ID)
+	} else {
+		r.memLobbyDue[p.ID] = p.idleAt
 	}
-	if _, exists := r.memMembers[p.ID]; !exists {
-		r.memMembers[p.ID] = make(map[string]Member)
+	for charID := range r.memMembers[p.ID] {
+		if owner := r.memCharParty[charID]; owner == "" || owner == p.ID {
+			r.memCharParty[charID] = p.ID
+		}
 	}
 }
 
@@ -57,7 +83,7 @@ func (r *MemoryRepository) GetParty(_ context.Context, id string) (Party, error)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	exp, ok := r.memLobbyExp[id]
-	if !ok || time.Now().UTC().After(exp) {
+	if !ok || !r.clock().Before(exp) {
 		return Party{}, ErrNotFound
 	}
 	p, ok := r.memLobbies[id]
@@ -73,14 +99,14 @@ func (r *MemoryRepository) ListParties(_ context.Context, status string, limit, 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	now := time.Now().UTC()
+	now := r.clock()
 	var activeList []PartySummary
 	for id, p := range r.memLobbies {
 		exp, ok := r.memLobbyExp[id]
-		if !ok || now.After(exp) {
+		if !ok || !now.Before(exp) {
 			continue
 		}
-		if status != "" && p.Status != status {
+		if p.sleepUntil != 0 || (status != "" && p.Status != status) {
 			continue
 		}
 		members := make([]Member, 0, len(r.memMembers[id]))
@@ -93,6 +119,9 @@ func (r *MemoryRepository) ListParties(_ context.Context, status string, limit, 
 
 	// Sort newest first
 	sort.Slice(activeList, func(i, j int) bool {
+		if activeList[i].CreatedAt.Equal(activeList[j].CreatedAt) {
+			return activeList[i].ID > activeList[j].ID
+		}
 		return activeList[i].CreatedAt.After(activeList[j].CreatedAt)
 	})
 
@@ -111,41 +140,51 @@ func (r *MemoryRepository) UpdateParty(_ context.Context, p Party) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	exp, ok := r.memLobbyExp[p.ID]
-	if !ok || time.Now().UTC().After(exp) {
+	if !ok || !r.clock().Before(exp) {
 		return ErrNotFound
 	}
-	if _, ok := r.memLobbies[p.ID]; !ok {
-		return ErrNotFound
+	if r.memLobbies[p.ID].sleepUntil != 0 {
+		return ErrPartyNotRecruiting
 	}
-	r.memLobbies[p.ID] = p
-	r.memLobbyExp[p.ID] = time.Now().UTC().Add(r.lobbyTTL)
+	r.touchLocked(p)
 	return nil
 }
 
 func (r *MemoryRepository) DeleteParty(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.memLobbies, id)
-	delete(r.memLobbyExp, id)
-	if members, ok := r.memMembers[id]; ok {
-		for charID := range members {
+	for charID := range r.memMembers[id] {
+		if r.memCharParty[charID] == id {
 			delete(r.memCharParty, charID)
 		}
-		delete(r.memMembers, id)
 	}
+	r.deleteLobbyLocked(id)
 	return nil
+}
+
+func (r *MemoryRepository) deleteLobbyLocked(id string) {
+	delete(r.memLobbies, id)
+	delete(r.memLobbyExp, id)
+	delete(r.memLobbyDue, id)
+	delete(r.memMembers, id)
 }
 
 func (r *MemoryRepository) AddMember(_ context.Context, m Member) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	exp, ok := r.memLobbyExp[m.PartyID]
-	if !ok || time.Now().UTC().After(exp) {
+	if !ok || !r.clock().Before(exp) {
 		return ErrNotFound
 	}
 	p, ok := r.memLobbies[m.PartyID]
 	if !ok {
 		return ErrNotFound
+	}
+	if p.sleepUntil != 0 {
+		return ErrPartyNotRecruiting
+	}
+	if r.hasOtherLobbyLocked(m.PartyID, m.CharacterID) {
+		return ErrAlreadyInParty
 	}
 	if _, ok := r.memMembers[m.PartyID]; !ok {
 		r.memMembers[m.PartyID] = make(map[string]Member)
@@ -163,7 +202,7 @@ func (r *MemoryRepository) AddMember(_ context.Context, m Member) error {
 	m.BattleActor = cloneBattleActor(m.BattleActor)
 	r.memMembers[m.PartyID][m.CharacterID] = m
 	r.memCharParty[m.CharacterID] = m.PartyID
-	r.memLobbyExp[m.PartyID] = time.Now().UTC().Add(r.lobbyTTL)
+	r.touchLocked(p)
 	return nil
 }
 
@@ -171,7 +210,7 @@ func (r *MemoryRepository) GetMembers(_ context.Context, partyID string) ([]Memb
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	membersMap, ok := r.memMembers[partyID]
-	if !ok {
+	if !ok || !r.clock().Before(r.memLobbyExp[partyID]) {
 		return nil, nil
 	}
 	var list []Member
@@ -196,7 +235,7 @@ func (r *MemoryRepository) GetActivePartyByCharacter(_ context.Context, characte
 		return Party{}, Member{}, ErrNotFound
 	}
 	exp, ok := r.memLobbyExp[partyID]
-	if !ok || time.Now().UTC().After(exp) {
+	if !ok || !r.clock().Before(exp) {
 		return Party{}, Member{}, ErrNotFound
 	}
 	p, ok := r.memLobbies[partyID]
@@ -215,16 +254,21 @@ func (r *MemoryRepository) RemoveMember(_ context.Context, partyID, characterID 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	exp, ok := r.memLobbyExp[partyID]
-	if !ok || time.Now().UTC().After(exp) {
+	if !ok || !r.clock().Before(exp) {
 		return ErrNotFound
 	}
 	p, ok := r.memLobbies[partyID]
 	if !ok {
 		return ErrNotFound
 	}
+	if p.sleepUntil != 0 {
+		return ErrPartyNotRecruiting
+	}
 	members := r.memMembers[partyID]
 	delete(members, characterID)
-	delete(r.memCharParty, characterID)
+	if r.memCharParty[characterID] == partyID {
+		delete(r.memCharParty, characterID)
+	}
 	if p.LeaderCharacterID == characterID {
 		// Earliest joiner leads, as the Valkey script's join order does.
 		var next Member
@@ -237,15 +281,18 @@ func (r *MemoryRepository) RemoveMember(_ context.Context, partyID, characterID 
 			next.IsLeader = true
 			members[next.CharacterID] = next
 			p.LeaderCharacterID = next.CharacterID
-			r.memLobbies[partyID] = p
 		}
 	}
-	r.memLobbyExp[partyID] = time.Now().UTC().Add(r.lobbyTTL)
+	r.touchLocked(p)
 	return nil
 }
 
 func (r *MemoryRepository) GetPartyForUpdate(ctx context.Context, id string) (Party, error) {
-	return r.GetParty(ctx, id)
+	p, err := r.GetParty(ctx, id)
+	if err == nil && p.sleepUntil != 0 {
+		return Party{}, ErrPartyNotRecruiting
+	}
+	return p, err
 }
 
 func (r *MemoryRepository) GetMember(ctx context.Context, partyID, characterID string) (Member, error) {
@@ -300,9 +347,7 @@ func (r *MemoryRepository) CleanupParty(_ context.Context, state LobbyState) err
 			delete(r.memCharParty, charID)
 		}
 	}
-	delete(r.memLobbies, id)
-	delete(r.memLobbyExp, id)
-	delete(r.memMembers, id)
+	r.deleteLobbyLocked(id)
 	return nil
 }
 

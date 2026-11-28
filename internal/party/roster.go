@@ -43,7 +43,7 @@ func (s *Service) withRosterDetail(ctx context.Context, actor, partyID string, c
 		if detail.Party.LeaderCharacterID != actor {
 			return ErrNotPartyLeader
 		}
-		if detail.Party.Status != StatusRecruiting {
+		if detail.Party.Status != StatusRecruiting || detail.Party.sleepUntil != 0 {
 			return ErrPartyNotRecruiting
 		}
 		seen := make(map[string]bool, len(detail.Members))

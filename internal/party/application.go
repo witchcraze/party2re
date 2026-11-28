@@ -31,6 +31,8 @@ type Service struct {
 	depotRepo            DepotRepository
 	blessingProvider     BlessingProvider
 	timer                TimerService
+	idleStore            LobbyTimeoutRepository
+	sleep                SleepTimer
 	actionWait           ActionWaitWriter
 	tavernExit           TavernExitSettler
 	clock                func() time.Time

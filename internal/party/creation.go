@@ -113,7 +113,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			maxHP = battleActor.MaxHP
 		}
 
-		now := time.Now().UTC()
+		now := s.now()
 		partyID := id.New()
 		passHash := hashPassword(req.Password)
 
@@ -137,10 +137,6 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			CreatedAt:         now,
 			UpdatedAt:         now,
 		}
-		if err := s.repo.SaveParty(txCtx, createdParty); err != nil {
-			return err
-		}
-
 		createdMember = Member{
 			PartyID:       partyID,
 			CharacterID:   leaderChar.ID,
@@ -153,7 +149,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			JoinedAt:      now,
 			BattleActor:   battleActor,
 		}
-		return s.repo.AddMember(txCtx, createdMember)
+		return s.repo.SaveParty(txCtx, createdParty, createdMember)
 	})
 	if err != nil {
 		return PartyDetail{}, err

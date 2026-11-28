@@ -34,8 +34,15 @@ type storedMember struct {
 }
 
 type storedLobbyState struct {
-	Party   storedParty    `json:"party"`
-	Members []storedMember `json:"members"`
+	Party      storedParty    `json:"party"`
+	Members    []storedMember `json:"members"`
+	SleepUntil int64          `json:"sleep_until_ms,omitempty"`
+}
+
+func (s storedLobbyState) toParty() Party {
+	p := s.Party.toParty()
+	p.sleepUntil = s.SleepUntil
+	return p
 }
 
 func unmarshalJSONSlice[T any](raw json.RawMessage, dst *[]T) error {
@@ -59,16 +66,16 @@ func cloneBattleActor(actor *battle.LifetimeActor) *battle.LifetimeActor {
 	return &cloned
 }
 
-func marshalStoredMember(m Member) ([]byte, error) {
+func newStoredMember(m Member) (storedMember, error) {
 	sm := storedMember{Member: m}
 	if m.BattleActor != nil {
 		actorJSON, err := json.Marshal(m.BattleActor)
 		if err != nil {
-			return nil, err
+			return storedMember{}, err
 		}
 		sm.BattleActorJSON = string(actorJSON)
 	}
-	return json.Marshal(sm)
+	return sm, nil
 }
 
 func decodeStoredMembers(stored []storedMember) ([]Member, error) {

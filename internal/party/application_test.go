@@ -71,11 +71,16 @@ func (r *mockPartyRepository) WithPartyAdventureLock(ctx context.Context, partyI
 	return fn(lockedCtx)
 }
 
-func (r *mockPartyRepository) SaveParty(_ context.Context, p Party) error {
+func (r *mockPartyRepository) SaveParty(ctx context.Context, p Party, members ...Member) error {
 	if r.savePartyErr != nil {
 		return r.savePartyErr
 	}
 	r.parties[p.ID] = p
+	for _, member := range members {
+		if err := r.AddMember(ctx, member); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
