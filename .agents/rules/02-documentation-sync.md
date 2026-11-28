@@ -28,7 +28,7 @@ description: Rules for document ownership, content criteria, same-PR updates, co
 - Rewrite the owning section as one current explanation; replace superseded or duplicate text instead of appending reports. Keep cleanup within the active objective.
 - Cleanup found outside the objective goes to a new or existing documentation Issue naming the target sections, what to remove and what to preserve.
 - Add a section or document only for a distinct enduring contract, decision or procedure. Add an agent rule only for a cross-cutting constraint or decision criterion; a local bug needs a regression test. For mechanically enforced rules, state the requirement and link the check.
-- Before deleting or consolidating, inspect content and inbound references; preserve unique requirements, decisions, §2 findings and open gaps, and fix links. Age or length alone never justifies deletion.
+- Before deleting or consolidating, inspect content and inbound references; preserve unique requirements, decisions, §2 findings and open gaps, and fix links (`markdown_links_lint_test.go`). Age or length alone never justifies deletion.
 - Explain meaningful consolidation or growth in the PR's documentation section; no quotas or maintenance logs.
 
 ## 5. OpenAPI Specification Synchronization (SSOT & Modular Paths)
