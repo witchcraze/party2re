@@ -322,8 +322,13 @@ func (r *RunRepository[R, P]) FindActorRun(ctx context.Context, actor string) (*
 }
 
 // ListRuns returns the live (undisposed) runs of kind; the runs table is shared by every kind.
+// A live run with members keeps their enrollments, and an empty live run is a retained
+// system room holding its slot. Disposed history is never scanned,
+// so the scheduled idle sweep and quest listing stay bounded by live rooms.
 func (r *RunRepository[R, P]) ListRuns(ctx context.Context, kind string) ([]runhost.State, error) {
-	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `SELECT state_json FROM runs WHERE state_json IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(state_json,'$.kind'))=?`, kind)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `SELECT state_json FROM runs
+WHERE run_id IN (SELECT run_id FROM run_enrollments UNION SELECT run_id FROM runs WHERE slot IS NOT NULL)
+AND state_json IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(state_json,'$.kind'))=?`, kind)
 	if err != nil {
 		return nil, err
 	}

@@ -154,18 +154,30 @@
       "note": "One SQL transaction via WithRunForUpdate on a system-opened run."
     },
     {
-      "method": "DisposeIdle",
-      "source_ref": "internal/runhost/system.go#Service.DisposeIdle",
+      "method": "SweepIdle",
+      "source_ref": "internal/runhost/system.go#Service.SweepIdle",
       "transaction_type": "Delegated",
       "lock_sequence": [
         {
           "table": "runs",
           "tier": 0,
           "mode": "SELECT ... FOR UPDATE (via Store)",
-          "note": "Refuses an occupied or not-yet-idle run; disposal releases the slot."
+          "note": "Per room; the idle deadline, roster and TimedOut are re-checked under the lock, so a racing command or sweep wins once."
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (sorted IDs)",
+          "note": "Roster of a room with members; an empty retained room takes no character locks."
+        },
+        {
+          "table": "run_recipients / run_enrollments",
+          "tier": 8,
+          "mode": "UPDATE / DELETE",
+          "note": "Timeout dispositions; enrollments are released once each penalty is projected."
         }
       ],
-      "note": "One SQL transaction via WithRunForUpdate; no character locks."
+      "note": "Scheduled worker entry point; reads live runs via ListRuns, then per room one WithRunForUpdate transaction that deletes an empty idle retained run or commits the timeout, and a second (recoverTimeout) that projects penalties. Never atomic across rooms."
     },
     {
       "method": "executeCombat",

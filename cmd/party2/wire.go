@@ -76,6 +76,12 @@ func wireApp(
 	if cmbt.pvp != nil {
 		soc.worker.RegisterReconciler("pvp_inactivity_sweep", cmbt.pvp.SweepInactiveRooms)
 	}
+	if cmbt.normal != nil {
+		soc.worker.RegisterReconciler("normal_run_idle_sweep", cmbt.normal.SweepIdle)
+	}
+	if cmbt.boss != nil {
+		soc.worker.RegisterReconciler("boss_run_idle_sweep", cmbt.boss.SweepIdle)
+	}
 	misc, err := newMiscServices(db, core, soc, econ, valkeyClient)
 	if err != nil {
 		return nil, err

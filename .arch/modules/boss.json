@@ -50,7 +50,7 @@
       "source_ref": "internal/boss/rooms.go#RunService.Rooms",
       "transaction_type": "Delegated",
       "lock_sequence": [],
-      "note": "Slot reads; an empty idle room is deleted through runhost DisposeIdle (runs row only)."
+      "note": "Slot reads only; the runhost SweepIdle worker deletes idle rooms."
     }
   ]
 }

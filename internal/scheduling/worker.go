@@ -56,21 +56,24 @@ func (w *Worker) Run(ctx context.Context) {
 
 const defaultFetchLimit = 50
 
+// processActions runs due actions before reconcilers, and bounds each reconciler to
+// one interval, so a slow reconciler never delays the tick's due actions; cancelled
+// work is retried on the next tick.
 func (w *Worker) processActions(ctx context.Context) {
-	for actionType, reconcile := range w.reconcilers {
-		if err := reconcile(ctx); err != nil {
-			w.logger.Error(ctx, "Failed to reconcile scheduled actions", err, slog.String("type", actionType))
+	if actions, err := w.repo.FetchDue(ctx, time.Now(), defaultFetchLimit); err != nil {
+		w.logger.Error(ctx, "Failed to fetch due actions", err)
+	} else {
+		for _, action := range actions {
+			w.processAction(ctx, action)
 		}
 	}
-	// Fetch actions due up to now
-	actions, err := w.repo.FetchDue(ctx, time.Now(), defaultFetchLimit)
-	if err != nil {
-		w.logger.Error(ctx, "Failed to fetch due actions", err)
-		return
-	}
-
-	for _, action := range actions {
-		w.processAction(ctx, action)
+	for actionType, reconcile := range w.reconcilers {
+		reconcileCtx, cancel := context.WithTimeout(ctx, w.interval)
+		err := reconcile(reconcileCtx)
+		cancel()
+		if err != nil {
+			w.logger.Error(ctx, "Failed to reconcile scheduled actions", err, slog.String("type", actionType))
+		}
 	}
 }
 

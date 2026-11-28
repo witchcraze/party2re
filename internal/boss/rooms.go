@@ -52,9 +52,8 @@ func (s *RunService) OpenSealingRooms(ctx context.Context, partyName string, uns
 	return errors.Join(errs...)
 }
 
-// Rooms lists the live sealing rooms in stage order. Like the legacy room
-// listing (quest.cgi:86–90) it first deletes an empty room idle for 30 minutes.
-// Reading a room never advances its battle.
+// Rooms lists the live sealing rooms in stage order. Reading never changes a room;
+// the scheduled idle sweep deletes an empty room idle for 30 minutes (quest.cgi:86–90).
 func (s *RunService) Rooms(ctx context.Context) ([]Run, error) {
 	var rooms []Run
 	for _, stage := range s.stages {
@@ -62,25 +61,9 @@ func (s *RunService) Rooms(ctx context.Context) ([]Run, error) {
 		if err != nil {
 			return nil, err
 		}
-		if r == nil {
-			continue
+		if r != nil {
+			rooms = append(rooms, *r)
 		}
-		if len(r.Roster) == 0 {
-			// DisposeIdle refuses (ErrConflict) a room that is occupied or not yet idle.
-			if err := s.DisposeIdle(ctx, r.ID); errors.Is(err, runhost.ErrConflict) {
-				rooms = append(rooms, *r)
-				continue
-			} else if err != nil {
-				return nil, err
-			}
-			if r, err = s.FindSlot(ctx, slot(stage.ID)); err != nil {
-				return nil, err
-			}
-			if r == nil {
-				continue
-			}
-		}
-		rooms = append(rooms, *r)
 	}
 	return rooms, nil
 }

@@ -69,6 +69,7 @@ type normalStore struct {
 	failWrite      atomic.Bool
 	loseCommit     atomic.Bool
 	tamperRetained atomic.Bool
+	owned          map[string]bool // when set, ListRuns returns only these runs
 }
 
 func (r *normalStore) FindRetainedEarnings(ctx context.Context, actor string) ([]runhost.RetainedEarnings, error) {

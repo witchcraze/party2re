@@ -102,6 +102,16 @@ func (s *Service[R, P]) RecoverTimeout(ctx context.Context, player, actor, runID
 	if err := s.authorize(ctx, player, actor); err != nil {
 		return err
 	}
+	return s.recoverTimeout(ctx, runID, func(r *State) error {
+		if p, ok := r.Recipients[actor]; !ok || p.PlayerID != player {
+			return ErrForbidden
+		}
+		return nil
+	})
+}
+
+// recoverTimeout is RecoverTimeout after authorization; the idle sweep passes a nil owner check.
+func (s *Service[R, P]) recoverTimeout(ctx context.Context, runID string, owner func(*State) error) error {
 	return s.cfg.Store.WithRunForUpdate(ctx, runID, false, func(ctx context.Context) error {
 		run, err := s.cfg.Store.FindRun(ctx, runID)
 		if err != nil {
@@ -111,9 +121,10 @@ func (s *Service[R, P]) RecoverTimeout(ctx context.Context, player, actor, runID
 			return nil
 		}
 		r := P(run).Host()
-		p, ok := r.Recipients[actor]
-		if !ok || p.PlayerID != player {
-			return ErrForbidden
+		if owner != nil {
+			if err := owner(r); err != nil {
+				return err
+			}
 		}
 		if !r.TimedOut {
 			return ErrConflict

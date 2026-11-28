@@ -72,6 +72,16 @@ type lossyStore struct {
 	failSave            *atomic.Bool
 	failRecoveryReceipt *atomic.Bool
 	failReceipt         *atomic.Bool
+	owned               map[string]bool
+}
+
+// ListRuns keeps the idle sweep on this test's runs; the shared DB holds other tests' runs.
+func (s lossyStore) ListRuns(ctx context.Context, kind string) ([]runhost.State, error) {
+	runs, err := s.Store.ListRuns(ctx, kind)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(runs, func(r runhost.State) bool { return !s.owned[r.ID] }), nil
 }
 
 func (s lossyStore) WithRunForUpdate(ctx context.Context, id string, create bool, fn func(context.Context) error) error {
@@ -108,12 +118,13 @@ type sysFixture struct {
 	failSave            atomic.Bool
 	failRecoveryReceipt atomic.Bool
 	failReceipt         atomic.Bool
+	owned               map[string]bool
 	svc                 *runhost.Service[sysRun, *sysRun]
 }
 
 func newSysFixture(t *testing.T, capacity int) *sysFixture {
 	t.Helper()
-	f := &sysFixture{db: database.OpenTestDB(t), clock: &sysClock{}}
+	f := &sysFixture{db: database.OpenTestDB(t), clock: &sysClock{}, owned: map[string]bool{}}
 	f.clock.nanos.Store(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	f.retain.Store(true)
 	var err error
@@ -152,7 +163,7 @@ func newSysFixture(t *testing.T, capacity int) *sysFixture {
 	adapter := battle.NewService(battle.WithCharacterRepository(f.chars), battle.WithCustomSkillRepository(customs), battle.WithInventoryRepository(invs), battle.WithDepotRepository(depots), battle.WithEquipmentRepository(equips), battle.WithJobHistoryRepository(history), battle.WithTransactionProvider(tx), battle.WithTransactionRunner(runner))
 	room := sysRoom{capacity: capacity, retain: &f.retain}
 	f.svc, err = runhost.NewService[sysRun](runhost.Config[sysRun]{
-		Kind: "system-test", MaxMembers: 6, Store: lossyStore{Store: store, lose: &f.lose, failSave: &f.failSave, failRecoveryReceipt: &f.failRecoveryReceipt, failReceipt: &f.failReceipt}, Characters: f.chars, Inventories: invs,
+		Kind: "system-test", MaxMembers: 6, Store: lossyStore{Store: store, lose: &f.lose, failSave: &f.failSave, failRecoveryReceipt: &f.failRecoveryReceipt, failReceipt: &f.failReceipt, owned: f.owned}, Characters: f.chars, Inventories: invs,
 		Builder: adapter, Settler: adapter, Penalty: sysPenalty{}, Clock: f.clock, Room: room, SystemRoom: room,
 		ExitEffects: func(context.Context, string) error { return nil },
 	})
@@ -339,26 +350,25 @@ func TestSystemRunIdleDisposalIntegration(t *testing.T) {
 	if _, err := f.svc.Join(ctx, c.PlayerID, c.ID, occupiedID, "occupy"); err != nil {
 		t.Fatal(err)
 	}
+	f.owned[emptyID], f.owned[occupiedID] = true, true
 	f.clock.nanos.Add(int64(29 * time.Minute))
-	if err := f.svc.DisposeIdle(ctx, emptyID); !errors.Is(err, runhost.ErrConflict) {
-		t.Fatalf("dispose before the idle timeout = %v", err)
+	if err := f.svc.SweepIdle(ctx); err != nil {
+		t.Fatal(err)
 	}
+	if f.room(t, empty) == nil || f.room(t, occupied) == nil {
+		t.Fatal("room swept before the idle timeout")
+	}
+	// Joining never renews room activity, so both rooms are idle: the empty one is
+	// deleted and the occupied one times out its member (auto_delete_quest).
 	f.clock.nanos.Add(int64(2 * time.Minute))
-	if err := f.svc.DisposeIdle(ctx, occupiedID); !errors.Is(err, runhost.ErrConflict) {
-		t.Fatalf("dispose of an occupied room = %v", err)
-	}
-	if err := f.svc.DisposeIdle(ctx, emptyID); err != nil {
+	if err := f.svc.SweepIdle(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if r := f.room(t, empty); r != nil {
 		t.Fatalf("idle empty room still live: %+v", r.State)
 	}
-	if r := f.room(t, occupied); r == nil || !slices.Equal(r.Roster, []string{c.ID}) {
-		t.Fatalf("occupied room = %+v", r)
-	}
-	// A member's idle cleanup deletes a retained room too (auto_delete_quest).
-	if _, err := f.svc.Command(ctx, runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: occupiedID, ID: "cleanup", Version: f.version(t, occupiedID), Action: "cleanup"}); err != nil {
-		t.Fatal(err)
+	if after, err := f.chars.FindByID(ctx, c.ID); err != nil || !after.PendingWake {
+		t.Fatalf("idle member not penalized: %+v %v", after, err)
 	}
 	if r := f.room(t, occupied); r != nil {
 		t.Fatalf("timed-out retained room still live: %+v", r.State)

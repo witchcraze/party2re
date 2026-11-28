@@ -23,7 +23,7 @@ Open: comments, whispers (`ささやき`), manual screenshots (`すくしょ`) a
 
 ## Resumable normal-run transitions
 
-**Decision (#1325, 2026-10-11):** SQL authority for the run, and the explicit idle-cleanup timing below.
+**Decision (#1325, 2026-10-11):** SQL authority for the run, and the idle-cleanup timing below.
 
 | Transition | Preconditions and resulting facts |
 | --- | --- |
@@ -57,7 +57,9 @@ Whisper recipients can be outside the encounter, and an omitted recipient makes 
 
 **Idle cleanup.** `quest.cgi:80–91,172–183` checks **strictly more than 1800 seconds** since the room log changed, clears each non-NPC member's location, sets `sleep=3600` and deletes the room. It calls neither `nigeru` nor `get_stock`, and user-owned stock lives outside the room, so pending earnings survive and are credited once at the owner's next stock-releasing normal command. There is no timeout bonus and no release at cleanup. GET never performs cleanup or renews its deadline.
 
-**Decision (#1325, 2026-10-11):** keep the strict 30-minute threshold; trigger cleanup by an explicit owner command (withdrawn by the owner on 2026-11-28 in favor of the scheduled sweep, [#2985](https://github.com/witchcraze/party2re/issues/2985)); keep earned assets; apply a recoverable one-hour sleep penalty to remaining real participants, anchored to the committed cleanup instant. Persist its deadline before any timer projection; a failed timer write cannot release ownership or extend the hour on retry. Record a distinct timeout history disposition. No exit fatigue, history or recovery is inferred for timeout. (The original writes a duration via `system.cgi:861–883` that `sleep.cgi:19` later reduces by time since the member's last save; matching that anchor is [#2987](https://github.com/witchcraze/party2re/issues/2987).)
+**Decision (#1325, 2026-10-11):** keep the strict 30-minute threshold; keep earned assets; apply a recoverable one-hour sleep penalty to remaining real participants, anchored to the committed cleanup instant. Persist its deadline before any timer projection; a failed timer write cannot release ownership or extend the hour on retry. Record a distinct timeout history disposition. No exit fatigue, history or recovery is inferred for timeout. (The original writes a duration via `system.cgi:861–883` that `sleep.cgi:19` later reduces by time since the member's last save; matching that anchor is [#2987](https://github.com/witchcraze/party2re/issues/2987).)
+
+**Decision (#2985, 2026-11-28):** the scheduled worker cleans up idle rooms without any member action, in place of legacy's cleanup on every quest-list view; a member's cleanup command still applies between ticks.
 
 ### Room activity contract
 
