@@ -3,8 +3,6 @@ package medal_test
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 
@@ -60,15 +58,7 @@ func (m *mockDepotRepo) Save(ctx context.Context, value depot.Depot) error {
 }
 
 func TestMedalService(t *testing.T) {
-	tmpDir := t.TempDir()
-	rewardsFile := filepath.Join(tmpDir, "medal_rewards.json")
-	rewardsData := `[
-		{ "cost": 3, "item_id": "armor-32" },
-		{ "cost": 10, "item_id": "weapon-32" }
-	]`
-	if err := os.WriteFile(rewardsFile, []byte(rewardsData), 0644); err != nil {
-		t.Fatal(err)
-	}
+	rewards := []medal.Reward{{Cost: 3, ItemID: "armor-32"}, {Cost: 10, ItemID: "weapon-32"}}
 
 	t.Run("successful claim delivers to depot", func(t *testing.T) {
 		char := corecharacter.Character{ID: "char-1", SmallMedals: 5}
@@ -80,12 +70,12 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		depotRepo := &mockDepotRepo{dep: d}
 
-		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		svc, err := medal.NewServiceWithRewards(charRepo, depotRepo, dummyTxProvider{}, rewards)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		updatedChar, updatedDepot, err := svc.Claim(context.Background(), "char-1", "armor-32")
+		updatedChar, err := svc.Claim(context.Background(), "char-1", "armor-32")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -94,11 +84,11 @@ func TestMedalService(t *testing.T) {
 			t.Errorf("expected 2 medals, got %d", updatedChar.SmallMedals)
 		}
 
-		if len(updatedDepot.Items) != 1 {
-			t.Fatalf("expected 1 depot item, got %d", len(updatedDepot.Items))
+		if len(depotRepo.dep.Items) != 1 {
+			t.Fatalf("expected 1 depot item, got %d", len(depotRepo.dep.Items))
 		}
-		if updatedDepot.Items[0].DefinitionID != "armor-32" {
-			t.Errorf("expected armor-32 in depot, got %s", updatedDepot.Items[0].DefinitionID)
+		if depotRepo.dep.Items[0].DefinitionID != "armor-32" {
+			t.Errorf("expected armor-32 in depot, got %s", depotRepo.dep.Items[0].DefinitionID)
 		}
 	})
 
@@ -107,12 +97,12 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		depotRepo := &mockDepotRepo{}
 
-		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		svc, err := medal.NewServiceWithRewards(charRepo, depotRepo, dummyTxProvider{}, rewards)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		updatedChar, updatedDepot, err := svc.Claim(context.Background(), "char-uninit", "armor-32")
+		updatedChar, err := svc.Claim(context.Background(), "char-uninit", "armor-32")
 		if err != nil {
 			t.Fatalf("Claim failed on uninitialized depot: %v", err)
 		}
@@ -120,8 +110,8 @@ func TestMedalService(t *testing.T) {
 		if updatedChar.SmallMedals != 2 {
 			t.Errorf("expected 2 medals, got %d", updatedChar.SmallMedals)
 		}
-		if len(updatedDepot.Items) != 1 || updatedDepot.Items[0].DefinitionID != "armor-32" {
-			t.Errorf("expected armor-32 in newly created depot, got %+v", updatedDepot.Items)
+		if len(depotRepo.dep.Items) != 1 || depotRepo.dep.Items[0].DefinitionID != "armor-32" {
+			t.Errorf("expected armor-32 in newly created depot, got %+v", depotRepo.dep.Items)
 		}
 	})
 
@@ -132,12 +122,12 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		depotRepo := &mockDepotRepo{dep: d}
 
-		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		svc, err := medal.NewServiceWithRewards(charRepo, depotRepo, dummyTxProvider{}, rewards)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		_, _, err = svc.Claim(context.Background(), "char-1", "armor-32")
+		_, err = svc.Claim(context.Background(), "char-1", "armor-32")
 		if !errors.Is(err, medal.ErrInsufficientMedals) {
 			t.Errorf("expected ErrInsufficientMedals, got %v", err)
 		}
@@ -150,12 +140,12 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		depotRepo := &mockDepotRepo{dep: d}
 
-		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		svc, err := medal.NewServiceWithRewards(charRepo, depotRepo, dummyTxProvider{}, rewards)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		_, _, err = svc.Claim(context.Background(), "char-1", "non-existent-item")
+		_, err = svc.Claim(context.Background(), "char-1", "non-existent-item")
 		if !errors.Is(err, medal.ErrRewardNotFound) {
 			t.Errorf("expected ErrRewardNotFound, got %v", err)
 		}
@@ -178,15 +168,15 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		depotRepo := &mockDepotRepo{dep: d}
 
-		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		svc, err := medal.NewServiceWithRewards(charRepo, depotRepo, dummyTxProvider{}, rewards)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// medal.cgi:80 sends the prize with send_item, which ignores capacity.
-		_, got, err := svc.Claim(context.Background(), "char-1", "armor-32")
-		if err != nil || len(got.Items) != 6 || got.Quantity("armor-32") != 1 {
-			t.Errorf("want armor-32 as a 6th slot, got %+v, %v", got.Items, err)
+		_, err = svc.Claim(context.Background(), "char-1", "armor-32")
+		if err != nil || len(depotRepo.dep.Items) != 6 || depotRepo.dep.Quantity("armor-32") != 1 {
+			t.Errorf("want armor-32 as a 6th slot, got %+v, %v", depotRepo.dep.Items, err)
 		}
 	})
 
@@ -207,20 +197,20 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		depotRepo := &mockDepotRepo{dep: d}
 
-		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		svc, err := medal.NewServiceWithRewards(charRepo, depotRepo, dummyTxProvider{}, rewards)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		_, updatedDepot, err := svc.Claim(context.Background(), "char-1", "armor-32")
+		_, err = svc.Claim(context.Background(), "char-1", "armor-32")
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// Expected capacity: JobLevel 10 (55) + ExDepot 1 (5) + OverDepot 1 (50) = 110
 		expectedCap := depot.CalculateCapacity(10, 1, 1)
-		if updatedDepot.Capacity != expectedCap {
-			t.Errorf("expected refreshed depot capacity %d, got %d", expectedCap, updatedDepot.Capacity)
+		if depotRepo.dep.Capacity != expectedCap {
+			t.Errorf("expected refreshed depot capacity %d, got %d", expectedCap, depotRepo.dep.Capacity)
 		}
 	})
 
@@ -235,20 +225,20 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		depotRepo := &mockDepotRepo{} // empty dep returns ErrNotFound
 
-		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		svc, err := medal.NewServiceWithRewards(charRepo, depotRepo, dummyTxProvider{}, rewards)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		_, updatedDepot, err := svc.Claim(context.Background(), "char-1", "armor-32")
+		_, err = svc.Claim(context.Background(), "char-1", "armor-32")
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// Expected capacity: JobLevel 15 (80) + OverDepot 2 (100) = 180
 		expectedCap := depot.CalculateCapacity(15, 0, 2)
-		if updatedDepot.Capacity != expectedCap {
-			t.Errorf("expected newly created depot capacity %d, got %d", expectedCap, updatedDepot.Capacity)
+		if depotRepo.dep.Capacity != expectedCap {
+			t.Errorf("expected newly created depot capacity %d, got %d", expectedCap, depotRepo.dep.Capacity)
 		}
 	})
 }
@@ -270,12 +260,7 @@ func TestMedalService_ConcurrentClaim(t *testing.T) {
 	charRepo := &mockCharacterRepo{char: char}
 	depotRepo := &mockDepotRepo{dep: d}
 
-	svc, err := medal.NewServiceWithRewards(
-		charRepo,
-		depotRepo,
-		rewards,
-		medal.WithTransactionProvider(dummyTxProvider{}),
-	)
+	svc, err := medal.NewServiceWithRewards(charRepo, depotRepo, dummyTxProvider{}, rewards)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +271,7 @@ func TestMedalService_ConcurrentClaim(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _, err := svc.Claim(context.Background(), "char-1", "armor-32")
+			_, err := svc.Claim(context.Background(), "char-1", "armor-32")
 			errs <- err
 		}()
 	}
@@ -296,5 +281,11 @@ func TestMedalService_ConcurrentClaim(t *testing.T) {
 	finalChar, _ := charRepo.FindByID(context.Background(), "char-1")
 	if finalChar.SmallMedals < 0 {
 		t.Fatalf("small medals went negative: %d", finalChar.SmallMedals)
+	}
+}
+
+func TestNewService_RequiresTransactionProvider(t *testing.T) {
+	if _, err := medal.NewService(&mockCharacterRepo{}, &mockDepotRepo{}, nil); !errors.Is(err, medal.ErrNilDependency) {
+		t.Fatalf("got %v, want ErrNilDependency", err)
 	}
 }

@@ -203,7 +203,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 					_, err := combat.customSkill.SetCustomSkill(ctx, actor.ID, "Test", "", [3]string{"gem_atk_1"})
 					return err
 				}},
-				{"medal-exchange", func() error { _, _, err := misc.medal.Claim(ctx, actor.ID, "armor-32"); return err }},
+				{"medal-exchange", func() error { _, err := misc.medal.Claim(ctx, actor.ID, "armor-32"); return err }},
 				{"plantation", func() error { _, err := econ.plantation.Sow(ctx, actor.ID, "red"); return err }},
 				{"depot-send-item", func() error { _, err := econ.depot.SendItem(ctx, actor.ID, peer.ID, inv.Items[0].ID); return err }},
 				{"wishingwell", func() error {
