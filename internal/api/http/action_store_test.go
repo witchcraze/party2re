@@ -24,6 +24,7 @@ var storeInputs = []struct{ action, params, args string }{
 	{"store_build", `{"town_id":"town2","house_style":"005"}`, "town2 005"},
 	{"store_list_gold", `{"item_id":"inst-1","price":300}`, "inst-1 300"},
 	{"store_list_barter", `{"item_id":"inst-1","wish_item_name":"やくそう"}`, "inst-1 やくそう"},
+	{"store_list_barter", `{"item_id":"inst-1","wish_item_name":""}`, "inst-1"}, // legacy accepts an empty wish
 	{"store_withdraw", `{"sale_id":"sale-1"}`, "sale-1"},
 	{"store_buy", `{"sale_id":"sale-1"}`, "sale-1"},
 	{"store_trade", `{"sale_id":"sale-1","item_id":"inst-2"}`, "sale-1 inst-2"},

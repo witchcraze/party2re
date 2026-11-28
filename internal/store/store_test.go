@@ -1218,3 +1218,63 @@ func TestStoreService_ChangeWallpaper_RestoredChoices(t *testing.T) {
 		}
 	})
 }
+
+// Legacy nazukeru never sets $f_end (store.cgi:696), so every interior that
+// shares the selected one's name is renamed; differently named ones stay.
+func TestRenameInteriorRenamesEverySameNamedInterior(t *testing.T) {
+	svc, storeRepo, _, _, _ := setupTestService(t)
+	ctx := context.Background()
+	if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+		t.Fatal(err)
+	}
+	// A placed interior is named after its furniture.
+	var ids []string
+	for _, furniture := range []string{"001", "001", "002"} {
+		in, err := svc.AddInterior(ctx, "c1", furniture)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, in.ID)
+	}
+	if err := svc.RenameInterior(ctx, "c1", ids[0], "かっこいい机"); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := storeRepo.GetStoreByCharacterID(ctx, "c1")
+	names := map[string]string{}
+	for _, in := range storeRepo.interiors[st.ID] {
+		names[in.ID] = in.Name
+	}
+	if names[ids[0]] != "かっこいい机" || names[ids[1]] != "かっこいい机" || names[ids[2]] != "002" {
+		t.Fatalf("names = %v", names)
+	}
+}
+
+// Legacy validates only a non-empty wish (store.cgi:208): an empty wish lists
+// a barter that no visitor item matches, and the owner can still withdraw it.
+func TestListBarterItemAcceptsEmptyWish(t *testing.T) {
+	svc, _, _, depotRepo, _ := setupTestService(t)
+	ctx := context.Background()
+	if _, err := svc.BuildStore(ctx, "c1", "town1", "001"); err != nil {
+		t.Fatal(err)
+	}
+	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = []coreitem.Instance{{ID: "inst1", DefinitionID: "wpn_001", Quantity: 1}}
+	_ = depotRepo.Save(ctx, dep1)
+	dep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
+	dep2.Items = []coreitem.Instance{{ID: "c2_herb", DefinitionID: "itm_001", Quantity: 1}}
+	_ = depotRepo.Save(ctx, dep2)
+
+	if _, err := svc.ListBarterItem(ctx, "c1", "inst1", "   "); !errors.Is(err, store.ErrItemNotFound) {
+		t.Fatalf("blank wish: %v", err)
+	}
+	sale, err := svc.ListBarterItem(ctx, "c1", "inst1", "")
+	if err != nil || sale.WishItemName != "" {
+		t.Fatalf("empty wish: %+v %v", sale, err)
+	}
+	if err := svc.TradeItem(ctx, "c2", sale.ID, "c2_herb"); !errors.Is(err, store.ErrTradeItemMissing) {
+		t.Fatalf("trade against an empty wish: %v", err)
+	}
+	if err := svc.WithdrawListing(ctx, "c1", sale.ID); err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+}

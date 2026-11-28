@@ -119,19 +119,20 @@ func (s *Service) ListGoldItem(ctx context.Context, characterID, depotItemInstan
 // Transaction: RunInTx.
 // Lock Order: characters(2) -> inventory_items(3) -> character_depots/depot_items(5).
 func (s *Service) ListBarterItem(ctx context.Context, characterID, depotItemInstanceID, wishItemName string) (*Sale, error) {
-	cleanWish := strings.TrimSpace(wishItemName)
-	if cleanWish == "" {
-		return nil, ErrItemNotFound
-	}
-	var resolvedWishName string
-	if s.itemCatalog != nil {
-		def, err := s.itemCatalog.FindByName(cleanWish)
-		if err != nil {
+	// Legacy validates only a non-empty wish (store.cgi:208); an empty one
+	// lists a barter no visitor can complete.
+	resolvedWishName := strings.TrimSpace(wishItemName)
+	if wishItemName != "" {
+		if resolvedWishName == "" {
 			return nil, ErrItemNotFound
 		}
-		resolvedWishName = def.Name
-	} else {
-		resolvedWishName = cleanWish
+		if s.itemCatalog != nil {
+			def, err := s.itemCatalog.FindByName(resolvedWishName)
+			if err != nil {
+				return nil, ErrItemNotFound
+			}
+			resolvedWishName = def.Name
+		}
 	}
 
 	now := s.nowFunc().UTC()

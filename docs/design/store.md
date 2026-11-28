@@ -19,17 +19,17 @@ Player stores (`store.cgi`) are boutiques built in the four towns, listing Depot
 | `かう`, visitor `こうかん` | `store_buy`, `store_trade` |
 | `かんばん`, `かべがみ`, `いんてりあ`, `なづける`, `かたづけ` | `store_rename`, `store_wallpaper`, `store_interior_add`, `store_interior_rename`, `store_interior_clean` |
 
-Commands name explicit Depot instances, listings and interiors instead of legacy item names or listing numbers. Legacy `なづける` renames every interior with the given name, because its stop flag `$f_end` is never set (`store.cgi:696`); Go renames only the selected interior ([#2976](https://github.com/witchcraze/party2re/issues/2976)).
+Commands name explicit Depot instances, listings and interiors instead of legacy item names or listing numbers. Legacy `なづける` renames every interior with the given name, because its stop flag `$f_end` is never set (`store.cgi:696`), so renaming the selected interior also renames every interior sharing its current name.
 
 ## Legacy findings
 
 - **Construction** (`_town.cgi:89–127`): `＠みせ` takes only a house style. The name is the owner's registered name, otherwise `@<name>の店@`; rejection order is funds, town capacity, already-owned store. Expiry removes only the town entry, so a rebuilt store keeps its name, wallpaper, furniture and listings, and neither the owner nor visitors can act in it until it stands again.
 - **Signboard name** (`store.cgi:298`): `is_build_store` compares against every town member name, so the owner's current name is also rejected. Signboard names forbid ASCII `@`, `/` and `\`; interior names allow them (`store.cgi:672–684`).
-- **Barter wish** (`store.cgi:208`): an empty wish passes validation and creates a listing that can never be traded; Go rejects it ([#2977](https://github.com/witchcraze/party2re/issues/2977)).
+- **Barter wish** (`store.cgi:208`): an empty wish passes validation and creates a listing that no visitor item can match, so it is never traded; the owner can still withdraw it.
 - **Collection** (`store.cgi:175–176,276–277`): listing registers the lister's held hand items (`add_collection`), not the listed Depot item; purchase and barter register nothing.
 
 ## Customization charges (#1146)
 
-**Legacy behavior.** The signboard (`store.cgi:289–313`, `kanban`) shows a 5,000 G fee and rejects a smaller balance, and furniture (`store.cgi:626–661`, `interior`) shows a 1,000 G price and rejects a smaller balance. **Pitfall:** neither routine nor the common dispatcher (`system.cgi:639–655`) deducts the gold, so the check is only a balance threshold. Wallpaper (`store.cgi:593–620`) does deduct its price.
+**Pitfall:** the signboard (`store.cgi:289–313`, `kanban`) shows a 5,000 G fee and furniture (`store.cgi:626–661`, `interior`) a 1,000 G price, and both reject a smaller balance, but neither routine nor the common dispatcher (`system.cgi:639–655`) deducts the gold. Wallpaper (`store.cgi:593–620`) does deduct its price.
 
-**Decision (#1146, 2026-10-19):** the user chose 「原典の観測動作に復元する（看板5,000G・家具1,000Gの残高検査のみ行い、実行時にゴールドを控除しない）」. Renaming the signboard requires at least 5,000 G and placing furniture at least 1,000 G, but neither deducts gold; wallpaper keeps its deduction. An exact-threshold balance is accepted.
+**Decision (#1146, 2026-10-19):** the user chose 「原典の観測動作に復元する（看板5,000G・家具1,000Gの残高検査のみ行い、実行時にゴールドを控除しない）」: both are balance thresholds (an exact-threshold balance is accepted), and wallpaper keeps its deduction.
