@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -293,4 +295,167 @@ func TestCombatAdmissionProduction(t *testing.T) {
 			t.Fatal("exit overwrote a peer credit", after, err)
 		}
 	})
+}
+
+// stage26Fixture wires production services on MariaDB and Valkey with one
+// stage-26-eligible character per name, cleaned up with its once lock.
+func stage26Fixture(t *testing.T, names ...string) (*coreServices, *socServices, *cmbtServices, []corecharacter.Character) {
+	t.Helper()
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("requires MariaDB and Valkey")
+	}
+	ctx := context.Background()
+	db := database.OpenTestDB(t)
+	client := testutil.OpenValkey(t)
+	core, err := newCoreServices(db, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	econ, err := newEconServices(db, core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	soc, err := newSocServices(db, core, econ, client, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	combat, err := newCmbtServices(db, core, soc, econ, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The fixture constructs combat services without the later Tavern wiring.
+	combat.normal.SetExitEffects(func(context.Context, string) error { return nil })
+	chars := make([]corecharacter.Character, len(names))
+	for i, name := range names {
+		c, err := database.CreateTestCharacterWithFunds(ctx, db, name+id.New()[:8], 1000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.Level, c.Stats.HP, c.Stats.MaxHP = 99, 500, 500
+		if err := core.charRepo.Update(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+		chars[i] = c
+		t.Cleanup(func() {
+			if err := soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, c.ID); err != nil {
+				t.Error(err)
+			}
+			if err := core.charRepo.Delete(ctx, c.ID); err != nil {
+				t.Error(err)
+			}
+			if err := core.playerRepo.Delete(ctx, c.PlayerID); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	return core, soc, combat, chars
+}
+
+func exitNormalRun(t *testing.T, combat *cmbtServices, c corecharacter.Character, entry runhost.Receipt) {
+	t.Helper()
+	if _, err := combat.normal.Command(context.Background(), runhost.Command{PlayerID: c.PlayerID, ActorID: c.ID, RunID: entry.Command.RunID, ID: "exit-" + id.New()[:8], Version: entry.Version, Action: "exit"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Stage 26 once per wake across Party creation and solo entry on production
+// Valkey (quest.cgi:594–599 $m{once}=1; cleared only on waking at Home).
+func TestCombatAdmissionProduction_Stage26OncePerWake(t *testing.T) {
+	ctx := context.Background()
+	_, soc, combat, chars := stage26Fixture(t, "S26L_", "S26M_")
+	leader, member := chars[0], chars[1]
+	stage26 := party.CreatePartyRequest{Speed: 18, Name: "Stage26Party", StageID: "stage-26", MaxMembers: 2}
+	lobby, err := combat.party.CreateParty(ctx, leader.ID, stage26)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := combat.party.JoinParty(ctx, lobby.Party.ID, member.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	for c, want := range map[string]bool{leader.ID: true, member.ID: false} {
+		if locked, err := soc.timer.IsLocked(ctx, timer.CategoryDungeonOnce, c); err != nil || locked != want {
+			t.Fatalf("once lock for %s = %v (err=%v), want %v", c, locked, err, want)
+		}
+	}
+	for _, c := range []string{member.ID, leader.ID} {
+		if _, err := combat.party.LeaveParty(ctx, lobby.Party.ID, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Leaving does not restore the quota for either entry route.
+	if _, err := combat.party.CreateParty(ctx, leader.ID, stage26); !errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+		t.Fatalf("leader re-created stage-26 party: %v", err)
+	}
+	if _, err := combat.normal.EnterSolo(ctx, leader.PlayerID, leader.ID, "s26-blocked", "solo-quest", "stage-26", "normal", 3); !errors.Is(err, adventure.ErrDailyOnceAlreadyUsed) {
+		t.Fatalf("leader entered stage-26 solo: %v", err)
+	}
+	// Waking at Home releases the quota.
+	if err := soc.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, leader.ID); err != nil {
+		t.Fatal(err)
+	}
+	entry, err := combat.normal.EnterSolo(ctx, leader.PlayerID, leader.ID, "s26-after-wake", "solo-quest", "stage-26", "normal", 3)
+	if err != nil {
+		t.Fatalf("leader rejected after wake: %v", err)
+	}
+	exitNormalRun(t, combat, leader, entry)
+}
+
+// One character racing solo entry against Party creation for stage 26 gets
+// exactly one admission; the others are rejected without unexpected errors.
+func TestCombatAdmissionProduction_Stage26ConcurrentSoloAndParty(t *testing.T) {
+	ctx := context.Background()
+	_, soc, combat, chars := stage26Fixture(t, "S26R_")
+	c := chars[0]
+	var mu sync.Mutex
+	var lobbies []string
+	var entries []runhost.Receipt
+	var fns []func() error
+	for i := 0; i < 3; i++ {
+		key, name := fmt.Sprintf("s26-race-%d", i), fmt.Sprintf("Race%d", i)
+		fns = append(fns,
+			func() error {
+				entry, err := combat.normal.EnterSolo(ctx, c.PlayerID, c.ID, key, "solo-quest", "stage-26", "normal", 3)
+				if err == nil {
+					mu.Lock()
+					entries = append(entries, entry)
+					mu.Unlock()
+				}
+				return err
+			},
+			func() error {
+				lobby, err := combat.party.CreateParty(ctx, c.ID, party.CreatePartyRequest{Speed: 18, Name: name, StageID: "stage-26"})
+				if err == nil {
+					mu.Lock()
+					lobbies = append(lobbies, lobby.Party.ID)
+					mu.Unlock()
+				}
+				return err
+			})
+	}
+	errs := testutil.RunRace(fns...)
+	for _, p := range lobbies {
+		if _, err := combat.party.LeaveParty(ctx, p, c.ID); err != nil {
+			t.Error(err)
+		}
+	}
+	for _, e := range entries {
+		exitNormalRun(t, combat, c, e)
+	}
+	admitted := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			admitted++
+		case errors.Is(err, adventure.ErrDailyOnceAlreadyUsed), errors.Is(err, party.ErrAlreadyInParty),
+			errors.Is(err, party.ErrMemberBusy), errors.Is(err, runhost.ErrBusy):
+		default:
+			t.Errorf("unexpected admission error (deadlock=%v): %v", testutil.IsDeadlockError(err), err)
+		}
+	}
+	if admitted != 1 || len(lobbies)+len(entries) != 1 {
+		t.Fatalf("admitted %d (lobbies=%v entries=%d), want exactly one: %v", admitted, lobbies, len(entries), errs)
+	}
+	if locked, err := soc.timer.IsLocked(ctx, timer.CategoryDungeonOnce, c.ID); err != nil || !locked {
+		t.Fatalf("winner's once lock missing: %v %v", locked, err)
+	}
 }
