@@ -297,9 +297,8 @@ contract. The weekday is read in JST from the accepted step's time, as for the
 treasure orb. File references are relative to `party2/map/16/` at the legacy
 revision above.
 
-- **Mining follows a site flag, not the position.** Entering a site sets the
-  flag, and its approach cell clears it. `9` is entered only from `H`, so mining
-  works there too (`__1.cgi:26–28,36–45`).
+- **Mining also works on `9`.** It follows the site flag, not the position, and
+  `9` is entered only from `H`, whose flag stays set (`__1.cgi:26–28,36–45`).
 - **Mining is not a move.** It spends no round and never checks the limit. A
   party standing at a site past round 150 can still mine (`1.cgi:37–77`;
   contrast `vs_dungeon.cgi:81`).
@@ -307,15 +306,6 @@ revision above.
   member's last-opening symbol, including the actor's own (`1.cgi:79–83`,
   `lib/system.cgi:861–867`). Every member may then open one chest of each mined
   treasure without item 215.
-- **`X` is not a boss.** It announces a boss but spawns an ordinary crystal-rock
-  group. Out-of-range `@appears` entries fall back to index 0 (`1.cgi:31,85–104`,
-  `lib/_npc_action.cgi:641–642`). The `_data.cgi` boss is never used.
-- **One flag covers the three springs.** They refill only when a `_1` step lands
-  on a multiple of 20, and the refill precedes the spring check (`_1.cgi:34–43`).
-- **Sunday may give no kind.** `Y` redraws a Sunday as `int(rand(6))`, and 0 maps
-  to no kind. The `__data.cgi` group then spawns and nothing is recorded. Kind
-  `n` never comes from `Y` on a Sunday (`_1.cgi:43,72–76`). The demon behind `V`
-  needs all six kinds (`__2.cgi:37`).
 - **`Z` installs `sealed` before its group and the special boss field after it.**
   Both last for the run, as with map13's EX boss (`__1.cgi:29`). The `z`
   transition has already installed `sealed` (`__2.cgi:41`).

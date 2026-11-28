@@ -15,3 +15,8 @@ const NativeMap13ID = nativeMap13ID
 var Map13Route = map13Route
 
 func (m DungeonMonster) EnemyCombatForTest() *corebattle.LifetimeActor { return m.combat }
+
+// NativeMap16 exposes the unlisted map16 definition to tests until #2943 lists it.
+var NativeMap16 = nativeMap16
+
+const NativeMap16ID = nativeMap16ID
