@@ -722,6 +722,47 @@ func TestChangeJob_ResetsCostume(t *testing.T) {
 	}
 }
 
+func TestChangeJob_SameJobPreservesCostume(t *testing.T) {
+	char := corecharacter.Character{
+		ID:       "char-same-costume",
+		Name:     "Hero",
+		JobID:    "job-01",
+		Level:    20,
+		JobLevel: 2,
+		SP:       10,
+	}
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	repo := &repositoryStub{value: state}
+	charRepo := &charRepoStub{char: char}
+	costumeResetter := &mockJobCostumeResetter{}
+
+	catalog, _ := corejob.NewCatalog([]corejob.Definition{
+		{ID: "job-01", Name: "Job 1", CMPTier: 1},
+	})
+
+	svc, err := NewService(
+		repo,
+		WithCatalog(catalog),
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
+		WithCostumeResetter(costumeResetter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updatedChar, _, err := svc.ChangeJob(context.Background(), char.ID, "job-01")
+	if err != nil {
+		t.Fatalf("ChangeJob failed: %v", err)
+	}
+	if updatedChar.JobID != "job-01" || updatedChar.Level != 1 || updatedChar.JobLevel != 3 {
+		t.Fatalf("unexpected character state after same-job change: %+v", updatedChar)
+	}
+	if costumeResetter.calledFor != "" {
+		t.Errorf("expected costume resetter not to be called on same-job change, got %q", costumeResetter.calledFor)
+	}
+}
+
 type jobTrackerStub struct {
 	calledFor string
 	err       error

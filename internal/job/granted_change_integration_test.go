@@ -375,6 +375,25 @@ func TestChangeJob_CostumeResetContract(t *testing.T) {
 		}
 	})
 
+	t.Run("same-job change preserves active costume", func(t *testing.T) {
+		char, prior := setupChar(t, "SameJobKeep")
+		jobSvc, err := job.NewService(jobs, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner), job.WithCostumeResetter(storeSvc))
+		if err != nil {
+			t.Fatal(err)
+		}
+		updated, _, err := jobSvc.ChangeJob(ctx, char.ID, "job-01")
+		if err != nil {
+			t.Fatalf("same-job ChangeJob failed: %v", err)
+		}
+		if updated.JobID != "job-01" || updated.Level != 1 || updated.JobLevel != char.JobLevel+1 {
+			t.Fatalf("unexpected character after same-job ChangeJob: %+v", updated)
+		}
+		got, err := costumeRepo.GetActiveCostume(ctx, char.ID)
+		if err != nil || !sameCostume(got, prior) {
+			t.Fatalf("costume unexpectedly altered on same-job change: got=%+v want=%+v err=%v", got, prior, err)
+		}
+	})
+
 	t.Run("reset error fails and rolls back job change", func(t *testing.T) {
 		char, prior := setupChar(t, "ResetErr")
 		resetSentinel := errors.New("injected reset error")
