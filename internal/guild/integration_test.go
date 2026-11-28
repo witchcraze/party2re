@@ -63,18 +63,12 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 		t.Errorf("expected points 0, color #FFFFFF, got points %d, color %s", g.Points, g.Color)
 	}
 
-	// 2. Member1 joins
-	m1, err := service.Join(ctx, g.ID, memberChar1.ID)
-	if err != nil {
-		t.Fatalf("service.Join failed: %v", err)
+	// 2-3. Member1 applies and the leader approves it with a custom title (さんか, あたえる: 親衛隊長)
+	if err := service.ApplyToJoin(ctx, g.ID, memberChar1.ID); err != nil {
+		t.Fatalf("service.ApplyToJoin failed: %v", err)
 	}
-	if m1.Role != guild.RoleMember || m1.Title != "" {
-		t.Errorf("member1 role = %v, title = %q; want member, ''", m1.Role, m1.Title)
-	}
-
-	// 3. Leader assigns custom role title to Member1 (あたえる: 親衛隊長)
 	if err := assigned(service.Assign(ctx, g.ID, leaderChar.ID, memberChar1.ID, "親衛隊長")); err != nil {
-		t.Fatalf("service.AssignCustomRole failed: %v", err)
+		t.Fatalf("service.Assign failed: %v", err)
 	}
 	_, m1Updated, err := service.GetByCharacter(ctx, memberChar1.ID)
 	if err != nil || m1Updated.Title != "親衛隊長" {
@@ -94,10 +88,12 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 		t.Fatalf("expected color %s, got %s, err = %v", testColor, detail.Guild.Color, err)
 	}
 
-	// 5. Member2 joins
-	_, err = service.Join(ctx, g.ID, memberChar2.ID)
-	if err != nil {
-		t.Fatalf("service.Join (member2) failed: %v", err)
+	// 5. Member2 applies and is approved
+	if err := service.ApplyToJoin(ctx, g.ID, memberChar2.ID); err != nil {
+		t.Fatalf("service.ApplyToJoin (member2) failed: %v", err)
+	}
+	if err := assigned(service.Assign(ctx, g.ID, leaderChar.ID, memberChar2.ID, "member")); err != nil {
+		t.Fatalf("service.Assign (member2) failed: %v", err)
 	}
 
 	// 6. Leader updates notice
@@ -119,22 +115,20 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 		t.Fatalf("expected points 100, got %d, err = %v", gWithPoints.Points, err)
 	}
 
-	// 9. Transfer leadership from Leader to Member1
-	if err := service.TransferLeadership(ctx, g.ID, leaderChar.ID, memberChar1.ID); err != nil {
-		t.Fatalf("service.TransferLeadership failed: %v", err)
-	}
-
-	// 10. Former leader leaves guild
+	// 9. Leader leaves; leadership passes to Member1
 	if err := service.Leave(ctx, g.ID, leaderChar.ID); err != nil {
 		t.Fatalf("service.Leave failed: %v", err)
 	}
+	if successor, err := service.Get(ctx, g.ID); err != nil || successor.Guild.LeaderCharacterID != memberChar1.ID {
+		t.Fatalf("successor = %+v, err = %v; want %s", successor.Guild, err, memberChar1.ID)
+	}
 
-	// 11. Sole leader (Member1) leaves -> disbands guild
+	// 10. Sole leader (Member1) leaves -> disbands guild
 	if err := service.Leave(ctx, g.ID, memberChar1.ID); err != nil {
 		t.Fatalf("service.Leave (sole leader disband) failed: %v", err)
 	}
 
-	// 12. Verify guild is deleted
+	// 11. Verify guild is deleted
 	if _, err := service.Get(ctx, g.ID); err == nil {
 		t.Error("expected error getting disbanded guild, got nil")
 	}
@@ -363,7 +357,12 @@ func TestGuildService_DeterministicDepartureInterleaving(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	if err := service.ApplyToJoin(ctx, g.ID, applicantChar.ID); err != nil {
+	// The application also locks the guild, so it bypasses the interceptor armed for Leave.
+	setup, err := guild.NewService(realRepo, guild.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := setup.ApplyToJoin(ctx, g.ID, applicantChar.ID); err != nil {
 		t.Fatalf("ApplyToJoin failed: %v", err)
 	}
 

@@ -522,39 +522,6 @@ func TestService_ExistingLongGuildNamePreserved(t *testing.T) {
 	}
 }
 
-func TestService_Join(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("Character already in guild", func(t *testing.T) {
-		repo := &mockGuildRepo{
-			getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
-				return guild.Guild{ID: "g1"}, guild.Member{GuildID: "g1", CharacterID: charID}, nil
-			},
-		}
-		svc, _ := guild.NewService(repo)
-		_, err := svc.Join(ctx, "g2", "char1")
-		if !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
-			t.Errorf("err = %v, want %v", err, guild.ErrCharacterAlreadyInGuild)
-		}
-	})
-
-	t.Run("Success without capacity limits", func(t *testing.T) {
-		repo := &mockGuildRepo{
-			getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: guildID, Points: 100}, []guild.Member{{CharacterID: "c0", Role: guild.RoleLeader}}, nil
-			},
-		}
-		svc, _ := guild.NewService(repo)
-		m, err := svc.Join(ctx, "g1", "char1")
-		if err != nil {
-			t.Fatalf("Join() unexpected error: %v", err)
-		}
-		if m.Role != guild.RoleMember || m.CharacterID != "char1" || m.Title != "" {
-			t.Errorf("joined member = %+v", m)
-		}
-	})
-}
-
 type mockNewsPublisher struct {
 	calls []struct {
 		Category    string
@@ -752,50 +719,6 @@ func TestService_Kick(t *testing.T) {
 		}
 		if !kicked {
 			t.Error("expected member to be kicked")
-		}
-	})
-}
-
-func TestService_TransferLeadership(t *testing.T) {
-	ctx := context.Background()
-	members := []guild.Member{
-		{CharacterID: "leader1", Role: guild.RoleLeader, Title: guild.DefaultTitleLeader},
-		{CharacterID: "member1", Role: guild.RoleMember, Title: "親衛隊長"},
-	}
-	repo := &mockGuildRepo{
-		getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-			return guild.Guild{ID: guildID}, members, nil
-		},
-	}
-	svc, _ := guild.NewService(repo)
-
-	t.Run("Unauthorized if not leader", func(t *testing.T) {
-		err := svc.TransferLeadership(ctx, "g1", "member1", "leader1")
-		if !errors.Is(err, guild.ErrUnauthorized) {
-			t.Errorf("err = %v, want %v", err, guild.ErrUnauthorized)
-		}
-	})
-
-	t.Run("Target not member", func(t *testing.T) {
-		err := svc.TransferLeadership(ctx, "g1", "leader1", "outsider")
-		if !errors.Is(err, guild.ErrTargetNotMember) {
-			t.Errorf("err = %v, want %v", err, guild.ErrTargetNotMember)
-		}
-	})
-
-	t.Run("Success", func(t *testing.T) {
-		transferred := false
-		repo.transferLeadershipFn = func(_ context.Context, guildID, oldL, newL string) error {
-			if oldL == "leader1" && newL == "member1" {
-				transferred = true
-			}
-			return nil
-		}
-		if err := svc.TransferLeadership(ctx, "g1", "leader1", "member1"); err != nil {
-			t.Fatalf("TransferLeadership() unexpected error: %v", err)
-		}
-		if !transferred {
-			t.Error("expected leadership transfer to be called")
 		}
 	})
 }
@@ -1185,3 +1108,11 @@ func TestValidateGuildName(t *testing.T) {
 
 // assigned drops ＠あたえる's outcome where a test needs only the error.
 func assigned(_ guild.AssignOutcome, err error) error { return err }
+
+// addActiveMember seeds an approved member directly; production joins only through ＠さんか and approval.
+func addActiveMember(t *testing.T, repo guild.Repository, guildID, characterID string) {
+	t.Helper()
+	if _, err := repo.AddMember(context.Background(), guild.Member{GuildID: guildID, CharacterID: characterID, Role: guild.RoleMember}); err != nil {
+		t.Fatal(err)
+	}
+}

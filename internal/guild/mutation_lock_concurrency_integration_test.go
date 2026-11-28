@@ -29,6 +29,8 @@ type mutationLockGateRepo struct {
 	*database.GuildRepository
 	beforeLocked, afterRead           func(context.Context)
 	beforeCharLocked, afterCharLocked func(context.Context)
+	// afterLocked skips Leave's unlocked roster discovery and fires once the guild row is locked.
+	afterLocked func(context.Context)
 }
 
 func (r *mutationLockGateRepo) GetGuild(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
@@ -46,6 +48,9 @@ func (r *mutationLockGateRepo) GetGuildForUpdate(ctx context.Context, guildID st
 	g, members, err := r.GuildRepository.GetGuildForUpdate(ctx, guildID)
 	if err == nil && r.afterRead != nil {
 		r.afterRead(ctx)
+	}
+	if err == nil && r.afterLocked != nil {
+		r.afterLocked(ctx)
 	}
 	return g, members, err
 }
@@ -108,9 +113,7 @@ func newMutationLockFixture(t *testing.T) *mutationLockFixture {
 	}
 	f.service = f.newService(t, repo)
 
-	if _, err = f.service.Join(context.Background(), g.ID, f.active.ID); err != nil {
-		t.Fatal(err)
-	}
+	addActiveMember(t, repo, g.ID, f.active.ID)
 	return f
 }
 
@@ -162,7 +165,7 @@ func awaitMutationLockSignal(t *testing.T, ch <-chan struct{}) {
 	}
 }
 
-func TestGuildMutationLock_TransferFirst(t *testing.T) {
+func TestGuildMutationLock_LeaderLeaveFirst(t *testing.T) {
 	modes := []string{"disband", "color", "notice", "mark", "wallpaper"}
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
@@ -174,9 +177,9 @@ func TestGuildMutationLock_TransferFirst(t *testing.T) {
 			committed := make(chan struct{})
 			var started sync.Once
 
-			var transferLockedOnce sync.Once
-			transferRepo := &mutationLockGateRepo{GuildRepository: f.repo, afterRead: func(context.Context) {
-				transferLockedOnce.Do(func() {
+			var leaveLockedOnce sync.Once
+			leaveRepo := &mutationLockGateRepo{GuildRepository: f.repo, afterLocked: func(context.Context) {
+				leaveLockedOnce.Do(func() {
 					close(locked)
 					select {
 					case <-resume:
@@ -184,10 +187,12 @@ func TestGuildMutationLock_TransferFirst(t *testing.T) {
 					}
 				})
 			}}
-			transfer := f.newService(t, transferRepo)
+			leave := f.newService(t, leaveRepo)
 
+			// Leave holds every member's character lock, which Disband and paid settings take first.
 			opRepo := &mutationLockGateRepo{GuildRepository: f.repo,
-				beforeLocked: func(context.Context) { started.Do(func() { close(opStarted) }) },
+				beforeCharLocked: func(context.Context) { started.Do(func() { close(opStarted) }) },
+				beforeLocked:     func(context.Context) { started.Do(func() { close(opStarted) }) },
 				afterRead: func(c context.Context) {
 					if database.TxFromContext(c) == nil {
 						started.Do(func() { close(opStarted) })
@@ -200,9 +205,9 @@ func TestGuildMutationLock_TransferFirst(t *testing.T) {
 			}
 			opService := f.newService(t, opRepo)
 
-			transferDone, opDone := make(chan error, 1), make(chan error, 1)
+			leaveDone, opDone := make(chan error, 1), make(chan error, 1)
 			go func() {
-				transferDone <- transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID)
+				leaveDone <- leave.Leave(ctx, f.g.ID, f.leader.ID)
 				close(committed)
 			}()
 			awaitMutationLockSignal(t, locked)
@@ -211,8 +216,8 @@ func TestGuildMutationLock_TransferFirst(t *testing.T) {
 			awaitMutationLockSignal(t, opStarted)
 			close(resume)
 
-			if err := <-transferDone; err != nil {
-				t.Fatalf("transfer failed: %v", err)
+			if err := <-leaveDone; err != nil {
+				t.Fatalf("leave failed: %v", err)
 			}
 			if err := <-opDone; !errors.Is(err, guild.ErrUnauthorized) {
 				t.Fatalf("former leader operation %s = %v, want ErrUnauthorized", mode, err)
@@ -225,9 +230,9 @@ func TestGuildMutationLock_TransferFirst(t *testing.T) {
 			}
 
 			// Verify guild survived and active member is now leader
-			gDetail, members, err := f.repo.GetGuild(context.Background(), f.g.ID)
+			gDetail, _, err := f.repo.GetGuild(context.Background(), f.g.ID)
 			if err != nil {
-				t.Fatalf("expected guild to survive transfer: %v", err)
+				t.Fatalf("expected guild to survive succession: %v", err)
 			}
 			if gDetail.LeaderCharacterID != f.active.ID {
 				t.Fatalf("expected leader to be %s, got %s", f.active.ID, gDetail.LeaderCharacterID)
@@ -244,7 +249,6 @@ func TestGuildMutationLock_TransferFirst(t *testing.T) {
 			if mode == "wallpaper" && gDetail.Bgimg == "stage0.gif" {
 				t.Fatal("wallpaper was modified by former leader")
 			}
-			_ = members
 		})
 	}
 }
@@ -257,8 +261,8 @@ func TestGuildMutationLock_MutationFirst(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			var lockOnce, transferStartedOnce sync.Once
-			locked, resume, transferStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			var lockOnce, leaveStartedOnce sync.Once
+			locked, resume, leaveStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			opRepo := &mutationLockGateRepo{GuildRepository: f.repo, afterRead: func(c context.Context) {
 				lockOnce.Do(func() {
 					close(locked)
@@ -270,17 +274,17 @@ func TestGuildMutationLock_MutationFirst(t *testing.T) {
 			}}
 			opService := f.newService(t, opRepo)
 
-			transferRepo := &mutationLockGateRepo{GuildRepository: f.repo, beforeLocked: func(context.Context) {
-				transferStartedOnce.Do(func() { close(transferStarted) })
+			leaveRepo := &mutationLockGateRepo{GuildRepository: f.repo, beforeCharLocked: func(context.Context) {
+				leaveStartedOnce.Do(func() { close(leaveStarted) })
 			}}
-			transfer := f.newService(t, transferRepo)
+			leave := f.newService(t, leaveRepo)
 
-			opDone, transferDone := make(chan error, 1), make(chan error, 1)
+			opDone, leaveDone := make(chan error, 1), make(chan error, 1)
 			go func() { opDone <- f.executeOp(ctx, opService, mode) }()
 			awaitMutationLockSignal(t, locked)
 
-			go func() { transferDone <- transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID) }()
-			awaitMutationLockSignal(t, transferStarted)
+			go func() { leaveDone <- leave.Leave(ctx, f.g.ID, f.leader.ID) }()
+			awaitMutationLockSignal(t, leaveStarted)
 			close(resume)
 
 			if err := <-opDone; err != nil {
@@ -288,9 +292,9 @@ func TestGuildMutationLock_MutationFirst(t *testing.T) {
 			}
 
 			if mode == "disband" {
-				// Guild was disbanded first; TransferLeadership must fail with ErrGuildNotFound
-				if err := <-transferDone; !errors.Is(err, guild.ErrGuildNotFound) {
-					t.Fatalf("transfer after disband = %v, want ErrGuildNotFound", err)
+				// Guild was disbanded first; Leave must fail with ErrGuildNotFound
+				if err := <-leaveDone; !errors.Is(err, guild.ErrGuildNotFound) {
+					t.Fatalf("leave after disband = %v, want ErrGuildNotFound", err)
 				}
 				// Guild must not exist
 				_, _, err := f.repo.GetGuild(context.Background(), f.g.ID)
@@ -298,9 +302,9 @@ func TestGuildMutationLock_MutationFirst(t *testing.T) {
 					t.Fatalf("expected guild not found after disband, got %v", err)
 				}
 			} else {
-				// Mutation succeeded, then transfer succeeded
-				if err := <-transferDone; err != nil {
-					t.Fatalf("transfer failed: %v", err)
+				// Mutation succeeded, then the leader left
+				if err := <-leaveDone; err != nil {
+					t.Fatalf("leave failed: %v", err)
 				}
 				gDetail, _, err := f.repo.GetGuild(context.Background(), f.g.ID)
 				if err != nil {
@@ -351,13 +355,12 @@ func TestGuildMutationLock_Stress(t *testing.T) {
 			res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 				err1, err2 := testutil.RunRace2(
 					func() error { return f.executeOp(ctx, f.service, mode) },
-					func() error { return f.service.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID) },
+					func() error { return f.service.Leave(ctx, f.g.ID, f.leader.ID) },
 				)
 				for _, err := range []error{err1, err2} {
 					if err != nil &&
 						!errors.Is(err, guild.ErrUnauthorized) &&
-						!errors.Is(err, guild.ErrGuildNotFound) &&
-						!errors.Is(err, guild.ErrTargetNotMember) {
+						!errors.Is(err, guild.ErrCharacterNotInGuild) {
 						return err
 					}
 				}
@@ -371,7 +374,7 @@ func TestGuildMutationLock_Stress(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected guild to exist: %v", err)
 			}
-			if gDetail.LeaderCharacterID != f.active.ID && gDetail.LeaderCharacterID != f.leader.ID {
+			if gDetail.LeaderCharacterID != f.active.ID {
 				t.Fatalf("unexpected leader: %+v", gDetail)
 			}
 		})

@@ -97,9 +97,7 @@ func newApprovalRoleFixture(t *testing.T) *approvalRoleFixture {
 	}
 	f.service = f.newService(t, repo)
 
-	if _, err = f.service.Join(ctx, g.ID, f.active.ID); err != nil {
-		t.Fatal(err)
-	}
+	addActiveMember(t, repo, g.ID, f.active.ID)
 	if err = f.service.ApplyToJoin(ctx, g.ID, f.pending.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -189,6 +187,8 @@ type approvalRoleGateRepo struct {
 	*database.GuildRepository
 	t                       *testing.T
 	beforeLocked, afterRead func(context.Context)
+	// afterLocked skips Leave's unlocked roster discovery and fires once the guild row is locked.
+	afterLocked func(context.Context)
 }
 
 func (r *approvalRoleGateRepo) GetGuild(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
@@ -224,6 +224,9 @@ func (r *approvalRoleGateRepo) GetGuildForUpdate(ctx context.Context, guildID st
 		start = time.Now()
 		r.afterRead(ctx)
 		r.t.Logf("GetGuildForUpdate barrier: %s", time.Since(start))
+	}
+	if err == nil && r.afterLocked != nil {
+		r.afterLocked(ctx)
 	}
 	return g, members, err
 }
@@ -276,7 +279,7 @@ func (f *approvalRoleFixture) startWorker(t *testing.T, name string, fn func() e
 	}
 }
 
-func TestGuildApprovalRole_TransferFirst(t *testing.T) {
+func TestGuildApprovalRole_LeaderLeaveFirst(t *testing.T) {
 	for _, mode := range []string{"assignActive", "approvePending"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newApprovalRoleFixture(t)
@@ -286,9 +289,9 @@ func TestGuildApprovalRole_TransferFirst(t *testing.T) {
 			committed := make(chan struct{})
 			var started sync.Once
 
-			var transferLockedOnce sync.Once
-			transferRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t, afterRead: func(context.Context) {
-				transferLockedOnce.Do(func() {
+			var leaveLockedOnce sync.Once
+			leaveRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t, afterLocked: func(context.Context) {
+				leaveLockedOnce.Do(func() {
 					close(locked)
 					select {
 					case <-resume:
@@ -296,7 +299,7 @@ func TestGuildApprovalRole_TransferFirst(t *testing.T) {
 					}
 				})
 			}}
-			transfer := f.newService(t, transferRepo)
+			leave := f.newService(t, leaveRepo)
 
 			opRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t,
 				beforeLocked: func(context.Context) { started.Do(func() { close(opStarted) }) },
@@ -312,13 +315,13 @@ func TestGuildApprovalRole_TransferFirst(t *testing.T) {
 			}
 			opService := f.newService(t, opRepo)
 
-			transferDone := f.startWorker(t, "transfer", func() error {
-				err := transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID)
+			leaveDone := f.startWorker(t, "leave", func() error {
+				err := leave.Leave(ctx, f.g.ID, f.leader.ID)
 				close(committed)
 				return err
 			})
 			if err := awaitApprovalRoleSignal(ctx, locked); err != nil {
-				t.Fatalf("transfer lock gate: %v", err)
+				t.Fatalf("leave lock gate: %v", err)
 			}
 
 			opDone := f.startWorker(t, "mutation", func() error { return f.executeOp(ctx, opService, mode, "AuditChanged") })
@@ -327,9 +330,9 @@ func TestGuildApprovalRole_TransferFirst(t *testing.T) {
 			}
 			close(resume)
 
-			transferErr, opErr := transferDone(), opDone()
-			if transferErr != nil {
-				t.Fatal(transferErr)
+			leaveErr, opErr := leaveDone(), opDone()
+			if leaveErr != nil {
+				t.Fatal(leaveErr)
 			}
 			if !errors.Is(opErr, guild.ErrUnauthorized) {
 				t.Fatalf("former leader operation %s = %v, want unauthorized", mode, opErr)
@@ -370,8 +373,8 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 			f := newApprovalRoleFixture(t)
 			ctx := f.ctx
 
-			var lockOnce, transferStartedOnce sync.Once
-			locked, resume, transferStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			var lockOnce, leaveStartedOnce sync.Once
+			locked, resume, leaveStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			opRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t, afterRead: func(c context.Context) {
 				lockOnce.Do(func() {
 					close(locked)
@@ -383,28 +386,28 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 			}}
 			opService := f.newService(t, opRepo)
 
-			transferRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t, beforeLocked: func(context.Context) {
-				transferStartedOnce.Do(func() { close(transferStarted) })
+			leaveRepo := &approvalRoleGateRepo{GuildRepository: f.repo, t: t, beforeLocked: func(context.Context) {
+				leaveStartedOnce.Do(func() { close(leaveStarted) })
 			}}
-			transfer := f.newService(t, transferRepo)
+			leave := f.newService(t, leaveRepo)
 
 			opDone := f.startWorker(t, "mutation", func() error { return f.executeOp(ctx, opService, mode, "MutTitle") })
 			if err := awaitApprovalRoleSignal(ctx, locked); err != nil {
 				t.Fatalf("mutation lock gate: %v", err)
 			}
 
-			transferDone := f.startWorker(t, "transfer", func() error { return transfer.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID) })
-			if err := awaitApprovalRoleSignal(ctx, transferStarted); err != nil {
-				t.Fatalf("transfer start gate: %v", err)
+			leaveDone := f.startWorker(t, "leave", func() error { return leave.Leave(ctx, f.g.ID, f.leader.ID) })
+			if err := awaitApprovalRoleSignal(ctx, leaveStarted); err != nil {
+				t.Fatalf("leave start gate: %v", err)
 			}
 			close(resume)
 
-			opErr, transferErr := opDone(), transferDone()
+			opErr, leaveErr := opDone(), leaveDone()
 			if opErr != nil {
 				t.Fatalf("op %s failed: %v", mode, opErr)
 			}
-			if transferErr != nil {
-				t.Fatalf("transfer failed: %v", transferErr)
+			if leaveErr != nil {
+				t.Fatalf("leave failed: %v", leaveErr)
 			}
 
 			d := f.assertRoster(t)
@@ -429,7 +432,7 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 					t.Fatalf("expected 1 acceptance letter, got: %v", letters)
 				}
 			case "assignActive":
-				// Active member had title changed before transfer, but on transfer becomes leader with default title
+				// The retitled active member then succeeds the departing leader.
 				letters := f.recipientLetters(t, f.active.ID)
 				if len(letters) != 0 {
 					t.Fatalf("unexpected letters for active title change: %v", letters)
@@ -442,8 +445,8 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 		f := newApprovalRoleFixture(t)
 		ctx := context.Background()
 
-		// Transfer leadership to active member first
-		if err := f.service.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID); err != nil {
+		// The leader departs, so the active member succeeds first
+		if err := f.service.Leave(ctx, f.g.ID, f.leader.ID); err != nil {
 			t.Fatal(err)
 		}
 
@@ -573,11 +576,12 @@ func TestGuildApprovalRole_Stress(t *testing.T) {
 			res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
 				err1, err2 := testutil.RunRace2(
 					func() error { return f.executeOp(ctx, f.service, mode, "StressTitle") },
-					func() error { return f.service.TransferLeadership(ctx, f.g.ID, f.leader.ID, f.active.ID) },
+					func() error { return f.service.Leave(ctx, f.g.ID, f.leader.ID) },
 				)
 				for _, err := range []error{err1, err2} {
 					if err != nil &&
 						!errors.Is(err, guild.ErrUnauthorized) &&
+						!errors.Is(err, guild.ErrCharacterNotInGuild) &&
 						!errors.Is(err, guild.ErrCannotAssignToLeader) &&
 						!errors.Is(err, guild.ErrMemberNotPending) &&
 						!errors.Is(err, guild.ErrTargetNotMember) {
@@ -590,13 +594,8 @@ func TestGuildApprovalRole_Stress(t *testing.T) {
 				t.Fatalf("unexpected stress failures: %+v", res)
 			}
 
-			d := f.assertRoster(t)
-			if d.Guild.LeaderCharacterID == f.active.ID {
-				// Transfer succeeded
-				t.Logf("%s: transfer leader is active member", mode)
-			} else if d.Guild.LeaderCharacterID == f.leader.ID {
-				t.Logf("%s: original leader retained", mode)
-			} else {
+			// The first departure always commits, handing over to the earliest-joined active member.
+			if d := f.assertRoster(t); d.Guild.LeaderCharacterID != f.active.ID {
 				t.Fatalf("unexpected leader: %+v", d.Guild)
 			}
 			t.Logf("%s: %+v", mode, res)

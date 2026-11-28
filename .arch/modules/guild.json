@@ -185,6 +185,31 @@
       ]
     },
     {
+      "method": "ApplyToJoin",
+      "source_ref": "internal/guild/community.go#Service.ApplyToJoin",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock the applicant before the active-affiliation read, serializing with other character-locked membership changes."
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock the guild so dissolution either precedes the application (ErrGuildNotFound) or sees it as a successor candidate."
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "INSERT",
+          "note": "Check duplicates on the locked roster and insert the pending application; the leader letter is sent after commit."
+        }
+      ]
+    },
+    {
       "method": "ChangeMark",
       "source_ref": "internal/guild/community.go#Service.ChangeMark",
       "transaction_type": "RunInTx",
