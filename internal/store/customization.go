@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"slices"
 	"strings"
 )
 
@@ -165,7 +166,9 @@ func (s *Service) AddInterior(ctx context.Context, characterID, furnitureID stri
 	return createdInterior, nil
 }
 
-// RenameInterior gives a custom name to a placed interior furniture item.
+// RenameInterior renames the selected interior and every other interior that
+// shares its current name: legacy nazukeru never sets its stop flag $f_end
+// (store.cgi:696), so it renames all matches.
 func (s *Service) RenameInterior(ctx context.Context, characterID, interiorID, cleanName string) error {
 	if err := ValidateInteriorName(cleanName); err != nil {
 		return err
@@ -190,18 +193,19 @@ func (s *Service) RenameInterior(ctx context.Context, characterID, interiorID, c
 			return err
 		}
 
-		found := false
-		for _, in := range interiors {
-			if in.ID == interiorID {
-				found = true
-				break
-			}
-		}
-		if !found {
+		i := slices.IndexFunc(interiors, func(in Interior) bool { return in.ID == interiorID })
+		if i < 0 {
 			return ErrInteriorNotFound
 		}
-
-		return s.repo.UpdateInteriorName(txCtx, interiorID, cleanName)
+		oldName := interiors[i].Name
+		for _, in := range interiors {
+			if in.Name == oldName {
+				if err := s.repo.UpdateInteriorName(txCtx, in.ID, cleanName); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
 }
 

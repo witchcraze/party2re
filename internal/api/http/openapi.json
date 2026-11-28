@@ -6159,7 +6159,7 @@
                       "type": "string"
                     },
                     "wish_item_name": {
-                      "description": "Exact name of an existing weapon, armor or item wanted in exchange.",
+                      "description": "Exact name of an existing weapon, armor or item wanted in exchange. An empty name lists a barter that no visitor can complete, as legacy allows.",
                       "type": "string"
                     }
                   },
@@ -6410,7 +6410,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "interior_id": {
-                      "description": "Interior from the observed store interiors.",
+                      "description": "Interior from the observed store interiors. Every interior sharing its current name is renamed, as legacy なづける does.",
                       "type": "string"
                     },
                     "name": {
