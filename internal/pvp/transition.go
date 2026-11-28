@@ -38,6 +38,8 @@ type TransitionRepository interface {
 	FindCharacterClaim(context.Context, string) (string, error)
 	CommitTransition(context.Context, Transition, func(context.Context) error) error
 	AcknowledgeTransition(context.Context, string, int) error
+	// ListOverdueRooms returns up to limit claimed rooms that are pending or whose activity predates cutoff, oldest first.
+	ListOverdueRooms(ctx context.Context, cutoff time.Time, limit int) ([]string, error)
 }
 
 // IsActivityTransitionKind reports whether kind is a room-activity writer subject to inactivity guards.
@@ -231,8 +233,14 @@ func (s *Service) recoverCharacter(ctx context.Context, characterID string) (Tra
 	if err != nil || roomID == "" {
 		return Transition{}, err
 	}
+	return s.recoverRoom(ctx, roomID, characterID)
+}
+
+// recoverRoom completes pending publication and times out an overdue room.
+// An empty characterID (the scheduled sweep) times out regardless of membership.
+func (s *Service) recoverRoom(ctx context.Context, roomID, characterID string) (Transition, error) {
 	var recovered Transition
-	err = s.repo.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+	err := s.repo.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
 		t, err := s.transitions.FindTransition(lockedCtx, roomID)
 		if err != nil {
 			return err
@@ -246,7 +254,7 @@ func (s *Service) recoverCharacter(ctx context.Context, characterID string) (Tra
 			t.Pending = false
 			recovered = t
 		}
-		if t.Version > 0 && t.Detail.Room.Status != StatusDisbanded && hasRoomMember(t.Detail.Members, characterID) && s.isInactive(t.LastActivityAt, s.now()) {
+		if t.Version > 0 && t.Detail.Room.Status != StatusDisbanded && (characterID == "" || hasRoomMember(t.Detail.Members, characterID)) && s.isInactive(t.LastActivityAt, s.now()) {
 			if _, roomErr := s.repo.GetRoom(lockedCtx, roomID); roomErr != nil && !errors.Is(roomErr, ErrRoomNotFound) {
 				return roomErr
 			}
@@ -343,6 +351,37 @@ func (r *MemoryTransitionRepository) CommitTransition(ctx context.Context, t Tra
 	}
 	r.states[t.Detail.Room.ID] = data
 	return nil
+}
+
+func (r *MemoryTransitionRepository) ListOverdueRooms(_ context.Context, cutoff time.Time, limit int) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var due []Transition
+	seen := make(map[string]bool)
+	for _, roomID := range r.claims {
+		if seen[roomID] {
+			continue
+		}
+		seen[roomID] = true
+		var t Transition
+		if data := r.states[roomID]; len(data) > 0 {
+			if err := json.Unmarshal(data, &t); err != nil {
+				return nil, err
+			}
+		}
+		if t.LastActivityAt.IsZero() {
+			t.LastActivityAt = t.Detail.Room.CreatedAt
+		}
+		if t.Pending || (!t.LastActivityAt.IsZero() && t.LastActivityAt.Before(cutoff)) {
+			due = append(due, t)
+		}
+	}
+	slices.SortFunc(due, func(a, b Transition) int { return a.LastActivityAt.Compare(b.LastActivityAt) })
+	ids := make([]string, 0, min(len(due), limit))
+	for _, t := range due[:min(len(due), limit)] {
+		ids = append(ids, t.Detail.Room.ID)
+	}
+	return ids, nil
 }
 
 func (r *MemoryTransitionRepository) AcknowledgeTransition(_ context.Context, roomID string, version int) error {

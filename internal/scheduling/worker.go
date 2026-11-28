@@ -32,7 +32,7 @@ func (w *Worker) RegisterHandler(actionType string, handler ActionHandler) {
 	w.handlers[actionType] = handler
 }
 
-// RegisterReconciler opts a feature into periodic repair of its own reservations.
+// RegisterReconciler opts a feature into running fn on every tick to repair or expire its own state.
 func (w *Worker) RegisterReconciler(actionType string, reconcile func(context.Context) error) {
 	w.reconcilers[actionType] = reconcile
 }

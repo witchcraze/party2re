@@ -584,3 +584,40 @@ func TestPvPInactivity_NonFinalKillsSurviveValkeyExpiryAndRetry(t *testing.T) {
 		t.Fatalf("Bob after timeout recovery = %+v (want PvPWins=0, PendingWake=true)", afterBob)
 	}
 }
+
+func TestPvPSweepInactiveRooms_OnlyOverdueRooms(t *testing.T) {
+	ctx := context.Background()
+	t0 := time.Now().UTC().Truncate(time.Second)
+	svc, chars, _, trans, timers, now := newClockedService(t, corebattle.OutcomeWin, t0)
+	alice := createTestCharacter("char-1", "Alice", 500)
+	bob := createTestCharacter("char-2", "Bob", 500)
+	chars.add(alice)
+	chars.add(bob)
+
+	old, err := svc.CreateRoom(ctx, alice.ID, pvp.CreateRoomRequest{Name: "Old", Bet: 100, MaxMembers: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	*now = t0.Add(10 * time.Minute)
+	fresh, err := svc.CreateRoom(ctx, bob.ID, pvp.CreateRoomRequest{Name: "Fresh", Bet: 100, MaxMembers: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	*now = t0.Add(pvp.InactivityTimeout + time.Second)
+	if err := svc.SweepInactiveRooms(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if tr, _ := trans.FindTransition(ctx, old.Room.ID); tr.Kind != "timeout" || tr.Pending {
+		t.Fatalf("overdue room not swept: %+v", tr)
+	}
+	if locked, err := timers.IsLocked(ctx, timer.CategorySleep, alice.ID); err != nil || !locked {
+		t.Fatalf("swept member not sleeping: %v %v", locked, err)
+	}
+	if tr, _ := trans.FindTransition(ctx, fresh.Room.ID); tr.Kind == "timeout" {
+		t.Fatalf("fresh room swept early: %+v", tr)
+	}
+	if claim, _ := svc.GetCharacterClaim(ctx, bob.ID); claim != fresh.Room.ID {
+		t.Fatalf("fresh room claim lost: %q", claim)
+	}
+}
