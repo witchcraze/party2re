@@ -300,28 +300,6 @@ func TestService_AssignApprovesApplicant(t *testing.T) {
 		}
 	})
 
-	t.Run("fails when applicant already joined another guild in the meantime", func(t *testing.T) {
-		repo := &mockGuildRepo{
-			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, []guild.Member{
-					{GuildID: guildID, CharacterID: leaderID, Role: guild.RoleLeader, IsPending: false},
-					{GuildID: guildID, CharacterID: applicantID, Role: guild.RoleMember, IsPending: true},
-				}, nil
-			},
-			getGuildByCharFn: func(ctx context.Context, charID string) (guild.Guild, guild.Member, error) {
-				if charID == applicantID {
-					return guild.Guild{ID: "other-guild"}, guild.Member{GuildID: "other-guild", CharacterID: applicantID, IsPending: false}, nil
-				}
-				return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
-			},
-		}
-		svc, _ := guild.NewService(repo)
-		err := assigned(svc.Assign(ctx, guildID, leaderID, applicantID, "隊長"))
-		if !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
-			t.Errorf("expected ErrCharacterAlreadyInGuild, got %v", err)
-		}
-	})
-
 	t.Run("persists NFC normalized role title for decomposed input", func(t *testing.T) {
 		decomposed := strings.Repeat("e\u0301", 6)
 		var approvedTitle string

@@ -136,8 +136,6 @@ func (f *approvalRoleFixture) executeOp(ctx context.Context, s *guild.Service, m
 	switch mode {
 	case "assignActive":
 		return assigned(s.Assign(ctx, f.g.ID, f.leader.ID, f.active.ID, title))
-	case "assignPending":
-		return assigned(s.Assign(ctx, f.g.ID, f.leader.ID, f.pending.ID, title))
 	case "approvePending":
 		return assigned(s.Assign(ctx, f.g.ID, f.leader.ID, f.pending.ID, title))
 	default:
@@ -279,7 +277,7 @@ func (f *approvalRoleFixture) startWorker(t *testing.T, name string, fn func() e
 }
 
 func TestGuildApprovalRole_TransferFirst(t *testing.T) {
-	for _, mode := range []string{"assignActive", "assignPending", "approvePending"} {
+	for _, mode := range []string{"assignActive", "approvePending"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newApprovalRoleFixture(t)
 			ctx := f.ctx
@@ -367,7 +365,7 @@ func TestGuildApprovalRole_TransferFirst(t *testing.T) {
 }
 
 func TestGuildApprovalRole_MutationFirst(t *testing.T) {
-	for _, mode := range []string{"assignActive", "assignPending", "approvePending"} {
+	for _, mode := range []string{"assignActive", "approvePending"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newApprovalRoleFixture(t)
 			ctx := f.ctx
@@ -415,7 +413,7 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 			}
 
 			switch mode {
-			case "assignPending", "approvePending":
+			case "approvePending":
 				for _, m := range d.Members {
 					if m.CharacterID == f.pending.ID {
 						if m.IsPending {
@@ -457,7 +455,7 @@ func TestGuildApprovalRole_MutationFirst(t *testing.T) {
 }
 
 func TestGuildApprovalRole_HealthyAndRollback(t *testing.T) {
-	for _, mode := range []string{"assignActive", "assignPending", "approvePending"} {
+	for _, mode := range []string{"assignActive", "approvePending"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newApprovalRoleFixture(t)
 			ctx := context.Background()
@@ -505,7 +503,7 @@ func TestGuildApprovalRole_HealthyAndRollback(t *testing.T) {
 				if letters := f.recipientLetters(t, f.active.ID); len(letters) != 0 {
 					t.Fatalf("unexpected letters for active assign: %v", letters)
 				}
-			case "assignPending", "approvePending":
+			case "approvePending":
 				for _, m := range d.Members {
 					if m.CharacterID == f.pending.ID {
 						if m.IsPending {
@@ -566,7 +564,7 @@ func TestGuildApprovalRole_CurrentState(t *testing.T) {
 }
 
 func TestGuildApprovalRole_Stress(t *testing.T) {
-	for _, mode := range []string{"assignActive", "assignPending", "approvePending"} {
+	for _, mode := range []string{"assignActive", "approvePending"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newApprovalRoleFixture(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

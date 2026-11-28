@@ -6,8 +6,6 @@ Guilds (`guild.cgi`, `join_guild.cgi`) are social organizations ranked by Guild 
 
 ## Membership
 
-When an applicant has joined another guild, `ataeru` drops the pending row before reaching the approval or rejection branch (`lib/guild.cgi:209–232,251–257`). Go retains the row on approval and sends an ordinary rejection letter on rejection. [#2966](https://github.com/witchcraze/party2re/issues/2966)
-
 ### Broadcast Callouts (`よびかける`)
 
 Letters go to every roster row in order, **including pending applicants** and the sender, under the shared [letter rules](home.md#letter-settings). A throttled or failed recipient stops the broadcast (`lib/guild.cgi:50–57`); earlier deliveries stay, and no point is awarded or activity recorded.

@@ -239,9 +239,10 @@ func WithGuild(g GuildService) Option {
 				}
 				// guild.cgi:ataeru $npc_com; a plain retitle has none.
 				result := room(gd, map[guild.AssignOutcome]string{
-					guild.AssignApproved: fmt.Sprintf("%sを%sに参加することを許可しました", target.Name, gd.Name),
-					guild.AssignRejected: target.Name + "の参加を拒否しました",
-					guild.AssignExpelled: fmt.Sprintf("%sを%sから追放しました", target.Name, gd.Name),
+					guild.AssignApproved:                fmt.Sprintf("%sを%sに参加することを許可しました", target.Name, gd.Name),
+					guild.AssignRejected:                target.Name + "の参加を拒否しました",
+					guild.AssignExpelled:                fmt.Sprintf("%sを%sから追放しました", target.Name, gd.Name),
+					guild.AssignStaleApplicationRemoved: target.Name + "はすでに別のギルドに加入しています",
 				}[outcome])
 				result.Outcome = outcome
 				return result, nil
