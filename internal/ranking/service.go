@@ -20,6 +20,15 @@ type cacheEntry struct {
 	updatedAt time.Time
 }
 
+type pairCacheData struct {
+	leader         []CharacterRankingEntry
+	leaderTotal    int
+	leaderCalc     time.Time
+	dependent      []CharacterRankingEntry
+	dependentTotal int
+	dependentCalc  time.Time
+}
+
 // TransactionProvider defines ambient transaction runner contract.
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
@@ -34,7 +43,8 @@ type Service struct {
 	cacheTTL    time.Duration
 	refreshMu   sync.Mutex
 	mu          sync.RWMutex
-	cache       map[RankingType]cacheEntry
+	cache       map[string]cacheEntry
+	refreshSeq  map[string]uint64
 	txProvider  TransactionProvider
 }
 
@@ -85,10 +95,11 @@ func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
 		return nil, errors.New("ranking repository is required")
 	}
 	s := &Service{
-		repo:     repo,
-		nowFunc:  func() time.Time { return time.Now().UTC() },
-		cacheTTL: DefaultCacheTTL,
-		cache:    make(map[RankingType]cacheEntry),
+		repo:       repo,
+		nowFunc:    func() time.Time { return time.Now().UTC() },
+		cacheTTL:   DefaultCacheTTL,
+		cache:      make(map[string]cacheEntry),
+		refreshSeq: make(map[string]uint64),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -139,20 +150,94 @@ func unmarshalSnapshotData(t RankingType, raw string) (any, error) {
 	}
 }
 
-func (s *Service) storeCache(t RankingType, data any, total int, calculatedAt time.Time) {
+func pairCacheKey(pair boardPairSpec) string {
+	return "pair:" + string(pair.leaderType) + ":" + string(pair.dependentType)
+}
+
+func (s *Service) readFreshCache(key string) (cacheEntry, uint64, bool) {
+	now := s.nowFunc().UTC()
+	s.mu.RLock()
+	cached, exists := s.cache[key]
+	seq := s.refreshSeq[key]
+	s.mu.RUnlock()
+	if exists && cached.expiresAt.After(now) {
+		return cached, seq, true
+	}
+	return cacheEntry{}, seq, false
+}
+
+func (s *Service) storeRefreshedCache(key string, data any, total int, updatedAt time.Time) {
 	now := s.nowFunc().UTC()
 	s.mu.Lock()
-	if existing, ok := s.cache[t]; ok && existing.updatedAt.After(calculatedAt) {
+	s.refreshSeq[key]++
+	if existing, ok := s.cache[key]; ok && existing.updatedAt.After(updatedAt) {
 		s.mu.Unlock()
 		return
 	}
-	s.cache[t] = cacheEntry{
+	s.cache[key] = cacheEntry{
 		data:      data,
 		total:     total,
 		expiresAt: now.Add(s.cacheTTL),
-		updatedAt: calculatedAt,
+		updatedAt: updatedAt,
 	}
 	s.mu.Unlock()
+}
+
+func (s *Service) storeBackfillCache(key string, seqBefore uint64, data any, total int, updatedAt time.Time) cacheEntry {
+	now := s.nowFunc().UTC()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if existing, ok := s.cache[key]; ok {
+		if s.refreshSeq[key] != seqBefore {
+			if existing.expiresAt.After(now) {
+				return existing
+			}
+			// A refresh occurred while fallback was in flight; do not overwrite cache with stale data.
+			return cacheEntry{data: data, total: total, updatedAt: updatedAt}
+		}
+		if existing.updatedAt.After(updatedAt) {
+			return existing
+		}
+	} else if s.refreshSeq[key] != seqBefore {
+		return cacheEntry{data: data, total: total, updatedAt: updatedAt}
+	}
+
+	entry := cacheEntry{
+		data:      data,
+		total:     total,
+		expiresAt: now.Add(s.cacheTTL),
+		updatedAt: updatedAt,
+	}
+	s.cache[key] = entry
+	return entry
+}
+
+func (s *Service) publishSingleSnapshot(ctx context.Context, snap RankingSnapshot, data any) {
+	if s.valkeyCache != nil {
+		_, _ = s.valkeyCache.Set(ctx, snap.RankingType, snap, s.cacheTTL, CacheWriteRefresh)
+	}
+	s.storeRefreshedCache(string(snap.RankingType), data, snap.TotalCount, snap.CalculatedAt)
+}
+
+func (s *Service) publishPairSnapshots(ctx context.Context, pair boardPairSpec, leader, dependent preparedSnapshot) {
+	if s.valkeyCache != nil {
+		_, _ = s.valkeyCache.SetPair(ctx, SnapshotPair{
+			Leader:    leader.snapshot,
+			Dependent: dependent.snapshot,
+		}, s.cacheTTL, CacheWriteRefresh)
+	}
+	leaderList, _ := leader.data.([]CharacterRankingEntry)
+	depList, _ := dependent.data.([]CharacterRankingEntry)
+	pairData := pairCacheData{
+		leader:         leaderList,
+		leaderTotal:    leader.snapshot.TotalCount,
+		leaderCalc:     leader.snapshot.CalculatedAt,
+		dependent:      depList,
+		dependentTotal: dependent.snapshot.TotalCount,
+		dependentCalc:  dependent.snapshot.CalculatedAt,
+	}
+	s.storeRefreshedCache(pairCacheKey(pair), pairData, 0, laterTime(leader.snapshot.CalculatedAt, dependent.snapshot.CalculatedAt))
 }
 
 type loadedSnapshot struct {
@@ -161,27 +246,160 @@ type loadedSnapshot struct {
 	calculatedAt time.Time
 }
 
-func (s *Service) getOrLoadSnapshot(ctx context.Context, t RankingType) (any, int, time.Time, error) {
-	s.mu.RLock()
-	cached, exists := s.cache[t]
-	s.mu.RUnlock()
-
-	if exists && cached.expiresAt.After(s.nowFunc()) {
-		return cached.data, cached.total, cached.updatedAt, nil
+func decodePairSnapshot(pair boardPairSpec, sp SnapshotPair) (pairCacheData, time.Time, error) {
+	if sp.Leader.SnapshotData == "" {
+		return pairCacheData{}, time.Time{}, fmt.Errorf("decode ranking snapshot %s: empty snapshot_data", pair.leaderType)
 	}
+	if sp.Dependent.SnapshotData == "" {
+		return pairCacheData{}, time.Time{}, fmt.Errorf("decode ranking snapshot %s: empty snapshot_data", pair.dependentType)
+	}
+	leaderRaw, err := unmarshalSnapshotData(pair.leaderType, sp.Leader.SnapshotData)
+	if err != nil {
+		return pairCacheData{}, time.Time{}, fmt.Errorf("decode ranking snapshot %s: %w", pair.leaderType, err)
+	}
+	depRaw, err := unmarshalSnapshotData(pair.dependentType, sp.Dependent.SnapshotData)
+	if err != nil {
+		return pairCacheData{}, time.Time{}, fmt.Errorf("decode ranking snapshot %s: %w", pair.dependentType, err)
+	}
+	leaderList, ok := leaderRaw.([]CharacterRankingEntry)
+	if !ok {
+		return pairCacheData{}, time.Time{}, fmt.Errorf("unexpected snapshot data type %T for %s", leaderRaw, pair.leaderType)
+	}
+	depList, ok := depRaw.([]CharacterRankingEntry)
+	if !ok {
+		return pairCacheData{}, time.Time{}, fmt.Errorf("unexpected snapshot data type %T for %s", depRaw, pair.dependentType)
+	}
+	return pairCacheData{
+		leader:         leaderList,
+		leaderTotal:    sp.Leader.TotalCount,
+		leaderCalc:     sp.Leader.CalculatedAt,
+		dependent:      depList,
+		dependentTotal: sp.Dependent.TotalCount,
+		dependentCalc:  sp.Dependent.CalculatedAt,
+	}, laterTime(sp.Leader.CalculatedAt, sp.Dependent.CalculatedAt), nil
+}
 
-	// 1. Check Valkey distributed cache
-	if s.valkeyCache != nil {
-		if snap, found, err := s.valkeyCache.Get(ctx, t); err == nil && found && snap.SnapshotData != "" {
-			if data, err := unmarshalSnapshotData(t, snap.SnapshotData); err == nil {
-				s.storeCache(t, data, snap.TotalCount, snap.CalculatedAt)
-				return data, snap.TotalCount, snap.CalculatedAt, nil
-			}
+func extractPairBoard(data pairCacheData, pair boardPairSpec, t RankingType) (any, int, time.Time) {
+	if t == pair.leaderType {
+		return data.leader, data.leaderTotal, data.leaderCalc
+	}
+	return data.dependent, data.dependentTotal, data.dependentCalc
+}
+
+func (s *Service) getOrLoadSnapshot(ctx context.Context, t RankingType) (any, int, time.Time, error) {
+	if pair, ok := exclusionPairFor(t); ok {
+		return s.getOrLoadPairSnapshot(ctx, pair, t)
+	}
+	return s.getOrLoadSingleSnapshot(ctx, t)
+}
+
+func (s *Service) getOrLoadPairSnapshot(ctx context.Context, pair boardPairSpec, t RankingType) (any, int, time.Time, error) {
+	key := pairCacheKey(pair)
+	if cached, _, ok := s.readFreshCache(key); ok {
+		if pairData, ok := cached.data.(pairCacheData); ok {
+			data, total, calc := extractPairBoard(pairData, pair, t)
+			return data, total, calc, nil
 		}
 	}
 
-	// 2. Cache miss: Singleflight database fallback to prevent cache stampede
-	res, err := s.sf.Do(string(t), func() (any, error) {
+	res, err := s.sf.Do(key, func() (any, error) {
+		if cached, _, ok := s.readFreshCache(key); ok {
+			if pairData, ok := cached.data.(pairCacheData); ok {
+				return pairData, nil
+			}
+		}
+
+		// Capture refresh sequence before checking external stores so a concurrent refresh wins.
+		_, seqBefore, _ := s.readFreshCache(key)
+
+		if s.valkeyCache != nil {
+			if sp, found, err := s.valkeyCache.GetPair(ctx, pair.leaderType, pair.dependentType); err == nil && found {
+				if pairData, updatedAt, err := decodePairSnapshot(pair, sp); err == nil {
+					stored := s.storeBackfillCache(key, seqBefore, pairData, 0, updatedAt)
+					if pd, ok := stored.data.(pairCacheData); ok {
+						return pd, nil
+					}
+					return pairData, nil
+				}
+			}
+		}
+
+		all, err := s.repo.GetAllSnapshots(ctx)
+		if err != nil {
+			return nil, err
+		}
+		leaderSnap, okL := all[pair.leaderType]
+		depSnap, okD := all[pair.dependentType]
+		if !okL || !okD {
+			return nil, ErrSnapshotNotFound
+		}
+
+		sp := SnapshotPair{Leader: leaderSnap, Dependent: depSnap}
+		pairData, updatedAt, err := decodePairSnapshot(pair, sp)
+		if err != nil {
+			return nil, err
+		}
+
+		if s.valkeyCache != nil {
+			written, setErr := s.valkeyCache.SetPair(ctx, sp, s.cacheTTL, CacheWriteBackfill)
+			if setErr == nil && !written {
+				if reloaded, found, getErr := s.valkeyCache.GetPair(ctx, pair.leaderType, pair.dependentType); getErr == nil && found {
+					if newerData, newerUpdatedAt, decErr := decodePairSnapshot(pair, reloaded); decErr == nil {
+						pairData = newerData
+						updatedAt = newerUpdatedAt
+					}
+				}
+			}
+		}
+
+		stored := s.storeBackfillCache(key, seqBefore, pairData, 0, updatedAt)
+		if pd, ok := stored.data.(pairCacheData); ok {
+			return pd, nil
+		}
+		return pairData, nil
+	})
+	if err != nil {
+		return nil, 0, time.Time{}, err
+	}
+
+	pairData, ok := res.(pairCacheData)
+	if !ok {
+		return nil, 0, time.Time{}, fmt.Errorf("unexpected loaded pair snapshot result %T for %s", res, t)
+	}
+	data, total, calc := extractPairBoard(pairData, pair, t)
+	return data, total, calc, nil
+}
+
+func (s *Service) getOrLoadSingleSnapshot(ctx context.Context, t RankingType) (any, int, time.Time, error) {
+	key := string(t)
+	if cached, _, ok := s.readFreshCache(key); ok {
+		return cached.data, cached.total, cached.updatedAt, nil
+	}
+
+	res, err := s.sf.Do(key, func() (any, error) {
+		if cached, _, ok := s.readFreshCache(key); ok {
+			return loadedSnapshot{
+				data:         cached.data,
+				total:        cached.total,
+				calculatedAt: cached.updatedAt,
+			}, nil
+		}
+
+		_, seqBefore, _ := s.readFreshCache(key)
+
+		if s.valkeyCache != nil {
+			if snap, found, err := s.valkeyCache.Get(ctx, t); err == nil && found && snap.SnapshotData != "" {
+				if data, err := unmarshalSnapshotData(t, snap.SnapshotData); err == nil {
+					stored := s.storeBackfillCache(key, seqBefore, data, snap.TotalCount, snap.CalculatedAt)
+					return loadedSnapshot{
+						data:         stored.data,
+						total:        stored.total,
+						calculatedAt: stored.updatedAt,
+					}, nil
+				}
+			}
+		}
+
 		snap, err := s.repo.GetSnapshot(ctx, t)
 		if err != nil {
 			return nil, err
@@ -190,14 +408,27 @@ func (s *Service) getOrLoadSnapshot(ctx context.Context, t RankingType) (any, in
 		if err != nil {
 			return nil, fmt.Errorf("decode ranking snapshot %s: %w", t, err)
 		}
-		s.storeCache(t, data, snap.TotalCount, snap.CalculatedAt)
+		total := snap.TotalCount
+		calcAt := snap.CalculatedAt
+
 		if s.valkeyCache != nil {
-			_ = s.valkeyCache.Set(ctx, t, snap, s.cacheTTL)
+			written, setErr := s.valkeyCache.Set(ctx, t, snap, s.cacheTTL, CacheWriteBackfill)
+			if setErr == nil && !written {
+				if reloaded, found, getErr := s.valkeyCache.Get(ctx, t); getErr == nil && found && reloaded.SnapshotData != "" {
+					if newerData, decErr := unmarshalSnapshotData(t, reloaded.SnapshotData); decErr == nil {
+						data = newerData
+						total = reloaded.TotalCount
+						calcAt = reloaded.CalculatedAt
+					}
+				}
+			}
 		}
+
+		stored := s.storeBackfillCache(key, seqBefore, data, total, calcAt)
 		return loadedSnapshot{
-			data:         data,
-			total:        snap.TotalCount,
-			calculatedAt: snap.CalculatedAt,
+			data:         stored.data,
+			total:        stored.total,
+			calculatedAt: stored.updatedAt,
 		}, nil
 	})
 	if err != nil {

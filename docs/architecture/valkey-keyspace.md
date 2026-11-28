@@ -43,7 +43,7 @@ readiness. Introducing Cluster requires resolving those multi-key placements.
 | `party2:scheduled:lock:<id>` | Distributed Coordination | `String` | 5 minutes (`300s` worker lock) | Flag (`"1"`) | `internal/scheduling` | `AcquireLock` (SET NX EX 300), released via DEL on completion or auto-released on worker crash. |
 | `party2:scheduled:actor:<actor_id>` | Valkey Master | `Set` | None; membership removed on completion/failure, index deleted on actor cancellation | Scheduled Action IDs (`string`) | `internal/scheduling` | `Schedule` (SADD prior to ZADD enqueueing; failure halts and cleans up), `FindPendingByActorID` (SMEMBERS + MGET, Pending/Processing only), `Save` (SREM for terminal states), `CancelByActorID` (DEL on success; write errors halt and propagate without destructive index deletion). An index, not an exclusive actor lock. |
 | `party2:ratelimit:<key>` | Distributed Coordination | `String` (Atomic Int) | Window duration (e.g. 60s or 900s) | Integer counter | `internal/ratelimit` | `Allow` (`INCR` + conditional `EXPIRE` on count == 1). |
-| `party2:ranking:snapshot:<category>` | Valkey Cache | `String` | 5 minutes (`300s`) | JSON (`RankingSnapshot`: entries, refreshed_at) | `internal/ranking` | `SetSnapshot` (SET EX 300), `GetSnapshot` (GET). Rebuilt on miss from MariaDB `ranking_snapshots` table. |
+| `party2:ranking:snapshot:<category>` (standalone)<br>`party2:ranking:snapshot:pair:<leader>:<dependent>` (exclusion pairs: `pvp_victory:monster_kills`, `mao_count:hero_count`) | Valkey Cache | `String` | 5 minutes (`300s`) | JSON (`cachedEntry`: UTC timestamp + `RankingSnapshot` or `SnapshotPair`) | `internal/ranking` | `Set` / `SetPair` (`lua/set_snapshot.lua`: refresh overwrites same/newer or invalid entries; SQL-fallback backfill writes only when absent, invalid or strictly older), `Get` / `GetPair`, `Delete`. Rebuilt on miss from MariaDB `ranking_snapshots` (`GetAllSnapshots` for pairs). |
 | `party2:party:lobby:<party_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`LobbyState`: `Party`, `Members` with private battle-row snapshots) | `internal/party` | `SaveParty`, `GetParty`, `UpdateParty`, `DeleteParty`. Automatic expiration of abandoned lobbies. |
 | `party2:party:lobbies` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `party_id`, Score: `CreatedAt.Unix()` | `internal/party` | `SaveParty` (ZADD), `DeleteParty` (ZREM), `ListParties` (ZREVRANGE / ZRANGE). |
 | `party2:party:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Party ID (`string`) | `internal/party` | `AddMember` (SET EX), `RemoveMember` / `DeleteParty` (DEL), `GetActivePartyByCharacter` (GET). O(1) single-party membership check. |
@@ -163,100 +163,32 @@ overdue scheduled work as if it expired would lose pending actions.
 replace a legacy Set index and revoke its indexed tokens. This is not permission
 to blindly delete arbitrary financial/session state on any type error.
 
-Casino room persistence and writer-side partial failure boundary:
+Casino room persistence, secondary-sync boundaries (`party2:casino:rooms:active`
+and `party2:casino:character:<character_id>`) and SQL-first departure recovery
+belong to [transient run state](transient-run-state.md#casino-financial-and-departure-publication).
 
-Indian Poker, HighLow and Doppel actions hold the room lock while
-staging the complete room/member result, including next-round resets,
-eliminations, leader succession and disband. Required reads, wagers, payouts,
-and win updates run inside the SQL transaction
-before `UpdateRoomDetail` publishes that result with one authoritative payload
-`SET`. No intermediate accepted turn or removal is published. This keeps a
-rejected action from later settling against a rolled-back wager.
+## Candidate D: In-Progress Run Buffers
 
-- **Before publication**: A required read, SQL mutation or rejected payload write returns its error and rolls back SQL; the previously published room/member snapshot remains unchanged.
-- **After publication**: `saveRoomDetail` synchronizes the active index (`party2:casino:rooms:active` ZADD/ZREM) and renews reverse mappings (`party2:casino:character:<character_id>`) for every still-admitted participant and spectator whose mapping still targets the mutating room (or removes them on disband); `UpdateRoomDetail` then removes eliminated characters' reverse mappings when still mapped to that room. Admission writes (`CreateRoom`, `AddMember`) avoid overwriting a different live room mapping, and missing/expired mappings are not resurrected by renewal. These post-payload synchronization failures return `SecondarySyncError` / `ErrSecondarySync`. The action permits SQL to commit because the complete payload already applied. Secondary synchronization/cleanup is attempted across all members even when an earlier index or mapping update fails.
-- **Observation and replay**: Once the transaction and `UpdateRoomDetail` succeed without a secondary-sync failure, the masked response snapshot is read reentrantly under the same room lock. Secondary errors and response-read errors remain observable by callers (HTTP 500). Refresh room/account observations before deciding a new action; never blindly replay an unconfirmed command. Indian Poker/HighLow reject an already submitted turn; Doppel permits reselection before settlement without another wager. Settled rooms reject further game actions. A successful renewal restores the active index and extends matching reverse mappings; failed reverse-mapping cleanup can leave a stale room pointer, which `GetCharacterRoomView` resolves as absent once live roster admission is gone while unreadable or blank mappings return an error.
+Dungeon and Challenge provisional rewards use Valkey Hashes (including JSON item
+arrays) with a 7200-second sliding lifetime; see
+[transient run state](transient-run-state.md#candidate-d-in-progress-run-buffers)
+for start, settlement and recovery boundaries. Matchmaking/invitation patterns
+need an actual feature requirement before adding keys.
 
-This game-action boundary handles confirmed failures, without crash-proof
-cross-store settlement or automatic wager replay. Unknown SET acknowledgements,
-SQL finalization failures and lost game state still require separate settlement
-recovery.
-
-**Departure recovery** uses the SQL-first publication pattern described for
-[PvP](transient-run-state.md#pvp-financial-publication), limited to Casino
-departure and kick. SQL commits participant fatigue (none for spectators or
-kicks), the complete departure outcome and, for kicks, the target's 60-second
-action-wait deadline together before room and timer publication. The latest
-receipt per room is retained indefinitely and replaced only by a later committed
-departure or kick. Pending roster claims survive Valkey loss and are released
-only after room, index, conditional mapping and kick-wait writes are
-acknowledged. Admission and departure claims serialize on character SQL row
-locks: admission rechecks pending evidence before publishing, and departure
-rejects a roster that has moved to another room. Subsequent Casino room commands
-and Action Gateway mutations (`POST /actions`) resume pending publication under
-the existing room lock without replaying fatigue, wagers, progression or kick
-deadlines, preserving later character updates. Kick recovery extends
-`party2:timer:action_wait:<target>` via `ImposeLockUntil`, superseding any
-in-flight claim token so a failed concurrent command's release cannot erase the
-imposed wait, while neither shortening a longer active wait nor reviving an
-expired deadline. Recovery can restore lost
-pending room state only until the original departure deadline; after that it
-finishes cleanup without resurrecting the room. Already acknowledged receipts
-never republish or renew a room. A retry of the latest departure or kick
-succeeds without another fatigue increment or wait reset; after a new admission,
-an identity-free request denotes a new departure or kick, as in PvP. Older
-outcomes superseded by another member's departure are not replayable, and
-voluntary leaves are never treated as kick replays. Owned activity/view GETs
-remain read-only and surface pending recovery rather than false idle state or
-writing timers. Publication or SQL acknowledgement failures retain evidence and
-remain observable as `ErrDepartureRecovery` with the underlying error (HTTP 500).
-This protocol retains the existing room-lease boundary; broader multi-instance
-fencing remains outside its guarantee ([#1574](https://github.com/witchcraze/party2re/issues/1574)).
-
-Room creation/start and admission
-operations retain their own publication boundaries. `AddMember` / `RemoveMember`
-also publish payloads before synchronizing reverse mappings.
-
-Candidate D: In-Progress Run Buffers currently store provisional rewards in
-hashes (including JSON item arrays), not in hypothetical `active_nodes` or
-`turn_history` ZSets. Matchmaking/invitation patterns need an actual feature
-requirement before adding keys.
-
-Dungeon additionally owns
-`party2:dungeon:{char:<member_id>}:member` (String, JSON pair of
-leader character ID and run ID). These references have **no TTL**: a follower
-index must not expire while only the leader's canonical buffer is renewed.
-The canonical state/rewards retain their existing 7200s sliding TTL. Reads
-follow a reference once and verify both run ID and saved membership; a missing,
-replaced or unrelated canonical run never grants access. Reads perform no
-cleanup or renewal. Start writes references before publishing canonical state;
-explicit owner cleanup conditionally deletes only references matching that run,
-using each member key's own hash slot, then atomically compares the owner/run ID
-in canonical state before deleting state and rewards together. A replacement
-between discovery and deletion preserves its buffers and member references;
-missing or different runs are a no-op without TTL renewal. A later enrollment can replace a stale
-reference. Natural run expiry or a failed start may leave at most one inert
-reference per character; it carries no rewards and never establishes activity
-without a matching live run. There is no cross-slot atomicity claim.
+Dungeon additionally owns `party2:dungeon:{char:<member_id>}:member` (String, JSON
+leader/run pair, **no TTL** so a follower reference does not expire while only
+the leader's buffer is renewed; natural expiry or a failed start can leave at
+most one inert reference).
 
 ### Challenge run identity target
 
-The [participant-exit boundary](transient-run-state.md#challenge-participant-exit-target)
-keeps Challenge live state in Valkey, under
-`party2:challenge:{run:<session_id>}:session` and
-`party2:challenge:{run:<session_id>}:rewards` (Hashes). Both share one hash slot
-and the existing 7200s sliding activity lifetime. Each enrolled character,
-including the leader, uses `party2:challenge:{char:<character_id>}:member`
-(String containing the immutable session ID, no TTL). SQL claims and the public
-owner reader preserve unresolved activity when a reference or live body is
-missing; GET never repairs either. Revision-qualified canonical publication and
-run-qualified reference deletion protect replacement enrollment. Leadership is
-buffer data, not a key address. Terminal publication removes the live body/reward ledger and retains only a
-revision fingerprint until the recorded deadline. SQL acknowledgement removes the
-pending snapshot and releases only departed claims. Old character-keyed
-buffers/references remain read-only until explicit migration under the storage
-owner; migration keeps their earlier absolute expiry and conditionally removes
-only matching legacy keys.
+Challenge live state uses `party2:challenge:{run:<session_id>}:session` and
+`party2:challenge:{run:<session_id>}:rewards` (Hashes sharing `{run:<session_id>}`,
+7200s sliding lifetime) plus per-actor `party2:challenge:{char:<character_id>}:member`
+(String immutable session ID, **no TTL**). Terminal publication removes the live
+body and ledger and retains only a revision fingerprint until the recorded deadline.
+Admission claims, transition ordering and legacy migration belong to
+[transient run state](transient-run-state.md#challenge-participant-exit-target).
 
 ## Lua Script Registry
 
@@ -264,27 +196,28 @@ The following registry describes current scripts. Exact arguments and error
 codes are owned by the embedded `.lua` source; this table is navigation, not
 a claim that every service operation consists of one atomic script.
 
-| Script Identifier | Source Location | Target Keys (`KEYS[...]`) | Parameters (`ARGV[...]`) | Operation Description & Invariant Guarantees |
+| Script Identifier | Source Location | Target Keys | Parameters | Operation Description & Invariant Guarantees |
 | :--- | :--- | :--- | :--- | :--- |
+| `ranking_set_snapshot` | `internal/ranking/lua/set_snapshot.lua` (`setSnapshotLua`) | Standalone or paired ranking snapshot key | Entry JSON, TTL ms, mode, timestamp, kind (order: the script) | Atomically writes a snapshot or exclusion pair with `PX` TTL; rejects stale refreshes and prevents SQL-fallback backfills from overwriting valid current or newer entries while repairing corrupt/empty cache payloads. |
 | `party_add_member` | `internal/party/lua/add_member.lua` (`addMemberLua`) | `lobbyKey`, `characterKey` | Member JSON, IDs and lobby TTL (order: the script) | Atomically adds or replaces a roster member while `current_members < max_members` and sets the character-to-party mapping. Prevents overfilling under concurrent joins. |
-| `party_remove_member` | `internal/party/lua/remove_member.lua` (`removeMemberLua`) | `lobbyKey`, `characterKey` | Character ID, lobby TTL | Atomically removes a member and its reverse index, promotes the earliest remaining member when the leader leaves, and refreshes the lobby TTL. |
-| `party_update_party` | `internal/party/valkey_repository.go` (`updatePartyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `lobbiesIndexKey` | `ARGV[1]`: Party JSON<br>`ARGV[2]`: Lobby TTL<br>`ARGV[3]`: Status<br>`ARGV[4]`: Party ID | Atomically updates party configuration (e.g. stage, speed, max members) and removes the party from the recruiting index set (`ZREM`) when it is `completed`. |
-| `dungeon_step` | `internal/dungeon/lua/dungeon_step.lua` (`dungeonStepLua`) | `KEYS[1]`: `party2:dungeon:{char:<id>}:state`<br>`KEYS[2]`: `party2:dungeon:{char:<id>}:rewards` | Expected run ID and revision, position, vitality and reward deltas, event key, encounter, floor change and map state (order: the script) | Atomically advances coordinates, updates HP/MP/round and consumed items, records one-time consumed event keys in `state.consumed_events`, replaces the map-owned run state `state.map_state` whole when given, adds member stock (exp/gold/crystals) and the leader's run record, and appends pending defeat credits to `state.credits` after moving the acting member's stock into them, once per event. A replayed consumed key never reinstalls its encounter. Exhausted runs stay active at a zero budget. |
-| `dungeon_ack_credits` | `internal/dungeon/lua/ack_credits.lua` (`ackCreditsLua`) | `KEYS[1]`: `party2:dungeon:{char:<id>}:state` | Run ID, settled credit IDs (JSON) | Removes those credits from `state.credits` after SQL settlement without changing the revision; a missing or replaced run is a no-op. |
-| `dungeon_delete_expedition` | `internal/dungeon/lua/delete_expedition.lua` (`deleteExpeditionLua`) | Owner's state and rewards keys in the same `{char:<id>}` hash slot | Owner character ID, finalized run ID | Atomically deletes both buffers only when state still matches that owner/run; absent or replaced runs are a no-op. |
-| `challenge_publish_run` | `internal/challenge/lua/publish_run.lua` | Run session/reward hashes in one hash slot | Accepted revision, exact snapshot/ledger, status and absolute deadline | Conditional publication; retry restores both hashes without renewing the deadline; older revisions cannot overwrite newer ones. |
-| `challenge_freeze_legacy` | `internal/challenge/lua/freeze_legacy.lua` | One matching legacy session hash | Immutable run ID | Freezes old advance writers before canonical migration publication, without renewing TTL. |
-| `challenge_claim_member` | `internal/challenge/lua/claim_member.lua` | One actor member key | Immutable run ID and optional matching legacy reference | Installs the run reference; rejects another enrollment. |
-| `challenge_advance_round` | `internal/challenge/lua/challenge_round.lua` (`challengeRoundLua`) | `KEYS[1]`: `party2:challenge:{char:<id>}:session`<br>`KEYS[2]`: `party2:challenge:{char:<id>}:rewards` | `ARGV[1]`: Expected Session ID<br>`ARGV[2]`: Surviving HP<br>`ARGV[3]`: Exp Delta<br>`ARGV[4]`: Gold Delta<br>`ARGV[5]`: Item ID<br>`ARGV[6]`: Timestamp<br>`ARGV[7]`: TTL (7200s)<br>`ARGV[8]`: Expected Round<br>`ARGV[9]`: Post-combat Members JSON | Legacy-buffer adapter only; coordinated writers use `challenge_publish_run`. Compares session ID, active status and round before atomically advancing the wave, saving participant HP/MP, cumulative consumptions and individual rewards alongside the shared reward ledger. A round mismatch changes no state or TTL. |
-| `combat_release_member` | `internal/{dungeon,challenge}/lua/release_member.lua` | `KEYS[1]`: owning feature's member reference | `ARGV[1]`: expected run ID (legacy/Dungeon: encoded leader/run pair) | Deletes only the matching reference; old cleanup preserves a replacement enrollment. Each invocation operates on one member's hash slot. |
-| `casino_release_room_lock` | `internal/casino/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (Casino room or character admission lock) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks. |
-| `pvp_delete_character_room` | `internal/pvp/lua/delete_character_room.lua` (`deleteCharacterRoomLua`) | `KEYS[1]`: character mapping | `ARGV[1]`: Room ID | Delete only when the mapping still names that room; preserves later admission. |
-| `pvp_release_room_lock` | `internal/pvp/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (`party2:pvp:lock:room:<room_id>`) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks (Issue #652). |
-| `gvg_delete_character_room` | `internal/gvg/lua/delete_character_room.lua` (`deleteCharacterRoomLua`) | `KEYS[1]`: character mapping | `ARGV[1]`: Room ID | Delete only when the mapping still names that room; preserves later admission. |
-| `gvg_release_room_lock` | `internal/gvg/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (`party2:gvg:lock:room:<room_id>`) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks (Issue #652). |
-| `casino_claim_character_room` | `internal/casino/lua/claim_character_room.lua` (`claimCharacterRoomLua`) | `KEYS[1]`: character mapping (`party2:casino:character:<character_id>`) | `ARGV[1]`: Room ID, `ARGV[2]`: expected previous Room ID (or empty), `ARGV[3]`: TTL seconds | Claims/replaces a mapping under the character admission lock when absent, already equal to `ARGV[1]`, or equal to the verified stale `ARGV[2]`; CAS still rejects conflicting foreign claims and blank values. |
-| `casino_renew_character_room` | `internal/casino/lua/renew_character_room.lua` (`renewCharacterRoomLua`) | `KEYS[1]`: character mapping (`party2:casino:character:<character_id>`) | `ARGV[1]`: Room ID, `ARGV[2]`: TTL seconds | Atomically refreshes the character room mapping TTL (`SET EX`) only when the current value still matches `ARGV[1]`, preventing resurrection of deleted mappings or overwrite of another room's mapping. |
-| `casino_delete_character_room` | `internal/casino/lua/delete_character_room.lua` (`deleteCharacterRoomLua`) | `KEYS[1]`: character mapping (`party2:casino:character:<character_id>`) | `ARGV[1]`: Room ID | Atomically deletes the character room mapping only when its current value still matches `ARGV[1]`, preserving later cross-room admission. |
+| `party_remove_member` | `internal/party/lua/remove_member.lua` (`removeMemberLua`) | `lobbyKey`, `characterKey` | Character ID, lobby TTL (order: the script) | Atomically removes a member and its reverse index, promotes the earliest remaining member when the leader leaves, and refreshes the lobby TTL. |
+| `party_update_party` | `internal/party/lua/update_party.lua` (`updatePartyLua`) | `lobbyKey`, `lobbiesIndexKey` | Party JSON, lobby TTL, status, party ID (order: the script) | Atomically updates party configuration (e.g. stage, speed, max members) and removes the party from the recruiting index set (`ZREM`) when `completed`. |
+| `dungeon_step` | `internal/dungeon/lua/dungeon_step.lua` (`dungeonStepLua`) | `{char:<id>}:state`, `{char:<id>}:rewards` | Run ID, revision, movement, vitality, rewards, encounter and map state (order: the script) | Atomically advances coordinates, updates HP/MP/round and consumed items, records one-time event keys, replaces `map_state`, updates member stock and appends pending defeat credits once per event. Exhausted runs stay active at a zero budget. |
+| `dungeon_ack_credits` | `internal/dungeon/lua/ack_credits.lua` (`ackCreditsLua`) | `{char:<id>}:state` | Run ID, settled credit IDs (order: the script) | Removes settled credits from `state.credits` without changing the revision; missing or replaced runs are no-ops. |
+| `dungeon_delete_expedition` | `internal/dungeon/lua/delete_expedition.lua` (`deleteExpeditionLua`) | Owner state and rewards keys in `{char:<id>}` | Owner character ID, finalized run ID (order: the script) | Atomically deletes both buffers only when state still matches that owner/run; absent or replaced runs are no-ops. |
+| `challenge_publish_run` | `internal/challenge/lua/publish_run.lua` | Run session/reward hashes in `{run:<id>}` | Accepted revision, snapshot/ledger, status, deadline (order: the script) | Conditional publication; retry restores both hashes without renewing the deadline; older revisions cannot overwrite newer ones. |
+| `challenge_freeze_legacy` | `internal/challenge/lua/freeze_legacy.lua` | One matching legacy session hash | Immutable run ID (order: the script) | Freezes old advance writers before canonical migration publication, without renewing TTL. |
+| `challenge_claim_member` | `internal/challenge/lua/claim_member.lua` | One actor member key | Immutable run ID, optional legacy reference (order: the script) | Installs the run reference; rejects another enrollment. |
+| `challenge_advance_round` | `internal/challenge/lua/challenge_round.lua` (`challengeRoundLua`) | Legacy `{char:<id>}:session`, `:rewards` | Expected session/round, HP, reward/item deltas, timestamp, TTL, members JSON (order: the script) | Legacy-buffer adapter only; coordinated writers use `challenge_publish_run`. Compares session ID, active status and round before advancing the wave and saving member state and shared rewards atomically. |
+| `combat_release_member` | `internal/{dungeon,challenge}/lua/release_member.lua` | Owning feature's member reference | Expected run ID (order: the script) | Deletes only the matching reference per member hash slot so old cleanup preserves replacement enrollments. |
+| `casino_release_room_lock` | `internal/casino/lua/release_room_lock.lua` (`releaseRoomLockLua`) | Casino room or character lock key | Lock token (order: the script) | Atomically deletes the lock key only if its value matches the caller's token. |
+| `pvp_delete_character_room` | `internal/pvp/lua/delete_character_room.lua` (`deleteCharacterRoomLua`) | Character mapping | Room ID (order: the script) | Deletes only when the mapping still names that room, preserving later admissions. |
+| `pvp_release_room_lock` | `internal/pvp/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `party2:pvp:lock:room:<room_id>` | Lock token (order: the script) | Atomically deletes the room lock key only if its value matches the caller's token (Issue #652). |
+| `gvg_delete_character_room` | `internal/gvg/lua/delete_character_room.lua` (`deleteCharacterRoomLua`) | Character mapping | Room ID (order: the script) | Deletes only when the mapping still names that room, preserving later admissions. |
+| `gvg_release_room_lock` | `internal/gvg/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `party2:gvg:lock:room:<room_id>` | Lock token (order: the script) | Atomically deletes the room lock key only if its value matches the caller's token (Issue #652). |
+| `casino_claim_character_room` | `internal/casino/lua/claim_character_room.lua` (`claimCharacterRoomLua`) | `party2:casino:character:<character_id>` | Room ID, expected previous room ID, TTL (order: the script) | Claims/replaces a mapping under the character admission lock when absent, already matching or matching the verified stale ID; rejects conflicting foreign claims and blank values. |
+| `casino_renew_character_room` | `internal/casino/lua/renew_character_room.lua` (`renewCharacterRoomLua`) | `party2:casino:character:<character_id>` | Room ID, TTL (order: the script) | Atomically refreshes the character room mapping TTL only when its current value matches the mutating room. |
+| `casino_delete_character_room` | `internal/casino/lua/delete_character_room.lua` (`deleteCharacterRoomLua`) | `party2:casino:character:<character_id>` | Room ID (order: the script) | Atomically deletes the character room mapping only when its current value matches the mutating room. |
 
 Lua scripts live in feature `lua/` directories and use `go:embed`. Party scripts
 operate on bounded member JSON; Challenge reward arrays also use JSON.
