@@ -34,13 +34,23 @@ func TestWeeklyRotation_FirstStartPreservesCounters(t *testing.T) {
 
 type weeklyScheduler struct {
 	actions    []corescheduling.ScheduledAction
+	requeued   []corescheduling.ScheduledAction
 	enqueueErr error
 	readErr    error
+	requeueErr error
 	writes     int
 }
 
 func (s *weeklyScheduler) FindPendingByActorID(ctx context.Context, actor string) ([]corescheduling.ScheduledAction, error) {
 	return s.actions, s.readErr
+}
+
+func (s *weeklyScheduler) RequeuePending(_ context.Context, action corescheduling.ScheduledAction) error {
+	if s.requeueErr != nil {
+		return s.requeueErr
+	}
+	s.requeued = append(s.requeued, action)
+	return nil
 }
 
 func (s *weeklyScheduler) ScheduleWithID(ctx context.Context, id, typ, actor string, params map[string]string, at time.Time) error {
@@ -286,11 +296,14 @@ func TestWeeklyRotation_PreservesUncertainProcessing(t *testing.T) {
 	if len(scheduler.actions) != 2 || !reflect.DeepEqual(scheduler.actions[0], uncertain) || scheduler.actions[1].ID == uncertain.ID || repo.activeWeeklyJobChanges["new-week"] != 1 {
 		t.Fatal("reconciliation replaced uncertain metadata or consumed future counters")
 	}
+	if len(scheduler.requeued) != 0 {
+		t.Fatalf("expected 0 RequeuePending calls for Processing action, got %+v", scheduler.requeued)
+	}
 	if err := handler.Reconcile(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if scheduler.writes != 1 {
-		t.Fatal("reconciliation did not preserve the recovered Pending reservation")
+	if scheduler.writes != 1 || len(scheduler.requeued) != 1 || scheduler.requeued[0].ID != scheduler.actions[1].ID {
+		t.Fatalf("reconciliation did not preserve/requeue the recovered Pending reservation: writes=%d requeued=%+v", scheduler.writes, scheduler.requeued)
 	}
 }
 
@@ -324,14 +337,23 @@ func TestWeeklyRotation_ReconcileShortCircuitsOnSteadyStateAndRecoversLostReserv
 		t.Fatalf("startup lockCalls=%d writes=%d, want 1/1", repo.lockCalls, scheduler.writes)
 	}
 
-	// 2. Healthy steady-state ticks short-circuit without touching SQL or re-enqueueing.
+	// 2. Healthy steady-state ticks short-circuit without touching SQL or re-enqueueing,
+	// while repairing queue membership via RequeuePending and propagating repair errors.
 	now = now.Add(5 * time.Second)
 	if err := handler.Reconcile(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if repo.lockCalls != 1 || scheduler.writes != 1 {
-		t.Fatalf("steady-state tick hit SQL or re-enqueued: lockCalls=%d writes=%d", repo.lockCalls, scheduler.writes)
+	if repo.lockCalls != 1 || scheduler.writes != 1 || len(scheduler.requeued) != 1 || scheduler.requeued[0].ID != scheduler.actions[0].ID {
+		t.Fatalf("steady-state tick hit SQL, re-enqueued, or skipped RequeuePending: lockCalls=%d writes=%d requeued=%+v", repo.lockCalls, scheduler.writes, scheduler.requeued)
 	}
+	scheduler.requeueErr = errors.New("valkey zadd failed")
+	if err := handler.Reconcile(ctx); !errors.Is(err, scheduler.requeueErr) {
+		t.Fatalf("expected steady-state requeue error, got %v", err)
+	}
+	if repo.lockCalls != 1 || scheduler.writes != 1 {
+		t.Fatalf("steady-state requeue error hit SQL or re-enqueued: lockCalls=%d writes=%d", repo.lockCalls, scheduler.writes)
+	}
+	scheduler.requeueErr = nil
 
 	// 3. Mid-run Valkey reservation loss restores the reservation without hitting SQL.
 	repo.activeWeeklyJobChanges["char-1"] = 2

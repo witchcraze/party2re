@@ -8,9 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/valkey-io/valkey-go"
+	corescheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/ranking"
+	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -245,4 +249,198 @@ func TestWeeklyRotation_ConcurrentReconciliationConservesCounters_RealDB(t *test
 		t.Fatalf("progress advanced more than once: %v / %v", due, err)
 	}
 	t.Logf("%d operations conserved counters in %v", res.TotalOps, res.Duration)
+}
+
+type isolatedRankingSchedRepo struct {
+	*scheduling.ValkeyRepository
+	actor        string
+	logicalActor string
+}
+
+func (r *isolatedRankingSchedRepo) Schedule(ctx context.Context, action corescheduling.ScheduledAction) error {
+	action.ActorID = r.actor
+	return r.ValkeyRepository.Schedule(ctx, action)
+}
+
+func (r *isolatedRankingSchedRepo) Save(ctx context.Context, action corescheduling.ScheduledAction) error {
+	action.ActorID = r.actor
+	return r.ValkeyRepository.Save(ctx, action)
+}
+
+func (r *isolatedRankingSchedRepo) FindPendingByActorID(ctx context.Context, _ string) ([]corescheduling.ScheduledAction, error) {
+	return r.ValkeyRepository.FindPendingByActorID(ctx, r.actor)
+}
+
+func TestRankingReconcile_RealValkey_MissingQueueEntryRepair_Integration(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	_, repo := weeklyRotationDB(t)
+	vkClient := testutil.OpenValkey(t)
+	baseRepo := scheduling.NewValkeyRepository(vkClient)
+
+	hasDueID := func(due []corescheduling.ScheduledAction, actionID string) (corescheduling.ScheduledAction, bool) {
+		for _, a := range due {
+			if a.ID == actionID {
+				return a, true
+			}
+		}
+		return corescheduling.ScheduledAction{}, false
+	}
+
+	verifyRepairAndDelivery := func(
+		t *testing.T,
+		actionType string,
+		firstTarget time.Time,
+		nextTarget time.Time,
+		advanceToDue func(),
+		reconcile func(context.Context) error,
+		handler scheduling.ActionHandler,
+		schedSvc *scheduling.Service,
+		isolated *isolatedRankingSchedRepo,
+	) {
+		t.Helper()
+		if err := reconcile(ctx); err != nil {
+			t.Fatalf("initial reconcile: %v", err)
+		}
+		pending, err := isolated.FindPendingByActorID(ctx, "")
+		if err != nil || len(pending) != 1 {
+			t.Fatalf("expected 1 pending reservation, got %+v, err=%v", pending, err)
+		}
+		act := pending[0]
+		dueBefore, err := baseRepo.FetchDue(ctx, firstTarget, 200)
+		if err != nil {
+			t.Fatalf("FetchDue before drop: %v", err)
+		}
+		if _, ok := hasDueID(dueBefore, act.ID); !ok {
+			t.Fatalf("expected %q in FetchDue before queue drop", act.ID)
+		}
+
+		// Drop ONLY the sorted-set queue entry while keeping payload and actor index.
+		if err := vkClient.Do(ctx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(act.ID).Build()).Error(); err != nil {
+			t.Fatalf("ZREM pending queue: %v", err)
+		}
+		dueAfterDrop, err := baseRepo.FetchDue(ctx, firstTarget, 200)
+		if err != nil {
+			t.Fatalf("FetchDue after drop: %v", err)
+		}
+		if _, ok := hasDueID(dueAfterDrop, act.ID); ok {
+			t.Fatalf("unexpected %q in FetchDue after queue drop", act.ID)
+		}
+
+		for range 2 {
+			if err := reconcile(ctx); err != nil {
+				t.Fatalf("repair reconcile: %v", err)
+			}
+		}
+		afterRepair, err := isolated.FindPendingByActorID(ctx, "")
+		if err != nil || len(afterRepair) != 1 || afterRepair[0].ID != act.ID {
+			t.Fatalf("expected existing reservation %q preserved, got %+v, err=%v", act.ID, afterRepair, err)
+		}
+		dueAfterRepair, err := baseRepo.FetchDue(ctx, firstTarget, 200)
+		if err != nil {
+			t.Fatalf("FetchDue after repair: %v", err)
+		}
+		dueAct, ok := hasDueID(dueAfterRepair, act.ID)
+		if !ok {
+			t.Fatalf("expected %q restored in FetchDue after repair", act.ID)
+		}
+
+		// Stale Pending snapshot must never overwrite concurrent Processing or make it executable.
+		processing := act
+		processing.State = corescheduling.StateProcessing
+		if err := baseRepo.Save(ctx, processing); err != nil {
+			t.Fatalf("save processing: %v", err)
+		}
+		if err := vkClient.Do(ctx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(act.ID).Build()).Error(); err != nil {
+			t.Fatalf("ZREM processing: %v", err)
+		}
+		if err := schedSvc.RequeuePending(ctx, act); err != nil {
+			t.Fatalf("stale RequeuePending on Processing: %v", err)
+		}
+		dueProc, err := baseRepo.FetchDue(ctx, firstTarget, 200)
+		if err != nil {
+			t.Fatalf("FetchDue during processing: %v", err)
+		}
+		if _, ok := hasDueID(dueProc, act.ID); ok {
+			t.Fatalf("stale RequeuePending made Processing action %q executable", act.ID)
+		}
+		if err := vkClient.Do(ctx, vkClient.B().Zscore().Key("party2:scheduled:pending").Member(act.ID).Build()).Error(); !valkey.IsValkeyNil(err) {
+			t.Fatalf("expected Processing queue entry cleaned by FetchDue, got %v", err)
+		}
+		procFound, err := isolated.FindPendingByActorID(ctx, "")
+		if err != nil || len(procFound) != 1 || procFound[0].State != corescheduling.StateProcessing {
+			t.Fatalf("expected StateProcessing preserved, got %+v, err=%v", procFound, err)
+		}
+
+		// Restore Pending and advance clock to verify due delivery through Worker.
+		if err := baseRepo.Save(ctx, act); err != nil {
+			t.Fatalf("restore pending payload: %v", err)
+		}
+		if err := schedSvc.RequeuePending(ctx, act); err != nil {
+			t.Fatalf("restore pending queue: %v", err)
+		}
+		advanceToDue()
+		dueAct.ActorID = isolated.logicalActor
+		worker := scheduling.NewWorker(isolated, time.Second, logging.Nop())
+		worker.RegisterHandler(actionType, handler)
+		worker.ProcessAction(ctx, dueAct)
+
+		afterDelivery, err := isolated.FindPendingByActorID(ctx, "")
+		if err != nil {
+			t.Fatalf("FindPendingByActorID after delivery: %v", err)
+		}
+		if len(afterDelivery) != 1 || !afterDelivery[0].ExecuteAt.Equal(nextTarget) || afterDelivery[0].State != corescheduling.StatePending {
+			t.Fatalf("expected next reservation at %v, got %+v", nextTarget, afterDelivery)
+		}
+	}
+
+	t.Run("daily_refresh", func(t *testing.T) {
+		dailyDB := database.CreateTestDatabase(t, []string{"players", "characters", "character_depots", "character_alchemy", "guilds", "guild_members", "job_popularity_stats", "ranking_snapshots", "weekly_job_changes"}...)
+		dailyRepo, err := database.NewRankingRepository(dailyDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Date(2025, 1, 2, 6, 0, 0, 0, time.UTC) // 2025-01-02 15:00 JST
+		firstTarget := ranking.NextMidnightJST(now)
+		nextTarget := ranking.NextMidnightJST(firstTarget)
+		actor := "ranking-test-daily:" + id.New()
+		isolated := &isolatedRankingSchedRepo{ValkeyRepository: baseRepo, actor: actor, logicalActor: "ranking:daily"}
+		t.Cleanup(func() {
+			if _, err := isolated.CancelByActorID(context.Background(), actor); err != nil {
+				t.Error(err)
+			}
+		})
+		schedSvc := scheduling.NewService(isolated)
+		svc, err := ranking.NewService(dailyRepo, ranking.WithNowFunc(func() time.Time { return now }))
+		if err != nil {
+			t.Fatal(err)
+		}
+		handler := ranking.NewRefreshHandler(svc, ranking.WithRefreshScheduler(schedSvc))
+		verifyRepairAndDelivery(t, ranking.RankingActionTypeRefresh, firstTarget, nextTarget, func() {
+			now = firstTarget
+		}, handler.Reconcile, handler, schedSvc, isolated)
+	})
+
+	t.Run("weekly_rotation", func(t *testing.T) {
+		now := time.Date(2025, 1, 4, 15, 0, 0, 0, time.UTC) // Sunday 2025-01-05 00:00 JST
+		setWeeklyRotationDue(t, repo, now.AddDate(0, 0, 7))
+		firstTarget := now.AddDate(0, 0, 7)
+		nextTarget := firstTarget.AddDate(0, 0, 7)
+		actor := "ranking-test-weekly:" + id.New()
+		isolated := &isolatedRankingSchedRepo{ValkeyRepository: baseRepo, actor: actor, logicalActor: "ranking:weekly"}
+		t.Cleanup(func() {
+			if _, err := isolated.CancelByActorID(context.Background(), actor); err != nil {
+				t.Error(err)
+			}
+		})
+		schedSvc := scheduling.NewService(isolated)
+		svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return now }))
+		if err != nil {
+			t.Fatal(err)
+		}
+		handler := ranking.NewRotateWeeklyHandler(svc, schedSvc)
+		verifyRepairAndDelivery(t, ranking.RankingActionTypeRotateWeekly, firstTarget, nextTarget, func() {
+			now = firstTarget
+		}, handler.Reconcile, handler, schedSvc, isolated)
+	})
 }
