@@ -221,6 +221,7 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 		speed = DefaultSpeed
 	}
 
+	req.NeedJoin = validation.StripLegacyText(req.NeedJoin)
 	if corecharacter.ValidateNeedJoin(req.NeedJoin, char) != nil {
 		return RoomDetail{}, ErrNeedJoinNotMet
 	}
@@ -238,7 +239,7 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 		MaxMembers:        maxMembers,
 		TargetWins:        targetWins,
 		PrizePool:         InitialPrizeGP, // Leader seeds initial 2 GP
-		PasswordHash:      hashPassword(strings.TrimSpace(req.Password)),
+		PasswordHash:      hashPassword(strings.TrimSpace(validation.StripLegacyText(req.Password))),
 		NeedJoin:          req.NeedJoin,
 		Status:            StatusRecruiting,
 		Round:             0,
@@ -333,7 +334,7 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 		if len(detail.Members) >= detail.Room.MaxMembers {
 			return ErrRoomFull
 		}
-		if detail.Room.PasswordHash != "" && detail.Room.PasswordHash != hashPassword(strings.TrimSpace(password)) {
+		if detail.Room.PasswordHash != "" && detail.Room.PasswordHash != hashPassword(strings.TrimSpace(validation.StripLegacyText(password))) {
 			return ErrInvalidPassword
 		}
 		if corecharacter.ValidateNeedJoin(detail.Room.NeedJoin, char) != nil {

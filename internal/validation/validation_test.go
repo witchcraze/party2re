@@ -8,6 +8,28 @@ import (
 	"github.com/witchcraze/party2re/internal/validation"
 )
 
+func TestStripLegacyText(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"unchanged ascii", "Hello, World!", "Hello, World!"},
+		{"deletes CR and LF", "a\r\nb\nc\rd", "abcd"},
+		{"deletes combining diacritics U+0300-U+036F", "e\u0300\u0301\u036f", "e"},
+		{"deletes Thai marks U+0E34-U+0E3A and U+0E47-U+0E4E", "ก\u0E34\u0E3A\u0E47\u0E4Eข", "กข"},
+		{"preserves precomposed accent and dakuten", "éか\u3099", "éか\u3099"},
+		{"preserves tab and other controls", "a\tb\u20D0", "a\tb\u20D0"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := validation.StripLegacyText(tc.input); got != tc.want {
+				t.Errorf("StripLegacyText(%q) = %q; want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSanitizeText(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -83,15 +105,22 @@ func TestValidateSingleLine(t *testing.T) {
 			wantOutput: "",
 		},
 		{
-			name:       "contains newline in single line",
+			name:       "strips newline in single line as decode_pt does",
 			input:      "Line1\nLine2",
 			maxRunes:   20,
-			wantErr:    validation.ErrControlCharacter,
-			wantOutput: "",
+			wantErr:    nil,
+			wantOutput: "Line1Line2",
 		},
 		{
-			name:       "contains carriage return in single line",
+			name:       "strips carriage return in single line as decode_pt does",
 			input:      "Line1\rLine2",
+			maxRunes:   20,
+			wantErr:    nil,
+			wantOutput: "Line1Line2",
+		},
+		{
+			name:       "contains tab control character",
+			input:      "Line1\tLine2",
 			maxRunes:   20,
 			wantErr:    validation.ErrControlCharacter,
 			wantOutput: "",
@@ -146,18 +175,25 @@ func TestValidateSingleLine(t *testing.T) {
 			wantOutput: "",
 		},
 		{
-			name:       "zalgo text with more than 2 consecutive combining marks",
+			name:       "strips decode_pt combining marks",
 			input:      "Z\u0300\u0301\u0302algo",
+			maxRunes:   20,
+			wantErr:    nil,
+			wantOutput: "Zalgo",
+		},
+		{
+			name:       "zalgo text with more than 2 consecutive combining marks outside decode_pt",
+			input:      "Z\u20D0\u20D1\u20D2algo",
 			maxRunes:   20,
 			wantErr:    validation.ErrZalgo,
 			wantOutput: "",
 		},
 		{
-			name:       "valid combining marks up to 2",
-			input:      "Z\u0300\u0301algo",
+			name:       "valid combining marks up to 2 outside decode_pt",
+			input:      "Z\u20D0\u20D1algo",
 			maxRunes:   20,
 			wantErr:    nil,
-			wantOutput: "Z\u0300\u0301algo",
+			wantOutput: "Z\u20D0\u20D1algo",
 		},
 	}
 
@@ -183,25 +219,23 @@ func TestValidateSingleLine(t *testing.T) {
 func TestCheckText(t *testing.T) {
 	tests := []struct {
 		name    string
-		kind    validation.TextKind
 		input   string
 		wantErr error
 	}{
-		{"line accepts plain text unchanged", validation.TextLine, " a,;<>＠ ", nil},
-		{"line rejects LF", validation.TextLine, "a\nb", validation.ErrControlCharacter},
-		{"line rejects tab", validation.TextLine, "a\tb", validation.ErrControlCharacter},
-		{"comment accepts CR LF", validation.TextComment, "a\r\nb", nil},
-		{"comment rejects other controls", validation.TextComment, "a\x07b", validation.ErrControlCharacter},
-		{"comment rejects C1 control", validation.TextComment, "a\u0085b", validation.ErrControlCharacter},
-		{"rejects zero-width", validation.TextComment, "a\u200bb", validation.ErrZeroWidth},
-		{"rejects bidi override", validation.TextLine, "a\u202eb", validation.ErrBidiOverride},
-		{"line break resets combining run", validation.TextComment, "e\u0301\u0301\ne\u0301\u0301", nil},
-		{"rejects zalgo", validation.TextLine, "Z\u0300\u0301\u0302", validation.ErrZalgo},
+		{"accepts plain text unchanged", " a,;<>＠ ", nil},
+		{"rejects LF", "a\nb", validation.ErrControlCharacter},
+		{"rejects CR", "a\rb", validation.ErrControlCharacter},
+		{"rejects tab", "a\tb", validation.ErrControlCharacter},
+		{"rejects other controls", "a\x07b", validation.ErrControlCharacter},
+		{"rejects C1 control", "a\u0085b", validation.ErrControlCharacter},
+		{"rejects zero-width", "a\u200bb", validation.ErrZeroWidth},
+		{"rejects bidi override", "a\u202eb", validation.ErrBidiOverride},
+		{"rejects zalgo", "Z\u20D0\u20D1\u20D2", validation.ErrZalgo},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validation.CheckText(tc.kind, tc.input); !errors.Is(err, tc.wantErr) {
-				t.Fatalf("CheckText(%q, %q) = %v; want %v", tc.kind, tc.input, err, tc.wantErr)
+			if err := validation.CheckText(tc.input); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("CheckText(%q) = %v; want %v", tc.input, err, tc.wantErr)
 			}
 		})
 	}
@@ -317,16 +351,22 @@ func TestValidateCharacterName(t *testing.T) {
 			wantOutput: "",
 		},
 		{
-			name:       "contains internal newline",
+			name:       "strips internal newline as decode_pt does",
 			input:      "A\nB",
-			wantErr:    validation.ErrInternalWhitespace,
-			wantOutput: "",
+			wantErr:    nil,
+			wantOutput: "AB",
 		},
 		{
-			name:       "nfc normalization converts decomposed characters",
+			name:       "strips decode_pt combining marks before NFC",
 			input:      "Ka\u0301",
 			wantErr:    nil,
-			wantOutput: "Ká",
+			wantOutput: "Ka",
+		},
+		{
+			name:       "nfc normalization converts decomposed dakuten",
+			input:      "か\u3099",
+			wantErr:    nil,
+			wantOutput: "が",
 		},
 		{
 			name:       "contains prohibited comma",
@@ -371,16 +411,16 @@ func TestValidateCharacterName(t *testing.T) {
 			wantOutput: "",
 		},
 		{
-			name:       "contains prohibited backslash",
+			name:       "accepts backslash on creation",
 			input:      "A\\B",
-			wantErr:    validation.ErrProhibitedCharacter,
-			wantOutput: "",
+			wantErr:    nil,
+			wantOutput: "A\\B",
 		},
 		{
-			name:       "contains prohibited slash",
+			name:       "accepts slash on creation",
 			input:      "A/B",
-			wantErr:    validation.ErrProhibitedCharacter,
-			wantOutput: "",
+			wantErr:    nil,
+			wantOutput: "A/B",
 		},
 		{
 			name:       "contains prohibited angle brackets",
@@ -401,8 +441,8 @@ func TestValidateCharacterName(t *testing.T) {
 			wantOutput: "",
 		},
 		{
-			name:       "contains zalgo marks",
-			input:      "Z\u0300\u0301\u0302al",
+			name:       "contains zalgo marks outside decode_pt",
+			input:      "Z\u20D0\u20D1\u20D2al",
 			wantErr:    validation.ErrZalgo,
 			wantOutput: "",
 		},
@@ -424,6 +464,18 @@ func TestValidateCharacterName(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestValidateCharacterRename(t *testing.T) {
+	if _, err := validation.ValidateCharacterRename("A\\B"); !errors.Is(err, validation.ErrProhibitedCharacter) {
+		t.Fatalf("ValidateCharacterRename backslash = %v; want ErrProhibitedCharacter", err)
+	}
+	if _, err := validation.ValidateCharacterRename("A/B"); !errors.Is(err, validation.ErrProhibitedCharacter) {
+		t.Fatalf("ValidateCharacterRename slash = %v; want ErrProhibitedCharacter", err)
+	}
+	if got, err := validation.ValidateCharacterRename("A\nB\u0301"); err != nil || got != "AB" {
+		t.Fatalf("ValidateCharacterRename stripped = %q, %v; want %q, nil", got, err, "AB")
 	}
 }
 
@@ -537,10 +589,16 @@ func TestValidateGuildName(t *testing.T) {
 			wantOutput: strings.Repeat("あ", 16),
 		},
 		{
-			name:       "nfc normalization converts decomposed characters",
+			name:       "strips decode_pt combining marks",
 			input:      "Ka\u0301",
 			wantErr:    nil,
-			wantOutput: "Ká",
+			wantOutput: "Ka",
+		},
+		{
+			name:       "nfc normalization converts decomposed dakuten",
+			input:      "か\u3099",
+			wantErr:    nil,
+			wantOutput: "が",
 		},
 		{
 			name:       "17-character ascii name exceeds limit",
@@ -597,10 +655,10 @@ func TestValidateGuildName(t *testing.T) {
 			wantOutput: "",
 		},
 		{
-			name:       "newline rejected",
+			name:       "strips newline as decode_pt does",
 			input:      "Alice\nBob",
-			wantErr:    validation.ErrInternalWhitespace,
-			wantOutput: "",
+			wantErr:    nil,
+			wantOutput: "AliceBob",
 		},
 		{
 			name:       "contains prohibited comma",
@@ -657,16 +715,16 @@ func TestValidateGuildName(t *testing.T) {
 			wantOutput: "",
 		},
 		{
-			name:       "contains prohibited backslash",
+			name:       "accepts backslash",
 			input:      `Alice\Bob`,
-			wantErr:    validation.ErrProhibitedCharacter,
-			wantOutput: "",
+			wantErr:    nil,
+			wantOutput: `Alice\Bob`,
 		},
 		{
-			name:       "contains prohibited slash",
+			name:       "accepts slash",
 			input:      "Alice/Bob",
-			wantErr:    validation.ErrProhibitedCharacter,
-			wantOutput: "",
+			wantErr:    nil,
+			wantOutput: "Alice/Bob",
 		},
 		{
 			name:       "contains c0 control character",
@@ -699,8 +757,8 @@ func TestValidateGuildName(t *testing.T) {
 			wantOutput: "",
 		},
 		{
-			name:       "contains zalgo marks",
-			input:      "Z\u0300\u0301\u0302algo",
+			name:       "contains zalgo marks outside decode_pt",
+			input:      "Z\u20D0\u20D1\u20D2algo",
 			wantErr:    validation.ErrZalgo,
 			wantOutput: "",
 		},
@@ -739,7 +797,10 @@ func TestValidateQuestName(t *testing.T) {
 		{name: "fullwidth whitespace rejected", input: "冒険　隊", wantErr: validation.ErrInternalWhitespace},
 		{name: "prohibited at sign rejected", input: "quest@1", wantErr: validation.ErrProhibitedCharacter},
 		{name: "prohibited fullwidth at sign rejected", input: "＠冒険", wantErr: validation.ErrProhibitedCharacter},
-		{name: "nfc normalized", input: "Ka\u0301", wantOutput: "Ká"},
+		{name: "decode_pt marks stripped", input: "Ka\u0301", wantOutput: "Ka"},
+		{name: "nfc normalized", input: "か\u3099", wantOutput: "が"},
+		{name: "backslash rejected", input: `a\b`, wantErr: validation.ErrProhibitedCharacter},
+		{name: "slash rejected", input: "a/b", wantErr: validation.ErrProhibitedCharacter},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -783,7 +844,8 @@ func TestValidateLegacyComment(t *testing.T) {
 		{"control character", "a\x00b", 10, "", validation.ErrControlCharacter},
 		{"zero width", "a\u200Bb", 10, "", validation.ErrZeroWidth},
 		{"bidi override", "a\u202Eb", 10, "", validation.ErrBidiOverride},
-		{"zalgo", "Z\u0300\u0301\u0302", 10, "", validation.ErrZalgo},
+		{"decode_pt combining marks are removed", "e\u0301\u0E34\u0E47", 10, "e", nil},
+		{"zalgo", "Z\u20D0\u20D1\u20D2", 10, "", validation.ErrZalgo},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

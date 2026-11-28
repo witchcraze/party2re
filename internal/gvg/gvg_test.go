@@ -330,7 +330,7 @@ func TestCreateRoom(t *testing.T) {
 			"room\x001",
 			"room\u200B1",
 			"room\u202E1",
-			"Z\u0300\u0301\u0302",
+			"Z\u20D0\u20D1\u20D2",
 			strings.Repeat("あ", 51),
 		} {
 			if _, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: invalid}); !errors.Is(err, gvg.ErrInvalidRoomName) {
@@ -342,12 +342,12 @@ func TestCreateRoom(t *testing.T) {
 	t.Run("normalizes valid room name with NFC", func(t *testing.T) {
 		charRepo.characters["c_nfc"] = createTestCharacter("c_nfc", "NFCLdr", 100, 0)
 		guildRepo.charGuilds["c_nfc"] = "g1"
-		detail, err := svc.CreateRoom(ctx, "c_nfc", gvg.CreateRoomRequest{Name: "Ka\u0301"})
+		detail, err := svc.CreateRoom(ctx, "c_nfc", gvg.CreateRoomRequest{Name: "か\u3099Ka\u0301"})
 		if err != nil {
 			t.Fatalf("CreateRoom NFC failed: %v", err)
 		}
-		if detail.Room.Name != "Ká" {
-			t.Errorf("expected NFC-normalized room name %q, got %q", "Ká", detail.Room.Name)
+		if detail.Room.Name != "がKa" {
+			t.Errorf("expected normalized room name %q, got %q", "がKa", detail.Room.Name)
 		}
 	})
 

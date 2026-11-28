@@ -157,10 +157,10 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusNotImplemented, "ACTION_NOT_IMPLEMENTED", "Action service not configured.")
 			return
 		}
-		err := checkTextParams(req.Params, playercontext.TextKinds[req.Action])
+		params, err := cleanTextParams(req.Params)
 		var execute func(context.Context, string, string, playercontext.Result) (any, error)
 		if err == nil {
-			execute, err = command.prepare(req.Params)
+			execute, err = command.prepare(params)
 		}
 		if err != nil {
 			writeActionFailure(w, http.StatusBadRequest, "INVALID_ACTION_PARAMS", "Invalid action parameters.")
@@ -223,7 +223,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 		if !earlyWake && !slices.Contains(current.AvailableActions, req.Action) {
 			replay := false
 			if command.replay != nil {
-				replay, err = command.replay(r.Context(), player.ID, char.ID, req.Params)
+				replay, err = command.replay(r.Context(), player.ID, char.ID, params)
 				if err != nil {
 					writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify the owned command receipt.")
 					return
@@ -234,7 +234,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		if !matchesBoundParams(req.Params, h.boundParams(current)[req.Action]) {
+		if !matchesBoundParams(params, h.boundParams(current)[req.Action]) {
 			h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_UNAVAILABLE", Message: "Action is unavailable for the current selection."})
 			return
 		}

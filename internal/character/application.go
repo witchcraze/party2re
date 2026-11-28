@@ -255,7 +255,7 @@ func (s *Service) findForUpdate(ctx context.Context, id string) (corecharacter.C
 
 // ChangeName renames a character at the Naming Hall for 500,000 G.
 func (s *Service) ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error) {
-	validName, err := validation.ValidateCharacterName(newName)
+	validName, err := validation.ValidateCharacterRename(newName)
 	if err != nil {
 		return corecharacter.Character{}, ErrInvalidName
 	}

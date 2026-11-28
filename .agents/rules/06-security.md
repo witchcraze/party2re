@@ -26,5 +26,5 @@ Check a new dependency's known vulnerabilities before adding it (see `01-develop
 - Enforced by `internal/architecture/crypto_lint_test.go`.
 
 ## 6. Text Input Validation
-- Every string Gateway parameter MUST declare a text kind in `internal/playercontext/catalog_text.go`; the Gateway rejects unsafe text by that kind before decoding. Enforced by `internal/playercontext/catalog_text_lint_test.go`.
+- Gateway string parameters strip CR/LF and legacy `decode_pt` combining marks (`validation.StripLegacyText`) and reject unsafe characters (`validation.CheckText`) before decoding; REST and non-HTTP callers MUST apply `StripLegacyText` at the service boundary (except approved verbatim fields such as login messages).
 - Legacy prohibited-character sets MUST come from the `internal/validation` profiles, chosen at the service boundary so non-HTTP callers get them too. Enforced by `internal/architecture/prohibited_chars_lint_test.go`.

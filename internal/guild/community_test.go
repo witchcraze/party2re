@@ -301,7 +301,7 @@ func TestService_AssignApprovesApplicant(t *testing.T) {
 	})
 
 	t.Run("persists NFC normalized role title for decomposed input", func(t *testing.T) {
-		decomposed := strings.Repeat("e\u0301", 6)
+		decomposed := strings.Repeat("か\u3099", 6)
 		var approvedTitle string
 		repo := &mockGuildRepo{
 			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
@@ -527,7 +527,7 @@ func TestService_BroadcastCallout(t *testing.T) {
 
 	t.Run("fails on zalgo text", func(t *testing.T) {
 		svc, _ := guild.NewService(&mockGuildRepo{})
-		err := svc.BroadcastCallout(ctx, guildID, member1, "Z\u0300\u0301\u0302algo")
+		err := svc.BroadcastCallout(ctx, guildID, member1, "Z\u20D0\u20D1\u20D2algo")
 		if !errors.Is(err, validation.ErrZalgo) {
 			t.Errorf("expected ErrZalgo, got %v", err)
 		}
@@ -546,16 +546,16 @@ func TestService_BroadcastCallout(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo, guild.WithLetterSender(letterSender))
-		// "Ka\u0301llout" is NFD ("Ká" decomposed); should be normalized to NFC "Kállout"
-		err := svc.BroadcastCallout(ctx, guildID, member1, "Ka\u0301llout")
+		// "か\u3099llout" normalizes to NFC "がllout"; decode_pt marks in "Ka\u0301" are stripped.
+		err := svc.BroadcastCallout(ctx, guildID, member1, "か\u3099Ka\u0301llout")
 		if err != nil {
 			t.Fatalf("BroadcastCallout error: %v", err)
 		}
 		if len(letterSender.letters) != 1 {
 			t.Fatalf("expected 1 letter sent, got %d", len(letterSender.letters))
 		}
-		if letterSender.letters[0].Content != "Kállout" {
-			t.Errorf("expected NFC normalized 'Kállout', got %q", letterSender.letters[0].Content)
+		if letterSender.letters[0].Content != "がKallout" {
+			t.Errorf("expected normalized 'がKallout', got %q", letterSender.letters[0].Content)
 		}
 	})
 

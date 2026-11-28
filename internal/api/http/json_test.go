@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type testPayload struct {
@@ -154,30 +152,39 @@ func TestDecodeOptionalJSON_ChunkedEmptyBody(t *testing.T) {
 	}
 }
 
-func TestCheckTextParams(t *testing.T) {
-	kinds := map[string]validation.TextKind{"name": validation.TextLine, "body": validation.TextComment}
+func TestCleanTextParams(t *testing.T) {
 	for _, tc := range []struct {
-		raw string
-		ok  bool
+		raw      string
+		want     string
+		wantFail bool
 	}{
-		{``, true},
-		{`[]`, true},
-		{`{"name":"a,;<>","body":"a\r\nb","count":1}`, true},
-		{`{"name":"a\nb"}`, false},
-		{`{"other":"a\nb"}`, false}, // undeclared strings are lines
-		{`{"body":"a\u0007b"}`, false},
-		{`{"body":"a\u202eb"}`, false},
-		{`{"name":["ok","a\u200bb"]}`, false},
-		{`{"name":[{"id":"a\u0085b"}]}`, false},
-		{"{\"name\":\"\xff\"}", false},
-		{`{"name":"a\u202eb","name":null}`, false},
-		{`{"name":"ok","NAME":"ok"}`, false},
-		{`{"name":[{"id":"ok","id":null}]}`, false},
-		{`{"name":[{"id":"ok","ID":"ok"}]}`, false},
-		{`{"name":`, false},
+		{raw: ``, want: ``},
+		{raw: `[]`, want: `[]`},
+		{raw: `{"name":"a,;<>","body":"a\r\nb","count":1}`, want: `{"name":"a,;<>","body":"ab","count":1}`},
+		{raw: `{"name":"e\u0300\u0301\u036f","thai":"ก\u0E34\u0E3A\u0E47\u0E4Eข"}`, want: `{"name":"e","thai":"กข"}`},
+		{raw: `{"name":["ok\n","か\u3099"]}`, want: "{\"name\":[\"ok\",\"か\u3099\"]}"},
+		{raw: `{"bio":{"hobby":"a\r\nb\u0301"}}`, want: `{"bio":{"hobby":"ab"}}`},
+		{raw: `{"name":"a\tb"}`, wantFail: true},
+		{raw: `{"body":"a\u0007b"}`, wantFail: true},
+		{raw: `{"body":"a\u202eb"}`, wantFail: true},
+		{raw: `{"name":["ok","a\u200bb"]}`, wantFail: true},
+		{raw: `{"name":[{"id":"a\u0085b"}]}`, wantFail: true},
+		{raw: `{"name":"Z\u20D0\u20D1\u20D2"}`, wantFail: true},
+		{raw: "{\"name\":\"\xff\"}", wantFail: true},
+		{raw: `{"name":"a\u202eb","name":null}`, wantFail: true},
+		{raw: `{"name":"ok","NAME":"ok"}`, wantFail: true},
+		{raw: `{"name":[{"id":"ok","id":null}]}`, wantFail: true},
+		{raw: `{"name":[{"id":"ok","ID":"ok"}]}`, wantFail: true},
+		{raw: `{"name":`, wantFail: true},
+		{raw: `{} {}`, wantFail: true},
 	} {
-		if err := checkTextParams([]byte(tc.raw), kinds); (err == nil) != tc.ok {
-			t.Errorf("checkTextParams(%q) = %v; want ok=%v", tc.raw, err, tc.ok)
+		got, err := cleanTextParams([]byte(tc.raw))
+		if (err != nil) != tc.wantFail {
+			t.Errorf("cleanTextParams(%q) err = %v; wantFail=%v", tc.raw, err, tc.wantFail)
+			continue
+		}
+		if !tc.wantFail && string(got) != tc.want {
+			t.Errorf("cleanTextParams(%q) = %s; want %s", tc.raw, got, tc.want)
 		}
 	}
 }

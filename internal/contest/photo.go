@@ -7,6 +7,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // SavePhoto stores a new captured photo/screenshot for a character.
@@ -20,6 +21,9 @@ func (s *Service) SavePhoto(
 	metadata string,
 ) (Photo, error) {
 	characterID = strings.TrimSpace(characterID)
+	title = validation.StripLegacyText(title)
+	location = validation.StripLegacyText(location)
+	caption = validation.StripLegacyText(caption)
 	if characterID == "" {
 		return Photo{}, ErrCharacterNotFound
 	}

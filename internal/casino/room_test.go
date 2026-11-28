@@ -37,7 +37,6 @@ func TestCasinoRoomLobby(t *testing.T) {
 			"Poker ",
 			"Bad Room Name",
 			"Bad\tRoom",
-			"Bad\nRoom",
 			"カジノ　部屋",
 			"　Poker",
 			"Poker　",
@@ -56,7 +55,7 @@ func TestCasinoRoomLobby(t *testing.T) {
 			"room\x001",
 			"room\u200B1",
 			"room\u202E1",
-			"Z\u0300\u0301\u0302",
+			"Z\u20D0\u20D1\u20D2",
 		}
 		for _, name := range invalidNames {
 			if err := casino.ValidateRoomName(name); !errors.Is(err, casino.ErrInvalidRoomName) {
@@ -83,7 +82,7 @@ func TestCasinoRoomLobby(t *testing.T) {
 		nfcLeader := "char-nfc"
 		casinoRepo.accounts[nfcLeader] = casino.Account{CharacterID: nfcLeader, Coins: 500}
 		detail, err := svc.CreateRoom(ctx, nfcLeader, casino.CreateRoomRequest{
-			Name:       "Ka\u0301",
+			Name:       "か\u3099",
 			GameType:   casino.GameTypeIndian,
 			Speed:      casino.SpeedNormal,
 			MaxPlayers: 4,
@@ -92,13 +91,13 @@ func TestCasinoRoomLobby(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateRoom NFC error: %v", err)
 		}
-		if detail.Room.Name != "Ká" {
-			t.Errorf("expected NFC-normalized room name %q, got %q", "Ká", detail.Room.Name)
+		if detail.Room.Name != "が" {
+			t.Errorf("expected NFC-normalized room name %q, got %q", "が", detail.Room.Name)
 		}
 		nfcLeader2 := "char-nfc-2"
 		casinoRepo.accounts[nfcLeader2] = casino.Account{CharacterID: nfcLeader2, Coins: 500}
 		if _, err := svc.CreateRoom(ctx, nfcLeader2, casino.CreateRoomRequest{
-			Name:       "Ká",
+			Name:       "が",
 			GameType:   casino.GameTypeIndian,
 			Speed:      casino.SpeedNormal,
 			MaxPlayers: 4,

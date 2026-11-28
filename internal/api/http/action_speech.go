@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
@@ -104,7 +103,7 @@ func (h *Handler) registerSpeech() {
 		text, err := validation.ValidateLegacyComment(p.Text, maxSpeechLength)
 		switch {
 		case errors.Is(err, validation.ErrEmpty):
-			if err := validation.ValidateVerbatimLine(strings.NewReplacer("\r", "", "\n", "").Replace(p.Text), maxSpeechLength); err != nil {
+			if err := validation.ValidateVerbatimLine(validation.StripLegacyText(p.Text), maxSpeechLength); err != nil {
 				return nil, err
 			}
 		case err != nil:

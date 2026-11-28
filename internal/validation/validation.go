@@ -40,16 +40,46 @@ const (
 	TagChars = ";<>"
 )
 
+// StripLegacyText removes CR, LF and the combining-mark runs deleted by
+// legacy decode_pt (party2/lib/system.cgi:708,711-713) before any field rule runs.
+func StripLegacyText(s string) string {
+	hasRemoved := false
+	for _, r := range s {
+		if isLegacyStrippedRune(r) {
+			hasRemoved = true
+			break
+		}
+	}
+	if !hasRemoved {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if !isLegacyStrippedRune(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func isLegacyStrippedRune(r rune) bool {
+	return r == '\r' || r == '\n' ||
+		(r >= 0x0300 && r <= 0x036F) ||
+		(r >= 0x0E34 && r <= 0x0E3A) ||
+		(r >= 0x0E47 && r <= 0x0E4E)
+}
+
 // SanitizeText returns the Unicode NFC normalized and whitespace-trimmed version of the input.
 func SanitizeText(s string) string {
 	return norm.NFC.String(strings.TrimSpace(s))
 }
 
 // ValidateSingleLine validates that the input string is a valid single-line text within maxRunes.
-// It normalizes via NFC, trims whitespace, and rejects control characters, zero-width characters,
-// bidi overrides, and excessive combining marks (Zalgo text).
+// It strips legacy decode_pt characters, normalizes via NFC, trims whitespace, and rejects control
+// characters, zero-width characters, bidi overrides, and excessive combining marks (Zalgo text).
 func ValidateSingleLine(input string, maxRunes int) (string, error) {
-	sanitized := SanitizeText(input)
+	sanitized := SanitizeText(StripLegacyText(input))
 	if sanitized == "" {
 		return "", ErrEmpty
 	}
@@ -79,11 +109,12 @@ func ValidatePlainLine(input string, maxRunes int) (string, error) {
 	return sanitized, nil
 }
 
-// ValidateLegacyComment validates chat-style body text like the legacy comment field: line breaks are removed,
-// and maxLength applies to the length after the legacy HTML escaping, whatever form the caller stores.
-// It otherwise applies the ValidateSingleLine checks and returns the normalized text.
+// ValidateLegacyComment validates chat-style body text like the legacy comment field:
+// decode_pt removals apply, and maxLength applies to the length after the legacy HTML escaping,
+// whatever form the caller stores. It otherwise applies the ValidateSingleLine checks and returns
+// the normalized text.
 func ValidateLegacyComment(input string, maxLength int) (string, error) {
-	sanitized, err := ValidateSingleLine(strings.NewReplacer("\r", "", "\n", "").Replace(input), maxLength)
+	sanitized, err := ValidateSingleLine(input, maxLength)
 	if err != nil {
 		return "", err
 	}
@@ -128,26 +159,11 @@ func ValidateVerbatimLine(input string, maxRunes int) error {
 	return nil
 }
 
-// TextKind selects the field-agnostic check every Gateway string parameter
-// receives before its service applies the field's legacy profile.
-type TextKind string
-
-const (
-	// TextLine is single-line text or an identifier: every control character is rejected.
-	TextLine TextKind = "line"
-	// TextComment is body text whose service removes or keeps line breaks, so CR and LF pass.
-	TextComment TextKind = "comment"
-)
-
-// CheckText rejects control (CR/LF excepted for TextComment), zero-width,
-// bidi-override and Zalgo characters without normalizing the text.
-func CheckText(kind TextKind, s string) error {
+// CheckText rejects control, zero-width, bidi-override and Zalgo characters
+// without normalizing the text.
+func CheckText(s string) error {
 	consecutiveCombining := 0
 	for _, r := range s {
-		if kind == TextComment && (r == '\r' || r == '\n') {
-			consecutiveCombining = 0
-			continue
-		}
 		if err := checkSafeRune(r, &consecutiveCombining); err != nil {
 			return err
 		}
@@ -158,9 +174,10 @@ func CheckText(kind TextKind, s string) error {
 // MaxQuestNameLen is the legacy $max_title limit for quest/party names (quest.cgi:18).
 const MaxQuestNameLen = 50
 
-// validateName applies legacy identifier name constraints (NFC, no prohibited
-// symbols, no ASCII/fullwidth whitespace, safety checks, and maxRunes).
-func validateName(name string, maxRunes int) (string, error) {
+// validateName applies legacy identifier name constraints (decode_pt stripping, NFC,
+// no prohibited symbols, no ASCII/fullwidth whitespace, safety checks, and maxRunes).
+func validateName(name string, maxRunes int, prohibited string) (string, error) {
+	name = StripLegacyText(name)
 	if name == "" {
 		return "", ErrEmpty
 	}
@@ -168,7 +185,7 @@ func validateName(name string, maxRunes int) (string, error) {
 	if normalized == "" {
 		return "", ErrEmpty
 	}
-	if strings.ContainsAny(normalized, NameChars+FullwidthAt) {
+	if strings.ContainsAny(normalized, prohibited) {
 		return "", ErrProhibitedCharacter
 	}
 
@@ -189,30 +206,37 @@ func validateName(name string, maxRunes int) (string, error) {
 	return normalized, nil
 }
 
-// ValidateCharacterName validates character names according to legacy Party2 rules and modern safety checks:
-// - Max 8 runes (legacy: new_entry.cgi:114; name_change.cgi:125)
-// - No whitespace (\s or \u3000) permitted anywhere in the name (surrounding or internal) (legacy: new_entry.cgi:113; name_change.cgi:124)
-// - No prohibited symbols ([,;\"\'&<>\\\/@＠])
-// - No control characters, zero-width characters, bidi overrides, or Zalgo marks
-// - Unicode NFC normalization
+// ValidateCharacterName validates new character names (and recipient lookups) according to legacy Party2 rules and modern safety checks:
+// - Max 8 runes (legacy: new_entry.cgi:114)
+// - No whitespace (\s or \u3000) permitted anywhere in the name (surrounding or internal) (legacy: new_entry.cgi:113)
+// - No prohibited symbols ([,;\"\'&<>@＠]); \ and / are permitted on creation
+// - decode_pt CR/LF and combining-mark stripping, Unicode NFC normalization, and no control/zero-width/bidi/Zalgo characters
 func ValidateCharacterName(name string) (string, error) {
-	return validateName(name, 8)
+	return validateName(name, 8, TitleChars+FullwidthAt)
+}
+
+// ValidateCharacterRename validates Naming Hall character renames according to legacy Party2 rules and modern safety checks:
+// - Max 8 runes (legacy: name_change.cgi:125)
+// - No whitespace (\s or \u3000) permitted anywhere in the name (legacy: name_change.cgi:124)
+// - No prohibited symbols ([,;\"\'&<>\\\/@＠]) (legacy: name_change.cgi:122)
+// - decode_pt CR/LF and combining-mark stripping, Unicode NFC normalization, and no control/zero-width/bidi/Zalgo characters
+func ValidateCharacterRename(name string) (string, error) {
+	return validateName(name, 8, NameChars+FullwidthAt)
 }
 
 // ValidateGuildName validates guild names according to legacy Party2 rules and modern safety checks:
 // - Max 16 runes (legacy: join_guild.cgi:26 $max_guild_name = 16; system.cgi:1723-1729 get_utf_length)
 // - No ASCII whitespace (\s) or Japanese fullwidth spaces (\u3000) (internal or surrounding)
-// - No prohibited symbols ([,;\"\'&<>\\\/@＠])
-// - No control characters, zero-width characters, bidi overrides, or Zalgo marks
-// - Unicode NFC normalization
+// - No prohibited symbols ([,;\"\'&<>@＠]); \ and / are permitted (legacy: join_guild.cgi:247-248)
+// - decode_pt CR/LF and combining-mark stripping, Unicode NFC normalization, and no control/zero-width/bidi/Zalgo characters
 func ValidateGuildName(name string) (string, error) {
-	return validateName(name, 16)
+	return validateName(name, 16, TitleChars+FullwidthAt)
 }
 
 // ValidateQuestName validates quest/party names according to legacy Party2 rules (quest.cgi:18,554–561)
-// and shared safety checks (NFC, max 50 runes, no whitespace, no prohibited symbols).
+// and shared safety checks (decode_pt stripping, NFC, max 50 runes, no whitespace, no prohibited symbols).
 func ValidateQuestName(name string) (string, error) {
-	return validateName(name, MaxQuestNameLen)
+	return validateName(name, MaxQuestNameLen, NameChars+FullwidthAt)
 }
 
 // ValidateStarterJob verifies and normalizes starter job ID.

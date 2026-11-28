@@ -15,18 +15,21 @@ import (
 func TestCharacterNameEqualityAndRetry(t *testing.T) {
 	f := newReferralFixture(t)
 	ctx := context.Background()
-	for _, name := range []string{"Hero", "hero", "Héro", "HERO", "é"} {
+	for _, name := range []string{"Hero", "hero", "Héro", "HERO", "が"} {
 		created, err := f.create(ctx, name, "")
 		if err != nil || created.Name != name {
 			t.Fatalf("distinct exact name %q: created=%+v err=%v", name, created, err)
 		}
 	}
-	for _, name := range []string{"Hero", "e\u0301"} {
+	for _, name := range []string{"Hero", "か\u3099"} {
 		if _, err := f.create(ctx, name, ""); !errors.Is(err, character.ErrNameAlreadyTaken) {
 			t.Fatalf("duplicate/NFC-equivalent name %q: %v", name, err)
 		}
 	}
-	f.assertCounts(t, 5, 0)
+	if created, err := f.create(ctx, "e\u0301", ""); err != nil || created.Name != "e" {
+		t.Fatalf("decode_pt combining-mark strip: created=%+v err=%v", created, err)
+	}
+	f.assertCounts(t, 6, 0)
 	// Direct duplicate primary keys and unrelated storage failures retain their errors.
 	if err := f.core.charRepo.Save(ctx, f.referrer); err == nil || errors.Is(err, character.ErrNameAlreadyTaken) {
 		t.Fatalf("primary-key duplicate mistaken for name conflict: %v", err)

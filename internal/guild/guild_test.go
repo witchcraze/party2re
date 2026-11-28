@@ -273,8 +273,9 @@ func TestValidateRoleTitle(t *testing.T) {
 		{"Control character", "隊長\x00", "", guild.ErrInvalidRoleTitle},
 		{"Zero-width space", "隊長\u200B", "", guild.ErrInvalidRoleTitle},
 		{"Bidi override", "隊長\u202E", "", guild.ErrInvalidRoleTitle},
-		{"Zalgo text", "隊\u0300\u0301\u0302長", "", guild.ErrInvalidRoleTitle},
-		{"NFC normalization valid", "Ka\u0301pt", "Kápt", nil},
+		{"Zalgo text", "隊\u20D0\u20D1\u20D2長", "", guild.ErrInvalidRoleTitle},
+		{"NFC normalization valid", "か\u3099pt", "がpt", nil},
+		{"decode_pt mark stripped", "Ka\u0301pt", "Kapt", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -339,7 +340,6 @@ func TestService_Create_Validation(t *testing.T) {
 			{"internal ascii space", "Knights of Round"},
 			{"japanese fullwidth space", "騎士団　本部"},
 			{"tab character", "Knights\tRound"},
-			{"newline character", "Knights\nRound"},
 			{"too long name (17 runes ascii)", strings.Repeat("A", 17)},
 			{"too long name (17 runes japanese)", strings.Repeat("あ", 17)},
 			{"prohibited comma", "Knights,Round"},
@@ -351,13 +351,11 @@ func TestService_Create_Validation(t *testing.T) {
 			{"prohibited greater than", "Knights>Round"},
 			{"prohibited at sign", "@Knights"},
 			{"prohibited fullwidth at sign", "＠Knights"},
-			{"prohibited backslash", `Knights\Round`},
-			{"prohibited slash", "Knights/Round"},
 			{"control character C0", "Knights\x00Round"},
 			{"control character C1", "Knights\u0080Round"},
 			{"zero-width space", "Knights\u200BRound"},
 			{"bidi override", "Knights\u202ERound"},
-			{"zalgo text", "Z\u0300\u0301\u0302algo"},
+			{"zalgo text", "Z\u20D0\u20D1\u20D2algo"},
 		}
 
 		for _, tc := range invalidNames {
@@ -369,7 +367,7 @@ func TestService_Create_Validation(t *testing.T) {
 		}
 	})
 
-	t.Run("Success normalizes guild name with NFC", func(t *testing.T) {
+	t.Run("Success normalizes guild name and accepts backslash/slash", func(t *testing.T) {
 		var createdGuild guild.Guild
 		repo := &mockGuildRepo{
 			createGuildFn: func(_ context.Context, g guild.Guild, m guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error) {
@@ -378,13 +376,21 @@ func TestService_Create_Validation(t *testing.T) {
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		// Decomposed unicode "Ka\u0301" -> NFC "Ká"
-		g, _, _, err := svc.Create(ctx, "char1", "Ka\u0301")
-		if err != nil {
-			t.Fatalf("Create() unexpected error: %v", err)
-		}
-		if g.Name != "Ká" || createdGuild.Name != "Ká" {
-			t.Errorf("expected NFC normalized name %q, got %q (repo: %q)", "Ká", g.Name, createdGuild.Name)
+		for _, tc := range []struct {
+			input, want string
+		}{
+			{"か\u3099", "が"},
+			{"Ka\u0301\n", "Ka"},
+			{`Knights\Round`, `Knights\Round`},
+			{"Knights/Round", "Knights/Round"},
+		} {
+			g, _, _, err := svc.Create(ctx, "char1", tc.input)
+			if err != nil {
+				t.Fatalf("Create(%q) unexpected error: %v", tc.input, err)
+			}
+			if g.Name != tc.want || createdGuild.Name != tc.want {
+				t.Errorf("Create(%q): got %q (repo: %q), want %q", tc.input, g.Name, createdGuild.Name, tc.want)
+			}
 		}
 	})
 
@@ -860,7 +866,7 @@ func TestService_AssignCustomRole(t *testing.T) {
 	})
 
 	t.Run("Persists NFC normalized role title for decomposed input", func(t *testing.T) {
-		decomposed := strings.Repeat("e\u0301", 6)
+		decomposed := strings.Repeat("か\u3099", 6)
 		var assignedTitle string
 		repo.assignCustomRoleFn = func(_ context.Context, guildID, targetCharID, title string) error {
 			if targetCharID == "member1" {
@@ -897,7 +903,7 @@ func TestService_AssignCustomRole(t *testing.T) {
 			},
 		}
 		pendingSvc, _ := guild.NewService(pendingRepo)
-		decomposed := strings.Repeat("e\u0301", 6)
+		decomposed := strings.Repeat("か\u3099", 6)
 		if err := assigned(pendingSvc.Assign(ctx, "g_pending", "leader1", "applicant1", decomposed)); err != nil {
 			t.Fatalf("AssignCustomRole on pending member failed: %v", err)
 		}
@@ -1137,7 +1143,10 @@ func TestValidateGuildName(t *testing.T) {
 		{"valid ascii name", "Knights", nil, "Knights"},
 		{"valid max 16 runes ascii", strings.Repeat("a", 16), nil, strings.Repeat("a", 16)},
 		{"valid max 16 runes japanese", strings.Repeat("あ", 16), nil, strings.Repeat("あ", 16)},
-		{"nfc normalized", "Ka\u0301", nil, "Ká"},
+		{"nfc normalized", "か\u3099", nil, "が"},
+		{"decode_pt stripped", "Ka\u0301", nil, "Ka"},
+		{"accepts backslash", `Knights\Round`, nil, `Knights\Round`},
+		{"accepts slash", "Knights/Round", nil, "Knights/Round"},
 		{"exceeds 16 runes ascii", strings.Repeat("a", 17), guild.ErrInvalidGuildName, ""},
 		{"exceeds 16 runes japanese", strings.Repeat("あ", 17), guild.ErrInvalidGuildName, ""},
 		{"empty name", "", guild.ErrInvalidGuildName, ""},
@@ -1152,7 +1161,7 @@ func TestValidateGuildName(t *testing.T) {
 		{"control character", "Knights\x00", guild.ErrInvalidGuildName, ""},
 		{"zero-width space", "Knights\u200B", guild.ErrInvalidGuildName, ""},
 		{"bidi override", "Knights\u202E", guild.ErrInvalidGuildName, ""},
-		{"zalgo text", "Z\u0300\u0301\u0302algo", guild.ErrInvalidGuildName, ""},
+		{"zalgo text", "Z\u20D0\u20D1\u20D2algo", guild.ErrInvalidGuildName, ""},
 	}
 
 	for _, tc := range tests {
