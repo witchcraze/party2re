@@ -4,26 +4,7 @@ Dungeon behavior is defined by legacy `lib/vs_dungeon.cgi` and the selected
 `map/<dungeon>/<map>.cgi`, including its event subroutines. Map symbols alone
 do not describe every event. Current Go is in `internal/dungeon`.
 
-## Legacy movement and map events
-
-The leader performs the initial advance. Afterwards any living member may move.
-Cardinal movement is available only when no living enemy-side members remain, including ordinary
-unopened Dungeon chests. Movement advances the shared round and dispatches the
-selected map's `event_<symbol>`. Both action registration and the movement guard
-enforce this restriction (`lib/vs_dungeon.cgi:37–48,74–80`). Combat actions
-and Escape remain available.
-A wall hit invokes the selected map's wall event without consuming a round.
-
-The initial leader advance changes round 0 to 1 without moving or dispatching
-the start tile. Thus map0's limit of 20 permits 19 subsequent successful moves,
-not 20 moves after initialization (`vs_dungeon.cgi:57–103`).
-
-## Scouting and blocking chests
-
-Legacy `@ちず` defaults to radius 1. The acting character's job 9, 26, 27, or
-79 supplies radius 2; held item 197 adds one. The original checks the actor,
-not the presence of any qualifying party member. Visible tiles use the map's
-display definitions and out-of-bounds walls.
+## Blocking chests
 
 **Pitfall:** the `$event ne '宝'` exception in `_susumu` never frees unopened
 chests ([treasure contract](#treasure-inspection-and-delivery)). Map0 `event_2` appends
@@ -39,11 +20,6 @@ thresholds (`quest.cgi:209,233–241`) apply rather than the looser server
 formula (`quest.cgi:526–537`). Only the leader is checked; joiners are not gated
 (`add_member`, `quest.cgi:928–1079`). The listing shows only maps the viewer may
 start as leader, and a start the listing would hide is rejected.
-
-Dungeon 16 (not native yet, #1777) is listed at any job level while the leader's
-once quota is free (`get_limited_dungeons`). The quota is shared with Adventure
-stage 26 (`quest.cgi:597,654`): a start consumes it, and Home wake resets it
-(`home.cgi:192`).
 
 ## Retired synthetic catalog
 
@@ -75,7 +51,9 @@ settlement are owned by the [run buffer contract](../architecture/transient-run-
 
 For map0, initialize the round to 1 as part of accepted start, representing the
 leader's initial advance through the existing Start use case. Do not add a new
-public advance command solely to reproduce two legacy requests.
+public advance command solely to reproduce two legacy requests. The advance
+dispatches nothing, so map0's limit of 20 permits only 19 moves
+(`vs_dungeon.cgi:57–103`).
 
 **Floor changes.** The selected map, round, position and flags are one saved
 header (`_battle.cgi:464,521`); the next request loads the new map file with its
@@ -96,7 +74,7 @@ position displays the party marker. There is no source-backed permanent reveal
 flag (`map/0/1.cgi:14–16`, `vs_dungeon.cgi:114–129`); map5's `I` is
 [revealed by its lever](#map5-lever-temple).
 
-Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)). Participant combat and individual exit come with the [run-host room library](../architecture/transient-run-state.md#dungeon-on-the-run-host-2121), not as incidental changes in a map implementation.
+Native maps reuse the existing routes ([Dungeon OpenAPI](../api/paths/dungeon.json)); map16 mining adds the only map-owned command. Participant combat and individual exit come with the [run-host room library](../architecture/transient-run-state.md#dungeon-on-the-run-host-2121), not as incidental changes in a map implementation.
 
 ### Legacy action reconciliation
 
@@ -113,7 +91,7 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 | `にし`/`きた`/`みなみ`/`ひがし` (`39–43,70–73`) | Any living member moves in that direction; map-owned dispatch follows admission |
 | `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
 | Treasure `しらべる` → `shiraberu(target)` (`45–48`) | Participant inspection under the [treasure contract](#treasure-inspection-and-delivery). Map0 [#2119](https://github.com/witchcraze/party2re/issues/2119), map3 [#2374](https://github.com/witchcraze/party2re/issues/2374). |
-| `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:40–87`, `__1.cgi:36–64`) | Open: map16 mining (#1777) |
+| `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:37–77`, `_1.cgi:78–118`, `__1.cgi:36–59`) | [Map16 mining](#map16-crystal-mine-and-sealed-floors), a living participant's action beside movement. Open: [#2942](https://github.com/witchcraze/party2re/issues/2942) |
 | Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Leader Escape settles every member as `nigeru`, at the saved round. The menu never offers calm mode (commented out, `quest.cgi:41,46,319`), so its fatigue halving does not apply. Open: per-character departure ([#2888](https://github.com/witchcraze/party2re/issues/2888)); whole-party Escape is not equivalent |
 
 ### Treasure inspection and delivery
@@ -181,6 +159,7 @@ temporary effects in explicit combat ([#1865](https://github.com/witchcraze/part
 contents and inspection ([treasure contract](#treasure-inspection-and-delivery);
 per-map sources: [#2428](https://github.com/witchcraze/party2re/issues/2428),
 map15 [#2451](https://github.com/witchcraze/party2re/issues/2451),
+map16 [#2944](https://github.com/witchcraze/party2re/issues/2944),
 map17 [#2455](https://github.com/witchcraze/party2re/issues/2455))
 and narration, owned by the Dungeon log ([#948](https://github.com/witchcraze/party2re/issues/948)).
 
@@ -308,6 +287,38 @@ the legacy revision above.
   (`__1.cgi:28`, `_2.cgi:30`, `_battle.cgi:1568–1610,1786–1791`). Native records
   it in the run state; the batch resolver has no named fields, so battles apply it
   only with explicit combat ([#1865](https://github.com/witchcraze/party2re/issues/1865)).
+
+### Map16 crystal mine and sealed floors
+
+Decision [#1777](https://github.com/witchcraze/party2re/issues/1777): reproduce the
+original without departures. Mining (`さいくつ`) is one living participant's
+map-owned action. It sits beside movement and uses the same step and revision
+contract. The weekday is read in JST from the accepted step's time, as for the
+treasure orb. File references are relative to `party2/map/16/` at the legacy
+revision above.
+
+- **Mining follows a site flag, not the position.** Entering a site sets the
+  flag, and its approach cell clears it. `9` is entered only from `H`, so mining
+  works there too (`__1.cgi:26–28,36–45`).
+- **Mining is not a move.** It spends no round and never checks the limit. A
+  party standing at a site past round 150 can still mine (`1.cgi:37–77`;
+  contrast `vs_dungeon.cgi:81`).
+- **A mined treasure frees every allowance.** `_reset_event` clears each roster
+  member's last-opening symbol, including the actor's own (`1.cgi:79–83`,
+  `lib/system.cgi:861–867`). Every member may then open one chest of each mined
+  treasure without item 215.
+- **`X` is not a boss.** It announces a boss but spawns an ordinary crystal-rock
+  group. Out-of-range `@appears` entries fall back to index 0 (`1.cgi:31,85–104`,
+  `lib/_npc_action.cgi:641–642`). The `_data.cgi` boss is never used.
+- **One flag covers the three springs.** They refill only when a `_1` step lands
+  on a multiple of 20, and the refill precedes the spring check (`_1.cgi:34–43`).
+- **Sunday may give no kind.** `Y` redraws a Sunday as `int(rand(6))`, and 0 maps
+  to no kind. The `__data.cgi` group then spawns and nothing is recorded. Kind
+  `n` never comes from `Y` on a Sunday (`_1.cgi:43,72–76`). The demon behind `V`
+  needs all six kinds (`__2.cgi:37`).
+- **`Z` installs `sealed` before its group and the special boss field after it.**
+  Both last for the run, as with map13's EX boss (`__1.cgi:29`). The `z`
+  transition has already installed `sealed` (`__2.cgi:41`).
 
 ### Map17 tomb switches and secret room
 
