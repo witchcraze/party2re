@@ -2,6 +2,7 @@
 party2-main/
 
 # Go build and test artifacts.
+/party2
 /bin/
 /dist/
 /out/
