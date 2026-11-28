@@ -9,6 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 type mockCharRepo struct {
@@ -339,7 +340,7 @@ func TestExecuteRound_VictoryProgression(t *testing.T) {
 		},
 	}
 	repo := newMockChallengeRepo()
-	service, err := challenge.NewService(repo, charRepo, corebattle.Engine{})
+	service, err := challenge.NewService(repo, charRepo, corebattle.Engine{}, challenge.WithRNG(random.NewDeterministic(1)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,8 +407,10 @@ func TestExecuteRound_DefeatTerminatesSession(t *testing.T) {
 		t.Errorf("unexpected defeat result: %#v", res)
 	}
 
-	// Active session should be nil/non-active
-	active, _ := service.GetActiveSession(ctx, "weak_hero")
+	active, err := service.GetActiveSession(ctx, "weak_hero")
+	if err != nil {
+		t.Fatalf("GetActiveSession after defeat: %v", err)
+	}
 	if active != nil {
 		t.Errorf("expected no active session, got %#v", active)
 	}
