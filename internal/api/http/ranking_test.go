@@ -541,6 +541,31 @@ func (r *snapshotReadTestRepo) GetSnapshot(ctx context.Context, rankingType rank
 	return r.getSnapshot(ctx, rankingType)
 }
 
+func (r *snapshotReadTestRepo) GetAllSnapshots(ctx context.Context) (map[ranking.RankingType]ranking.RankingSnapshot, error) {
+	out := make(map[ranking.RankingType]ranking.RankingSnapshot)
+	for _, rt := range []ranking.RankingType{
+		ranking.RankingTypePvPVictory,
+		ranking.RankingTypeMonsterKills,
+		ranking.RankingTypeMaoCount,
+		ranking.RankingTypeHeroCount,
+		ranking.RankingTypeJobPopularity,
+		ranking.RankingTypeHelper,
+		ranking.RankingTypeCasinoWins,
+		ranking.RankingTypeAlchemy,
+		ranking.RankingTypeWeeklyJobChange,
+	} {
+		snap, err := r.getSnapshot(ctx, rt)
+		if errors.Is(err, ranking.ErrSnapshotNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out[rt] = snap
+	}
+	return out, nil
+}
+
 func TestRankingEndpoints_RealServiceSnapshotErrorsAndAbsence(t *testing.T) {
 	endpoints := []string{
 		"/rankings/monster-kills",

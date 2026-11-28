@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -525,5 +526,321 @@ func TestPairedBoards_ConcurrentScheduledAndManualRefreshConsistency(t *testing.
 		if !okL || !okD || cacheL.SnapshotData != sqlL.SnapshotData || cacheD.SnapshotData != sqlD.SnapshotData {
 			t.Fatalf("%s: cache and SQL diverged after concurrent refreshes", tc.name)
 		}
+	}
+}
+
+type hookSnapshotCache struct {
+	*mockSnapshotCache
+	mu        sync.Mutex
+	onSet     func(rankingType ranking.RankingType, snap ranking.RankingSnapshot)
+	onSetPair func(pair ranking.SnapshotPair, mode ranking.CacheWriteMode)
+	setCalls  int
+	failSet   func(call int, rankingType ranking.RankingType) error
+}
+
+func (h *hookSnapshotCache) Set(ctx context.Context, rankingType ranking.RankingType, snapshot ranking.RankingSnapshot, ttl time.Duration, mode ranking.CacheWriteMode) (bool, error) {
+	h.mu.Lock()
+	h.setCalls++
+	call := h.setCalls
+	fail := h.failSet
+	hook := h.onSet
+	h.mu.Unlock()
+
+	if hook != nil {
+		hook(rankingType, snapshot)
+	}
+	if fail != nil {
+		if err := fail(call, rankingType); err != nil {
+			return false, err
+		}
+	}
+	return h.mockSnapshotCache.Set(ctx, rankingType, snapshot, ttl, mode)
+}
+
+func (h *hookSnapshotCache) SetPair(ctx context.Context, pair ranking.SnapshotPair, ttl time.Duration, mode ranking.CacheWriteMode) (bool, error) {
+	h.mu.Lock()
+	h.setCalls++
+	call := h.setCalls
+	fail := h.failSet
+	hook := h.onSetPair
+	h.mu.Unlock()
+
+	if hook != nil {
+		hook(pair, mode)
+	}
+	if fail != nil {
+		if err := fail(call, pair.Leader.RankingType); err != nil {
+			return false, err
+		}
+	}
+	return h.mockSnapshotCache.SetPair(ctx, pair, ttl, mode)
+}
+
+func TestPairedBoards_DelayedBackfillDoesNotSplitOrRevertUpdatedPair(t *testing.T) {
+	for _, tc := range pairedBoardCases {
+		for _, sameTime := range []bool{false, true} {
+			name := tc.name + "/advancing_clock"
+			if sameTime {
+				name = tc.name + "/same_timestamp"
+			}
+			t.Run(name, func(t *testing.T) {
+				ctx := context.Background()
+				repo := newMockRepo()
+				tc.setLeaders(repo, rankedEntries("a"))
+				tc.setDependent(repo, rankedEntries("a", "b"))
+
+				now := time.Date(2026, 11, 28, 1, 0, 0, 0, time.UTC)
+				nowFn := func() time.Time { return now }
+
+				cache := &hookSnapshotCache{mockSnapshotCache: newMockSnapshotCache()}
+				writerSvc, err := ranking.NewService(repo, ranking.WithSnapshotCache(cache), ranking.WithNowFunc(nowFn))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := writerSvc.RefreshAllSnapshots(ctx); err != nil {
+					t.Fatalf("initial RefreshAllSnapshots: %v", err)
+				}
+
+				// Simulate cache miss before reader loads Gen 1 from SQL.
+				_ = cache.Delete(ctx, tc.leaderType)
+
+				// Reader misses cache, reads Gen 1 from SQL, and pauses before writing backfill to Valkey.
+				backfillEntered := make(chan struct{})
+				releaseBackfill := make(chan struct{})
+				var paused atomic.Bool
+				cache.mu.Lock()
+				cache.onSetPair = func(_ ranking.SnapshotPair, mode ranking.CacheWriteMode) {
+					if mode == ranking.CacheWriteBackfill && paused.CompareAndSwap(false, true) {
+						close(backfillEntered)
+						<-releaseBackfill
+					}
+				}
+				cache.mu.Unlock()
+
+				readerSvc, err := ranking.NewService(repo, ranking.WithSnapshotCache(cache), ranking.WithNowFunc(nowFn))
+				if err != nil {
+					t.Fatal(err)
+				}
+				readerDone := make(chan error, 1)
+				go func() {
+					_, err := tc.getLeader(readerSvc, ctx, 20, 0)
+					readerDone <- err
+				}()
+
+				<-backfillEntered
+
+				// Update candidates so Gen 2 puts "b" on leader and "a" on dependent, then refresh on writerSvc.
+				if !sameTime {
+					now = now.Add(time.Second)
+				}
+				tc.setLeaders(repo, rankedEntries("b"))
+				tc.setDependent(repo, rankedEntries("a", "b"))
+				if err := writerSvc.RefreshSnapshot(ctx, tc.leaderType); err != nil {
+					t.Fatalf("Gen 2 RefreshSnapshot: %v", err)
+				}
+
+				// Resume the delayed Gen 1 backfill SET.
+				close(releaseBackfill)
+				if err := <-readerDone; err != nil {
+					t.Fatalf("reader failed: %v", err)
+				}
+
+				// Both the reader service and a fresh service instance must observe consistent Gen 2 ("b" on leader, "a" on dependent).
+				for svcIdx, svc := range []*ranking.Service{readerSvc, func() *ranking.Service {
+					s, err := ranking.NewService(repo, ranking.WithSnapshotCache(cache), ranking.WithNowFunc(nowFn))
+					if err != nil {
+						t.Fatal(err)
+					}
+					return s
+				}()} {
+					leaderPage, err := tc.getLeader(svc, ctx, 20, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					depPage, err := tc.getDependent(svc, ctx, 20, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertDisjointPair(t, leaderPage, depPage)
+					if got := boardIDs(t, leaderPage.Entries, 1); fmt.Sprint(got) != "[b]" {
+						t.Fatalf("svc[%d] leader = %v, want [b]", svcIdx, got)
+					}
+					if got := boardIDs(t, depPage.Entries, 1); fmt.Sprint(got) != "[a]" {
+						t.Fatalf("svc[%d] dependent = %v, want [a]", svcIdx, got)
+					}
+					if !leaderPage.CalculatedAt.Equal(depPage.CalculatedAt) {
+						t.Fatalf("svc[%d] CalculatedAt diverged: leader=%v dep=%v", svcIdx, leaderPage.CalculatedAt, depPage.CalculatedAt)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestPairedBoards_CacheWriteFailureAndExpiryRecoverConsistently(t *testing.T) {
+	for _, tc := range pairedBoardCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			repo := newMockRepo()
+			tc.setLeaders(repo, rankedEntries("a"))
+			tc.setDependent(repo, rankedEntries("a", "b"))
+
+			now := time.Date(2026, 11, 28, 2, 0, 0, 0, time.UTC)
+			nowFn := func() time.Time { return now }
+
+			cache := newMockSnapshotCache()
+			cache.nowFunc = nowFn
+			ttl := 5 * time.Minute
+
+			writerSvc, err := ranking.NewService(repo, ranking.WithSnapshotCache(cache), ranking.WithNowFunc(nowFn), ranking.WithCacheTTL(ttl))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := writerSvc.RefreshAllSnapshots(ctx); err != nil {
+				t.Fatalf("initial RefreshAllSnapshots: %v", err)
+			}
+
+			// Gen 2 refresh commits SQL while Valkey cache write fails.
+			now = now.Add(time.Minute)
+			tc.setLeaders(repo, rankedEntries("b"))
+			tc.setDependent(repo, rankedEntries("a", "b"))
+			cache.mu.Lock()
+			cache.setErr = errors.New("valkey write failed")
+			cache.mu.Unlock()
+			if err := writerSvc.RefreshSnapshot(ctx, tc.dependentType); err != nil {
+				t.Fatalf("RefreshSnapshot should fail-open on cache write error: %v", err)
+			}
+			cache.mu.Lock()
+			cache.setErr = nil
+			cache.mu.Unlock()
+
+			// While Gen 1 remains in Valkey, a fresh service reads a consistent Gen 1 pair (never mixed Gen 2/Gen 1).
+			readerBeforeExpiry, err := ranking.NewService(repo, ranking.WithSnapshotCache(cache), ranking.WithNowFunc(nowFn), ranking.WithCacheTTL(ttl))
+			if err != nil {
+				t.Fatal(err)
+			}
+			l1, err := tc.getLeader(readerBeforeExpiry, ctx, 20, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			d1, err := tc.getDependent(readerBeforeExpiry, ctx, 20, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertDisjointPair(t, l1, d1)
+			if !l1.CalculatedAt.Equal(d1.CalculatedAt) {
+				t.Fatalf("before expiry CalculatedAt diverged: %v vs %v", l1.CalculatedAt, d1.CalculatedAt)
+			}
+
+			// Once cache expires, both boards reload Gen 2 together from SQL.
+			now = now.Add(ttl + time.Second)
+			l2, err := tc.getLeader(readerBeforeExpiry, ctx, 20, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			d2, err := tc.getDependent(readerBeforeExpiry, ctx, 20, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertDisjointPair(t, l2, d2)
+			if got := boardIDs(t, l2.Entries, 1); fmt.Sprint(got) != "[b]" {
+				t.Fatalf("after expiry leader = %v, want [b]", got)
+			}
+			if got := boardIDs(t, d2.Entries, 1); fmt.Sprint(got) != "[a]" {
+				t.Fatalf("after expiry dependent = %v, want [a]", got)
+			}
+			if !l2.CalculatedAt.Equal(d2.CalculatedAt) {
+				t.Fatalf("after expiry CalculatedAt diverged: %v vs %v", l2.CalculatedAt, d2.CalculatedAt)
+			}
+		})
+	}
+}
+
+type blockingSnapshotRepo struct {
+	*mockRankingRepository
+	onGetAll func()
+}
+
+func (b *blockingSnapshotRepo) GetAllSnapshots(ctx context.Context) (map[ranking.RankingType]ranking.RankingSnapshot, error) {
+	res, err := b.mockRankingRepository.GetAllSnapshots(ctx)
+	if b.onGetAll != nil {
+		b.onGetAll()
+	}
+	return res, err
+}
+
+func TestPairedBoards_SameServiceInFlightFallbackDoesNotOverwriteRefresh(t *testing.T) {
+	for _, tc := range pairedBoardCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			base := newMockRepo()
+			tc.setLeaders(base, rankedEntries("a"))
+			tc.setDependent(base, rankedEntries("a", "b"))
+
+			now := time.Date(2026, 11, 28, 3, 0, 0, 0, time.UTC)
+			nowFn := func() time.Time { return now }
+
+			// First publish Gen 1 via a separate writer so svc starts with an empty in-memory cache (no Valkey).
+			seedSvc, err := ranking.NewService(base, ranking.WithNowFunc(nowFn))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := seedSvc.RefreshAllSnapshots(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			readDone := make(chan struct{})
+			releaseFallback := make(chan struct{})
+			var paused atomic.Bool
+			repo := &blockingSnapshotRepo{
+				mockRankingRepository: base,
+				onGetAll: func() {
+					if paused.CompareAndSwap(false, true) {
+						close(readDone)
+						<-releaseFallback
+					}
+				},
+			}
+			svc, err := ranking.NewService(repo, ranking.WithNowFunc(nowFn))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fallbackErr := make(chan error, 1)
+			go func() {
+				_, err := tc.getDependent(svc, ctx, 20, 0)
+				fallbackErr <- err
+			}()
+
+			<-readDone
+
+			// Refresh Gen 2 on the same Service instance at the same timestamp while fallback is paused.
+			tc.setLeaders(base, rankedEntries("b"))
+			tc.setDependent(base, rankedEntries("a", "b"))
+			if err := svc.RefreshSnapshot(ctx, tc.dependentType); err != nil {
+				t.Fatal(err)
+			}
+
+			close(releaseFallback)
+			if err := <-fallbackErr; err != nil {
+				t.Fatal(err)
+			}
+
+			lPage, err := tc.getLeader(svc, ctx, 20, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dPage, err := tc.getDependent(svc, ctx, 20, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertDisjointPair(t, lPage, dPage)
+			if got := boardIDs(t, lPage.Entries, 1); fmt.Sprint(got) != "[b]" {
+				t.Fatalf("leader = %v, want [b]", got)
+			}
+			if got := boardIDs(t, dPage.Entries, 1); fmt.Sprint(got) != "[a]" {
+				t.Fatalf("dependent = %v, want [a]", got)
+			}
+		})
 	}
 }

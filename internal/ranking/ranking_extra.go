@@ -50,12 +50,11 @@ func (s *Service) RecordJobChange(ctx context.Context, characterID string) error
 // The deadline advances atomically with snapshot/reset, so retries cannot consume new counters.
 func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) (time.Time, error) {
 	var (
-		now        time.Time
-		nextDue    time.Time
-		snapshot   RankingSnapshot
-		entries    []CharacterRankingEntry
-		totalCount int
-		rotated    bool
+		now      time.Time
+		nextDue  time.Time
+		snapshot RankingSnapshot
+		entries  []CharacterRankingEntry
+		rotated  bool
 	)
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
@@ -120,7 +119,6 @@ func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) (time.Time, 
 
 		snapshot = snap
 		entries = activeEntries
-		totalCount = total
 		rotated = true
 		return nil
 	})
@@ -131,10 +129,7 @@ func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) (time.Time, 
 	// Acceptance criteria: commit前の値をcacheに公開しない
 	// Cache is updated strictly post-commit.
 	if rotated {
-		if s.valkeyCache != nil {
-			_ = s.valkeyCache.Set(ctx, RankingTypeWeeklyJobChange, snapshot, s.cacheTTL)
-		}
-		s.storeCache(RankingTypeWeeklyJobChange, entries, totalCount, now)
+		s.publishSingleSnapshot(ctx, snapshot, entries)
 	}
 
 	return nextDue, nil

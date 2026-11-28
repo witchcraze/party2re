@@ -89,25 +89,24 @@ func (s *Service) refreshBatch(ctx context.Context, build func(ctx context.Conte
 		return err
 	}
 
+	byType := make(map[RankingType]preparedSnapshot, len(prepared))
 	for _, item := range prepared {
-		if s.valkeyCache != nil {
-			_ = s.valkeyCache.Set(ctx, item.snapshot.RankingType, item.snapshot, s.cacheTTL)
+		byType[item.snapshot.RankingType] = item
+	}
+	for _, pair := range exclusionPairs {
+		leader, okL := byType[pair.leaderType]
+		dep, okD := byType[pair.dependentType]
+		if okL && okD {
+			s.publishPairSnapshots(ctx, pair, leader, dep)
+			delete(byType, pair.leaderType)
+			delete(byType, pair.dependentType)
 		}
 	}
-	cacheNow := s.nowFunc().UTC()
-	s.mu.Lock()
 	for _, item := range prepared {
-		if existing, ok := s.cache[item.snapshot.RankingType]; ok && existing.updatedAt.After(item.snapshot.CalculatedAt) {
-			continue
-		}
-		s.cache[item.snapshot.RankingType] = cacheEntry{
-			data:      item.data,
-			total:     item.snapshot.TotalCount,
-			expiresAt: cacheNow.Add(s.cacheTTL),
-			updatedAt: item.snapshot.CalculatedAt,
+		if remaining, ok := byType[item.snapshot.RankingType]; ok {
+			s.publishSingleSnapshot(ctx, remaining.snapshot, remaining.data)
 		}
 	}
-	s.mu.Unlock()
 	return nil
 }
 

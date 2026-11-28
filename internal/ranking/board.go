@@ -7,6 +7,25 @@ const boardSize = 10
 
 type boardQuery func(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 
+type boardPairSpec struct {
+	leaderType    RankingType
+	dependentType RankingType
+}
+
+var exclusionPairs = []boardPairSpec{
+	{leaderType: RankingTypePvPVictory, dependentType: RankingTypeMonsterKills},
+	{leaderType: RankingTypeMaoCount, dependentType: RankingTypeHeroCount},
+}
+
+func exclusionPairFor(t RankingType) (boardPairSpec, bool) {
+	for _, pair := range exclusionPairs {
+		if t == pair.leaderType || t == pair.dependentType {
+			return pair, true
+		}
+	}
+	return boardPairSpec{}, false
+}
+
 type pairedBoardDef struct {
 	leaderType     RankingType
 	dependentType  RankingType

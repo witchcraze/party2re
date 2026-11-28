@@ -166,10 +166,17 @@ func (m *mockRankingRepository) GetSnapshot(ctx context.Context, rankingType ran
 }
 
 func (m *mockRankingRepository) GetAllSnapshots(ctx context.Context) (map[ranking.RankingType]ranking.RankingSnapshot, error) {
+	if m.getSnapshotErr != nil {
+		return nil, m.getSnapshotErr
+	}
 	if m.err != nil {
 		return nil, m.err
 	}
-	return m.snapshots, nil
+	out := make(map[ranking.RankingType]ranking.RankingSnapshot, len(m.snapshots))
+	for k, v := range m.snapshots {
+		out[k] = v
+	}
+	return out, nil
 }
 
 func (m *mockRankingRepository) GetCasinoWinsRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
@@ -454,6 +461,13 @@ func TestService_SnapshotDatabaseFallback_OnCacheMiss(t *testing.T) {
 	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 
 	// Persist snapshots in repo directly (simulating pre-existing DB snapshots on fresh server start)
+	repo.snapshots[ranking.RankingTypePvPVictory] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypePvPVictory,
+		SnapshotData: `[{"rank":1,"character_id":"p1","character_name":"Champ","score":50}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
 	repo.snapshots[ranking.RankingTypeMonsterKills] = ranking.RankingSnapshot{
 		RankingType:  ranking.RankingTypeMonsterKills,
 		SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":99},{"rank":2,"character_id":"c2","character_name":"Mage","score":85}]`,
@@ -656,8 +670,15 @@ func TestService_SnapshotReadDistinguishesAbsenceFromFailures(t *testing.T) {
 			t.Fatalf("GetRankingByType(job_popularity): expected %v, got %v", sqlErr, err)
 		}
 
-		// Clearing the SQL failure with a valid snapshot succeeds on the next read.
+		// Clearing the SQL failure with a valid snapshot pair succeeds on the next read.
 		repo.getSnapshotErr = nil
+		repo.snapshots[ranking.RankingTypePvPVictory] = ranking.RankingSnapshot{
+			RankingType:  ranking.RankingTypePvPVictory,
+			SnapshotData: `[{"rank":1,"character_id":"p1","character_name":"Champ","score":9}]`,
+			TotalCount:   1,
+			CalculatedAt: fixedTime,
+			UpdatedAt:    fixedTime,
+		}
 		repo.snapshots[ranking.RankingTypeMonsterKills] = ranking.RankingSnapshot{
 			RankingType:  ranking.RankingTypeMonsterKills,
 			SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":5}]`,
@@ -714,7 +735,14 @@ func TestService_SnapshotReadDistinguishesAbsenceFromFailures(t *testing.T) {
 				t.Fatalf("invalid snapshot (%q) populated Valkey cache", badJSON)
 			}
 
-			// Repairing SQL snapshot allows subsequent read to succeed.
+			// Repairing SQL snapshot pair allows subsequent read to succeed.
+			repo.snapshots[ranking.RankingTypePvPVictory] = ranking.RankingSnapshot{
+				RankingType:  ranking.RankingTypePvPVictory,
+				SnapshotData: `[{"rank":1,"character_id":"p1","character_name":"Champ","score":9}]`,
+				TotalCount:   1,
+				CalculatedAt: fixedTime,
+				UpdatedAt:    fixedTime,
+			}
 			repo.snapshots[ranking.RankingTypeMonsterKills] = ranking.RankingSnapshot{
 				RankingType:  ranking.RankingTypeMonsterKills,
 				SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":5}]`,

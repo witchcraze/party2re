@@ -12,7 +12,7 @@ The Casino follows `party2/lib/casino.cgi`, `_casino.cgi`, `casino_indian.cgi`, 
 ## Rooms
 
 - Casino owns a 30-minute idle lifetime, renewed by room commands and room speech ([casino rooms](../architecture/place-log.md#casino-rooms)). Open: legacy expiry also puts participants to sleep (#2635).
-- After an error, clients observe room and account state instead of replaying a wager; repeated actions on a finished round or an already-submitted turn are rejected. Publication ordering and cross-store limits are owned by [Valkey keyspace](../architecture/valkey-keyspace.md#index-lifetimes-ttl-scored-sorted-set-with-lazy-purging).
+- After an error, clients observe room and account state instead of replaying a wager; repeated actions on a finished round or an already-submitted turn are rejected. Publication ordering and cross-store limits are owned by [transient run state](../architecture/transient-run-state.md#casino-financial-and-departure-publication).
 
 ### Observation and visibility
 
