@@ -90,13 +90,13 @@ func (s *Service) PurchaseItem(ctx context.Context, characterID string, itemID s
 			}
 
 			if s.collectionRecorder != nil {
-				category := shopItem.Category
+				handKind := coreitem.LegacyHandKindByID(shopItem.ItemDefinitionID)
 				if s.itemDefProvider != nil {
 					if def, err := s.itemDefProvider.FindByID(shopItem.ItemDefinitionID); err == nil {
-						category = def.Category()
+						handKind = def.LegacyHandKind()
 					}
 				}
-				if err := s.collectionRecorder.RecordItemDiscovered(txCtx, characterID, shopItem.ItemDefinitionID, shopItem.Name, category); err != nil {
+				if err := s.collectionRecorder.RecordItemDiscovered(txCtx, characterID, shopItem.ItemDefinitionID, shopItem.Name, coreitem.LegacyCollectionCategory(handKind)); err != nil {
 					return err
 				}
 			}

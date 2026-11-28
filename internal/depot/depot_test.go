@@ -173,19 +173,26 @@ func (c *memoryItemCatalog) FindByID(id string) (item.Definition, error) {
 	return def, nil
 }
 
+type recordedCollectionCall struct {
+	itemID   string
+	category string
+}
+
 type memoryCollectionRecorder struct {
 	mu       sync.Mutex
 	recorded []string
+	calls    []recordedCollectionCall
 	err      error
 }
 
-func (m *memoryCollectionRecorder) RecordItemDiscovered(_ context.Context, _, itemID, _, _ string) error {
+func (m *memoryCollectionRecorder) RecordItemDiscovered(_ context.Context, _, itemID, _, category string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.err != nil {
 		return m.err
 	}
 	m.recorded = append(m.recorded, itemID)
+	m.calls = append(m.calls, recordedCollectionCall{itemID: itemID, category: category})
 	return nil
 }
 
@@ -1055,4 +1062,57 @@ type errDepotFinder struct {
 
 func (e *errDepotFinder) FindByCharacterIDForUpdate(_ context.Context, _ string) (Depot, error) {
 	return Depot{}, e.err
+}
+
+func TestWithdrawItem_RecordsLegacyCollectionCategory(t *testing.T) {
+	ctx := context.Background()
+	catalog, err := item.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("DefaultCatalog failed: %v", err)
+	}
+	depotRepo := newMemoryDepotRepo()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+	collector := &memoryCollectionRecorder{}
+
+	service, err := NewService(
+		depotRepo, charRepo, invRepo,
+		WithItemDefinitionProvider(catalog),
+		WithCollectionRecorder(collector),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	for _, tc := range []struct {
+		charID  string
+		itemID  string
+		wantCat string
+	}{
+		{"char-shield", "item-071", "item"},
+		{"char-ring", "item-012", "item"},
+		{"char-weapon", "weapon-01", "weapon"},
+		{"char-armor", "armor-01", "armor"},
+	} {
+		char, _ := corecharacter.New(tc.charID)
+		char.ID = tc.charID
+		charRepo.characters[tc.charID] = char
+		inv, _ := coreinventory.New(tc.charID)
+		invRepo.inventories[tc.charID] = inv
+		dep, _ := NewDepot(tc.charID)
+		inst, err := item.NewInstance(tc.itemID, 1)
+		if err != nil {
+			t.Fatalf("NewInstance(%s) failed: %v", tc.itemID, err)
+		}
+		_ = dep.AddItem(inst)
+		_ = depotRepo.Save(ctx, dep)
+
+		if _, _, err := service.WithdrawItem(ctx, tc.charID, inst.ID); err != nil {
+			t.Fatalf("WithdrawItem(%s) failed: %v", tc.itemID, err)
+		}
+		last := collector.calls[len(collector.calls)-1]
+		if last.itemID != tc.itemID || last.category != tc.wantCat {
+			t.Errorf("%s recorded %+v, want category %q", tc.itemID, last, tc.wantCat)
+		}
+	}
 }

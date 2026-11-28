@@ -84,3 +84,16 @@ func LegacyHandKindByID(definitionID string) int {
 	}
 	return 3
 }
+
+// LegacyCollectionCategory maps a legacy hand kind (1 = weapon, 2 = armor, 3 = item)
+// to its character_item_collection category.
+func LegacyCollectionCategory(handKind int) string {
+	switch handKind {
+	case 1:
+		return "weapon"
+	case 2:
+		return "armor"
+	default:
+		return "item"
+	}
+}

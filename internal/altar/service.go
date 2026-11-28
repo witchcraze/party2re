@@ -153,11 +153,7 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 				return err
 			}
 			if s.collector != nil {
-				cat := string(itemDef.Slot)
-				if cat == "" {
-					cat = "consumable"
-				}
-				if err := s.collector.RecordItemDiscovered(txCtx, char.ID, itemDef.ID, itemDef.Name, cat); err != nil {
+				if err := s.collector.RecordItemDiscovered(txCtx, char.ID, itemDef.ID, itemDef.Name, coreitem.LegacyCollectionCategory(itemDef.LegacyHandKind())); err != nil {
 					return err
 				}
 			}

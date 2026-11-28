@@ -1532,3 +1532,115 @@ func TestPlayRaffle_DoesNotSendDeliveryNotice(t *testing.T) {
 		t.Fatalf("expected zero notices from raffle, got %+v", notifier.notices)
 	}
 }
+
+func TestPlayRaffle_AccessoryRecordsAsItem(t *testing.T) {
+	origReader := rand.Reader
+	// Roll 45 (5th prize item-012, 祈りの指輪, SlotAccessory), subRoll 0, plus bytes for id.New().
+	randBuf := make([]byte, 64)
+	randBuf[1] = 45
+	rand.Reader = bytes.NewReader(randBuf)
+	defer func() { rand.Reader = origReader }()
+
+	catalog, err := coreitem.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("DefaultCatalog failed: %v", err)
+	}
+
+	repo := &mockLotteryRepo{
+		getRaffleTicketsFn: func(context.Context, string) (int, error) { return 3, nil },
+		useRaffleTicketsFn: func(context.Context, string, int) (int, error) { return 0, nil },
+	}
+	charRepo := &mockCharacterRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", JobLevel: 5},
+		},
+	}
+	invRepo := &mockInventoryRepo{}
+	depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+	recorder := &mockCollectionRecorder{}
+
+	svc, err := lottery.NewService(repo,
+		lottery.WithCharacterRepository(charRepo),
+		lottery.WithInventoryRepository(invRepo),
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithItemDefinitionProvider(catalog),
+		lottery.WithCollectionRecorder(recorder),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, _, _, err := svc.PlayRaffle(context.Background(), "char-1")
+	if err != nil {
+		t.Fatalf("PlayRaffle failed: %v", err)
+	}
+	if res.Prize.ItemDefinitionID != "item-012" {
+		t.Fatalf("expected prize item-012, got %+v", res.Prize)
+	}
+	if len(recorder.records) != 1 || recorder.records[0].itemID != "item-012" || recorder.records[0].category != "item" {
+		t.Fatalf("recorded = %+v, want item-012 with category item", recorder.records)
+	}
+}
+
+func TestDrawTakarakuji_ShieldAndAccessoryRecordAsItem(t *testing.T) {
+	jst := time.FixedZone("JST", 9*60*60)
+	drawTime := time.Date(2026, 9, 11, 0, 0, 0, 0, jst)
+
+	activeRound := lottery.TakarakujiRound{
+		RoundID:      1,
+		DrawDate:     drawTime,
+		Prize1ItemID: "item-071",
+		Prize1Amount: 1,
+		Prize2ItemID: "item-012",
+		Prize2Amount: 1,
+		Prize3ItemID: "weapon-40",
+		Prize3Amount: 1,
+	}
+	tickets := make([]lottery.TakarakujiTicket, 20)
+	for i := 0; i < 20; i++ {
+		tickets[i] = lottery.TakarakujiTicket{
+			ID:          fmt.Sprintf("t-%d", i+1),
+			RoundID:     1,
+			CharacterID: fmt.Sprintf("char-%d", i+1),
+		}
+	}
+
+	repo := &mockLotteryRepo{
+		getActiveTakarakujiRoundFn:   func(context.Context) (lottery.TakarakujiRound, error) { return activeRound, nil },
+		listRoundTakarakujiTicketsFn: func(context.Context, int) ([]lottery.TakarakujiTicket, error) { return tickets, nil },
+		createTakarakujiRoundFn:      func(_ context.Context, r lottery.TakarakujiRound) (lottery.TakarakujiRound, error) { return r, nil },
+	}
+	catalog, err := coreitem.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("DefaultCatalog failed: %v", err)
+	}
+	depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+	recorder := &mockCollectionRecorder{}
+
+	svc, err := lottery.NewService(repo,
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithItemDefinitionProvider(catalog),
+		lottery.WithCollectionRecorder(recorder),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := svc.DrawTakarakuji(context.Background(), drawTime); err != nil {
+		t.Fatalf("DrawTakarakuji failed: %v", err)
+	}
+
+	got := make(map[string]string, len(recorder.records))
+	for _, rec := range recorder.records {
+		got[rec.itemID] = rec.category
+	}
+	for itemID, wantCat := range map[string]string{
+		"item-071":  "item",
+		"item-012":  "item",
+		"weapon-40": "weapon",
+	} {
+		if got[itemID] != wantCat {
+			t.Errorf("%s category = %q, want %q", itemID, got[itemID], wantCat)
+		}
+	}
+}

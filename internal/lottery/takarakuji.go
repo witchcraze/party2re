@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 )
 
 const (
@@ -178,23 +179,16 @@ func RollNewRoundPrizes() (prize1 string, amount1 int, prize2 string, amount2 in
 
 func (s *Service) resolveItemInfo(itemID string) (string, string) {
 	name := itemID
-	category := "item"
-	if strings.HasPrefix(itemID, "weapon") || strings.HasPrefix(itemID, "wea") {
-		category = "weapon"
-	} else if strings.HasPrefix(itemID, "armor") || strings.HasPrefix(itemID, "arm") {
-		category = "armor"
-	}
+	handKind := coreitem.LegacyHandKindByID(itemID)
 	if s.itemDefProvider != nil {
 		if def, err := s.itemDefProvider.FindByID(itemID); err == nil {
 			if def.Name != "" {
 				name = def.Name
 			}
-			if def.Slot != "" {
-				category = def.Category()
-			}
+			handKind = def.LegacyHandKind()
 		}
 	}
-	return name, category
+	return name, coreitem.LegacyCollectionCategory(handKind)
 }
 
 func (s *Service) resolveItemName(itemID string) string {

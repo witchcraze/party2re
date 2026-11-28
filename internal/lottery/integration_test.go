@@ -281,8 +281,9 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 					}
 					def, err := itemCatalog.FindByID(w.ItemID)
 					if err == nil {
-						if ce.Category != def.Category() {
-							t.Errorf("winner %s prize %s recorded with wrong category %s; want %s", w.CharacterID, w.ItemID, ce.Category, def.Category())
+						wantCat := coreitem.LegacyCollectionCategory(def.LegacyHandKind())
+						if ce.Category != wantCat {
+							t.Errorf("winner %s prize %s recorded with wrong category %s; want %s", w.CharacterID, w.ItemID, ce.Category, wantCat)
 						}
 					}
 				}
