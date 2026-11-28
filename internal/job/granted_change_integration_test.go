@@ -727,3 +727,246 @@ func TestCelestialWish_CostumeResetContract(t *testing.T) {
 		}
 	})
 }
+
+func TestJobMemoryAndFutureRecall_CostumeResetContract(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	costumeRepo := testCostumeRepoFromEnv(t)
+	storeSvc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
+	ctx := context.Background()
+
+	chars, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := database.NewCharacterJobRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventories, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	futureRepo, err := database.NewFutureMemoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	runner, err := economy.NewService(chars, inventories, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := corejob.NewCatalog([]corejob.Definition{
+		{ID: "job-01", Name: "First", CMPTier: 1, MasterySP: 80},
+		{ID: "job-02", Name: "Second", CMPTier: 1, MasterySP: 80},
+		{ID: "job-03", Name: "Third", CMPTier: 1, MasterySP: 80},
+		{ID: "job-04", Name: "Fourth", CMPTier: 1, MasterySP: 80},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	setupExchangeChar := func(t *testing.T, prefix, itemID string) (corecharacter.Character, costume.ActiveCostume) {
+		t.Helper()
+		char, err := database.CreateTestCharacter(ctx, db, prefix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		char.JobID, char.OldJobID, char.SP, char.OldSP, char.Level = "job-01", "job-02", 50, 40, 20
+		if err := chars.Update(ctx, char); err != nil {
+			t.Fatal(err)
+		}
+		state, err := corejob.NewCharacterJob(char.ID, "job-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		state.RecordMastery("job-03", 80, 80)
+		state.RecordMastery("job-04", 100, 80)
+		if err := jobs.Save(ctx, state); err != nil {
+			t.Fatal(err)
+		}
+		inv, _ := coreinventory.New(char.ID)
+		if itemID != "" {
+			tok, err := coreitem.NewInstance(itemID, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := inv.Add(tok); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := inventories.Save(ctx, inv); err != nil {
+			t.Fatal(err)
+		}
+		prior := seedActiveCostume(t, costumeRepo, char.ID)
+		return char, prior
+	}
+
+	assertLocked := func(t *testing.T) *jobCostumeWrapper {
+		t.Helper()
+		return &jobCostumeWrapper{
+			store: storeSvc,
+			onReset: func(_ context.Context, id string) {
+				_, lockErr := db.ExecContext(ctx, `SELECT id FROM characters WHERE id = ? FOR UPDATE NOWAIT`, id)
+				if lockErr == nil {
+					t.Errorf("ResetCostume executed without holding character row lock for %s", id)
+				}
+			},
+		}
+	}
+
+	for _, itemID := range []string{"item-168", "item-243"} {
+		t.Run("ExchangeJob_"+itemID+"_clears_under_lock_and_restores_on_rollback", func(t *testing.T) {
+			char, _ := setupExchangeChar(t, "ExLockOK", itemID)
+			jobSvc, err := job.NewService(jobs, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner), job.WithCostumeResetter(assertLocked(t)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := jobSvc.ExchangeJob(ctx, char.ID, "job-03", "job-04"); err != nil {
+				t.Fatalf("ExchangeJob failed: %v", err)
+			}
+			if got, err := costumeRepo.GetActiveCostume(ctx, char.ID); err != nil || got != nil {
+				t.Fatalf("costume not cleared after ExchangeJob: got=%+v err=%v", got, err)
+			}
+
+			for _, ambient := range []bool{false, true} {
+				charRB, priorRB := setupExchangeChar(t, "ExRB", itemID)
+				sentinel := errors.New("exchange rollback")
+				var repo job.Repository = jobs
+				if !ambient {
+					repo = failAfterJobPointsSave{Repository: jobs, err: sentinel}
+				}
+				rbSvc, err := job.NewService(repo, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner), job.WithCostumeResetter(storeSvc))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var gotErr error
+				if ambient {
+					gotErr = database.RunInTx(ctx, db, func(txCtx context.Context) error {
+						if _, _, err := rbSvc.ExchangeJob(txCtx, charRB.ID, "job-03", "job-04"); err != nil {
+							return err
+						}
+						return sentinel
+					})
+				} else {
+					_, _, gotErr = rbSvc.ExchangeJob(ctx, charRB.ID, "job-03", "job-04")
+				}
+				if !errors.Is(gotErr, sentinel) {
+					t.Fatalf("want sentinel, got %v", gotErr)
+				}
+				if got, err := costumeRepo.GetActiveCostume(ctx, charRB.ID); err != nil || !sameCostume(got, priorRB) {
+					t.Fatalf("prior costume not restored after ExchangeJob rollback (ambient=%v): got=%+v err=%v", ambient, got, err)
+				}
+			}
+		})
+	}
+
+	t.Run("RestoreJobMemory_clears_under_lock_and_restores_on_rollback", func(t *testing.T) {
+		char, _ := setupExchangeChar(t, "RestLockOK", "item-168")
+		jobSvc, err := job.NewService(jobs, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner), job.WithCostumeResetter(assertLocked(t)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := jobSvc.ExchangeJob(ctx, char.ID, "job-03", "job-04"); err != nil {
+			t.Fatal(err)
+		}
+		_ = seedActiveCostume(t, costumeRepo, char.ID)
+		if _, _, err := jobSvc.RestoreJobMemory(ctx, char.ID); err != nil {
+			t.Fatalf("RestoreJobMemory failed: %v", err)
+		}
+		if got, err := costumeRepo.GetActiveCostume(ctx, char.ID); err != nil || got != nil {
+			t.Fatalf("costume not cleared after RestoreJobMemory: got=%+v err=%v", got, err)
+		}
+
+		for _, ambient := range []bool{false, true} {
+			charRB, _ := setupExchangeChar(t, "RestRB", "item-168")
+			setupSvc, err := job.NewService(jobs, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := setupSvc.ExchangeJob(ctx, charRB.ID, "job-03", "job-04"); err != nil {
+				t.Fatal(err)
+			}
+			priorRB := seedActiveCostume(t, costumeRepo, charRB.ID)
+			sentinel := errors.New("restore rollback")
+			var repo job.Repository = jobs
+			if !ambient {
+				repo = failAfterJobPointsSave{Repository: jobs, err: sentinel}
+			}
+			rbSvc, err := job.NewService(repo, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner), job.WithCostumeResetter(storeSvc))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var gotErr error
+			if ambient {
+				gotErr = database.RunInTx(ctx, db, func(txCtx context.Context) error {
+					if _, _, err := rbSvc.RestoreJobMemory(txCtx, charRB.ID); err != nil {
+						return err
+					}
+					return sentinel
+				})
+			} else {
+				_, _, gotErr = rbSvc.RestoreJobMemory(ctx, charRB.ID)
+			}
+			if !errors.Is(gotErr, sentinel) {
+				t.Fatalf("want sentinel, got %v", gotErr)
+			}
+			if got, err := costumeRepo.GetActiveCostume(ctx, charRB.ID); err != nil || !sameCostume(got, priorRB) {
+				t.Fatalf("prior costume not restored after RestoreJobMemory rollback (ambient=%v): got=%+v err=%v", ambient, got, err)
+			}
+		}
+	})
+
+	t.Run("RecallFutureMemory_clears_under_lock_and_restores_on_rollback", func(t *testing.T) {
+		setupFuture := func(prefix string) (corecharacter.Character, string, costume.ActiveCostume) {
+			char, prior := setupExchangeChar(t, prefix, "")
+			snap := char.CreateFutureMemory("mem-"+char.ID[:8], time.Now().UTC())
+			if err := futureRepo.Save(ctx, snap); err != nil {
+				t.Fatal(err)
+			}
+			return char, snap.ID, prior
+		}
+
+		char, memID, _ := setupFuture("FutLockOK")
+		jobSvc, err := job.NewService(jobs, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner), job.WithFutureMemoryRepository(futureRepo), job.WithCostumeResetter(assertLocked(t)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := jobSvc.RecallFutureMemory(ctx, char.ID, memID); err != nil {
+			t.Fatalf("RecallFutureMemory failed: %v", err)
+		}
+		if got, err := costumeRepo.GetActiveCostume(ctx, char.ID); err != nil || got != nil {
+			t.Fatalf("costume not cleared after RecallFutureMemory: got=%+v err=%v", got, err)
+		}
+
+		for _, ambient := range []bool{false, true} {
+			charRB, memRB, priorRB := setupFuture("FutRB")
+			sentinel := errors.New("future recall rollback")
+			var repo job.Repository = jobs
+			if !ambient {
+				repo = failAfterJobPointsSave{Repository: jobs, err: sentinel}
+			}
+			rbSvc, err := job.NewService(repo, job.WithCatalog(catalog), job.WithCharacterRepository(chars), job.WithInventoryRepository(inventories), job.WithEconomy(runner), job.WithFutureMemoryRepository(futureRepo), job.WithCostumeResetter(storeSvc))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var gotErr error
+			if ambient {
+				gotErr = database.RunInTx(ctx, db, func(txCtx context.Context) error {
+					if _, _, err := rbSvc.RecallFutureMemory(txCtx, charRB.ID, memRB); err != nil {
+						return err
+					}
+					return sentinel
+				})
+			} else {
+				_, _, gotErr = rbSvc.RecallFutureMemory(ctx, charRB.ID, memRB)
+			}
+			if !errors.Is(gotErr, sentinel) {
+				t.Fatalf("want sentinel, got %v", gotErr)
+			}
+			if got, err := costumeRepo.GetActiveCostume(ctx, charRB.ID); err != nil || !sameCostume(got, priorRB) {
+				t.Fatalf("prior costume not restored after RecallFutureMemory rollback (ambient=%v): got=%+v err=%v", ambient, got, err)
+			}
+		}
+	})
+}

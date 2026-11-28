@@ -111,6 +111,9 @@ func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID 
 			}
 			tc.Character = c
 
+			if err := s.resetCostume(tc.Context, characterID); err != nil {
+				return err
+			}
 			if err := s.futureMemories.Delete(tc.Context, characterID, memoryID); err != nil {
 				return err
 			}
@@ -168,6 +171,9 @@ func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID 
 	}
 	state.RestoreCurrentJob(char.JobID)
 	if err := s.repository.Save(ctx, state); err != nil {
+		return char, corejob.CharacterJob{}, err
+	}
+	if err := s.resetCostume(ctx, characterID); err != nil {
 		return char, corejob.CharacterJob{}, err
 	}
 	return char, state, nil

@@ -438,6 +438,84 @@ func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 	}
 }
 
+func TestExchangeJobAndRestore_ResetsCostume(t *testing.T) {
+	ctx := context.Background()
+	catalog, _ := corejob.NewCatalog([]corejob.Definition{
+		{ID: "job-01", Name: "Job 1", CMPTier: 1},
+		{ID: "job-02", Name: "Job 2", CMPTier: 1},
+		{ID: "job-03", Name: "Job 3", CMPTier: 1},
+		{ID: "job-04", Name: "Job 4", CMPTier: 1},
+	})
+	setup := func(itemID string) (*Service, *charRepoStub, *repositoryStub, *failingCostumeResetter) {
+		char := corecharacter.Character{
+			ID: "char-ex-costume", JobID: "job-01", SP: 2, OldJobID: "job-02", OldSP: 1,
+		}
+		state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+		state.RecordMastery("job-03", 20, 20)
+		state.RecordMastery("job-04", 30, 30)
+		repo := &repositoryStub{value: state}
+		charRepo := &charRepoStub{char: char}
+		inv, _ := coreinventory.New(char.ID)
+		token, _ := item.NewInstance(itemID, 1)
+		_ = inv.Add(token)
+		invRepo := &inventoryRepoStub{inventory: inv}
+		resetter := &failingCostumeResetter{}
+		svc, err := NewService(repo, WithCatalog(catalog), WithCharacterRepository(charRepo), WithInventoryRepository(invRepo), WithCostumeResetter(resetter))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc, charRepo, repo, resetter
+	}
+
+	for _, itemID := range []string{"item-168", "item-243"} {
+		t.Run("ExchangeJob_"+itemID, func(t *testing.T) {
+			svc, _, _, resetter := setup(itemID)
+			if _, _, err := svc.ExchangeJob(ctx, "char-ex-costume", "job-03", "job-04"); err != nil {
+				t.Fatalf("ExchangeJob(%s) failed: %v", itemID, err)
+			}
+			if resetter.calledFor != "char-ex-costume" {
+				t.Fatalf("expected ResetCostume called for char-ex-costume, got %q", resetter.calledFor)
+			}
+			if itemID == "item-168" {
+				resetter.calledFor = ""
+				if _, _, err := svc.RestoreJobMemory(ctx, "char-ex-costume"); err != nil {
+					t.Fatalf("RestoreJobMemory failed: %v", err)
+				}
+				if resetter.calledFor != "char-ex-costume" {
+					t.Fatalf("expected RestoreJobMemory to call ResetCostume, got %q", resetter.calledFor)
+				}
+			}
+		})
+	}
+
+	t.Run("ExchangeJob_ResetErrorAbortsSave", func(t *testing.T) {
+		svc, charRepo, repo, resetter := setup("item-168")
+		sentinel := errors.New("costume reset failed")
+		resetter.err = sentinel
+		if _, _, err := svc.ExchangeJob(ctx, "char-ex-costume", "job-03", "job-04"); !errors.Is(err, sentinel) {
+			t.Fatalf("expected sentinel error, got %v", err)
+		}
+		if charRepo.char.JobID != "job-01" || charRepo.char.JobMemory != nil || repo.value.CurrentJobID != "job-01" {
+			t.Fatalf("expected state unchanged on reset failure: char=%+v job=%+v", charRepo.char, repo.value)
+		}
+	})
+
+	t.Run("RestoreJobMemory_ResetErrorAbortsSave", func(t *testing.T) {
+		svc, charRepo, repo, resetter := setup("item-168")
+		if _, _, err := svc.ExchangeJob(ctx, "char-ex-costume", "job-03", "job-04"); err != nil {
+			t.Fatal(err)
+		}
+		sentinel := errors.New("costume reset failed")
+		resetter.err = sentinel
+		if _, _, err := svc.RestoreJobMemory(ctx, "char-ex-costume"); !errors.Is(err, sentinel) {
+			t.Fatalf("expected sentinel error, got %v", err)
+		}
+		if charRepo.char.JobID != "job-03" || charRepo.char.JobMemory == nil || repo.value.CurrentJobID != "job-03" {
+			t.Fatalf("expected recalled memory kept on reset failure: char=%+v job=%+v", charRepo.char, repo.value)
+		}
+	})
+}
+
 func TestServiceRestoreActiveJob(t *testing.T) {
 	ctx := context.Background()
 	state, _ := corejob.NewCharacterJob("character-1", "job-01")
