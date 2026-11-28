@@ -10649,6 +10649,11 @@
           "item_name": {
             "type": "string"
           },
+          "number": {
+            "description": "Display number (legacy ナンバー): the lowest number free among active listings when listed; purchase and cancel log rows name it.",
+            "minimum": 1,
+            "type": "integer"
+          },
           "price": {
             "type": "integer"
           },
@@ -10671,6 +10676,7 @@
         },
         "required": [
           "id",
+          "number",
           "seller_character_id",
           "seller_name",
           "item_id",

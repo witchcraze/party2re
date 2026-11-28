@@ -11,7 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
-// Requires a dedicated DB: CountTotalActiveListings and ListActiveListings assert market-wide counts.
+// Requires a dedicated DB: ActiveListingNumbers and ListActiveListings assert market-wide counts.
 func TestFleaMarketRepository_Database(t *testing.T) {
 	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "fleamarket_listings")
 
@@ -37,6 +37,7 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 	listingID := id.New()
 	listing := fleamarket.Listing{
 		ID:                listingID,
+		Number:            7,
 		SellerCharacterID: seller.ID,
 		SellerName:        seller.Name,
 		ItemID:            "wea-sword",
@@ -56,11 +57,11 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetListingByID failed: %v", err)
 	}
-	if fetched.ID != listingID || fetched.SellerName != seller.Name || fetched.Price != 250 {
+	if fetched.ID != listingID || fetched.SellerName != seller.Name || fetched.Price != 250 || fetched.Number != 7 {
 		t.Errorf("unexpected fetched listing: %+v", fetched)
 	}
 
-	// 3. CountActiveListingsBySeller and CountTotalActiveListings
+	// 3. CountActiveListingsBySeller and ActiveListingNumbers
 	count, err := repo.CountActiveListingsBySeller(ctx, seller.ID)
 	if err != nil {
 		t.Fatalf("CountActiveListingsBySeller failed: %v", err)
@@ -69,12 +70,12 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 		t.Errorf("expected 1 active listing, got %d", count)
 	}
 
-	totalActiveBefore, err := repo.CountTotalActiveListings(ctx)
+	numbersBefore, err := repo.ActiveListingNumbers(ctx)
 	if err != nil {
-		t.Fatalf("CountTotalActiveListings failed: %v", err)
+		t.Fatalf("ActiveListingNumbers failed: %v", err)
 	}
-	if totalActiveBefore != 1 {
-		t.Errorf("expected 1 total active listing, got %d", totalActiveBefore)
+	if len(numbersBefore) != 1 || numbersBefore[0] != listing.Number {
+		t.Errorf("expected the listing's number %d, got %v", listing.Number, numbersBefore)
 	}
 
 	// 4. ListActiveListings
@@ -123,12 +124,12 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 		t.Errorf("expected 0 active listings after sell, got %d", countAfter)
 	}
 
-	totalActiveAfter, err := repo.CountTotalActiveListings(ctx)
+	numbersAfter, err := repo.ActiveListingNumbers(ctx)
 	if err != nil {
-		t.Fatalf("CountTotalActiveListings after sell failed: %v", err)
+		t.Fatalf("ActiveListingNumbers after sell failed: %v", err)
 	}
-	if totalActiveAfter != totalActiveBefore-1 {
-		t.Errorf("expected total active to decrease by 1, got %d (was %d)", totalActiveAfter, totalActiveBefore)
+	if len(numbersAfter) != 0 {
+		t.Errorf("expected no active numbers after sell, got %v", numbersAfter)
 	}
 
 	// 7. Stale UpdateListing on already-sold listing should return ErrListingNotActive (CAS failure)

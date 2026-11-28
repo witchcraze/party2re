@@ -10999,6 +10999,14 @@
       },
       "FleaMarketListing": {
         "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Display number (legacy ナンバー): the lowest number free among active listings when listed; purchase and cancel log rows name it."
+          },
           "buyer_character_id": {
             "type": [
               "string",
@@ -11013,9 +11021,6 @@
           },
           "created_at": {
             "format": "date-time",
-            "type": "string"
-          },
-          "id": {
             "type": "string"
           },
           "item_category": {
@@ -11053,6 +11058,7 @@
         },
         "required": [
           "id",
+          "number",
           "seller_character_id",
           "seller_name",
           "item_id",

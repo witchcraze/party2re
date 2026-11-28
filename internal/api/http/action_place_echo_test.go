@@ -36,8 +36,8 @@ func TestFleaMarketCommandsEcho(t *testing.T) {
 	// Go listings have no display number, so purchase and cancel name the item.
 	for _, tc := range []echoCase{
 		{"fleamarket_list", `{"item_id":"owned-item","price":300}`, "＠しゅっぴん>はやぶさの剣＠ねだん>300", "はやぶさの剣を300 Gで出品しとくぞ"},
-		{"fleamarket_purchase", `{"listing_id":"listing-1"}`, "＠かう>はやぶさの剣", "まいどあり"},
-		{"fleamarket_cancel", `{"listing_id":"listing-1"}`, "＠もどす>はやぶさの剣", "そら、はやぶさの剣だ"},
+		{"fleamarket_purchase", `{"listing_id":"listing-1"}`, "＠かう>3", "まいどあり"},
+		{"fleamarket_cancel", `{"listing_id":"listing-1"}`, "＠もどす>3", "そら、はやぶさの剣だ"},
 	} {
 		log := &fakePlaceLog{}
 		f := &fleaMarketGatewayFixture{gatewayFixture: newGatewayFixture(t)}

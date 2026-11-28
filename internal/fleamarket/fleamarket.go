@@ -44,7 +44,10 @@ var (
 )
 
 type Listing struct {
-	ID                string        `json:"id"`
+	ID string `json:"id"`
+	// Number is the lowest number free among active listings when it was listed
+	// (free.cgi number_select); purchase and cancel log rows name it.
+	Number            int           `json:"number"`
 	SellerCharacterID string        `json:"seller_character_id"`
 	SellerName        string        `json:"seller_name"`
 	ItemID            string        `json:"item_id"`
@@ -72,7 +75,8 @@ type FleaMarketRepository interface {
 	GetActiveListingsBySeller(ctx context.Context, sellerCharacterID string) ([]Listing, error)
 	CountActiveListingsBySeller(ctx context.Context, sellerCharacterID string) (int, error)
 	LockListingCapacityForUpdate(ctx context.Context) error
-	CountTotalActiveListings(ctx context.Context) (int, error)
+	// ActiveListingNumbers returns every active listing's number, ascending.
+	ActiveListingNumbers(ctx context.Context) ([]int, error)
 	UpdateListing(ctx context.Context, listing Listing) error
 }
 
@@ -225,11 +229,11 @@ func (s *Service) CreateListing(
 		if err := s.repo.LockListingCapacityForUpdate(txCtx); err != nil {
 			return err
 		}
-		totalActive, err := s.repo.CountTotalActiveListings(txCtx)
+		numbers, err := s.repo.ActiveListingNumbers(txCtx)
 		if err != nil {
 			return err
 		}
-		if totalActive >= ServerMaxListings {
+		if len(numbers) >= ServerMaxListings {
 			return ErrServerMaxListingsReached
 		}
 
@@ -306,6 +310,7 @@ func (s *Service) CreateListing(
 		// 8. Create Listing record
 		created = Listing{
 			ID:                id.New(),
+			Number:            lowestFreeNumber(numbers),
 			SellerCharacterID: seller.ID,
 			SellerName:        seller.Name,
 			ItemID:            consumedItem.DefinitionID,
@@ -354,4 +359,17 @@ func collectionCategoryForHandKind(kind int) string {
 	default:
 		return "item"
 	}
+}
+
+// lowestFreeNumber returns the smallest positive number missing from the
+// ascending, distinct numbers (free.cgi number_select).
+func lowestFreeNumber(numbers []int) int {
+	next := 1
+	for _, n := range numbers {
+		if n != next {
+			break
+		}
+		next++
+	}
+	return next
 }

@@ -48,7 +48,7 @@ func (f *fleaMarketGatewayFixture) PurchaseListing(ctx context.Context, actor, l
 		return fleamarket.PurchaseResult{}, err
 	}
 	return fleamarket.PurchaseResult{
-		Listing:      fleamarket.Listing{ID: listingID, ItemName: "はやぶさの剣", Status: fleamarket.StatusSold},
+		Listing:      fleamarket.Listing{ID: listingID, Number: 3, ItemName: "はやぶさの剣", Status: fleamarket.StatusSold},
 		BuyerGold:    700,
 		ItemInstance: coreitem.Instance{ID: "item-1", DefinitionID: "weapon-01"},
 	}, nil
@@ -59,7 +59,7 @@ func (f *fleaMarketGatewayFixture) CancelListing(ctx context.Context, actor, lis
 	if _, err := f.execute(ctx, actor, 0); err != nil {
 		return fleamarket.Listing{}, err
 	}
-	return fleamarket.Listing{ID: listingID, ItemName: "はやぶさの剣", Status: fleamarket.StatusCancelled}, nil
+	return fleamarket.Listing{ID: listingID, Number: 3, ItemName: "はやぶさの剣", Status: fleamarket.StatusCancelled}, nil
 }
 
 func (f *fleaMarketGatewayFixture) router(t *testing.T, timers timer.Service, options ...Option) nethttp.Handler {

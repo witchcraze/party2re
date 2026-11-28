@@ -26,8 +26,8 @@ type countRendezvous struct {
 	both    chan struct{}
 }
 
-func (r *countRendezvous) CountTotalActiveListings(ctx context.Context) (int, error) {
-	n, err := r.FleaMarketRepository.CountTotalActiveListings(ctx)
+func (r *countRendezvous) ActiveListingNumbers(ctx context.Context) ([]int, error) {
+	n, err := r.FleaMarketRepository.ActiveListingNumbers(ctx)
 	r.mu.Lock()
 	r.arrived++
 	if r.arrived == 2 {
@@ -182,6 +182,90 @@ func TestFleaMarketListingOrderAndEnhancementPersist(t *testing.T) {
 	for _, row := range owned {
 		if row.ItemID == "item-999" && row.EnhancementLevel != 0 {
 			t.Fatalf("default enhancement: %+v", row)
+		}
+	}
+}
+
+// Requires a dedicated DB: numbers are allocated across every active listing.
+// Concurrent listing and cancelling must never give two active listings the
+// same number (free.cgi number_select under the capacity lock), and every item
+// stays either listed or in its seller's Depot.
+func TestFleaMarketListingNumbersStayDistinctUnderConcurrency(t *testing.T) {
+	db := database.CreateTestDatabase(t, "players", "characters", "character_depots", "depot_items", "fleamarket_listings", "fleamarket_capacity_lock")
+	ctx := context.Background()
+	chars, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depots, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := database.NewFleaMarketRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := fleamarket.NewService(repo, chars, depots, fleamarket.WithTransactionProvider(database.NewTransactionProvider(db)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testutil.GetStressConfig()
+	// list, cancel, list: every seller ends with one active listing, so the
+	// final numbers include the ones allocated concurrently in the last round.
+	cfg.OpsPerWorker = 3
+	const stock = 2
+	sellers := make([]string, cfg.Workers)
+	for i := range sellers {
+		seller, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("NumSeller%d", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		inst, err := coreitem.NewInstance("item-001", stock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.CreateTestDepot(ctx, db, seller.ID, 1, []coreitem.Instance{inst}); err != nil {
+			t.Fatal(err)
+		}
+		sellers[i] = seller.ID
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	listed := make([]string, cfg.Workers)
+	res := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
+		if op%2 == 0 {
+			l, err := svc.CreateListing(ctx, sellers[worker], "item-001", 10, now)
+			listed[worker] = l.ID
+			return err
+		}
+		_, err := svc.CancelListing(ctx, sellers[worker], listed[worker])
+		return err
+	})
+	if res.Failures != 0 || res.Deadlocks != 0 {
+		t.Fatalf("stress outcome: %+v", res)
+	}
+	numbers, err := repo.ActiveListingNumbers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(numbers) != cfg.Workers {
+		t.Fatalf("active listings = %d, want %d", len(numbers), cfg.Workers)
+	}
+	for i, n := range numbers {
+		if n < 1 || (i > 0 && numbers[i-1] == n) {
+			t.Fatalf("duplicate or invalid active numbers: %v", numbers)
+		}
+	}
+	for _, seller := range sellers {
+		dep, err := depots.FindByCharacterID(ctx, seller)
+		if err != nil {
+			t.Fatal(err)
+		}
+		active, err := repo.CountActiveListingsBySeller(ctx, seller)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dep.Quantity("item-001")+active != stock {
+			t.Fatalf("seller %s lost items: depot=%d listed=%d", seller, dep.Quantity("item-001"), active)
 		}
 	}
 }
