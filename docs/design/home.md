@@ -35,7 +35,6 @@ Each box's copy belongs to its owner, not to the counterpart's identity (legacy 
 - **Decision (#1126) — throttle:** compare sender/recipient character IDs against the newest letter the recipient has not deleted (by `created_at`, then `id`); the recipient deleting it removes it from the check, the sender deleting their copy does not. The wait is a fixed 30 seconds in whole seconds (29 rejected, 30 allowed). Rejection writes nothing. A guild callout stops at that recipient ([Guild](guild.md#broadcast-callouts-よびかける)); other guild notices are dropped best-effort.
 - **Decision (#1126) — retention:** each box keeps the newest N (default 30, `PARTY2_HOME_LETTER_LOG_LIMIT`). Delivery always succeeds; the oldest letters leave that box even when unread, through the owner's deletion flag. Lowering N shortens a box on its next send.
 - **Decision (#1126) — body length** (`lib/system.cgi:700–725`): default 500 (`PARTY2_HOME_LETTER_MAX_LENGTH`), also for guild notices. Line breaks are removed. The limit counts the length after legacy HTML escaping (`&`, `;`, `,` count 5; `<`, `>` 4; `"` 6). Legacy also counted the `＠てがみをかく>宛先` text; Go takes the recipient separately.
-- **Departure (#1126):** legacy silently strips combining marks in several ranges, which alters accented and Thai text. Go keeps them after NFC normalization and rejects excessive sequences.
 
 ### 3. Companion Greeting Phrases & Resident Companions (`character_companion_phrases`, `home_members`)
 

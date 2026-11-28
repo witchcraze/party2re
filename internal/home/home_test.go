@@ -90,7 +90,7 @@ func TestValidateLetter(t *testing.T) {
 			name:                 "content with zalgo diacritics",
 			senderCharacterID:    "char-1",
 			recipientCharacterID: "char-2",
-			content:              "Hello Z\u0300\u0301\u0302algo",
+			content:              "Hello Z\u20D0\u20D1\u20D2algo",
 			expectErr:            validation.ErrZalgo,
 		},
 	}
@@ -133,8 +133,13 @@ func TestValidatePhrase(t *testing.T) {
 			expectErr: ErrPhraseTooLong,
 		},
 		{
-			name:      "phrase with newline disallowed in single line",
+			name:      "phrase with newline stripped as decode_pt does",
 			phrase:    "Hello\nWorld",
+			expectErr: nil,
+		},
+		{
+			name:      "phrase with tab disallowed in single line",
+			phrase:    "Hello\tWorld",
 			expectErr: validation.ErrControlCharacter,
 		},
 		{
@@ -154,7 +159,7 @@ func TestValidatePhrase(t *testing.T) {
 		},
 		{
 			name:      "phrase with zalgo diacritics",
-			phrase:    "Z\u0300\u0301\u0302algo",
+			phrase:    "Z\u20D0\u20D1\u20D2algo",
 			expectErr: validation.ErrZalgo,
 		},
 	}

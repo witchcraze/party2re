@@ -69,10 +69,15 @@ func TestPlaceSayLogsAPublicRowAndIgnoresTheActionWait(t *testing.T) {
 }
 
 func TestPlaceSayDoesNotStartTheActionWait(t *testing.T) {
-	_, _, router := speechRouter(t, &fakePlaceLog{})
+	log := &fakePlaceLog{}
+	_, _, router := speechRouter(t, log)
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"place_say","params":{"text":"hi"}}`, nil)
 	if status != 200 || waitMS(t, raw) != 0 {
 		t.Fatalf("place_say: %d %s", status, raw["error"])
+	}
+	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"place_say","params":{"text":"e\u0301\u0E34\u0E47"}}`, nil)
+	if status != 200 || speechResult(t, raw) != (SpeechResult{Text: "e"}) {
+		t.Fatalf("decode_pt place_say: %d %s %s", status, raw["result"], raw["error"])
 	}
 }
 

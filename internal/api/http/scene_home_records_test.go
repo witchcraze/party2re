@@ -238,4 +238,8 @@ func TestCustomSkillSetInTheOwnedCustomSkillScene(t *testing.T) {
 	if status != 200 || !slices.Equal(stub.sets, []string{"hero ひっさつ くらえ gem-1"}) {
 		t.Fatalf("set: %d %s %v", status, raw, stub.sets)
 	}
+	status, raw = act("custom_skill_set", `{"name":"必\n殺","comment":"a\r\nb\u0301","gems":["gem-1","",""]}`)
+	if status != 200 || !slices.Equal(stub.sets, []string{"hero ひっさつ くらえ gem-1", "hero 必殺 ab gem-1"}) {
+		t.Fatalf("decode_pt set: %d %s %v", status, raw, stub.sets)
+	}
 }

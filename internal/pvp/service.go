@@ -197,6 +197,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	if req.Speed == 0 {
 		req.Speed = DefaultSpeed
 	}
+	req.NeedJoin = validation.StripLegacyText(req.NeedJoin)
 	if corecharacter.ValidateNeedJoin(req.NeedJoin, char) != nil {
 		return RoomDetail{}, ErrNeedJoinNotMet
 	}
@@ -223,7 +224,7 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 		TargetWins:        req.TargetWins,
 		Bet:               req.Bet,
 		PrizePool:         req.Bet,
-		PasswordHash:      hashPassword(req.Password),
+		PasswordHash:      hashPassword(validation.StripLegacyText(req.Password)),
 		NeedJoin:          req.NeedJoin,
 		Status:            StatusRecruiting,
 		Round:             0,
@@ -322,7 +323,7 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 			return err
 		}
 
-		if detail.Room.PasswordHash != "" && hashPassword(password) != detail.Room.PasswordHash {
+		if detail.Room.PasswordHash != "" && hashPassword(validation.StripLegacyText(password)) != detail.Room.PasswordHash {
 			return ErrInvalidPassword
 		}
 		if corecharacter.ValidateNeedJoin(detail.Room.NeedJoin, char) != nil {

@@ -34,6 +34,7 @@ type gatewayFixture struct {
 	actions                                          []scheduling.ScheduledAction
 	sleep                                            home.SleepStatus
 	afterExecute                                     func()
+	lastReason                                       string
 	expectedContext                                  context.Context
 	t                                                *testing.T
 }
@@ -138,7 +139,10 @@ func (f *gatewayFixture) router(action string, timers playercontext.TimerReader,
 			return f.execute(ctx, id, p.Amount)
 		}, gatewayRejection)
 	} else if action == "rescue_request" {
-		command = withActionCommand(action, func(ctx context.Context, id string, p rescueActionParams) (any, error) { return f.execute(ctx, id, 0) }, gatewayRejection)
+		command = withActionCommand(action, func(ctx context.Context, id string, p rescueActionParams) (any, error) {
+			f.lastReason = p.Reason
+			return f.execute(ctx, id, 0)
+		}, gatewayRejection)
 	} else if action == "pvp_room_create" {
 		command = withActionCommand(action, func(ctx context.Context, id string, p pvpCreateRoomRequest) (any, error) {
 			return f.execute(ctx, id, 0)
@@ -263,13 +267,17 @@ func TestActionGatewayStrictParams(t *testing.T) {
 
 func TestActionGatewayTextSafety(t *testing.T) {
 	for _, tc := range []struct {
-		reason string
-		ok     bool
+		reason     string
+		ok         bool
+		wantReason string
 	}{
-		{`"a\r\nb"`, true}, // rescue_request's reason is a comment
-		{`"a\u202eb"`, false},
-		{`"a\u0007b"`, false},
-		{"\"a\xffb\"", false},
+		{`"a\r\nb"`, true, "ab"},
+		{`"e\u0301\u0E34\u0E47"`, true, "e"},
+		{`"a\tb"`, false, ""},
+		{`"a\u202eb"`, false, ""},
+		{`"a\u0007b"`, false, ""},
+		{`"Z\u20D0\u20D1\u20D2"`, false, ""},
+		{"\"a\xffb\"", false, ""},
 	} {
 		t.Run(tc.reason, func(t *testing.T) {
 			f := newGatewayFixture(t)
@@ -281,8 +289,8 @@ func TestActionGatewayTextSafety(t *testing.T) {
 			f.sleepErr = errors.New("shared sleep guard must be bypassed")
 			status, got := gatewayRequest(t, f.router("rescue_request", timers), "hero", "session", "application/json", `{"action":"rescue_request","params":{"reason":`+tc.reason+`}}`, nil)
 			if tc.ok {
-				if status != 200 || f.executions != 1 {
-					t.Fatalf("status=%d response=%s", status, got)
+				if status != 200 || f.executions != 1 || f.lastReason != tc.wantReason {
+					t.Fatalf("status=%d reason=%q response=%s", status, f.lastReason, got)
 				}
 				return
 			}

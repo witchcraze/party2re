@@ -142,7 +142,7 @@ func TestColosseum_CreateRoom(t *testing.T) {
 		"room\x001",
 		"room\u200B1",
 		"room\u202E1",
-		"Z\u0300\u0301\u0302",
+		"Z\u20D0\u20D1\u20D2",
 		strings.Repeat("あ", 51),
 	} {
 		if _, err := svc.CreateRoom(ctx, hero.ID, pvp.CreateRoomRequest{Name: invalid, Bet: 10}); !errors.Is(err, pvp.ErrInvalidRoomName) {
@@ -150,15 +150,15 @@ func TestColosseum_CreateRoom(t *testing.T) {
 		}
 	}
 
-	// NFC normalization on valid room name
+	// NFC normalization on valid room name (and decode_pt stripping)
 	nfcHero := createTestCharacter("char-nfc", "NFCHero", 500)
 	charRepo.add(nfcHero)
-	nfcDetail, err := svc.CreateRoom(ctx, nfcHero.ID, pvp.CreateRoomRequest{Name: "Ka\u0301", Bet: 10})
+	nfcDetail, err := svc.CreateRoom(ctx, nfcHero.ID, pvp.CreateRoomRequest{Name: "か\u3099Ka\u0301", Bet: 10})
 	if err != nil {
 		t.Fatalf("CreateRoom NFC failed: %v", err)
 	}
-	if nfcDetail.Room.Name != "Ká" {
-		t.Errorf("expected NFC-normalized room name %q, got %q", "Ká", nfcDetail.Room.Name)
+	if nfcDetail.Room.Name != "がKa" {
+		t.Errorf("expected normalized room name %q, got %q", "がKa", nfcDetail.Room.Name)
 	}
 
 	// Invalid Bet < 10

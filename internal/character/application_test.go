@@ -211,6 +211,8 @@ func TestService_CreateAndGet(t *testing.T) {
 		"あ",
 		"12345678",
 		"あいうえおかきく",
+		"Hero\\1",
+		"Hero/1",
 	}
 	for _, n := range validCreateNames {
 		c, err := service.CreateWithOptions(context.Background(), "player-valid", n, CreationOptions{JobID: "job-01", Gender: "m"})
@@ -220,6 +222,11 @@ func TestService_CreateAndGet(t *testing.T) {
 		if c.Name != n {
 			t.Errorf("CreateWithOptions() name = %q, want %q", c.Name, n)
 		}
+	}
+
+	strippedChar, err := service.CreateWithOptions(context.Background(), "player-strip", "He\u0301ro\n", CreationOptions{JobID: "job-01", Gender: "m"})
+	if err != nil || strippedChar.Name != "Hero" {
+		t.Errorf("CreateWithOptions() decode_pt strip = %q, %v; want %q, nil", strippedChar.Name, err, "Hero")
 	}
 
 	invalidCreateNames := []string{
@@ -242,8 +249,6 @@ func TestService_CreateAndGet(t *testing.T) {
 		"Hero'1",
 		"Hero&1",
 		"<Hero>",
-		"Hero\\1",
-		"Hero/1",
 	}
 	for _, n := range invalidCreateNames {
 		if _, err := service.CreateWithOptions(context.Background(), "player-inv", n, CreationOptions{JobID: "job-01", Gender: "m"}); !errors.Is(err, ErrInvalidName) {

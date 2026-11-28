@@ -563,20 +563,20 @@ func TestHomeService(t *testing.T) {
 			t.Errorf("expected ErrBidiOverride, got %v", err)
 		}
 
-		// Zalgo rejection
-		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello Z\u0300\u0301\u0302algo")
+		// Zalgo rejection (outside decode_pt stripped ranges)
+		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello Z\u20D0\u20D1\u20D2algo")
 		if !errors.Is(err, validation.ErrZalgo) {
 			t.Errorf("expected ErrZalgo, got %v", err)
 		}
 
-		// NFC normalization: NFD "Cafe\u0301" becomes NFC "Café" (\u00e9)
-		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Cafe\u0301")
+		// decode_pt strips U+0300-U+036F; non-stripped combining marks still NFC normalize
+		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Cafe\u0301 か\u3099")
 		if err != nil {
 			t.Fatalf("expected SendLetter to succeed, got %v", err)
 		}
-		expectedContent := "Café"
+		expectedContent := "Cafe が"
 		if letter.Content != expectedContent {
-			t.Errorf("expected NFC normalized content %q, got %q", expectedContent, letter.Content)
+			t.Errorf("expected decode_pt/NFC normalized content %q, got %q", expectedContent, letter.Content)
 		}
 	})
 
@@ -617,10 +617,10 @@ func TestHomeService(t *testing.T) {
 	})
 
 	t.Run("teach companion phrase validation and NFC normalization", func(t *testing.T) {
-		// Newline rejection
-		_, err := service.TeachCompanionPhrase(ctx, "char-1", "Hello\nWorld")
+		// Tab rejection
+		_, err := service.TeachCompanionPhrase(ctx, "char-1", "Hello\tWorld")
 		if !errors.Is(err, validation.ErrControlCharacter) {
-			t.Errorf("expected ErrControlCharacter for newline, got %v", err)
+			t.Errorf("expected ErrControlCharacter for tab, got %v", err)
 		}
 
 		// Control character rejection
@@ -641,20 +641,20 @@ func TestHomeService(t *testing.T) {
 			t.Errorf("expected ErrBidiOverride, got %v", err)
 		}
 
-		// Zalgo rejection
-		_, err = service.TeachCompanionPhrase(ctx, "char-1", "Z\u0300\u0301\u0302algo")
+		// Zalgo rejection (outside decode_pt stripped ranges)
+		_, err = service.TeachCompanionPhrase(ctx, "char-1", "Z\u20D0\u20D1\u20D2algo")
 		if !errors.Is(err, validation.ErrZalgo) {
 			t.Errorf("expected ErrZalgo, got %v", err)
 		}
 
-		// NFC normalization: NFD "Cafe\u0301" becomes NFC "Café" (\u00e9)
-		cp, err := service.TeachCompanionPhrase(ctx, "char-1", "Cafe\u0301")
+		// decode_pt strips CR/LF and U+0300-U+036F; non-stripped marks NFC normalize
+		cp, err := service.TeachCompanionPhrase(ctx, "char-1", "Cafe\u0301\nか\u3099")
 		if err != nil {
 			t.Fatalf("expected TeachCompanionPhrase to succeed, got %v", err)
 		}
-		expectedPhrase := "Café"
+		expectedPhrase := "Cafeが"
 		if cp.Phrase != expectedPhrase {
-			t.Errorf("expected NFC normalized phrase %q, got %q", expectedPhrase, cp.Phrase)
+			t.Errorf("expected decode_pt/NFC normalized phrase %q, got %q", expectedPhrase, cp.Phrase)
 		}
 		_ = service.ForgetCompanionPhrase(ctx, cp.ID, "char-1")
 	})

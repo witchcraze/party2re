@@ -319,6 +319,12 @@ func TestGuildCreateMovesFounderIntoRoom(t *testing.T) {
 	if status != 200 || got.Message != "＠新ギルド 新月の設立を許可します！" || got.Selection == nil || got.Selection.Destination != "guild" || store.selection.Destination != "guild" || got.Character == nil {
 		t.Fatalf("%d %+v %v", status, got, f.calls)
 	}
+	f2, _, _, router2 := newGuildFixture(t, "join_guild", false, "")
+	status, raw = gatewayRequest(t, router2, "hero", "session", "application/json", saleGatewayBody("guild_create", `{"name":"ab\n\u0301"}`), nil)
+	got = tavernResult[GuildResult](t, raw)
+	if status != 200 || got.Message != "＠新ギルド abの設立を許可します！" {
+		t.Fatalf("decode_pt guild_create: %d %+v %v", status, got, f2.calls)
+	}
 }
 
 func TestGuildApplyNamesMasterAndUsesSelectedGuild(t *testing.T) {

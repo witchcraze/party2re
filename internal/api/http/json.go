@@ -96,58 +96,121 @@ func decodeActionParams(raw json.RawMessage, required []string, dst any) error {
 	return dec.Decode(dst)
 }
 
-// checkTextParams applies the field-agnostic text check to every string token
-// in the params, nested values included, by its top-level parameter's declared
-// kind (TextLine when undeclared). It walks tokens rather than a decoded map and
-// rejects duplicate keys, so the strings checked are the ones typed decoding keeps.
-func checkTextParams(raw json.RawMessage, kinds map[string]validation.TextKind) error {
+// cleanTextParams strips legacy decode_pt characters (CR/LF and combining-mark
+// runs) from every string value token in params (nested values included), checks
+// the cleaned strings for remaining unsafe characters, and rejects invalid UTF-8,
+// case-insensitive duplicate keys, or trailing data. It returns the cleaned JSON.
+func cleanTextParams(raw json.RawMessage) (json.RawMessage, error) {
 	if len(raw) == 0 {
-		return nil
+		return raw, nil
 	}
 	if !utf8.Valid(raw) {
-		return errors.New("params are not valid UTF-8")
+		return nil, errors.New("params are not valid UTF-8")
 	}
-	return checkTextValue(json.NewDecoder(bytes.NewReader(raw)), kinds, validation.TextLine)
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var buf bytes.Buffer
+	changed, err := cleanTextValue(dec, &buf)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, errors.New("trailing data in params")
+	}
+	if !changed {
+		return raw, nil
+	}
+	return buf.Bytes(), nil
 }
 
-// checkTextValue reads one JSON value. Only the top-level object (kinds != nil)
-// assigns member kinds; nested values inherit theirs.
-func checkTextValue(dec *json.Decoder, kinds map[string]validation.TextKind, kind validation.TextKind) error {
+// cleanTextValue reads one JSON value, normalizing and checking string values.
+func cleanTextValue(dec *json.Decoder, buf *bytes.Buffer) (bool, error) {
 	tok, err := dec.Token()
 	if err != nil {
-		return err
+		return false, err
 	}
 	switch t := tok.(type) {
 	case string:
-		return validation.CheckText(kind, t)
+		cleaned := validation.StripLegacyText(t)
+		if err := validation.CheckText(cleaned); err != nil {
+			return false, err
+		}
+		writeJSONString(buf, cleaned)
+		return cleaned != t, nil
+	case json.Number:
+		buf.WriteString(t.String())
+		return false, nil
+	case bool:
+		if t {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+		return false, nil
+	case nil:
+		buf.WriteString("null")
+		return false, nil
 	case json.Delim:
+		if t != '{' && t != '[' {
+			return false, errors.New("unexpected JSON delimiter")
+		}
+		buf.WriteByte(byte(t))
 		seen := map[string]bool{}
+		changed := false
+		first := true
 		for dec.More() {
-			member := kind
+			if !first {
+				buf.WriteByte(',')
+			}
+			first = false
 			if t == '{' {
 				key, err := dec.Token()
 				if err != nil {
-					return err
+					return false, err
 				}
-				name, _ := key.(string)
+				name, ok := key.(string)
+				if !ok {
+					return false, errors.New("expected JSON string key")
+				}
 				// Typed decoding matches field names case-insensitively, keeping the last.
 				folded := strings.ToLower(name)
 				if seen[folded] {
-					return errors.New("duplicate action parameter")
+					return false, errors.New("duplicate action parameter")
 				}
 				seen[folded] = true
-				if kinds != nil {
-					if member = kinds[name]; member == "" {
-						member = validation.TextLine
-					}
-				}
+				writeJSONString(buf, name)
+				buf.WriteByte(':')
 			}
-			if err := checkTextValue(dec, nil, member); err != nil {
-				return err
+			elemChanged, err := cleanTextValue(dec, buf)
+			if err != nil {
+				return false, err
+			}
+			if elemChanged {
+				changed = true
 			}
 		}
-		_, err = dec.Token()
-		return err
+		end, err := dec.Token()
+		if err != nil {
+			return false, err
+		}
+		endDelim, ok := end.(json.Delim)
+		if !ok {
+			return false, errors.New("expected closing JSON delimiter")
+		}
+		buf.WriteByte(byte(endDelim))
+		return changed, nil
+	default:
+		return false, errors.New("unexpected JSON token")
 	}
-	return nil
+}
+
+func writeJSONString(buf *bytes.Buffer, s string) {
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(s)
+	// json.Encoder.Encode appends a trailing newline.
+	b := buf.Bytes()
+	if len(b) > 0 && b[len(b)-1] == '\n' {
+		buf.Truncate(len(b) - 1)
+	}
 }

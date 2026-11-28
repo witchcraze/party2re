@@ -331,7 +331,7 @@ func (s *Service) TeachCompanionPhrase(ctx context.Context, characterID, phrase 
 	cp := CompanionPhrase{
 		ID:          id.New(),
 		CharacterID: characterID,
-		Phrase:      validation.SanitizeText(phrase),
+		Phrase:      validation.SanitizeText(validation.StripLegacyText(phrase)),
 		CreatedAt:   now,
 	}
 
