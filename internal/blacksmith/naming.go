@@ -11,23 +11,25 @@ import (
 var (
 	ErrNameWhitespace    = errors.New("name contains invalid whitespace")
 	ErrNameForbiddenChar = errors.New("name contains forbidden characters (,;\"'&<>)")
-	ErrNameAtSymbol      = errors.New("name contains forbidden at symbol (@, ＠)")
+	ErrNameAtSymbol      = errors.New("name contains forbidden full-width at symbol (＠)")
 	ErrNameTooLong       = errors.New("name cannot exceed 20 characters")
 	ErrEmptyName         = errors.New("name cannot be empty")
 )
 
-// ValidateCustomName validates custom names for weapons and armors according to legacy Party2 rules (blacksmith.cgi:60-72, 80-92).
+// ValidateCustomName applies the legacy nazukeru name rules (blacksmith.cgi:60-71, 80-91).
 func ValidateCustomName(name string) error {
-	if name == "" {
+	// Perl-false "0" renames nothing either; legacy shows the prompt (blacksmith.cgi:59, 79).
+	if name == "" || name == "0" {
 		return ErrEmptyName
 	}
-	if strings.ContainsAny(name, " \t\n\r") || strings.Contains(name, "　") {
+	// Perl \s on the byte string plus the ideographic space.
+	if strings.ContainsAny(name, " \t\n\r\f\v　") {
 		return ErrNameWhitespace
 	}
 	if strings.ContainsAny(name, validation.MarkupChars) {
 		return ErrNameForbiddenChar
 	}
-	if strings.ContainsAny(name, validation.TitleChars+validation.FullwidthAt) {
+	if strings.Contains(name, validation.FullwidthAt) {
 		return ErrNameAtSymbol
 	}
 	if utf8.RuneCountInString(name) > 20 {

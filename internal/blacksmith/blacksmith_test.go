@@ -219,7 +219,12 @@ func TestValidateCustomName(t *testing.T) {
 		wantErr error
 	}{
 		{"empty", "", blacksmith.ErrEmptyName},
+		{"perl-false zero", "0", blacksmith.ErrEmptyName},
+		{"zero prefix valid", "00", nil},
 		{"half-width space", "Holy Sword", blacksmith.ErrNameWhitespace},
+		{"leading space not trimmed", " 剣", blacksmith.ErrNameWhitespace},
+		{"trailing full-width space", "剣　", blacksmith.ErrNameWhitespace},
+		{"vertical tab", "剣\v", blacksmith.ErrNameWhitespace},
 		{"full-width space", "聖なる　剣", blacksmith.ErrNameWhitespace},
 		{"tab character", "Sword\tX", blacksmith.ErrNameWhitespace},
 		{"comma forbidden", "Sword,One", blacksmith.ErrNameForbiddenChar},
@@ -229,7 +234,7 @@ func TestValidateCustomName(t *testing.T) {
 		{"ampersand forbidden", "Sword&Shield", blacksmith.ErrNameForbiddenChar},
 		{"less than forbidden", "Sword<1>", blacksmith.ErrNameForbiddenChar},
 		{"greater than forbidden", "Sword>1<", blacksmith.ErrNameForbiddenChar},
-		{"half-width at forbidden", "Sword@User", blacksmith.ErrNameAtSymbol},
+		{"half-width at allowed", "a@b", nil},
 		{"full-width at forbidden", "Sword＠User", blacksmith.ErrNameAtSymbol},
 		{"21 runes too long", strings.Repeat("剣", 21), blacksmith.ErrNameTooLong},
 		{"20 runes valid", strings.Repeat("剣", 20), nil},
@@ -418,7 +423,7 @@ func TestNameEquipment(t *testing.T) {
 	_ = equipRepo.Save(ctx, equip)
 
 	// 2. Error on forbidden char
-	err = svc.NameEquipment(ctx, char.ID, "weapon", "Excali@bur")
+	err = svc.NameEquipment(ctx, char.ID, "weapon", "Excali＠bur")
 	if !errors.Is(err, blacksmith.ErrNameAtSymbol) {
 		t.Errorf("expected ErrNameAtSymbol, got %v", err)
 	}
@@ -447,13 +452,13 @@ func TestNameEquipment(t *testing.T) {
 		t.Errorf("armor name = %q, want 竜鱗の鎧", c2.ArmorCustomName)
 	}
 
-	// 6. Clearing name
-	if err := svc.NameEquipment(ctx, char.ID, "weapon", ""); err != nil {
-		t.Fatalf("clear weapon name failed: %v", err)
+	// 6. Empty name is the legacy prompt, not a reset
+	if err := svc.NameEquipment(ctx, char.ID, "weapon", ""); !errors.Is(err, blacksmith.ErrEmptyName) {
+		t.Fatalf("empty name: got %v, want ErrEmptyName", err)
 	}
 	c3, _ := charRepo.FindByID(ctx, char.ID)
-	if c3.WeaponCustomName != "" {
-		t.Errorf("weapon name not cleared: %q", c3.WeaponCustomName)
+	if c3.WeaponCustomName != "聖剣エクスカリバー" {
+		t.Errorf("weapon name changed by empty input: %q", c3.WeaponCustomName)
 	}
 }
 

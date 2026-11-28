@@ -22,7 +22,7 @@ import (
 
 var blacksmithInputs = []struct{ action, params string }{
 	{"blacksmith_seal", `{"seal_id":2}`},
-	{"blacksmith_name", `{"target":" ARM ","name":" 名剣 "}`},
+	{"blacksmith_name", `{"target":" ARM ","name":"名剣"}`},
 	{"blacksmith_deposit", `{}`},
 	{"blacksmith_withdraw", `{"slot":3}`},
 }
@@ -138,7 +138,7 @@ func TestBlacksmithGatewayOutcomes(t *testing.T) {
 								t.Fatalf("seal facts: %s", result)
 							}
 						case "blacksmith_name":
-							if f.target != " ARM " || f.name != " 名剣 " || string(result["target"]) != `"armor"` || string(result["name"]) != `"名剣"` || string(result["message"]) != `"防具を名剣と名づけたぜ"` {
+							if f.target != " ARM " || f.name != "名剣" || string(result["target"]) != `"armor"` || string(result["name"]) != `"名剣"` || string(result["message"]) != `"防具を名剣と名づけたぜ"` {
 								t.Fatalf("name facts: %s", result)
 							}
 						case "blacksmith_deposit":
@@ -167,11 +167,8 @@ func TestBlacksmithGatewayOutcomes(t *testing.T) {
 	}
 	f := &blacksmithGatewayFixture{gatewayFixture: newGatewayFixture(t)}
 	router := f.router(t, timer.NewService(nil))
-	for _, body := range []string{`{"action":"blacksmith_deposit"}`, `{"action":"blacksmith_name","params":{"target":"weapon","name":""}}`} {
-		status, got := gatewayRequest(t, router, "hero", "session", "application/json", body, nil)
-		if status != 200 {
-			t.Fatalf("empty input/reset failed: %d %s", status, got)
-		}
+	if status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"blacksmith_deposit"}`, nil); status != 200 {
+		t.Fatalf("empty input failed: %d %s", status, got)
 	}
 }
 

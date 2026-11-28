@@ -205,11 +205,8 @@ func (s *Service) NameEquipment(ctx context.Context, characterID string, target 
 		return ErrInvalidTarget
 	}
 
-	trimmedName := strings.TrimSpace(customName)
-	if trimmedName != "" {
-		if err := ValidateCustomName(trimmedName); err != nil {
-			return err
-		}
+	if err := ValidateCustomName(customName); err != nil {
+		return err
 	}
 
 	return s.runInTx(ctx, func(txCtx context.Context) error {
@@ -232,13 +229,13 @@ func (s *Service) NameEquipment(ctx context.Context, characterID string, target 
 			if !ok || instID == "" {
 				return ErrNoWeaponEquipped
 			}
-			char.WeaponCustomName = trimmedName
+			char.WeaponCustomName = customName
 		case "armor", "arm", "防具":
 			instID, ok := equip.Equipped(item.SlotBody)
 			if !ok || instID == "" {
 				return ErrNoArmorEquipped
 			}
-			char.ArmorCustomName = trimmedName
+			char.ArmorCustomName = customName
 		}
 
 		return s.characters.Update(txCtx, char)

@@ -61,12 +61,8 @@ func WithBlacksmith(service BlacksmithService) Option {
 			case "armor", "arm", "防具":
 				target, label = "armor", "防具"
 			}
-			name := strings.TrimSpace(p.Name)
-			message := label + "を" + name + "と名づけたぜ"
-			if name == "" {
-				message = label + "の名前を元に戻したぜ"
-			}
-			return blacksmithNameResult{target, name, message, commandEcho{target: label + "＠なまえ>" + name, reply: message}}, nil
+			message := label + "を" + p.Name + "と名づけたぜ"
+			return blacksmithNameResult{target, p.Name, message, commandEcho{target: label + "＠なまえ>" + p.Name, reply: message}}, nil
 		}, blacksmithActionRejection)(h)
 		withEchoCommand("blacksmith_deposit", func(ctx context.Context, actor string, _ struct{}) (blacksmithDepositResult, error) {
 			// Read the display name before mutation (blacksmith.cgi:177 get_weapon_name).
