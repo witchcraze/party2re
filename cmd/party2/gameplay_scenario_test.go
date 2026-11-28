@@ -263,6 +263,12 @@ type scenarioContext struct {
 			Listings      []fleamarket.Listing `json:"listings"`
 			OwnedListings []fleamarket.Listing `json:"owned_listings"`
 			Quests        []helperquest.Quest  `json:"quests"`
+			// Medal castle balance and prize tiers.
+			SmallMedals int `json:"small_medals"`
+			Rewards     []struct {
+				Cost   int    `json:"cost"`
+				ItemID string `json:"item_id"`
+			} `json:"rewards"`
 			// Shop wares and Depot contents share the key.
 			Items []struct {
 				ID             string         `json:"id"`

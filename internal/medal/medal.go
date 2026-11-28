@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
-	"os"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -14,15 +13,6 @@ import (
 
 //go:embed medal_rewards.json
 var defaultMedalRewardsData []byte
-
-// InitialRewards returns the default embedded small medal reward tiers.
-func InitialRewards() ([]Reward, error) {
-	var rewards []Reward
-	if err := json.Unmarshal(defaultMedalRewardsData, &rewards); err != nil {
-		return nil, err
-	}
-	return rewards, nil
-}
 
 var (
 	ErrNilDependency      = errors.New("medal dependency is nil")
@@ -49,14 +39,6 @@ type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-type Option func(*Service)
-
-func WithTransactionProvider(txProvider TransactionProvider) Option {
-	return func(s *Service) {
-		s.txProvider = txProvider
-	}
-}
-
 type Service struct {
 	mutationCheck func(context.Context, string) error
 	characters    CharacterRepository
@@ -65,73 +47,32 @@ type Service struct {
 	rewards       []Reward
 }
 
-func NewService(
-	characters CharacterRepository,
-	depots DepotRepository,
-	rewardsFilePath string,
-	opts ...Option,
-) (*Service, error) {
-	if characters == nil || depots == nil {
-		return nil, ErrNilDependency
-	}
-
-	var data []byte
-	if rewardsFilePath == "" {
-		data = defaultMedalRewardsData
-	} else {
-		var err error
-		data, err = os.ReadFile(rewardsFilePath)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+// NewService serves the embedded medal.cgi prize tiers.
+func NewService(characters CharacterRepository, depots DepotRepository, txProvider TransactionProvider) (*Service, error) {
 	var rewards []Reward
-	if err := json.Unmarshal(data, &rewards); err != nil {
+	if err := json.Unmarshal(defaultMedalRewardsData, &rewards); err != nil {
 		return nil, err
 	}
-
-	return NewServiceWithRewards(characters, depots, rewards, opts...)
+	return NewServiceWithRewards(characters, depots, txProvider, rewards)
 }
 
-func NewServiceWithRewards(
-	characters CharacterRepository,
-	depots DepotRepository,
-	rewards []Reward,
-	opts ...Option,
-) (*Service, error) {
-	if characters == nil || depots == nil {
+func NewServiceWithRewards(characters CharacterRepository, depots DepotRepository, txProvider TransactionProvider, rewards []Reward) (*Service, error) {
+	if characters == nil || depots == nil || txProvider == nil {
 		return nil, ErrNilDependency
 	}
-
-	s := &Service{
-		characters: characters,
-		depots:     depots,
-		rewards:    rewards,
-	}
-	for _, opt := range opts {
-		opt(s)
-	}
-	return s, nil
+	return &Service{characters: characters, depots: depots, txProvider: txProvider, rewards: rewards}, nil
 }
 
 func (s *Service) GetRewards() []Reward {
 	return s.rewards
 }
 
-func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	if s.txProvider != nil {
-		return s.txProvider.RunInTx(ctx, fn)
-	}
-	return fn(ctx)
-}
-
-func (s *Service) Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, depot.Depot, error) {
+func (s *Service) Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, error) {
 	if characterID == "" {
-		return corecharacter.Character{}, depot.Depot{}, corecharacter.ErrNotFound
+		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 	if itemID == "" {
-		return corecharacter.Character{}, depot.Depot{}, ErrRewardNotFound
+		return corecharacter.Character{}, ErrRewardNotFound
 	}
 
 	var targetReward *Reward
@@ -142,13 +83,11 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 		}
 	}
 	if targetReward == nil {
-		return corecharacter.Character{}, depot.Depot{}, ErrRewardNotFound
+		return corecharacter.Character{}, ErrRewardNotFound
 	}
 
 	var updatedChar corecharacter.Character
-	var updatedDepot depot.Depot
-
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
+	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
 		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
 			return err
@@ -184,12 +123,11 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 		}
 
 		updatedChar = char
-		updatedDepot = dep
 		return nil
 	})
 	if err != nil {
-		return corecharacter.Character{}, depot.Depot{}, err
+		return corecharacter.Character{}, err
 	}
 
-	return updatedChar, updatedDepot, nil
+	return updatedChar, nil
 }

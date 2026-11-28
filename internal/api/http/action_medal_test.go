@@ -11,7 +11,6 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -29,10 +28,10 @@ func (f *medalHelperFixture) GetRewards() []medal.Reward {
 	return []medal.Reward{{Cost: 3, ItemID: "armor-32"}, {Cost: 5, ItemID: "item-013"}}
 }
 
-func (f *medalHelperFixture) Claim(ctx context.Context, actor, itemID string) (corecharacter.Character, depot.Depot, error) {
+func (f *medalHelperFixture) Claim(ctx context.Context, actor, itemID string) (corecharacter.Character, error) {
 	f.claimedItem = itemID
 	_, err := f.execute(ctx, actor, 0)
-	return corecharacter.Character{ID: actor, Name: "勇者", SmallMedals: 2}, depot.Depot{}, err
+	return corecharacter.Character{ID: actor, Name: "勇者", SmallMedals: 2}, err
 }
 
 func (f *medalHelperFixture) ListQuests(context.Context, time.Time) ([]helperquest.Quest, error) {

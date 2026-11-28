@@ -8,7 +8,6 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -16,7 +15,7 @@ import (
 // MedalService is the medal castle surface.
 type MedalService interface {
 	GetRewards() []medal.Reward
-	Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, depot.Depot, error)
+	Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, error)
 }
 
 type medalClaimRequest struct {
@@ -60,7 +59,7 @@ func WithMedal(service MedalService) Option {
 		}
 		withActionCommand("medal_claim", func(ctx context.Context, actor string, p medalClaimRequest) (any, error) {
 			reward := medalRewardView(service.GetRewards(), p.ItemID)
-			char, _, err := service.Claim(ctx, actor, p.ItemID)
+			char, err := service.Claim(ctx, actor, p.ItemID)
 			if errors.Is(err, medal.ErrInsufficientMedals) {
 				return nil, medalShort{reward.Cost}
 			}
