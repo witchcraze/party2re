@@ -53,7 +53,7 @@ func (r *MemoryRepository) SaveParty(_ context.Context, p Party, members ...Memb
 		r.memMembers[p.ID][member.CharacterID] = member
 		r.memCharParty[member.CharacterID] = p.ID
 	}
-	r.touchLocked(p)
+	r.touchLocked(p, true)
 	return nil
 }
 
@@ -62,9 +62,11 @@ func (r *MemoryRepository) hasOtherLobbyLocked(id, actor string) bool {
 	return owner != id && r.clock().Before(r.memLobbyExp[owner])
 }
 
-func (r *MemoryRepository) touchLocked(p Party) {
+func (r *MemoryRepository) touchLocked(p Party, renewIdle bool) {
 	now := r.clock()
-	p.idleAt = now.Add(lobbyIdleTimeout).UnixMilli()
+	if renewIdle || p.idleAt == 0 {
+		p.idleAt = now.Add(lobbyIdleTimeout).UnixMilli()
+	}
 	r.memLobbies[p.ID] = p
 	r.memLobbyExp[p.ID] = now.Add(r.lobbyTTL)
 	if p.Status == StatusCompleted {
@@ -146,7 +148,7 @@ func (r *MemoryRepository) UpdateParty(_ context.Context, p Party) error {
 	if r.memLobbies[p.ID].sleepUntil != 0 {
 		return ErrPartyNotRecruiting
 	}
-	r.touchLocked(p)
+	r.touchLocked(p, true)
 	return nil
 }
 
@@ -202,7 +204,7 @@ func (r *MemoryRepository) AddMember(_ context.Context, m Member) error {
 	m.BattleActor = cloneBattleActor(m.BattleActor)
 	r.memMembers[m.PartyID][m.CharacterID] = m
 	r.memCharParty[m.CharacterID] = m.PartyID
-	r.touchLocked(p)
+	r.touchLocked(p, false)
 	return nil
 }
 
@@ -283,7 +285,7 @@ func (r *MemoryRepository) RemoveMember(_ context.Context, partyID, characterID 
 			p.LeaderCharacterID = next.CharacterID
 		}
 	}
-	r.touchLocked(p)
+	r.touchLocked(p, true)
 	return nil
 }
 

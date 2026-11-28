@@ -73,13 +73,8 @@ Room activity and actor battle eligibility are separate clocks. `party.cgi:21–
 | Plain comment, unknown legacy text, public or private whisper | Yes, including permitted spectator/fallen submissions | Unknown action returns before the interval check (`640`); whisper checks interval then returns before the combat tail (`641–649`). Plain comments do not inherit combat cooldown |
 | Banned skill silently ignored | Yes, as a comment; no actor combat timestamp | `_battle.cgi:667–675` returns without `$mes` |
 | Successful floor-0 kick | Yes | `_skill.cgi:796–837` also writes a quest-area notice without redirecting the room log |
-| Invitation or other dispatch redirected to another log | No | `sasou`, `_skill.cgi:772–776` |
+| Quest-list join or dispatch writing to another log | No | `さんか` (`quest.cgi:11–12,1047–1077`); `sasou` (`_skill.cgi:772–776`) |
 | Screenshot, even successful | No | `system.cgi:175–191` sets `$mes` |
-| Rejected operation (`$mes`) | No | `party.cgi:25` |
-| GET, discovery, elapsed time, due detection | Never | #1325 observation boundary |
-| Retried committed command / receipt read | No new instant | #1325 receipt boundary; a new intentional comment is a new submission |
-
-Room activity is persisted in the same commit as the accepted operation; rolled-back commands cannot renew it.
 
 ### Combat travel and encounter replacement
 

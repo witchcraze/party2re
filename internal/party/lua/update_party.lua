@@ -170,6 +170,11 @@ elseif op == 'update' then
     state.party = cjson.decode(value)
 end
 
-state.idle_at_ms = idleAt
+if op ~= 'add' then
+    state.idle_at_ms = idleAt
+elseif not state.idle_at_ms then
+    local oldExpiry = redis.call('PEXPIRETIME', KEYS[1])
+    state.idle_at_ms = oldExpiry > 0 and oldExpiry or idleAt
+end
 publish(removedKey, newMemberKey)
 return 'OK'
