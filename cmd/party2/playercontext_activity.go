@@ -200,6 +200,9 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		if controls.CanMove {
 			a.Actions = append(a.Actions, "dungeon_move")
 		}
+		if controls.CanMine {
+			a.Actions = append(a.Actions, "dungeon_mine")
+		}
 		if controls.CanFight {
 			a.Actions = append(a.Actions, "dungeon_fight")
 		}

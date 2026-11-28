@@ -15,6 +15,7 @@ var continuationCatalog = []ActionDefinition{
 	{ID: "gvg_advance", Label: "ギルド戦を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "expected_round"}, ActivityKind: "gvg", WaitExempt: WaitActivityPacing},
 	{ID: "gvg_leave", Label: "ギルド戦部屋を離れる", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "gvg", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "dungeon_move", Label: "探索を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"direction"}, ActivityKind: "dungeon", WaitExempt: WaitActivityPacing},
+	{ID: "dungeon_mine", Label: "採掘する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{}, ActivityKind: "dungeon", WaitExempt: WaitActivityPacing},
 	{ID: "dungeon_fight", Label: "探索の戦闘を続ける", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{}, ActivityKind: "dungeon", WaitExempt: WaitActivityPacing},
 	{ID: "dungeon_escape", Label: "探索から脱出する", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{}, ActivityKind: "dungeon", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "challenge_advance", Label: "試練を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"session_id"}, ActivityKind: "challenge", WaitExempt: WaitActivityPacing},

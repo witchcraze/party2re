@@ -41,53 +41,68 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 	return result, err
 }
 
-func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (ExpeditionStepResult, error) {
-	if characterID == "" {
-		return ExpeditionStepResult{}, ErrCharacterNotFound
-	}
+// stepRun is one admitted command on a run: the acting member, the leader
+// who owns the buffer, and the floor the party stands on.
+type stepRun struct {
+	exp          *ActiveExpedition
+	owner, actor corecharacter.Character
+	dungeon      Dungeon
+	floor        Floor
+}
 
+// admitStep admits a living member's map command (a move or map16 mining)
+// while no living enemy or unopened chest remains.
+func (s *Service) admitStep(ctx context.Context, characterID string) (stepRun, error) {
+	if characterID == "" {
+		return stepRun{}, ErrCharacterNotFound
+	}
 	exp, err := s.activeStore.GetActiveExpedition(ctx, characterID)
 	if err != nil {
-		return ExpeditionStepResult{}, err
+		return stepRun{}, err
 	}
 	if exp == nil || exp.Status != StatusExploring {
-		return ExpeditionStepResult{}, ErrNoActiveExpedition
+		return stepRun{}, ErrNoActiveExpedition
 	}
 	if !exp.ContainsCharacter(characterID) {
-		return ExpeditionStepResult{}, ErrForbidden
+		return stepRun{}, ErrForbidden
 	}
-	// Legacy registers the directions for every member, but a fallen one can only Escape.
+	// Legacy registers the commands for every member, but a fallen one can only Escape.
 	if !exp.isAlive(characterID) {
-		return ExpeditionStepResult{}, ErrActorFallen
+		return stepRun{}, ErrActorFallen
 	}
-
 	if exp.Encounter.blocking() {
-		return ExpeditionStepResult{}, ErrCombatActive
+		return stepRun{}, ErrCombatActive
 	}
 	if err := s.settleCredits(ctx, exp); err != nil {
-		return ExpeditionStepResult{}, err
+		return stepRun{}, err
 	}
-
 	if _, ok := s.dungeonMap[exp.DungeonID]; !ok {
-		return ExpeditionStepResult{}, ErrDungeonNotFound
+		return stepRun{}, ErrDungeonNotFound
 	}
-
 	actor, err := s.findCharacter(ctx, characterID)
 	if err != nil {
-		return ExpeditionStepResult{}, err
+		return stepRun{}, err
 	}
 	// The leader owns the run buffer, combat and the run-level mirrors.
 	owner := actor
 	if exp.CharacterID != characterID {
 		if owner, err = s.findCharacter(ctx, exp.CharacterID); err != nil {
-			return ExpeditionStepResult{}, err
+			return stepRun{}, err
 		}
 	}
-
 	d, floor, err := s.activeFloor(exp)
+	if err != nil {
+		return stepRun{}, err
+	}
+	return stepRun{exp: exp, owner: owner, actor: actor, dungeon: d, floor: floor}, nil
+}
+
+func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (ExpeditionStepResult, error) {
+	run, err := s.admitStep(ctx, characterID)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
+	exp, floor := run.exp, run.floor
 	// The limit rejects before any state, RNG or wall event changes.
 	if exp.Round >= exp.RoundLimit {
 		return ExpeditionStepResult{}, ErrMovementExhausted
@@ -108,16 +123,16 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 	}
 
 	if newX < 0 || newX >= floor.Width || newY < 0 || newY >= floor.Height || floor.Grid[newY][newX] == cellWall {
-		return s.hitWall(ctx, exp, owner.ID, characterID, floor)
+		return s.hitWall(ctx, exp, run.owner.ID, characterID, floor)
 	}
 	if w, ok := floor.event(floor.Grid[newY][newX]).action.(conditionalWall); ok {
 		if closed, err := w.closed(exp); err != nil {
 			return ExpeditionStepResult{}, err
 		} else if closed {
-			return s.hitWall(ctx, exp, owner.ID, characterID, floor)
+			return s.hitWall(ctx, exp, run.owner.ID, characterID, floor)
 		}
 	}
-	return s.moveNative(ctx, exp, &owner, &actor, d, floor, newX, newY)
+	return s.moveNative(ctx, exp, &run.owner, &run.actor, run.dungeon, floor, newX, newY)
 }
 
 // hitWall runs the floor's wall event without spending a round or resetting

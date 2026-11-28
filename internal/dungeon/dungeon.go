@@ -26,6 +26,7 @@ var (
 	ErrImpassableWall            = errors.New("cannot move into wall or out of map bounds")
 	ErrExpeditionAlreadyFinished = errors.New("expedition is already completed")
 	ErrMovementExhausted         = errors.New("movement limit reached; escape to leave the dungeon")
+	ErrNoMiningSite              = errors.New("there is no mining site here")
 	ErrJobLevelRequired          = errors.New("leader job level is too low for this dungeon")
 )
 
@@ -46,6 +47,10 @@ const (
 	EventTreasure TileEventType = "treasure"
 	EventBoss     TileEventType = "boss"
 	EventEscape   TileEventType = "escape"
+	// EventMineEmpty and EventMineDepleted report mining that dug nothing up,
+	// or a site already exhausted.
+	EventMineEmpty    TileEventType = "mine_empty"
+	EventMineDepleted TileEventType = "mine_depleted"
 	// EventWipeout reports resumed settlement of a carried-over wiped_out buffer.
 	EventWipeout TileEventType = "wipeout"
 )
@@ -94,6 +99,8 @@ type Floor struct {
 	Marks map[byte]string `json:"-"`
 	// events bind this floor's symbols; see map_events.go.
 	events map[byte]mapEvent
+	// mine is the floor's mining (map16 さいくつ), nil where nothing is mined.
+	mine nativeEvent
 }
 
 // FloorExit is a route or pitfall: the round carries over and the position is

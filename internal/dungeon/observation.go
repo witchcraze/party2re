@@ -7,18 +7,20 @@ type ContinuationControls struct {
 	CanMove   bool `json:"can_move"`
 	CanFight  bool `json:"can_fight"`
 	CanEscape bool `json:"can_escape"`
+	CanMine   bool `json:"can_mine"`
 }
 
-// Any living member may move; combat and Escape stay with the leader. An
-// all-fallen party can only Escape.
+// Any living member may move or mine; combat and Escape stay with the
+// leader. An all-fallen party can only Escape.
 func (exp ActiveExpedition) Controls(actor string) ContinuationControls {
 	canMove := exp.Status == StatusExploring && exp.isAlive(actor) && !exp.Encounter.blocking() && exp.Round < exp.RoundLimit
+	canMine := exp.canMine(actor)
 	if exp.CharacterID != actor {
-		return ContinuationControls{CanMove: canMove}
+		return ContinuationControls{CanMove: canMove, CanMine: canMine}
 	}
 	switch exp.Status {
 	case StatusExploring:
-		return ContinuationControls{CanMove: canMove, CanFight: exp.Encounter.hostile() && exp.anyAlive(), CanEscape: true}
+		return ContinuationControls{CanMove: canMove, CanFight: exp.Encounter.hostile() && exp.anyAlive(), CanEscape: true, CanMine: canMine}
 	case StatusEscaped, StatusWipedOut:
 		// Both operations retry the frozen outcome without fighting or changing it.
 		return ContinuationControls{CanFight: true, CanEscape: true}

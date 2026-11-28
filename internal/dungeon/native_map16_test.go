@@ -39,9 +39,10 @@ func newMap16Fixture(t *testing.T, store dungeon.ActiveExpeditionStore, id strin
 }
 
 type map16State struct {
-	Site       string   `json:"site"`
-	SpringUsed bool     `json:"spring_used"`
-	Kinds      []string `json:"kinds"`
+	Site       string   `json:"site,omitempty"`
+	SpringUsed bool     `json:"spring_used,omitempty"`
+	Kinds      []string `json:"kinds,omitempty"`
+	Depleted   []string `json:"depleted,omitempty"`
 }
 
 func map16StateOf(t *testing.T, exp dungeon.ActiveExpedition) (st map16State) {

@@ -142,6 +142,13 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader,
 	if err := ev.action.apply(&n); err != nil {
 		return ExpeditionStepResult{}, err
 	}
+	return s.finishNative(ctx, &n, revived, x, y)
+}
+
+// finishNative resolves a step's battle at (x, y) or commits the step,
+// reporting a treasure it created.
+func (s *Service) finishNative(ctx context.Context, n *nativeStep, revived map[string]int, x, y int) (ExpeditionStepResult, error) {
+	exp, leader := n.exp, n.leader
 	var damages map[string]int
 	if !n.recovery {
 		damages = negate(n.step.MemberHPDeltas)
