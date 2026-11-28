@@ -23,18 +23,18 @@ func (r *FutureMemoryRepository) Save(ctx context.Context, memory corecharacter.
 	executor := ExecutorFromContext(ctx, r.db)
 	_, err := executor.ExecContext(ctx, `
 		INSERT INTO character_future_memories (
-			id, character_id, slot, job_id, old_job_id, level, experience,
-			max_hp, max_mp, attack, defense, agility, gender, over_level, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			id, character_id, job_id, old_job_id, level, experience,
+			max_hp, max_mp, attack, defense, agility, over_level, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
-			slot = VALUES(slot), job_id = VALUES(job_id), old_job_id = VALUES(old_job_id),
+			job_id = VALUES(job_id), old_job_id = VALUES(old_job_id),
 			level = VALUES(level), experience = VALUES(experience),
 			max_hp = VALUES(max_hp), max_mp = VALUES(max_mp),
 			attack = VALUES(attack), defense = VALUES(defense), agility = VALUES(agility),
-			gender = VALUES(gender), over_level = VALUES(over_level)
+			over_level = VALUES(over_level)
 	`,
-		memory.ID, memory.CharacterID, 1, memory.JobID, memory.OldJobID, memory.Level, memory.Experience,
-		memory.MaxHP, memory.MaxMP, memory.Attack, memory.Defense, memory.Agility, memory.Gender, memory.OverLevel, memory.CreatedAt,
+		memory.ID, memory.CharacterID, memory.JobID, memory.OldJobID, memory.Level, memory.Experience,
+		memory.MaxHP, memory.MaxMP, memory.Attack, memory.Defense, memory.Agility, memory.OverLevel, memory.CreatedAt,
 	)
 	return err
 }
@@ -43,7 +43,7 @@ func (r *FutureMemoryRepository) FindByCharacterID(ctx context.Context, characte
 	executor := ExecutorFromContext(ctx, r.db)
 	rows, err := executor.QueryContext(ctx, `
 		SELECT id, character_id, job_id, old_job_id, level, experience,
-		       max_hp, max_mp, attack, defense, agility, gender, over_level, created_at
+		       max_hp, max_mp, attack, defense, agility, over_level, created_at
 		FROM character_future_memories
 		WHERE character_id = ?
 		ORDER BY created_at ASC
@@ -58,7 +58,7 @@ func (r *FutureMemoryRepository) FindByCharacterID(ctx context.Context, characte
 		var m corecharacter.FutureMemory
 		if err := rows.Scan(
 			&m.ID, &m.CharacterID, &m.JobID, &m.OldJobID, &m.Level, &m.Experience,
-			&m.MaxHP, &m.MaxMP, &m.Attack, &m.Defense, &m.Agility, &m.Gender, &m.OverLevel, &m.CreatedAt,
+			&m.MaxHP, &m.MaxMP, &m.Attack, &m.Defense, &m.Agility, &m.OverLevel, &m.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

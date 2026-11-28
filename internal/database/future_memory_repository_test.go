@@ -44,7 +44,6 @@ func TestFutureMemoryRepositorySaveAndFind(t *testing.T) {
 		Attack:      150,
 		Defense:     110,
 		Agility:     90,
-		Gender:      "female",
 		OverLevel:   true,
 		CreatedAt:   now,
 	}
@@ -63,7 +62,7 @@ func TestFutureMemoryRepositorySaveAndFind(t *testing.T) {
 	got := memories[0]
 	if got.ID != mem.ID || got.CharacterID != char.ID || got.JobID != "job-05" || got.OldJobID != "job-01" ||
 		got.Level != 50 || got.Experience != 12000 || got.MaxHP != 600 || got.MaxMP != 300 ||
-		got.Attack != 150 || got.Defense != 110 || got.Agility != 90 || got.Gender != "female" || !got.OverLevel {
+		got.Attack != 150 || got.Defense != 110 || got.Agility != 90 || !got.OverLevel {
 		t.Fatalf("retrieved memory mismatch: %#v, want %#v", got, mem)
 	}
 
