@@ -52,7 +52,6 @@ type FutureMemory struct {
 	Attack      int       `json:"attack"`
 	Defense     int       `json:"defense"`
 	Agility     int       `json:"agility"`
-	Gender      string    `json:"gender"`
 	OverLevel   bool      `json:"over_level"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -97,7 +96,6 @@ func (c *Character) CreateFutureMemory(id string, createdAt time.Time) FutureMem
 		Attack:      c.Stats.Attack,
 		Defense:     c.Stats.Defense,
 		Agility:     c.Stats.Agility,
-		Gender:      c.Gender,
 		OverLevel:   c.OverLevel,
 		CreatedAt:   createdAt,
 	}
@@ -123,7 +121,6 @@ func (c *Character) ApplyFutureMemory(memory FutureMemory, currentSP, oldSP int)
 	c.Stats.Attack = memory.Attack
 	c.Stats.Defense = memory.Defense
 	c.Stats.Agility = memory.Agility
-	c.Gender = memory.Gender
 	c.OverLevel = memory.OverLevel
 	c.SP = currentSP
 	c.OldSP = oldSP

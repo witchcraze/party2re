@@ -223,7 +223,7 @@ func TestHomeFutureMemory_Integration_BothSourcesAndOverFutureBoundary(t *testin
 			c := f.char
 			if m.JobID != c.JobID || m.OldJobID != c.OldJobID || m.Level != c.Level || m.Experience != c.Experience ||
 				m.MaxHP != c.Stats.MaxHP || m.MaxMP != c.Stats.MaxMP || m.Attack != c.Stats.Attack ||
-				m.Defense != c.Stats.Defense || m.Agility != c.Stats.Agility || m.Gender != c.Gender || m.OverLevel != c.OverLevel {
+				m.Defense != c.Stats.Defense || m.Agility != c.Stats.Agility || m.OverLevel != c.OverLevel {
 				t.Fatalf("snapshot %+v does not match character %+v", m, c)
 			}
 			state := f.jobState(t)
