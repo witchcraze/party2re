@@ -49,18 +49,9 @@ func (room sealingRoom) Act(ctx context.Context, r *Run, cmd runhost.Command) (r
 		return runhost.Effects{}, runhost.ErrConflict
 	}
 	r.Round++
-	// @partys: the requester's side in member order, fallen members included.
 	var names []string
-	party, fallen := 0, 0
-	for _, a := range r.Battle.Actors {
-		if a.TeamID != actor.TeamID || a.Banished || a.RosterDetached {
-			continue
-		}
+	for _, a := range partys(r, actor.TeamID) {
 		names = append(names, a.Name)
-		party++
-		if a.HP <= 0 {
-			fallen++
-		}
 		if !slices.Contains(r.Roster, a.ID) {
 			continue
 		}
@@ -73,16 +64,10 @@ func (room sealingRoom) Act(ctx context.Context, r *Run, cmd runhost.Command) (r
 			return runhost.Effects{}, err
 		}
 	}
-	blessing := ""
-	if s.cfg.Blessings != nil {
-		var err error
-		if blessing, err = s.cfg.Blessings.GetActiveBlessing(ctx, cmd.ActorID); err != nil {
-			return runhost.Effects{}, fmt.Errorf("treasure blessing: %w", err)
-		}
+	if err := room.addTreasure(ctx, r, stage, actor); err != nil {
+		return runhost.Effects{}, err
 	}
 	now := s.cfg.Clock.Now()
-	count := runhost.TreasureCount(0, party, fallen, runhost.IsTreasureBlessing(blessing), s.cfg.RNG.Intn)
-	r.Boxes = runhost.GenerateTreasureBoxes(count, stage.Treasures, now, s.cfg.RNG.Intn)
 	// delete_all_field(1) removes the temporary field only (_battle.cgi:1560–1566).
 	r.Battle.Fields.Temporary, r.Battle.Fields.Turns = "", 0
 	msg := fmt.Sprintf("勇者%sが%sを封印する", strings.Join(names, "、"), stage.Name)
@@ -98,6 +83,42 @@ func (room sealingRoom) Act(ctx context.Context, r *Run, cmd runhost.Command) (r
 		}
 	}
 	return fx, nil
+}
+
+// partys is @partys: actor team's members in member order, fallen included.
+func partys(r *Run, team string) []corebattle.LifetimeActor {
+	var out []corebattle.LifetimeActor
+	for _, a := range r.Battle.Actors {
+		if a.TeamID == team && !a.Banished && !a.RosterDetached {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// addTreasure is add_treasure (_npc_action.cgi:498–549) as ＠ふういん and
+// job78's treasure retry call it: it replaces the chests with ones drawn from
+// the stage's @treasures plus the weekday orb, counted from the requester's
+// @partys and Chapel blessing.
+func (room sealingRoom) addTreasure(ctx context.Context, r *Run, stage BossStage, actor *corebattle.LifetimeActor) error {
+	s := room.s
+	party := partys(r, actor.TeamID)
+	fallen := 0
+	for _, a := range party {
+		if a.HP <= 0 {
+			fallen++
+		}
+	}
+	blessing := ""
+	if s.cfg.Blessings != nil {
+		var err error
+		if blessing, err = s.cfg.Blessings.GetActiveBlessing(ctx, actor.ID); err != nil {
+			return fmt.Errorf("treasure blessing: %w", err)
+		}
+	}
+	count := runhost.TreasureCount(0, len(party), fallen, runhost.IsTreasureBlessing(blessing), s.cfg.RNG.Intn)
+	r.Boxes = runhost.GenerateTreasureBoxes(count, stage.Treasures, s.cfg.Clock.Now(), s.cfg.RNG.Intn)
+	return nil
 }
 
 // Exit is nigeru's sealing part; sealing rooms have no calm mode.
@@ -160,18 +181,32 @@ func (sealingRoom) Choices(r *Run, _ string) []runhost.Choice {
 func (sealingRoom) Responds(r *Run) bool { return r.Round != sealedRound }
 
 // Combat binds the vs_king branches: crystals scaled by the unseal clock
-// (_battle.cgi:152–170) and the room's NPC skills こうげき and デジョン.
-func (room sealingRoom) Combat(ctx context.Context, r *Run, _ string, _ *corebattle.EquipmentResetContext, _ bool) (runhost.RoomCombat, error) {
+// (_battle.cgi:152–170), the room's NPC skills こうげき and デジョン, and
+// job78's treasure retry through add_treasure (_skill.cgi:6214–6218).
+func (room sealingRoom) Combat(ctx context.Context, r *Run, actor string, _ *corebattle.EquipmentResetContext, _ bool) (runhost.RoomCombat, error) {
 	s := room.s
 	unsealedAt, err := s.cfg.UnsealClock.GetUnsealedAt(ctx)
 	if err != nil {
 		return runhost.RoomCombat{}, fmt.Errorf("read unseal clock: %w", err)
 	}
 	now := s.cfg.Clock.Now()
-	stage := s.byID[r.Admission.StageID]
+	stage, ok := s.byID[r.Admission.StageID]
 	// vs_king.cgi:19–23 loads the stage file on every request, drawing its pool.
 	pool := stage.summonPool(s.cfg.RNG)
+	jobRoom := runhost.JobRoom{Validate: func(id string) error {
+		if id != "job-78-entry-6" || !ok || r.Actor(actor) == nil {
+			return corebattle.ErrUnsupportedEffect
+		}
+		return nil
+	}}
+	jobRoom.Apply = func(id string) error {
+		if err := jobRoom.Validate(id); err != nil {
+			return err
+		}
+		return room.addTreasure(ctx, r, stage, r.Actor(actor))
+	}
 	return runhost.RoomCombat{
+		JobRoom: jobRoom,
 		Habitat: func() string { return stage.Name },
 		Summons: func() runhost.Summons { return runhost.Summons{EnemyPool: pool} },
 		Scale: func(e runhost.Earnings) runhost.Earnings {

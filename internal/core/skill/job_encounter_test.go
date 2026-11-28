@@ -42,15 +42,17 @@ func TestJobEncounterShortcutBoundariesAndNoEffect(t *testing.T) {
 		floor  int
 		draw   float64
 		called bool
-	}{{8, 0, true}, {8, 1.0 / 3, false}, {9, 0, false}} {
+		normal bool
+	}{{8, 0, true, true}, {8, 1.0 / 3, false, true}, {9, 0, false, true}, {8, 0, false, false}} {
 		s, c, f, d := jobEncounterFixture()
 		calls := 0
-		c.Room = &corebattle.JobRoomContext{NormalStage: true, Floor: tc.floor,
+		c.Room = &corebattle.JobRoomContext{NormalStage: tc.normal, Floor: tc.floor,
 			Validate: func(string) error { return nil },
 			Apply:    func(string) (corebattle.TargetContext, error) { calls++; return f.TargetContext, nil },
 		}
 		draws := []float64{tc.draw}
-		if tc.floor == 9 {
+		// Outside vs_monster legacy's condition short-circuits before rand(3) (_skill.cgi:6120).
+		if tc.floor == 9 || !tc.normal {
 			c.Room.Apply, c.Room.Validate = nil, nil
 			draws = nil
 		}
@@ -66,13 +68,16 @@ func TestJobEncounterTreasureRetrySPAndTargetResolution(t *testing.T) {
 		target  string
 		draw    float64
 		success bool
-	}{{"box", 0, true}, {"box", .5999, true}, {"box", .6, false}, {"enemy", 0, false}} {
+		normal  bool
+	}{{"box", 0, true, true}, {"box", .5999, true, true}, {"box", .6, false, true}, {"enemy", 0, false, true},
+		// Every room library retries (_skill.cgi:6205–6219), not only vs_monster.
+		{"box", 0, true, false}, {"box", .6, false, false}} {
 		s, c, f, d := jobEncounterFixture()
 		s.Actors[0].Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 240, OldJobID: "job-78", OldSP: 230}
 		s.Actors[2].Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 450, OldJobID: "job-78", OldSP: 440}
 		f.Arguments[0] = tc.target
 		calls := 0
-		c.Room = &corebattle.JobRoomContext{NormalStage: true, Floor: 11, TreasureIDs: []string{"box"},
+		c.Room = &corebattle.JobRoomContext{NormalStage: tc.normal, Floor: 11, TreasureIDs: []string{"box"},
 			Validate: func(string) error { return nil },
 			Apply:    func(string) (corebattle.TargetContext, error) { calls++; return f.TargetContext, nil },
 		}
@@ -248,7 +253,8 @@ func TestJobEncounterAdmissionRejectsMissingContextBeforeDraw(t *testing.T) {
 		ids := []string{id}
 		switch mode {
 		case "mode":
-			c.Room = &corebattle.JobRoomContext{Floor: 8}
+			// A vs_monster room that can draw a passage needs its room hooks.
+			c.Room = &corebattle.JobRoomContext{NormalStage: true, Floor: 8}
 		case "cursor":
 			id = "job-78-entry-4"
 			ids[0] = id
