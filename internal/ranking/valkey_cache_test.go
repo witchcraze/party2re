@@ -55,8 +55,15 @@ func isValidSnapshotJSON(raw string) bool {
 	if err := json.Unmarshal([]byte(raw), &v); err != nil {
 		return false
 	}
-	_, ok := v.([]any)
-	return ok
+	arr, ok := v.([]any)
+	if !ok {
+		return false
+	}
+	if len(arr) > 0 {
+		_, ok = arr[0].(map[string]any)
+		return ok
+	}
+	return true
 }
 
 func (m *mockSnapshotCache) isExpiredLocked(key string) bool {
@@ -479,12 +486,25 @@ func TestValkeySnapshotCache_RealOrNop(t *testing.T) {
 		t.Fatalf("GetPair failed: found=%v err=%v pair=%+v", found, err, gotPair)
 	}
 
-	// Corrupt JSON stored under pair key must be repaired by backfill.
+	// Corrupt JSON or non-array JSON ("{}") stored under cache keys must be repaired by same-timestamp backfill.
+	if err := client.Do(ctx, client.B().Set().Key("party2:ranking:snapshot:helper").Value(fmt.Sprintf(`{"ts":%q,"snapshot":{"ranking_type":"helper","snapshot_data":"{}","total_count":0}}`, t2.UTC().Format("2006-01-02T15:04:05.000000000Z"))).Ex(5*time.Second).Build()).Error(); err != nil {
+		t.Fatalf("seed object-json single value: %v", err)
+	}
+	if written, err := cache.Set(ctx, ranking.RankingTypeHelper, singleV2, 5*time.Second, ranking.CacheWriteBackfill); err != nil || !written {
+		t.Fatalf("expected backfill to repair object-json single value, written=%v err=%v", written, err)
+	}
+
 	if err := client.Do(ctx, client.B().Set().Key("party2:ranking:snapshot:pair:pvp_victory:monster_kills").Value("{corrupt").Ex(5*time.Second).Build()).Error(); err != nil {
 		t.Fatalf("seed corrupt valkey value: %v", err)
 	}
 	if written, err := cache.SetPair(ctx, pairV2, 5*time.Second, ranking.CacheWriteBackfill); err != nil || !written {
 		t.Fatalf("expected backfill to repair corrupt pair value, written=%v err=%v", written, err)
+	}
+	if err := client.Do(ctx, client.B().Set().Key("party2:ranking:snapshot:pair:pvp_victory:monster_kills").Value(fmt.Sprintf(`{"ts":%q,"pair":{"leader":{"ranking_type":"pvp_victory","snapshot_data":"{}"},"dependent":{"ranking_type":"monster_kills","snapshot_data":"[]"}}}`, t2.UTC().Format("2006-01-02T15:04:05.000000000Z"))).Ex(5*time.Second).Build()).Error(); err != nil {
+		t.Fatalf("seed object-json pair value: %v", err)
+	}
+	if written, err := cache.SetPair(ctx, pairV2, 5*time.Second, ranking.CacheWriteBackfill); err != nil || !written {
+		t.Fatalf("expected backfill to repair object-json pair value, written=%v err=%v", written, err)
 	}
 
 	if err := cache.Delete(ctx, ranking.RankingTypePvPVictory); err != nil {

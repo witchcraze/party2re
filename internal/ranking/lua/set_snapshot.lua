@@ -5,11 +5,15 @@
 -- ARGV[4]: candidate timestamp ("2006-01-02T15:04:05.000000000Z")
 -- ARGV[5]: entry kind ("single" or "pair")
 local function is_valid_snapshot_data(raw)
-	if type(raw) ~= 'string' or raw == '' then
+	if type(raw) ~= 'string' or not string.match(raw, '^%s*%[') then
 		return false
 	end
 	local ok, decoded = pcall(cjson.decode, raw)
-	return ok and type(decoded) == 'table'
+	if not ok or type(decoded) ~= 'table' then
+		return false
+	end
+	local first = decoded[1]
+	return (first == nil and next(decoded) == nil) or type(first) == 'table'
 end
 
 local cur = redis.call('GET', KEYS[1])
