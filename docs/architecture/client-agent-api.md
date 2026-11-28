@@ -563,9 +563,8 @@ schema without actor identity inputs. Its required fields must match the catalog
 `then` requires the params envelope exactly when those fields are nonempty.
 Home sleep permits optional `target_home_id`; Home wake and Depot expansion
 permit only omitted params or an empty object.
-Bank amounts span signed int64, and command strings permit empty values for
-service-owned validation/defaults. The catalog drift check rejects missing,
-duplicate, malformed or unresolved contracts even for no-input commands.
+The catalog drift check rejects missing, duplicate, malformed or unresolved
+contracts even for no-input commands.
 Unmigrated entries retain their REST-operation checks. Removing a replaced REST
 operation therefore does not remove its migrated command's validation; route
 retirement still requires the tracked replacement verification.

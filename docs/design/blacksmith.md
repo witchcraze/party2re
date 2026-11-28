@@ -18,10 +18,9 @@ legacy findings.
 
 ## 2. Equipment Naming (なづける)
 
-**Decision (#2060).** Following legacy, there is no reset to the catalog name.
-An empty name, and the Perl-false name `0`, rename nothing: legacy shows the
-naming prompt (`blacksmith.cgi:59,79,99–104`), which the Gateway replaces with the
-scene observation, so `blacksmith_name` rejects them as invalid names.
+**Decision (#2060).** Legacy shows the naming prompt for an empty name or the
+Perl-false name `0` (`blacksmith.cgi:59,79,99–104`). The Gateway uses scene
+observation for that prompt, so there is no reset to the catalog name.
 
 ## 3. Dedicated Weapon Storage (専用預かり所)
 

@@ -371,7 +371,7 @@ func TestCatalog_BlacksmithGatewayContracts(t *testing.T) {
 					if field.Type != "integer" || field.Format != "int64" || field.Minimum.String() != "-9223372036854775808" || field.Maximum.String() != "9223372036854775807" {
 						t.Fatalf("incorrect numeric contract: %+v", field)
 					}
-				} else if field.Type != "string" || field.MinLength != 0 {
+				} else if field.Type != "string" {
 					t.Fatalf("incorrect naming contract: %+v", field)
 				}
 			}

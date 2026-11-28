@@ -5684,7 +5684,12 @@
                   "additionalProperties": false,
                   "properties": {
                     "name": {
-                      "description": "Explicit custom name, stored untrimmed; the service applies the legacy naming rules and rejects an empty name.",
+                      "description": "Custom equipment name, stored untrimmed. The service checks whitespace and characters.",
+                      "maxLength": 20,
+                      "minLength": 1,
+                      "not": {
+                        "const": "0"
+                      },
                       "type": "string"
                     },
                     "target": {
