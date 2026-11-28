@@ -23,7 +23,7 @@ func WithSecretShop(service SecretShopService) Option {
 			if err != nil {
 				return secretShopPurchaseResponse{}, err
 			}
-			result, err := service.PurchaseItem(ctx, actorID, params.ItemID, params.Quantity)
+			result, err := service.PurchaseItem(ctx, actorID, params.ItemID)
 			if err != nil {
 				return secretShopPurchaseResponse{}, err
 			}
@@ -42,8 +42,6 @@ func secretShopActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusNotFound, ErrorDetail{Code: "SECRETSHOP_ITEM_NOT_FOUND", Message: "Secret shop item not found."}
 	case errors.Is(err, secretshop.ErrItemUnavailableInHelperQuest):
 		return http.StatusConflict, ErrorDetail{Code: "SECRETSHOP_ITEM_UNAVAILABLE", Message: "Item unavailable during an active helper request."}
-	case errors.Is(err, secretshop.ErrInvalidQuantity):
-		return http.StatusBadRequest, ErrorDetail{Code: "SECRETSHOP_INVALID_QUANTITY", Message: "Secret shop quantity must be between 1 and 99."}
 	case errors.Is(err, secretshop.ErrInsufficientFunds):
 		return http.StatusBadRequest, ErrorDetail{Code: "SECRETSHOP_INSUFFICIENT_FUNDS", Message: "Insufficient wallet funds."}
 	case errors.Is(err, secretshop.ErrPriceOverflow):

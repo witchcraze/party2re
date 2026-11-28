@@ -235,7 +235,8 @@ enter from the observed scene; Enter applies the same rule. Legacy `＠いどう
 a base action of every place (`lib/system.cgi:9–24`), so every scene outside an
 activity offers `scene_enter`. Facility destinations have `town` as parent
 unless registered otherwise. A `ParentOnly` destination is entered only from its
-parent: the [Black Market](../design/black-market.md#access) from the Oracle shop.
+parent: the [Black Market](../design/black-market.md#access) from the Oracle shop
+and the [secret shop](../design/shops.md#7-secret-shop) from the item shop.
 Shop subjects use `target_kind:item` and IDs validated by
 the owned actor's existing Shop catalog, including its eligibility filters.
 Home registers `target_kind:home` with a character ID validated by the public
@@ -271,7 +272,7 @@ return the service next token without inventing a total or a cross-page snapshot
 Mixed/unknown fields and null values are rejected. All other pageable lists are
 offset-only. Back never accepts a caller-supplied parent.
 
-GET and command refresh share the HTTP selected-scene composer, which produces `town`, `facility`, `subject` or `selection_unavailable` variants. Each facility scene projects only its owner's facts, with field shapes in OpenAPI and rules in the facility's design document ([Home](../design/home.md#observation-visibility-and-navigation), [Shops](../design/shops.md#10-shop-scenes-and-commands), [Bank](../design/bank.md#observation-and-retained-routes), [Chapel](../design/chapel.md), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration), [Store](../design/store.md#town-scenes-and-commands)). Facility rules shared by every scene, stated once here:
+GET and command refresh share the HTTP selected-scene composer, which produces `town`, `facility`, `subject` or `selection_unavailable` variants. Each facility scene projects only its owner's facts, with field shapes in OpenAPI and rules in the facility's design document ([Home](../design/home.md#observation-visibility-and-navigation), [Shops](../design/shops.md#10-shop-scenes-and-commands), [Bank](../design/bank.md#observation-and-retained-routes), [Chapel](../design/chapel.md), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [SecretShop](../design/shops.md#7-secret-shop), [Store](../design/store.md#town-scenes-and-commands)). Facility rules shared by every scene, stated once here:
 
 - Required reads fail the whole observation; missing configuration returns 501. A missing optional store yields an empty in-memory view that GET never persists.
 - GET and refresh never invoke NPC talk/inspect, purchases, deliveries, collection writes, scheduling or other mutations, and never renew selection.
@@ -506,7 +507,7 @@ facility operation has a replacement.
 
 | Migration owner | Responsibility and contract sources |
 | --- | --- |
-| Economy | No Economy REST route remains ([#947](https://github.com/witchcraze/party2re/issues/947)); remaining legacy differences are children of [#2063](https://github.com/witchcraze/party2re/issues/2063). Feature-owned mappings: [Shops](../design/shops.md#scoped-legacy-actioncall-path-reconciliation), [Bank](../design/bank.md#observation-and-retained-routes), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [Auction](../design/auction.md#gateway-and-retained-reads), [Black Market](../design/black-market.md#gateway-and-retained-routes), [Blacksmith](../design/blacksmith.md#4-gateway-commands), [Alchemy](../design/alchemy.md#gateway-and-observation), [Flea Market](../design/fleamarket.md#1-legacy-actions-reconciliation-table), [Gem Store](../design/gemstore.md#gatewayと参照), [Player Store](../design/store.md#town-scenes-and-commands). |
+| Economy | No Economy REST route remains ([#947](https://github.com/witchcraze/party2re/issues/947)); remaining legacy differences are children of [#2063](https://github.com/witchcraze/party2re/issues/2063). Feature-owned mappings: [Shops](../design/shops.md#scoped-legacy-actioncall-path-reconciliation), [Bank](../design/bank.md#observation-and-retained-routes), [Depot](../design/depot.md#gateway-observation-and-retained-operations), [Auction](../design/depot.md#5-mailing-items-and-money-おくる), [Black Market](../design/black-market.md#gateway-and-observation), [Blacksmith](../design/blacksmith.md#4-gateway-commands), [Alchemy](../design/alchemy.md#gateway-and-observation), [Flea Market](../design/fleamarket.md#1-legacy-actions-reconciliation-table), [Gem Store](../design/gemstore.md#gatewayと参照), [Player Store](../design/store.md#town-scenes-and-commands). |
 | [Combat/Adventure #948](https://github.com/witchcraze/party2re/issues/948) | Run/room/Party commands, owned observations and Replay. Adopt [run authority and recovery](transient-run-state.md), [Adventure](../design/adventure.md) and [Replay visibility](../design/replay.md); generic activity facts do not replace maps, explicit battle choices or receipt reads. |
 | [Town/Faith/Social #949](https://github.com/witchcraze/party2re/issues/949) | Home, Casino, faith and social facilities. [Home](../design/home.md#scoped-legacy-action-reconciliation) and [Casino](../design/casino.md#scoped-legacy-dispatch-reconciliation) own their visibility/action mappings; observation does not connect mutations. |
 | [Final cleanup #950](https://github.com/witchcraze/party2re/issues/950) | Final router/OpenAPI cleanup, deliberate exceptions and otherwise unassigned core profile/inventory/equipment, Event Plaza, ranking/news/notification surfaces. Assign remaining gameplay replacements to bounded children before deleting them. |
@@ -602,7 +603,7 @@ Only explicitly mapped 4xx errors are known rejections; every other execution er
 
 ### Feature command contracts
 
-Bank, Shop, SecretShop, stage adventure, rescue and Home sleep/wake commands keep their feature owners' rules ([Bank](../design/bank.md), [Shop](../design/shops.md#10-shop-scenes-and-commands), [SecretShop](../design/shops.md#74-purchase-transport-and-remaining-migration), [Adventure](../design/adventure.md), [Rescue](../design/rescue-and-helper.md#emergency-rescue), [Home recovery](../design/home.md#5-resting--sleeping-sleepcgi-homecgi)). Cross-cutting points:
+Bank, Shop, SecretShop, stage adventure, rescue and Home sleep/wake commands keep their feature owners' rules ([Bank](../design/bank.md), [Shop](../design/shops.md#10-shop-scenes-and-commands), [SecretShop](../design/shops.md#7-secret-shop), [Adventure](../design/adventure.md), [Rescue](../design/rescue-and-helper.md#emergency-rescue), [Home recovery](../design/home.md#5-resting--sleeping-sleepcgi-homecgi)). Cross-cutting points:
 
 - `adventure_start` and `party_start` enroll a floor-0 [normal run](#normal-run-commands-and-recovery) and resolve no combat.
 - `rescue_request` bypasses ordinary entry and Sleep/CanWake gates and does not guarantee that sleep is removed.

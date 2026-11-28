@@ -53,11 +53,9 @@ func helperExcludes(active []string, shopType ShopType, itemID string, batch boo
 	return slices.Contains(active, itemID)
 }
 
-// PurchaseInShop buys an item from a specific shop type, applying shop-specific pricing and messages.
-func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopType ShopType, itemDefinitionID string, quantity int) (PurchaseResult, error) {
-	if quantity <= 0 || quantity > MaxTransactionQuantity {
-		return PurchaseResult{}, ErrInvalidQuantity
-	}
+// PurchaseInShop buys one unit, as legacy ＠かう does: into the empty hand
+// field, otherwise to the Depot.
+func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopType ShopType, itemDefinitionID string) (PurchaseResult, error) {
 	if characterID == "" {
 		return PurchaseResult{}, corecharacter.ErrNotFound
 	}
@@ -76,11 +74,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 		return PurchaseResult{}, ErrItemUnavailable
 	}
 
-	unitPrice, err := s.CalculateRetailPrice(shopType, itemDefinitionID, definition.Price)
-	if err != nil {
-		return PurchaseResult{}, err
-	}
-	totalPrice, err := safeMultiply(unitPrice, quantity)
+	totalPrice, err := s.CalculateRetailPrice(shopType, itemDefinitionID, definition.Price)
 	if err != nil {
 		return PurchaseResult{}, err
 	}
@@ -112,8 +106,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 
 		occupied := inv.IsFull(itemDefinitionID)
 
-		// Slot empty and single quantity -> Add to inventory
-		if !occupied && quantity == 1 {
+		if !occupied {
 			res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
 				CharacterID:       characterID,
 				DeductGold:        totalPrice,
@@ -178,7 +171,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 			return nil
 		}
 
-		// Slot occupied or quantity > 1: Transfer to Depot (Rank 5)
+		// Slot occupied: Transfer to Depot (Rank 5)
 		if s.depots == nil {
 			return ErrDepotNotConfigured
 		}
@@ -188,7 +181,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 			return err
 		}
 
-		inst, err := item.NewInstance(itemDefinitionID, quantity)
+		inst, err := item.NewInstance(itemDefinitionID, 1)
 		if err != nil {
 			return err
 		}

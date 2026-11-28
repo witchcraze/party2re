@@ -322,7 +322,7 @@ func TestHelperQuestFilter(t *testing.T) {
 	}
 
 	// Attempting to purchase filtered item returns ErrItemUnavailableInHelperQuest
-	_, err = svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	_, err = svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root")
 	if !errors.Is(err, secretshop.ErrItemUnavailableInHelperQuest) {
 		t.Fatalf("expected ErrItemUnavailableInHelperQuest, got %v", err)
 	}
@@ -337,7 +337,7 @@ func TestPurchaseItemDirectToInventory(t *testing.T) {
 	_ = charRepo.Update(ctx, eligible)
 
 	// Single purchase into empty inventory -> goes to inventory
-	result, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	result, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root")
 	if err != nil {
 		t.Fatalf("PurchaseItem failed: %v", err)
 	}
@@ -371,13 +371,13 @@ func TestPurchaseItemTransferToDepot(t *testing.T) {
 	_ = charRepo.Update(ctx, eligible)
 
 	// 1. Buy first item -> enters inventory
-	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root")
 	if err != nil {
 		t.Fatalf("first PurchaseItem failed: %v", err)
 	}
 
 	// 2. Buy second item -> inventory consumable slot is occupied, transfers to depot
-	res2, err := svc.PurchaseItem(ctx, "char-high", "secret_item_magic_mirror", 1)
+	res2, err := svc.PurchaseItem(ctx, "char-high", "secret_item_magic_mirror")
 	if err != nil {
 		t.Fatalf("second PurchaseItem failed: %v", err)
 	}
@@ -405,35 +405,6 @@ func TestPurchaseItemTransferToDepot(t *testing.T) {
 	}
 }
 
-func TestPurchaseItemQuantityGreaterThanOneTransfersToDepot(t *testing.T) {
-	depotRepo := newMockDepotRepo()
-	svc, charRepo, _, _ := setupTest(t, secretshop.WithDepotRepository(depotRepo))
-	ctx := context.Background()
-
-	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
-	_ = charRepo.Update(ctx, eligible)
-
-	// Quantity = 2 -> always transferred to depot
-	res, err := svc.PurchaseItem(ctx, "char-high", "secret_item_ruby_of_protection", 2)
-	if err != nil {
-		t.Fatalf("PurchaseItem failed: %v", err)
-	}
-	if !res.TransferredToDepot {
-		t.Fatal("expected multi-quantity purchase to transfer to depot")
-	}
-	if res.TotalPrice != 1500*2 {
-		t.Fatalf("expected total price %d, got %d", 1500*2, res.TotalPrice)
-	}
-
-	dep, err := depotRepo.FindByCharacterIDForUpdate(ctx, "char-high")
-	if err != nil {
-		t.Fatalf("depot lookup failed: %v", err)
-	}
-	if len(dep.Items) != 1 || dep.Items[0].Quantity != 2 {
-		t.Fatalf("expected depot stack of 2, got %+v", dep.Items)
-	}
-}
-
 func TestPurchaseItemDepotFullDeliversOverCapacity(t *testing.T) {
 	depotRepo := newMockDepotRepo()
 	cap := depot.CalculateCapacity(7, 0, 0)
@@ -450,9 +421,12 @@ func TestPurchaseItemDepotFullDeliversOverCapacity(t *testing.T) {
 	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
 	_ = charRepo.Update(ctx, eligible)
 
-	// Quantity 2 triggers the depot route; send_item ignores capacity (secret.cgi:55).
-	if _, err := svc.PurchaseItem(ctx, "char-high", "secret_item_ruby_of_protection", 2); err != nil {
-		t.Fatalf("purchase into full depot: %v", err)
+	// The first purchase fills the tool hand, so the second takes the depot
+	// route; send_item ignores capacity (secret.cgi:55).
+	for range 2 {
+		if _, err := svc.PurchaseItem(ctx, "char-high", "secret_item_ruby_of_protection"); err != nil {
+			t.Fatalf("purchase into full depot: %v", err)
+		}
 	}
 	dep, _ := depotRepo.FindByCharacterIDForUpdate(ctx, "char-high")
 	if len(dep.Items) != cap+1 {
@@ -467,7 +441,7 @@ func TestPurchaseItemValidationErrors(t *testing.T) {
 	// Ineligible (JobLevel < 7)
 	ineligible := createTestCharacter("char-low", "Novice", 99, 6, 100000)
 	_ = charRepo.Update(ctx, ineligible)
-	_, err := svc.PurchaseItem(ctx, "char-low", "secret_item_herbal_root", 1)
+	_, err := svc.PurchaseItem(ctx, "char-low", "secret_item_herbal_root")
 	if !errors.Is(err, secretshop.ErrAccessDenied) {
 		t.Fatalf("expected ErrAccessDenied, got %v", err)
 	}
@@ -475,25 +449,16 @@ func TestPurchaseItemValidationErrors(t *testing.T) {
 	// Eligible (JobLevel >= 7) but insufficient funds
 	broke := createTestCharacter("char-broke", "Veteran", 20, 7, 100)
 	_ = charRepo.Update(ctx, broke)
-	_, err = svc.PurchaseItem(ctx, "char-broke", "secret_item_herbal_root", 1)
+	_, err = svc.PurchaseItem(ctx, "char-broke", "secret_item_herbal_root")
 	if !errors.Is(err, secretshop.ErrInsufficientFunds) {
 		t.Fatalf("expected ErrInsufficientFunds, got %v", err)
 	}
 
-	// Invalid quantity
 	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
 	_ = charRepo.Update(ctx, eligible)
-	_, err = svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 0)
-	if !errors.Is(err, secretshop.ErrInvalidQuantity) {
-		t.Fatalf("expected ErrInvalidQuantity for 0, got %v", err)
-	}
-	_, err = svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 100)
-	if !errors.Is(err, secretshop.ErrInvalidQuantity) {
-		t.Fatalf("expected ErrInvalidQuantity for 100, got %v", err)
-	}
 
 	// Non-existent item
-	_, err = svc.PurchaseItem(ctx, "char-high", "non_existent_item", 1)
+	_, err = svc.PurchaseItem(ctx, "char-high", "non_existent_item")
 	if !errors.Is(err, secretshop.ErrItemNotFound) {
 		t.Fatalf("expected ErrItemNotFound, got %v", err)
 	}
@@ -512,7 +477,7 @@ func TestPurchaseItem_RecordsCollectionDiscovery(t *testing.T) {
 	_ = charRepo.Update(ctx, eligible)
 
 	// Single purchase into empty inventory -> goes to inventory and records collection discovery
-	res, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	res, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root")
 	if err != nil {
 		t.Fatalf("PurchaseItem failed: %v", err)
 	}
@@ -551,7 +516,7 @@ func TestPurchaseItem_DepotTransferDoesNotRecordCollection(t *testing.T) {
 	_ = charRepo.Update(ctx, eligible)
 
 	// Buy first item -> enters inventory, records collection
-	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root")
 	if err != nil {
 		t.Fatalf("first purchase failed: %v", err)
 	}
@@ -560,7 +525,7 @@ func TestPurchaseItem_DepotTransferDoesNotRecordCollection(t *testing.T) {
 	}
 
 	// Buy second item -> transfers to depot, MUST NOT record collection (legacy parity)
-	res2, err := svc.PurchaseItem(ctx, "char-high", "secret_item_magic_mirror", 1)
+	res2, err := svc.PurchaseItem(ctx, "char-high", "secret_item_magic_mirror")
 	if err != nil {
 		t.Fatalf("second purchase failed: %v", err)
 	}
@@ -569,18 +534,6 @@ func TestPurchaseItem_DepotTransferDoesNotRecordCollection(t *testing.T) {
 	}
 	if len(recorder.calls) != 1 {
 		t.Fatalf("expected still 1 record after depot transfer, got %d", len(recorder.calls))
-	}
-
-	// Buy multi-quantity item -> transfers to depot, MUST NOT record collection
-	res3, err := svc.PurchaseItem(ctx, "char-high", "secret_item_ruby_of_protection", 2)
-	if err != nil {
-		t.Fatalf("multi-quantity purchase failed: %v", err)
-	}
-	if !res3.TransferredToDepot {
-		t.Fatal("expected multi-quantity item to transfer to depot")
-	}
-	if len(recorder.calls) != 1 {
-		t.Fatalf("expected still 1 record after multi-quantity depot transfer, got %d", len(recorder.calls))
 	}
 }
 
@@ -600,7 +553,7 @@ func TestPurchaseItem_CollectionRecorderErrorPropagated(t *testing.T) {
 	_ = charRepo.Update(ctx, eligible)
 
 	// Mandatory collection discovery: purchase must fail and propagate collection error
-	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root")
 	if !errors.Is(err, colErr) {
 		t.Fatalf("expected purchase to fail with collection error, got %v", err)
 	}
@@ -616,7 +569,7 @@ func TestService_SetCollectionRecorder(t *testing.T) {
 	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
 	_ = charRepo.Update(ctx, eligible)
 
-	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root")
 	if err != nil {
 		t.Fatalf("purchase failed: %v", err)
 	}

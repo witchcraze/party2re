@@ -16,7 +16,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 | **`guild.cgi` (No Donation Leveling)** | **ギルド拠点**: ゴールド寄付によるギルドLv1〜10上げは存在しない。**活動による動的GP**、自由役職命名（6文字）、申請承認制、HEXカラー。 | Purge fictional donation levels; restore activity GP & custom roles. |
 | **`sleep.cgi` / `home.cgi` (No Paid Inn)** | **自宅での睡眠**: 有料の宿屋は存在しない。**自宅（または他人の家）で寝る**ことで無料全快・日次フラグリセット。 | Decommissioned separate inn package; integrated into `internal/home`. |
 | **`free.cgi` (Flea Market)** | **フリーマーケット**: 旧ファイル名は `fleamarket.cgi` ではなく `lib/free.cgi`。預かり所から直接出品・引出。 | Dedicated to `internal/fleamarket`. |
-| **`secret.cgi` (Secret Shop)** | **秘密の店**: 旧ファイル名は `lib/secret.cgi`。転職7回以上（`job_lv >= 7`）、原典8アイテム3倍価格、満杯時Depot転送、ぱふぱふ（会話のみ）。 | Owned by `internal/secretshop`. |
+| **`secret.cgi` (Secret Shop)** | **秘密の店**: 旧ファイル名は `lib/secret.cgi`。道具屋の`＠ひみつのみせ`からのみ、転職7回以上（`job_lv >= 7`）、原典8アイテム3倍価格、満杯時Depot転送、ぱふぱふ（会話のみ）。 | Owned by `internal/secretshop`. |
 | **`black_market.cgi` (Black Market)** | **闇市場**: ゴールド売買・相場変動・日次枠を全撤廃し、純粋なレアポイント生贄（手持ち/Depot）と24種景品Depot直送に回帰。 | Owned by `internal/blackmarket`. |
 
 ---
@@ -144,9 +144,9 @@ The script-level pointers below remain navigation for the parent cluster. **Reco
 | `lib/weapon.cgi` | 武器屋 (@ブッキー) | `internal/shop/` | [design/shops.md](../design/shops.md)<br/>[design/items-and-equipment.md](../design/items-and-equipment.md) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、手助けクエスト除外、Depot自動転送 |
 | `lib/armor.cgi` | 防具屋 (@アマノ) | `internal/shop/` | [design/shops.md](../design/shops.md) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、手助けクエスト除外、Depot自動転送 |
 | `lib/item.cgi` | 道具屋 (@アイテムコ) | `internal/shop/` | [design/shops.md](../design/shops.md) | Review against source | 定価2倍販売・50%売却、ジョブレベル別カタログ拡張、秘密の店ヒント |
-| `lib/accessory.cgi` | 装飾品屋 (@ミラ) | `internal/shop/` | [design/accessory-shop.md](../design/accessory-shop.md) | Review against source | カタログ・倍率・48レシピ・秘薬保証。成功確率の原典比較境界に差分あり。 |
+| `lib/accessory.cgi` | 装飾品屋 (@ミラ) | `internal/shop/` | [design/shops.md](../design/shops.md) | Review against source | カタログ・倍率・48レシピ・秘薬保証 |
 | `lib/blacksmith.cgi` | 鍛冶屋 (@ブッキー) | `internal/blacksmith/` | [design/blacksmith.md](../design/blacksmith.md) | Review against source | 武器刻印12種(刻印晶消費)、装備名付け(武器・防具/20文字/サニタイズ)、専用武器預かり所(3枠/名前重複禁止/装備中引出不可) |
-| `lib/secret.cgi` | 秘密の店 (@ヒミツジ) | `internal/secretshop/` | [design/shops.md](../design/shops.md) | Review against source | 転職7回以上(`job_lv >= 7`)、原典8種3倍価格、手持ち直接購入時の図鑑自動登録連携(`RecordItemDiscovered`)、満杯時Depot転送(`depot.FindOrCreate`)、ぱふぱふ会話のみ |
+| `lib/secret.cgi` | 秘密の店 (@ヒミツジ) | `internal/secretshop/` | [design/shops.md](../design/shops.md) | Review against source | 道具屋の`＠ひみつのみせ`からのみ、転職7回以上(`job_lv >= 7`)、原典8種3倍価格、手持ち直接購入時の図鑑自動登録連携(`RecordItemDiscovered`)、満杯時Depot転送(`depot.FindOrCreate`)、ぱふぱふ会話のみ |
 | `lib/black_market.cgi` | 闇市場 (@闇商人) | `internal/blackmarket/` | [design/black-market.md](../design/black-market.md) | Review against source | `job_lv>=15` で入場、純粋レアポイント物々交換、手持ち/Depot生贄、24種景品Depot直送、原典台詞 |
 | `lib/gem_store.cgi` | 宝石店 (@ジェマ) | `internal/gemstore/` | [design/gemstore.md](../design/gemstore.md) | Review against source | 売却額は購入額(5倍)ではなく基本価格の50%。配送の受信上限は送信者の転職回数で判定 |
 | `lib/store.cgi`, `lib/goods.cgi` | プレイヤーストア・オラクル屋 | `internal/store/`<br/>`internal/api/http/oracle.go` | [design/store.md](../design/store.md)<br/>[design/oracle-shop.md](../design/oracle-shop.md) | Review against source | オラクル屋は `oracle` シーン。`かう`/`かべがみ`/`やみいちば` → `oracle_buy`/`oracle_wallpaper`/`oracle_blackmarket`。 店舗建設(50,000G/90日)、ゴールド・物々交換出品、壁紙50種（最大50,000G実控除）・看板(5,000G残高要・控除なし)・家具15種内装(1,000G残高要・控除なし)。詳細は [design/store.md](../design/store.md#customization-charges-1146) 参照。 |

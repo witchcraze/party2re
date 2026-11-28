@@ -22,7 +22,7 @@ func TestPurchaseRejectsItemsOutsideTheSalesTier(t *testing.T) {
 		{shop.ShopTypeItem, "weapon-01"},   // another shop's goods
 		{shop.ShopTypeArmor, "item-001"},
 	} {
-		if _, err := svc.PurchaseInShop(context.Background(), char.ID, tc.shopType, tc.id, 1); !errors.Is(err, shop.ErrItemNotFound) {
+		if _, err := svc.PurchaseInShop(context.Background(), char.ID, tc.shopType, tc.id); !errors.Is(err, shop.ErrItemNotFound) {
 			t.Fatalf("%s %s: err = %v", tc.shopType, tc.id, err)
 		}
 	}
@@ -38,7 +38,7 @@ func TestPurchaseAbortsOnHelperReadFailure(t *testing.T) {
 	svc, chars, invs, depots, helper, _ := setupParityTest(t)
 	char := createTestCharacter(t, chars, "Hero", 1000)
 	helper.err = errors.New("helper read failed")
-	if _, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 1); !errors.Is(err, helper.err) {
+	if _, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01"); !errors.Is(err, helper.err) {
 		t.Fatalf("single purchase err = %v", err)
 	}
 	items := []shop.BatchPurchaseItemRequest{{ItemDefinitionID: "weapon-01", Quantity: 1}}
@@ -70,7 +70,7 @@ func TestSellOnlyFromTheShopHand(t *testing.T) {
 		{shop.ShopTypeArmor, weapon.ID},
 		{shop.ShopTypeWeapon, herb.ID},
 	} {
-		if _, err := svc.Sell(context.Background(), char.ID, tc.shopType, tc.id, 1); !errors.Is(err, shop.ErrNotInShopHand) {
+		if _, err := svc.Sell(context.Background(), char.ID, tc.shopType, tc.id); !errors.Is(err, shop.ErrNotInShopHand) {
 			t.Fatalf("%s %s: err = %v", tc.shopType, tc.id, err)
 		}
 	}
@@ -78,7 +78,7 @@ func TestSellOnlyFromTheShopHand(t *testing.T) {
 		t.Fatalf("rejected sale paid %d", got.Money)
 	}
 	for shopType, id := range map[shop.ShopType]string{shop.ShopTypeWeapon: weapon.ID, shop.ShopTypeAccessory: herb.ID} {
-		if _, err := svc.Sell(context.Background(), char.ID, shopType, id, 1); err != nil {
+		if _, err := svc.Sell(context.Background(), char.ID, shopType, id); err != nil {
 			t.Fatalf("%s sale: %v", shopType, err)
 		}
 	}

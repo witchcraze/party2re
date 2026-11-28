@@ -2,9 +2,13 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
 )
@@ -34,6 +38,7 @@ type ShopSceneInfo struct {
 	Title    string             `json:"title"`
 	ShopType shop.ShopType      `json:"shop_type"`
 	NPC      ShopNPCObservation `json:"npc"`
+	// Quantity bounds one shop_batch_purchase line.
 	Quantity ShopQuantityBounds `json:"quantity"`
 	// SaleOffer is the item in this shop's hand; null when that hand is empty.
 	SaleOffer *shop.SaleOffer `json:"sale_offer"`
@@ -113,46 +118,94 @@ func shopSaleOffer(info ShopSceneInfo) scenePresentation {
 	return presentation
 }
 
-// shop.cgi files' @words and shiraberu_npc; an empty inspect uses the default.
-var shopNPCWords = map[shop.ShopType]struct {
-	words   []string
-	inspect string
-}{
-	shop.ShopTypeWeapon: {[]string{
-		"いらっしゃい！ここは武器屋だぜ！",
-		"強い武器ほど重いぜ！重いと素早さが下がるから注意しな！",
-		"武器の強さ＝攻撃力だぜ！",
-		"まとめて買ってくれるなら、あんたの預かり所に送ってやるぜ！",
-	}, "おいおい、俺は武器じゃねぇぜ"},
-	shop.ShopTypeArmor: {[]string{
-		"いらっしゃいッス！ここは防具屋ッス！",
-		"防御力が高ければ、敵から受けるダメージが減るッスよ！",
-		"防具も重いと素早さが下がるッスから注意ッス！",
-		"まとめて買ってくれるなら、預かり所に送っておくッスよ！",
-	}, "な、な、何を見ているッスか！？"},
-	shop.ShopTypeItem: {[]string{
-		"いらしゃいませぇ〜ここは道具屋ニャ",
-		"冒険に出る前に道具があると便利ニャ",
-		"道具は戦闘中に使うニャ！",
-		"この世界のどこかに秘密の店というあやしいお店があるらしいですよぉ",
-	}, "ほえ？なんでしょうかぁ？"},
-	shop.ShopTypeAccessory: {[]string{
-		"ここはアクセサリー屋。ここでしか手に入らないアイテムばっかりよ",
-		"おすすめのアクセサリーを買うと良いと思うわ！",
-		"独占禁止法？　ぼったくり？　細かいことはいいの！",
-	}, ""},
+// shopInspects are the shop.cgi files' shiraberu_npc; an empty one uses the default.
+var shopInspects = map[shop.ShopType]string{
+	shop.ShopTypeWeapon: "おいおい、俺は武器じゃねぇぜ",
+	shop.ShopTypeArmor:  "な、な、何を見ているッスか！？",
+	shop.ShopTypeItem:   "ほえ？なんでしょうかぁ？",
 }
 
-var shopTitles = map[shop.ShopType]string{shop.ShopTypeWeapon: "武器店", shop.ShopTypeArmor: "防具店", shop.ShopTypeItem: "道具店", shop.ShopTypeAccessory: "装飾品店"}
+// shopWords builds a shop's legacy @words. Lines naming a random product pick
+// from the actor's whole sales tier, as legacy $sales[int(rand(@sales))] does.
+func shopWords(kind shop.ShopType) func(*Handler, context.Context, corecharacter.Character) ([]string, error) {
+	return func(_ *Handler, _ context.Context, c corecharacter.Character) ([]string, error) {
+		ids, err := shop.GetSalesItemIDs(kind, c.JobLevel)
+		if err != nil {
+			return nil, err
+		}
+		catalog, err := coreitem.DefaultCatalog()
+		if err != nil {
+			return nil, err
+		}
+		def, err := catalog.FindByID(ids[random.Intn(len(ids))])
+		if err != nil {
+			return nil, err
+		}
+		title, _ := shop.GetShopMeta(kind)
+		n, pick := c.Name, def.Name
+		switch kind {
+		case shop.ShopTypeWeapon:
+			return []string{
+				"ここは武器屋だ！戦いに武器は必須だぜ！",
+				n + "には" + pick + "なんか良いんじゃねぇか？",
+				n + "には" + pick + "がオススメだ！",
+				"銅の剣はどぉの剣？",
+				"よぉ！何か買っていくのか？",
+				"素早さが高いと会心の一撃や回避率が上がるぞ！",
+				"攻撃力が高い分、重さも重くなり素早さが下がる。つまり、自分に合った装備をしろってことだ！",
+				"この世界のどこかに、自分の強さにより武器の強さも変わる武器があるらしいぜ！",
+				"モンスターにやられたとしてもお金が半分になることはないぜ！",
+				fmt.Sprintf("%sの攻撃力は%dか…。Lv.%dにしてはなかなかだな！", n, c.Stats.Attack, c.Level),
+				fmt.Sprintf("%sの転職回数は%d回か！転職回数が多ければ熟練者と見なし、もっと強い武器を売ってやるぜ！", n, c.JobLevel),
+			}, nil
+		case shop.ShopTypeArmor:
+			return []string{
+				"ここは防具屋ッス！防具を装備すればダメージを減らすことができるッス！",
+				"素早さがないと攻撃をかわすことができないッス！",
+				"素早さに自信がない場合は、ステテコパンツがオススメッス！",
+				"強さや重さは１回の戦闘ごとで変わるッス！",
+				n + "さんは" + pick + "なんて似合いそうッスね！",
+				"重い鎧でガチガチに固めるか、ヒラヒラの服で回避率を上げるのか、どちらが好きッスか？",
+				"いつかあっしもあぶない水着を着るのが夢ッス",
+				fmt.Sprintf("%sさんの転職回数は%d回ッスね！転職回数が多いと熟練者と見なし売れる物が増えるッス！", n, c.JobLevel),
+				fmt.Sprintf("%sさんの守備力は%dッスね！。なかなかの固さッスね！", n, c.Stats.Defense),
+			}, nil
+		case shop.ShopTypeItem:
+			return []string{
+				"いらしゃいませぇ〜ここは" + title + "ニャ",
+				"冒険に出る前に道具があると便利ニャ",
+				"初心者たんには薬草をオススメしてますぅ",
+				"守りの石は相手からのだめぇじを軽減することができるらしいニャ",
+				n + "たんは顔色が悪そうなのでぇ、毒消し草を食べるといいニャ",
+				"この草おいしいニャ。モグモグ…。あぅっ！またお店の品を食べてしまったニャ…",
+				"天使の鈴は頭が悪い人に使うといいらしぃニャ。あたしのことぢゃないニャ",
+				n + "たんの今日の夕食は薬草料理がオススメニャ",
+				n + "たんはべじたりあんですかぁ？",
+				"魔法使いたんは魔法の聖水を持っていくとよいですよぉ",
+				"この世界のどこかに秘密の店というあやしいお店があるらしいですよぉ",
+				"今日のオススメ商品はコレニャ！じゃじゃ〜ん " + pick + " ニャ！",
+			}, nil
+		default:
+			return []string{
+				"ここは" + title + "。ここでしか手に入らないアイテムばっかりよ",
+				n + "は " + pick + " を買うと良いと思うわ！",
+				"独占禁止法？　ぼったくり？　細かいことはいいの！",
+			}, nil
+		}
+	}
+}
 
 func shopFacility(kind shop.ShopType) facility {
 	commands := []string{"shop_purchase", "shop_batch_purchase", "shop_sell"}
+	if kind == shop.ShopTypeItem {
+		commands = append(commands, "shop_secretshop")
+	}
 	if kind == shop.ShopTypeAccessory {
 		commands = []string{"shop_purchase", "shop_sell", "shop_synthesize"}
 	}
-	_, name := shop.GetShopMeta(kind)
-	npc := &npcProfile{name: name, words: shopNPCWords[kind].words}
-	if inspect := shopNPCWords[kind].inspect; inspect != "" {
+	title, name := shop.GetShopMeta(kind)
+	npc := &npcProfile{name: name, wordsOf: shopWords(kind)}
+	if inspect := shopInspects[kind]; inspect != "" {
 		npc.inspect = name + "「" + inspect + "」"
 	}
 	bind := func(n playercontext.Selection, _ string) map[string]map[string]any {
@@ -165,16 +218,20 @@ func shopFacility(kind shop.ShopType) facility {
 		}
 		return bound
 	}
-	return facility{title: shopTitles[kind], commands: commands, bind: bind, read: (*Handler).shopSceneData, placeLog: true, npc: npc,
-		present: func(_ *Handler, _ context.Context, _ playercontext.Result, data any) scenePresentation {
+	return facility{title: title, commands: commands, bind: bind, read: (*Handler).shopSceneData, placeLog: true, npc: npc,
+		present: func(h *Handler, ctx context.Context, result playercontext.Result, data any) scenePresentation {
+			var presentation scenePresentation
 			switch data := data.(type) {
 			case ShopCatalogSceneData:
-				presentation := shopSaleOffer(data.ShopSceneInfo)
+				presentation = shopSaleOffer(data.ShopSceneInfo)
 				presentation.next = data.Page.Next
-				return presentation
 			case ShopProductSceneData:
-				return shopSaleOffer(data.ShopSceneInfo)
+				presentation = shopSaleOffer(data.ShopSceneInfo)
 			}
-			return scenePresentation{}
+			// ＠ひみつのみせ answers only characters the secret shop admits (item.cgi himitsunomise).
+			if kind == shop.ShopTypeItem && h.playerContext.Enterable(ctx, result, "secretshop") != nil {
+				presentation.hide = append(presentation.hide, "shop_secretshop")
+			}
+			return presentation
 		}}
 }

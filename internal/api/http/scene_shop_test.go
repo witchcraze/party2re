@@ -18,6 +18,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/secretshop"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
@@ -87,6 +88,7 @@ func shopSceneRouter(t *testing.T, options ...Option) (*shopSceneRepository, *ga
 				return slices.ContainsFunc(catalog.Items, func(p shop.CatalogItem) bool { return p.ID == target }), err
 			}})
 	}
+	scenes = append(scenes, playercontext.SceneDefinition{ID: "secretshop", Parent: "shop_item", ParentOnly: true, CanEnter: playercontext.ByCharacter(secretshop.CheckEligibility)})
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store, scenes...))
 	opts := []Option{WithPlayerContext(pc), func(h *Handler) { h.homes = f.gatewayFixture }}
 	opts = append(opts, options...)
@@ -388,7 +390,6 @@ func TestShopSceneActorOwnershipAndExplicitPurchase(t *testing.T) {
 		t.Fatalf("purchase template: %+v", response.AvailableActions)
 	}
 	params := response.AvailableActions[i].ParamsTemplate
-	params["quantity"] = 1
 	body, err := json.Marshal(map[string]any{"action": "shop_purchase", "params": params})
 	if err != nil {
 		t.Fatal(err)
@@ -410,5 +411,70 @@ func TestShopSceneActorOwnershipAndExplicitPurchase(t *testing.T) {
 	if status != 200 || len(f.inv.Items) != 1 || f.inv.Items[0].DefinitionID != "weapon-01" || f.char.Money != 100-product.RetailPrice || store.writes != 0 ||
 		result.NPCMessage != "まいど！ヒノキの棒だ！受けとってくれ！" || result.TransferredToDepot {
 		t.Fatalf("purchase redirected: %d %s %+v", status, raw, f.inv)
+	}
+}
+
+// item.cgi himitsunomise: the hidden ＠ひみつのみせ moves a character with job
+// level 7 or more from the item shop into the secret shop; nothing else enters it.
+func TestShopSecretShopEntryFromItemShopOnly(t *testing.T) {
+	f, store, router := shopSceneRouter(t)
+	f.char.JobLevel = 6
+	store.selection = playercontext.Selection{Destination: "shop_item"}
+	if _, observation := navigationGET(t, router); offered(observation, "shop_secretshop") {
+		t.Fatal("secret shop offered below job level 7")
+	}
+	if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("shop_secretshop", `{}`), nil); status != 403 || store.selection.Destination != "shop_item" {
+		t.Fatalf("unqualified move: %d %+v", status, store.selection)
+	}
+
+	f.char.JobLevel = 7
+	if _, observation := navigationGET(t, router); !offered(observation, "shop_secretshop") {
+		t.Fatal("secret shop hidden from a qualified character")
+	}
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("shop_secretshop", `{}`), nil)
+	if got := tavernResult[HiddenEntryResult](t, raw); status != 200 || got.Message != "秘密の店を見つけました！" || store.selection.Destination != "secretshop" {
+		t.Fatalf("secret shop move: %d %+v", status, got)
+	}
+
+	for _, scene := range []string{"shop_weapon", "town"} {
+		store.selection = playercontext.Selection{Destination: scene}
+		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("shop_secretshop", `{}`), nil); status != 409 || store.selection.Destination != scene {
+			t.Fatalf("move from %s: %d %+v", scene, status, store.selection)
+		}
+		if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("scene_enter", `{"destination":"secretshop"}`), nil); status != 403 || store.selection.Destination != scene {
+			t.Fatalf("direct entry from %s: %d %+v", scene, status, store.selection)
+		}
+	}
+}
+
+// Shop talk transcribes each shop.cgi's @words, filling in the actor's facts and
+// a product from the actor's sales tier.
+func TestShopWordsUseLegacyLinesWithLiveFacts(t *testing.T) {
+	char := corecharacter.Character{Name: "勇者", Level: 12, JobLevel: 3, Stats: corecharacter.Stats{Attack: 40, Defense: 25}}
+	for kind, want := range map[shop.ShopType][]string{
+		shop.ShopTypeWeapon:    {"ここは武器屋だ！戦いに武器は必須だぜ！", "勇者の攻撃力は40か…。Lv.12にしてはなかなかだな！", "勇者の転職回数は3回か！転職回数が多ければ熟練者と見なし、もっと強い武器を売ってやるぜ！"},
+		shop.ShopTypeArmor:     {"勇者さんの守備力は25ッスね！。なかなかの固さッスね！"},
+		shop.ShopTypeItem:      {"いらしゃいませぇ〜ここは道具屋ニャ", "勇者たんはべじたりあんですかぁ？"},
+		shop.ShopTypeAccessory: {"ここはアクセサリー屋。ここでしか手に入らないアイテムばっかりよ"},
+	} {
+		words, err := shopWords(kind)(nil, context.Background(), char)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range want {
+			if !slices.Contains(words, line) {
+				t.Errorf("%s words lack %q: %v", kind, line, words)
+			}
+		}
+		ids, _ := shop.GetSalesItemIDs(kind, char.JobLevel)
+		catalog, _ := item.DefaultCatalog()
+		if !slices.ContainsFunc(words, func(w string) bool {
+			return slices.ContainsFunc(ids, func(id string) bool {
+				def, err := catalog.FindByID(id)
+				return err == nil && strings.Contains(w, def.Name)
+			})
+		}) {
+			t.Errorf("%s words name no product of the actor's tier: %v", kind, words)
+		}
 	}
 }

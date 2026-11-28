@@ -14,7 +14,6 @@ import (
 type shopPurchaseRequest struct {
 	ShopType         shop.ShopType `json:"shop_type"`
 	ItemDefinitionID string        `json:"item_definition_id"`
-	Quantity         int           `json:"quantity"`
 }
 
 type shopSellRequest struct {
@@ -33,7 +32,6 @@ type shopSynthesizeRequest struct {
 
 type shopPurchaseResponse struct {
 	ItemDefinitionID   string `json:"item_definition_id"`
-	Quantity           int    `json:"quantity"`
 	TotalCost          int    `json:"total_cost"`
 	TransferredToDepot bool   `json:"transferred_to_depot"`
 	NPCMessage         string `json:"npc_message"`
@@ -119,7 +117,7 @@ func shopCommands() Option {
 					name = it.Name
 				}
 			}
-			res, err := h.shops.PurchaseInShop(ctx, actor, p.ShopType, p.ItemDefinitionID, p.Quantity)
+			res, err := h.shops.PurchaseInShop(ctx, actor, p.ShopType, p.ItemDefinitionID)
 			if err != nil {
 				return shopPurchaseResponse{}, err
 			}
@@ -127,7 +125,7 @@ func shopCommands() Option {
 			if res.TransferredToDepot {
 				message = lines.depot(name, char.Name)
 			}
-			return shopPurchaseResponse{ItemDefinitionID: res.ItemInstance.DefinitionID, Quantity: res.ItemInstance.Quantity,
+			return shopPurchaseResponse{ItemDefinitionID: res.ItemInstance.DefinitionID,
 				TotalCost: res.TotalPrice, TransferredToDepot: res.TransferredToDepot, NPCMessage: message, commandEcho: commandEcho{target: name, reply: message}}, nil
 		}, shopActionRejection)(h)
 		withEchoCommand("shop_sell", func(ctx context.Context, actor string, p shopSellRequest) (shopSaleResponse, error) {
@@ -139,7 +137,7 @@ func shopCommands() Option {
 			if err != nil {
 				return shopSaleResponse{}, err
 			}
-			res, err := h.shops.Sell(ctx, actor, p.ShopType, p.ItemInstanceID, 1)
+			res, err := h.shops.Sell(ctx, actor, p.ShopType, p.ItemInstanceID)
 			if err != nil {
 				return shopSaleResponse{}, err
 			}

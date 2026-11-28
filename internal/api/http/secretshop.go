@@ -10,12 +10,11 @@ import (
 // SecretShopService defines the secret shop operations behind its scene and purchase command.
 type SecretShopService interface {
 	GetShopStatus(ctx context.Context, characterID string) (*secretshop.ShopStatus, error)
-	PurchaseItem(ctx context.Context, characterID string, itemID string, quantity int) (*secretshop.PurchaseResult, error)
+	PurchaseItem(ctx context.Context, characterID string, itemID string) (*secretshop.PurchaseResult, error)
 }
 
 type secretShopPurchaseRequest struct {
-	ItemID   string `json:"item_id"`
-	Quantity int    `json:"quantity"`
+	ItemID string `json:"item_id"`
 }
 
 type secretShopPurchaseResponse struct {

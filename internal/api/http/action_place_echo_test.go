@@ -88,7 +88,7 @@ func TestSecretShopPurchaseEchoes(t *testing.T) {
 	log := &fakePlaceLog{}
 	f := newSecretShopGatewayFixture(t)
 	f.inv.Items = []coreitem.Instance{{ID: "held", DefinitionID: "item-015", Quantity: 1}}
-	status, raw := f.request(f.router(timer.NewService(nil), WithPlaceLog(log)), `{"item_id":"secret_item_herbal_root","quantity":1}`)
+	status, raw := f.request(f.router(timer.NewService(nil), WithPlaceLog(log)), `{"item_id":"secret_item_herbal_root"}`)
 	def, err := f.catalog.FindByID("item-010")
 	if err != nil {
 		t.Fatal(err)
@@ -106,6 +106,6 @@ func TestShopCommandsEcho(t *testing.T) {
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_sell","params":{"shop_type":"weapon","item_instance_id":"`+weapon.ID+`"}}`, nil)
 	assertEcho(t, log, status, raw, echoCase{"shop_sell", "", "＠うる>ヒノキの棒", "ヒノキの棒 の買取代の 5 Gだ！"})
 	log.rows, f.char.Money = nil, 1000
-	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":1}}`, nil)
+	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01"}}`, nil)
 	assertEcho(t, log, status, raw, echoCase{"shop_purchase", "", "＠かう>ヒノキの棒", "まいど！ヒノキの棒だ！受けとってくれ！"})
 }

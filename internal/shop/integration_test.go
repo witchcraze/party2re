@@ -63,7 +63,7 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 	}
 
 	// 1. Purchase item
-	purchResult, err := shopService.PurchaseInShop(ctx, createdChar.ID, shop.ShopTypeItem, testItem.ID, 1)
+	purchResult, err := shopService.PurchaseInShop(ctx, createdChar.ID, shop.ShopTypeItem, testItem.ID)
 	if err != nil {
 		t.Fatalf("Purchase() error = %v", err)
 	}
@@ -91,7 +91,7 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 
 	// 2. Sell item back
 	itemInstanceID := restoredInv.Items[0].ID
-	sellResult, err := shopService.Sell(ctx, createdChar.ID, shop.ShopTypeItem, itemInstanceID, 1)
+	sellResult, err := shopService.Sell(ctx, createdChar.ID, shop.ShopTypeItem, itemInstanceID)
 	if err != nil {
 		t.Fatalf("Sell() error = %v", err)
 	}
@@ -144,7 +144,7 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
+			_, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01")
 			errs <- err
 		}()
 	}
@@ -208,7 +208,7 @@ func TestConcurrentShopSalesPreventDoubleSpending(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := shopService.Sell(ctx, char.ID, shop.ShopTypeItem, potionInst.ID, 1)
+			_, err := shopService.Sell(ctx, char.ID, shop.ShopTypeItem, potionInst.ID)
 			errs <- err
 		}()
 	}
@@ -240,40 +240,6 @@ func TestConcurrentShopSalesPreventDoubleSpending(t *testing.T) {
 	restoredInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
 	if len(restoredInv.Items) != 0 {
 		t.Errorf("restored Inventory item count = %d, want 0", len(restoredInv.Items))
-	}
-}
-
-func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
-	db := database.OpenTestDB(t)
-
-	ctx := context.Background()
-	charRepo, _ := database.NewCharacterRepository(db)
-	invRepo, _ := database.NewInventoryRepository(db)
-	txProvider := database.NewTransactionProvider(db)
-
-	char, _ := database.CreateTestCharacter(ctx, db, "Bulk Buyer")
-	char.Money = 999_999
-	_ = charRepo.Update(ctx, char)
-
-	potion, _ := item.NewDefinition("item-001", "Bulk Potion", 10)
-	catalog, _ := item.NewCatalog([]item.Definition{potion})
-	depotRepo, _ := database.NewDepotRepository(db)
-	shopService, _ := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(txProvider), shop.WithDepotRepository(depotRepo))
-
-	// 1. Purchase MaxTransactionQuantity (9999)
-	res, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-001", shop.MaxTransactionQuantity)
-	if err != nil {
-		t.Fatalf("Purchase(9999) failed: %v", err)
-	}
-	expectedTotal := 10 * 2 * shop.MaxTransactionQuantity
-	if res.TotalPrice != expectedTotal {
-		t.Errorf("TotalPrice = %d, want %d", res.TotalPrice, expectedTotal)
-	}
-
-	// 2. Purchase MaxTransactionQuantity + 1 -> rejected
-	_, err = shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeItem, "item-001", shop.MaxTransactionQuantity+1)
-	if err == nil {
-		t.Fatalf("expected error for quantity > MaxTransactionQuantity, got nil")
 	}
 }
 
@@ -340,7 +306,7 @@ func TestShopIntegration_MandatoryInductionRollback(t *testing.T) {
 	}
 
 	// 1. Initial purchase attempt fails because legend induction fails
-	_, err = shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
+	_, err = shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01")
 	if err == nil {
 		t.Fatal("expected Purchase to fail when collection legend induction fails")
 	}
@@ -368,7 +334,7 @@ func TestShopIntegration_MandatoryInductionRollback(t *testing.T) {
 
 	// 3. Resolve failure and retry purchase
 	inductor.err = nil
-	res, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
+	res, err := shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01")
 	if err != nil {
 		t.Fatalf("expected Purchase to succeed after resolving inductor failure: %v", err)
 	}
@@ -401,7 +367,7 @@ func TestShopIntegration_MandatoryInductionRollback(t *testing.T) {
 	}
 
 	// 5. Subsequent duplicate purchase succeeds without redundant induction
-	_, err = shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
+	_, err = shopService.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01")
 	if err != nil {
 		t.Fatalf("subsequent purchase failed: %v", err)
 	}

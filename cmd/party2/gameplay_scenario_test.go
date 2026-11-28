@@ -541,7 +541,7 @@ func TestGameplayScenario_NoviceDepositPurchaseEquip(t *testing.T) {
 
 func shopPurchaseParams(shop scenarioContext) map[string]any {
 	item := shop.Scene.Data.Items[0]
-	params := map[string]any{"quantity": 1}
+	params := map[string]any{}
 	for _, action := range shop.AvailableActions {
 		if action.Action == "shop_purchase" {
 			for k, v := range action.ParamsTemplate {

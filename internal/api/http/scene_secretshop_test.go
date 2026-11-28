@@ -18,6 +18,7 @@ import (
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/secretshop"
+	"github.com/witchcraze/party2re/internal/shop"
 )
 
 type secretShopSceneService struct {
@@ -39,6 +40,19 @@ func (s *secretShopSceneService) GetShopStatus(ctx context.Context, actor string
 	return status, err
 }
 
+// emptyItemShop renders the item shop that the secret shop's back returns to.
+type emptyItemShop struct{ ShopService }
+
+func (emptyItemShop) GetCatalog(_ context.Context, kind shop.ShopType, _ string) (shop.ShopCatalog, error) {
+	return shop.ShopCatalog{ShopType: kind}, nil
+}
+func (emptyItemShop) InspectNPC(context.Context, shop.ShopType, string) (shop.NPCInspectResult, error) {
+	return shop.NPCInspectResult{}, nil
+}
+func (emptyItemShop) GetSaleOffer(context.Context, shop.ShopType, string) (*shop.SaleOffer, error) {
+	return nil, nil
+}
+
 func secretShopSceneRouter(t *testing.T, options ...func(*playercontext.Service)) (*secretShopGatewayFixture, *gatewayNavigationStore, *secretShopSceneService, http.Handler) {
 	t.Helper()
 	return secretShopSceneRouterWith(t, nil, options...)
@@ -51,7 +65,8 @@ func secretShopSceneRouterWith(t *testing.T, handlerOptions []Option, options ..
 	reads := &secretShopSceneService{SecretShopService: f}
 	pc := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, timer.NewService(nil), playercontext.WithNavigation(store,
 		playercontext.SceneDefinition{ID: "town", Pageable: true},
-		playercontext.SceneDefinition{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: playercontext.ByCharacter(secretshop.CheckEligibility),
+		playercontext.SceneDefinition{ID: "shop_item", Parent: "town"},
+		playercontext.SceneDefinition{ID: "secretshop", Parent: "shop_item", ParentOnly: true, SubjectKind: "item", Pageable: true, CanEnter: playercontext.ByCharacter(secretshop.CheckEligibility),
 			SubjectAvailable: func(ctx context.Context, actor, target string) (bool, error) {
 				status, err := f.service.GetShopStatus(ctx, actor)
 				if err != nil {
@@ -63,7 +78,7 @@ func secretShopSceneRouterWith(t *testing.T, handlerOptions []Option, options ..
 	for _, option := range options {
 		option(pc)
 	}
-	h, err := NewHandler(f.gatewayFixture, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithSecretShop(reads), WithPlayerContext(pc), WithDungeon(&dungeonSceneFixture{observeExpeditionFn: func(context.Context, string) (*dungeon.ExpeditionObservation, error) {
+	h, err := NewHandler(f.gatewayFixture, f, &struct{ AdventureService }{}, emptyItemShop{}, WithSecretShop(reads), WithPlayerContext(pc), WithDungeon(&dungeonSceneFixture{observeExpeditionFn: func(context.Context, string) (*dungeon.ExpeditionObservation, error) {
 		return &dungeon.ExpeditionObservation{ID: "active", LeaderID: "leader", Status: "in_progress", Directions: []dungeon.Direction{}}, nil
 	}}), func(h *Handler) { h.homes = f.gatewayFixture }, func(h *Handler) {
 		for _, option := range handlerOptions {
@@ -81,7 +96,7 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 	f.helperErr = errors.New("town must not read catalog")
 	f.char.JobLevel = 6
 	status, observation := navigationGET(t, router)
-	if status != 200 || len(decodeSceneData[TownSceneData](t, observation).Destinations) != 0 || reads.reads != 0 {
+	if status != 200 || slices.ContainsFunc(decodeSceneData[TownSceneData](t, observation).Destinations, func(d SceneDestination) bool { return d.ID == "secretshop" }) || reads.reads != 0 {
 		t.Fatalf("unqualified town: %d %+v", status, observation)
 	}
 	enter := observation.AvailableActions[slices.IndexFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == "scene_enter" })]
@@ -99,19 +114,16 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 		t.Fatalf("entry bypass: %d %s", status, raw)
 	}
 	assertGatewayError(t, raw, "SCENE_ACCESS_DENIED")
+	// Legacy reaches the secret shop only from the item shop (item.cgi himitsunomise).
 	f.char.JobLevel, f.helperErr = 7, nil
 	status, observation = navigationGET(t, router)
-	data := decodeSceneData[TownSceneData](t, observation)
-	if status != 200 || len(data.Destinations) != 1 || data.Destinations[0].ID != "secretshop" || !data.Destinations[0].Supported || data.Destinations[0].EnterParams.Destination != "secretshop" || reads.reads != 0 {
+	if data := decodeSceneData[TownSceneData](t, observation); status != 200 || slices.ContainsFunc(data.Destinations, func(d SceneDestination) bool { return d.ID == "secretshop" }) || reads.reads != 0 {
 		t.Fatalf("qualified town: %+v", data)
 	}
-	enter = observation.AvailableActions[slices.IndexFunc(observation.AvailableActions, func(a ContextAction) bool { return a.Action == "scene_enter" })]
-	if err := json.Unmarshal(enter.ParamsSchema, &enterSchema); err != nil {
-		t.Fatal(err)
+	if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"secretshop"}}`, nil); status != 403 || store.writes != 0 {
+		t.Fatalf("entry from town: %d %s", status, raw)
 	}
-	if !slices.Contains(enterSchema.Properties["destination"].Enum, "secretshop") {
-		t.Fatal("qualified entry is missing from the input schema")
-	}
+	store.selection = playercontext.Selection{Destination: "shop_item"}
 	status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"secretshop"}}`, nil)
 	if status != 200 || string(raw["success"]) != "true" || store.writes != 1 {
 		t.Fatalf("entry: %d %s", status, raw)
@@ -123,7 +135,7 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 		t.Fatal(err)
 	}
 	slices.SortFunc(want.Items, func(a, b secretshop.Item) int { return strings.Compare(a.ID, b.ID) })
-	if status != 200 || observation.Scene.Kind != "facility" || observation.Scene.Support.Observation != "details" || catalog.Title != want.LocationName || catalog.NPCName != want.NPCName || !catalog.IsEligible || catalog.Parent != "town" || catalog.Quantity != (ShopQuantityBounds{Minimum: 1, Maximum: 99}) || len(catalog.Items) != 8 {
+	if status != 200 || observation.Scene.Kind != "facility" || observation.Scene.Support.Observation != "details" || catalog.Title != want.LocationName || catalog.NPCName != want.NPCName || !catalog.IsEligible || catalog.Parent != "shop_item" || len(catalog.Items) != 8 {
 		t.Fatalf("catalog: %d %+v", status, catalog)
 	}
 	for i, p := range catalog.Items {
@@ -147,9 +159,6 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 	if product.ID != "secret_item_herbal_root" || index < 0 || refreshed.AvailableActions[index].ParamsTemplate["item_id"] != product.ID || refreshed.AvailableActions[index].ParamsSchema == nil {
 		t.Fatalf("selected command: %+v", refreshed)
 	}
-	if _, exists := refreshed.AvailableActions[index].ParamsTemplate["quantity"]; exists {
-		t.Fatal("quantity was silently bound")
-	}
 	var purchaseSchema struct {
 		Required   []string
 		Properties map[string]struct{ Const any }
@@ -157,19 +166,19 @@ func TestSecretShopSceneQualifiedNavigationAndExplicitPurchase(t *testing.T) {
 	if err := json.Unmarshal(refreshed.AvailableActions[index].ParamsSchema, &purchaseSchema); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(purchaseSchema.Required, []string{"item_id", "quantity"}) || purchaseSchema.Properties["item_id"].Const != product.ID || purchaseSchema.Properties["quantity"].Const != nil {
+	if !slices.Equal(purchaseSchema.Required, []string{"item_id"}) || purchaseSchema.Properties["item_id"].Const != product.ID {
 		t.Fatalf("purchase schema: %+v", purchaseSchema)
 	}
 	// After another client changes selection, the earlier offer is rejected, never redirected.
 	observed := store.selection.Subject
 	store.selection.Subject = playercontext.Subject{Kind: "item", ID: "secret_item_magic_mirror"}
-	status, raw = f.request(router, fmt.Sprintf(`{"item_id":%q,"quantity":1}`, product.PurchaseParams.ItemID))
+	status, raw = f.request(router, fmt.Sprintf(`{"item_id":%q}`, product.PurchaseParams.ItemID))
 	if status != 409 || f.executions != 0 || len(f.inv.Items) != 0 {
 		t.Fatalf("stale offer executed: %d %s", status, raw)
 	}
 	assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
 	store.selection.Subject = observed
-	status, raw = f.request(router, fmt.Sprintf(`{"item_id":%q,"quantity":1}`, product.PurchaseParams.ItemID))
+	status, raw = f.request(router, fmt.Sprintf(`{"item_id":%q}`, product.PurchaseParams.ItemID))
 	if status != 200 || string(raw["success"]) != "true" || f.executions != 1 || len(f.inv.Items) != 1 || f.inv.Items[0].DefinitionID != "item-010" || f.char.Money != 100000-product.Price || store.writes != 2 {
 		t.Fatalf("explicit purchase redirected: %d %s", status, raw)
 	}
@@ -243,10 +252,10 @@ func TestSecretShopScenePagesFiltersAndUnavailableSelection(t *testing.T) {
 		}
 		assertGatewayError(t, raw, "ACTION_UNAVAILABLE")
 	}
-	for range 2 {
+	for _, want := range []string{"secretshop", "shop_item", "town"} {
 		status, raw = gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_back","params":{}}`, nil)
-		if status != 200 || string(raw["success"]) != "true" {
-			t.Fatalf("safe back: %d %s", status, raw)
+		if status != 200 || string(raw["success"]) != "true" || store.selection.Destination != want {
+			t.Fatalf("safe back to %s: %d %s", want, status, raw)
 		}
 	}
 	if store.selection.Destination != "town" || f.writes != 0 || f.executions != 0 {
@@ -264,7 +273,7 @@ func TestSecretShopSceneRefreshFailureAndGETRecovery(t *testing.T) {
 			}
 			before := f.char.Money
 			f.afterExecute = func() { reads.err = errors.New("private SecretShop source failure") }
-			status, raw := f.request(router, `{"item_id":"secret_item_herbal_root","quantity":1}`)
+			status, raw := f.request(router, `{"item_id":"secret_item_herbal_root"}`)
 			wantStatus := 200
 			if rejection {
 				wantStatus = 400
@@ -286,7 +295,7 @@ func TestSecretShopSceneRefreshFailureAndGETRecovery(t *testing.T) {
 	if status, _ := navigationGET(t, router); status != 500 || f.writes != 0 {
 		t.Fatalf("partial required read: %d", status)
 	}
-	f.helperErr, store.selection.Destination = nil, "town"
+	f.helperErr, store.selection.Destination = nil, "shop_item"
 	store.afterSave = func() { f.helperErr = errors.New("helper refresh failed") }
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"secretshop"}}`, nil)
 	if status != 200 || string(raw["success"]) != "true" || string(raw["context"]) != "null" || store.writes != 1 {

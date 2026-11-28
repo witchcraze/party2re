@@ -11,7 +11,7 @@ The Bank (銀行, teller `@タクシード`, `party2/lib/bank.cgi`) stores gold 
 
 ## Observation and retained routes
 
-Selecting `bank` exposes the wallet, savings, savings limit and NPC name through character context ([context and recovery contract](../architecture/client-agent-api.md)). No Bank REST route remains.
+Selecting `bank` exposes the wallet, savings, savings limit and NPC name through character context ([context and recovery contract](../architecture/client-agent-api.md)).
 
 | Legacy action | Disposition |
 | --- | --- |

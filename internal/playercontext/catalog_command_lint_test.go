@@ -218,12 +218,11 @@ func TestCatalog_DepotSendMoneyGatewayContract(t *testing.T) {
 
 func TestCatalog_SecretShopGatewayContract(t *testing.T) {
 	act, ok := playercontext.GetAction("secretshop_purchase")
-	if !ok || act.OperationID != "executeCharacterAction" || !slices.Equal(act.RequiredParams, []string{"item_id", "quantity"}) {
+	if !ok || act.OperationID != "executeCharacterAction" || !slices.Equal(act.RequiredParams, []string{"item_id"}) {
 		t.Fatalf("purchase not bound to explicit Gateway inputs: %+v", act)
 	}
 	then, params := gatewayContract(t, loadOpenAPISpec(t), act.ID)
-	quantity := params.Properties["quantity"]
-	if params.Type != "object" || string(params.AdditionalProperties) != "false" || !slices.Equal(then.Required, []string{"params"}) || !slices.Equal(params.Required, act.RequiredParams) || len(params.Properties) != 2 || params.Properties["item_id"].Type != "string" || quantity.Type != "integer" || quantity.Format != "int64" || quantity.Minimum.String() != "-9223372036854775808" || quantity.Maximum.String() != "9223372036854775807" {
+	if params.Type != "object" || string(params.AdditionalProperties) != "false" || !slices.Equal(then.Required, []string{"params"}) || !slices.Equal(params.Required, act.RequiredParams) || len(params.Properties) != 1 || params.Properties["item_id"].Type != "string" {
 		t.Fatalf("incorrect purchase contract: %+v / %+v", then, params)
 	}
 }

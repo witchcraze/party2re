@@ -157,7 +157,7 @@ func TestOracleBlackMarketMovesQualifiedCharacters(t *testing.T) {
 	f.char.JobLevel = 15
 	store, router := f.router(t, "oracle")
 	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("oracle_blackmarket", `{}`), nil)
-	if got := tavernResult[OracleBlackMarketResult](t, raw); status != 200 || got.Message != "闇市場を見つけました！" ||
+	if got := tavernResult[HiddenEntryResult](t, raw); status != 200 || got.Message != "闇市場を見つけました！" ||
 		got.Selection.Destination != "blackmarket" || store.selection.Destination != "blackmarket" {
 		t.Fatalf("black market move: %d %+v", status, got)
 	}

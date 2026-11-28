@@ -81,7 +81,7 @@ func TestSecretShopProductionHelperWiring(t *testing.T) {
 			t.Fatal("production catalog exposes active helper target")
 		}
 	}
-	if _, err := misc.secretshop.PurchaseItem(ctx, char.ID, "secret_item_herbal_root", 1); !errors.Is(err, secretshop.ErrItemUnavailableInHelperQuest) {
+	if _, err := misc.secretshop.PurchaseItem(ctx, char.ID, "secret_item_herbal_root"); !errors.Is(err, secretshop.ErrItemUnavailableInHelperQuest) {
 		t.Fatalf("production helper purchase filter: %v", err)
 	}
 	q.CompletedAt, q.CompletedBy = &now, char.ID

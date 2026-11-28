@@ -3512,19 +3512,11 @@
                   "properties": {
                     "item_id": {
                       "type": "string",
-                      "description": "Explicit SecretShop catalog item ID; the service validates current availability."
-                    },
-                    "quantity": {
-                      "type": "integer",
-                      "format": "int64",
-                      "minimum": -9223372036854775808,
-                      "maximum": 9223372036854775807,
-                      "description": "Explicit quantity; the existing service accepts 1..99 and rejects other integers. No REST quantity default is applied."
+                      "description": "Explicit SecretShop catalog item ID; the service validates current availability. One unit per purchase, as legacy ＠かう: it goes to the empty tool hand, otherwise to the Depot."
                     }
                   },
                   "required": [
-                    "item_id",
-                    "quantity"
+                    "item_id"
                   ],
                   "additionalProperties": false
                 }
@@ -8065,21 +8057,13 @@
                     },
                     "item_definition_id": {
                       "type": "string",
-                      "description": "Explicit product ID from the shop's current job-level sales list. Funds and helper exclusions stay service-owned."
-                    },
-                    "quantity": {
-                      "type": "integer",
-                      "format": "int64",
-                      "minimum": -9223372036854775808,
-                      "maximum": 9223372036854775807,
-                      "description": "Explicit quantity; the service accepts 1..9999. One item goes to the empty hand, otherwise goods go to the Depot."
+                      "description": "Explicit product ID from the shop's current job-level sales list. Funds and helper exclusions stay service-owned. One unit per purchase, as legacy ＠かう: it goes to the empty hand, otherwise to the Depot."
                     }
                   },
                   "additionalProperties": false,
                   "required": [
                     "shop_type",
-                    "item_definition_id",
-                    "quantity"
+                    "item_definition_id"
                   ]
                 }
               },
@@ -8748,6 +8732,31 @@
                 "action": {
                   "type": "string",
                   "const": "oracle_blackmarket"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "const": "shop_secretshop"
                 }
               },
               "required": [
@@ -9883,7 +9892,8 @@
         "required": [
           "minimum",
           "maximum"
-        ]
+        ],
+        "description": "Bounds for one shop_batch_purchase line's quantity; ordinary purchase buys one unit."
       },
       "ShopPurchaseParams": {
         "type": "object",
@@ -10707,24 +10717,6 @@
             "const": true,
             "type": "boolean"
           },
-          "quantity": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "minimum": {
-                "const": 1,
-                "type": "integer"
-              },
-              "maximum": {
-                "const": 99,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "minimum",
-              "maximum"
-            ]
-          },
           "items": {
             "type": "array",
             "maxItems": 100,
@@ -10741,7 +10733,6 @@
           "title",
           "npc_name",
           "is_eligible",
-          "quantity",
           "items",
           "page"
         ],
@@ -10767,24 +10758,6 @@
             "const": true,
             "type": "boolean"
           },
-          "quantity": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "minimum": {
-                "const": 1,
-                "type": "integer"
-              },
-              "maximum": {
-                "const": 99,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "minimum",
-              "maximum"
-            ]
-          },
           "product": {
             "$ref": "#/components/schemas/SecretShopProduct"
           }
@@ -10794,7 +10767,6 @@
           "title",
           "npc_name",
           "is_eligible",
-          "quantity",
           "product"
         ],
         "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Status and purchase REST operations are retired; NPC interaction REST operations remain registered."

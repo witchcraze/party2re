@@ -200,25 +200,25 @@ func (s *stubAdventureService) GetChronicle(ctx context.Context, characterID str
 }
 
 type stubShopService struct {
-	sellFn           func(ctx context.Context, characterID string, shopType shop.ShopType, itemInstanceID string, quantity int) (shop.SaleResult, error)
+	sellFn           func(ctx context.Context, characterID string, shopType shop.ShopType, itemInstanceID string) (shop.SaleResult, error)
 	getCatalogFn     func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
 	batchPurchaseFn  func(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
 	inspectNPCFn     func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
 	talkNPCFn        func(ctx context.Context, shopType shop.ShopType) (string, error)
 	saleOfferFn      func(ctx context.Context, shopType shop.ShopType, characterID string) (*shop.SaleOffer, error)
-	purchaseInShopFn func(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
+	purchaseInShopFn func(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string) (shop.PurchaseResult, error)
 	synthesizeFn     func(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error)
 }
 
-func (s *stubShopService) PurchaseInShop(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error) {
+func (s *stubShopService) PurchaseInShop(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string) (shop.PurchaseResult, error) {
 	if s.purchaseInShopFn != nil {
-		return s.purchaseInShopFn(ctx, characterID, shopType, itemDefinitionID, quantity)
+		return s.purchaseInShopFn(ctx, characterID, shopType, itemDefinitionID)
 	}
 	return shop.PurchaseResult{}, nil
 }
-func (s *stubShopService) Sell(ctx context.Context, characterID string, shopType shop.ShopType, itemInstanceID string, quantity int) (shop.SaleResult, error) {
+func (s *stubShopService) Sell(ctx context.Context, characterID string, shopType shop.ShopType, itemInstanceID string) (shop.SaleResult, error) {
 	if s.sellFn != nil {
-		return s.sellFn(ctx, characterID, shopType, itemInstanceID, quantity)
+		return s.sellFn(ctx, characterID, shopType, itemInstanceID)
 	}
 	return shop.SaleResult{}, nil
 }

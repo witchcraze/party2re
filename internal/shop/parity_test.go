@@ -118,7 +118,7 @@ func TestPurchase_SlotOccupied_AutoTransferToDepot(t *testing.T) {
 	char := createTestCharacter(t, charRepo, "Fighter", 1000)
 
 	// 1. First weapon purchase -> empty inventory -> goes to inventory
-	res1, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
+	res1, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01")
 	if err != nil {
 		t.Fatalf("first purchase error: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestPurchase_SlotOccupied_AutoTransferToDepot(t *testing.T) {
 	}
 
 	// 2. Second weapon purchase -> slot occupied -> auto-transfers to depot
-	res2, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02", 1)
+	res2, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02")
 	if err != nil {
 		t.Fatalf("second purchase error: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestPurchase_DepotFullDeliversOverCapacity(t *testing.T) {
 	_ = depotRepo.Save(context.Background(), dep)
 
 	// send_item appends to a full depot (system.cgi:818-837).
-	if _, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02", 1); err != nil {
+	if _, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02"); err != nil {
 		t.Fatalf("purchase into full depot: %v", err)
 	}
 	charAfter, _ := charRepo.FindByID(context.Background(), char.ID)
@@ -210,13 +210,13 @@ func TestPurchase_ActiveHelperExclusion(t *testing.T) {
 	helperMock.activeIDs = []string{"weapon-01"}
 
 	// Attempt to purchase weapon-01 -> rejected with ErrItemUnavailable
-	_, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
+	_, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-01")
 	if !errors.Is(err, shop.ErrItemUnavailable) {
 		t.Fatalf("expected ErrItemUnavailable, got %v", err)
 	}
 
 	// Purchase weapon-02 (not in helper) -> succeeds
-	res, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02", 1)
+	res, err := svc.PurchaseInShop(context.Background(), char.ID, shop.ShopTypeWeapon, "weapon-02")
 	if err != nil {
 		t.Fatalf("weapon-02 purchase error: %v", err)
 	}
@@ -478,7 +478,7 @@ func TestArmorBatchPurchaseFiltersWeaponHelperRequests(t *testing.T) {
 	if listed, single, many := flags("armor-01"); !listed || single || !many {
 		t.Fatalf("armor request: listed=%v single=%v batch=%v, want batch only", listed, single, many)
 	}
-	if _, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeArmor, "armor-01", 1); !errors.Is(err, shop.ErrItemUnavailable) {
+	if _, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeArmor, "armor-01"); !errors.Is(err, shop.ErrItemUnavailable) {
 		t.Fatalf("single purchase of requested armor: %v", err)
 	}
 	if err := batch("armor-01"); err != nil {
@@ -492,7 +492,7 @@ func TestArmorBatchPurchaseFiltersWeaponHelperRequests(t *testing.T) {
 	if err := batch("armor-02"); !errors.Is(err, shop.ErrItemUnavailable) {
 		t.Fatalf("batch purchase of armor matching a requested weapon: %v", err)
 	}
-	if _, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeArmor, "armor-02", 1); err != nil {
+	if _, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeArmor, "armor-02"); err != nil {
 		t.Fatalf("single purchase of armor matching a requested weapon: %v", err)
 	}
 }

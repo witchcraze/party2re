@@ -32,7 +32,7 @@ func TestPlayerContextRegistersQualifiedSecretShop(t *testing.T) {
 		t.Fatal("production SecretShop scene is missing")
 	}
 	d := scenes[i]
-	if d.Parent != "town" || d.SubjectKind != "item" || !d.Pageable || d.CursorPageable || d.CanEnter == nil || d.SubjectAvailable == nil {
+	if d.Parent != "shop_item" || !d.ParentOnly || d.SubjectKind != "item" || !d.Pageable || d.CursorPageable || d.CanEnter == nil || d.SubjectAvailable == nil {
 		t.Fatalf("registration: %+v", d)
 	}
 	for _, level := range []int{6, 7} {

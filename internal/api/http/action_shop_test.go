@@ -155,11 +155,11 @@ func TestShopCommandsRejectInvalidInputsWithoutWrites(t *testing.T) {
 		status      int
 		code        string
 	}{
-		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01"}}`, 400, ""},
-		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":1,"character_id":"other"}}`, 400, ""},
-		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"secret","item_definition_id":"weapon-01","quantity":1}}`, 409, "ACTION_UNAVAILABLE"},
-		{"town", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":1}}`, 409, "ACTION_UNAVAILABLE"},
-		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":0}}`, 400, "SHOP_INVALID_QUANTITY"},
+		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon"}}`, 400, ""},
+		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","character_id":"other"}}`, 400, ""},
+		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"secret","item_definition_id":"weapon-01"}}`, 409, "ACTION_UNAVAILABLE"},
+		{"town", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01"}}`, 409, "ACTION_UNAVAILABLE"},
+		{"shop_weapon", `{"action":"shop_purchase","params":{"shop_type":"weapon","item_definition_id":"weapon-01","quantity":1}}`, 400, ""},
 		{"shop_weapon", `{"action":"shop_sell","params":{"shop_type":"weapon","item_instance_id":"missing"}}`, 404, "SHOP_ITEM_NOT_OWNED"},
 		{"shop_accessory", `{"action":"shop_batch_purchase","params":{"shop_type":"accessory","items":[{"item_definition_id":"item-143","quantity":1}]}}`, 409, "ACTION_UNAVAILABLE"},
 		{"shop_item", `{"action":"shop_batch_purchase","params":{"shop_type":"item","items":[]}}`, 400, "SHOP_EMPTY_PURCHASE_LIST"},

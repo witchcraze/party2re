@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records legacy rules, decisions and open gaps for the town shops (weapon, armor, item and accessory) and the secret shop. Catalog tiers, prices, dialogue and transport are owned by code and [OpenAPI](../api/base.json); other commerce facilities have their own documents ([Store](store.md), [Flea Market](fleamarket.md), [Auction](auction.md), [Black Market](black-market.md), [Accessory Shop](accessory-shop.md)).
+This document records legacy rules, decisions and open gaps for the town shops (weapon, armor, item and accessory) and the secret shop. Catalog tiers, prices, synthesis recipes, dialogue and transport are owned by code and [OpenAPI](../api/base.json).
 
 ## Helper quest exclusion
 
@@ -10,21 +10,17 @@ Items requested by helper quests are not sold (`get_helper_item`, filtered by le
 
 ## 5. Purchase Routing and Depot Auto-Transfer
 
-- A single purchase fills the matching [legacy hand field](items-and-equipment.md#legacy-hand-fields) when it is empty. An occupied field or a quantity above 1 routes the goods to the Depot.
+- `かう` buys one unit. It fills the matching [legacy hand field](items-and-equipment.md#legacy-hand-fields) when that field is empty, and otherwise goes to the Depot.
 - Depot delivery ignores capacity and may exceed it (`send_item`, `system.cgi:818–837`; [delivery capacity](depot.md#delivery-capacity-by-caller)).
-- Batch purchase (`まとめてかう`: `weapon.cgi:116`, `armor.cgi:115`, `item.cgi:137`) exists only in the weapon, armor and item shops and always delivers to the Depot.
+- Batch purchase (`まとめてかう`: `weapon.cgi:116`, `armor.cgi:115`, `item.cgi:137`) exists only in the weapon, armor and item shops and always delivers to the Depot. Legacy splits the typed names on `<>` and buys each one, so a repeated name buys another unit; a batch line's quantity stands for that repetition.
 
 ## 7. Secret shop
 
-Access requires job level 7 or more (`item.cgi:57–69`); the secret shop sells its eight items at three times the base price (`secret.cgi` sales). Stored uncompleted helper requests exclude their targets, also after expiry, until no other uncompleted request needs them ([Helper lifecycle](rescue-and-helper.md#lifecycle-and-expiration)). Inventory delivery registers the item collection (`secret.cgi:44–46`); Depot delivery does not. Puff-puff (`ぱふぱふ`) has no effect beyond its dialogue.
-
-### 7.4. Purchase Transport and Remaining Migration
-
-Purchase uses the Gateway's `secretshop_purchase` with explicit item and quantity, and logs `＠かう>item` with the keeper's reply. Puff-puff uses `secretshop_puffpuff`, an NPC act with no inputs: like legacy `pafupafu` (`$to_name = $m`), its actor row and NPC row are private to the actor ([NPC interaction](../architecture/place-log.md#npc-interaction)). No SecretShop REST route remains. **Known difference:** legacy `kau` (`secret.cgi:34–82`) buys one item, while Go accepts 1–99 and sends bulk quantities to the Depot; this is not an approved replacement of the single-purchase rule.
+The item shop's `＠ひみつのみせ` (`item.cgi:45–67`) is registered in `%actions` but not `@actions`: only the keeper's `しらべる` reply hints at it, and below job level 7 it returns without a message. Go offers `shop_secretshop` in the item shop only to characters the secret shop admits, and the secret shop is entered only from the item shop. The secret shop sells its eight items at three times the base price (`secret.cgi` sales). Stored uncompleted helper requests exclude their targets, also after expiry, until no other uncompleted request needs them ([Helper lifecycle](rescue-and-helper.md#lifecycle-and-expiration)). Inventory delivery registers the item collection (`secret.cgi:61–62`); Depot delivery does not. Puff-puff (`ぱふぱふ`, `secretshop_puffpuff`) has no effect beyond its dialogue; like legacy `pafupafu` (`$to_name = $m`), its actor and NPC rows are private to the actor ([NPC interaction](../architecture/place-log.md#npc-interaction)).
 
 ## 10. Shop scenes and commands
 
-The four ordinary shops map directly to scene destinations through the shared [navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery). Accessory products stay ordinary item catalog entries. Each command names its shop explicitly (`shop_type`), so later navigation cannot redirect it. Go quantity bounds (1–9999) are not legacy: the original bought one item per purchase, and batch input named several items.
+The four ordinary shops map directly to scene destinations through the shared [navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery). Accessory products stay ordinary item catalog entries. Each command names its shop explicitly (`shop_type`), so later navigation cannot redirect it.
 
 ### Scoped legacy action/call-path reconciliation
 
@@ -35,10 +31,10 @@ Shop files load through `party.cgi:14–30`; `system.cgi:9–24` registers share
 | `かう` (four shops) | `shop_purchase` | The scene lists the catalog with nominal strength/weight in the weapon and armor shops. |
 | `うる` | `shop_sell` | Only the item in the shop's hand sells (`sale_offer`): weapon, armor, or the tool hand in the item and accessory shops. |
 | `まとめてかう` (weapon, armor, item) | `shop_batch_purchase` | Always delivers to the Depot. |
-| `ひみつのみせ` (item shop) | `scene_enter` `secretshop` | Qualified navigation (job level 7). Legacy enters only from the item shop; Go enters from town. |
-| `ごうせい` (accessory, `accessory.cgi:100–101,172–292`) | `shop_synthesize` | The accessory scene lists the recipes; see [Accessory Shop](accessory-shop.md#synthesis). |
-| `はなす` / NPC `しらべる` | `npc_talk` / `npc_inspect` | Static dialogue omits legacy dynamic recommendations (such as the accessory shop's random item line); exact dialogue parity is not claimed. |
+| `ひみつのみせ` (item shop) | `shop_secretshop` | See [secret shop](#7-secret-shop). |
+| `ごうせい` (accessory, `accessory.cgi:100–101,172–292`) | `shop_synthesize` | Legacy fails when continuous `rand(100) > rate` (`accessory.cgi:184`); Go succeeds when `random.Intn(100) < rate`. For the catalog's integer rates both give the displayed percentage, so the different operators are not a probability bug. |
+| `はなす` / NPC `しらべる` | `npc_talk` / `npc_inspect` | Talk uses each shop's `@words`, including the lines built from the actor's facts and a random product of the actor's sales tier. |
 
-Each success logs `＠verb>target` and the keeper's reply. `まとめてかう` logs the checked names joined by `<>`, with a purchase list and total (`weapon.cgi:144–153`); Go lists one line per unit. Missing `ごうせい` materials are a logged reply that changes nothing (`accessory.cgi:204–206`).
+Each success logs `＠verb>target` and the keeper's reply. Missing `ごうせい` materials are a logged reply that changes nothing (`accessory.cgi:204–206`).
 
-`get_depot` is an uncalled utility, not an omitted action. No ordinary Shop REST route remains.
+`get_depot` is an uncalled utility, not an omitted action.
