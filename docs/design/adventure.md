@@ -4,7 +4,7 @@
 
 The Adventure system reconstructs the operation-driven stage adventure of legacy Party2 (`quest.cgi`, `vs_monster.cgi`, `_battle.cgi`). Evidence paths are under `party2/` at revision `ff97fc549932a146cc945d7edf71b44c868a840e`.
 
-Solo and Party starts enroll a floor-0 run on the run host (`NormalRunService`); each later operation is a Gateway [run command](../architecture/client-agent-api.md#normal-run-commands-and-recovery).
+Solo and Party starts enroll a floor-0 run on the run host; each later operation is a Gateway [run command](../architecture/client-agent-api.md#normal-run-commands-and-recovery). Grid dungeons and endurance challenges are separate modes; see [Dungeon](dungeon.md) and [Challenge](challenge.md).
 
 ## Original interaction contract and reconstruction target
 
@@ -17,23 +17,22 @@ These are source-inspected requirements, not a claim of full CGI execution or co
 - **Treasure and exit are individual operations.** `しらべる` selects a chest and checks the actor's allowance/item rules (`lib/_npc_action.cgi:5–85`); entering the treasure room does not open chests. `にげる` distinguishes a participant from a spectator, removes that actor and applies participant exit effects (`lib/_battle.cgi:1184–1278`). Participants leave at different times; one exit is not a party-wide finish.
 - **Scene capture follows actual submissions.** `party.cgi:20–27` records an eligible operation, including commentary, using the pre-operation location. Rejected operations and refreshes do not record. Content, visibility and copy rules belong to [Replay](replay.md).
 
-The state between operations must be enough to resume the same encounter: roster and roles, living/fallen participants, resources, statuses/effects and lifetimes, chosen encounter, field state, consumed items, actor/NPC timing, progression and earned-reward/exit facts. Persisting only HP/MP and restarting the batch resolver loses these facts. SQL is the run authority ([transient run state](../architecture/transient-run-state.md#run-host-durable-command-boundary-1325)); Party lobbies and adventure audit rows cannot resume combat.
+The state between operations must be enough to resume the same encounter: roster and roles, living/fallen participants, resources, statuses/effects and lifetimes, chosen encounter, field state, consumed items, actor/NPC timing, progression and earned-reward/exit facts. Persisting only HP/MP and re-resolving the floor loses these facts; Party lobbies and adventure audit rows cannot resume combat.
 
 Open: comments, whispers (`ささやき`), manual screenshots (`すくしょ`) and spectating (`けんがく`) have no native normal-adventure command contract yet (#948). Private whispers and manual screenshots are not automatic Replay payloads.
 
 ## Resumable normal-run transitions
 
-**Decision (#1325, 2026-10-11):** SQL authority for the run, and the idle-cleanup timing below.
+**Decision (#1325, 2026-10-11):** SQL is the run authority ([run host boundary](../architecture/transient-run-state.md#run-host-durable-command-boundary-1325)), with the idle-cleanup timing below. The [interaction contract](#original-interaction-contract-and-reconstruction-target) above owns the preconditions of advancing, acting, inspecting and exiting; each transition adds these facts:
 
 | Transition | Preconditions and resulting facts |
 | --- | --- |
 | Waiting admission | Party owns create/join; solo uses the same enrollment boundary without a lobby. Enrollment keeps ordered participants, leader, stage/mode and speed and creates floor 0 without combat |
-| Encounter creation (`すすむ`) | Living participant, interval satisfied, no living enemies; floor 0 also requires the leader. Clear applicable statuses and temporary/anti fields, advance exactly one floor and create its encounter; no NPC response or automatic allied action |
-| Battle action | Authorized current living actor (or a verified fallen-actor exception), registered action and valid target/resources. Process that operation, its effects and the bounded NPC response |
+| Encounter creation (`すすむ`) | Clear applicable statuses and temporary/anti fields, advance exactly one floor and create its encounter; no automatic allied action |
 | Defeat | Resolve revival and death effects within the operation. Keep fallen membership and earned facts; do not exit everyone, halve prior EXP or erase gold. With no living allies, offer permitted exit/recovery, not an automatic payout |
 | Ordinary boss defeat | Keep clear facts and allow explicit advance into treasure floor 11; treasure is not generated or opened by victory alone |
-| Treasure inspection (`しらべる`) | Living actor selects a current unopened chest; validate allowance and any consumable key. Claim/delivery is individual and atomic; no NPC response. Stay in the room until explicit exit |
-| Individual exit (`にげる`) | Participant receives only outstanding personal effects/history, leaves the roster and releases ownership; others' encounter/resources/timing are kept. Spectators receive no combat rewards |
+| Treasure inspection (`しらべる`) | Claim/delivery is individual and atomic. Stay in the room until explicit exit |
+| Individual exit (`にげる`) | Participant receives only outstanding personal effects/history and releases ownership; others' encounter/resources/timing are kept. Spectators receive no combat rewards |
 | Leadership and room disposal | On leader exit, choose the first remaining real participant in roster order, not lock order. Dispose the room only after the last real participant leaves and settlement is durable; NPCs do not keep an empty room alive |
 | Idle cleanup | Separate due detection, participant recovery/penalty and physical deletion; expired storage never proves rewards or mandatory work were processed |
 
@@ -90,6 +89,11 @@ Job79's time callback removes the enemy head from the current enemy pool while m
 
 **Room facts survive travel.** Room ID/log, ordered allies, leader, mode, record header and earned facts are not reinitialized; member persistence writes changed stage/floor but keeps `$r_stage` and records (`_battle.cgi:464–468,496–554`; `quest.cgi:1287–1296`). Travel neither pays nor erases earnings. Assignment keeps `$is_clear` and EX markers. Tool150's encounter creation at floor 10 sets clear; at stage24 it also creates the EX marker and applies the [ordinary NPC/field contract](battle.md#normal-adventure-action-and-target-matrix). Ordinary treasure creation at floor 11 runs Try success if applicable and, independently of clear/victory, unseals for **stage19 only**; clear credit consumes the retained flag for the current destination (`vs_monster.cgi:91–110`). Assignment, inspection and exit emit no unseal event; each genuine treasure recreation is a new event. The unseal clock follows the [Boss unseal lifecycle](boss.md#6-unseal-to-sealing-room-lifecycle); calling Boss's counter-writing helper as well would double-count. The next advance from assigned floor 10 still runs the destination's EX flag path before floor 11 (`52–80,227–249`). Exit uses the changed floor for fatigue, not the encounters actually fought (`_battle.cgi:1208–1222`).
 
+### Treasure creation and inspection
+
+- **Treasure count** (`vs_monster.cgi:90–101`; `_npc_action.cgi:498–519`). The loop is inclusive (`for 0 .. $count`), so an index of P−1−D yields one chest per surviving member. P is `@partys`, which includes living helpers; fallen helpers were dropped at the previous save (`_battle.cgi:486–493,521`). Job, accessory (equipped slot only) and chapel blessing bonuses use the acting player (`%m`) only, never other members. **Pitfall:** `my $count = shift || $#partys;` treats an index of 0 as falsy and falls back to P−1 before the blessing and dead-member penalty.
+- **Treasure pocket** (item215). **Decision (2026-11-07, #1899):** `shiraberu` clears `$m{ite}` on use and the hand holds one unit, so a character carries at most one pocket at a time.
+
 ### EX unlock and continuation
 
 **Decision (#1191, 2026-11-03).** EX eligibility is a durable **room-wide marker**, separate from stage clear, the special boss stat cap and named fields. Moving stages never clears it; the current stage must also support EX (22–26). All five stage predicates read the same `ex.cgi`, not a per-stage achievement.
@@ -108,17 +112,11 @@ An EX room continues 11→12→13, where 13 is terminal; a room without EX ends 
 
 ## Stage admission and clean-room enemy data
 
-- **Stage admission (#1194, #2833).** Where legacy `quest.cgi` (`tsukuru` / `get_limited_stages`) and `check_create_quest` / `exclude_job_lv_stage` diverged on stages 22, 23, 25 and 27, party2re adopts the selection UI's job-level and JST seasonal rules across both observation and admission, with no character-level gate (`internal/adventure/stage_catalog.go`). Gates apply only to the room's creator (solo start or Party creation); legacy `add_member` and the first `すすむ` never re-check members (`vs_monster.cgi:56–82`).
-- **Stage 26 season fallback.** Explicit ordinary rooms preserve their selected season marker; missing markers default to spring (`stage/26.cgi:16–28`).
-- **Shared enemy data and clean-room naming (#2402).** Ordinary stage encounters and Dungeon maps share the legacy transcription in `internal/stagedata` (retaining native combat payloads and source-position identities rather than the batch catalog's last-monster boss convention; see [Battle](battle.md#normal-adventure-action-and-target-matrix)). Stage enemies keep their legacy stage-file name, except franchise-distinctive names ([rule 00 §3](../../.agents/rules/00-migration-constraints.md#3-asset-and-intellectual-property-rules)) map one-to-one to generic replacements across every shipped catalog with `A`/`B` suffixes kept (`internal/stagedata/names_test.go`).
-
-## Batch crawl
-
-The batch crawl (`internal/adventure`, `internal/party`) no longer serves production starts; #2474 deletes it. These decisions and source findings remain current:
-
-- **Treasure count** (`vs_monster.cgi:90–101`; `_npc_action.cgi:498–519`). The loop is inclusive (`for 0 .. $count`), so an index of P−1−D yields one chest per surviving member. P is `@partys`, which includes living helpers; fallen helpers were dropped at the previous save (`_battle.cgi:486–493,521`). Job, accessory (equipped slot only) and chapel blessing bonuses use the acting player (`%m`) only, never other members. **Pitfall:** `my $count = shift || $#partys;` treats an index of 0 as falsy and falls back to P−1 before the blessing and dead-member penalty.
-- **Treasure pocket** (item215). **Decision (2026-11-07, #1899):** `shiraberu` clears `$m{ite}` on use and the hand holds one unit, so a character carries at most one pocket at a time. Batch crawls claim only the base one-chest allowance and never consume a pocket automatically.
+- **Stage admission (#1194, #2833).** Where legacy `quest.cgi` (`tsukuru` / `get_limited_stages`) and `check_create_quest` / `exclude_job_lv_stage` diverged on stages 22, 23, 25 and 27, party2re adopts the selection UI's job-level and JST seasonal rules across both observation and admission, with no character-level gate. Gates apply only to the room's creator (solo start or Party creation); legacy `add_member` and the first `すすむ` never re-check members (`vs_monster.cgi:56–82`).
 - **Once-daily lock** (stage26, dungeon16; `quest.cgi:594–599` `$m{once}=1`). The quota is consumed at party creation or solo start, only for the creator/leader, and is not restored by leaving or start failure. It clears only on waking at Home.
-- **Chronicle**: the legacy owner-view unlock belongs to the entry command so record GETs remain read-only under the [Gateway contract](../architecture/client-agent-api.md). Historical party-log backfill cannot recover members who fell before the final floor, seasons or per-member rewards; backfilled rows record zero rewards and unclassified season rather than guesses.
+- **Stage 26 season fallback.** Explicit ordinary rooms preserve their selected season marker; missing markers default to spring (`stage/26.cgi:16–28`).
+- **Shared enemy data (#2402).** Ordinary stage encounters and Dungeon maps share one legacy transcription with source-position identities (see [Battle](battle.md#normal-adventure-action-and-target-matrix)). Enemy names follow [rule 00 §3](../../.agents/rules/00-migration-constraints.md#3-asset-and-intellectual-property-rules).
 
-Grid dungeons and endurance challenges are separate modes; see [Dungeon](dungeon.md) and [Challenge](challenge.md).
+## Records
+
+The legacy owner view unlocks record rewards while displaying them; the reconstruction moves that unlock to the owner's entry command so record GETs stay read-only under the [Gateway contract](../architecture/client-agent-api.md).

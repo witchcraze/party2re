@@ -3,6 +3,7 @@ package adventure
 import (
 	"context"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -32,6 +33,15 @@ type NormalRun struct {
 }
 
 func (r *NormalRun) Host() *runhost.State { return &r.State }
+
+// PostBattleSettler applies post-battle state, rewards, and item drops.
+type PostBattleSettler interface {
+	ApplyPostBattleResult(ctx context.Context, req battle.ApplyPostBattleRequest) (battle.ApplyPostBattleResponse, error)
+}
+
+// UnsealHook runs after a stage19 treasure creation commits (make_vs_king).
+// unsealers is the unsealing party, leader first; partyName is its quest name.
+type UnsealHook func(ctx context.Context, partyName string, unsealers []corebattle.LifetimeActor)
 
 type NormalRunConfig struct {
 	Store       runhost.Store[NormalRun]

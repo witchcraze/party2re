@@ -70,9 +70,9 @@ func (f *normalFixture) waitingParty(t *testing.T, mode string) (*normalPartyAdm
 	repo := party.NewValkeyRepository(client)
 	var opts []party.Option
 	if builder, ok := f.cfg.Builder.(*battle.Service); ok {
-		opts = append(opts, party.WithParticipantBuilder(builder))
+		opts = append(opts, party.WithLifetimeActorBuilder(builder))
 	}
-	svc, err := party.NewService(repo, f.chars, f.invs, f.cfg.Stages, f.cfg.Monsters, nil, opts...)
+	svc, err := party.NewService(repo, f.chars, f.cfg.Stages, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func (f *normalFixture) waitingParty(t *testing.T, mode string) (*normalPartyAdm
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The retained batch lobby does not yet advertise Try. Exercise its frozen
+	// The lobby does not yet advertise Try. Exercise its frozen
 	// admission contract without enabling a production start before #1330.
 	if mode != "normal" {
 		p.Party.Mode = mode
@@ -538,7 +538,7 @@ func setupCapturedPartyMembers(t *testing.T, f *normalFixture) (*normalPartyAdmi
 	}
 
 	repo := party.NewValkeyRepository(client)
-	svc, err := party.NewService(repo, f.chars, f.invs, f.cfg.Stages, f.cfg.Monsters, nil, party.WithParticipantBuilder(f.cfg.Builder.(*battle.Service)))
+	svc, err := party.NewService(repo, f.chars, f.cfg.Stages, party.WithLifetimeActorBuilder(f.cfg.Builder.(*battle.Service)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -699,7 +699,7 @@ func TestNormalRunPartyLegacyLobbyFallback(t *testing.T) {
 
 	repo := party.NewValkeyRepository(client)
 	// Legacy party service without ParticipantBuilder simulates pre-cutover lobbies in Valkey without BattleActor.
-	legacySvc, err := party.NewService(repo, f.chars, f.invs, f.cfg.Stages, f.cfg.Monsters, nil)
+	legacySvc, err := party.NewService(repo, f.chars, f.cfg.Stages)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -66,66 +66,36 @@ func (s *NormalRunService) advance(ctx context.Context, r *NormalRun, actorID st
 }
 
 func (s *NormalRunService) createEncounter(ctx context.Context, r *NormalRun, actorID string) error {
-	if r.Stage.Ordinary != nil {
-		party := make([]corebattle.LifetimeActor, 0, len(r.Battle.Actors))
-		for _, a := range r.Battle.Actors {
-			if a.TeamID == r.Actor(actorID).TeamID && !a.Banished && !a.RosterDetached {
-				party = append(party, a)
-			}
-		}
-		encounter, err := r.Stage.BuildOrdinaryEncounter(s.cfg.Monsters, party, *r.Actor(actorID), r.Round, r.Mode, fmt.Sprintf("%s-f%d-v%d", r.ID, r.Round, r.Version+1), s.cfg.RNG)
-		if err != nil {
-			return err
-		}
-		r.EncounterPool, r.AppearancePositions = encounter.Pool, encounter.Appears
-		r.Battle.Actors = append(r.Battle.Actors, encounter.Actors...)
-		for _, a := range encounter.Actors {
-			r.Enemies = append(r.Enemies, a.ID)
-		}
-		if r.Round == EXBossFloor {
-			r.prepareEXAllies(actorID)
-		}
-		// Restoration precedes the cap, which leaves current HP/MP untouched (_battle.cgi:1485–1530).
-		if slices.Contains(r.Stage.SpecialBossFloors, r.Round) {
-			reset, err := s.resetContext(ctx, r, actorID)
-			if err != nil {
-				return err
-			}
-			if err := r.Battle.ApplySpecialBossField(&reset, s.cfg.RNG); err != nil {
-				return err
-			}
-			if !r.Battle.SpecialBossField {
-				return corebattle.ErrUnsupportedEffect
-			}
-		}
-		r.markEncounterCreated()
-		return nil
-	}
-	ids := r.Stage.GetBossIDs()
-	if r.Round < BossFloor {
-		pool := r.Stage.GetNormalMonsterIDs()
-		if len(pool) == 0 {
-			return ErrStageNotFound
-		}
-		count := int(s.cfg.RNG.Float64()*(2.5+float64(len(r.Roster))*0.6)) + 1
-		ids = make([]string, count)
-		for i := range ids {
-			ids[i] = pool[s.cfg.RNG.Intn(len(pool))]
+	party := make([]corebattle.LifetimeActor, 0, len(r.Battle.Actors))
+	for _, a := range r.Battle.Actors {
+		if a.TeamID == r.Actor(actorID).TeamID && !a.Banished && !a.RosterDetached {
+			party = append(party, a)
 		}
 	}
-	if len(ids) == 0 {
-		return ErrStageNotFound
+	encounter, err := r.Stage.BuildOrdinaryEncounter(s.cfg.Monsters, party, *r.Actor(actorID), r.Round, r.Mode, fmt.Sprintf("%s-f%d-v%d", r.ID, r.Round, r.Version+1), s.cfg.RNG)
+	if err != nil {
+		return err
 	}
-	session := CrawlSession{Mode: r.Mode, Rng: s.cfg.RNG.Intn, RngFloat: s.cfg.RNG.Float64}
-	for i, id := range ids {
-		m, err := s.cfg.Monsters.FindByID(id)
-		if err != nil {
-			return err
-		}
-		a := session.buildMonsterActor(fmt.Sprintf("%s-f%d-v%d-%d", m.ID, r.Round, r.Version+1, i), m, float64(len(r.Roster)-2)*0.1, r.Round == BossFloor)
-		a.TeamID = "enemies"
-		r.Battle.Actors = append(r.Battle.Actors, a)
+	r.EncounterPool, r.AppearancePositions = encounter.Pool, encounter.Appears
+	r.Battle.Actors = append(r.Battle.Actors, encounter.Actors...)
+	for _, a := range encounter.Actors {
 		r.Enemies = append(r.Enemies, a.ID)
+	}
+	if r.Round == EXBossFloor {
+		r.prepareEXAllies(actorID)
+	}
+	// Restoration precedes the cap, which leaves current HP/MP untouched (_battle.cgi:1485–1530).
+	if slices.Contains(r.Stage.SpecialBossFloors, r.Round) {
+		reset, err := s.resetContext(ctx, r, actorID)
+		if err != nil {
+			return err
+		}
+		if err := r.Battle.ApplySpecialBossField(&reset, s.cfg.RNG); err != nil {
+			return err
+		}
+		if !r.Battle.SpecialBossField {
+			return corebattle.ErrUnsupportedEffect
+		}
 	}
 	r.markEncounterCreated()
 	return nil

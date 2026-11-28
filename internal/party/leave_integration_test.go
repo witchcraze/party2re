@@ -69,12 +69,6 @@ func (leaveTestStageProvider) FindByID(stageID string) (adventure.Stage, error) 
 
 func (leaveTestStageProvider) CanAccessStage(corecharacter.Character, string) error { return nil }
 
-type leaveTestMonsterProvider struct{}
-
-func (leaveTestMonsterProvider) FindByID(string) (adventure.Monster, error) {
-	return adventure.Monster{}, adventure.ErrMonsterNotFound
-}
-
 func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 	db := database.OpenTestDB(t)
 	client := testutil.OpenValkey(t)
@@ -117,8 +111,8 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 		party.WithLobbiesIndexKey(indexKey),
 	)
 
-	svc, err := party.NewService(repo, chars, invs, leaveTestStageProvider{}, leaveTestMonsterProvider{}, nil,
-		party.WithParticipantBuilder(adapter),
+	svc, err := party.NewService(repo, chars, leaveTestStageProvider{},
+		party.WithLifetimeActorBuilder(adapter),
 		party.WithTransactionProvider(tx),
 	)
 	if err != nil {
@@ -181,7 +175,7 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 
 		// Character write failure rolls back SQL and keeps Valkey membership.
 		writeErr := errors.New("injected character update failure")
-		failCharSvc, err := party.NewService(repo, failingUpdateCharRepo{CharacterRepository: chars, err: writeErr}, invs, leaveTestStageProvider{}, leaveTestMonsterProvider{}, nil,
+		failCharSvc, err := party.NewService(repo, failingUpdateCharRepo{CharacterRepository: chars, err: writeErr}, leaveTestStageProvider{},
 			party.WithTransactionProvider(tx),
 		)
 		if err != nil {
@@ -196,7 +190,7 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 
 		// Valkey removal failure rolls back the SQL character write.
 		valkeyErr := errors.New("injected valkey remove failure")
-		failRepoSvc, err := party.NewService(failingRemovePartyRepo{Repository: repo, err: valkeyErr}, chars, invs, leaveTestStageProvider{}, leaveTestMonsterProvider{}, nil,
+		failRepoSvc, err := party.NewService(failingRemovePartyRepo{Repository: repo, err: valkeyErr}, chars, leaveTestStageProvider{},
 			party.WithTransactionProvider(tx),
 		)
 		if err != nil {
@@ -296,8 +290,8 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 		tavernExit := testTavernExitAdapter{svc: tavernSvc}
-		leaveSvc, err := party.NewService(repo, chars, invs, leaveTestStageProvider{}, leaveTestMonsterProvider{}, nil,
-			party.WithParticipantBuilder(adapter),
+		leaveSvc, err := party.NewService(repo, chars, leaveTestStageProvider{},
+			party.WithLifetimeActorBuilder(adapter),
 			party.WithTransactionProvider(tx),
 			party.WithTavernExitSettler(tavernExit),
 		)
@@ -339,7 +333,7 @@ func TestLeavePartySQLAndValkeyIntegration(t *testing.T) {
 
 		// Valkey removal failure rolls back ResetFullness and ClaimDelivery too.
 		valkeyErr := errors.New("injected valkey failure")
-		failLeaveSvc, err := party.NewService(failingRemovePartyRepo{Repository: repo, err: valkeyErr}, chars, invs, leaveTestStageProvider{}, leaveTestMonsterProvider{}, nil,
+		failLeaveSvc, err := party.NewService(failingRemovePartyRepo{Repository: repo, err: valkeyErr}, chars, leaveTestStageProvider{},
 			party.WithTransactionProvider(tx),
 			party.WithTavernExitSettler(tavernExit),
 		)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -164,48 +163,6 @@ func TestCombatWiring_PvPEquippedParticipant(t *testing.T) {
 	}
 	if pvpPart.TeamID != pvp.ColorRed {
 		t.Errorf("pvpPart.TeamID = %s, want %s", pvpPart.TeamID, pvp.ColorRed)
-	}
-}
-
-func TestCombatWiring_AdventureEquippedParticipant(t *testing.T) {
-	ctx := context.Background()
-	charRepo := newMockCharRepo()
-	invRepo := newMockInvRepo()
-	equipRepo := newMockEquipRepo()
-
-	setupEquippedCharacter(ctx, charRepo, invRepo, equipRepo, "char-adv", 30, 20, 25)
-
-	battleAdapter := battle.NewService(
-		battle.WithCharacterRepository(charRepo),
-		battle.WithInventoryRepository(invRepo),
-		battle.WithEquipmentRepository(equipRepo),
-	)
-
-	part, err := battleAdapter.BuildParticipant(ctx, "char-adv")
-	if err != nil {
-		t.Fatalf("BuildParticipant failed: %v", err)
-	}
-
-	char, _ := charRepo.FindByID(ctx, "char-adv")
-	stage := adventure.Stage{
-		ID:   "stage-1",
-		Name: "テスト洞窟",
-	}
-
-	session, err := adventure.NewCrawlSessionWithParticipants(stage, []corecharacter.Character{char}, []corebattle.Participant{part}, nil)
-	if err != nil {
-		t.Fatalf("NewCrawlSessionWithParticipants failed: %v", err)
-	}
-
-	if len(session.Participants) != 1 {
-		t.Fatalf("session.Participants len = %d, want 1", len(session.Participants))
-	}
-	p := session.Participants[0]
-	if p.Attack != 44 {
-		t.Errorf("p.Attack = %d, want 44", p.Attack)
-	}
-	if p.Defense != 44 {
-		t.Errorf("p.Defense = %d, want 44", p.Defense)
 	}
 }
 

@@ -35,26 +35,6 @@ type postAdventureTavern interface {
 	ClaimDelivery(ctx context.Context, characterID string) (tavern.OrderResult, error)
 }
 
-func buildPostAdventureHook(t postAdventureTavern) func(ctx context.Context, characterID string) (string, error) {
-	return func(ctx context.Context, characterID string) (string, error) {
-		if err := t.ResetFullness(ctx, characterID); err != nil {
-			return "", err
-		}
-		// Battle-end notices from _battle.cgi:1366-1372.
-		result, err := t.ClaimDelivery(ctx, characterID)
-		if errors.Is(err, tavern.ErrNoActiveDelivery) {
-			return "", nil
-		}
-		if unpaid, ok := errors.AsType[tavern.UnaffordableDeliveryError](err); ok {
-			return "酒場から" + unpaid.ItemName + "が届きましたが、お金が足りませんでした", nil
-		}
-		if err != nil {
-			return "", err
-		}
-		return "酒場から" + result.Item.Name + "が届きました！", nil
-	}
-}
-
 type partyTavernExitAdapter struct {
 	tavern postAdventureTavern
 }

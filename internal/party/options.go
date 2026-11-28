@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
 )
 
@@ -65,46 +64,15 @@ func WithNewsPublisher(news NewsPublisher) Option {
 	}
 }
 
-// ParticipantBuilder constructs a Participant from a character ID.
-type ParticipantBuilder interface {
-	BuildParticipant(ctx context.Context, characterID string) (battle.Participant, error)
-}
-
 // LifetimeActorBuilder constructs a battle LifetimeActor snapshot from a character ID.
 type LifetimeActorBuilder interface {
 	BuildLifetimeActor(ctx context.Context, characterID, icon string) (battle.LifetimeActor, error)
 }
 
-// WithParticipantBuilder configures the ParticipantBuilder.
-func WithParticipantBuilder(builder ParticipantBuilder) Option {
+// WithLifetimeActorBuilder configures the member battle-row snapshot builder.
+func WithLifetimeActorBuilder(builder LifetimeActorBuilder) Option {
 	return func(s *Service) {
-		s.participantBuilder = builder
-		if lb, ok := builder.(LifetimeActorBuilder); ok {
-			s.lifetimeActorBuilder = lb
-		}
-	}
-}
-
-// PostAdventureHook is called after an adventure concludes and state is applied.
-// Successful nonempty messages are included per participant; errors do not fail completion.
-type PostAdventureHook func(ctx context.Context, characterID string) (string, error)
-
-// WithPostAdventureHook configures the post-adventure hook.
-func WithPostAdventureHook(hook PostAdventureHook) Option {
-	return func(s *Service) {
-		s.postAdventureHook = hook
-	}
-}
-
-// BlessingProvider queries active chapel blessings for a character.
-type BlessingProvider interface {
-	GetActiveBlessing(ctx context.Context, characterID string) (string, error)
-}
-
-// WithBlessingProvider configures the blessing provider.
-func WithBlessingProvider(provider BlessingProvider) Option {
-	return func(s *Service) {
-		s.blessingProvider = provider
+		s.lifetimeActorBuilder = builder
 	}
 }
 
@@ -112,19 +80,6 @@ func WithBlessingProvider(provider BlessingProvider) Option {
 func WithRNG(rng func(n int) int) Option {
 	return func(s *Service) {
 		s.rng = rng
-	}
-}
-
-// AdventureRepository persists and retrieves adventure records for party members.
-type AdventureRepository interface {
-	Save(ctx context.Context, value adventure.Adventure) error
-	FindByID(ctx context.Context, id string) (adventure.Adventure, error)
-}
-
-// WithAdventureRepository configures the AdventureRepository for recording member clears and chronicle stats.
-func WithAdventureRepository(repo AdventureRepository) Option {
-	return func(s *Service) {
-		s.advRepo = repo
 	}
 }
 

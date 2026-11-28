@@ -105,37 +105,6 @@ func (s Stage) SelectSeason(rng func(n int) int) Stage {
 	return s.ForSeason(chosenSeason)
 }
 
-// GetBossIDs returns the stage boss IDs (for Floor 10).
-// If not explicitly defined, the last monster in MonsterIDs is designated as the stage boss.
-func (s Stage) GetBossIDs() []string {
-	if len(s.BossIDs) > 0 {
-		return s.BossIDs
-	}
-	if len(s.MonsterIDs) > 0 {
-		return []string{s.MonsterIDs[len(s.MonsterIDs)-1]}
-	}
-	return nil
-}
-
-// GetNormalMonsterIDs returns normal monster IDs (for Floors 1 to 9), excluding stage bosses.
-func (s Stage) GetNormalMonsterIDs() []string {
-	bosses := s.GetBossIDs()
-	bossMap := make(map[string]bool, len(bosses))
-	for _, b := range bosses {
-		bossMap[b] = true
-	}
-	var normal []string
-	for _, m := range s.MonsterIDs {
-		if !bossMap[m] {
-			normal = append(normal, m)
-		}
-	}
-	if len(normal) == 0 {
-		return s.MonsterIDs
-	}
-	return normal
-}
-
 type stageJSON struct {
 	ID              string              `json:"id"`
 	Name            string              `json:"name"`
@@ -238,7 +207,7 @@ func parseStageNum(stageID string) (int, bool) {
 // server-side creation handler (check_create_quest:474-568) omitted seasonal verification.
 // Consequently, direct requests could historically initiate off-season adventures.
 // In party2re, the intended selection UI rules are adopted as the unified canonical standard
-// across observation (AvailableStages) and admission (CanAccessStage / StartPartyAdventure).
+// across observation (AvailableStages) and admission (CanAccessStage).
 func IsStageInSeason(stageID string, t time.Time) bool {
 	num, ok := parseStageNum(stageID)
 	if !ok {

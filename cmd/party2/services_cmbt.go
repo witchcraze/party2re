@@ -230,49 +230,25 @@ func newCmbtServices(
 		return nil, err
 	}
 
-	dbPartyRepo, err := database.NewPartyRepository(db)
-	if err != nil {
-		return nil, err
-	}
-	partyRepo := party.NewValkeyRepository(valkeyClient, party.WithDurableLogRepository(dbPartyRepo))
+	partyRepo := party.NewValkeyRepository(valkeyClient)
 	partyService, err := party.NewService(
 		partyRepo,
 		core.charRepo,
-		core.invRepo,
 		adventureStages,
-		adventureMonsters,
-		battleEngine,
 		party.WithTransactionProvider(core.txProvider),
 		party.WithNewsPublisher(party.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err
 		})),
-		party.WithParticipantBuilder(battleAdapter),
-		party.WithPostBattleSettler(battleAdapter),
-		party.WithDepotRepository(econ.depotRepo),
+		party.WithLifetimeActorBuilder(battleAdapter),
 		party.WithTimerService(soc.timer),
 		party.WithIdleSweep(partyRepo, soc.timer),
-		party.WithAdventureRepository(adventureRepo),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	advService, err := adventure.NewServiceWithCatalogs(
-		adventureRepo,
-		core.charRepo,
-		core.invRepo,
-		adventureStages,
-		adventureMonsters,
-		battleEngine,
-		soc.sched,
-		nil,
-		adventure.RealClock{},
-		adventure.WithParticipantBuilder(battleAdapter),
-		adventure.WithPostBattleSettler(battleAdapter),
-		adventure.WithTransactionProvider(core.txProvider),
-		adventure.WithTimerService(soc.timer),
-	)
+	advService, err := adventure.NewServiceWithCatalogs(adventureRepo, core.charRepo, adventureStages, adventureMonsters)
 	if err != nil {
 		return nil, err
 	}
@@ -284,8 +260,6 @@ func newCmbtServices(
 			slog.WarnContext(ctx, "sealing room opening failed", "error_type", reflect.TypeOf(err).String())
 		}
 	})
-	advService.SetUnsealHook(unseal)
-	partyService.SetUnsealHook(unseal)
 
 	admission := combatAdmission{party: partyService, characters: core.charRepo, tx: core.txProvider,
 		busy: func(ctx context.Context, actor string) error {
@@ -404,7 +378,6 @@ func newCmbtServices(
 		return until, pending, nil
 	})
 	dungeonService.ConfigureAdmission(admission)
-	advService.SetLegacyAdmission(admission.withMembers)
 	challengeService.ConfigureAdmission(admission)
 	bossStore, err := database.NewRunRepository[boss.Run](db)
 	if err != nil {

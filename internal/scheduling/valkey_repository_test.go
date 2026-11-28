@@ -31,6 +31,10 @@ func cleanupKeys(t testing.TB, client valkey.Client, ids ...string) {
 	}
 }
 
+// earliestDue sorts a test's own due entry ahead of residual entries other
+// tests leave in the shared pending queue, which FetchDue reads in score order.
+var earliestDue = time.Unix(1, 0).UTC()
+
 func validTestAction(id string, executeAt time.Time) core_scheduling.ScheduledAction {
 	return core_scheduling.ScheduledAction{
 		ID:          id,
@@ -151,7 +155,7 @@ func TestValkeyRepository_FetchDue_ReturnsPastActions(t *testing.T) {
 
 	repo := scheduling.NewValkeyRepository(client)
 	ctx := context.Background()
-	if err := repo.Schedule(ctx, validTestAction(id, time.Now().Add(-time.Minute).UTC())); err != nil {
+	if err := repo.Schedule(ctx, validTestAction(id, earliestDue)); err != nil {
 		t.Fatalf("Schedule: %v", err)
 	}
 
@@ -201,7 +205,7 @@ func TestValkeyRepository_FetchDue_MalformedJSONRemovedFromQueue(t *testing.T) {
 	if err := client.Do(ctx, client.B().Set().Key("party2:scheduled:action:"+id).Value("not-valid-json").Build()).Error(); err != nil {
 		t.Fatal(err)
 	}
-	score := float64(time.Now().Add(-time.Minute).Unix())
+	score := float64(earliestDue.Unix())
 	if err := client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build()).Error(); err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +252,7 @@ func TestValkeyRepository_FetchDue_InvalidValidateRemovedFromQueue(t *testing.T)
 	if err := client.Do(ctx, client.B().Set().Key("party2:scheduled:action:"+id).Value(string(data)).Build()).Error(); err != nil {
 		t.Fatal(err)
 	}
-	score := float64(time.Now().Add(-time.Minute).Unix())
+	score := float64(earliestDue.Unix())
 	if err := client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build()).Error(); err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +285,7 @@ func TestValkeyRepository_FetchDue_StaleQueueEntryCleanedUp(t *testing.T) {
 	defer cleanupKeys(t, client, id)
 
 	ctx := context.Background()
-	score := float64(time.Now().Add(-time.Minute).Unix())
+	score := float64(earliestDue.Unix())
 	if err := client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(score, id).Build()).Error(); err != nil {
 		t.Fatal(err)
 	}

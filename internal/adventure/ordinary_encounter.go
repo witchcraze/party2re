@@ -8,8 +8,7 @@ import (
 	"github.com/witchcraze/party2re/internal/stagedata"
 )
 
-// OrdinaryStage is the complete source-position table, separate from the batch
-// catalog's historical last-monster boss convention. Persist it with the room.
+// OrdinaryStage is the complete source-position table. Persist it with the room.
 type OrdinaryStage = stagedata.Stage
 
 // OrdinaryEncounter retains the complete unrolled summon table as well as the
@@ -21,7 +20,7 @@ type OrdinaryEncounter struct {
 }
 
 // OrdinarySeason follows room-marker priority. An unmarked room is spring;
-// calendar time and the batch resolver's random season are not inputs.
+// calendar time is not an input.
 func (s Stage) OrdinarySeason(markers ...string) Stage {
 	for _, season := range []string{"spring", "summer", "autumn", "winter"} {
 		for _, marker := range markers {
@@ -100,9 +99,8 @@ func (s Stage) BuildOrdinaryEncounter(catalog *MonsterCatalog, party []corebattl
 		}
 	}
 	actors := make([]corebattle.LifetimeActor, 0, len(chosen))
-	session := CrawlSession{Mode: mode, Rng: rng.Intn, RngFloat: rng.Float64}
 	for i, m := range chosen {
-		a := session.buildMonsterActor(fmt.Sprintf("%s-%d", encounterID, i), m, float64(len(party)-2)*.1, floor >= BossFloor)
+		a := buildMonsterActor(fmt.Sprintf("%s-%d", encounterID, i), m, float64(len(party)-2)*.1, floor >= BossFloor, mode, rng.Float64)
 		if floor < BossFloor && i < 8 {
 			a.EncounterIdentity += string(rune('A' + i))
 		}

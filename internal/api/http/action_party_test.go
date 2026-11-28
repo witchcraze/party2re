@@ -171,12 +171,6 @@ func (partyTestStageCatalog) AvailableStages(corecharacter.Character) []adventur
 	return []adventure.Stage{{ID: "stage-00", Name: "はじまりの森"}}
 }
 
-type partyTestMonsterCatalog struct{}
-
-func (partyTestMonsterCatalog) FindByID(string) (adventure.Monster, error) {
-	return adventure.Monster{}, adventure.ErrMonsterNotFound
-}
-
 func TestPartyKickSetsActionWaitAndQuestPlaceLog(t *testing.T) {
 	ctx := context.Background()
 	f := &multiPartyGatewayFixture{
@@ -187,7 +181,7 @@ func TestPartyKickSetsActionWaitAndQuestPlaceLog(t *testing.T) {
 		},
 	}
 	repo := party.NewMemoryRepository()
-	partySvc, err := party.NewService(repo, f, nil, partyTestStageCatalog{}, partyTestMonsterCatalog{}, nil)
+	partySvc, err := party.NewService(repo, f, partyTestStageCatalog{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +399,7 @@ func TestPartyJoinPreservesAppliedMembershipWhenRosterRefreshFails(t *testing.T)
 
 	baseRepo := party.NewMemoryRepository()
 	faultRepo := &gatewayJoinFaultRepo{Repository: baseRepo, readErr: errors.New("valkey roster read failure")}
-	partySvc, err := party.NewService(faultRepo, f, nil, partyTestStageCatalog{}, partyTestMonsterCatalog{}, nil)
+	partySvc, err := party.NewService(faultRepo, f, partyTestStageCatalog{})
 	if err != nil {
 		t.Fatal(err)
 	}

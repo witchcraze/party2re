@@ -507,8 +507,7 @@ Party admission takes its existing lobby lock, then serializes roster validation
 and the SQL handoff on the admission's durable run identity. Each member's
 private battle-row snapshot is captured in the Valkey lobby on create or join
 and handed off through the immutable admission record, never through public
-lobby responses. Roster writers and
-the retained Party batch start use that same SQL boundary, including when the
+lobby responses. Roster writers use that same SQL boundary, including when the
 Valkey lease expires. Enrollment freezes round 0 without combat. SQL ownership
 survives lobby cleanup failure, expiry and restart; retry finds the same admission
 before consulting the lobby. Cleanup removes only that lobby's reverse mappings

@@ -6,7 +6,6 @@
   "consumer_interfaces": [
     "internal/shop/shop.go#InventoryRepository",
     "internal/blacksmith/blacksmith.go#InventoryRepository",
-    "internal/adventure/adventure.go#InventoryRepository",
     "internal/blackmarket/blackmarket.go#InventoryRepository",
     "internal/dungeon/dungeon.go#InventoryProvider"
   ],

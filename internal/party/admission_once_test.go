@@ -72,7 +72,7 @@ func createReadyPartyWithStage(
 func TestPartyCreation_DailyOnceLock_Lifecycle(t *testing.T) {
 	ctx := context.Background()
 	timerSvc := timer.NewService(nil)
-	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(t, nil, WithTimerService(timerSvc))
+	svc, _, charRepo := setupPartyAdventureTestService(t, WithTimerService(timerSvc))
 
 	leader, err := corecharacter.New("LeadChar")
 	if err != nil {
@@ -134,26 +134,16 @@ func TestPartyCreation_DailyOnceLock_Lifecycle(t *testing.T) {
 
 	// Leader can now create party for stage-26 again
 	_, _ = svc.LeaveParty(ctx, memberPartyID, member.ID)
-	newPartyID := createReadyPartyWithStage(ctx, t, svc, charRepo, "stage-26", leader)
-	if newPartyID == "" {
+	if newPartyID := createReadyPartyWithStage(ctx, t, svc, charRepo, "stage-26", leader); newPartyID == "" {
 		t.Fatal("expected leader party creation to succeed after lock release")
 	}
 
-	// Adventure starts and runs to a winning conclusion
-	res, err := svc.StartPartyAdventure(ctx, newPartyID, leader.ID)
-	if err != nil {
-		t.Fatalf("StartPartyAdventure failed: %v", err)
-	}
-	if res.Outcome != "win" {
-		t.Fatalf("expected outcome win, got %s", res.Outcome)
-	}
-	_ = partyRepo
 }
 
 func TestPartyCreation_DailyOnceLock_CreationFailureCompensated(t *testing.T) {
 	ctx := context.Background()
 	timerSvc := timer.NewService(nil)
-	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(t, nil, WithTimerService(timerSvc))
+	svc, partyRepo, charRepo := setupPartyAdventureTestService(t, WithTimerService(timerSvc))
 
 	leader, err := corecharacter.New("FailChar")
 	if err != nil {
@@ -207,7 +197,7 @@ func TestPartyCreation_DailyOnceLock_StorageFailurePropagates(t *testing.T) {
 		tryLockErr: injectedErr,
 	}
 
-	svc, _, charRepo, _, _ := setupPartyAdventureTestService(t, nil, WithTimerService(mockTimer))
+	svc, _, charRepo := setupPartyAdventureTestService(t, WithTimerService(mockTimer))
 
 	leader, err := corecharacter.New("StorLead")
 	if err != nil {
@@ -231,7 +221,7 @@ func TestPartyCreation_DailyOnceLock_StorageFailurePropagates(t *testing.T) {
 func TestPartyAdmission_ConcurrentSoloCrawlAndPartyCreation(t *testing.T) {
 	ctx := context.Background()
 	timerSvc := timer.NewService(nil)
-	partySvc, _, partyCharRepo, _, _ := setupPartyAdventureTestService(t, nil, WithTimerService(timerSvc))
+	partySvc, _, partyCharRepo := setupPartyAdventureTestService(t, WithTimerService(timerSvc))
 
 	char, err := corecharacter.New("Racer")
 	if err != nil {
@@ -271,7 +261,7 @@ func TestPartyAdmission_ConcurrentSoloCrawlAndPartyCreation(t *testing.T) {
 		}()
 	}
 
-	// 5 attempts of concurrent solo crawl lock acquisition
+	// 5 attempts of concurrent solo-start lock acquisition
 	for i := 0; i < attempts/2; i++ {
 		wg.Add(1)
 		go func() {

@@ -34,11 +34,11 @@ func TestAdventureRepository(t *testing.T) {
 		FloorsCleared:    10,
 		IsCleared:        true,
 		PartySize:        1,
-		ExperienceReward: adventure.AdventureReward,
+		ExperienceReward: 20,
 		BattleResult: corebattle.Result{
 			Outcome:  corebattle.OutcomeWin,
 			WinnerID: character.ID,
-			LoserID:  adventure.AdventureEnemyID,
+			LoserID:  "starter-opponent",
 			Turns:    3,
 		},
 		Resolved: true,

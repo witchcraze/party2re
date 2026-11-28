@@ -163,7 +163,7 @@ func TestListHistory(t *testing.T) {
 	}
 
 	repo := &chronicleRepositoryStub{adventures: advs}
-	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, monsters, corebattle.Engine{}, nil, nil, &testClock{now: now})
+	service, err := NewServiceWithCatalogs(repo, charStub, stages, monsters)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -215,7 +215,6 @@ func TestListHistory(t *testing.T) {
 }
 
 func TestGetChronicle(t *testing.T) {
-	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	stages, err := NewStageCatalog([]Stage{
 		{ID: "stage-01", Name: "平原", MonsterIDs: []string{"mon-01"}},
 		{ID: "stage-02", Name: "森林", MonsterIDs: []string{"mon-02"}},
@@ -243,7 +242,7 @@ func TestGetChronicle(t *testing.T) {
 	}
 
 	repo := &chronicleRepositoryStub{aggregatedStats: stats}
-	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, nil, corebattle.Engine{}, nil, nil, &testClock{now: now})
+	service, err := NewServiceWithCatalogs(repo, charStub, stages, nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -335,7 +334,7 @@ func TestListHistoryByCursor(t *testing.T) {
 	repo := &chronicleRepositoryStub{adventures: adventures}
 	charStub := &characterRepositoryStub{value: corecharacter.Character{ID: "char-1", Name: "Hero"}}
 	stages, _ := InitialStageCatalog()
-	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, nil, corebattle.Engine{}, nil, nil, &testClock{now: now})
+	service, err := NewServiceWithCatalogs(repo, charStub, stages, nil)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}

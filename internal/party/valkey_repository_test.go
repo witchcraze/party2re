@@ -19,15 +19,6 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-type dummyLogRepo struct {
-	logs []party.PartyAdventureLog
-}
-
-func (d *dummyLogRepo) SaveAdventureLog(_ context.Context, log party.PartyAdventureLog) error {
-	d.logs = append(d.logs, log)
-	return nil
-}
-
 func TestMemoryRepository_Lifecycle(t *testing.T) {
 	ctx := context.Background()
 	repo := party.NewMemoryRepository()
@@ -218,32 +209,6 @@ func TestMemoryRepository_LobbyExpiry(t *testing.T) {
 	}
 	if total != 0 || len(summaries) != 0 {
 		t.Errorf("expected 0 parties after expiry, got total=%d len=%d", total, len(summaries))
-	}
-}
-
-func TestMemoryRepository_DurableLogDelegation(t *testing.T) {
-	ctx := context.Background()
-	dummy := &dummyLogRepo{}
-	repo := party.NewMemoryRepository(party.WithDurableLogRepository(dummy))
-
-	log := party.PartyAdventureLog{
-		ID:                  "adv-123",
-		PartyID:             "party-1",
-		StageID:             "stage-1",
-		Outcome:             "win",
-		Turns:               5,
-		TotalEXP:            100,
-		TotalGold:           50,
-		SynergyBonusPercent: 20,
-		CreatedAt:           time.Now().UTC(),
-	}
-
-	if err := repo.SaveAdventureLog(ctx, log); err != nil {
-		t.Fatalf("SaveAdventureLog failed: %v", err)
-	}
-
-	if len(dummy.logs) != 1 || dummy.logs[0].ID != "adv-123" {
-		t.Errorf("expected log delegated to durable repository, got %+v", dummy.logs)
 	}
 }
 
@@ -759,12 +724,6 @@ func (liveTestStageProvider) CanAccessStage(corecharacter.Character, string) err
 	return nil
 }
 
-type liveTestMonsterProvider struct{}
-
-func (liveTestMonsterProvider) FindByID(string) (adventure.Monster, error) {
-	return adventure.Monster{}, nil
-}
-
 // Concurrent departures must leave exactly the remaining member as leader.
 func TestValkeyRepository_ConcurrentLeaderLeaveStress_LiveValkey(t *testing.T) {
 	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
@@ -906,7 +865,7 @@ func TestValkeyRepository_PasswordHash_LiveValkey(t *testing.T) {
 		},
 	}
 
-	svc, err := party.NewService(repo, charRepo, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil)
+	svc, err := party.NewService(repo, charRepo, liveTestStageProvider{})
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
@@ -1077,7 +1036,7 @@ func TestValkeyRepository_JoinPartyPreservesMembershipOnPostWriteReadFailure_Liv
 		},
 	}
 
-	healthySvc, err := party.NewService(healthyRepo, charRepo, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil)
+	healthySvc, err := party.NewService(healthyRepo, charRepo, liveTestStageProvider{})
 	if err != nil {
 		t.Fatalf("NewService(healthy) failed: %v", err)
 	}
@@ -1093,7 +1052,7 @@ func TestValkeyRepository_JoinPartyPreservesMembershipOnPostWriteReadFailure_Liv
 		Repository: healthyRepo,
 		readErr:    errors.New("injected post-write roster read failure"),
 	}
-	faultSvc, err := party.NewService(faultRepo, charRepo, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil)
+	faultSvc, err := party.NewService(faultRepo, charRepo, liveTestStageProvider{})
 	if err != nil {
 		t.Fatalf("NewService(fault) failed: %v", err)
 	}

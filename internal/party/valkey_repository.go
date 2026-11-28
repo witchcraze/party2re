@@ -51,13 +51,6 @@ func mapLuaError(err error) error {
 // ValkeyRepositoryOption configures ValkeyRepository.
 type ValkeyRepositoryOption func(*repositoryConfig)
 
-// WithDurableLogRepository configures a delegate repository for durable adventure logs (e.g. MariaDB).
-func WithDurableLogRepository(logRepo AdventureLogRepository) ValkeyRepositoryOption {
-	return func(r *repositoryConfig) {
-		r.logRepo = logRepo
-	}
-}
-
 // WithLobbyKeyPrefix overrides the default lobby key prefix.
 func WithLobbyKeyPrefix(prefix string) ValkeyRepositoryOption {
 	return func(r *repositoryConfig) {
@@ -105,7 +98,6 @@ func WithLobbyClock(clock func() time.Time) ValkeyRepositoryOption {
 
 type repositoryConfig struct {
 	clock           func() time.Time
-	logRepo         AdventureLogRepository
 	lobbyPrefix     string
 	charPrefix      string
 	lobbiesIndexKey string
@@ -357,14 +349,6 @@ func (r *ValkeyRepository) GetActivePartyByCharacter(ctx context.Context, charac
 // removed leader is replaced by the earliest remaining member.
 func (r *ValkeyRepository) RemoveMember(ctx context.Context, partyID, characterID string) error {
 	return mapLuaError(r.mutateLobby(ctx, "remove", partyID, characterID, r.clock()).Error())
-}
-
-// SaveAdventureLog persists durable adventure logs through the configured store.
-func (r *repositoryConfig) SaveAdventureLog(ctx context.Context, log PartyAdventureLog) error {
-	if r.logRepo == nil {
-		return errors.New("adventure log repository is required")
-	}
-	return r.logRepo.SaveAdventureLog(ctx, log)
 }
 
 // Ensure interface compliance

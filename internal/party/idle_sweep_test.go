@@ -142,7 +142,7 @@ func TestSweepIdleRacesWithJoin(t *testing.T) {
 	repo := party.NewMemoryRepository(party.WithLobbyClock(func() time.Time { return clockNow }))
 	sleep := &sleepRecorder{deadlines: make(map[string][]time.Time)}
 	chars := &liveTestCharRepo{chars: map[string]corecharacter.Character{}}
-	service, err := party.NewService(repo, chars, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil,
+	service, err := party.NewService(repo, chars, liveTestStageProvider{},
 		party.WithClock(func() time.Time { return clockNow }), party.WithIdleSweep(repo, sleep))
 	if err != nil {
 		t.Fatal(err)
@@ -210,7 +210,7 @@ func TestJoinPreservesIdleDeadlineAndInRoomCommandsRenew(t *testing.T) {
 		"leader-b": {ID: "leader-b", Name: "LeaderB", Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
 		"ally-b":   {ID: "ally-b", Name: "AllyB", Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
 	}}
-	svc, err := party.NewService(repo, chars, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil,
+	svc, err := party.NewService(repo, chars, liveTestStageProvider{},
 		party.WithClock(clock), party.WithIdleSweep(repo, sleep))
 	if err != nil {
 		t.Fatal(err)
@@ -522,7 +522,7 @@ func TestJoinPreservesIdleDeadlineWithLiveValkey(t *testing.T) {
 		leaderB: {ID: leaderB, Name: "LeaderB", Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
 		allyB:   {ID: allyB, Name: "AllyB", Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
 	}}
-	svc, err := party.NewService(repo, chars, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil,
+	svc, err := party.NewService(repo, chars, liveTestStageProvider{},
 		party.WithClock(clock), party.WithIdleSweep(repo, timers))
 	if err != nil {
 		t.Fatal(err)
@@ -675,7 +675,7 @@ func TestSweepIdleRacesWithJoinLiveValkey(t *testing.T) {
 		leaderID: {ID: leaderID, Name: "Leader", Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
 		joinerID: {ID: joinerID, Name: "Joiner", Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
 	}}
-	svc, err := party.NewService(repo, chars, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil,
+	svc, err := party.NewService(repo, chars, liveTestStageProvider{},
 		party.WithClock(clock), party.WithIdleSweep(repo, timers))
 	if err != nil {
 		t.Fatal(err)
@@ -739,7 +739,7 @@ func seedLegacyLobby(t *testing.T, client valkey.Client, key, index, roomID, raw
 
 func newIdleService(t *testing.T, repo party.Repository, idle party.LobbyTimeoutRepository, sleep party.SleepTimer, clock func() time.Time) *party.Service {
 	t.Helper()
-	svc, err := party.NewService(repo, &liveTestCharRepo{}, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil,
+	svc, err := party.NewService(repo, &liveTestCharRepo{}, liveTestStageProvider{},
 		party.WithClock(clock), party.WithIdleSweep(idle, sleep))
 	if err != nil {
 		t.Fatal(err)
