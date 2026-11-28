@@ -206,6 +206,67 @@ func TestSweepIdleWithLiveValkey(t *testing.T) {
 	}
 }
 
+func TestSweepIdleLegacyRosterExcludesMembersOfAnotherLobby(t *testing.T) {
+	ctx := t.Context()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	old := sampleTestParty(id.New(), id.New(), "Old lobby")
+	current := sampleTestParty(id.New(), id.New(), "Current lobby")
+	moved, missing := old.LeaderCharacterID, id.New()
+	client, repo, prefix := liveLobbyRepository(t, []string{old.ID, current.ID}, []string{moved, missing, current.LeaderCharacterID})
+	sleep := &sleepRecorder{failActor: missing, deadlines: make(map[string][]time.Time)}
+	service := newIdleService(t, repo, repo, sleep, func() time.Time { return now })
+	seedIdleLobby(t, repo, old, missing)
+	seedIdleLobby(t, repo, current)
+
+	// The old lobby body outlived the leader's original character mapping.
+	if err := client.Do(ctx, client.B().Del().Key(prefix+"character:"+moved).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.AddMember(ctx, party.Member{PartyID: current.ID, CharacterID: moved, JoinedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	lobbyKey := prefix + "lobby:" + old.ID
+	raw, err := client.Do(ctx, client.B().Get().Key(lobbyKey).Build()).ToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedLegacyLobby(t, client, lobbyKey, prefix+"lobbies", old.ID, raw, now.Add(time.Minute))
+	if err := service.SweepIdle(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Do(ctx, client.B().Del().Key(prefix+"character:"+missing).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+
+	now = now.Add(2 * time.Minute)
+	until := now.Add(time.Hour)
+	if err := service.SweepIdle(ctx); !errors.Is(err, errSleepWrite) {
+		t.Fatalf("first timeout = %v, want a sleep write failure", err)
+	}
+	if got := sleep.deadlines[moved]; len(got) != 0 {
+		t.Errorf("first timeout penalized another lobby's member: %v", got)
+	}
+	if p, _, err := repo.GetActivePartyByCharacter(ctx, moved); err != nil || p.ID != current.ID {
+		t.Fatalf("current lobby ownership = %q, %v", p.ID, err)
+	}
+	// Removing the newer membership cannot make the frozen old timeout claim it.
+	if err := repo.RemoveMember(ctx, current.ID, moved); err != nil {
+		t.Fatal(err)
+	}
+	sleep.failActor = ""
+	now = now.Add(5 * time.Second)
+	if err := service.SweepIdle(ctx); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][]time.Time{missing: {until}}
+	if !reflect.DeepEqual(sleep.deadlines, want) {
+		t.Fatalf("sleep deadlines = %v, want %v", sleep.deadlines, want)
+	}
+	if _, err := repo.GetParty(ctx, old.ID); !errors.Is(err, party.ErrNotFound) {
+		t.Fatalf("old lobby after retry = %v", err)
+	}
+}
+
 func seedLegacyLobby(t *testing.T, client valkey.Client, key, index, roomID, raw string, expiry time.Time) {
 	t.Helper()
 	var fields map[string]json.RawMessage

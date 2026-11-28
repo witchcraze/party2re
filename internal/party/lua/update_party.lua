@@ -28,6 +28,11 @@ local function ownedKeys()
     return keys
 end
 
+local function hasOtherLobby(key)
+    local owner = redis.call('GET', key)
+    return owner and owner ~= id and redis.call('EXISTS', lobbyPrefix .. owner) == 1
+end
+
 if op == 'delete' then
     local keys = ownedKeys()
     local leaderKey = charPrefix .. state.party.leader_character_id
@@ -45,10 +50,12 @@ end
 -- Index mutations go first so a failed publication leaves the room intact.
 local function publish(removedKey, newMemberKey)
     local keys = {}
+    -- A newly frozen roster already excludes members claimed by another live lobby.
     for _, m in ipairs(state.members) do
         local key = charPrefix .. m.character_id
         local owner = redis.call('GET', key)
-        if not owner or owner == id or key == newMemberKey or op == 'save' then
+        if not owner or owner == id or key == newMemberKey or op == 'save'
+            or (op == 'timeout' and state.sleep_until_ms) then
             table.insert(keys, key)
         end
     end
@@ -87,11 +94,24 @@ if op == 'timeout' then
     if state.idle_at_ms >= now then
         return false
     end
+    local members = {}
+    for _, member in ipairs(state.members) do
+        if not hasOtherLobby(charPrefix .. member.character_id) then
+            table.insert(members, member)
+        end
+    end
+    local rosterChanged = #members ~= #state.members
+    state.members = members
     if not state.sleep_until_ms then
         state.sleep_until_ms = tonumber(value)
         return publish()
     end
-    return cjson.encode(state)
+    local updated = cjson.encode(state)
+    if rosterChanged then
+        -- Keep excluded members out of later retries even after they leave the other lobby.
+        redis.call('SET', KEYS[1], updated, 'KEEPTTL')
+    end
+    return updated
 end
 
 if state.sleep_until_ms then
@@ -99,11 +119,6 @@ if state.sleep_until_ms then
 end
 
 local removedKey, newMemberKey
-local function hasOtherLobby(key)
-    local owner = redis.call('GET', key)
-    return owner and owner ~= id and redis.call('EXISTS', lobbyPrefix .. owner) == 1
-end
-
 if op == 'save' then
     for _, member in ipairs(state.members) do
         if hasOtherLobby(charPrefix .. member.character_id) then

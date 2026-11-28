@@ -23,8 +23,9 @@ successful roster or configuration changes renew the idle deadline. Quest-list
 reads leave it untouched. After more than 30 minutes of inactivity, the worker
 checks the latest lobby under the same locks as roster writers and run admission.
 It freezes the roster and records one sleep deadline, one hour from the start of
-cleanup. Each member's sleep is extended to at least that deadline before the
-lobby is removed.
+cleanup. Members whose lookup points to another live lobby are excluded.
+Members with missing lookups remain eligible. The worker extends each eligible
+member's sleep to at least the recorded deadline before removing the lobby.
 
 Sleep writes may become visible individually. A failed write leaves the frozen
 lobby available for retries against the recorded deadline. The

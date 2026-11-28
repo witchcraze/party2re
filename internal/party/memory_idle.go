@@ -38,13 +38,21 @@ func (r *MemoryRepository) BeginLobbyTimeout(_ context.Context, id string, now t
 	if p.idleAt >= now.UnixMilli() {
 		return nil, time.Time{}, nil
 	}
-	if p.sleepUntil == 0 {
+	starting := p.sleepUntil == 0
+	if starting {
 		p.sleepUntil = now.Add(lobbyIdleSleep).UnixMilli()
 		r.memLobbies[id] = p
 		r.memLobbyExp[id] = r.clock().Add(r.lobbyTTL)
 	}
 	members := make([]Member, 0, len(r.memMembers[id]))
-	for _, member := range r.memMembers[id] {
+	for actor, member := range r.memMembers[id] {
+		if r.hasOtherLobbyLocked(id, actor) {
+			delete(r.memMembers[id], actor)
+			continue
+		}
+		if starting {
+			r.memCharParty[actor] = id
+		}
 		members = append(members, member)
 	}
 	sort.Slice(members, func(i, j int) bool {
