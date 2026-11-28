@@ -200,8 +200,7 @@ func (s *Service) NameEquipment(ctx context.Context, characterID string, target 
 	if strings.TrimSpace(characterID) == "" {
 		return ErrInvalidCharacterID
 	}
-	t := strings.ToLower(strings.TrimSpace(target))
-	if t != "weapon" && t != "wea" && t != "武器" && t != "armor" && t != "arm" && t != "防具" {
+	if target != "weapon" && target != "armor" {
 		return ErrInvalidTarget
 	}
 
@@ -223,14 +222,14 @@ func (s *Service) NameEquipment(ctx context.Context, characterID string, target 
 			return err
 		}
 
-		switch t {
-		case "weapon", "wea", "武器":
+		switch target {
+		case "weapon":
 			instID, ok := equip.Equipped(item.SlotMainHand)
 			if !ok || instID == "" {
 				return ErrNoWeaponEquipped
 			}
 			char.WeaponCustomName = customName
-		case "armor", "arm", "防具":
+		case "armor":
 			instID, ok := equip.Equipped(item.SlotBody)
 			if !ok || instID == "" {
 				return ErrNoArmorEquipped

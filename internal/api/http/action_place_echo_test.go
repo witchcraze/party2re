@@ -66,6 +66,7 @@ func TestGemStoreCommandsEcho(t *testing.T) {
 func TestBlacksmithCommandsEcho(t *testing.T) {
 	for _, tc := range []echoCase{
 		{"blacksmith_seal", `{"seal_id":2}`, "＠こくいん>" + blacksmith.Seals[1].Name, "よっしゃ！武器に【" + blacksmith.Seals[1].Name + "】を刻印したぜ！"},
+		{"blacksmith_name", `{"target":"weapon","name":"名剣"}`, "＠なづける>武器＠なまえ>名剣", "武器を名剣と名づけたぜ"},
 		{"blacksmith_name", `{"target":"armor","name":"名剣"}`, "＠なづける>防具＠なまえ>名剣", "防具を名剣と名づけたぜ"},
 		{"blacksmith_deposit", `{}`, "＠あずける>武器", "名剣をお預かっておくぜ"},
 		{"blacksmith_withdraw", `{"slot":3}`, "＠ひきだす>古剣", "古剣を返すぜ"},

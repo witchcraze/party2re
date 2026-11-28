@@ -21,9 +21,7 @@ legacy findings.
 **Decision (#2060).** Following legacy, there is no reset to the catalog name.
 An empty name, and the Perl-false name `0`, rename nothing: legacy shows the
 naming prompt (`blacksmith.cgi:59,79,99–104`), which the Gateway replaces with the
-scene observation, so `blacksmith_name` rejects them as invalid names. Names are
-stored as given, without trimming. A custom name disappears only when the item
-leaves the slot (§3).
+scene observation, so `blacksmith_name` rejects them as invalid names.
 
 ## 3. Dedicated Weapon Storage (専用預かり所)
 
@@ -44,7 +42,7 @@ additions to `@actions`/`%actions` (`blacksmith.cgi:24–31`) map as follows:
 | Legacy dispatch | Gateway action | Mapping decision |
 | --- | --- | --- |
 | `こくいん` → `kokuin` | `blacksmith_seal` → `ApplySeal` | Seal ID replaces the seal-name text |
-| `なづける` → `nazukeru` | `blacksmith_name` → `NameEquipment` | Explicit `target`; empty name rejected (§2) |
+| `なづける` → `nazukeru` | `blacksmith_name` → `NameEquipment` | Explicit `target` |
 | `あずける` → `azukeru` | `blacksmith_deposit` → `DepositWeapon` | The equipped main-hand weapon is the target |
 | `ひきだす` → `hikidasu` | `blacksmith_withdraw` → `WithdrawWeapon` | Owned `slot` replaces legacy effective-name selection |
 
