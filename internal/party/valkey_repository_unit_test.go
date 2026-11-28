@@ -66,37 +66,6 @@ func TestValkeyRepository_RequiresClient(t *testing.T) {
 	party.NewValkeyRepository(nil)
 }
 
-func TestValkeyRepository_NewWithOptions(t *testing.T) {
-	client := valkeytest.NewMockClient()
-	dummy := &dummyLogRepo{}
-
-	repo := party.NewValkeyRepository(
-		client,
-		party.WithLobbyKeyPrefix("test:lobby:"),
-		party.WithCharacterKeyPrefix("test:char:"),
-		party.WithLobbiesIndexKey("test:lobbies"),
-		party.WithLobbyTTL(10*time.Minute),
-		party.WithDurableLogRepository(dummy),
-	)
-	if repo == nil {
-		t.Fatalf("expected non-nil ValkeyRepository")
-	}
-
-	// Test SaveAdventureLog delegation
-	log := party.PartyAdventureLog{
-		ID:       "adv-test-1",
-		PartyID:  "party-1",
-		Outcome:  "win",
-		TotalEXP: 100,
-	}
-	if err := repo.SaveAdventureLog(context.Background(), log); err != nil {
-		t.Fatalf("SaveAdventureLog failed: %v", err)
-	}
-	if len(dummy.logs) != 1 || dummy.logs[0].ID != "adv-test-1" {
-		t.Errorf("expected log delegated to dummy repo: %+v", dummy.logs)
-	}
-}
-
 func TestValkeyRepository_SaveParty(t *testing.T) {
 	ctx := context.Background()
 	p := sampleTestParty("party-save-1", "char-lead-1", "勇者隊")

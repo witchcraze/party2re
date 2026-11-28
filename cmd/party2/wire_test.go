@@ -218,63 +218,6 @@ func (m *mockTavernService) ClaimDelivery(ctx context.Context, characterID strin
 	return m.claimResult, m.claimErr
 }
 
-func TestWirePostAdventureHook_ResetsFullnessAndClaimsDelivery(t *testing.T) {
-	tavernMock := &mockTavernService{claimErr: tavern.ErrNoActiveDelivery}
-	postAdventureHook := buildPostAdventureHook(tavernMock)
-
-	message, err := postAdventureHook(context.Background(), "char-42")
-	if err != nil {
-		t.Fatalf("expected nil error, got %v", err)
-	}
-	if message != "" {
-		t.Fatalf("expected no message without a reservation, got %q", message)
-	}
-	if !tavernMock.resetFullnessCalled {
-		t.Errorf("expected ResetFullness to be called")
-	}
-	if tavernMock.claimedCharID != "char-42" {
-		t.Errorf("expected ClaimDelivery for char-42, got %s", tavernMock.claimedCharID)
-	}
-
-	resetErr := errors.New("tavern fullness reset db error")
-	failingTavern := &mockTavernService{resetFullnessErr: resetErr}
-	failingHook := buildPostAdventureHook(failingTavern)
-	if _, err := failingHook(context.Background(), "char-42"); !errors.Is(err, resetErr) {
-		t.Fatalf("expected ResetFullness error %v, got %v", resetErr, err)
-	}
-	if failingTavern.claimedCharID != "" {
-		t.Errorf("expected ClaimDelivery not to run when ResetFullness fails, got %s", failingTavern.claimedCharID)
-	}
-}
-
-func TestWirePostAdventureHook_Messages(t *testing.T) {
-	claimErr := errors.New("delivery storage unavailable")
-	for _, tt := range []struct {
-		name    string
-		result  tavern.OrderResult
-		err     error
-		want    string
-		wantErr error
-	}{
-		// Legacy shows no recovery amounts and names the unpaid meal (_battle.cgi:1366-1372).
-		{"delivered", tavern.OrderResult{Item: tavern.MenuItem{Name: "スープ"}, HPHealed: 20, MPHealed: 10}, nil, "酒場からスープが届きました！", nil},
-		{"insufficient funds", tavern.OrderResult{}, fmt.Errorf("claim: %w", tavern.UnaffordableDeliveryError{ItemName: "スープ"}), "酒場からスープが届きましたが、お金が足りませんでした", nil},
-		{"no reservation", tavern.OrderResult{}, tavern.ErrNoActiveDelivery, "", nil},
-		{"storage failure", tavern.OrderResult{Item: tavern.MenuItem{Name: "スープ"}}, claimErr, "", claimErr},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			tavernMock := &mockTavernService{claimResult: tt.result, claimErr: tt.err}
-			got, err := buildPostAdventureHook(tavernMock)(context.Background(), "hero")
-			if got != tt.want || !errors.Is(err, tt.wantErr) {
-				t.Fatalf("message=%q err=%v, want %q err=%v", got, err, tt.want, tt.wantErr)
-			}
-			if !tavernMock.resetFullnessCalled || tavernMock.claimedCharID != "hero" {
-				t.Fatalf("fullness reset or delivery claim missing: %+v", tavernMock)
-			}
-		})
-	}
-}
-
 func TestWirePartyTavernExitAdapter(t *testing.T) {
 	claimErr := errors.New("delivery storage unavailable")
 	for _, tt := range []struct {

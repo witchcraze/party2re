@@ -3,7 +3,6 @@ package boss_test
 import (
 	"context"
 	"errors"
-	"maps"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -18,7 +17,6 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
-	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/runhost"
 )
 
@@ -39,36 +37,6 @@ type stubNormalPenalty struct{}
 
 func (stubNormalPenalty) ProjectRunPenalty(context.Context, string, time.Time) error { return nil }
 
-type failingAdventureRepo struct {
-	adventure.Repository
-	fail atomic.Bool
-}
-
-func (r *failingAdventureRepo) Save(ctx context.Context, v adventure.Adventure) error {
-	if err := r.Repository.Save(ctx, v); err != nil {
-		return err
-	}
-	if r.fail.Load() {
-		return errors.New("injected adventure save failure")
-	}
-	return nil
-}
-
-type failingPartyLogRepo struct {
-	party.AdventureLogRepository
-	fail atomic.Bool
-}
-
-func (r *failingPartyLogRepo) SaveAdventureLog(ctx context.Context, log party.PartyAdventureLog) error {
-	if err := r.AdventureLogRepository.SaveAdventureLog(ctx, log); err != nil {
-		return err
-	}
-	if r.fail.Load() {
-		return errors.New("injected party log save failure")
-	}
-	return nil
-}
-
 type failingNormalStore struct {
 	runhost.Store[adventure.NormalRun]
 	failReceipt atomic.Bool
@@ -84,50 +52,11 @@ func (s *failingNormalStore) SaveRunReceipt(ctx context.Context, receipt runhost
 	return nil
 }
 
-type alwaysWinBattleEngine struct{}
-
-func (alwaysWinBattleEngine) Resolve(req corebattle.Request) (corebattle.Result, error) {
-	remHP := make(map[string]int, len(req.Participants))
-	remMP := make(map[string]int, len(req.Participants))
-	for _, p := range req.Participants {
-		remHP[p.ID] = p.HP
-		remMP[p.ID] = p.MP
-	}
-	var winnerID string
-	if len(req.Participants) > 0 {
-		winnerID = req.Participants[0].ID
-	}
-	return corebattle.Result{
-		Outcome:     corebattle.OutcomeWin,
-		WinnerID:    winnerID,
-		Turns:       1,
-		Reward:      req.VictoryReward,
-		RemainingHP: remHP,
-		RemainingMP: remMP,
-	}, nil
-}
-
-func (alwaysWinBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
-	remHP := make(map[string]int, len(req.Allies))
-	remMP := make(map[string]int, len(req.Allies))
-	for _, a := range req.Allies {
-		remHP[a.ID] = a.HP
-		remMP[a.ID] = a.MP
-	}
-	return corebattle.PartyBattleResult{
-		Outcome:     corebattle.OutcomeWin,
-		Turns:       1,
-		TotalReward: req.VictoryReward,
-		RemainingHP: remHP,
-		RemainingMP: remMP,
-	}, nil
-}
-
 func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 	db := database.CreateTestDatabase(t,
 		"players", "characters", "inventory_items", "equipment_slots",
 		"character_depots", "depot_items", "character_jobs", "character_job_history", "character_job_masteries",
-		"adventures", "party_adventure_logs",
+		"adventures",
 		"runs", "run_enrollments",
 		"run_recipients", "run_receipts",
 		"boss_unseal_clock",
@@ -158,16 +87,10 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	advBaseRepo, err := database.NewAdventureRepository(db)
+	advRepo, err := database.NewAdventureRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	advRepo := &failingAdventureRepo{Repository: advBaseRepo}
-	partyDBRepo, err := database.NewPartyRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	partyLogRepo := &failingPartyLogRepo{AdventureLogRepository: partyDBRepo}
 	normalBaseStore, err := database.NewRunRepository[adventure.NormalRun](db)
 	if err != nil {
 		t.Fatal(err)
@@ -204,7 +127,6 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lobbyRepo := party.NewMemoryRepository(party.WithDurableLogRepository(partyLogRepo))
 	bossStore, err := database.NewRunRepository[boss.Run](db)
 	if err != nil {
 		t.Fatal(err)
@@ -249,29 +171,6 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 		}
 		return rooms
 	}
-	partySvc, err := party.NewService(
-		lobbyRepo, chars, invs, stages, monsters, alwaysWinBattleEngine{},
-		party.WithParticipantBuilder(adapter),
-		party.WithPostBattleSettler(adapter),
-		party.WithTransactionProvider(tx),
-		party.WithRNG(func(int) int { return 0 }),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	partySvc.SetUnsealHook(unseal)
-
-	soloAdvSvc, err := adventure.NewServiceWithCatalogs(
-		advRepo, chars, invs, stages, monsters, alwaysWinBattleEngine{}, nil, nil, clock,
-		adventure.WithParticipantBuilder(adapter),
-		adventure.WithPostBattleSettler(adapter),
-		adventure.WithTransactionProvider(tx),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	soloAdvSvc.SetUnsealHook(unseal)
-
 	normalSvc, err := adventure.NewNormalRunService(adventure.NormalRunConfig{
 		Store: normalStore, Characters: chars, Inventories: invs,
 		Builder: adapter, Settler: adapter, History: advRepo,
@@ -406,85 +305,5 @@ func TestUnsealClock_Stage19AllPaths_SQLIntegration(t *testing.T) {
 	}
 	if len(unseals) != 1 {
 		t.Fatalf("replay/chest/exit reopened rooms: %v", unseals)
-	}
-
-	// 3. Solo Crawl stage-19: rollback preserves t1, success overwrites clock to t2 + increments MaoCount
-	heroSolo := newHero("SoloC")
-	t2 := t1.Add(90 * time.Minute)
-	clock.Set(t2)
-	advRepo.fail.Store(true)
-	if _, err := soloAdvSvc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
-		CharacterIDs: []string{heroSolo.ID}, StageID: "stage-19", Mode: adventure.CrawlModeNormal, Rng: func(int) int { return 0 },
-	}); err == nil {
-		t.Fatal("expected injected solo adventure failure")
-	}
-	if ts, err := bossRepo.GetUnsealedAt(ctx); err != nil || ts == nil || !ts.Equal(t1) {
-		t.Fatalf("rolled-back solo crawl leaked clock: got %v, want %v", ts, t1)
-	}
-	if c, err := chars.FindByID(ctx, heroSolo.ID); err != nil || c.MaoCount != 0 {
-		t.Fatalf("rolled-back solo crawl leaked MaoCount: %d", c.MaoCount)
-	}
-
-	advRepo.fail.Store(false)
-	soloRes, err := soloAdvSvc.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
-		CharacterIDs: []string{heroSolo.ID}, StageID: "stage-19", Mode: adventure.CrawlModeNormal, Rng: func(int) int { return 0 },
-	})
-	if err != nil || !soloRes.UnsealDemonKing {
-		t.Fatalf("solo stage-19 crawl failed: res=%+v err=%v", soloRes, err)
-	}
-	if ts, err := bossRepo.GetUnsealedAt(ctx); err != nil || ts == nil || !ts.Equal(t2) {
-		t.Fatalf("solo crawl did not overwrite clock: got %v, want %v", ts, t2)
-	}
-	if c, err := chars.FindByID(ctx, heroSolo.ID); err != nil || c.MaoCount != 1 {
-		t.Fatalf("solo crawl MaoCount = %d, want 1", c.MaoCount)
-	}
-	if len(unseals) != 2 || !maps.Equal(sealingRooms(), opened) {
-		t.Fatalf("solo crawl trigger should reach the hook without duplicating rooms: %v %v", unseals, sealingRooms())
-	}
-
-	// 4. Party Crawl stage-19: rollback preserves t2, success overwrites clock to t3 + increments MaoCount
-	p1, p2 := newHero("PC1"), newHero("PC2")
-	partyCrawlID := "party-stage19-unseal"
-	if err := lobbyRepo.SaveParty(ctx, party.Party{
-		ID: partyCrawlID, Name: "封印隊", LeaderCharacterID: p1.ID, StageID: "stage-19",
-		Mode: adventure.CrawlModeNormal, Status: party.StatusRecruiting, MaxMembers: 6,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for i, c := range []corecharacter.Character{p1, p2} {
-		if err := lobbyRepo.AddMember(ctx, party.Member{PartyID: partyCrawlID, CharacterID: c.ID, IsLeader: i == 0}); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	t3 := t2.Add(90 * time.Minute)
-	clock.Set(t3)
-	partyLogRepo.fail.Store(true)
-	if _, err := partySvc.StartPartyAdventure(ctx, partyCrawlID, p1.ID); err == nil {
-		t.Fatal("expected injected party crawl log failure")
-	}
-	if ts, err := bossRepo.GetUnsealedAt(ctx); err != nil || ts == nil || !ts.Equal(t2) {
-		t.Fatalf("rolled-back party crawl leaked clock: got %v, want %v", ts, t2)
-	}
-	for _, memberID := range []string{p1.ID, p2.ID} {
-		if c, err := chars.FindByID(ctx, memberID); err != nil || c.MaoCount != 0 {
-			t.Fatalf("rolled-back party crawl leaked MaoCount for %s: %d", memberID, c.MaoCount)
-		}
-	}
-
-	partyLogRepo.fail.Store(false)
-	if _, err := partySvc.StartPartyAdventure(ctx, partyCrawlID, p1.ID); err != nil {
-		t.Fatalf("party stage-19 crawl failed: %v", err)
-	}
-	if ts, err := bossRepo.GetUnsealedAt(ctx); err != nil || ts == nil || !ts.Equal(t3) {
-		t.Fatalf("party crawl did not overwrite clock: got %v, want %v", ts, t3)
-	}
-	for _, memberID := range []string{p1.ID, p2.ID} {
-		if c, err := chars.FindByID(ctx, memberID); err != nil || c.MaoCount != 1 {
-			t.Fatalf("party crawl MaoCount for %s = %d, want 1", memberID, c.MaoCount)
-		}
-	}
-	if !slices.Equal(unseals, []string{"SoloUnseal", "", "封印隊"}) || !maps.Equal(sealingRooms(), opened) {
-		t.Fatalf("party crawl trigger should reach the hook once without duplicating rooms: %v %v", unseals, sealingRooms())
 	}
 }

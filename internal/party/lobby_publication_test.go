@@ -87,7 +87,7 @@ func TestLiveLobbyRenewalKeepsAllLookups(t *testing.T) {
 	chars := &liveTestCharRepo{chars: map[string]corecharacter.Character{
 		"leader": {ID: "leader", Stats: corecharacter.Stats{HP: 50, MaxHP: 50}},
 	}}
-	service, err := party.NewService(repo, chars, nil, liveTestStageProvider{}, liveTestMonsterProvider{}, nil)
+	service, err := party.NewService(repo, chars, liveTestStageProvider{})
 	if err != nil {
 		t.Fatal(err)
 	}

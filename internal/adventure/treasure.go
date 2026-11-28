@@ -2,7 +2,6 @@ package adventure
 
 import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/runhost"
 )
@@ -19,12 +18,11 @@ const (
 	treasureHunterJob = "job-78"
 )
 
-// TreasureCalculationInput specifies the party state when arriving at Floor 11 (Treasure Room).
+// TreasureCalculationInput specifies the party state when creating Floor 11 (Treasure Room).
 type TreasureCalculationInput struct {
 	TripleTreasure      bool // StageTraits.TripleTreasure
 	AliveMembers        int
-	DeadMembers         int // Number of dead party members (legacy add_treasure: --$count if hp <= 0)
-	TotalMembers        int // Total party members; if 0, defaults to AliveMembers + DeadMembers
+	TotalMembers        int // legacy @partys, fallen members included
 	HasMerchant         bool
 	HasGambler          bool
 	HasTreasureHunter   bool
@@ -43,21 +41,7 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 	if rng == nil {
 		rng = random.Intn
 	}
-
-	total := input.TotalMembers
-	if total <= 0 {
-		total = input.AliveMembers + input.DeadMembers
-	}
-	if total < input.AliveMembers {
-		total = input.AliveMembers
-	}
-	dead := input.DeadMembers
-	if dead <= 0 && total > input.AliveMembers {
-		dead = total - input.AliveMembers
-	}
-	if dead < 0 {
-		dead = 0
-	}
+	total, dead := input.TotalMembers, input.TotalMembers-input.AliveMembers
 
 	// Legacy vs_monster.cgi:92:
 	//   my $count = $stage eq '17' || $stage eq '20' || $stage eq '21' ? ($#partys+1) * 3 : $#partys;
@@ -102,66 +86,4 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 // In legacy Party2 ($m{ite} eq '191'), this checks the currently equipped accessory slot, not unequipped inventory.
 func ParticipantHasLuckyPendant(p corebattle.Participant) bool {
 	return p.Gear != nil && p.Gear.AccessoryID == ItemLuckyPendant
-}
-
-func (s *CrawlSession) spawnTreasureBoxes() {
-	aliveCount := 0
-	deadCount := 0
-
-	for _, c := range s.Characters {
-		isAlive := true
-		for _, p := range s.Participants {
-			if p.ID == c.ID && p.HP <= 0 {
-				isAlive = false
-				break
-			}
-		}
-		if isAlive {
-			aliveCount++
-		} else {
-			deadCount++
-		}
-	}
-
-	// Identify the acting player (操作主体: session leader, matching legacy %m in vs_monster.cgi)
-	var leader *corecharacter.Character
-	for i := range s.Characters {
-		if s.Characters[i].ID == s.LeaderID {
-			leader = &s.Characters[i]
-			break
-		}
-	}
-	if leader == nil && len(s.Characters) > 0 {
-		leader = &s.Characters[0]
-	}
-
-	var hasMerchant, hasGambler, hasTreasureHunter, hasLuckyPendant bool
-	if leader != nil {
-		hasMerchant, hasGambler, hasTreasureHunter = leader.JobID == merchantJob, leader.JobID == gamblerJob, leader.JobID == treasureHunterJob
-		for _, p := range s.Participants {
-			if p.ID == leader.ID {
-				hasLuckyPendant = ParticipantHasLuckyPendant(p)
-				break
-			}
-		}
-	}
-
-	boxCount := CalculateTreasureCount(TreasureCalculationInput{
-		TripleTreasure:      s.Stage.TripleTreasure,
-		AliveMembers:        aliveCount,
-		DeadMembers:         deadCount,
-		TotalMembers:        len(s.Characters),
-		HasMerchant:         hasMerchant,
-		HasGambler:          hasGambler,
-		HasTreasureHunter:   hasTreasureHunter,
-		HasLuckyPendant:     hasLuckyPendant,
-		HasTreasureBlessing: s.HasTreasureBlessing,
-		Rng:                 s.Rng,
-	})
-
-	pools := runhost.TreasurePools{Weapons: s.Stage.TreasureWeapons, Armors: s.Stage.TreasureArmors, Items: s.Stage.TreasureItems}
-	s.TreasureBoxes = runhost.GenerateTreasureBoxes(boxCount, pools, s.now(), s.Rng)
-	if s.Stage.UnsealsOnTreasure {
-		s.UnsealDemonKing = true
-	}
 }

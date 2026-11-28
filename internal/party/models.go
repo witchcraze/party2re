@@ -8,12 +8,8 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
-	battleadapter "github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/runhost"
 	"github.com/witchcraze/party2re/internal/validation"
 )
 
@@ -133,53 +129,6 @@ type CreatePartyRequest struct {
 	NeedJoin   string `json:"need_join,omitempty"`
 }
 
-type MemberRewardSummary struct {
-	CharacterID    string              `json:"character_id"`
-	Name           string              `json:"name"`
-	GainedEXP      int                 `json:"gained_exp"`
-	GainedGold     int                 `json:"gained_gold"`
-	GainedCrystals int                 `json:"gained_crystals,omitempty"`
-	LevelBefore    int                 `json:"level_before"`
-	LevelAfter     int                 `json:"level_after"`
-	Drops          []coreitem.Instance `json:"drops,omitempty"`
-}
-
-type PartyAdventureResult struct {
-	PostAdventureMessages map[string]string        `json:"post_adventure_messages,omitempty"`
-	PartyID               string                   `json:"party_id"`
-	StageID               string                   `json:"stage_id"`
-	Outcome               string                   `json:"outcome"`
-	Round                 int                      `json:"round,omitempty"`
-	ExitFatigue           int                      `json:"exit_fatigue,omitempty"`
-	FloorsCleared         int                      `json:"floors_cleared"`
-	Turns                 int                      `json:"turns"`
-	TotalEXP              int                      `json:"total_exp"`
-	TotalGold             int                      `json:"total_gold"`
-	TotalCrystals         int                      `json:"total_crystals,omitempty"`
-	SynergyBonusPercent   int                      `json:"synergy_bonus_percent"`
-	Rewards               []MemberRewardSummary    `json:"rewards"`
-	TreasureBoxes         []runhost.TreasureBox    `json:"treasure_boxes,omitempty"`
-	BattleResult          battle.PartyBattleResult `json:"battle_result"`
-	LostDrops             map[string][]string      `json:"lost_drops,omitempty"`
-
-	MonsterTames map[string][]battleadapter.MonsterTameResult `json:"monster_tames,omitempty"`
-}
-
-type PartyAdventureLog struct {
-	ID                  string    `json:"id"`
-	PartyID             string    `json:"party_id"`
-	StageID             string    `json:"stage_id"`
-	Outcome             string    `json:"outcome"`
-	Turns               int       `json:"turns"`
-	TotalEXP            int       `json:"total_exp"`
-	TotalGold           int       `json:"total_gold"`
-	SynergyBonusPercent int       `json:"synergy_bonus_percent"`
-	DetailsJSON         string    `json:"details_json,omitempty"`
-	CreatedAt           time.Time `json:"created_at"`
-}
-
-// newSummary lists the leader first, then members in join order, as the
-// legacy quest list does (quest.cgi:98–106).
 func newSummary(p Party, joinOrder []Member) PartySummary {
 	names := make([]string, 0, len(joinOrder))
 	var leaderName string
@@ -244,14 +193,8 @@ func ValidateNeedJoin(needJoin string, char corecharacter.Character) error {
 	return nil
 }
 
-// AdventureLogRepository defines durable persistence for party adventure logs in MariaDB.
-type AdventureLogRepository interface {
-	SaveAdventureLog(ctx context.Context, log PartyAdventureLog) error
-}
-
 // Repository defines persistence operations for parties and members.
 type Repository interface {
-	AdventureLogRepository
 	PartyAdventureLockRepository
 
 	SaveParty(ctx context.Context, p Party, members ...Member) error
@@ -275,26 +218,10 @@ type CharacterRepository interface {
 	Update(ctx context.Context, value corecharacter.Character) error
 }
 
-// InventoryRepository defines inventory item persistence.
-type InventoryRepository interface {
-	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	Save(ctx context.Context, value coreinventory.Inventory) error
-}
-
 // StageProvider resolves stage definitions.
 type StageProvider interface {
 	FindByID(id string) (adventure.Stage, error)
 	CanAccessStage(c corecharacter.Character, stageID string) error
-}
-
-// MonsterProvider resolves monster definitions.
-type MonsterProvider interface {
-	FindByID(id string) (adventure.Monster, error)
-}
-
-// BattleEngine resolves multiplayer party combat.
-type BattleEngine interface {
-	ResolvePartyBattle(req battle.PartyBattleRequest) (battle.PartyBattleResult, error)
 }
 
 // NewsPublisher broadcasts announcements.

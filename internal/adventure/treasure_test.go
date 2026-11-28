@@ -27,7 +27,7 @@ func TestCalculateTreasureCount_BaseCases(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-				AliveMembers: tc.aliveMembers,
+				AliveMembers: tc.aliveMembers, TotalMembers: tc.aliveMembers,
 			})
 			if got != tc.want {
 				t.Errorf("CalculateTreasureCount(%d) = %d, want %d", tc.aliveMembers, got, tc.want)
@@ -39,8 +39,8 @@ func TestCalculateTreasureCount_BaseCases(t *testing.T) {
 func TestCalculateTreasureCount_MerchantBonus(t *testing.T) {
 	// Merchant always adds exactly +1 box
 	got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers: 4,
-		HasMerchant:  true,
+		AliveMembers: 4, TotalMembers: 4,
+		HasMerchant: true,
 	})
 	if got != 5 {
 		t.Errorf("got %d boxes with merchant, want 5", got)
@@ -50,7 +50,7 @@ func TestCalculateTreasureCount_MerchantBonus(t *testing.T) {
 func TestCalculateTreasureCount_TreasureHunterBonus(t *testing.T) {
 	// rng returns 0: bonus is 1 + 0 = 1
 	gotMin := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:      4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasTreasureHunter: true,
 		Rng:               func(n int) int { return 0 },
 	})
@@ -60,7 +60,7 @@ func TestCalculateTreasureCount_TreasureHunterBonus(t *testing.T) {
 
 	// rng returns 1: bonus is 1 + 1 = 2
 	gotMax := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:      4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasTreasureHunter: true,
 		Rng:               func(n int) int { return 1 },
 	})
@@ -72,7 +72,7 @@ func TestCalculateTreasureCount_TreasureHunterBonus(t *testing.T) {
 func TestCalculateTreasureCount_LuckyPendantBonus(t *testing.T) {
 	// rng(3) == 0: triggers +1 box
 	gotTriggered := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:    4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasLuckyPendant: true,
 		Rng:             func(n int) int { return 0 },
 	})
@@ -82,7 +82,7 @@ func TestCalculateTreasureCount_LuckyPendantBonus(t *testing.T) {
 
 	// rng(3) == 1: does not trigger
 	gotNotTriggered := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:    4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasLuckyPendant: true,
 		Rng:             func(n int) int { return 1 },
 	})
@@ -102,7 +102,7 @@ func TestCalculateTreasureCount_CombinedBonuses(t *testing.T) {
 	}
 
 	got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:      4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasMerchant:       true,
 		HasTreasureHunter: true,
 		HasLuckyPendant:   true,
@@ -116,7 +116,7 @@ func TestCalculateTreasureCount_CombinedBonuses(t *testing.T) {
 func TestCalculateTreasureCount_BlessingBonus(t *testing.T) {
 	// rng(5) == 0: triggers +1 box (20% chance)
 	gotTriggered := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:        4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasTreasureBlessing: true,
 		Rng:                 func(n int) int { return 0 },
 	})
@@ -126,7 +126,7 @@ func TestCalculateTreasureCount_BlessingBonus(t *testing.T) {
 
 	// rng(5) == 1: does not trigger
 	gotNotTriggered := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:        4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasTreasureBlessing: true,
 		Rng:                 func(n int) int { return 1 },
 	})
@@ -136,7 +136,7 @@ func TestCalculateTreasureCount_BlessingBonus(t *testing.T) {
 
 	// HasTreasureBlessing = false: does not trigger even if rng returns 0
 	gotDisabled := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:        4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasTreasureBlessing: false,
 		Rng:                 func(n int) int { return 0 },
 	})
@@ -147,10 +147,10 @@ func TestCalculateTreasureCount_BlessingBonus(t *testing.T) {
 
 func TestCalculateTreasureCount_StageMultiplier(t *testing.T) {
 	// Legacy vs_monster.cgi:92 ($#partys+1)*3 = 2*3 = 6. Inclusive 0..6 produces 7 boxes.
-	if got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{AliveMembers: 2, TripleTreasure: true}); got != 7 {
+	if got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{AliveMembers: 2, TotalMembers: 2, TripleTreasure: true}); got != 7 {
 		t.Errorf("triple treasure: got %d, want 7", got)
 	}
-	if got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{AliveMembers: 2}); got != 2 {
+	if got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{AliveMembers: 2, TotalMembers: 2}); got != 2 {
 		t.Errorf("ordinary stage: got %d, want 2", got)
 	}
 }
@@ -159,8 +159,8 @@ func TestCalculateTreasureCount_GamblerBonus(t *testing.T) {
 	// Gambler bonus: rng(3) - rng(2)
 	// Case 1: Max positive bonus: rng(3) = 2, rng(2) = 0 -> +2
 	gotPos := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers: 4,
-		HasGambler:   true,
+		AliveMembers: 4, TotalMembers: 4,
+		HasGambler: true,
 		Rng: func(n int) int {
 			if n == 3 {
 				return 2
@@ -174,8 +174,8 @@ func TestCalculateTreasureCount_GamblerBonus(t *testing.T) {
 
 	// Case 2: Negative penalty without Lucky Pendant: rng(3) = 0, rng(2) = 1 -> -1 (4 - 1 = 3)
 	gotNeg := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers: 4,
-		HasGambler:   true,
+		AliveMembers: 4, TotalMembers: 4,
+		HasGambler: true,
 		Rng: func(n int) int {
 			if n == 3 {
 				return 0
@@ -189,7 +189,7 @@ func TestCalculateTreasureCount_GamblerBonus(t *testing.T) {
 
 	// Case 3: Negative penalty WITH Lucky Pendant: guarded to not fall below baseCount (4)
 	gotGuarded := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
-		AliveMembers:    4,
+		AliveMembers: 4, TotalMembers: 4,
 		HasGambler:      true,
 		HasLuckyPendant: true,
 		Rng: func(n int) int {
@@ -255,7 +255,6 @@ func TestCalculateTreasureCount_DeadMembersPenalty(t *testing.T) {
 	for _, tc := range testsNormal {
 		got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
 			AliveMembers: tc.alive,
-			DeadMembers:  tc.dead,
 			TotalMembers: tc.total,
 		})
 		if got != tc.want {
@@ -278,7 +277,6 @@ func TestCalculateTreasureCount_DeadMembersPenalty(t *testing.T) {
 		got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
 			TripleTreasure: true,
 			AliveMembers:   tc.alive,
-			DeadMembers:    tc.dead,
 			TotalMembers:   tc.total,
 		})
 		if got != tc.want {
@@ -398,7 +396,6 @@ func TestCalculateTreasureCount_LegacyFalsyFallback(t *testing.T) {
 	// 1 alive, 1 dead: fallback resets count to 1, dead penalty subtracts 1 -> count = 0 -> 1 box
 	got1Alive1Dead := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
 		AliveMembers:    1,
-		DeadMembers:     1,
 		TotalMembers:    2,
 		HasGambler:      true,
 		HasLuckyPendant: false,

@@ -16,20 +16,10 @@ type Service struct {
 	activityCheck        func(context.Context, string) error
 	repo                 Repository
 	charRepo             CharacterRepository
-	invRepo              InventoryRepository
-	advRepo              AdventureRepository
 	stages               StageProvider
-	monsters             MonsterProvider
-	battleEngine         BattleEngine
 	news                 NewsPublisher
 	txProvider           TransactionProvider
-	postAdventureHook    PostAdventureHook
-	unsealHook           adventure.UnsealHook
-	participantBuilder   ParticipantBuilder
 	lifetimeActorBuilder LifetimeActorBuilder
-	battleSettler        PostBattleSettler
-	depotRepo            DepotRepository
-	blessingProvider     BlessingProvider
 	timer                TimerService
 	idleStore            LobbyTimeoutRepository
 	sleep                SleepTimer
@@ -42,10 +32,7 @@ type Service struct {
 func NewService(
 	repo Repository,
 	charRepo CharacterRepository,
-	invRepo InventoryRepository,
 	stages StageProvider,
-	monsters MonsterProvider,
-	battleEngine BattleEngine,
 	opts ...Option,
 ) (*Service, error) {
 	if repo == nil {
@@ -57,21 +44,8 @@ func NewService(
 	if stages == nil {
 		return nil, errors.New("stage provider is nil")
 	}
-	if monsters == nil {
-		return nil, errors.New("monster provider is nil")
-	}
-	if battleEngine == nil {
-		battleEngine = battle.Engine{}
-	}
 
-	s := &Service{
-		repo:         repo,
-		charRepo:     charRepo,
-		invRepo:      invRepo,
-		stages:       stages,
-		monsters:     monsters,
-		battleEngine: battleEngine,
-	}
+	s := &Service{repo: repo, charRepo: charRepo, stages: stages}
 
 	for _, opt := range opts {
 		opt(s)
@@ -81,8 +55,6 @@ func NewService(
 }
 
 // runInTx wraps execution within a MariaDB transaction if a TransactionProvider is configured.
-// Lobby metadata lives in Valkey Master; adventure settlement and audit logs commit atomically in MariaDB
-// with Rank 2 character locks acquired in ascending ID order.
 func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) error) error {
 	if s.txProvider != nil {
 		return s.txProvider.RunInTx(ctx, fn)

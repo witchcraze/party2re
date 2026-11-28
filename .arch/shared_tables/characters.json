@@ -90,13 +90,6 @@
       "purpose": "Lock character to deduct the standing delivery price and restore HP/MP"
     },
     {
-      "module": "adventure",
-      "caller_method": "internal/adventure/adventure.go#Service.StartStage",
-      "lock_mode": "SELECT / UPDATE",
-      "lock_order": 2,
-      "purpose": "Verify character level requirement against stage min level and apply rewards upon crawl completion"
-    },
-    {
       "module": "blackmarket",
       "caller_method": "internal/blackmarket/blackmarket.go#Service.SacrificeItem",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",

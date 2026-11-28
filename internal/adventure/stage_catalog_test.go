@@ -18,9 +18,6 @@ func TestStageCreation(t *testing.T) {
 	if st.ID != "s-1" || st.Name != "Meadow" {
 		t.Errorf("NewStage() = %#v", st)
 	}
-	if len(st.GetBossIDs()) != 1 || st.GetBossIDs()[0] != "m-1" {
-		t.Errorf("default boss should be m-1, got %v", st.GetBossIDs())
-	}
 }
 
 func TestStageCreationValidation(t *testing.T) {
@@ -70,30 +67,6 @@ func TestStageCatalogOperations(t *testing.T) {
 	stages := cat.Stages()
 	if len(stages) != 2 {
 		t.Errorf("Stages() count = %d, want 2", len(stages))
-	}
-}
-
-func TestStage_BossAndNormalMonsters(t *testing.T) {
-	// Without explicit bosses, last monster is boss
-	s1, _ := adventure.NewStage("s-1", "Meadow", []string{"m-1", "m-2", "m-boss"})
-	bosses := s1.GetBossIDs()
-	if len(bosses) != 1 || bosses[0] != "m-boss" {
-		t.Fatalf("expected m-boss, got %v", bosses)
-	}
-	normals := s1.GetNormalMonsterIDs()
-	if len(normals) != 2 || normals[0] != "m-1" || normals[1] != "m-2" {
-		t.Fatalf("expected [m-1, m-2], got %v", normals)
-	}
-
-	// With explicit bosses
-	s2, _ := adventure.NewStageWithBosses("s-2", "Forest", []string{"m-1", "m-2", "b-1", "b-2"}, []string{"b-1", "b-2"})
-	bosses2 := s2.GetBossIDs()
-	if len(bosses2) != 2 || bosses2[0] != "b-1" || bosses2[1] != "b-2" {
-		t.Fatalf("expected [b-1, b-2], got %v", bosses2)
-	}
-	normals2 := s2.GetNormalMonsterIDs()
-	if len(normals2) != 2 || normals2[0] != "m-1" || normals2[1] != "m-2" {
-		t.Fatalf("expected [m-1, m-2], got %v", normals2)
 	}
 }
 

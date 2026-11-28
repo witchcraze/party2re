@@ -1,7 +1,7 @@
 {
   "module": "adventure",
   "tier": 1,
-  "description": "Adventure stage room library on the run host (admission rules, advance, encounters, exit effects, records, and the stage's combat seams: travel tools, job78 room, summon pool, defeat modifiers, clear credit), plus retained batch crawl execution.",
+  "description": "Adventure stage room library on the run host (admission rules, advance, encounters, exit effects, records, and the stage's combat seams: travel tools, job78 room, summon pool, defeat modifiers, clear credit).",
   "package": "internal/adventure",
   "implementation_package": "internal/adventure",
   "dependencies": [
@@ -16,12 +16,6 @@
       "target_module": "core/character",
       "relation_type": "consumer_interface",
       "source_ref": "internal/adventure/adventure.go#CharacterRepository"
-    },
-    {
-      "name": "inventory_repository",
-      "target_module": "core/inventory",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/adventure.go#InventoryRepository"
     },
     {
       "name": "transaction_provider",
@@ -49,52 +43,6 @@
     }
   ],
   "transaction_boundaries": [
-    {
-      "method": "StartStage",
-      "source_ref": "internal/adventure/adventure.go#Service.StartStage",
-      "transaction_type": "Delegated",
-      "lock_sequence": [],
-      "note": "StartStage performs ordinary access reads and delegates immediate crawl execution to ExecuteCrawl."
-    },
-    {
-      "method": "ExecuteCrawl",
-      "source_ref": "internal/adventure/normal_legacy.go#Service.ExecuteCrawl",
-      "transaction_type": "Delegated",
-      "lock_sequence": [],
-      "note": "Production composition first serializes retained batch admission through sorted character locks and owned-activity checks, then delegates batch execution and ambient settlement."
-    },
-    {
-      "method": "executeCrawl",
-      "source_ref": "internal/adventure/adventure.go#Service.executeCrawl",
-      "transaction_type": "RunInTx",
-      "lock_sequence": [
-        {
-          "table": "characters",
-          "tier": 2,
-          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
-          "note": "Lock participating characters ascending by ID and apply rewards/vitality"
-        },
-        {
-          "table": "inventory_items",
-          "tier": 3,
-          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
-          "note": "Lock inventories, consume master keys, and deliver Floor 11 treasure drops"
-        },
-        {
-          "table": "character_depots / depot_items",
-          "tier": 5,
-          "mode": "SELECT ... FOR UPDATE (via PostBattleSettler)",
-          "note": "Conditional overflow delivery when inventory is full"
-        },
-        {
-          "table": "adventures",
-          "tier": 8,
-          "mode": "INSERT ... ON DUPLICATE KEY UPDATE",
-          "note": "Persist resolved adventure history record for each participant in the same transaction"
-        }
-      ],
-      "note": "Wraps post-battle reward/item settlement and adventure history persistence in a single RunInTx boundary; PostAdventureHook executes after commit."
-    },
     {
       "method": "applyCombatTravel",
       "source_ref": "internal/adventure/combat_travel.go#NormalRunService.applyCombatTravel",

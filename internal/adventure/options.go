@@ -3,9 +3,6 @@ package adventure
 import (
 	"context"
 	"time"
-
-	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 type Clock interface {
@@ -16,67 +13,9 @@ type RealClock struct{}
 
 func (RealClock) Now() time.Time { return time.Now().UTC() }
 
-type CharacterUpdater interface {
-	Update(ctx context.Context, value corecharacter.Character) error
-}
-
-type Logger interface {
-	Warn(msg string, args ...any)
-}
-
-type nopLogger struct{}
-
-func (nopLogger) Warn(msg string, args ...any) {}
-
-// PostAdventureHook is called after an adventure concludes and state is applied.
-// It is invoked as a best-effort side-effect notification.
-// A nonempty message is included in the participant's completion result on success.
-// Hook execution errors are logged via Logger without failing the completed adventure.
-type PostAdventureHook func(ctx context.Context, characterID string) (string, error)
-
-func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
-	s.postAdventureHook = hook
-}
-
-type partyBattleResolver interface {
-	ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
-}
-
-// ParticipantBuilder constructs a Participant from a character ID.
-type ParticipantBuilder interface {
-	BuildParticipant(ctx context.Context, characterID string) (corebattle.Participant, error)
-}
-
-// Option configures optional parameters on Service.
-type Option func(*Service)
-
-// WithParticipantBuilder configures the ParticipantBuilder.
-func WithParticipantBuilder(builder ParticipantBuilder) Option {
-	return func(s *Service) {
-		s.participantBuilder = builder
-		if settler, ok := builder.(PostBattleSettler); ok && s.battleSettler == nil {
-			s.battleSettler = settler
-		}
-	}
-}
-
-// WithPostBattleSettler configures the PostBattleSettler.
-func WithPostBattleSettler(settler PostBattleSettler) Option {
-	return func(s *Service) {
-		s.battleSettler = settler
-	}
-}
-
 // BlessingProvider queries active chapel blessings for a character.
 type BlessingProvider interface {
 	GetActiveBlessing(ctx context.Context, characterID string) (string, error)
-}
-
-// WithBlessingProvider configures the BlessingProvider.
-func WithBlessingProvider(provider BlessingProvider) Option {
-	return func(s *Service) {
-		s.blessingProvider = provider
-	}
 }
 
 // TimerService manages daily dungeon locks.
@@ -88,28 +27,7 @@ type TimerService interface {
 	ReleaseLockWithToken(ctx context.Context, category, targetID, token string) (bool, error)
 }
 
-// WithTimerService configures the TimerService.
-func WithTimerService(timer TimerService) Option {
-	return func(s *Service) {
-		s.timer = timer
-	}
-}
-
-// WithNowFunc configures a custom nowFunc for deterministic time generation.
-func WithNowFunc(nowFunc func() time.Time) Option {
-	return func(s *Service) {
-		s.nowFunc = nowFunc
-	}
-}
-
 // TransactionProvider executes a callback within an ambient or new database transaction.
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
-}
-
-// WithTransactionProvider configures the TransactionProvider.
-func WithTransactionProvider(txProvider TransactionProvider) Option {
-	return func(s *Service) {
-		s.txProvider = txProvider
-	}
 }

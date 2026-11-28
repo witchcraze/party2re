@@ -271,8 +271,7 @@ func TestOrdinaryStage15SnapshotAndGeneratedSlots(t *testing.T) {
 func TestOrdinarySuppliedStateAndHardScaling(t *testing.T) {
 	m := Monster{ID: "m", Name: "native", HP: 100, MP: 80, Attack: 30, Defense: 20, Agility: 10, CMP: 100, ExperienceReward: 10, GoldReward: 20,
 		Combat: &corebattle.LifetimeActor{Participant: corebattle.Participant{MaxHP: 500, MaxMP: 400, MaxCMP: 300, BaseStats: corebattle.BattleBaseStats{Attack: 70}, Abilities: []string{"poison1"}, Gear: &corebattle.BattleGearStats{AccessoryID: "item-159"}}, Jobs: corebattle.BattleJobs{JobID: "job-01", SP: 9, OldJobID: "job-02", OldSP: 5}, Hit: 200, Tension: 3, Temporary: corebattle.TemporaryRegeneration, Extended: corebattle.ExtendedPurification, ExtendedTurns: 4, CrystalReward: 3, NPCLoadout: &corebattle.NPCLoadout{CustomName: "custom", Gems: [3]string{"a", "a", "b"}, GemCosts: [3]int{27, 27, 16}}}}
-	s := CrawlSession{Mode: CrawlModeHard, RngFloat: func() float64 { return 0 }}
-	a := s.buildMonsterActor("e", m, 0, false)
+	a := buildMonsterActor("e", m, 0, false, CrawlModeHard, func() float64 { return 0 })
 	if a.HP != 135 || a.MaxHP != 500 || a.MaxMP != 400 || a.MaxCMP != 300 || a.Jobs.SP != 13 || a.Jobs.OldSP != 7 || a.CrystalReward != 4 || a.NPCLoadout.CustomCost != 84 || a.Hit != 200 || a.ExtendedTurns != 4 {
 		t.Fatalf("supplied/hard payload: %+v", a)
 	}

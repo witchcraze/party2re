@@ -14,15 +14,12 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 )
 
 type mockPartyRepository struct {
 	parties              map[string]Party
 	members              map[string]map[string]Member // partyID -> characterID -> Member
 	memberParty          map[string]string            // characterID -> partyID
-	logs                 []PartyAdventureLog
-	saveLogErr           error
 	savePartyErr         error
 	updatePartyErr       error
 	updatePartyCallCount int
@@ -229,24 +226,6 @@ func (r *mockPartyRepository) RemoveMember(_ context.Context, partyID, character
 	return nil
 }
 
-func (r *mockPartyRepository) SaveAdventureLog(_ context.Context, log PartyAdventureLog) error {
-	if r.saveLogErr != nil {
-		return r.saveLogErr
-	}
-	r.logs = append(r.logs, log)
-	return nil
-}
-
-func (r *mockPartyRepository) GetAdventureLogsByPartyID(_ context.Context, partyID string) ([]PartyAdventureLog, error) {
-	var result []PartyAdventureLog
-	for _, l := range r.logs {
-		if l.PartyID == partyID {
-			result = append(result, l)
-		}
-	}
-	return result, nil
-}
-
 type mockCharacterRepository struct {
 	chars     map[string]corecharacter.Character
 	updateErr error
@@ -292,28 +271,6 @@ func (p *mockTransactionProvider) RunInTx(ctx context.Context, fn func(ctx conte
 	return nil
 }
 
-type mockInventoryRepository struct {
-	inventories map[string]coreinventory.Inventory
-}
-
-func (r *mockInventoryRepository) FindByCharacterID(_ context.Context, characterID string) (coreinventory.Inventory, error) {
-	return r.FindByCharacterIDForUpdate(context.Background(), characterID)
-}
-
-func (r *mockInventoryRepository) FindByCharacterIDForUpdate(_ context.Context, characterID string) (coreinventory.Inventory, error) {
-	inv, ok := r.inventories[characterID]
-	if !ok {
-		inv, _ = coreinventory.New(characterID)
-		r.inventories[characterID] = inv
-	}
-	return inv, nil
-}
-
-func (r *mockInventoryRepository) Save(_ context.Context, inv coreinventory.Inventory) error {
-	r.inventories[inv.CharacterID] = inv
-	return nil
-}
-
 type mockStageProvider struct {
 	stages      map[string]adventure.Stage
 	reqJobLevel map[string]int
@@ -337,18 +294,6 @@ func (p *mockStageProvider) CanAccessStage(c corecharacter.Character, stageID st
 	return nil
 }
 
-type mockMonsterProvider struct {
-	monsters map[string]adventure.Monster
-}
-
-func (p *mockMonsterProvider) FindByID(id string) (adventure.Monster, error) {
-	m, ok := p.monsters[id]
-	if !ok {
-		return adventure.Monster{}, adventure.ErrMonsterNotFound
-	}
-	return m, nil
-}
-
 type mockNewsPublisher struct {
 	published []string
 }
@@ -358,17 +303,11 @@ func (m *mockNewsPublisher) PublishNews(_ context.Context, category, title, cont
 	return nil
 }
 
-func setupTestServiceWithEngine(
-	t *testing.T,
-	engine BattleEngine,
-	opts ...Option,
-) (*Service, *mockPartyRepository, *mockCharacterRepository, *mockNewsPublisher) {
+func setupTestService(t *testing.T, opts ...Option) (*Service, *mockPartyRepository, *mockCharacterRepository, *mockNewsPublisher) {
 	t.Helper()
 	partyRepo := newMockPartyRepository()
 	charRepo := newMockCharacterRepository()
-	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
 	news := &mockNewsPublisher{}
-
 	stages := &mockStageProvider{
 		stages: map[string]adventure.Stage{
 			"forest": {
@@ -378,60 +317,12 @@ func setupTestServiceWithEngine(
 			},
 		},
 	}
-
-	monsters := &mockMonsterProvider{
-		monsters: map[string]adventure.Monster{
-			"slime": {
-				ID:               "slime",
-				Name:             "スライム",
-				HP:               20,
-				Attack:           8,
-				Defense:          2,
-				ExperienceReward: 40,
-				GoldReward:       20,
-				DropItemIDs:      []string{"potion"},
-			},
-			"goblin": {
-				ID:               "goblin",
-				Name:             "ゴブリン",
-				HP:               30,
-				Attack:           12,
-				Defense:          4,
-				ExperienceReward: 60,
-				GoldReward:       40,
-			},
-		},
-	}
-
-	if engine == nil {
-		engine = fixedBattleEngine{outcome: battle.OutcomeWin}
-	}
-
-	serviceOpts := []Option{
-		WithNewsPublisher(news),
-		WithRNG(func(n int) int { return 0 }),
-	}
-	serviceOpts = append(serviceOpts, opts...)
-
-	svc, err := NewService(
-		partyRepo,
-		charRepo,
-		invRepo,
-		stages,
-		monsters,
-		engine,
-		serviceOpts...,
-	)
+	serviceOpts := append([]Option{WithNewsPublisher(news), WithRNG(func(n int) int { return 0 })}, opts...)
+	svc, err := NewService(partyRepo, charRepo, stages, serviceOpts...)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	return svc, partyRepo, charRepo, news
-}
-
-func setupTestService(t *testing.T, opts ...Option) (*Service, *mockPartyRepository, *mockCharacterRepository, *mockNewsPublisher) {
-	t.Helper()
-	return setupTestServiceWithEngine(t, fixedBattleEngine{outcome: battle.OutcomeWin}, opts...)
 }
 
 func TestPartyService_CreateAndGet(t *testing.T) {
@@ -646,162 +537,6 @@ func TestPartyService_KickAndLeave(t *testing.T) {
 	}
 }
 
-func TestPartyService_StartPartyAdventure(t *testing.T) {
-	svc, partyRepo, charRepo, _ := setupTestService(t)
-
-	leader := corecharacter.Character{
-		ID:         "leader",
-		Name:       "Hero1",
-		Level:      5,
-		Experience: 250,
-		Money:      100,
-		Stats:      corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 25, Defense: 10},
-	}
-	m1 := corecharacter.Character{
-		ID:         "m1",
-		Name:       "Hero2",
-		Level:      5,
-		Experience: 250,
-		Money:      50,
-		Stats:      corecharacter.Stats{HP: 45, MaxHP: 45, Attack: 20, Defense: 8},
-	}
-	charRepo.chars[leader.ID] = leader
-	charRepo.chars[m1.ID] = m1
-
-	detail, _ := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
-		Speed:   18,
-		Name:    "CoopParty",
-		StageID: "forest",
-	})
-	partyID := detail.Party.ID
-	_, _ = svc.JoinParty(context.Background(), partyID, m1.ID, "")
-
-	// The leader starts without any readiness step (vs_monster.cgi:56–58).
-	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
-	if err != nil {
-		t.Fatalf("StartPartyAdventure failed: %v", err)
-	}
-	if res.Outcome != "win" {
-		t.Fatalf("expected victory, got %s", res.Outcome)
-	}
-	if res.SynergyBonusPercent != 10 {
-		t.Fatalf("expected 10%% synergy bonus for 2 players, got %d%%", res.SynergyBonusPercent)
-	}
-	if len(res.Rewards) != 2 {
-		t.Fatalf("expected 2 member rewards, got %d", len(res.Rewards))
-	}
-	if len(partyRepo.logs) != 1 {
-		t.Fatalf("expected adventure log saved, got %d", len(partyRepo.logs))
-	}
-
-	// Verify character rewards
-	updatedLeader := charRepo.chars[leader.ID]
-	if updatedLeader.Money <= leader.Money || updatedLeader.Experience <= leader.Experience {
-		t.Fatalf("expected leader to gain gold and exp, got money=%d exp=%d", updatedLeader.Money, updatedLeader.Experience)
-	}
-}
-
-func TestPartyService_StartPartyAdventure_CrystalRewards(t *testing.T) {
-	partyRepo := newMockPartyRepository()
-	charRepo := newMockCharacterRepository()
-	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
-
-	stages := &mockStageProvider{
-		stages: map[string]adventure.Stage{
-			"forest": {
-				ID:         "forest",
-				Name:       "はじまりの森",
-				MonsterIDs: []string{"slime"},
-			},
-		},
-	}
-	monsters := &mockMonsterProvider{
-		monsters: map[string]adventure.Monster{
-			"slime": {
-				ID:               "slime",
-				Name:             "スライム",
-				HP:               20,
-				Attack:           8,
-				Defense:          2,
-				ExperienceReward: 40,
-				GoldReward:       20,
-			},
-		},
-	}
-
-	customBattleEngine := &mockCrystalPartyBattleEngine{crystalsPerFloor: 7}
-	svc, err := NewService(
-		partyRepo,
-		charRepo,
-		invRepo,
-		stages,
-		monsters,
-		customBattleEngine,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	leader := corecharacter.Character{
-		ID:      "char-leader",
-		Name:    "LeaderHero",
-		JobID:   "warrior",
-		Level:   10,
-		Stats:   corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 50, Defense: 20},
-		Crystal: 10,
-	}
-	charRepo.chars[leader.ID] = leader
-
-	p, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
-		Name:    "CrystalParty",
-		StageID: "forest",
-		Speed:   3,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	res, err := svc.StartPartyAdventure(context.Background(), p.Party.ID, leader.ID)
-	if err != nil {
-		t.Fatalf("StartPartyAdventure failed: %v", err)
-	}
-	if res.Outcome != "win" {
-		t.Fatalf("expected win, got %s", res.Outcome)
-	}
-	// 10 floors * 7 = 70 crystals
-	if res.TotalCrystals != 70 {
-		t.Errorf("res.TotalCrystals = %d, want 70", res.TotalCrystals)
-	}
-	if len(res.Rewards) != 1 || res.Rewards[0].GainedCrystals != 70 {
-		t.Errorf("res.Rewards[0].GainedCrystals = %d, want 70", res.Rewards[0].GainedCrystals)
-	}
-	// Initial 10 + 70 = 80
-	if charRepo.chars[leader.ID].Crystal != 80 {
-		t.Errorf("charRepo.chars[leader.ID].Crystal = %d, want 80", charRepo.chars[leader.ID].Crystal)
-	}
-}
-
-type mockCrystalPartyBattleEngine struct {
-	crystalsPerFloor int
-}
-
-func (m *mockCrystalPartyBattleEngine) ResolvePartyBattle(req battle.PartyBattleRequest) (battle.PartyBattleResult, error) {
-	remHP := make(map[string]int)
-	for _, a := range req.Allies {
-		remHP[a.ID] = a.HP
-	}
-	return battle.PartyBattleResult{
-		Outcome:     battle.OutcomeWin,
-		Turns:       1,
-		RemainingHP: remHP,
-		TotalReward: battle.Reward{
-			Experience: 20,
-			Currency:   10,
-			Crystals:   m.crystalsPerFloor,
-		},
-	}, nil
-}
-
 func TestListParties(t *testing.T) {
 	svc, _, charRepo, _ := setupTestService(t)
 
@@ -835,216 +570,6 @@ func TestListParties(t *testing.T) {
 	}
 	if page.Items[0].StageName != "はじまりの森" {
 		t.Errorf("expected stage name 'はじまりの森', got %q", page.Items[0].StageName)
-	}
-}
-
-func TestPartyService_StartPartyAdventure_DuplicateCharacterNames(t *testing.T) {
-	svc, _, charRepo, _ := setupTestService(t)
-
-	// Two characters with different IDs but exact same display name
-	leader := corecharacter.Character{
-		ID:         "char-same-1",
-		Name:       "SameHero",
-		Level:      5,
-		Experience: 250,
-		Money:      100,
-		Stats:      corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 25, Defense: 10},
-	}
-	m1 := corecharacter.Character{
-		ID:         "char-same-2",
-		Name:       "SameHero",
-		Level:      5,
-		Experience: 250,
-		Money:      50,
-		Stats:      corecharacter.Stats{HP: 45, MaxHP: 45, Attack: 20, Defense: 8},
-	}
-	charRepo.chars[leader.ID] = leader
-	charRepo.chars[m1.ID] = m1
-
-	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
-		Speed:   18,
-		Name:    "TwinParty",
-		StageID: "forest",
-	})
-	if err != nil {
-		t.Fatalf("CreateParty failed: %v", err)
-	}
-	partyID := detail.Party.ID
-
-	if _, err := svc.JoinParty(context.Background(), partyID, m1.ID, ""); err != nil {
-		t.Fatalf("JoinParty failed: %v", err)
-	}
-
-	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
-	if err != nil {
-		t.Fatalf("StartPartyAdventure with duplicate names failed: %v", err)
-	}
-	if res.Outcome != "win" {
-		t.Fatalf("expected victory, got %s", res.Outcome)
-	}
-	if len(res.Rewards) != 2 {
-		t.Fatalf("expected 2 distinct member rewards, got %d", len(res.Rewards))
-	}
-	if res.Rewards[0].CharacterID == res.Rewards[1].CharacterID {
-		t.Fatalf("expected unique character IDs in rewards, got %s and %s", res.Rewards[0].CharacterID, res.Rewards[1].CharacterID)
-	}
-}
-
-func TestPartyService_StartPartyAdventure_SurvivingDamagePersisted(t *testing.T) {
-	engine := fixedBattleEngine{
-		remainingHP: map[string]int{
-			"char-dmg-leader": 80,
-			"char-dmg-member": 0,
-		},
-		outcome: battle.OutcomeWin,
-	}
-	svc, _, charRepo, _ := setupTestServiceWithEngine(t, engine)
-
-	leader := corecharacter.Character{
-		ID:         "char-dmg-leader",
-		Name:       "ToughHero",
-		Level:      5,
-		Experience: 250,
-		Money:      100,
-		Stats:      corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 15, Defense: 5},
-	}
-	m1 := corecharacter.Character{
-		ID:         "char-dmg-member",
-		Name:       "FragileHero",
-		Level:      5,
-		Experience: 250,
-		Money:      50,
-		Stats:      corecharacter.Stats{HP: 15, MaxHP: 50, Attack: 15, Defense: 2},
-	}
-	charRepo.chars[leader.ID] = leader
-	charRepo.chars[m1.ID] = m1
-
-	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
-		Speed:   18,
-		Name:    "BattleDamageParty",
-		StageID: "forest",
-	})
-	if err != nil {
-		t.Fatalf("CreateParty failed: %v", err)
-	}
-	partyID := detail.Party.ID
-
-	if _, err := svc.JoinParty(context.Background(), partyID, m1.ID, ""); err != nil {
-		t.Fatalf("JoinParty failed: %v", err)
-	}
-
-	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
-	if err != nil {
-		t.Fatalf("StartPartyAdventure failed: %v", err)
-	}
-
-	updatedLeader := charRepo.chars[leader.ID]
-	updatedMember := charRepo.chars[m1.ID]
-
-	// Leader took non-fatal damage and survived with HP < 100
-	if updatedLeader.Stats.HP <= 0 {
-		t.Errorf("expected leader to be alive, got HP=%d", updatedLeader.Stats.HP)
-	}
-	if updatedLeader.Stats.HP != 80 {
-		t.Errorf("expected leader HP=80, got %d", updatedLeader.Stats.HP)
-	}
-
-	// Fallen member persists with HP = 0
-	if updatedMember.Stats.HP != 0 {
-		t.Errorf("expected member HP=0, got %d", updatedMember.Stats.HP)
-	}
-	t.Logf("Battle result outcome=%s, leader HP: %d/%d, member HP: %d/%d", res.Outcome, updatedLeader.Stats.HP, updatedLeader.Stats.MaxHP, updatedMember.Stats.HP, updatedMember.Stats.MaxHP)
-}
-
-func TestPartyService_StartPartyAdventure_OverLevelAndCap(t *testing.T) {
-	svc, _, charRepo, _ := setupTestService(t)
-
-	// Leader with OverLevel at Lv 99
-	leader := corecharacter.Character{
-		ID:         "leader-overlevel",
-		Name:       "OverHero",
-		Level:      99,
-		Experience: 99 * 99 * 10,
-		Money:      1000,
-		OverLevel:  true,
-		Stats:      corecharacter.Stats{HP: 500, MaxHP: 500, Attack: 200, Defense: 150},
-	}
-	// Normal member without OverLevel at Lv 99
-	normalMem := corecharacter.Character{
-		ID:         "member-normal",
-		Name:       "NormalHero",
-		Level:      99,
-		Experience: 99 * 99 * 10,
-		Money:      1000,
-		OverLevel:  false,
-		Stats:      corecharacter.Stats{HP: 500, MaxHP: 500, Attack: 200, Defense: 150},
-	}
-	charRepo.chars[leader.ID] = leader
-	charRepo.chars[normalMem.ID] = normalMem
-
-	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
-		Speed:   18,
-		Name:    "HighLevelParty",
-		StageID: "forest",
-	})
-	if err != nil {
-		t.Fatalf("CreateParty failed: %v", err)
-	}
-	partyID := detail.Party.ID
-
-	if _, err := svc.JoinParty(context.Background(), partyID, normalMem.ID, ""); err != nil {
-		t.Fatalf("JoinParty failed: %v", err)
-	}
-
-	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
-	if err != nil {
-		t.Fatalf("StartPartyAdventure failed: %v", err)
-	}
-	if res.Outcome != "win" {
-		t.Fatalf("expected victory, got %s", res.Outcome)
-	}
-
-	updatedLeader := charRepo.chars[leader.ID]
-	updatedNormal := charRepo.chars[normalMem.ID]
-
-	// OverLevel character should advance to Lv 100+
-	if updatedLeader.Level < 100 {
-		t.Errorf("expected OverLevel character to reach level >= 100, got %d", updatedLeader.Level)
-	}
-
-	// Normal character should cap strictly at Lv 99
-	if updatedNormal.Level != 99 {
-		t.Errorf("expected normal character to remain capped at level 99, got %d", updatedNormal.Level)
-	}
-}
-
-func TestPartyService_StartPartyAdventure_SaveAdventureLogError(t *testing.T) {
-	ctx := context.Background()
-	svc, partyRepo, charRepo, _ := setupTestService(t)
-
-	leader := corecharacter.Character{
-		ID:    "char-leader-err",
-		Name:  "LeaderHero",
-		JobID: "warrior",
-		Level: 10,
-		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 20, Defense: 10},
-	}
-	charRepo.chars[leader.ID] = leader
-
-	detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
-		Speed:   18,
-		Name:    "ログ失敗テスト",
-		StageID: "forest",
-	})
-	if err != nil {
-		t.Fatalf("CreateParty failed: %v", err)
-	}
-
-	partyRepo.saveLogErr = errors.New("database connection broken")
-
-	_, err = svc.StartPartyAdventure(ctx, detail.Party.ID, leader.ID)
-	if err == nil {
-		t.Fatal("expected StartPartyAdventure to fail when SaveAdventureLog returns error, got nil")
 	}
 }
 
@@ -1210,66 +735,6 @@ func TestPartyService_SpeedSettings(t *testing.T) {
 	}
 }
 
-func TestPartyService_StartPartyAdventure_PostAdventureHook(t *testing.T) {
-	svc, _, charRepo, _ := setupTestService(t)
-	ctx := context.Background()
-
-	leader := corecharacter.Character{
-		ID:         "leader",
-		Name:       "Hero1",
-		Level:      5,
-		Experience: 250,
-		Money:      100,
-		Stats:      corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 25, Defense: 10},
-	}
-	m1 := corecharacter.Character{
-		ID:         "m1",
-		Name:       "Hero2",
-		Level:      5,
-		Experience: 250,
-		Money:      50,
-		Stats:      corecharacter.Stats{HP: 45, MaxHP: 45, Attack: 20, Defense: 8},
-	}
-	charRepo.chars[leader.ID] = leader
-	charRepo.chars[m1.ID] = m1
-
-	var hookedCharIDs []string
-	svc.SetPostAdventureHook(func(ctx context.Context, characterID string) (string, error) {
-		hookedCharIDs = append(hookedCharIDs, characterID)
-		return "", errors.New("tavern unavailable")
-	})
-
-	detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
-		Speed:   18,
-		Name:    "DeliveryParty",
-		StageID: "forest",
-	})
-	if err != nil {
-		t.Fatalf("CreateParty failed: %v", err)
-	}
-	partyID := detail.Party.ID
-	_, _ = svc.JoinParty(ctx, partyID, m1.ID, "")
-
-	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
-	if err != nil {
-		t.Fatalf("StartPartyAdventure failed: %v", err)
-	}
-	if len(res.Rewards) != 2 {
-		t.Fatalf("expected 2 member rewards, got %d", len(res.Rewards))
-	}
-
-	if len(hookedCharIDs) != 2 {
-		t.Fatalf("expected PostAdventureHook to be called 2 times, got %d", len(hookedCharIDs))
-	}
-
-	expectedIDs := map[string]bool{leader.ID: true, m1.ID: true}
-	for _, id := range hookedCharIDs {
-		if !expectedIDs[id] {
-			t.Errorf("unexpected character ID hooked: %s", id)
-		}
-	}
-}
-
 type stubLifetimePartyBuilder struct {
 	actors map[string]battle.LifetimeActor
 	err    error
@@ -1293,9 +758,7 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockPartyRepository()
 	charRepo := newMockCharacterRepository()
-	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
 	stages, _ := adventure.InitialStageCatalog()
-	monsters, _ := adventure.InitialMonsterCatalog()
 
 	builder := &stubLifetimePartyBuilder{
 		actors: map[string]battle.LifetimeActor{
@@ -1318,7 +781,7 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 		},
 	}
 
-	svc, err := NewService(repo, charRepo, invRepo, stages, monsters, nil, WithParticipantBuilder(builder))
+	svc, err := NewService(repo, charRepo, stages, WithLifetimeActorBuilder(builder))
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
@@ -1380,7 +843,7 @@ func TestCreateAndJoinPartyCaptureBattleRowAndPublicJSON(t *testing.T) {
 
 	// Verify against ValkeyRepository (in-memory) that CreateParty failure leaves zero lobby or character keys.
 	valkeyRepo := NewMemoryRepository()
-	valkeySvc, err := NewService(valkeyRepo, charRepo, invRepo, stages, monsters, nil, WithParticipantBuilder(builder))
+	valkeySvc, err := NewService(valkeyRepo, charRepo, stages, WithLifetimeActorBuilder(builder))
 	if err != nil {
 		t.Fatalf("NewService(ValkeyRepository) failed: %v", err)
 	}
@@ -1410,7 +873,7 @@ func TestLeaveParty_LegacyRound0Effects(t *testing.T) {
 			},
 		}
 		tx := &mockTransactionProvider{}
-		svc, repo, charRepo, _ := setupTestService(t, WithParticipantBuilder(builder), WithTransactionProvider(tx))
+		svc, repo, charRepo, _ := setupTestService(t, WithLifetimeActorBuilder(builder), WithTransactionProvider(tx))
 
 		charRepo.chars["leader"] = corecharacter.Character{
 			ID: "leader", Name: "Hero1", Level: 5, Tired: 10,
@@ -1469,7 +932,7 @@ func TestLeaveParty_LegacyRound0Effects(t *testing.T) {
 				},
 			},
 		}
-		svc, repo, charRepo, _ := setupTestService(t, WithParticipantBuilder(builder))
+		svc, repo, charRepo, _ := setupTestService(t, WithLifetimeActorBuilder(builder))
 		charRepo.chars["leader"] = corecharacter.Character{
 			ID: "leader", Name: "Hero1", Level: 5, Tired: 10,
 			Stats: corecharacter.Stats{HP: 60, MaxHP: 100, MP: 12, MaxMP: 30},

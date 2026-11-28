@@ -120,12 +120,6 @@ func wireHooks(
 		}
 		if misc.chapel != nil {
 			cmbt.battle.SetBlessingProvider(chapelBlessingAdapter{misc.chapel})
-			if cmbt.adv != nil {
-				cmbt.adv.SetBlessingProvider(chapelBlessingAdapter{misc.chapel})
-			}
-			if cmbt.party != nil {
-				cmbt.party.SetBlessingProvider(chapelBlessingAdapter{misc.chapel})
-			}
 			if cmbt.dungeon != nil {
 				cmbt.dungeon.SetBlessingProvider(chapelBlessingAdapter{misc.chapel})
 			}
@@ -146,10 +140,6 @@ func wireHooks(
 			cmbt.challenge.ConfigureFullnessResetter(misc.tavern)
 		}
 		soc.home.SetFullnessResetter(misc.tavern)
-		postAdventureHook := buildPostAdventureHook(misc.tavern)
-		if cmbt.adv != nil {
-			cmbt.adv.SetPostAdventureHook(postAdventureHook)
-		}
 		if cmbt.normal != nil {
 			cmbt.normal.SetExitEffects(misc.tavern.ResetFullness)
 		}
@@ -157,7 +147,6 @@ func wireHooks(
 			cmbt.boss.SetExitEffects(misc.tavern.ResetFullness)
 		}
 		if cmbt.party != nil {
-			cmbt.party.SetPostAdventureHook(postAdventureHook)
 			cmbt.party.SetTavernExitSettler(partyTavernExitAdapter{tavern: misc.tavern})
 		}
 		if cmbt.gvg != nil {
