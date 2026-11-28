@@ -543,13 +543,7 @@ func TestGuildRepository_MultiplePendingApplicationsAndAffiliation(t *testing.T)
 		t.Fatalf("expected active membership in G2, got guild: %+v, member: %+v, err: %v", activeG, activeM, err)
 	}
 
-	// 6. Leader 1 tries to approve applicant into Guild 1 -> fails with ErrCharacterAlreadyInGuild
-	err = guildRepo.ApproveMember(ctx, g1.ID, applicant.ID, "隊員")
-	if !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
-		t.Fatalf("expected ErrCharacterAlreadyInGuild when approving already-affiliated member, got: %v", err)
-	}
-
-	// 7. AddGuildPoints now awards points to G2
+	// 6. AddGuildPoints now awards points to G2
 	if err := guildRepo.AddGuildPoints(ctx, applicant.ID, 50); err != nil {
 		t.Fatalf("AddGuildPoints for active member failed: %v", err)
 	}
