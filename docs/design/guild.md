@@ -6,8 +6,7 @@ Guilds (`guild.cgi`, `join_guild.cgi`) are social organizations ranked by Guild 
 
 ## Membership
 
-- Applications are roster rows titled `参加申請中` that confer no affiliation: they earn no points (`lib/guild.cgi:63`), and the applicant may still found a guild.
-- Approval rechecks that the applicant has not joined another guild in the meantime (`lib/guild.cgi:220–224`). A character holds at most one active affiliation, also under concurrent creation, joining and approval.
+When an applicant has joined another guild, `ataeru` drops the pending row before reaching the approval or rejection branch (`lib/guild.cgi:209–232,251–257`). Go retains the row on approval and sends an ordinary rejection letter on rejection. [#2966](https://github.com/witchcraze/party2re/issues/2966)
 
 ### Broadcast Callouts (`よびかける`)
 

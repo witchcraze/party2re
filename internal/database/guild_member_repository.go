@@ -171,45 +171,22 @@ func (r *GuildRepository) AssignCustomRole(ctx context.Context, guildID string, 
 }
 
 func (r *GuildRepository) ApproveMember(ctx context.Context, guildID string, characterID string, title string) error {
-	if title == "" {
-		title = ""
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		UPDATE guild_members
+		SET is_pending = FALSE, title = ?
+		WHERE guild_id = ? AND character_id = ? AND is_pending = TRUE
+	`, title, guildID, characterID)
+	if err != nil {
+		return err
 	}
-	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		executor := ExecutorFromContext(txCtx, r.db)
-
-		// Re-verify that applicant is not already an active member of ANY guild (guild.cgi:ataeru)
-		var activeGuildID string
-		err := executor.QueryRowContext(txCtx, `
-			SELECT guild_id FROM guild_members
-			WHERE character_id = ? AND is_pending = FALSE
-		`, characterID).Scan(&activeGuildID)
-		if err == nil {
-			if activeGuildID != guildID {
-				return guild.ErrCharacterAlreadyInGuild
-			}
-			return guild.ErrMemberNotPending
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-
-		res, err := executor.ExecContext(txCtx, `
-			UPDATE guild_members
-			SET is_pending = FALSE, title = ?
-			WHERE guild_id = ? AND character_id = ? AND is_pending = TRUE
-		`, title, guildID, characterID)
-		if err != nil {
-			return err
-		}
-		rows, err := res.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return guild.ErrMemberNotPending
-		}
-		return nil
-	})
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return guild.ErrMemberNotPending
+	}
+	return nil
 }
 
 func (r *GuildRepository) IsColorTaken(ctx context.Context, color string, excludeGuildID string) (bool, error) {
