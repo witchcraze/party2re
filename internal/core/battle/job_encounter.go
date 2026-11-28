@@ -73,7 +73,8 @@ func (s *LifetimeState) ValidateJobEncounter(c *JobEncounterContext, id string, 
 		if c.Room == nil || c.Room.ActorID != "" && c.Room.ActorID != c.ActorID {
 			return ErrUnsupportedEffect
 		}
-		if id == "job-78-entry-2" && c.Room.NormalStage && c.Room.Floor >= 9 {
+		// Outside vs_monster the jump finds no passage without drawing (_skill.cgi:6120).
+		if id == "job-78-entry-2" && (!c.Room.NormalStage || c.Room.Floor >= 9) {
 			return nil
 		}
 		if id == "job-78-entry-6" {
@@ -98,7 +99,7 @@ func (s *LifetimeState) ValidateJobEncounter(c *JobEncounterContext, id string, 
 				return nil
 			}
 		}
-		if !c.Room.NormalStage || c.Room.Validate == nil || c.Room.Apply == nil {
+		if c.Room.Validate == nil || c.Room.Apply == nil {
 			return ErrUnsupportedEffect
 		}
 		return c.Room.Validate(id)
@@ -129,7 +130,7 @@ func (s *LifetimeState) ApplyJobEncounter(c *JobEncounterContext, id string, rng
 	}
 	switch id {
 	case "job-78-entry-2":
-		if c.Room.Floor >= 9 || rng.Float64()*3 >= 1 {
+		if !c.Room.NormalStage || c.Room.Floor >= 9 || rng.Float64()*3 >= 1 {
 			return nil
 		}
 		frame, err := c.Room.Apply(id)

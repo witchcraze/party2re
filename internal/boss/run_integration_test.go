@@ -598,3 +598,82 @@ func TestSealingRoomJoinLostAcknowledgement(t *testing.T) {
 		t.Fatalf("roster = %v, want [%s]", r.Roster, a.ID)
 	}
 }
+
+// TestSealingRoomTreasureRetry covers job78's トレハンのいじ on a sealing chest
+// at the rand(5) < 3 boundary (_skill.cgi:6201–6234): success replaces the
+// chests through add_treasure from the stage's @treasures plus the weekday orb.
+func TestSealingRoomTreasureRetry(t *testing.T) {
+	for _, tc := range []struct {
+		draw    float64
+		success bool
+	}{{0.5, true}, {0.6, false}} {
+		t.Run(map[bool]string{true: "success", false: "failure"}[tc.success], func(t *testing.T) {
+			// Each draw is the same fraction: 0.5 picks the tool table (rng(4)=2)
+			// and its third of four entries, a stage tool rather than the orb.
+			pools := runhost.TreasurePools{Weapons: []string{"weapon-007"}, Armors: []string{"armor-008"}, Items: []string{"item-001", "item-002", "item-003"}}
+			f := newStageFixture(t, fixedRNG{v: tc.draw}, boss.BossStage{Name: "@試練@", LeaderName: "王", Speed: 12, MaxMembers: 6, Treasures: pools,
+				Bosses: []boss.BossMonster{{Name: "王", HP: 1, Attack: 1, Agility: 1, Icon: "mon/190.gif"}}})
+			runID := f.open(t)
+			a, b := f.hero(t), f.hero(t)
+			f.join(t, a, runID)
+			f.join(t, b, runID)
+			f.defeat(t, a, runID, f.room(t).Leader)
+			if _, err := f.command(a, runID, "seal", ""); err != nil {
+				t.Fatal(err)
+			}
+			marker := runhost.TreasureBox{ID: "owned-box", Name: "古い宝箱A", ItemID: "item-099"}
+			f.editRun(t, runID, func(r *boss.Run) {
+				r.Boxes = []runhost.TreasureBox{marker}
+				r.Actor(a.ID).Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 250}
+				r.Actor(b.ID).Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 450}
+			})
+			if _, err := f.command(a, runID, "job-78-entry-6", marker.ID); err != nil {
+				t.Fatal(err)
+			}
+			r := f.room(t)
+			allySP := 450
+			if tc.success {
+				allySP = 100
+			}
+			if r.Actor(a.ID).Jobs.SP != 100 || r.Actor(b.ID).Jobs.SP != allySP {
+				t.Fatalf("SP = %d/%d, want 100/%d", r.Actor(a.ID).Jobs.SP, r.Actor(b.ID).Jobs.SP, allySP)
+			}
+			if !tc.success {
+				if len(r.Boxes) != 1 || r.Boxes[0] != marker {
+					t.Fatalf("failed retry changed chests: %+v", r.Boxes)
+				}
+				return
+			}
+			// Two living heroes: $#partys+1 chests, each the stage's third tool.
+			if len(r.Boxes) != 2 || r.Boxes[0].ItemID != "item-003" || r.Boxes[1].ItemID != "item-003" || r.Boxes[0].ID == marker.ID {
+				t.Fatalf("regenerated chests = %+v", r.Boxes)
+			}
+			saved := r.Boxes
+			receipt, err := f.command(b, runID, "chest", saved[1].ID)
+			if err != nil || receipt.Box == nil || receipt.Box.ItemID != saved[1].ItemID {
+				t.Fatalf("reloaded chest = %+v, %v", receipt.Box, err)
+			}
+		})
+	}
+}
+
+// TestSealingRoomBypassJumpFindsNoPassage: outside vs_monster job78's
+// バイパスジャンプ pays its 10 MP and moves nothing (_skill.cgi:6116–6133).
+func TestSealingRoomBypassJumpFindsNoPassage(t *testing.T) {
+	f := newSealFixture(t, fixedRNG{v: 0}, boss.BossMonster{Name: "王", HP: 900000, Defense: 900000, Attack: 1, Agility: 1})
+	runID := f.open(t)
+	a := f.hero(t)
+	f.join(t, a, runID)
+	f.editRun(t, runID, func(r *boss.Run) {
+		r.Actor(a.ID).Jobs = corebattle.BattleJobs{JobID: "job-78", SP: 250}
+		r.Actor(a.ID).MP = 80
+	})
+	before := f.room(t)
+	if _, err := f.command(a, runID, "job-78-entry-2", ""); err != nil {
+		t.Fatal(err)
+	}
+	r := f.room(t)
+	if r.Round != before.Round || r.Actor(a.ID).MP != 70 || r.Actor(r.Leader).HP != before.Actor(before.Leader).HP {
+		t.Fatalf("round=%d mp=%d leader=%d", r.Round, r.Actor(a.ID).MP, r.Actor(r.Leader).HP)
+	}
+}

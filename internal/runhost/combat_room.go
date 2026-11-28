@@ -21,8 +21,9 @@ type Choice struct {
 
 // CombatRoom supplies a room library's branches of the shared battle routines
 // (legacy `$m{lib}`). Without one the host keeps legacy's non-vs_monster
-// branch: NPCs respond, job78 finds no room, nothing travels or summons from a
-// pool, defeat rewards are unmodified and the room records nothing.
+// branch: NPCs respond, job78 finds no passage or chest room, nothing travels
+// or summons from a pool, defeat rewards are unmodified and the room records
+// nothing.
 type CombatRoom[R any] interface {
 	// Choices are add_battle_action's entries for actor, after the shared ones.
 	Choices(r *R, actor string) []Choice
@@ -36,8 +37,10 @@ type CombatRoom[R any] interface {
 // RoomCombat is one operation's room seams. Callbacks mutate only the locked
 // run; the host adopts their result into the working combat state.
 type RoomCombat struct {
-	// NormalStage enables job78's room bodies (_skill.cgi:6120,6205): the
-	// requester's through JobRoom, an NPC's bypass jump in the response.
+	// NormalStage is vs_monster, where job78's bypass jump can find a passage
+	// (_skill.cgi:6120): the requester's through JobRoom, an NPC's in the
+	// response. JobRoom also serves the treasure retry, which every room
+	// library with chests supplies (_skill.cgi:6201–6219).
 	NormalStage bool
 	JobRoom     JobRoom
 	// Tools bind held travel tools by definition ID; StoredTravel is job50's
