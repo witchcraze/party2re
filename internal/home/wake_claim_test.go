@@ -841,8 +841,7 @@ func TestWake_HookPaused_OwnershipLossDoesNotCorruptSuccessorState(t *testing.T)
 		ItemNo:      46,
 		ItemName:    "cat-ears",
 		Icon:        "icon",
-		ExpiresAt:   time.Now().Add(time.Hour),
-	}, time.Hour)
+	})
 	if err != nil {
 		t.Fatalf("failed to save successor active costume: %v", err)
 	}
@@ -913,8 +912,7 @@ func TestWake_CostumeClearedOnSuccessfulWake_MemoryRepository(t *testing.T) {
 		ItemNo:      46,
 		ItemName:    "cat-ears",
 		Icon:        "icon",
-		ExpiresAt:   time.Now().Add(time.Hour),
-	}, time.Hour)
+	})
 
 	res, err := svc.Wake(ctx, "c1")
 	if err != nil || !res.Recovered {
@@ -961,8 +959,7 @@ func TestWake_CostumeRefusesUnsafeDeletionWhenTimerNil(t *testing.T) {
 		ItemNo:      46,
 		ItemName:    "cat-ears",
 		Icon:        "icon",
-		ExpiresAt:   time.Now().Add(time.Hour),
-	}, time.Hour)
+	})
 
 	_, err = svc.Wake(ctx, "c1")
 	if !errors.Is(err, ErrWakeInProgress) {
@@ -1044,8 +1041,7 @@ func TestWake_PauseImmediatelyAfterOwnershipVerification_PreservesSuccessorNewCo
 		CharacterID: "c1",
 		ItemNo:      46,
 		ItemName:    "old-cat-ears",
-		ExpiresAt:   time.Now().Add(time.Hour),
-	}, time.Hour)
+	})
 
 	storeSvc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
 
@@ -1095,8 +1091,7 @@ func TestWake_PauseImmediatelyAfterOwnershipVerification_PreservesSuccessorNewCo
 		CharacterID: "c1",
 		ItemNo:      99,
 		ItemName:    "new-dragon-wings",
-		ExpiresAt:   time.Now().Add(time.Hour),
-	}, time.Hour)
+	})
 	if err != nil {
 		t.Fatalf("failed to save successor new costume: %v", err)
 	}

@@ -563,32 +563,49 @@ func TestOracleService_ApplyAndResetCostume(t *testing.T) {
 
 	// 1. Without costumeRepo (nil safe)
 	svcNoRepo := store.NewService(nil, nil, nil, nil, nil)
-	if _, err := svcNoRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Time{}); err != nil {
+	if _, err := svcNoRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif"); err != nil {
 		t.Errorf("expected nil error on nil costumeRepo apply, got %v", err)
 	}
 	if err := svcNoRepo.ResetCostume(ctx, "char-1"); err != nil {
 		t.Errorf("expected nil error on nil costumeRepo reset, got %v", err)
 	}
 
-	// 2. With costumeRepo
+	// 2. With costumeRepo — costume survives past midnight JST until reset
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{
+		"char-1": {ID: "char-1", Name: "勇者", JobLevel: 16},
+	}}
 	costumeRepo := costume.NewMemoryCostumeRepository()
-	svcWithRepo := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
+	now := time.Date(2026, 11, 28, 14, 59, 0, 0, time.UTC) // 23:59 JST
+	svcWithRepo := store.NewService(
+		newMockStoreRepo(),
+		charRepo,
+		&mockDepotRepo{depots: make(map[string]depot.Depot)},
+		&mockCatalog{items: make(map[string]coreitem.Definition)},
+		&mockTxProvider{},
+		store.WithCostumeRepository(costumeRepo),
+		store.WithNowFunc(func() time.Time { return now }),
+	)
 
-	_, err := svcWithRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Now().Add(time.Hour))
+	_, err := svcWithRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif")
 	if err != nil {
 		t.Fatalf("ApplyCostume failed: %v", err)
 	}
 
-	got, _ := costumeRepo.GetActiveCostume(ctx, "char-1")
-	if got == nil || got.ItemNo != 46 {
-		t.Fatalf("expected active costume item 46, got %+v", got)
+	// Advance past midnight JST (and across multiple days) without sleeping or changing job.
+	now = now.Add(25 * time.Hour)
+	status, err := svcWithRepo.GetOracleStatus(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("GetOracleStatus failed: %v", err)
+	}
+	if status.ActiveCostume == nil || status.ActiveCostume.ItemNo != 46 {
+		t.Fatalf("expected active costume item 46 to survive midnight JST, got %+v", status.ActiveCostume)
 	}
 
 	// Test ResetCostume
 	if err := svcWithRepo.ResetCostume(ctx, "char-1"); err != nil {
 		t.Fatalf("ResetCostume failed: %v", err)
 	}
-	got, _ = costumeRepo.GetActiveCostume(ctx, "char-1")
+	got, _ := costumeRepo.GetActiveCostume(ctx, "char-1")
 	if got != nil {
 		t.Errorf("expected costume cleared after reset, got %+v", got)
 	}
@@ -600,7 +617,7 @@ func TestOracleService_ResetCostumeWithClaim(t *testing.T) {
 	// 1. Without timer: refuses unsafe deletion
 	costumeRepo := costume.NewMemoryCostumeRepository()
 	svcNoTimer := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
-	_, _ = svcNoTimer.ApplyCostume(ctx, "char-1", 46, "costume-46", "icon", time.Now().Add(time.Hour))
+	_, _ = svcNoTimer.ApplyCostume(ctx, "char-1", 46, "costume-46", "icon")
 	reset, err := svcNoTimer.ResetCostumeWithClaim(ctx, "char-1", "waking", "any-token")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -656,7 +673,7 @@ func TestOracleService_ResetCostumeWithClaim_PauseAfterOwnershipVerification(t *
 		svc := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo), store.WithTimer(tm))
 
 		// 1. Initial costume
-		_, _ = svc.ApplyCostume(ctx, "c1", 46, "old-costume", "icon", time.Now().Add(time.Hour))
+		_, _ = svc.ApplyCostume(ctx, "c1", 46, "old-costume", "icon")
 
 		// 2. Setup claim
 		const oldToken = "old-token-123"
@@ -708,8 +725,7 @@ func TestOracleService_ResetCostumeWithClaim_PauseAfterOwnershipVerification(t *
 			CharacterID: "c1",
 			ItemNo:      99,
 			ItemName:    "new-costume",
-			ExpiresAt:   time.Now().Add(time.Hour),
-		}, time.Hour)
+		})
 
 		// 4. Old Wake resumes
 		close(releaseHook)

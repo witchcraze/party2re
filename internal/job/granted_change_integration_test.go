@@ -208,11 +208,11 @@ type hookedHomeCostume struct {
 	onApply func(characterID string)
 }
 
-func (h *hookedHomeCostume) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, exp time.Time) (func(context.Context) error, error) {
+func (h *hookedHomeCostume) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string) (func(context.Context) error, error) {
 	if h.onApply != nil {
 		h.onApply(characterID)
 	}
-	return h.store.ApplyCostume(ctx, characterID, itemNo, itemName, icon, exp)
+	return h.store.ApplyCostume(ctx, characterID, itemNo, itemName, icon)
 }
 
 func newTestHomeService(t *testing.T, db *sql.DB, chars economy.CharacterRepository, invRepo *database.InventoryRepository, tx *database.DefaultTransactionProvider, applier home.CostumeApplier) *home.Service {
@@ -259,9 +259,8 @@ func seedActiveCostume(t *testing.T, repo costume.Repository, charID string) cos
 		ItemName:    "ピンクスカート",
 		Icon:        "chr/001.gif",
 		RentedAt:    now.Add(-time.Minute),
-		ExpiresAt:   now.Add(time.Hour),
 	}
-	if err := repo.SaveActiveCostume(ctx, prior, time.Hour); err != nil {
+	if err := repo.SaveActiveCostume(ctx, prior); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -278,8 +277,7 @@ func sameCostume(got *costume.ActiveCostume, want costume.ActiveCostume) bool {
 		got.ItemNo == want.ItemNo &&
 		got.ItemName == want.ItemName &&
 		got.Icon == want.Icon &&
-		got.RentedAt.Equal(want.RentedAt) &&
-		got.ExpiresAt.Equal(want.ExpiresAt)
+		got.RentedAt.Equal(want.RentedAt)
 }
 
 func TestChangeJob_CostumeResetContract(t *testing.T) {

@@ -15177,10 +15177,6 @@
           "character_id": {
             "type": "string"
           },
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
           "icon": {
             "type": "string"
           },
@@ -15200,8 +15196,7 @@
           "item_no",
           "item_name",
           "icon",
-          "rented_at",
-          "expires_at"
+          "rented_at"
         ],
         "type": "object",
         "additionalProperties": false

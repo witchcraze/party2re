@@ -22,7 +22,7 @@ func TestValkeyCostumeRepository_NilClient(t *testing.T) {
 		t.Fatalf("expected nil costume and nil error, got: %v, %v", activeCostume, err)
 	}
 
-	err = repo.SaveActiveCostume(ctx, costume.ActiveCostume{CharacterID: "c1"}, time.Hour)
+	err = repo.SaveActiveCostume(ctx, costume.ActiveCostume{CharacterID: "c1"})
 	if err != nil {
 		t.Fatalf("expected nil error on nil client save, got: %v", err)
 	}
@@ -57,14 +57,12 @@ func TestValkeyCostumeRepository_GetActiveCostume(t *testing.T) {
 	}
 
 	// 3. Valid JSON active costume
-	future := time.Now().Add(2 * time.Hour).UTC()
 	active := costume.ActiveCostume{
 		CharacterID: "c1",
 		ItemNo:      46,
 		ItemName:    "チョビヒゲタクシード",
 		Icon:        "chr/012.gif",
-		RentedAt:    time.Now().Add(-1 * time.Hour).UTC(),
-		ExpiresAt:   future,
+		RentedAt:    time.Now().Add(-48 * time.Hour).UTC(),
 	}
 	raw, _ := json.Marshal(active)
 	clientOK := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
@@ -79,19 +77,15 @@ func TestValkeyCostumeRepository_GetActiveCostume(t *testing.T) {
 		t.Fatalf("unexpected costume returned: %+v", got)
 	}
 
-	// 4. Expired costume in cache returns nil
-	expired := costume.ActiveCostume{
-		CharacterID: "c1",
-		ExpiresAt:   time.Now().Add(-1 * time.Minute).UTC(),
-	}
-	rawExpired, _ := json.Marshal(expired)
-	clientExpired := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		return valkeytest.MakeStringResult(string(rawExpired))
+	// 4. Legacy payload with past expires_at still loads as active (no time-based expiry)
+	rawLegacy := `{"character_id":"c1","item_no":44,"item_name":"ピンクスカート","icon":"chr/001.gif","rented_at":"2026-01-01T00:00:00Z","expires_at":"2026-01-01T15:00:00Z"}`
+	clientLegacy := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeStringResult(rawLegacy)
 	}))
-	repoExpired := costume.NewValkeyCostumeRepository(clientExpired)
-	gotExpired, err := repoExpired.GetActiveCostume(ctx, "c1")
-	if err != nil || gotExpired != nil {
-		t.Fatalf("expected nil for expired costume, got: %v, %v", gotExpired, err)
+	repoLegacy := costume.NewValkeyCostumeRepository(clientLegacy)
+	gotLegacy, err := repoLegacy.GetActiveCostume(ctx, "c1")
+	if err != nil || gotLegacy == nil || gotLegacy.ItemNo != 44 {
+		t.Fatalf("expected legacy payload without time expiry to stay active, got: %+v, %v", gotLegacy, err)
 	}
 
 	// 5. Corrupt JSON
@@ -121,23 +115,14 @@ func TestValkeyCostumeRepository_SaveActiveCostume(t *testing.T) {
 		ItemName:    "水着",
 		Icon:        "m55.gif",
 	}
-	err := repo.SaveActiveCostume(ctx, active, 3600*time.Second)
+	err := repo.SaveActiveCostume(ctx, active)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	expectedPrefix := []string{"SET", "party2:daily:costume:char-123"}
-	if len(recordedCmd) < 5 || !reflect.DeepEqual(recordedCmd[:2], expectedPrefix) || recordedCmd[3] != "EX" || recordedCmd[4] != "3600" {
-		t.Fatalf("unexpected commands recorded: %v", recordedCmd)
-	}
-
-	// TTL <= 0 fallback to 86400
-	err = repo.SaveActiveCostume(ctx, active, 0)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if recordedCmd[4] != "86400" {
-		t.Fatalf("expected fallback TTL 86400, got: %s", recordedCmd[4])
+	if len(recordedCmd) != 3 || !reflect.DeepEqual(recordedCmd[:2], expectedPrefix) {
+		t.Fatalf("unexpected commands recorded (expected persistent SET without TTL): %v", recordedCmd)
 	}
 }
 

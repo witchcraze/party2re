@@ -5,9 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/valkey-io/valkey-go"
 )
@@ -26,7 +24,7 @@ const (
 	valkeyCostumeKeyPrefix = "party2:daily:costume:"
 )
 
-// ValkeyCostumeRepository stores active daily rented costumes in Valkey Master with midnight TTL.
+// ValkeyCostumeRepository stores active character costume state in Valkey Master.
 type ValkeyCostumeRepository struct {
 	client valkey.Client
 }
@@ -61,14 +59,11 @@ func (r *ValkeyCostumeRepository) GetActiveCostume(ctx context.Context, characte
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return nil, err
 	}
-	if !c.IsActive(time.Now().UTC()) {
-		return nil, nil
-	}
 	return &c, nil
 }
 
-// SaveActiveCostume stores active costume state in Valkey with a TTL.
-func (r *ValkeyCostumeRepository) SaveActiveCostume(ctx context.Context, costume ActiveCostume, ttl time.Duration) error {
+// SaveActiveCostume stores active costume state in Valkey without a time-based expiry.
+func (r *ValkeyCostumeRepository) SaveActiveCostume(ctx context.Context, costume ActiveCostume) error {
 	if r.client == nil {
 		return nil
 	}
@@ -79,12 +74,7 @@ func (r *ValkeyCostumeRepository) SaveActiveCostume(ctx context.Context, costume
 	}
 
 	key := valkeyCostumeKeyPrefix + costume.CharacterID
-	seconds := int64(ttl.Seconds())
-	if seconds <= 0 {
-		seconds = 86400
-	}
-
-	cmd := r.client.B().Set().Key(key).Value(string(raw)).ExSeconds(seconds).Build()
+	cmd := r.client.B().Set().Key(key).Value(string(raw)).Build()
 	return r.client.Do(ctx, cmd).Error()
 }
 
@@ -153,19 +143,16 @@ func (r *ValkeyCostumeRepository) RestoreActiveCostume(ctx context.Context, appl
 		}
 		appliedRaw = string(raw)
 	}
-	previousRaw, ttl := "", int64(0)
+	previousRaw := ""
 	if previous != nil {
-		ttl = int64(time.Until(previous.ExpiresAt).Seconds())
-		if ttl > 0 {
-			raw, err := json.Marshal(previous)
-			if err != nil {
-				return false, err
-			}
-			previousRaw = string(raw)
+		raw, err := json.Marshal(previous)
+		if err != nil {
+			return false, err
 		}
+		previousRaw = string(raw)
 	}
 	res := restoreIfCurrentScript.Exec(ctx, r.client, []string{valkeyCostumeKeyPrefix + characterID},
-		[]string{appliedRaw, previousRaw, strconv.FormatInt(ttl, 10)})
+		[]string{appliedRaw, previousRaw})
 	if err := res.Error(); err != nil {
 		return false, err
 	}

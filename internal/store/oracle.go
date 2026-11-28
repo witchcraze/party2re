@@ -7,10 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
@@ -191,9 +189,7 @@ func (s *Service) GetOracleStatus(ctx context.Context, characterID string) (*Ora
 		if err != nil {
 			return nil, err
 		}
-		if active != nil && active.IsActive(s.nowFunc().UTC()) {
-			activeCostume = active
-		}
+		activeCostume = active
 	}
 
 	return &OracleStatus{
@@ -285,23 +281,15 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 	return result, nil
 }
 
-// ApplyCostume applies an active costume state to the character until next midnight JST or rest.
+// ApplyCostume applies an active costume state to the character until rest or job change.
 // The returned undo restores the previous costume only while this one is still
 // current, for callers whose surrounding transaction rolls back.
-func (s *Service) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, expiresAt time.Time) (func(context.Context) error, error) {
+func (s *Service) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string) (func(context.Context) error, error) {
 	noop := func(context.Context) error { return nil }
 	if s.costumeRepo == nil {
 		return noop, nil
 	}
 	now := s.nowFunc().UTC()
-	if expiresAt.IsZero() {
-		expiresAt = timer.NextMidnightJST(now).UTC()
-	}
-	ttl := expiresAt.Sub(now)
-	if ttl <= 0 {
-		ttl = 24 * time.Hour
-		expiresAt = now.Add(ttl)
-	}
 	previous, err := s.costumeRepo.GetActiveCostume(ctx, characterID)
 	if err != nil {
 		return noop, err
@@ -312,9 +300,8 @@ func (s *Service) ApplyCostume(ctx context.Context, characterID string, itemNo i
 		ItemName:    itemName,
 		Icon:        icon,
 		RentedAt:    now,
-		ExpiresAt:   expiresAt,
 	}
-	if err := s.costumeRepo.SaveActiveCostume(ctx, applied, ttl); err != nil {
+	if err := s.costumeRepo.SaveActiveCostume(ctx, applied); err != nil {
 		return noop, err
 	}
 	return func(ctx context.Context) error {

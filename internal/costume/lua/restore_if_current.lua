@@ -5,6 +5,6 @@ end
 if ARGV[2] == "" then
     redis.call("DEL", KEYS[1])
 else
-    redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[3]))
+    redis.call("SET", KEYS[1], ARGV[2])
 end
 return 1

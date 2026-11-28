@@ -21,11 +21,11 @@ func restoreContract(t *testing.T, repo costume.Repository) {
 		}
 	})
 	now := time.Now().UTC().Truncate(time.Second)
-	prev := costume.ActiveCostume{CharacterID: char, ItemNo: 44, ItemName: "prev", Icon: "a", RentedAt: now, ExpiresAt: now.Add(time.Hour)}
-	applied := costume.ActiveCostume{CharacterID: char, ItemNo: 58, ItemName: "book", Icon: "b", RentedAt: now, ExpiresAt: now.Add(time.Hour)}
-	newer := costume.ActiveCostume{CharacterID: char, ItemNo: 45, ItemName: "newer", Icon: "c", RentedAt: now, ExpiresAt: now.Add(time.Hour)}
+	prev := costume.ActiveCostume{CharacterID: char, ItemNo: 44, ItemName: "prev", Icon: "a", RentedAt: now}
+	applied := costume.ActiveCostume{CharacterID: char, ItemNo: 58, ItemName: "book", Icon: "b", RentedAt: now}
+	newer := costume.ActiveCostume{CharacterID: char, ItemNo: 45, ItemName: "newer", Icon: "c", RentedAt: now}
 	save := func(c costume.ActiveCostume) {
-		if err := repo.SaveActiveCostume(ctx, c, time.Hour); err != nil {
+		if err := repo.SaveActiveCostume(ctx, c); err != nil {
 			t.Fatal(err)
 		}
 	}
