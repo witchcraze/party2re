@@ -5688,7 +5688,11 @@
                       "type": "string"
                     },
                     "target": {
-                      "description": "Equipped weapon or armor; existing service aliases are accepted.",
+                      "description": "Equipped item to rename.",
+                      "enum": [
+                        "weapon",
+                        "armor"
+                      ],
                       "type": "string"
                     }
                   },

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/witchcraze/party2re/internal/blacksmith"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -56,13 +55,12 @@ func WithBlacksmith(service BlacksmithService) Option {
 			if err := service.NameEquipment(ctx, actor, p.Target, p.Name); err != nil {
 				return blacksmithNameResult{}, err
 			}
-			target, label := "weapon", "武器"
-			switch strings.ToLower(strings.TrimSpace(p.Target)) {
-			case "armor", "arm", "防具":
-				target, label = "armor", "防具"
+			label := "武器"
+			if p.Target == "armor" {
+				label = "防具"
 			}
 			message := label + "を" + p.Name + "と名づけたぜ"
-			return blacksmithNameResult{target, p.Name, message, commandEcho{target: label + "＠なまえ>" + p.Name, reply: message}}, nil
+			return blacksmithNameResult{p.Target, p.Name, message, commandEcho{target: label + "＠なまえ>" + p.Name, reply: message}}, nil
 		}, blacksmithActionRejection)(h)
 		withEchoCommand("blacksmith_deposit", func(ctx context.Context, actor string, _ struct{}) (blacksmithDepositResult, error) {
 			// Read the display name before mutation (blacksmith.cgi:177 get_weapon_name).

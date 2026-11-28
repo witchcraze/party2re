@@ -429,9 +429,10 @@ func TestNameEquipment(t *testing.T) {
 	}
 
 	// 3. Error on invalid target
-	err = svc.NameEquipment(ctx, char.ID, "shield", "Aegis")
-	if !errors.Is(err, blacksmith.ErrInvalidTarget) {
-		t.Errorf("expected ErrInvalidTarget, got %v", err)
+	for _, target := range []string{"shield", "wea", "武器", "arm", "防具", "WEAPON", " armor "} {
+		if err := svc.NameEquipment(ctx, char.ID, target, "Aegis"); !errors.Is(err, blacksmith.ErrInvalidTarget) {
+			t.Errorf("target %q: got %v, want ErrInvalidTarget", target, err)
+		}
 	}
 
 	// 4. Success naming weapon

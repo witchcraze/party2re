@@ -15,6 +15,7 @@ import (
 	"github.com/witchcraze/party2re/internal/blacksmith"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -22,7 +23,7 @@ import (
 
 var blacksmithInputs = []struct{ action, params string }{
 	{"blacksmith_seal", `{"seal_id":2}`},
-	{"blacksmith_name", `{"target":" ARM ","name":"名剣"}`},
+	{"blacksmith_name", `{"target":"armor","name":"名剣"}`},
 	{"blacksmith_deposit", `{}`},
 	{"blacksmith_withdraw", `{"slot":3}`},
 }
@@ -102,6 +103,30 @@ func TestBlacksmithGatewayInputs(t *testing.T) {
 	}
 }
 
+func TestBlacksmithGatewayRejectsNameAliases(t *testing.T) {
+	// Invalid targets must be rejected before accessing a repository.
+	service, err := blacksmith.NewService(&struct{ blacksmith.CharacterRepository }{}, &struct{ blacksmith.InventoryRepository }{}, &coreitem.Catalog{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newGatewayFixture(t)
+	log := &fakePlaceLog{}
+	h, err := NewHandler(f, f, &struct{ AdventureService }{}, &struct{ ShopService }{},
+		WithBlacksmith(service), WithPlaceLog(log), WithPlayerContext(playercontext.NewService(f, f, timer.NewService(nil))),
+		func(h *Handler) { h.homes = f })
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := h.Router()
+	for _, params := range []string{`{"target":"wea","name":"名剣"}`, `{"target":"防具","name":"名剣"}`} {
+		status, got := gatewayRequest(t, router, "hero", "session", "application/json", saleGatewayBody("blacksmith_name", params), nil)
+		assertGatewayError(t, got, "BLACKSMITH_INVALID_TARGET")
+		if status != http.StatusBadRequest || len(log.rows) != 0 {
+			t.Fatalf("alias %s: got %d %s and place log %+v", params, status, got, log.rows)
+		}
+	}
+}
+
 func TestBlacksmithGatewayOutcomes(t *testing.T) {
 	for _, tc := range blacksmithInputs {
 		for _, refreshFailure := range []bool{false, true} {
@@ -138,7 +163,7 @@ func TestBlacksmithGatewayOutcomes(t *testing.T) {
 								t.Fatalf("seal facts: %s", result)
 							}
 						case "blacksmith_name":
-							if f.target != " ARM " || f.name != "名剣" || string(result["target"]) != `"armor"` || string(result["name"]) != `"名剣"` || string(result["message"]) != `"防具を名剣と名づけたぜ"` {
+							if f.target != "armor" || f.name != "名剣" || string(result["target"]) != `"armor"` || string(result["name"]) != `"名剣"` || string(result["message"]) != `"防具を名剣と名づけたぜ"` {
 								t.Fatalf("name facts: %s", result)
 							}
 						case "blacksmith_deposit":
@@ -278,6 +303,12 @@ func TestBlacksmithGatewayGuardsAndDiscovery(t *testing.T) {
 		}
 		if action.RequiredParams == nil || !slices.Equal(schema.Required, action.RequiredParams) || schema.AdditionalProperties || len(schema.Properties) != len(action.RequiredParams) {
 			t.Fatalf("incorrect schema: %s", action.ParamsSchema)
+		}
+		if input.action == "blacksmith_name" {
+			var target struct{ Enum []string }
+			if err := json.Unmarshal(schema.Properties["target"], &target); err != nil || !slices.Equal(target.Enum, []string{"weapon", "armor"}) {
+				t.Fatalf("incorrect target enum: %s", schema.Properties["target"])
+			}
 		}
 		for _, option := range []Option{WithBlacksmith(nil), func(*Handler) {}} {
 			g := newGatewayFixture(t)
