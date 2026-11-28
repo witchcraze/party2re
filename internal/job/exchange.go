@@ -58,6 +58,9 @@ func (s *Service) RestoreJobMemory(ctx context.Context, characterID string) (cor
 			return err
 		}
 		tc.Character.JobMemory = nil
+		if err := s.resetCostume(tc.Context, characterID); err != nil {
+			return err
+		}
 		// The trajectory snapshots SQL state before the economy runner's final save.
 		if err := s.characters.Update(tc.Context, tc.Character); err != nil {
 			return err
@@ -192,6 +195,9 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 			OldSP:    tc.Character.OldSP,
 		}
 		if err := tc.Character.ApplyJobMemory(targetJobID, spVal, targetOldJobID, oldSPVal); err != nil {
+			return err
+		}
+		if err := s.resetCostume(tc.Context, characterID); err != nil {
 			return err
 		}
 		// Recall records the recalled job, unlike a normal job change.

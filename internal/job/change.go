@@ -123,8 +123,8 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		if err := tc.Character.ApplyJobChange(targetJobID, targetSPValue); err != nil {
 			return err
 		}
-		if jobChanged && s.costume != nil {
-			if err := s.costume.ResetCostume(tc.Context, characterID); err != nil {
+		if jobChanged {
+			if err := s.resetCostume(tc.Context, characterID); err != nil {
 				return err
 			}
 		}
@@ -180,13 +180,18 @@ func (s *Service) ApplyGrantedJobChange(ctx context.Context, char *corecharacter
 		if err := char.ApplyJobChange(targetJobID, targetSP(state, *char, targetJobID)); err != nil {
 			return err
 		}
-		if s.costume != nil {
-			if err := s.costume.ResetCostume(txCtx, char.ID); err != nil {
-				return err
-			}
+		if err := s.resetCostume(txCtx, char.ID); err != nil {
+			return err
 		}
 		return s.repository.Save(txCtx, state)
 	})
+}
+
+func (s *Service) resetCostume(ctx context.Context, characterID string) error {
+	if s.costume == nil {
+		return nil
+	}
+	return s.costume.ResetCostume(ctx, characterID)
 }
 
 // recordDeparture stores the leaving job's latest SP and first-time mastery.

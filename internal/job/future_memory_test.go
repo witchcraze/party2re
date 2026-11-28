@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -315,4 +316,83 @@ func TestFutureMemory_ValidationAndErrors(t *testing.T) {
 	if _, _, err := svcEcoMem.RecallFutureMemory(ctx, char.ID, "any-id"); !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("expected ErrJobUnavailable in economy recall, got %v", err)
 	}
+}
+
+type futureCostumeResetter struct {
+	calledFor []string
+	err       error
+}
+
+func (f *futureCostumeResetter) ResetCostume(_ context.Context, characterID string) error {
+	f.calledFor = append(f.calledFor, characterID)
+	return f.err
+}
+
+func TestRecallFutureMemory_ResetsCostume(t *testing.T) {
+	ctx := context.Background()
+	setup := func(withEconomy bool) (*job.Service, *testCharRepo, *testFutureMemoryRepo, *futureCostumeResetter, string) {
+		char := corecharacter.Character{
+			ID: "char-future-costume", Name: "FutureHero", JobID: "job-05", OldJobID: "job-01",
+			Level: 50, Experience: 12000, SP: 80, OldSP: 40, Gender: "female",
+			Stats: corecharacter.Stats{MaxHP: 600, MaxMP: 300, HP: 600, MP: 300, Attack: 150, Defense: 110, Agility: 90},
+		}
+		state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+		jobRepo := &testJobRepo{value: state}
+		charRepo := &testCharRepo{char: char}
+		futureRepo := &testFutureMemoryRepo{}
+		snap := char.CreateFutureMemory("mem-costume", time.Now().UTC())
+		_ = futureRepo.Save(ctx, snap)
+		charRepo.char.JobID = "job-02"
+		resetter := &futureCostumeResetter{}
+		opts := []job.Option{
+			job.WithCharacterRepository(charRepo),
+			job.WithFutureMemoryRepository(futureRepo),
+			job.WithCostumeResetter(resetter),
+		}
+		if withEconomy {
+			emptyInv, _ := coreinventory.New(char.ID)
+			invRepo := &testInventoryRepo{inventory: emptyInv}
+			ecoSvc, err := economy.NewService(charRepo, invRepo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			opts = append(opts, job.WithInventoryRepository(invRepo), job.WithEconomy(ecoSvc))
+		}
+		svc, err := job.NewService(jobRepo, opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return svc, charRepo, futureRepo, resetter, snap.ID
+	}
+
+	for _, withEconomy := range []bool{true, false} {
+		name := "non-economy"
+		if withEconomy {
+			name = "economy"
+		}
+		t.Run(name+"_success", func(t *testing.T) {
+			svc, _, _, resetter, memID := setup(withEconomy)
+			if _, _, err := svc.RecallFutureMemory(ctx, "char-future-costume", memID); err != nil {
+				t.Fatalf("RecallFutureMemory failed: %v", err)
+			}
+			if len(resetter.calledFor) != 1 || resetter.calledFor[0] != "char-future-costume" {
+				t.Fatalf("expected ResetCostume called once for char-future-costume, got %v", resetter.calledFor)
+			}
+		})
+	}
+
+	t.Run("economy_reset_error_preserves_snapshot", func(t *testing.T) {
+		svc, charRepo, futureRepo, resetter, memID := setup(true)
+		sentinel := errors.New("costume reset failed")
+		resetter.err = sentinel
+		if _, _, err := svc.RecallFutureMemory(ctx, "char-future-costume", memID); !errors.Is(err, sentinel) {
+			t.Fatalf("expected sentinel error, got %v", err)
+		}
+		if charRepo.char.JobID != "job-02" {
+			t.Fatalf("expected character JobID unchanged on reset failure, got %s", charRepo.char.JobID)
+		}
+		if mems, err := futureRepo.FindByCharacterID(ctx, "char-future-costume"); err != nil || len(mems) != 1 {
+			t.Fatalf("expected snapshot preserved on reset failure, got %+v err=%v", mems, err)
+		}
+	})
 }
