@@ -43,16 +43,24 @@ Valkey publication runs after SQL commit. Admission (`CreateRoom`/`JoinRoom`)
 discovers unpublished or overdue rooms through the character's SQL claim, and
 subsequent room mutations retry pending publication under the room lock without
 repeating financial effects, combat, or activity extension. Live publication uses
-the remaining activity TTL (floored at 1s through the inclusive 1800s boundary)
-and never resurrects an expired room. When publication or recovery observes
-`now > last_activity_at + 1800s` on a non-disbanded room, it does not acknowledge
-that transition as live; instead it releases any already-departed claims and
-commits/publishes inactivity timeout cleanup for the remaining roster. Removed
-claims remain reserved until room, reverse-mapping, and any timeout sleep-timer
-writes succeed, with room-ID-checked mapping deletion. Retrying a pending team
-selection, match start, or non-final round completes publication and returns its
-stored result without advancing again; final round retries return the stored
-result until timeout.
+the remaining activity TTL and never resurrects an expired room. When publication
+or recovery observes `now > last_activity_at + 1800s` on a non-disbanded room, it
+does not acknowledge that transition as live; instead it releases any
+already-departed claims and commits/publishes inactivity timeout cleanup for the
+remaining roster. Removed claims remain reserved until room, reverse-mapping, and
+any timeout sleep-timer writes succeed.
+
+Final round retries return the stored result until timeout. Other pending
+transitions (team selection, match start, non-final round) return their stored
+result only to the call whose room lock recovers the publication. `advance`
+carries no round or request identity: after another operation, even a rejected
+`CreateRoom`, publishes the round, or after a published success response is lost,
+resending `advance` resolves the next round. GET room never recovers publication,
+so a client with an unknown outcome resends only while `round` is unchanged; this
+narrows the window but does not close it. Per
+[#1867](https://github.com/witchcraze/party2re/issues/1867),
+[#2736](https://github.com/witchcraze/party2re/issues/2736) replaces this engine
+with run-host commands carrying actor receipts instead of fixing it.
 
 These SQL records have no automatic expiry. Valkey connectivity failures always
 propagate without settling or penalizing. For a published room missing before
