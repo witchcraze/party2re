@@ -42,7 +42,7 @@ type bookCostume struct {
 	wrapUndo func(characterID string, undo func(context.Context) error) func(context.Context) error
 }
 
-func (c *bookCostume) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, exp time.Time) (func(context.Context) error, error) {
+func (c *bookCostume) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string) (func(context.Context) error, error) {
 	c.calls.Add(1)
 	if c.fail {
 		return nil, errInjectedAppearance
@@ -54,7 +54,7 @@ func (c *bookCostume) ApplyCostume(ctx context.Context, characterID string, item
 	if onApply != nil {
 		onApply(characterID)
 	}
-	undo, err := c.store.ApplyCostume(ctx, characterID, itemNo, itemName, icon, exp)
+	undo, err := c.store.ApplyCostume(ctx, characterID, itemNo, itemName, icon)
 	if err != nil {
 		return undo, err
 	}
@@ -79,8 +79,7 @@ func sameCostume(a *costume.ActiveCostume, b costume.ActiveCostume) bool {
 		a.ItemNo == b.ItemNo &&
 		a.ItemName == b.ItemName &&
 		a.Icon == b.Icon &&
-		a.RentedAt.Equal(b.RentedAt) &&
-		a.ExpiresAt.Equal(b.ExpiresAt)
+		a.RentedAt.Equal(b.RentedAt)
 }
 
 // bookFailures injects failures before commit (profile save, the runner's
@@ -426,8 +425,8 @@ func TestItemAppearance_RestoredWhenTransactionFails(t *testing.T) {
 		for _, def := range []string{bookDefinition, "item-044"} {
 			c := f.character(t, "f")
 			before := costume.ActiveCostume{CharacterID: c.ID, ItemNo: 51, ItemName: "previous", Icon: "chr/003.gif",
-				RentedAt: time.Now().UTC().Add(-time.Minute), ExpiresAt: time.Now().UTC().Add(time.Hour)}
-			if err := f.costume.repo.SaveActiveCostume(ctx, before, time.Hour); err != nil {
+				RentedAt: time.Now().UTC().Add(-time.Minute)}
+			if err := f.costume.repo.SaveActiveCostume(ctx, before); err != nil {
 				t.Fatal(err)
 			}
 			id := f.stockItem(t, c, tc.source, def)
@@ -455,9 +454,9 @@ func TestItemAppearance_UndoKeepsNewerChange(t *testing.T) {
 	ctx := context.Background()
 	c := f.character(t, "m")
 	newer := costume.ActiveCostume{CharacterID: c.ID, ItemNo: 52, ItemName: "newer", Icon: "chr/015.gif",
-		RentedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour)}
+		RentedAt: time.Now().UTC()}
 	f.beforeDepotFail = func(id string) {
-		if err := f.costume.repo.SaveActiveCostume(ctx, newer, time.Hour); err != nil {
+		if err := f.costume.repo.SaveActiveCostume(ctx, newer); err != nil {
 			t.Error(err)
 		}
 	}

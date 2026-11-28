@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 	"sync"
-	"time"
 )
 
 // ClaimExecutor executes an action within the exclusive claim ownership boundary.
@@ -32,7 +31,7 @@ func (r *MemoryCostumeRepository) SetClaimExecutor(executor ClaimExecutor) {
 	r.claimExecutor = executor
 }
 
-// GetActiveCostume retrieves the active costume from memory if not expired.
+// GetActiveCostume retrieves the active costume from memory.
 func (r *MemoryCostumeRepository) GetActiveCostume(_ context.Context, characterID string) (*ActiveCostume, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -41,15 +40,12 @@ func (r *MemoryCostumeRepository) GetActiveCostume(_ context.Context, characterI
 	if !ok {
 		return nil, nil
 	}
-	if !c.IsActive(time.Now().UTC()) {
-		return nil, nil
-	}
 	res := c
 	return &res, nil
 }
 
 // SaveActiveCostume stores active costume state in memory.
-func (r *MemoryCostumeRepository) SaveActiveCostume(_ context.Context, costume ActiveCostume, _ time.Duration) error {
+func (r *MemoryCostumeRepository) SaveActiveCostume(_ context.Context, costume ActiveCostume) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -90,16 +86,15 @@ func (r *MemoryCostumeRepository) RestoreActiveCostume(_ context.Context, applie
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now().UTC()
 	current, ok := r.costumes[applied.CharacterID]
 	if applied == (ActiveCostume{CharacterID: applied.CharacterID}) {
-		if ok && current.IsActive(now) {
+		if ok {
 			return false, nil
 		}
 	} else if !ok || current != applied {
 		return false, nil
 	}
-	if previous == nil || !previous.IsActive(now) {
+	if previous == nil {
 		delete(r.costumes, applied.CharacterID)
 	} else {
 		r.costumes[applied.CharacterID] = *previous

@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -20,16 +19,14 @@ type appliedCostume struct {
 	itemNo      int
 	itemName    string
 	icon        string
-	expiresAt   time.Time
 }
 
-func (m *mockCostumeApplier) ApplyCostume(_ context.Context, charID string, itemNo int, itemName, icon string, exp time.Time) (func(context.Context) error, error) {
+func (m *mockCostumeApplier) ApplyCostume(_ context.Context, charID string, itemNo int, itemName, icon string) (func(context.Context) error, error) {
 	m.applied = append(m.applied, appliedCostume{
 		characterID: charID,
 		itemNo:      itemNo,
 		itemName:    itemName,
 		icon:        icon,
-		expiresAt:   exp,
 	})
 	return func(context.Context) error { return nil }, nil
 }

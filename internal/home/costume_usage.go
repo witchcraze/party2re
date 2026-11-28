@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -15,7 +13,7 @@ import (
 type CostumeApplier interface {
 	// ApplyCostume stores the costume and returns an undo that restores the
 	// previous one only while this costume is still current.
-	ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, expiresAt time.Time) (func(context.Context) error, error)
+	ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string) (func(context.Context) error, error)
 }
 
 // SetCostumeApplier registers a cross-domain costume application hook.
@@ -131,7 +129,7 @@ func (s *Service) wearAppearance(ctx context.Context, characterID string, itemNo
 	if s.costumeApplier == nil {
 		return nil
 	}
-	undo, err := s.costumeApplier.ApplyCostume(ctx, characterID, itemNo, itemName, icon, timer.NextMidnightJST(s.nowFunc()).UTC())
+	undo, err := s.costumeApplier.ApplyCostume(ctx, characterID, itemNo, itemName, icon)
 	if err != nil {
 		return err
 	}

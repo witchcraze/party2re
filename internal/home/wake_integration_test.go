@@ -1079,8 +1079,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			CharacterID: char.ID,
 			ItemNo:      42,
 			RentedAt:    now,
-			ExpiresAt:   now.Add(time.Hour),
-		}, time.Hour); err != nil {
+		}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -1164,8 +1163,7 @@ func TestSleepWake_CycleConsistency(t *testing.T) {
 			CharacterID: char.ID,
 			ItemNo:      99,
 			RentedAt:    now,
-			ExpiresAt:   now.Add(time.Hour),
-		}, time.Hour); err != nil {
+		}); err != nil {
 			t.Fatalf("failed to rent costume: %v", err)
 		}
 

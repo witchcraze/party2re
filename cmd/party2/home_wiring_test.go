@@ -200,7 +200,7 @@ func TestHomeWakeProductionHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	costumes := costume.NewValkeyCostumeRepository(client)
-	if err := costumes.SaveActiveCostume(ctx, costume.ActiveCostume{CharacterID: f.char.ID, ItemNo: 1, ItemName: "Costume", Icon: "costume", RentedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour)}, time.Hour); err != nil {
+	if err := costumes.SaveActiveCostume(ctx, costume.ActiveCostume{CharacterID: f.char.ID, ItemNo: 1, ItemName: "Costume", Icon: "costume", RentedAt: time.Now().UTC()}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

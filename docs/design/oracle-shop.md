@@ -1,7 +1,7 @@
 # Oracle Shop Design
 
-The Oracle shop (オラクル屋, `@ラクル`) reconstructs legacy `lib/goods.cgi`: it rents costumes and sells home wallpapers. The costume catalog, its job-level gating and the wallpaper prices live in [`internal/store/oracle.go`](../../internal/store/oracle.go) and [`models.go`](../../internal/store/models.go).
+The Oracle shop (オラクル屋, `@ラクル`) reconstructs legacy `lib/goods.cgi`: it rents costumes and sells home wallpapers. The catalog, job-level gating and wallpaper prices live in [`internal/store/oracle.go`](../../internal/store/oracle.go) and [`models.go`](../../internal/store/models.go).
 
-- Costumes requested by an active helper quest are not sold. If that request list cannot be read, catalog reads and purchases fail instead of selling under unknown exclusions.
-- Home item use applies a costume; the [Home dispatch contract](home.md#legacy-dispatch-and-consumption-contract) owns selection, fallback and reset. Sleep and job change restore the ordinary job appearance. Current Go also expires the costume at midnight JST, which legacy never does ([#2980](https://github.com/witchcraze/party2re/issues/2980)).
-- The hidden `＠やみいちば` action is the only way into the black market ([access](black-market.md#access)).
+- Costumes requested by an active helper quest are excluded; read failures fail catalog reads and purchases closed.
+- Home item use applies a costume ([Home dispatch contract](home.md#legacy-dispatch-and-consumption-contract)); sleep and job change restore the ordinary job appearance.
+- The hidden `＠やみいちば` action is the only entry into the black market ([access](black-market.md#access)).

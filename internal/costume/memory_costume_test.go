@@ -18,17 +18,16 @@ func TestMemoryCostumeRepository(t *testing.T) {
 		t.Fatalf("expected nil, nil initially, got: %v, %v", c, err)
 	}
 
-	// 2. Save and Get
+	// 2. Save and Get (remains active across arbitrary elapsed time until cleared)
 	now := time.Now().UTC()
 	active := costume.ActiveCostume{
 		CharacterID: "char-1",
 		ItemNo:      46,
 		ItemName:    "チョビヒゲタクシード",
 		Icon:        "chr/012.gif",
-		RentedAt:    now,
-		ExpiresAt:   now.Add(2 * time.Hour),
+		RentedAt:    now.Add(-48 * time.Hour),
 	}
-	if err := repo.SaveActiveCostume(ctx, active, time.Hour); err != nil {
+	if err := repo.SaveActiveCostume(ctx, active); err != nil {
 		t.Fatalf("unexpected save error: %v", err)
 	}
 
@@ -40,19 +39,7 @@ func TestMemoryCostumeRepository(t *testing.T) {
 		t.Fatalf("unexpected costume data: %+v", got)
 	}
 
-	// 3. Expired costume returns nil
-	expired := costume.ActiveCostume{
-		CharacterID: "char-2",
-		ItemNo:      44,
-		ExpiresAt:   now.Add(-10 * time.Minute),
-	}
-	_ = repo.SaveActiveCostume(ctx, expired, 0)
-	gotExpired, err := repo.GetActiveCostume(ctx, "char-2")
-	if err != nil || gotExpired != nil {
-		t.Fatalf("expected nil for expired costume, got: %v, %v", gotExpired, err)
-	}
-
-	// 4. Clear active costume
+	// 3. Clear active costume
 	if err := repo.ClearActiveCostume(ctx, "char-1"); err != nil {
 		t.Fatalf("unexpected clear error: %v", err)
 	}
@@ -70,9 +57,8 @@ func TestMemoryCostumeRepository_ClearActiveCostumeWithClaim(t *testing.T) {
 		CharacterID: "c1",
 		ItemNo:      46,
 		ItemName:    "cat-ears",
-		ExpiresAt:   time.Now().Add(time.Hour),
 	}
-	_ = repo.SaveActiveCostume(ctx, active, time.Hour)
+	_ = repo.SaveActiveCostume(ctx, active)
 
 	// 1. Without claim executor: refuses unsafe deletion
 	reset, err := repo.ClearActiveCostumeWithClaim(ctx, "c1", "waking", "any-token")
