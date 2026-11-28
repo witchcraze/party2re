@@ -309,6 +309,14 @@ func TestBlacksmithGatewayGuardsAndDiscovery(t *testing.T) {
 			if err := json.Unmarshal(schema.Properties["target"], &target); err != nil || !slices.Equal(target.Enum, []string{"weapon", "armor"}) {
 				t.Fatalf("incorrect target enum: %s", schema.Properties["target"])
 			}
+			var name struct {
+				MinLength int
+				MaxLength int
+				Not       struct{ Const string }
+			}
+			if err := json.Unmarshal(schema.Properties["name"], &name); err != nil || name.MinLength != 1 || name.MaxLength != 20 || name.Not.Const != "0" {
+				t.Fatalf("incorrect name constraints: %s", schema.Properties["name"])
+			}
 		}
 		for _, option := range []Option{WithBlacksmith(nil), func(*Handler) {}} {
 			g := newGatewayFixture(t)
