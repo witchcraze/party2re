@@ -121,6 +121,9 @@ func hasPendingRankingSchedule(ctx context.Context, scheduler WeeklyRotationSche
 	}
 	for _, action := range actions {
 		if action.ActionType == actionType && action.ExecuteAt.Equal(next) && action.State == core_scheduling.StatePending {
+			if err := scheduler.RequeuePending(ctx, action); err != nil {
+				return false, err
+			}
 			return true, nil
 		}
 	}
@@ -161,6 +164,7 @@ type RotateWeeklyHandler struct {
 type WeeklyRotationScheduler interface {
 	ScheduleWithID(context.Context, string, string, string, map[string]string, time.Time) error
 	FindPendingByActorID(context.Context, string) ([]core_scheduling.ScheduledAction, error)
+	RequeuePending(context.Context, core_scheduling.ScheduledAction) error
 }
 
 // NewRotateWeeklyHandler creates a new RotateWeeklyHandler.

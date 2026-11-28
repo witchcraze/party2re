@@ -43,11 +43,17 @@ func TestDailyRefreshActionIDUsesJSTDate(t *testing.T) {
 type countingSnapshotSaveRepo struct {
 	*mockRankingRepository
 	saveSnapshotCalls int
+	getAllCalls       int
 }
 
 func (r *countingSnapshotSaveRepo) SaveSnapshot(ctx context.Context, snapshot ranking.RankingSnapshot) error {
 	r.saveSnapshotCalls++
 	return r.mockRankingRepository.SaveSnapshot(ctx, snapshot)
+}
+
+func (r *countingSnapshotSaveRepo) GetAllSnapshots(ctx context.Context) (map[ranking.RankingType]ranking.RankingSnapshot, error) {
+	r.getAllCalls++
+	return r.mockRankingRepository.GetAllSnapshots(ctx)
 }
 
 func TestRefreshHandler_HandleAll(t *testing.T) {
@@ -258,8 +264,8 @@ func TestRefreshHandler_ReconcileLifecycle(t *testing.T) {
 	if err := handler.Reconcile(ctx); err != nil {
 		t.Fatalf("same-day Reconcile: %v", err)
 	}
-	if sched.writes != 1 || !repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt.Equal(firstCalc) {
-		t.Fatalf("same-day reconcile unnecessarily refreshed or scheduled: writes=%d calc=%v", sched.writes, repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt)
+	if sched.writes != 1 || len(sched.requeued) != 1 || sched.requeued[0].ID != sched.actions[0].ID || !repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt.Equal(firstCalc) {
+		t.Fatalf("same-day reconcile unnecessarily refreshed/scheduled or skipped RequeuePending: writes=%d requeued=%+v calc=%v", sched.writes, sched.requeued, repo.snapshots[ranking.RankingTypeMonsterKills].CalculatedAt)
 	}
 	page, err := svc.GetMonsterKillsRanking(ctx, 10, 0)
 	if err != nil || len(page.Entries) != 1 || page.Entries[0].Score != 10 {
@@ -318,6 +324,29 @@ func TestRefreshHandler_ReconcilePreservesUncertainProcessingAndPropagatesErrors
 	}
 	if len(sched.actions) != 2 || !reflect.DeepEqual(sched.actions[0], uncertain) || sched.actions[1].ID == uncertain.ID {
 		t.Fatalf("reconcile modified uncertain Processing reservation: %+v", sched.actions)
+	}
+	if len(sched.requeued) != 0 {
+		t.Fatalf("expected 0 RequeuePending calls for Processing action, got %+v", sched.requeued)
+	}
+
+	// Steady-state RequeuePending failure propagates without hitting SQL snapshot reads.
+	countingRepo := &countingSnapshotSaveRepo{mockRankingRepository: newMockRepo()}
+	countingSvc, err := ranking.NewService(countingRepo, ranking.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	steadySched := &weeklyScheduler{}
+	steadyHandler := ranking.NewRefreshHandler(countingSvc, ranking.WithRefreshScheduler(steadySched))
+	if err := steadyHandler.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	readsBefore := countingRepo.getAllCalls
+	steadySched.requeueErr = errors.New("valkey zadd failed")
+	if err := steadyHandler.Reconcile(ctx); !errors.Is(err, steadySched.requeueErr) {
+		t.Fatalf("expected steady-state requeue error, got %v", err)
+	}
+	if countingRepo.getAllCalls != readsBefore {
+		t.Fatalf("steady-state requeue error hit SQL: getAllCalls=%d, want %d", countingRepo.getAllCalls, readsBefore)
 	}
 
 	// Scheduler read failure propagates.
