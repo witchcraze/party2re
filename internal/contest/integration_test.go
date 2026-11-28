@@ -481,6 +481,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	schedService := scheduling.NewService(schedRepo)
 
 	now := time.Now().UTC().Truncate(time.Second)
+	currentNow := now
 	roundEndTime := now.Add(7 * 24 * time.Hour)
 	r1 := contest.ContestRound{
 		Round:     1,
@@ -500,7 +501,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 		contest.WithTransactionProvider(txProvider),
 		contest.WithServiceScheduler(schedService),
 		contest.WithSettlementActorID(testActorID),
-		contest.WithNowFunc(func() time.Time { return now }),
+		contest.WithNowFunc(func() time.Time { return currentNow }),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -686,6 +687,58 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	cleanupValkeyAction(ctx, t, vkClient, testActorID, otherActionID)
 
 	// -------------------------------------------------------------
+	// 2e. Missing Queue Entry Repair:
+	//     If only the party2:scheduled:pending sorted-set entry is lost while
+	//     the actor index and Pending payload survive, ReconcileSettlementSchedule
+	//     must restore the queue entry under the existing ID without duplication.
+	// -------------------------------------------------------------
+	hasDueAction := func(due []core_scheduling.ScheduledAction, actionID string) (core_scheduling.ScheduledAction, bool) {
+		for _, a := range due {
+			if a.ID == actionID {
+				return a, true
+			}
+		}
+		return core_scheduling.ScheduledAction{}, false
+	}
+	dueBeforeDrop, err := schedRepo.FetchDue(ctx, roundEndTime, 200)
+	if err != nil {
+		t.Fatalf("FetchDue before drop failed: %v", err)
+	}
+	if _, ok := hasDueAction(dueBeforeDrop, act1.ID); !ok {
+		t.Fatalf("expected %q in FetchDue before queue drop", act1.ID)
+	}
+	if err := vkClient.Do(ctx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(act1.ID).Build()).Error(); err != nil {
+		t.Fatalf("ZREM party2:scheduled:pending failed: %v", err)
+	}
+	dueAfterDrop, err := schedRepo.FetchDue(ctx, roundEndTime, 200)
+	if err != nil {
+		t.Fatalf("FetchDue after drop failed: %v", err)
+	}
+	if _, ok := hasDueAction(dueAfterDrop, act1.ID); ok {
+		t.Fatalf("unexpected %q in FetchDue after queue drop", act1.ID)
+	}
+
+	for range 2 {
+		if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+			t.Fatalf("ReconcileSettlementSchedule after queue drop failed: %v", err)
+		}
+	}
+	actionsAfterRepair, err := schedRepo.FindPendingByActorID(ctx, testActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after queue repair failed: %v", err)
+	}
+	if len(actionsAfterRepair) != 1 || actionsAfterRepair[0].ID != act1.ID {
+		t.Fatalf("expected existing reservation %q preserved, got %+v", act1.ID, actionsAfterRepair)
+	}
+	dueAfterRepair, err := schedRepo.FetchDue(ctx, roundEndTime, 200)
+	if err != nil {
+		t.Fatalf("FetchDue after repair failed: %v", err)
+	}
+	if _, ok := hasDueAction(dueAfterRepair, act1.ID); !ok {
+		t.Fatalf("expected %q restored in FetchDue after repair", act1.ID)
+	}
+
+	// -------------------------------------------------------------
 	// 3. Processing State Protection: action being processed is NOT overwritten
 	// -------------------------------------------------------------
 	act1.State = core_scheduling.StateProcessing
@@ -708,6 +761,32 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	}
 	if actionsProc[0].State != core_scheduling.StateProcessing {
 		t.Errorf("expected action to remain StateProcessing, got %s", actionsProc[0].State)
+	}
+	// Stale Pending snapshot from an earlier actor read must never resurrect Processing in the queue or overwrite it.
+	if err := vkClient.Do(ctx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(act1.ID).Build()).Error(); err != nil {
+		t.Fatalf("ZREM processing action failed: %v", err)
+	}
+	stalePending := act1
+	stalePending.State = core_scheduling.StatePending
+	if err := schedService.RequeuePending(ctx, stalePending); err != nil {
+		t.Fatalf("RequeuePending with stale snapshot failed: %v", err)
+	}
+	dueDuringProc, err := schedRepo.FetchDue(ctx, roundEndTime, 200)
+	if err != nil {
+		t.Fatalf("FetchDue during processing failed: %v", err)
+	}
+	if _, ok := hasDueAction(dueDuringProc, act1.ID); ok {
+		t.Fatalf("stale RequeuePending made Processing action %q executable", act1.ID)
+	}
+	if err := vkClient.Do(ctx, vkClient.B().Zscore().Key("party2:scheduled:pending").Member(act1.ID).Build()).Error(); !valkey.IsValkeyNil(err) {
+		t.Fatalf("expected Processing queue entry cleaned by FetchDue, got err=%v", err)
+	}
+	actionsProcAfter, err := schedRepo.FindPendingByActorID(ctx, testActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after stale RequeuePending failed: %v", err)
+	}
+	if len(actionsProcAfter) != 1 || actionsProcAfter[0].State != core_scheduling.StateProcessing {
+		t.Fatalf("expected StateProcessing preserved, got %+v", actionsProcAfter)
 	}
 
 	// -------------------------------------------------------------
@@ -758,6 +837,69 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	}
 	if !strings.Contains(storedStrOld, string(core_scheduling.StateFailed)) {
 		t.Errorf("old act1 was corrupted/overwritten by reconciliation! Got: %s", storedStrOld)
+	}
+
+	// Stale Pending snapshot against terminal Failed state must keep Failed and only finalize metadata on FetchDue.
+	if err := schedService.RequeuePending(ctx, stalePending); err != nil {
+		t.Fatalf("RequeuePending with stale snapshot on Failed failed: %v", err)
+	}
+	storedStrOldAfterStale, err := vkClient.Do(ctx, vkClient.B().Get().Key("party2:scheduled:action:"+act1.ID).Build()).ToString()
+	if err != nil {
+		t.Fatalf("Get old act1 action after stale RequeuePending failed: %v", err)
+	}
+	if !strings.Contains(storedStrOldAfterStale, string(core_scheduling.StateFailed)) {
+		t.Errorf("stale RequeuePending altered Failed payload! Got: %s", storedStrOldAfterStale)
+	}
+	if err := vkClient.Do(ctx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(act1.ID).Build()).Error(); err != nil {
+		t.Fatalf("cleanup ZREM act1 failed: %v", err)
+	}
+
+	// -------------------------------------------------------------
+	// 5. Due Delivery After Queue Repair:
+	//    Drop act2 from party2:scheduled:pending, repair via ReconcileSettlementSchedule,
+	//    then advance clock past deadline and verify FetchDue + Worker settles the round.
+	// -------------------------------------------------------------
+	if err := vkClient.Do(ctx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(act2.ID).Build()).Error(); err != nil {
+		t.Fatalf("ZREM act2 failed: %v", err)
+	}
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule for act2 queue repair failed: %v", err)
+	}
+	currentNow = roundEndTime.Add(time.Minute)
+	dueForDelivery, err := schedRepo.FetchDue(ctx, currentNow, 200)
+	if err != nil {
+		t.Fatalf("FetchDue for delivery failed: %v", err)
+	}
+	dueAct2, ok := hasDueAction(dueForDelivery, act2.ID)
+	if !ok {
+		t.Fatalf("expected repaired %q in FetchDue at %v", act2.ID, currentNow)
+	}
+	handler := contest.NewContestSettlementHandler(svc, contest.WithScheduler(schedService))
+	worker := scheduling.NewWorker(schedRepo, time.Second, logging.Nop())
+	worker.RegisterHandler(contest.ActionTypeContestSettlement, handler)
+	worker.ProcessAction(ctx, dueAct2)
+
+	r1Settled, err := contestRepo.GetRoundByNumber(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetRoundByNumber after due delivery failed: %v", err)
+	}
+	expectedNewEnd := currentNow.Add(contest.ContestCycleDays * 24 * time.Hour)
+	if !r1Settled.EndTime.Equal(expectedNewEnd) {
+		t.Errorf("round 1 EndTime after due delivery = %v, want %v", r1Settled.EndTime, expectedNewEnd)
+	}
+	postDeliveryPending, err := schedRepo.FindPendingByActorID(ctx, testActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after delivery failed: %v", err)
+	}
+	var foundPostponed bool
+	for _, a := range postDeliveryPending {
+		trackAction(a.ID)
+		if strings.HasPrefix(a.ID, contest.SettlementActionID(1, expectedNewEnd)) && a.State == core_scheduling.StatePending {
+			foundPostponed = true
+		}
+	}
+	if !foundPostponed {
+		t.Errorf("expected next reservation for postponed deadline %v, got %+v", expectedNewEnd, postDeliveryPending)
 	}
 }
 

@@ -20,6 +20,7 @@ const (
 type Scheduler interface {
 	ScheduleWithID(ctx context.Context, id, actionType, actorID string, params map[string]string, executeAt time.Time) error
 	FindPendingByActorID(ctx context.Context, actorID string) ([]core_scheduling.ScheduledAction, error)
+	RequeuePending(ctx context.Context, action core_scheduling.ScheduledAction) error
 }
 
 // SettlementActionID returns the deterministic scheduled action ID for a contest round and execution time.
