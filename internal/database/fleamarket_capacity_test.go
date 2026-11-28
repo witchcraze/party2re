@@ -210,7 +210,9 @@ func TestFleaMarketListingNumbersStayDistinctUnderConcurrency(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := testutil.GetStressConfig()
-	cfg.OpsPerWorker = 4 // list, cancel, list, cancel: each seller stays below its 5-listing limit
+	// list, cancel, list: every seller ends with one active listing, so the
+	// final numbers include the ones allocated concurrently in the last round.
+	cfg.OpsPerWorker = 3
 	const stock = 2
 	sellers := make([]string, cfg.Workers)
 	for i := range sellers {
@@ -244,6 +246,9 @@ func TestFleaMarketListingNumbersStayDistinctUnderConcurrency(t *testing.T) {
 	numbers, err := repo.ActiveListingNumbers(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(numbers) != cfg.Workers {
+		t.Fatalf("active listings = %d, want %d", len(numbers), cfg.Workers)
 	}
 	for i, n := range numbers {
 		if n < 1 || (i > 0 && numbers[i-1] == n) {
