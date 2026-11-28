@@ -6205,7 +6205,7 @@
                     },
                     "name": {
                       "type": "string",
-                      "description": "Explicit custom name; an empty string resets it to the catalog name. Service validation and trimming apply."
+                      "description": "Explicit custom name, stored untrimmed; the service applies the legacy naming rules and rejects an empty name."
                     }
                   },
                   "additionalProperties": false,

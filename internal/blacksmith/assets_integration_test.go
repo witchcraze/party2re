@@ -173,16 +173,16 @@ func TestBlacksmithStateAndReset_Integration(t *testing.T) {
 		t.Fatalf("unexpected sealed/named state: %+v", sealedChar)
 	}
 
-	// Explicit name reset ("") persists empty WeaponCustomName while keeping seal and Money==0.
-	if err := svc.NameEquipment(ctx, char.ID, "weapon", ""); err != nil {
-		t.Fatalf("NameEquipment reset failed: %v", err)
+	// An empty name is the legacy prompt: rejected, persisted name and seal unchanged.
+	if err := svc.NameEquipment(ctx, char.ID, "weapon", ""); !errors.Is(err, blacksmith.ErrEmptyName) {
+		t.Fatalf("empty name: got %v, want ErrEmptyName", err)
 	}
-	resetChar, err := f.chars.FindByID(ctx, char.ID)
+	keptChar, err := f.chars.FindByID(ctx, char.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resetChar.WeaponCustomName != "" || resetChar.WeaponSeal != 1 || resetChar.Money != 0 {
-		t.Fatalf("expected empty custom name after reset, got %+v", resetChar)
+	if keptChar.WeaponCustomName != "BladeOne" || keptChar.WeaponSeal != 1 || keptChar.Money != 0 {
+		t.Fatalf("empty name changed state: %+v", keptChar)
 	}
 
 	// Rename again before deposit so SealID + CustomName round-trip through storage.
