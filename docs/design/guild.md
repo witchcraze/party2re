@@ -6,12 +6,12 @@ Guilds (`guild.cgi`, `join_guild.cgi`) are social organizations ranked by Guild 
 
 ## Membership
 
-- Applications are guild roster rows with title `参加申請中` (`lib/join_guild.cgi:182–219`). An unaffiliated character may apply to several guilds; an active member may neither apply nor create a guild. An applicant may still create a guild and becomes its leader. Pending rows earn no action points (`lib/guild.cgi:63`).
+- Applications are roster rows titled `参加申請中` that confer no affiliation: they earn no points (`lib/guild.cgi:63`), and the applicant may still found a guild.
 - Approval rechecks that the applicant has not joined another guild in the meantime (`lib/guild.cgi:220–224`). A character holds at most one active affiliation, also under concurrent creation, joining and approval.
 
 ### Broadcast Callouts (`よびかける`)
 
-Any active member may call out; letters go to every roster row in order, **including pending applicants**, and the sender receives a copy. Letters use the shared [throttle and length rules](home.md#letter-settings). A throttled or failed recipient stops the broadcast (`lib/guild.cgi:50–57`); earlier deliveries stay, and no point is awarded or activity recorded. Only complete delivery awards 1 point.
+Letters go to every roster row in order, **including pending applicants** and the sender, under the shared [letter rules](home.md#letter-settings). A throttled or failed recipient stops the broadcast (`lib/guild.cgi:50–57`); earlier deliveries stay, and no point is awarded or activity recorded.
 
 ### Guild Master Succession & Dissolution News
 
