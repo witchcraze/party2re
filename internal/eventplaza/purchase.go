@@ -118,7 +118,13 @@ func (s *Service) PurchaseBazaarItem(
 			}
 
 			if s.recorder != nil {
-				if err := s.recorder.RecordItemDiscovered(txCtx, characterID, targetItem.ItemDefinitionID, targetItem.Name, targetItem.Category); err != nil {
+				handKind := coreitem.LegacyHandKindByID(targetItem.ItemDefinitionID)
+				if s.itemDefProvider != nil {
+					if def, err := s.itemDefProvider.FindByID(targetItem.ItemDefinitionID); err == nil {
+						handKind = def.LegacyHandKind()
+					}
+				}
+				if err := s.recorder.RecordItemDiscovered(txCtx, characterID, targetItem.ItemDefinitionID, targetItem.Name, coreitem.LegacyCollectionCategory(handKind)); err != nil {
 					return err
 				}
 			}
@@ -177,12 +183,6 @@ func (s *Service) PurchaseBazaarItem(
 
 		if err := s.depotRepo.Save(txCtx, dep); err != nil {
 			return err
-		}
-
-		if s.recorder != nil {
-			if err := s.recorder.RecordItemDiscovered(txCtx, characterID, targetItem.ItemDefinitionID, targetItem.Name, targetItem.Category); err != nil {
-				return err
-			}
 		}
 
 		//lint:ignore error-swallow best-effort presence refresh must not veto the purchase

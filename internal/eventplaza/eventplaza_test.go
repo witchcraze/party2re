@@ -140,9 +140,15 @@ func (m *mockHelperProvider) GetActiveHelperItemIDs(ctx context.Context, now tim
 	return m.activeIDs, nil
 }
 
+type recordedBazaarCollection struct {
+	itemID   string
+	category string
+}
+
 type mockCollectionRecorder struct {
 	mu       sync.Mutex
 	recorded []string
+	calls    []recordedBazaarCollection
 	err      error
 }
 
@@ -153,6 +159,7 @@ func (m *mockCollectionRecorder) RecordItemDiscovered(ctx context.Context, chara
 		return m.err
 	}
 	m.recorded = append(m.recorded, itemID)
+	m.calls = append(m.calls, recordedBazaarCollection{itemID: itemID, category: category})
 	return nil
 }
 
@@ -447,12 +454,12 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 		t.Fatalf("expected item-072 in inventory, got %+v", inv.Items)
 	}
 
-	// Verify collection recorded
-	if len(recorderMock.recorded) != 1 || recorderMock.recorded[0] != "item-072" {
-		t.Errorf("expected item-072 recorded in collection, got %+v", recorderMock.recorded)
+	// Verify collection recorded with legacy item category
+	if len(recorderMock.calls) != 1 || recorderMock.calls[0] != (recordedBazaarCollection{itemID: "item-072", category: "item"}) {
+		t.Errorf("expected item-072 recorded with category item, got %+v", recorderMock.calls)
 	}
 
-	// 2. Second purchase while consumable slot is now occupied -> Delivered to Depot
+	// 2. Second purchase while consumable slot is now occupied -> Delivered to Depot (must NOT record collection)
 	// item-081 (魔法の粉, price 3600)
 	res, err = svc.PurchaseBazaarItem(ctx, charID, "item-081", 1)
 	if err != nil {
@@ -466,6 +473,9 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 	}
 	if !res.TransferredToDepot {
 		t.Errorf("expected transferred to depot = true when inventory slot occupied")
+	}
+	if len(recorderMock.calls) != 1 {
+		t.Errorf("expected Depot delivery not to record collection, got %+v", recorderMock.calls)
 	}
 
 	dep, err := depotRepo.FindByCharacterID(ctx, charID)
@@ -532,7 +542,7 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 		t.Errorf("expected collection error %v on inventory delivery, got %v", colErr, err)
 	}
 
-	// 8. Collection error propagation (depot delivery)
+	// 8. Depot delivery (occupied hand or quantity > 1) skips collection recorder (event.cgi:94)
 	invOcc, _ := coreinventory.New(emptyCharID)
 	dummyItem, _ := coreitem.NewInstance("item-dummy", 1)
 	_ = invOcc.Add(dummyItem)
@@ -541,9 +551,66 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 	emptyDepot, _ := depot.NewDepotWithCapacity(emptyCharID, emptyChar.JobLevel, 0, emptyChar.OverDepot)
 	_ = depotRepo.Save(ctx, emptyDepot)
 
-	_, err = svc.PurchaseBazaarItem(ctx, emptyCharID, "item-072", 1)
-	if !errors.Is(err, colErr) {
-		t.Errorf("expected collection error %v on depot delivery, got %v", colErr, err)
+	if res, err = svc.PurchaseBazaarItem(ctx, emptyCharID, "item-072", 1); err != nil || !res.TransferredToDepot {
+		t.Errorf("expected occupied-hand depot delivery to succeed without calling recorder, got res=%+v err=%v", res, err)
+	}
+
+	bulkCharID := id.New()
+	bulkChar, _ := corecharacter.New("BulkHero")
+	bulkChar.ID = bulkCharID
+	bulkChar.PlayerID = "player-bulk"
+	bulkChar.Money = 50000
+	charRepo.characters[bulkCharID] = bulkChar
+	if res, err = svc.PurchaseBazaarItem(ctx, bulkCharID, "item-072", 2); err != nil || !res.TransferredToDepot {
+		t.Errorf("expected quantity>1 depot delivery to succeed without calling recorder, got res=%+v err=%v", res, err)
 	}
 	recorderMock.err = nil
+}
+
+func TestPurchaseBazaarItem_AccessoryRecordsAsItem(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	clock := &mockClock{now: now}
+
+	tracker := NewValkeyPresenceTracker(newMockSortedSetStore().Client())
+	populatePresences(t, tracker, 30, now) // Tier 3 unlocked (item-090 水滴のピアス)
+
+	itemCat, err := coreitem.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("DefaultCatalog failed: %v", err)
+	}
+
+	charRepo := newMemoryCharacterRepo()
+	invRepo := newMemoryInventoryRepo()
+	depotRepo := newMemoryDepotRepo()
+	recorder := &mockCollectionRecorder{}
+
+	charID := id.New()
+	char, _ := corecharacter.New("Tier3Hero")
+	char.ID = charID
+	char.PlayerID = "player-t3"
+	char.Money = 50000
+	charRepo.characters[charID] = char
+
+	svc, err := NewService(
+		tracker, charRepo, invRepo,
+		WithClock(clock),
+		WithDepotRepository(depotRepo),
+		WithItemDefinitionProvider(itemCat),
+		WithCollectionRecorder(recorder),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	res, err := svc.PurchaseBazaarItem(ctx, charID, "item-090", 1)
+	if err != nil {
+		t.Fatalf("PurchaseBazaarItem(item-090) failed: %v", err)
+	}
+	if res.TransferredToDepot {
+		t.Fatalf("expected inventory delivery, got depot")
+	}
+	if len(recorder.calls) != 1 || recorder.calls[0] != (recordedBazaarCollection{itemID: "item-090", category: "item"}) {
+		t.Fatalf("recorded = %+v, want item-090 with category item", recorder.calls)
+	}
 }
