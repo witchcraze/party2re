@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"slices"
@@ -298,14 +299,20 @@ func TestDungeonActivityEncounterAndTerminalCandidates(t *testing.T) {
 		encounter bool
 		turns     int
 		want      []string
+		site      bool
 	}{
-		{dungeon.StatusExploring, false, 10, []string{"dungeon_move", "dungeon_escape"}},
-		{dungeon.StatusExploring, true, 10, []string{"dungeon_fight", "dungeon_escape"}},
-		{dungeon.StatusExploring, false, 0, []string{"dungeon_escape"}},
-		{dungeon.StatusEscaped, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
-		{dungeon.StatusWipedOut, false, 0, []string{"dungeon_fight", "dungeon_escape"}},
+		{dungeon.StatusExploring, false, 10, []string{"dungeon_move", "dungeon_escape"}, false},
+		// A map16 site keeps mining available at the limit, where moves stop.
+		{dungeon.StatusExploring, false, 0, []string{"dungeon_mine", "dungeon_escape"}, true},
+		{dungeon.StatusExploring, true, 10, []string{"dungeon_fight", "dungeon_escape"}, true},
+		{dungeon.StatusExploring, false, 0, []string{"dungeon_escape"}, false},
+		{dungeon.StatusEscaped, false, 0, []string{"dungeon_fight", "dungeon_escape"}, true},
+		{dungeon.StatusWipedOut, false, 0, []string{"dungeon_fight", "dungeon_escape"}, false},
 	} {
 		f.exp = &dungeon.ActiveExpedition{ID: "run", CharacterID: "hero", Revision: 8, Status: tc.status, CurrentHP: 1, Round: 20 - tc.turns, RoundLimit: 20}
+		if tc.site {
+			f.exp.DungeonID, f.exp.MapState = "native-map-16", json.RawMessage(`{"site":"B"}`)
+		}
 		if tc.encounter {
 			f.exp.Encounter = &dungeon.ActiveEncounter{}
 		}

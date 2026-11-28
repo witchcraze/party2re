@@ -4774,6 +4774,31 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "dungeon_mine"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "required": [],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "dungeon_escape"
                 }
               },
@@ -9987,6 +10012,10 @@
           "can_fight": {
             "type": "boolean"
           },
+          "can_mine": {
+            "description": "Mining is available at an active map16 site; depletion is never disclosed.",
+            "type": "boolean"
+          },
           "can_move": {
             "type": "boolean"
           }
@@ -9994,7 +10023,8 @@
         "required": [
           "can_move",
           "can_fight",
-          "can_escape"
+          "can_escape",
+          "can_mine"
         ],
         "type": "object"
       },
@@ -21415,7 +21445,7 @@
                 }
               }
             },
-            "description": "Dungeon escape result"
+            "description": "Dungeon fight result"
           },
           "400": {
             "content": {
@@ -21480,6 +21510,100 @@
           }
         ],
         "summary": "Continue the active dungeon encounter",
+        "tags": [
+          "Combat"
+        ]
+      }
+    },
+    "/characters/{id}/dungeons/mine": {
+      "post": {
+        "description": "Map16 mining (さいくつ): any living member mines at the party's active site while no living enemy or unopened chest remains. It spends no round and works past the round limit. The outcome is nothing (event_type mine_empty), a crystal-rock battle, or party treasure; each may deplete the site, which is never disclosed until a later attempt returns mine_depleted without changing the run. Returns 409 when no site is active, an enemy or unopened chest remains, or the run changed.",
+        "operationId": "mineDungeonSite",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DungeonStepResponse"
+                }
+              }
+            },
+            "description": "Dungeon mining result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request - invalid input or JSON syntax"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized - missing or invalid session token"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error",
+            "description": "Not Found"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error",
+            "description": "No active mining site, encounter pending or expedition state changed"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error",
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error",
+            "description": "Not Implemented"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Mine at the active map16 site",
         "tags": [
           "Combat"
         ]

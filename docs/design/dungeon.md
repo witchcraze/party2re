@@ -91,7 +91,7 @@ checkout revision `3bebb8872f521410396aa090818d573173224ea1`.
 | `にし`/`きた`/`みなみ`/`ひがし` (`39–43,70–73`) | Any living member moves in that direction; map-owned dispatch follows admission |
 | `ちず` → `chizu` (`39,44,114–129`) | Character context observation, actor-only visibility |
 | Treasure `しらべる` → `shiraberu(target)` (`45–48`) | Participant inspection under the [treasure contract](#treasure-inspection-and-delivery). Map0 [#2119](https://github.com/witchcraze/party2re/issues/2119), map3 [#2374](https://github.com/witchcraze/party2re/issues/2374). |
-| `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:37–77`, `_1.cgi:78–118`, `__1.cgi:36–59`) | [Map16 mining](#map16-crystal-mine-and-sealed-floors), a living participant's action beside movement. Open: [#2942](https://github.com/witchcraze/party2re/issues/2942) |
+| `add_battle_action2` → map16 `さいくつ` (`map/16/1.cgi:37–77`, `_1.cgi:78–118`, `__1.cgi:36–59`) | Any living member's `mineDungeonSite` at an active site. Open: the `__1` site ([#2943](https://github.com/witchcraze/party2re/issues/2943)) |
 | Shared `にげる` → `nigeru` (`_battle.cgi:1184–1222,1459–1473`) | Leader Escape settles every member as `nigeru`, at the saved round. The menu never offers calm mode (commented out, `quest.cgi:41,46,319`), so its fatigue halving does not apply. Open: per-character departure ([#2888](https://github.com/witchcraze/party2re/issues/2888)); whole-party Escape is not equivalent |
 
 ### Treasure inspection and delivery
@@ -291,17 +291,12 @@ the legacy revision above.
 ### Map16 crystal mine and sealed floors
 
 Decision [#1777](https://github.com/witchcraze/party2re/issues/1777): reproduce the
-original without departures. Mining (`さいくつ`) is one living participant's
-map-owned action. It sits beside movement and uses the same step and revision
-contract. The weekday is read in JST from the accepted step's time, as for the
-treasure orb. File references are relative to `party2/map/16/` at the legacy
+original without departures. The weekday is read in JST from the accepted
+step's time, as for the treasure orb. File references are relative to `party2/map/16/` at the legacy
 revision above.
 
 - **Mining also works on `9`.** It follows the site flag, not the position, and
   `9` is entered only from `H`, whose flag stays set (`__1.cgi:26–28,36–45`).
-- **Mining is not a move.** It spends no round and never checks the limit. A
-  party standing at a site past round 150 can still mine (`1.cgi:37–77`;
-  contrast `vs_dungeon.cgi:81`).
 - **A mined treasure frees every allowance.** `_reset_event` clears each roster
   member's last-opening symbol, including the actor's own (`1.cgi:79–83`,
   `lib/system.cgi:861–867`). Every member may then open one chest of each mined

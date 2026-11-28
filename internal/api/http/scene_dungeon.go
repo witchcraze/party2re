@@ -22,12 +22,14 @@ func (h *Handler) dungeonActivityData(ctx context.Context, result playercontext.
 	}
 	// Never combine an old activity's eligibility with another run or revision.
 	if view == nil || view.ID != fact.ID || view.Revision != fact.Revision || view.PartyID != fact.PartyID || string(view.Status) != fact.Phase || role != fact.Role ||
-		view.Controls.CanMove != slices.Contains(fact.Actions, "dungeon_move") || view.Controls.CanFight != slices.Contains(fact.Actions, "dungeon_fight") || view.Controls.CanEscape != slices.Contains(fact.Actions, "dungeon_escape") {
+		view.Controls.CanMove != slices.Contains(fact.Actions, "dungeon_move") || view.Controls.CanFight != slices.Contains(fact.Actions, "dungeon_fight") || view.Controls.CanEscape != slices.Contains(fact.Actions, "dungeon_escape") ||
+		view.Controls.CanMine != slices.Contains(fact.Actions, "dungeon_mine") {
 		return nil, dungeon.ErrExpeditionStateChanged
 	}
 	view.Controls.CanMove = view.Controls.CanMove && slices.Contains(result.AvailableActions, "dungeon_move")
 	view.Controls.CanFight = view.Controls.CanFight && slices.Contains(result.AvailableActions, "dungeon_fight")
 	view.Controls.CanEscape = view.Controls.CanEscape && slices.Contains(result.AvailableActions, "dungeon_escape")
+	view.Controls.CanMine = view.Controls.CanMine && slices.Contains(result.AvailableActions, "dungeon_mine")
 	if !view.Controls.CanMove {
 		view.Directions = []dungeon.Direction{}
 	}

@@ -17,6 +17,7 @@ type DungeonService interface {
 	StartPartyExpedition(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
 	Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
 	Fight(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
+	Mine(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
 	Escape(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
 	ObserveExpedition(ctx context.Context, characterID string) (*dungeon.ExpeditionObservation, error)
 }

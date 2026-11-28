@@ -35,14 +35,13 @@ type map16State struct {
 	SpringUsed bool `json:"spring_used,omitempty"`
 	// Kinds are the gem-boss kinds spawned this run, recorded at spawn.
 	Kinds []string `json:"kinds,omitempty"`
+	// Depleted are the sites mining has exhausted for the run.
+	Depleted []string `json:"depleted,omitempty"`
 }
 
-// map16StateOf reads the state an earlier event of this step saved, or the run's.
-func map16StateOf(n *nativeStep) (map16State, error) {
-	raw := n.step.MapState
-	if raw == nil {
-		raw = n.exp.MapState
-	}
+func (st map16State) depleted(site string) bool { return slices.Contains(st.Depleted, site) }
+
+func decodeMap16(raw json.RawMessage) (map16State, error) {
 	var st map16State
 	if len(raw) == 0 {
 		return st, nil
@@ -51,6 +50,17 @@ func map16StateOf(n *nativeStep) (map16State, error) {
 		return st, fmt.Errorf("dungeon: map16 state: %w", err)
 	}
 	return st, nil
+}
+
+// map16Run reads a run's saved map16 state.
+func map16Run(exp ActiveExpedition) (map16State, error) { return decodeMap16(exp.MapState) }
+
+// map16StateOf reads the state an earlier event of this step saved, or the run's.
+func map16StateOf(n *nativeStep) (map16State, error) {
+	if n.step.MapState != nil {
+		return decodeMap16(n.step.MapState)
+	}
+	return map16Run(*n.exp)
 }
 
 func (st map16State) save(n *nativeStep) {
@@ -120,11 +130,9 @@ func nm16RefillSprings(n *nativeStep) error {
 type nm16Spring struct{}
 
 func (nm16Spring) mark(exp *ActiveExpedition, _ byte) (string, error) {
-	var st map16State
-	if len(exp.MapState) > 0 {
-		if err := json.Unmarshal(exp.MapState, &st); err != nil {
-			return "", fmt.Errorf("dungeon: map16 state: %w", err)
-		}
+	st, err := map16Run(*exp)
+	if err != nil {
+		return "", err
 	}
 	if st.SpringUsed {
 		return "□", nil
@@ -218,6 +226,35 @@ func (nm16Herald) apply(n *nativeStep) error {
 	return nil
 }
 
+// nm16Mine is saikutu at the active, undepleted site (1.cgi:56–77, the same
+// in _1.cgi:97–118). The first true branch wins: rand(6) < 1 finds nothing,
+// rand(4) < 1 digs up a crystal-rock group, otherwise a party treasure. Each
+// outcome then depletes the site with its own odds: 1/4, 1/3 or 1/2.
+type nm16Mine struct{ crystal DungeonMonster }
+
+func (m nm16Mine) apply(n *nativeStep) error {
+	st, err := map16StateOf(n)
+	if err != nil {
+		return err
+	}
+	odds := 4.0
+	switch {
+	case 6*n.rng.Float64() < 1:
+	case 4*n.rng.Float64() < 1:
+		n.fightGroup(EncounterPool{Monsters: []DungeonMonster{m.crystal}}, "", "")
+		odds = 3
+	default:
+		// shortcut: contents, the wish-4 chest and the allowance clear (_reset_event) land with #2944.
+		n.step.Encounter = treasureEncounter(n.exp, n.actor.JobID, n.rng, n.step.NewX, n.step.NewY)
+		odds = 2
+	}
+	if odds*n.rng.Float64() < 1 {
+		st.Depleted = append(st.Depleted, st.Site)
+		st.save(n)
+	}
+	return nil
+}
+
 // nativeMap16 starts on the main floor; every floor has limit 150. Variant 2
 // is _1, 3 is __2 and 4 is __1.
 // shortcut: _1's 2 and the __2/__1 events stay inert, and the map unlisted, until #2943.
@@ -226,6 +263,7 @@ func nativeMap16() Dungeon {
 	approach := mapEvent{action: nm16Approach{}}
 	main := Floor{
 		Pools: []EncounterPool{nm16MainPool},
+		mine:  nm16Mine{crystal: nm16MainCrystal},
 		Exits: map[byte]FloorExit{'2': {Variants: []int{2}}},
 		Marks: map[byte]string{'X': "◎", 'B': "★", 'C': "★", 'D': "★", '2': "凸"},
 		events: map[byte]mapEvent{
@@ -237,6 +275,7 @@ func nativeMap16() Dungeon {
 	spring := Floor{
 		FloorNumber: 2,
 		Pools:       []EncounterPool{nm16SpringPool},
+		mine:        nm16Mine{crystal: nm16SpringCrystal},
 		Marks:       map[byte]string{'Y': "◎", 'E': "★", 'F': "★", 'G': "★", '2': "凸"},
 		events: map[byte]mapEvent{
 			'0': refill(nm16Field{}), 'R': {action: nm16Spring{}},

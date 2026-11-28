@@ -43,6 +43,10 @@ func toDungeonStepResult(result dungeon.ExpeditionStepResult) dungeonStepResultR
 		}
 	case result.EventType == dungeon.EventWipeout:
 		response.Message = "探索に失敗した…"
+	case result.EventType == dungeon.EventMineEmpty:
+		response.Message = "目ぼしいものは掘り出せなかった…"
+	case result.EventType == dungeon.EventMineDepleted:
+		response.Message = "もう掘り出せるものがなさそうだ…"
 	}
 	return response
 }

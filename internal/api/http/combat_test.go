@@ -98,6 +98,7 @@ type stubDungeonService struct {
 	startExpeditionFn func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
 	moveFn            func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
 	escapeFn          func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
+	mineFn            func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
 
 	startPartyExpeditionFn func(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
 	observeExpeditionFn    func(ctx context.Context, characterID string) (*dungeon.ExpeditionObservation, error)
@@ -445,6 +446,13 @@ func TestCombatEndpoints(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s *stubDungeonService) Mine(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error) {
+	if s.mineFn != nil {
+		return s.mineFn(ctx, characterID)
+	}
+	return dungeon.ExpeditionStepResult{EventType: dungeon.EventMineEmpty}, nil
 }
 
 func (s *stubDungeonService) Fight(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error) {

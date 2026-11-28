@@ -5290,6 +5290,31 @@
               "type": "object",
               "properties": {
                 "action": {
+                  "const": "dungeon_mine"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": []
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
                   "const": "dungeon_escape"
                 }
               },
@@ -16363,12 +16388,17 @@
           },
           "can_escape": {
             "type": "boolean"
+          },
+          "can_mine": {
+            "type": "boolean",
+            "description": "Mining is available at an active map16 site; depletion is never disclosed."
           }
         },
         "required": [
           "can_move",
           "can_fight",
-          "can_escape"
+          "can_escape",
+          "can_mine"
         ]
       },
       "DungeonExpeditionObservation": {

@@ -137,7 +137,12 @@ func (s *Service) resolveMonsterCombat(
 	carry StepParams,
 	memberDamages map[string]int,
 ) (ExpeditionStepResult, error) {
-	rounds, stayX, stayY := exp.combatProgress(newX, newY)
+	// A new fight spends the command's own round (one for a move, none for
+	// mining); a continuation spends none (vs_dungeon.cgi _susumu).
+	rounds := 0
+	if exp.Encounter == nil {
+		rounds = carry.RoundDelta
+	}
 	var enemies []corebattle.Participant
 	if exp.Encounter != nil {
 		enemies = exp.Encounter.Enemies
@@ -162,8 +167,8 @@ func (s *Service) resolveMonsterCombat(
 		ExpectedExpeditionID: exp.ID,
 		ExpectedRevision:     &exp.Revision,
 		Combat:               true,
-		NewX:                 stayX,
-		NewY:                 stayY,
+		NewX:                 newX,
+		NewY:                 newY,
 		HPDelta:              out.leaderHP,
 		MemberHPDeltas:       out.memberHP,
 		MemberMPDeltas:       out.memberMP,
@@ -217,15 +222,6 @@ func addDelta(m *map[string]int, id string, d int) {
 		*m = make(map[string]int)
 	}
 	(*m)[id] += d
-}
-
-// combatProgress: the round advances only on the move itself, and the party
-// already stands on the destination (vs_dungeon.cgi _susumu).
-func (exp *ActiveExpedition) combatProgress(newX, newY int) (rounds, stayX, stayY int) {
-	if exp.Encounter != nil {
-		return 0, newX, newY
-	}
-	return 1, newX, newY
 }
 
 func buildFallbackParticipantWithHP(char corecharacter.Character, currentHP int) corebattle.Participant {

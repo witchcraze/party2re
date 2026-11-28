@@ -35,6 +35,7 @@ func TestDungeonSceneReadAndRefresh(t *testing.T) {
 	}{
 		{"exploring", "actor", dungeon.StatusExploring, "落穴の塔１階", "落穴の塔１階", dungeon.ContinuationControls{CanMove: true, CanEscape: true}, []string{"dungeon_move", "dungeon_escape"}},
 		{"encounter", "actor", dungeon.StatusExploring, "落穴の塔２階", "落穴の塔２階", dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
+		{"mining", "actor", dungeon.StatusExploring, "落穴の塔１階", "落穴の塔１階", dungeon.ContinuationControls{CanMine: true, CanEscape: true}, []string{"dungeon_mine", "dungeon_escape"}},
 		{"member", "member", dungeon.StatusExploring, "落穴の塔１階", "落穴の塔１階", dungeon.ContinuationControls{}, []string{}},
 		{"empty_floor_name", "actor", dungeon.StatusExploring, "", "ダンジョン探索", dungeon.ContinuationControls{CanMove: true, CanEscape: true}, []string{"dungeon_move", "dungeon_escape"}},
 		{"escaped", "actor", dungeon.StatusEscaped, "", "ダンジョン探索", dungeon.ContinuationControls{CanFight: true, CanEscape: true}, []string{"dungeon_fight", "dungeon_escape"}},
