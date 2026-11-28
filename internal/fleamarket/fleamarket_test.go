@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -83,14 +84,15 @@ func (m *mockFleaMarketRepo) CountActiveListingsBySeller(ctx context.Context, se
 	return count, nil
 }
 
-func (m *mockFleaMarketRepo) CountTotalActiveListings(ctx context.Context) (int, error) {
-	count := 0
+func (m *mockFleaMarketRepo) ActiveListingNumbers(ctx context.Context) ([]int, error) {
+	numbers := []int{}
 	for _, l := range m.listings {
 		if l.Status == fleamarket.StatusActive {
-			count++
+			numbers = append(numbers, l.Number)
 		}
 	}
-	return count, nil
+	slices.Sort(numbers)
+	return numbers, nil
 }
 
 func (m *mockFleaMarketRepo) UpdateListing(ctx context.Context, listing fleamarket.Listing) error {
@@ -568,5 +570,48 @@ func TestFleaMarketService_ServerCeiling(t *testing.T) {
 	_, err = svc.CreateListing(ctx, newSellerID, "item-herb", 100, now)
 	if !errors.Is(err, fleamarket.ErrServerMaxListingsReached) {
 		t.Errorf("expected ErrServerMaxListingsReached at 120 server ceiling, got %v", err)
+	}
+}
+
+// free.cgi number_select: a listing takes the lowest number free among active
+// listings, so a sold or returned listing's number is reused.
+func TestFleaMarketService_ListingNumbersReuseTheLowestFree(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockFleaMarketRepo()
+	charRepo := newMockCharRepo()
+	depotRepo := newMockDepotRepo()
+	svc, err := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(&mockItemDefs{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sellerID := "char-numbers"
+	charRepo.characters[sellerID] = corecharacter.Character{ID: sellerID, Name: "Numbers"}
+	dep, _ := depot.NewDepot(sellerID)
+	dep.Capacity = 20
+	inst, _ := coreitem.NewInstance("item-herb", 10)
+	_ = dep.AddItem(inst)
+	_ = depotRepo.Save(ctx, dep)
+	now := time.Now().UTC()
+
+	list := func() fleamarket.Listing {
+		t.Helper()
+		l, err := svc.CreateListing(ctx, sellerID, "item-herb", 10, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	first, second, third := list(), list(), list()
+	if first.Number != 1 || second.Number != 2 || third.Number != 3 {
+		t.Fatalf("numbers = %d %d %d, want 1 2 3", first.Number, second.Number, third.Number)
+	}
+	if _, err := svc.CancelListing(ctx, sellerID, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := list().Number; got != 1 {
+		t.Fatalf("freed number not reused: got %d", got)
+	}
+	if got := list().Number; got != 4 {
+		t.Fatalf("next number after 1-3 = %d, want 4", got)
 	}
 }

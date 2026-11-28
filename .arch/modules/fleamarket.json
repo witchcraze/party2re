@@ -72,7 +72,7 @@
       "source_ref": "internal/fleamarket/fleamarket.go#Service.CreateListing",
       "lock_sequence": [
         {"step": 1, "target": "fleamarket_capacity_lock", "lock_order": 0, "method": "FleaMarketRepository.LockListingCapacityForUpdate", "mode": "INSERT ... ON DUPLICATE KEY UPDATE"},
-        {"step": 2, "target": "fleamarket_listings", "method": "FleaMarketRepository.CountTotalActiveListings", "mode": "SELECT"},
+        {"step": 2, "target": "fleamarket_listings", "method": "FleaMarketRepository.ActiveListingNumbers", "mode": "SELECT"},
         {"step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
         {"step": 4, "target": "fleamarket_listings", "method": "FleaMarketRepository.CountActiveListingsBySeller", "mode": "SELECT"},
         {"step": 5, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},

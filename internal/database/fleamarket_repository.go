@@ -31,10 +31,10 @@ func (r *FleaMarketRepository) CreateListing(ctx context.Context, listing fleama
 
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO fleamarket_listings (
-			id, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
+			id, listing_no, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
 			price, status, buyer_character_id, buyer_name, created_at, sold_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, listing.ID, listing.SellerCharacterID, listing.SellerName, listing.ItemID, listing.ItemName, listing.ItemCategory, listing.EnhancementLevel,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, listing.ID, listing.Number, listing.SellerCharacterID, listing.SellerName, listing.ItemID, listing.ItemName, listing.ItemCategory, listing.EnhancementLevel,
 		listing.Price, string(listing.Status), listing.BuyerCharacterID, listing.BuyerName, listing.CreatedAt, listing.SoldAt)
 	return err
 }
@@ -47,6 +47,7 @@ func (r *FleaMarketRepository) scanListing(row scanner) (fleamarket.Listing, err
 
 	err := row.Scan(
 		&l.ID,
+		&l.Number,
 		&l.SellerCharacterID,
 		&l.SellerName,
 		&l.ItemID,
@@ -87,7 +88,7 @@ type scanner interface {
 
 func (r *FleaMarketRepository) GetListingByID(ctx context.Context, listingID string) (fleamarket.Listing, error) {
 	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT id, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
+		SELECT id, listing_no, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
 		       price, status, buyer_character_id, buyer_name, created_at, sold_at
 		FROM fleamarket_listings
 		WHERE id = ?
@@ -97,7 +98,7 @@ func (r *FleaMarketRepository) GetListingByID(ctx context.Context, listingID str
 
 func (r *FleaMarketRepository) GetListingByIDForUpdate(ctx context.Context, listingID string) (fleamarket.Listing, error) {
 	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT id, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
+		SELECT id, listing_no, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
 		       price, status, buyer_character_id, buyer_name, created_at, sold_at
 		FROM fleamarket_listings
 		WHERE id = ?
@@ -120,7 +121,7 @@ func (r *FleaMarketRepository) ListActiveListings(ctx context.Context, limit, of
 	}
 
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT id, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
+		SELECT id, listing_no, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
 		       price, status, buyer_character_id, buyer_name, created_at, sold_at
 		FROM fleamarket_listings
 		WHERE status = 'active'
@@ -150,7 +151,7 @@ func (r *FleaMarketRepository) ListActiveListings(ctx context.Context, limit, of
 
 func (r *FleaMarketRepository) GetActiveListingsBySeller(ctx context.Context, sellerCharacterID string) ([]fleamarket.Listing, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT id, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
+		SELECT id, listing_no, seller_character_id, seller_name, item_id, item_name, item_category, enhancement_level,
 		       price, status, buyer_character_id, buyer_name, created_at, sold_at
 		FROM fleamarket_listings
 		WHERE seller_character_id = ? AND status = 'active'
@@ -199,17 +200,26 @@ func (r *FleaMarketRepository) LockListingCapacityForUpdate(ctx context.Context)
 	return err
 }
 
-func (r *FleaMarketRepository) CountTotalActiveListings(ctx context.Context) (int, error) {
-	var count int
-	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT COUNT(*)
+func (r *FleaMarketRepository) ActiveListingNumbers(ctx context.Context) ([]int, error) {
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
+		SELECT listing_no
 		FROM fleamarket_listings
 		WHERE status = 'active'
-	`).Scan(&count)
+		ORDER BY listing_no
+	`)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return count, nil
+	defer rows.Close()
+	numbers := []int{}
+	for rows.Next() {
+		var n int
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		numbers = append(numbers, n)
+	}
+	return numbers, rows.Err()
 }
 
 func (r *FleaMarketRepository) UpdateListing(ctx context.Context, listing fleamarket.Listing) error {

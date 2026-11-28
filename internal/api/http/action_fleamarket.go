@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -47,21 +48,20 @@ func WithFleaMarket(service FleaMarketService) Option {
 			reply := fmt.Sprintf("%sを%d Gで出品しとくぞ", listing.ItemName, listing.Price)
 			return fleaMarketListingResult{listing, commandEcho{target: fmt.Sprintf("%s＠ねだん>%d", listing.ItemName, listing.Price), reply: reply}}, nil
 		}, fleaMarketActionRejection)(h)
-		// Legacy names a listing by its display number; Go listings have none, so
-		// the actor rows of purchase and cancel name the item instead.
+		// Legacy names a listing by its display number (free.cgi:185,278).
 		withEchoCommand("fleamarket_purchase", func(ctx context.Context, actor string, p fleaMarketListingRequest) (fleaMarketPurchaseResult, error) {
 			res, err := service.PurchaseListing(ctx, actor, p.ListingID, time.Now().UTC())
 			if err != nil {
 				return fleaMarketPurchaseResult{}, err
 			}
-			return fleaMarketPurchaseResult{res, commandEcho{target: res.Listing.ItemName, reply: "まいどあり"}}, nil
+			return fleaMarketPurchaseResult{res, commandEcho{target: strconv.Itoa(res.Listing.Number), reply: "まいどあり"}}, nil
 		}, fleaMarketActionRejection)(h)
 		withEchoCommand("fleamarket_cancel", func(ctx context.Context, actor string, p fleaMarketListingRequest) (fleaMarketListingResult, error) {
 			listing, err := service.CancelListing(ctx, actor, p.ListingID)
 			if err != nil {
 				return fleaMarketListingResult{}, err
 			}
-			return fleaMarketListingResult{listing, commandEcho{target: listing.ItemName, reply: "そら、" + listing.ItemName + "だ"}}, nil
+			return fleaMarketListingResult{listing, commandEcho{target: strconv.Itoa(listing.Number), reply: "そら、" + listing.ItemName + "だ"}}, nil
 		}, fleaMarketActionRejection)(h)
 	}
 }
