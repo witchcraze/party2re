@@ -119,10 +119,11 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		if err := s.recordPopularity(tc.Context, tc.Character); err != nil {
 			return err
 		}
+		jobChanged := tc.Character.JobID != targetJobID
 		if err := tc.Character.ApplyJobChange(targetJobID, targetSPValue); err != nil {
 			return err
 		}
-		if s.costume != nil {
+		if jobChanged && s.costume != nil {
 			if err := s.costume.ResetCostume(tc.Context, characterID); err != nil {
 				return err
 			}
