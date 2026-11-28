@@ -112,43 +112,24 @@ func TestValkeyRepository_SaveParty(t *testing.T) {
 	}
 
 	cmds := client.RecordedCommandStrings()
-	if len(cmds) != 3 {
-		t.Fatalf("expected 3 commands, got %d: %v", len(cmds), cmds)
-	}
-
-	// First command: SET lobbyKey
-	if cmds[0][0] != "SET" || cmds[0][1] != party.DefaultLobbyKeyPrefix+"party-save-1" {
-		t.Errorf("unexpected SET lobby command: %v", cmds[0])
+	if len(cmds) != 1 || len(cmds[0]) != 13 || cmds[0][5] != "save" ||
+		cmds[0][3] != party.DefaultLobbyKeyPrefix+p.ID || cmds[0][4] != party.DefaultLobbiesIndexKey {
+		t.Fatalf("unexpected lobby publication: %v", cmds)
 	}
 	var state party.LobbyState
-	if err := json.Unmarshal([]byte(cmds[0][2]), &state); err != nil {
+	if err := json.Unmarshal([]byte(cmds[0][12]), &state); err != nil {
 		t.Fatalf("saved lobby payload is invalid JSON: %v", err)
 	}
-	if state.Party.ID != "party-save-1" || state.Party.LeaderCharacterID != "char-lead-1" {
+	if state.Party.ID != p.ID || state.Party.LeaderCharacterID != p.LeaderCharacterID {
 		t.Errorf("unexpected saved state: %+v", state)
 	}
 
-	// Second command: ZADD lobbiesIndexKey
-	if cmds[1][0] != "ZADD" || cmds[1][1] != party.DefaultLobbiesIndexKey || cmds[1][3] != "party-save-1" {
-		t.Errorf("unexpected ZADD command: %v", cmds[1])
-	}
-
-	// Third command: SET characterKey for leader
-	if cmds[2][0] != "SET" || cmds[2][1] != party.DefaultCharacterKeyPrefix+"char-lead-1" || cmds[2][2] != "party-save-1" {
-		t.Errorf("unexpected SET character command: %v", cmds[2])
-	}
-
-	// 2. Error case: SET returns error
-	errSet := errors.New("valkey set error")
-	clientErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		if cmd.Commands()[0] == "SET" {
-			return valkeytest.MakeErrorResult(errSet)
-		}
-		return valkeytest.MakeOKResult()
+	errIndex := errors.New("lobby index is unwritable")
+	clientErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(context.Context, valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeErrorResult(errIndex)
 	}))
-	repoErr := party.NewValkeyRepository(clientErr)
-	if err := repoErr.SaveParty(ctx, p); !errors.Is(err, errSet) {
-		t.Fatalf("expected errSet, got %v", err)
+	if err := party.NewValkeyRepository(clientErr).SaveParty(ctx, p); !errors.Is(err, errIndex) {
+		t.Fatalf("SaveParty error = %v, want %v", err, errIndex)
 	}
 }
 
@@ -314,61 +295,21 @@ func TestValkeyRepository_UpdateParty(t *testing.T) {
 
 func TestValkeyRepository_DeleteParty(t *testing.T) {
 	ctx := context.Background()
-	p := sampleTestParty("party-del-1", "char-lead-1", "解散パーティ")
-	state := party.LobbyState{
-		Party:   p,
-		Members: sampleTestMembers("party-del-1", "char-lead-1"),
-	}
-	validData, _ := json.Marshal(state)
-
-	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		if cmd.Commands()[0] == "GET" {
-			return valkeytest.MakeStringResult(string(validData))
-		}
-		return valkeytest.MakeOKResult()
-	}))
-	repo := party.NewValkeyRepository(client)
-
-	if err := repo.DeleteParty(ctx, "party-del-1"); err != nil {
-		t.Fatalf("DeleteParty failed: %v", err)
-	}
-
-	cmds := client.RecordedCommandStrings()
-	// GET, DEL char1, DEL ready1, DEL char2, DEL ready2, DEL leader char1, DEL lobbyKey, ZREM
-	if len(cmds) < 4 {
-		t.Fatalf("expected cleanup commands, got %d: %v", len(cmds), cmds)
-	}
-
 	delErr := errors.New("valkey delete failure")
-	// Fail at each command step (including after earlier commands succeed) and verify error propagation.
-	for failIdx := 1; failIdx <= len(cmds); failIdx++ {
-		callCount := 0
-		partialClient := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-			callCount++
-			if callCount == failIdx {
-				return valkeytest.MakeErrorResult(delErr)
+	for _, want := range []error{nil, delErr} {
+		client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+			c := cmd.Commands()
+			if len(c) < 7 || c[5] != "delete" || c[6] != "party-del-1" {
+				t.Fatalf("unexpected delete command: %v", c)
 			}
-			if cmd.Commands()[0] == "GET" {
-				return valkeytest.MakeStringResult(string(validData))
+			if want != nil {
+				return valkeytest.MakeErrorResult(want)
 			}
 			return valkeytest.MakeOKResult()
 		}))
-		partialRepo := party.NewValkeyRepository(partialClient)
-		if err := partialRepo.DeleteParty(ctx, "party-del-1"); !errors.Is(err, delErr) {
-			t.Fatalf("step %d/%d (%s): expected delErr, got %v", failIdx, len(cmds), cmds[failIdx-1], err)
+		if err := party.NewValkeyRepository(client).DeleteParty(ctx, "party-del-1"); !errors.Is(err, want) {
+			t.Fatalf("DeleteParty error = %v, want %v", err, want)
 		}
-	}
-
-	// Corrupt JSON on GET must also fail rather than silently succeeding.
-	corruptClient := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		if cmd.Commands()[0] == "GET" {
-			return valkeytest.MakeStringResult("{corrupt-json")
-		}
-		return valkeytest.MakeOKResult()
-	}))
-	corruptRepo := party.NewValkeyRepository(corruptClient)
-	if err := corruptRepo.DeleteParty(ctx, "party-del-1"); err == nil {
-		t.Fatal("expected error on corrupt lobby JSON, got nil")
 	}
 }
 
@@ -531,7 +472,7 @@ func TestValkeyRepository_GetActivePartyByCharacter(t *testing.T) {
 	if _, _, err := repoErr.GetActivePartyByCharacter(ctx, "char-err"); !errors.Is(err, errKey) {
 		t.Fatalf("expected errKey, got %v", err)
 	}
-	for _, failRead := range []int{1, 2, 3} {
+	for _, failRead := range []int{1, 2} {
 		reads := 0
 		client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 			c := cmd.Commands()
@@ -705,11 +646,6 @@ func TestValkeyRepository_PasswordHashRoundTripAndPublicJSON(t *testing.T) {
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		c := cmd.Commands()
 		switch c[0] {
-		case "SET":
-			if c[1] == party.DefaultLobbyKeyPrefix+p.ID {
-				storedPayload = c[2]
-			}
-			return valkeytest.MakeOKResult()
 		case "GET":
 			if c[1] == party.DefaultLobbyKeyPrefix+p.ID {
 				return valkeytest.MakeStringResult(storedPayload)
@@ -723,9 +659,13 @@ func TestValkeyRepository_PasswordHashRoundTripAndPublicJSON(t *testing.T) {
 		case "EXISTS":
 			return valkeytest.MakeIntResult(1)
 		case "EVAL", "EVALSHA":
-			// update_party.lua passes [lobbyKey, indexKey] and [partyJSON, ttl, status, id]
-			if len(c) >= 6 && c[3] == party.DefaultLobbyKeyPrefix+p.ID && c[4] == party.DefaultLobbiesIndexKey {
-				updatePartyArg = c[5]
+			if len(c) == 13 && c[3] == party.DefaultLobbyKeyPrefix+p.ID && c[4] == party.DefaultLobbiesIndexKey {
+				switch c[5] {
+				case "save":
+					storedPayload = c[12]
+				case "update":
+					updatePartyArg = c[12]
+				}
 			}
 			return valkeytest.MakeOKResult()
 		default:
@@ -734,19 +674,12 @@ func TestValkeyRepository_PasswordHashRoundTripAndPublicJSON(t *testing.T) {
 	}))
 	repo := party.NewValkeyRepository(client)
 
-	if err := repo.SaveParty(ctx, p); err != nil {
+	if err := repo.SaveParty(ctx, p, members[0]); err != nil {
 		t.Fatalf("SaveParty failed: %v", err)
 	}
 	if !strings.Contains(storedPayload, `"password_hash":"`+wantHash+`"`) {
 		t.Fatalf("expected stored Valkey payload to contain password_hash, got: %s", storedPayload)
 	}
-	// Populate the leader member inside the stored lobby JSON while preserving the party payload from SaveParty.
-	leaderJSON, err := json.Marshal(members[0])
-	if err != nil {
-		t.Fatalf("Marshal leader member failed: %v", err)
-	}
-	storedPayload = strings.Replace(storedPayload, `"members":[]`, `"members":[`+string(leaderJSON)+`]`, 1)
-
 	gotParty, err := repo.GetParty(ctx, p.ID)
 	if err != nil {
 		t.Fatalf("GetParty failed: %v", err)

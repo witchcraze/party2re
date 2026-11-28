@@ -405,9 +405,6 @@ func TestValkeyKeyspaceDocCoversLuaAndHashTags(t *testing.T) {
 	requiredSectionsAndTerms := []string{
 		"Hash Tag",
 		"Lua Script Registry",
-		"party_add_member",
-		"party_remove_member",
-		"party_update_party",
 		"dungeon_step",
 		"challenge_advance_round",
 	}

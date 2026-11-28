@@ -251,6 +251,7 @@ func newCmbtServices(
 		party.WithPostBattleSettler(battleAdapter),
 		party.WithDepotRepository(econ.depotRepo),
 		party.WithTimerService(soc.timer),
+		party.WithIdleSweep(partyRepo, soc.timer),
 		party.WithAdventureRepository(adventureRepo),
 	)
 	if err != nil {

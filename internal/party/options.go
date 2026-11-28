@@ -28,7 +28,7 @@ func (s *Service) SetActionWait(writer ActionWaitWriter) {
 	s.actionWait = writer
 }
 
-// WithClock overrides the clock used for action wait deadlines.
+// WithClock overrides the clock used for lobby timeout and action wait deadlines.
 func WithClock(clock func() time.Time) Option {
 	return func(s *Service) {
 		s.clock = clock

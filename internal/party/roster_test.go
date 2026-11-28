@@ -398,11 +398,11 @@ func (r *activeLookupFaultRepo) GetActivePartyByCharacter(context.Context, strin
 	return Party{}, Member{}, r.activeErr
 }
 
-func (r *activeLookupFaultRepo) SaveParty(ctx context.Context, p Party) error {
+func (r *activeLookupFaultRepo) SaveParty(ctx context.Context, p Party, members ...Member) error {
 	if r.onSave != nil {
 		r.onSave()
 	}
-	return r.Repository.SaveParty(ctx, p)
+	return r.Repository.SaveParty(ctx, p, members...)
 }
 
 func (r *activeLookupFaultRepo) AddMember(ctx context.Context, m Member) error {

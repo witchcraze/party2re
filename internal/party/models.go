@@ -84,6 +84,8 @@ type Party struct {
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
+	idleAt            int64
+	sleepUntil        int64
 }
 
 type Member struct {
@@ -252,7 +254,7 @@ type Repository interface {
 	AdventureLogRepository
 	PartyAdventureLockRepository
 
-	SaveParty(ctx context.Context, p Party) error
+	SaveParty(ctx context.Context, p Party, members ...Member) error
 	GetParty(ctx context.Context, id string) (Party, error)
 	GetPartyForUpdate(ctx context.Context, id string) (Party, error)
 	ListParties(ctx context.Context, status string, limit, offset int) ([]PartySummary, int, error)

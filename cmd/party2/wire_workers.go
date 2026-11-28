@@ -20,6 +20,9 @@ func registerWorkers(soc *socServices, cmbt *cmbtServices, misc *miscServices) e
 	if cmbt.pvp != nil {
 		soc.worker.RegisterReconciler("pvp_inactivity_sweep", cmbt.pvp.SweepInactiveRooms)
 	}
+	if cmbt.party != nil {
+		soc.worker.RegisterReconciler("party_lobby_idle_sweep", cmbt.party.SweepIdle)
+	}
 	if cmbt.normal != nil {
 		soc.worker.RegisterReconciler("normal_run_idle_sweep", cmbt.normal.SweepIdle)
 	}
