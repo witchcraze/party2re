@@ -112,3 +112,20 @@ func TestLegacyHandKind(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyCollectionCategory(t *testing.T) {
+	tests := []struct {
+		kind int
+		want string
+	}{
+		{1, "weapon"},
+		{2, "armor"},
+		{3, "item"},
+		{0, "item"},
+	}
+	for _, tt := range tests {
+		if got := LegacyCollectionCategory(tt.kind); got != tt.want {
+			t.Errorf("LegacyCollectionCategory(%d) = %q, want %q", tt.kind, got, tt.want)
+		}
+	}
+}

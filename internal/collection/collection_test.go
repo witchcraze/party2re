@@ -1039,3 +1039,38 @@ func TestCollectionService_CategorySeparation(t *testing.T) {
 		t.Errorf("item collection expected 1 entry after item discovery, got entries=%d count=%d", len(itemEntries), itemProg.DiscoveredCount)
 	}
 }
+
+func TestCollectionService_OffHandAndAccessoryRecordUnderItemCategory(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCollectionRepo{
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	svc, err := collection.NewService(repo, 180, 141)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "item-071", "天上の盾と兜", "off-hand"); err != nil {
+		t.Fatalf("off-hand discovery failed: %v", err)
+	}
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "item-012", "祈りの指輪", "accessory"); err != nil {
+		t.Fatalf("accessory discovery failed: %v", err)
+	}
+
+	armEntries, _, err := svc.GetArmorCollection(ctx, "char-hero")
+	if err != nil {
+		t.Fatalf("GetArmorCollection failed: %v", err)
+	}
+	if len(armEntries) != 0 {
+		t.Errorf("armor collection expected 0 entries for off-hand/accessory, got %+v", armEntries)
+	}
+
+	itemEntries, _, err := svc.GetItemCollection(ctx, "char-hero", "item")
+	if err != nil {
+		t.Fatalf("GetItemCollection failed: %v", err)
+	}
+	if len(itemEntries) != 2 {
+		t.Fatalf("item collection expected 2 entries, got %+v", itemEntries)
+	}
+}

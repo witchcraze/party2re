@@ -301,11 +301,7 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 			return err
 		}
 		if s.collector != nil {
-			cat := string(def.Slot)
-			if cat == "" {
-				cat = "consumable"
-			}
-			if err := s.collector.RecordItemDiscovered(tc.Context, characterID, def.ID, def.Name, cat); err != nil {
+			if err := s.collector.RecordItemDiscovered(tc.Context, characterID, def.ID, def.Name, item.LegacyCollectionCategory(kind)); err != nil {
 				return err
 			}
 		}

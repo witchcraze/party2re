@@ -103,8 +103,14 @@ func (m *mockItemDefProvider) FindByID(id string) (coreitem.Definition, error) {
 	return def, nil
 }
 
+type recordedAltarCollection struct {
+	itemID   string
+	category string
+}
+
 type mockCollector struct {
 	recorded []string
+	calls    []recordedAltarCollection
 	err      error
 }
 
@@ -113,6 +119,7 @@ func (m *mockCollector) RecordItemDiscovered(_ context.Context, characterID, ite
 		return m.err
 	}
 	m.recorded = append(m.recorded, itemID)
+	m.calls = append(m.calls, recordedAltarCollection{itemID: itemID, category: category})
 	return nil
 }
 
@@ -524,5 +531,23 @@ func TestWish_PropagatesCollectionError(t *testing.T) {
 	_, err := svc.Wish(ctx, "char-1", ItemMirrorOfTruth)
 	if !errors.Is(err, colErr) {
 		t.Fatalf("expected collection error %v, got: %v", colErr, err)
+	}
+}
+
+func TestWish_RecordsLegacyCollectionCategory(t *testing.T) {
+	svc, charRepo, _, _, _, collector := setupTestService(t)
+	ctx := context.Background()
+
+	charRepo.chars["char-1"] = corecharacter.Character{
+		ID:   "char-1",
+		Name: "Hero",
+		Orb:  "G",
+	}
+
+	if _, err := svc.Wish(ctx, "char-1", ItemMirrorOfTruth); err != nil {
+		t.Fatalf("Wish failed: %v", err)
+	}
+	if len(collector.calls) != 1 || collector.calls[0].itemID != ItemMirrorOfTruth || collector.calls[0].category != "item" {
+		t.Fatalf("recorded = %+v, want itemID=%s category=item", collector.calls, ItemMirrorOfTruth)
 	}
 }

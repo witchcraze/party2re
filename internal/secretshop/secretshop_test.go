@@ -577,3 +577,55 @@ func TestService_SetCollectionRecorder(t *testing.T) {
 		t.Fatalf("expected 1 record call after SetCollectionRecorder, got %d", len(recorder.calls))
 	}
 }
+
+func TestPurchaseItem_ShieldAndAccessoryRecordAsItem(t *testing.T) {
+	catalogJSON := []byte(`[
+		{"id":"secret_shield","item_definition_id":"item-071","name":"天上の盾と兜","category":"armor","price":15000,"description":"shield"},
+		{"id":"secret_ring","item_definition_id":"item-012","name":"祈りの指輪","category":"armor","price":6000,"description":"accessory"}
+	]`)
+	secretCat, err := secretshop.LoadCatalog(catalogJSON)
+	if err != nil {
+		t.Fatalf("LoadCatalog failed: %v", err)
+	}
+	itemCat, err := coreitem.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("DefaultCatalog failed: %v", err)
+	}
+
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	depotRepo := newMockDepotRepo()
+	recorder := &mockCollectionRecorder{}
+
+	svc, err := secretshop.NewService(
+		charRepo,
+		invRepo,
+		secretCat,
+		secretshop.WithDepotRepository(depotRepo),
+		secretshop.WithItemDefinitionProvider(itemCat),
+		secretshop.WithCollectionRecorder(recorder),
+		secretshop.WithTransactionProvider(&mockTxProvider{}),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	ctx := context.Background()
+	for _, tc := range []struct {
+		charID   string
+		secretID string
+		wantID   string
+	}{
+		{"char-shield", "secret_shield", "item-071"},
+		{"char-ring", "secret_ring", "item-012"},
+	} {
+		_ = charRepo.Update(ctx, createTestCharacter(tc.charID, tc.charID, 20, 7, 100000))
+		if _, err := svc.PurchaseItem(ctx, tc.charID, tc.secretID); err != nil {
+			t.Fatalf("PurchaseItem(%s) failed: %v", tc.secretID, err)
+		}
+		last := recorder.calls[len(recorder.calls)-1]
+		if last.ItemID != tc.wantID || last.Category != "item" {
+			t.Errorf("recorded = %+v, want ItemID=%s Category=item", last, tc.wantID)
+		}
+	}
+}

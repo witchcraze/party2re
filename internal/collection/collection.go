@@ -271,7 +271,7 @@ func normalizeCategory(cat string) string {
 	switch strings.ToLower(strings.TrimSpace(cat)) {
 	case "weapon", "main-hand":
 		return "weapon"
-	case "armor", "shield", "off-hand", "body", "accessory":
+	case "armor", "shield", "body":
 		return "armor"
 	default:
 		return "item"

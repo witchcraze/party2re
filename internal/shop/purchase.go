@@ -156,7 +156,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 			}
 
 			if s.recorder != nil {
-				if err := s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, definition.Category()); err != nil {
+				if err := s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, item.LegacyCollectionCategory(definition.LegacyHandKind())); err != nil {
 					return err
 				}
 			}
