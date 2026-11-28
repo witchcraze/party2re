@@ -633,12 +633,10 @@ shape. Refresh errors use `CONTEXT_REFRESH_FAILED` with a safe public message;
 internal storage details are not exposed. Successful refresh omits
 `context_error`.
 
-This contract prevents a refresh failure from disguising a known successful
-mutation as a retryable command failure. It does **not** provide idempotency or
-exactly-once execution. A lost response, timeout or unexpected execution error can
-leave the outcome unknown; GET context is an observation, not a command receipt.
-Do not automatically replay POST. Safe command replay would require a separate
-idempotency-key/result-storage design, outside this scope.
+A lost response, timeout or unexpected execution error can leave the command
+outcome unknown. GET context reports current state only. Any POST retry must be
+explicit and follow the command's receipt contract, as in
+[normal-run commands and recovery](#normal-run-commands-and-recovery).
 
 ---
 
