@@ -5047,6 +5047,50 @@
               "type": "object",
               "properties": {
                 "action": {
+                  "const": "pvp_invite"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+                    },
+                    "recipient_name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8,
+                      "description": "Exact name of an existing character, who need not be in the quest place; an unknown name is rejected with 404 RECIPIENT_NOT_FOUND. Omit it to list the characters present in the quest place without writing."
+                    },
+                    "text": {
+                      "type": "string",
+                      "description": "Optional invitation body with recipient_name; it follows place_whisper text rules and is ignored without a recipient."
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
                   "const": "pvp_advance"
                 }
               },
@@ -5755,6 +5799,50 @@
                   "required": [
                     "room_id",
                     "target_character_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "casino_room_invite"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+                    },
+                    "recipient_name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8,
+                      "description": "Exact name of an existing character, who need not be in the casino lobby; an unknown name is rejected with 404 RECIPIENT_NOT_FOUND. Omit it to list the characters present in the casino lobby without writing."
+                    },
+                    "text": {
+                      "type": "string",
+                      "description": "Optional invitation body with recipient_name; it follows place_whisper text rules and is ignored without a recipient."
+                    }
+                  },
+                  "required": [
+                    "room_id"
                   ]
                 }
               },

@@ -122,7 +122,7 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 			a.Role = "leader"
 		}
 		if pv.Room.Status == pvp.StatusRecruiting && pv.Room.Round == 0 {
-			a.Actions = append(a.Actions, "pvp_team", "player_inspect")
+			a.Actions = append(a.Actions, "pvp_team", "player_inspect", "pvp_invite")
 			if a.Role == "leader" {
 				a.Actions = append(a.Actions, "pvp_start", "pvp_kick")
 			}
@@ -253,6 +253,10 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		a := playercontext.Activity{Kind: "casino", ID: view.Room.ID, Phase: string(view.Room.Status), Round: view.Room.Round, Role: controls.Role, Actions: []string{"casino_room_leave", "place_say"}, Pace: time.Duration(view.Room.Speed) * time.Second}
 		if controls.CanStart {
 			a.Actions = append(a.Actions, "casino_room_start", "casino_room_kick")
+		}
+		// Members, not spectators, may invite before the game (_casino.cgi:11-27).
+		if view.Room.Round == 0 && controls.Role != "spectator" {
+			a.Actions = append(a.Actions, "casino_room_invite")
 		}
 		if len(controls.Actions) > 0 {
 			a.Actions = append(a.Actions, "casino_room_action")

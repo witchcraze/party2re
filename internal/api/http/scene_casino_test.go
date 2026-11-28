@@ -210,6 +210,9 @@ func (f *casinoSceneFixture) readActivities(ctx context.Context, owner, actor st
 		return nil, err
 	}
 	a := playercontext.Activity{Kind: "casino", ID: v.Room.ID, Role: c.Role, Phase: string(v.Room.Status), Round: v.Room.Round, Actions: []string{"casino_room_leave", "place_say"}, Pace: time.Duration(v.Room.Speed) * time.Second}
+	if v.Room.Round == 0 && c.Role != "spectator" {
+		a.Actions = append(a.Actions, "casino_room_invite")
+	}
 	if c.CanStart {
 		a.Actions = append(a.Actions, "casino_room_start", "casino_room_kick")
 	}

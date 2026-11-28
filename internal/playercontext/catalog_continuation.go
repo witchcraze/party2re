@@ -9,6 +9,8 @@ var continuationCatalog = []ActionDefinition{
 	{ID: "pvp_team", Label: "チームを選ぶ", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "team_color"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_start", Label: "対戦を始める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_kick", Label: "部屋のメンバーを外す", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "target_character_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
+	// ＠さそう whispers into the quest place log with act_time = 0 (_skill.cgi:769-779).
+	{ID: "pvp_invite", Label: "冒険者をさそう", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "pvp", WaitExempt: WaitWhisper, LegacyVerb: "さそう"},
 	{ID: "pvp_advance", Label: "対戦を進める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing},
 	{ID: "pvp_leave", Label: "対戦部屋を離れる", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "pvp", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "gvg_start", Label: "ギルド戦を始める", Category: "adventure", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "gvg", WaitExempt: WaitActivityPacing},
@@ -28,5 +30,7 @@ var continuationCatalog = []ActionDefinition{
 	{ID: "casino_room_start", Label: "ゲームを始める", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "casino", WaitExempt: WaitActivityPacing},
 	{ID: "casino_room_leave", Label: "カジノ部屋を離れる", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "casino", WaitExempt: WaitActivityPacing, Recovery: true},
 	{ID: "casino_room_action", Label: "ゲームの行動を選ぶ", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "action"}, ActivityKind: "casino", WaitExempt: WaitActivityPacing},
+	// ＠さそう whispers into the casino lobby log with act_time = 0 (_casino.cgi:122-133).
+	{ID: "casino_room_invite", Label: "ロビーの人をさそう", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id"}, ActivityKind: "casino", WaitExempt: WaitWhisper, LegacyVerb: "さそう"},
 	{ID: "casino_room_kick", Label: "部屋のメンバーを外す", Category: "social", OperationID: "executeCharacterAction", RequiredParams: []string{"room_id", "target_character_id"}, ActivityKind: "casino", WaitExempt: WaitActivityPacing},
 }

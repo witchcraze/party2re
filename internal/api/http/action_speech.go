@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/placelog"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/validation"
 )
 
@@ -45,6 +46,9 @@ func speechRejection(err error) (int, ErrorDetail) {
 	}
 	if errors.Is(err, casino.ErrRoomNotFound) || errors.Is(err, casino.ErrMemberNotFound) {
 		return casinoActionRejection(err)
+	}
+	if errors.Is(err, pvp.ErrCharacterNotInRoom) {
+		return pvpLeaveRejection(err)
 	}
 	return 0, ErrorDetail{}
 }
@@ -93,26 +97,91 @@ func (h *Handler) registerSpeech() {
 		if err := decodeActionParams(raw, whisperDef.RequiredParams, &p); err != nil {
 			return nil, err
 		}
-		name, err := validation.ValidateCharacterName(p.RecipientName)
+		name, row, err := whisperRow(whisperVerb, p.RecipientName, p.Text)
 		if err != nil {
 			return nil, err
 		}
-		row := whisperVerb + ">" + name
-		// Legacy logs a whisper without a body as the bare command; a
-		// whitespace-only body still gets the character and length checks.
-		text, err := validation.ValidateLegacyComment(p.Text, maxSpeechLength)
-		switch {
-		case errors.Is(err, validation.ErrEmpty):
-			if err := validation.ValidateVerbatimLine(validation.StripLegacyText(p.Text), maxSpeechLength); err != nil {
-				return nil, err
-			}
-		case err != nil:
-			return nil, err
-		default:
-			row += " " + text
-		}
 		return func(ctx context.Context, _, _ string, current playercontext.Result) (any, error) {
 			return h.speak(ctx, current, row, name)
+		}, nil
+	}}
+	h.registerInvite("pvp_invite", placelog.Place{Kind: placelog.KindFacility, ID: "quest"}, pvp.ErrCharacterNotInRoom)
+	h.registerInvite("casino_room_invite", placelog.Place{Kind: placelog.KindFacility, ID: "casino"}, casino.ErrMemberNotFound)
+}
+
+// whisperRow validates a whisper and renders its row as the legacy command
+// line. Legacy logs a whisper without a body as the bare command; a
+// whitespace-only body still gets the character and length checks.
+func whisperRow(verb, recipientName, body string) (name, row string, err error) {
+	if name, err = validation.ValidateCharacterName(recipientName); err != nil {
+		return "", "", err
+	}
+	row = verb + ">" + name
+	text, err := validation.ValidateLegacyComment(body, maxSpeechLength)
+	switch {
+	case errors.Is(err, validation.ErrEmpty):
+		if err := validation.ValidateVerbatimLine(validation.StripLegacyText(body), maxSpeechLength); err != nil {
+			return "", "", err
+		}
+	case err != nil:
+		return "", "", err
+	default:
+		row += " " + text
+	}
+	return name, row, nil
+}
+
+type inviteParams struct {
+	RoomID        string `json:"room_id"`
+	RecipientName string `json:"recipient_name"`
+	Text          string `json:"text"`
+}
+
+// InviteCandidates answers ＠さそう without a recipient: the characters
+// currently in the lobby, as legacy lists them instead of writing.
+type InviteCandidates struct {
+	Message    string        `json:"message"`
+	Candidates []PlaceMember `json:"candidates"`
+}
+
+// registerInvite connects a room's ＠さそう (_skill.cgi:769-791,
+// _casino.cgi:122-145): a whisper written to the lobby's log instead of the
+// room's, so the room is neither renewed nor touched. Eligibility (members
+// before round 1) is the room activity's; notInRoom rejects a stale room ID.
+func (h *Handler) registerInvite(action string, lobby placelog.Place, notInRoom error) {
+	def, _ := playercontext.GetAction(action)
+	verb := legacyVerb(action)
+	h.actionCommands[action] = actionCommand{reject: speechRejection, prepare: func(raw json.RawMessage) (func(context.Context, string, string, playercontext.Result) (any, error), error) {
+		var p inviteParams
+		if err := decodeActionParams(raw, def.RequiredParams, &p); err != nil {
+			return nil, err
+		}
+		name, row := "", ""
+		if p.RecipientName != "" {
+			var err error
+			if name, row, err = whisperRow(verb, p.RecipientName, p.Text); err != nil {
+				return nil, err
+			}
+		}
+		return func(ctx context.Context, _, _ string, current playercontext.Result) (any, error) {
+			if room, ok := activityFact(current, def.ActivityKind); !ok || room.ID != p.RoomID {
+				return nil, notInRoom
+			}
+			if name != "" {
+				return h.writeSpeech(ctx, current, lobby, row, name)
+			}
+			out := InviteCandidates{Message: "誰をさそいますか？", Candidates: []PlaceMember{}}
+			if h.placeMembers == nil {
+				return out, nil
+			}
+			rows, err := h.placeMembers.Read(ctx, lobby, time.Now())
+			if err != nil {
+				return nil, err
+			}
+			for _, m := range rows {
+				out.Candidates = append(out.Candidates, PlaceMember{Kind: "character", Name: m.Name, Color: m.Color, IconURL: m.IconURL, AuraEffect: m.AuraEffect})
+			}
+			return out, nil
 		}, nil
 	}}
 }
@@ -121,6 +190,15 @@ func (h *Handler) registerSpeech() {
 // name makes it a whisper, visible only to the sender and the recipient. The
 // row is the command's only effect, so an append failure is not swallowed.
 func (h *Handler) speak(ctx context.Context, current playercontext.Result, text, recipientName string) (SpeechResult, error) {
+	place, err := h.scenePlace(ctx, current)
+	if err != nil {
+		return SpeechResult{}, err
+	}
+	return h.writeSpeech(ctx, current, place, text, recipientName)
+}
+
+// writeSpeech appends the actor's row to place, resolving the recipient first.
+func (h *Handler) writeSpeech(ctx context.Context, current playercontext.Result, place placelog.Place, text, recipientName string) (SpeechResult, error) {
 	char := current.Snapshot.Character
 	recipientID := ""
 	if recipientName != "" {
@@ -135,10 +213,6 @@ func (h *Handler) speak(ctx context.Context, current playercontext.Result, text,
 	}
 	row := placelog.Entry{OccurredAt: time.Now().UTC(), SpeakerKind: placelog.SpeakerCharacter, SpeakerCharacterID: char.ID,
 		Name: char.Name, Color: char.Color, Text: text, RecipientCharacterID: recipientID}
-	place, err := h.scenePlace(ctx, current)
-	if err != nil {
-		return SpeechResult{}, err
-	}
 	// Writing a room's log keeps the room alive (casino.cgi:124-129); the
 	// renewal also rejects a speaker whose room ended or who left it.
 	if place.Kind == placeKindCasinoRoom {
