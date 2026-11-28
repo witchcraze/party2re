@@ -160,59 +160,59 @@ func TestGuildActiveAffiliation_ConcurrentCreate(t *testing.T) {
 }
 
 func TestGuildActiveAffiliation_ConcurrentApproval(t *testing.T) {
-	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+	for _, tc := range []struct{ name, otherTitle string }{{"other approval", "魔導士"}, {"other rejection", guild.RemovalTitle}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newActiveAffiliationFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
 
-	leader1 := f.createCharacter(t, "AppLead1", 20000)
-	leader2 := f.createCharacter(t, "AppLead2", 20000)
-	applicant := f.createCharacter(t, "AppTarget", 5000)
+			leader1 := f.createCharacter(t, "AppLead1", 20000)
+			leader2 := f.createCharacter(t, "AppLead2", 20000)
+			applicant := f.createCharacter(t, "AppTarget", 5000)
+			g1, _, _, err := f.service.Create(ctx, leader1.ID, "AppG1_"+id.New()[:8])
+			if err != nil {
+				t.Fatal(err)
+			}
+			g2, _, _, err := f.service.Create(ctx, leader2.ID, "AppG2_"+id.New()[:8])
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, gid := range []string{g1.ID, g2.ID} {
+				if err := f.service.ApplyToJoin(ctx, gid, applicant.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	g1, _, _, err := f.service.Create(ctx, leader1.ID, "AppG1_"+id.New()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-	g2, _, _, err := f.service.Create(ctx, leader2.ID, "AppG2_"+id.New()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Applicant submits pending applications to both guilds
-	if err := f.service.ApplyToJoin(ctx, g1.ID, applicant.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.service.ApplyToJoin(ctx, g2.ID, applicant.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	// Both leaders approve the applicant concurrently
-	err1, err2 := testutil.RunRace2(
-		func() error {
-			return assigned(f.service.Assign(ctx, g1.ID, leader1.ID, applicant.ID, "騎士"))
-		},
-		func() error {
-			return assigned(f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, "魔導士"))
-		},
-	)
-
-	var successCount, alreadyInGuildCount int
-	for _, err := range []error{err1, err2} {
-		if err == nil {
-			successCount++
-		} else if errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
-			alreadyInGuildCount++
-		} else {
-			t.Errorf("unexpected error from ApproveApplication: %v", err)
-		}
-	}
-	if successCount != 1 || alreadyInGuildCount != 1 {
-		t.Fatalf("expected 1 success and 1 ErrCharacterAlreadyInGuild, got %d successes and %d alreadyInGuild (err1=%v, err2=%v)",
-			successCount, alreadyInGuildCount, err1, err2)
-	}
-
-	// Invariant: active affiliations must be exactly 1
-	if activeCount := f.countActiveAffiliations(t, applicant.ID); activeCount != 1 {
-		t.Errorf("active affiliation count = %d, want 1", activeCount)
+			var first, second guild.AssignOutcome
+			err1, err2 := testutil.RunRace2(
+				func() (err error) {
+					first, err = f.service.Assign(ctx, g1.ID, leader1.ID, applicant.ID, "騎士")
+					return err
+				},
+				func() (err error) {
+					second, err = f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, tc.otherTitle)
+					return err
+				},
+			)
+			if err1 != nil || err2 != nil {
+				t.Fatalf("concurrent assignments: %v / %v", err1, err2)
+			}
+			if tc.otherTitle == guild.RemovalTitle {
+				if first != guild.AssignApproved || (second != guild.AssignRejected && second != guild.AssignStaleApplicationRemoved) {
+					t.Fatalf("approval/rejection outcomes = %q / %q", first, second)
+				}
+			} else if !((first == guild.AssignApproved && second == guild.AssignStaleApplicationRemoved) ||
+				(first == guild.AssignStaleApplicationRemoved && second == guild.AssignApproved)) {
+				t.Fatalf("approval outcomes = %q / %q", first, second)
+			}
+			var rows int
+			if err := f.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_members WHERE character_id = ?", applicant.ID).Scan(&rows); err != nil {
+				t.Fatal(err)
+			}
+			if active := f.countActiveAffiliations(t, applicant.ID); active != 1 || rows != 1 {
+				t.Fatalf("affiliations = %d active / %d total; want one active row", active, rows)
+			}
+		})
 	}
 }
 
@@ -237,29 +237,23 @@ func TestGuildActiveAffiliation_CreateVsApproval(t *testing.T) {
 	newGuildName := "CvANew_" + id.New()[:8]
 
 	// Target creates a new guild while Leader1 approves Target concurrently
-	err1, err2 := testutil.RunRace2(
+	var approval guild.AssignOutcome
+	createErr, assignErr := testutil.RunRace2(
 		func() error {
 			_, _, _, err := f.service.Create(ctx, target.ID, newGuildName)
 			return err
 		},
-		func() error {
-			return assigned(f.service.Assign(ctx, g1.ID, leader1.ID, target.ID, "戦士"))
+		func() (err error) {
+			approval, err = f.service.Assign(ctx, g1.ID, leader1.ID, target.ID, "戦士")
+			return err
 		},
 	)
-
-	var successCount, alreadyInGuildCount int
-	for _, err := range []error{err1, err2} {
-		if err == nil {
-			successCount++
-		} else if errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
-			alreadyInGuildCount++
-		} else {
-			t.Errorf("unexpected error: %v", err)
-		}
+	if assignErr != nil {
+		t.Fatal(assignErr)
 	}
-	if successCount != 1 || alreadyInGuildCount != 1 {
-		t.Fatalf("expected 1 success and 1 ErrCharacterAlreadyInGuild, got %d successes and %d alreadyInGuild (err1=%v, err2=%v)",
-			successCount, alreadyInGuildCount, err1, err2)
+	if !((createErr == nil && approval == guild.AssignStaleApplicationRemoved) ||
+		(errors.Is(createErr, guild.ErrCharacterAlreadyInGuild) && approval == guild.AssignApproved)) {
+		t.Fatalf("concurrent Create = %v, Assign = %q", createErr, approval)
 	}
 
 	// Invariant: active affiliations must be exactly 1
@@ -269,7 +263,7 @@ func TestGuildActiveAffiliation_CreateVsApproval(t *testing.T) {
 
 	// Invariant: if Create won, money is 15000; if Approve won, money is 20000
 	currentMoney := f.getCharacterMoney(t, target.ID)
-	if err1 == nil {
+	if createErr == nil {
 		// Create won
 		if currentMoney != 15000 {
 			t.Errorf("Create won: expected money 15000, got %d", currentMoney)
@@ -452,63 +446,6 @@ func TestGuildActiveAffiliation_PendingSuccessionFallback(t *testing.T) {
 	}
 }
 
-func TestGuildActiveAffiliation_AssignCustomRoleConcurrency(t *testing.T) {
-	f := newActiveAffiliationFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	leader1 := f.createCharacter(t, "ARLead1", 20000)
-	leader2 := f.createCharacter(t, "ARLead2", 20000)
-	applicant := f.createCharacter(t, "ARTarget", 5000)
-
-	g1, _, _, err := f.service.Create(ctx, leader1.ID, "ARG1_"+id.New()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-	g2, _, _, err := f.service.Create(ctx, leader2.ID, "ARG2_"+id.New()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Applicant submits pending applications to both guilds
-	if err := f.service.ApplyToJoin(ctx, g1.ID, applicant.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.service.ApplyToJoin(ctx, g2.ID, applicant.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	// Concurrent AssignCustomRole on pending applicant vs ApproveApplication (or AssignCustomRole on other guild)
-	err1, err2 := testutil.RunRace2(
-		func() error {
-			return assigned(f.service.Assign(ctx, g1.ID, leader1.ID, applicant.ID, "親衛隊長"))
-		},
-		func() error {
-			return assigned(f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, "魔導将軍"))
-		},
-	)
-
-	var successCount, alreadyInGuildCount int
-	for _, err := range []error{err1, err2} {
-		if err == nil {
-			successCount++
-		} else if errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
-			alreadyInGuildCount++
-		} else {
-			t.Errorf("unexpected error from AssignCustomRole: %v", err)
-		}
-	}
-	if successCount != 1 || alreadyInGuildCount != 1 {
-		t.Fatalf("expected 1 success and 1 ErrCharacterAlreadyInGuild, got %d successes and %d alreadyInGuild (err1=%v, err2=%v)",
-			successCount, alreadyInGuildCount, err1, err2)
-	}
-
-	// Invariant: active affiliations must be exactly 1
-	if activeCount := f.countActiveAffiliations(t, applicant.ID); activeCount != 1 {
-		t.Errorf("active affiliation count = %d, want 1", activeCount)
-	}
-}
-
 func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.T) {
 	f := newActiveAffiliationFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -537,12 +474,14 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.
 
 	// Leader1 leaves G1 (attempting to promote applicant as sole remaining member)
 	// while Leader2 concurrently approves applicant in G2!
+	var approval guild.AssignOutcome
 	errLeave, errApprove := testutil.RunRace2(
 		func() error {
 			return f.service.Leave(ctx, g1.ID, leader1.ID)
 		},
-		func() error {
-			return assigned(f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, "精鋭"))
+		func() (err error) {
+			approval, err = f.service.Assign(ctx, g2.ID, leader2.ID, applicant.ID, "精鋭")
+			return err
 		},
 	)
 
@@ -551,9 +490,8 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.
 		t.Fatalf("unexpected error from Leave: %v", errLeave)
 	}
 
-	// ApproveApplication either succeeds (if it won race), or fails with ErrCharacterAlreadyInGuild (if Leave promoted applicant first).
-	if errApprove != nil && !errors.Is(errApprove, guild.ErrCharacterAlreadyInGuild) {
-		t.Fatalf("unexpected error from ApproveApplication: %v", errApprove)
+	if errApprove != nil || (approval != guild.AssignApproved && approval != guild.AssignStaleApplicationRemoved) {
+		t.Fatalf("unexpected Assign result: %q, %v", approval, errApprove)
 	}
 
 	// Invariant: active affiliations for applicant must be exactly 1 under all race outcomes
@@ -561,9 +499,8 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.
 		t.Errorf("active affiliation count for applicant = %d, want 1", activeCount)
 	}
 
-	// If ApproveApplication won, applicant is in G2 and G1 is disbanded.
-	// If Leave won, applicant is leader of G1 and ApproveApplication failed.
-	if errApprove == nil {
+	// If approval won, G1 disbands. If Leave won, G2 clears the stale application.
+	if approval == guild.AssignApproved {
 		// Approve won: G2 active, G1 disbanded
 		activeG, _, err := f.service.GetByCharacter(ctx, applicant.ID)
 		if err != nil {
@@ -583,6 +520,10 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.
 		}
 		if g1Detail.Guild.LeaderCharacterID != applicant.ID {
 			t.Errorf("G1 leader = %s, want %s", g1Detail.Guild.LeaderCharacterID, applicant.ID)
+		}
+		g2Detail, err := f.service.Get(ctx, g2.ID)
+		if err != nil || len(g2Detail.Members) != 1 || g2Detail.Members[0].CharacterID != leader2.ID {
+			t.Fatalf("G2 roster = %+v, err: %v", g2Detail.Members, err)
 		}
 	}
 }

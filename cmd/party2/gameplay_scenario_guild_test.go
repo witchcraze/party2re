@@ -7,6 +7,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -290,5 +292,88 @@ func TestGameplayScenario_GuildMembership(t *testing.T) {
 		if c, _ := look(applicantToken, applicant); c.Scene.LocationID != "town" || guildEntry(c) != nil {
 			t.Fatalf("expelled member after restart: %s", c.Scene.LocationID)
 		}
+	}
+}
+
+func TestGameplayScenario_GuildClearsStaleApplication(t *testing.T) {
+	a := newIsolatedScenarioApp(t)
+	ctx := context.Background()
+	_, _, masterToken, master := a.registerAccount(true)
+	if _, err := a.db.ExecContext(ctx, "UPDATE characters SET money = 5100 WHERE id = ?", master); err != nil {
+		t.Fatal(err)
+	}
+	association := a.enter(masterToken, master, a.context(masterToken, master), "join_guild")
+	a.offered(masterToken, master, association, "guild_create", map[string]any{"name": "g" + id.New()[:7]}, http.StatusOK)
+	repo, err := database.NewGuildRepository(a.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, err := repo.GetGuildByCharacter(ctx, master)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _, err := database.CreateTestGuildWithLeader(ctx, a.db, "g"+id.New()[:7], 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, title := range []string{"団員", guild.RemovalTitle} {
+		t.Run(title, func(t *testing.T) {
+			a := *a
+			a.t = t
+			applicant, err := database.CreateTestCharacter(ctx, a.db, "App"+id.New()[:7])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := repo.AddMember(ctx, guild.Member{GuildID: first.ID, CharacterID: applicant.ID, Role: guild.RoleMember, IsPending: true}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := repo.AddMember(ctx, guild.Member{GuildID: other.ID, CharacterID: applicant.ID, Role: guild.RoleMember, Title: "斥候"}); err != nil {
+				t.Fatal(err)
+			}
+
+			a.elapseActionWait(master)
+			room := a.context(masterToken, master)
+			got := a.offered(masterToken, master, room, "guild_assign", map[string]any{"member_id": applicant.ID, "title": title}, http.StatusOK)
+			var reply struct {
+				Outcome string `json:"outcome"`
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal(got.Result, &reply); err != nil {
+				t.Fatal(err)
+			}
+			if reply.Outcome != "stale_application_removed" || reply.Message != applicant.Name+"はすでに別のギルドに加入しています" || got.Context.Scene.LocationID != "guild" {
+				t.Fatalf("stale application reply = %+v, scene = %q", reply, got.Context.Scene.LocationID)
+			}
+
+			var observed struct {
+				Scene struct {
+					Data struct {
+						View struct {
+							Members []struct {
+								CharacterID string `json:"character_id"`
+							} `json:"members"`
+						} `json:"view"`
+					} `json:"data"`
+				} `json:"scene"`
+			}
+			a.call(masterToken, http.MethodGet, "/api/v1/characters/"+master+"/context", "", http.StatusOK, &observed)
+			if members := observed.Scene.Data.View.Members; len(members) != 1 || members[0].CharacterID != master {
+				t.Fatalf("refreshed roster = %+v, want only leader", members)
+			}
+			activeGuild, member, err := repo.GetGuildByCharacter(ctx, applicant.ID)
+			if err != nil || activeGuild.ID != other.ID || member.Title != "斥候" {
+				t.Fatalf("existing affiliation = %q / %+v, err = %v", activeGuild.ID, member, err)
+			}
+			var letters, memories int
+			if err := a.db.QueryRowContext(ctx, `SELECT
+				(SELECT COUNT(*) FROM character_letters WHERE recipient_character_id = ?),
+				(SELECT COUNT(*) FROM character_memories WHERE character_id = ? AND kind = 'guild_join')`, applicant.ID, applicant.ID).Scan(&letters, &memories); err != nil {
+				t.Fatal(err)
+			}
+			if letters != 0 || memories != 0 {
+				t.Fatalf("stale application wrote %d letters and %d join memories", letters, memories)
+			}
+		})
 	}
 }

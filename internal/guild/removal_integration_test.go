@@ -159,6 +159,13 @@ type removalGateRepo struct {
 	beforeLocked, afterRead func(context.Context)
 }
 
+func (r *removalGateRepo) LockCharacterForUpdate(ctx context.Context, characterID string) error {
+	if r.beforeLocked != nil {
+		r.beforeLocked(ctx)
+	}
+	return r.GuildRepository.LockCharacterForUpdate(ctx, characterID)
+}
+
 func (r *removalGateRepo) GetGuild(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
 	g, members, err := r.GuildRepository.GetGuild(ctx, guildID)
 	if err == nil && r.afterRead != nil {
@@ -168,9 +175,6 @@ func (r *removalGateRepo) GetGuild(ctx context.Context, guildID string) (guild.G
 }
 
 func (r *removalGateRepo) GetGuildForUpdate(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-	if r.beforeLocked != nil {
-		r.beforeLocked(ctx)
-	}
 	g, members, err := r.GuildRepository.GetGuildForUpdate(ctx, guildID)
 	if err == nil && r.afterRead != nil {
 		r.afterRead(ctx)

@@ -160,46 +160,27 @@
       ]
     },
     {
-      "method": "removeAuthorizedMember",
-      "source_ref": "internal/guild/removal.go#Service.removeAuthorizedMember",
-      "transaction_type": "RunInTx",
-      "lock_sequence": [
-        {
-          "table": "guilds",
-          "tier": 7,
-          "mode": "SELECT FOR UPDATE",
-          "note": "＠あたえる>追放 (Assign) delegates current leadership authorization to this shared removal boundary; the rejection or expulsion letter follows successful RunInTx."
-        },
-        {
-          "table": "guild_members",
-          "tier": 7,
-          "mode": "SELECT FOR UPDATE",
-          "note": "Lock roster in joined_at ASC, character_id ASC order; validate requester/target role and pending state before ambient RemoveMember deletion."
-        }
-      ]
-    },
-    {
       "method": "Assign",
-      "source_ref": "internal/guild/service.go#Service.Assign",
+      "source_ref": "internal/guild/assign.go#Service.Assign",
       "transaction_type": "RunInTx",
       "lock_sequence": [
         {
           "table": "characters",
           "tier": 2,
           "mode": "SELECT FOR UPDATE",
-          "note": "Titles lock the target character first; 追放 delegates to removeAuthorizedMember without it."
+          "note": "Lock the target character before either title assignment or removal to serialize with other character-locked membership changes."
         },
         {
           "table": "guilds",
           "tier": 7,
           "mode": "SELECT FOR UPDATE",
-          "note": "Verify current guild leadership under exclusive lock before approving, retitling or (via removeAuthorizedMember) removing."
+          "note": "Verify current guild leadership under exclusive lock."
         },
         {
           "table": "guild_members",
           "tier": 7,
           "mode": "SELECT FOR UPDATE",
-          "note": "Lock roster in deterministic order; an applicant's approval rechecks other active affiliations and records the join memory; the acceptance letter follows the transaction."
+          "note": "Lock the roster in joined_at, character_id order for classification and mutation. The affiliation lookup is an ordinary read under the target character lock."
         }
       ]
     },

@@ -451,7 +451,7 @@ func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service, err := guild.NewService(guildRepo)
+	service, err := guild.NewService(guildRepo, guild.WithTransactionProvider(database.NewTransactionProvider(db)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +543,6 @@ func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
 	if err := service.ApplyToJoin(ctx, gB.ID, applicant2.ID); !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
 		t.Fatalf("expected ErrCharacterAlreadyInGuild for affiliated character applying to B, got %v", err)
 	}
-	_ = gC
 
 	// 6. Leader B approves applicant into Guild B
 	if err := assigned(service.Assign(ctx, gB.ID, leaderB.ID, applicant.ID, "斥候")); err != nil {
@@ -556,9 +555,24 @@ func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
 		t.Fatalf("expected active membership in Guild B, got guild=%+v, member=%+v, err=%v", charGuild, charMember, err)
 	}
 
-	// 7. Leader A tries to approve applicant into Guild A -> fails with ErrCharacterAlreadyInGuild
-	if err := assigned(service.Assign(ctx, gA.ID, leaderA.ID, applicant.ID, "親衛隊")); !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
-		t.Fatalf("expected ErrCharacterAlreadyInGuild when approving already-affiliated member in A, got %v", err)
+	// 7. Either assignment form clears a stale application without disturbing the active guild.
+	for _, tc := range []struct {
+		characterID, title, activeGuildID, activeTitle string
+	}{
+		{applicant.ID, "親衛隊", gB.ID, "斥候"},
+		{applicant2.ID, guild.RemovalTitle, gC.ID, guild.DefaultTitleLeader},
+	} {
+		if outcome, err := service.Assign(ctx, gA.ID, leaderA.ID, tc.characterID, tc.title); err != nil || outcome != guild.AssignStaleApplicationRemoved {
+			t.Fatalf("Assign %q = %q, %v; want stale application removed", tc.title, outcome, err)
+		}
+		active, member, err := service.GetByCharacter(ctx, tc.characterID)
+		if err != nil || active.ID != tc.activeGuildID || member.Title != tc.activeTitle {
+			t.Fatalf("affiliation after %q = %q / %+v, err: %v", tc.title, active.ID, member, err)
+		}
+	}
+	roster, err := service.Get(ctx, gA.ID)
+	if err != nil || len(roster.Members) != 1 || roster.Members[0].CharacterID != leaderA.ID {
+		t.Fatalf("roster after stale assignments = %+v, err: %v", roster.Members, err)
 	}
 
 	// 8. AddGuildPoints now awards points to Guild B
