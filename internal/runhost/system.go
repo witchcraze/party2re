@@ -3,10 +3,12 @@ package runhost
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -171,11 +173,11 @@ func (s *Service[R, P]) Join(ctx context.Context, player, actor, runID, key stri
 	return s.resolveReceipt(ctx, cmd, result, err)
 }
 
-// DisposeIdle deletes a retained run that has had no members and no room
+// disposeIdle deletes a retained run that has had no members and no room
 // activity for the idle timeout (quest.cgi:86–90). A run with members keeps
 // its member-requested timeout, which applies their penalties.
 // Transaction: WithRunForUpdate. Lock Order: runs(0); no character locks.
-func (s *Service[R, P]) DisposeIdle(ctx context.Context, runID string) error {
+func (s *Service[R, P]) disposeIdle(ctx context.Context, runID string) error {
 	return s.cfg.Store.WithRunForUpdate(ctx, runID, false, func(ctx context.Context) error {
 		run, err := s.cfg.Store.FindRun(ctx, runID)
 		if err != nil || run == nil {
@@ -190,4 +192,84 @@ func (s *Service[R, P]) DisposeIdle(ctx context.Context, runID string) error {
 		r.Retained = false
 		return s.cfg.Store.SaveRun(ctx, *run, version)
 	})
+}
+
+// sweepBatchLimit bounds the rooms one scheduled sweep tick cleans up.
+const sweepBatchLimit = 50
+
+// SweepIdle cleans up this kind's idle rooms without a member command, standing in
+// for legacy's cleanup on every quest-list view (quest.cgi:80–91, auto_delete_quest
+// 172–184) because GET stays read-only. It also finishes timeouts whose penalty
+// projection failed. Each room is re-checked under its run lock, so racing commands
+// and repeated sweeps are safe.
+func (s *Service[R, P]) SweepIdle(ctx context.Context) error {
+	runs, err := s.cfg.Store.ListRuns(ctx, s.cfg.Kind)
+	if err != nil {
+		return err
+	}
+	cutoff := s.cfg.Clock.Now().Add(-idleTimeout)
+	var errs []error
+	swept := 0
+	for _, r := range runs {
+		if swept == sweepBatchLimit {
+			break
+		}
+		var err error
+		switch {
+		case len(r.Roster) > 0 && (r.TimedOut || r.LastActivity.Before(cutoff)):
+			err = s.timeoutIdle(ctx, r.ID)
+		case len(r.Roster) == 0 && r.Retained && r.LastActivity.Before(cutoff):
+			err = s.disposeIdle(ctx, r.ID)
+		default:
+			continue
+		}
+		swept++
+		// ErrConflict: a racing command renewed or finished the room first.
+		if err != nil && !errors.Is(err, ErrConflict) {
+			errs = append(errs, fmt.Errorf("run %s: %w", r.ID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// timeoutIdle commits the idle timeout a member's cleanup command would, then
+// projects its fixed penalties.
+// Transaction: WithRunForUpdate. Lock Order: runs(0) -> characters(2, sorted) -> recipients(8).
+func (s *Service[R, P]) timeoutIdle(ctx context.Context, runID string) error {
+	err := s.cfg.Store.WithRunForUpdate(ctx, runID, false, func(ctx context.Context) error {
+		run, err := s.cfg.Store.FindRun(ctx, runID)
+		if err != nil || run == nil {
+			return err
+		}
+		r := P(run).Host()
+		if r.TimedOut || len(r.Roster) == 0 {
+			return nil
+		}
+		now := s.cfg.Clock.Now()
+		if !now.After(r.LastActivity.Add(idleTimeout)) {
+			return ErrConflict
+		}
+		ctx = commandContext(ctx, r.ID)
+		if err := economy.LockInOrder(ctx, r.Roster, func(ctx context.Context, id string) error {
+			_, err := s.cfg.Characters.FindByIDForUpdate(ctx, id)
+			return err
+		}); err != nil {
+			return err
+		}
+		if err := s.timeout(ctx, run, now); err != nil {
+			return err
+		}
+		version := r.Version
+		r.Version++
+		for _, id := range r.Roster {
+			if err := s.cfg.Store.SaveRunRecipient(ctx, r.ID, id, r.Recipients[id]); err != nil {
+				return err
+			}
+		}
+		return s.cfg.Store.SaveRun(ctx, *run, version)
+	})
+	if err != nil {
+		return err
+	}
+	return s.recoverTimeout(ctx, runID, nil)
 }

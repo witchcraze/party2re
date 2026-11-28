@@ -134,6 +134,33 @@ func TestWorker_ReconcilesWithEmptyOrUnavailableQueue(t *testing.T) {
 	}
 }
 
+func TestWorker_BoundsSlowReconcilerAfterDueActions(t *testing.T) {
+	repo := newMockRepository()
+	worker := NewWorker(repo, 20*time.Millisecond, &mockLogger{})
+	handler := &mockHandler{}
+	worker.RegisterHandler("test_action", handler)
+	repo.actions = []core_scheduling.ScheduledAction{{ID: "due", ActionType: "test_action", ActorID: "actor", ExecuteAt: time.Now().Add(-time.Minute), State: core_scheduling.StatePending}}
+	var handledFirst bool
+	worker.RegisterReconciler("slow", func(ctx context.Context) error {
+		handledFirst = handler.handled
+		<-ctx.Done() // blocks until the per-tick bound cancels it
+		return ctx.Err()
+	})
+	done := make(chan struct{})
+	go func() {
+		worker.processActions(context.Background())
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("slow reconciler was not cancelled")
+	}
+	if !handledFirst {
+		t.Fatal("due action waited behind the reconciler")
+	}
+}
+
 func TestWorker(t *testing.T) {
 	repo := newMockRepository()
 	logger := &mockLogger{}

@@ -461,7 +461,7 @@ parity nor complete cross-store recovery.
 
 ## Run host: durable command boundary (#1325)
 
-The user approved SQL authority and the explicit idle-cleanup timing in #1325
+The user approved SQL authority and the idle-cleanup timing in #1325
 on 2026-10-11. The [run host](../../internal/runhost/runhost.go) owns enrolled
 runs for every room library; Party and PvP Valkey lobbies own waiting rosters. Legacy runs
 every room mode on shared routines (the battle engine, treasure inspection and
@@ -560,7 +560,8 @@ retains it, while preserving admission, recipient dispositions and receipts; ano
 actor cannot read those receipts.
 
 Room-log-equivalent activity uses the [gameplay matrix](../design/adventure.md#room-activity-contract).
-GET, rejected commands and receipt retries do not renew it. Explicit cleanup is
+GET, rejected commands and receipt retries do not renew it. Cleanup, by the
+scheduled sweep or a member's command, is
 due strictly after 1800 seconds, preserves outstanding normal/Try entitlements,
 and records timeout separately from personal exit. Remaining participants receive
 a durable one-hour sleep deadline anchored to the committed cleanup; departed
@@ -600,9 +601,8 @@ failed join rolls back with no partial membership or join effects, a lost commit
 acknowledgement resolves from the join receipt without repeating them, and an
 unreadable receipt reports `ErrRecovery`.
 At the last personal exit the room decides whether the run survives with its enemy
-state (`_battle.cgi:1331`). A surviving empty run has no member to request cleanup,
-so a member-less disposal removes it after the same idle timeout; member cleanup
-removes a retained room like any other. A room NPC may also remove fallen members
+state (`_battle.cgi:1331`). The scheduled sweep deletes a surviving empty run after
+the same idle timeout and times out a retained room with members like any other. A room NPC may also remove fallen members
 (`vs_king.cgi` dejon): they leave without exit settlement or the deletion check,
 their unreleased stock stays in the ledger like a disposed timeout's, and a rejoin
 to the same room carries it over.

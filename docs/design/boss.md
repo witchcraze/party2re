@@ -15,7 +15,7 @@ Sealing rooms (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`) are a room li
 
 The trigger is every stage19 ordinary floor-11 treasure creation ([Adventure](adventure.md#combat-travel-and-encounter-replacement)); MaoCount and the unseal clock commit with that settlement.
 
-- A stage never has two rooms: `make_vs_king` skips a stage whose quest directory exists (`vs_monster.cgi:168`), and an idle room is deleted only when the room list is read (`quest.cgi:86–90`). An idle but unlisted room therefore blocks its stage's reopening until a listing deletes it.
+- A stage never has two rooms: `make_vs_king` skips a stage whose quest directory exists (`vs_monster.cgi:168`), and an idle room is deleted only when the room list is read (`quest.cgi:86–90`). An idle but unlisted room therefore blocks its stage's reopening until a listing deletes it; natively the scheduled idle sweep stands in for the listing ([Adventure](adventure.md#earnings-and-inactivity-evidence)).
 - The last exit deletes the room only when its leader boss is defeated, before or after sealing (`_battle.cgi:1331`). `＠にげる` writes the room log (`party.cgi:25`), so every exit, the last included, restarts the 30-minute idle clock of a room that survives.
 - The room's enemy state belongs to that room. It is not the withdrawn shared world-boss HP ([transient-boss-hp.md](../architecture/transient-boss-hp.md)).
 
