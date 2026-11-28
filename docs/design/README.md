@@ -63,7 +63,6 @@ graph TD
 ### Client boundary and scheduling
 - [`action-preconditions.md`](action-preconditions.md) — Current catalog snapshot, availability gates, and known legacy differences.
 - [Scheduling](../architecture/valkey-keyspace.md#scheduled-work-lifecycle) — unfinished work and terminal recovery.
-- [`accessory-shop.md`](accessory-shop.md) — Accessory sales and synthesis.
 - [`admin.md`](admin.md) — Administrative character inspection and controls.
 
 ### 1. Account, Identity & Character Foundation

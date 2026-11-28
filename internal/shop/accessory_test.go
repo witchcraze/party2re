@@ -88,7 +88,7 @@ func TestAccessoryPurchase_InventoryRoutingAndDiscovery(t *testing.T) {
 	_ = invRepo.Save(ctx, coreinventory.Inventory{CharacterID: char.ID})
 
 	// Purchase item-147 (base price 50, retail 500 G in accessory shop)
-	res, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-147", 1)
+	res, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-147")
 	if err != nil {
 		t.Fatalf("PurchaseInShop error = %v", err)
 	}
@@ -108,7 +108,7 @@ func TestAccessoryPurchase_InventoryRoutingAndDiscovery(t *testing.T) {
 	}
 
 	// Purchase second accessory item when accessory slot is occupied -> routes to depot
-	res2, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-148", 1)
+	res2, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-148")
 	if err != nil {
 		t.Fatalf("PurchaseInShop 2 error = %v", err)
 	}
@@ -132,13 +132,13 @@ func TestAccessoryPurchase_JobLevelFilter(t *testing.T) {
 	_ = invRepo.Save(ctx, coreinventory.Inventory{CharacterID: char.ID})
 
 	// item-143 is only available at job_lv >= 100
-	_, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-143", 1)
+	_, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-143")
 	if !errors.Is(err, shop.ErrItemNotFound) {
 		t.Errorf("expected ErrItemNotFound for item-143 at job_lv 10, got %v", err)
 	}
 
 	// item-147 is available at job_lv < 50
-	_, err = svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-147", 1)
+	_, err = svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeAccessory, "item-147")
 	if err != nil {
 		t.Errorf("unexpected error purchasing item-147 at job_lv 10: %v", err)
 	}

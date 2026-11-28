@@ -23,12 +23,12 @@ import (
 type secretShopGatewayFixture struct {
 	*shopSceneRepository
 	SecretShopService
-	service                     *secretshop.Service
-	dep                         depot.Depot
-	getCalls, requestedQuantity int
-	requestedItem               string
-	nameErr                     error
-	requestContext              context.Context
+	service        *secretshop.Service
+	dep            depot.Depot
+	getCalls       int
+	requestedItem  string
+	nameErr        error
+	requestContext context.Context
 }
 
 type secretShopGatewayDepot struct{ f *secretShopGatewayFixture }
@@ -83,7 +83,7 @@ func (f *secretShopGatewayFixture) Get(ctx context.Context, id string) (corechar
 	return f.gatewayFixture.Get(ctx, id)
 }
 
-func (f *secretShopGatewayFixture) PurchaseItem(ctx context.Context, id, itemID string, quantity int) (*secretshop.PurchaseResult, error) {
+func (f *secretShopGatewayFixture) PurchaseItem(ctx context.Context, id, itemID string) (*secretshop.PurchaseResult, error) {
 	f.checkContext(ctx)
 	if f.requestContext != nil && ctx != f.requestContext {
 		f.t.Fatal("purchase lost request context")
@@ -92,11 +92,11 @@ func (f *secretShopGatewayFixture) PurchaseItem(ctx context.Context, id, itemID 
 		f.t.Fatal("wrong purchase actor")
 	}
 	f.executions++
-	f.requestedItem, f.requestedQuantity = itemID, quantity
+	f.requestedItem = itemID
 	var result *secretshop.PurchaseResult
 	err := f.executionErr
 	if err == nil {
-		result, err = f.service.PurchaseItem(ctx, id, itemID, quantity)
+		result, err = f.service.PurchaseItem(ctx, id, itemID)
 	}
 	if f.afterExecute != nil {
 		f.afterExecute()
@@ -122,9 +122,9 @@ func (f *secretShopGatewayFixture) request(router http.Handler, params string) (
 }
 
 func TestSecretShopGatewayPurchaseAndGETRecovery(t *testing.T) {
-	for _, quantity := range []int{1, 2, 99} {
+	{
 		for _, failure := range []string{"", "query", "profile"} {
-			t.Run(fmt.Sprintf("%d/%s", quantity, failure), func(t *testing.T) {
+			t.Run(failure, func(t *testing.T) {
 				f := newSecretShopGatewayFixture(t)
 				f.requestContext = context.WithValue(context.Background(), struct{}{}, "secret shop request")
 				f.afterExecute = func() {
@@ -136,19 +136,15 @@ func TestSecretShopGatewayPurchaseAndGETRecovery(t *testing.T) {
 					}
 				}
 				router := f.router(timer.NewService(nil))
-				status, got := f.request(router, fmt.Sprintf(`{"item_id":"secret_item_herbal_root","quantity":%d}`, quantity))
-				if status != 200 || string(got["success"]) != "true" || f.executions != 1 || f.requestedItem != "secret_item_herbal_root" || f.requestedQuantity != quantity {
+				status, got := f.request(router, `{"item_id":"secret_item_herbal_root"}`)
+				if status != 200 || string(got["success"]) != "true" || f.executions != 1 || f.requestedItem != "secret_item_herbal_root" {
 					t.Fatalf("status=%d calls=%d: %s", status, f.executions, got)
 				}
 				var result secretShopPurchaseResponse
 				if err := json.Unmarshal(got["result"], &result); err != nil {
 					t.Fatal(err)
 				}
-				wantMessage := "薬草の根っこメェ〜。持ってけメェ〜"
-				if quantity > 1 {
-					wantMessage = "薬草の根っこはテスト勇者メェ〜の預かり所の方に投げましたメェ〜"
-				}
-				if result.CharacterID != "hero" || result.Quantity != quantity || result.TotalPrice != 750*quantity || result.RemainingGold != 100000-750*quantity || f.char.Money != result.RemainingGold || result.TransferredToDepot != (quantity > 1) || result.NPCMessage != wantMessage || result.InventoryInstanceID == "" {
+				if result.CharacterID != "hero" || result.TotalPrice != 750 || result.RemainingGold != 100000-750 || f.char.Money != result.RemainingGold || result.TransferredToDepot || result.NPCMessage != "薬草の根っこメェ〜。持ってけメェ〜" || result.InventoryInstanceID == "" {
 					t.Fatalf("lost purchase facts/dialogue: %+v", result)
 				}
 				invCount := 0
@@ -157,7 +153,7 @@ func TestSecretShopGatewayPurchaseAndGETRecovery(t *testing.T) {
 						invCount += inst.Quantity
 					}
 				}
-				if invCount+f.dep.Quantity("item-010") != quantity || (quantity == 1 && invCount != 1) || (quantity > 1 && invCount != 0) {
+				if invCount != 1 || f.dep.Quantity("item-010") != 0 {
 					t.Fatalf("wrong delivery: inventory=%+v depot=%+v", f.inv, f.dep)
 				}
 				if failure == "" {
@@ -175,7 +171,7 @@ func TestSecretShopGatewayPurchaseAndGETRecovery(t *testing.T) {
 	t.Run("occupied inventory", func(t *testing.T) {
 		f := newSecretShopGatewayFixture(t)
 		f.inv.Items = []item.Instance{{ID: "held", DefinitionID: "item-015", Quantity: 1}}
-		status, got := f.request(f.router(timer.NewService(nil)), `{"item_id":"secret_item_herbal_root","quantity":1}`)
+		status, got := f.request(f.router(timer.NewService(nil)), `{"item_id":"secret_item_herbal_root"}`)
 		if status != 200 || f.dep.Quantity("item-010") != 1 || len(f.inv.Items) != 1 || !strings.Contains(string(got["result"]), `"transferred_to_depot":true`) || !strings.Contains(string(got["result"]), "預かり所") {
 			t.Fatalf("occupied delivery: %d %s", status, got)
 		}
@@ -188,13 +184,10 @@ func TestSecretShopGatewayValidationAndRejectionRecovery(t *testing.T) {
 		status             int
 		setup              func(*secretShopGatewayFixture)
 	}{
-		{"zero", `{"item_id":"secret_item_herbal_root","quantity":0}`, "SECRETSHOP_INVALID_QUANTITY", 400, nil},
-		{"negative", `{"item_id":"secret_item_herbal_root","quantity":-1}`, "SECRETSHOP_INVALID_QUANTITY", 400, nil},
-		{"too many", `{"item_id":"secret_item_herbal_root","quantity":100}`, "SECRETSHOP_INVALID_QUANTITY", 400, nil},
-		{"missing item", `{"item_id":"missing","quantity":1}`, "SECRETSHOP_ITEM_NOT_FOUND", 404, nil},
-		{"access", `{"item_id":"secret_item_herbal_root","quantity":1}`, "SECRETSHOP_ACCESS_DENIED", 403, func(f *secretShopGatewayFixture) { f.char.JobLevel = 6 }},
-		{"funds", `{"item_id":"secret_item_herbal_root","quantity":1}`, "SECRETSHOP_INSUFFICIENT_FUNDS", 400, func(f *secretShopGatewayFixture) { f.char.Money = 749 }},
-		{"helper", `{"item_id":"secret_item_herbal_root","quantity":1}`, "SECRETSHOP_ITEM_UNAVAILABLE", 409, func(f *secretShopGatewayFixture) { f.active = []string{"item-010"} }},
+		{"missing item", `{"item_id":"missing"}`, "SECRETSHOP_ITEM_NOT_FOUND", 404, nil},
+		{"access", `{"item_id":"secret_item_herbal_root"}`, "SECRETSHOP_ACCESS_DENIED", 403, func(f *secretShopGatewayFixture) { f.char.JobLevel = 6 }},
+		{"funds", `{"item_id":"secret_item_herbal_root"}`, "SECRETSHOP_INSUFFICIENT_FUNDS", 400, func(f *secretShopGatewayFixture) { f.char.Money = 749 }},
+		{"helper", `{"item_id":"secret_item_herbal_root"}`, "SECRETSHOP_ITEM_UNAVAILABLE", 409, func(f *secretShopGatewayFixture) { f.active = []string{"item-010"} }},
 	} {
 		for _, failRefresh := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/%t", tc.name, failRefresh), func(t *testing.T) {
@@ -229,7 +222,7 @@ func TestSecretShopGatewayValidationAndRejectionRecovery(t *testing.T) {
 }
 
 func TestSecretShopGatewayInvalidParamsAndOwnership(t *testing.T) {
-	for _, params := range []string{"", `null`, `{}`, `[]`, `{"item_id":"secret_item_herbal_root"}`, `{"quantity":1}`, `{"item_id":null,"quantity":1}`, `{"item_id":1,"quantity":1}`, `{"item_id":"x","quantity":null}`, `{"item_id":"x","quantity":"1"}`, `{"item_id":"x","quantity":1.5}`, `{"item_id":"x","quantity":9223372036854775808}`, `{"item_id":"x","quantity":1,"character_id":"other"}`, `{"item_id":"x","quantity":1,"player_id":"other"}`, `{"item_id":"x","quantity":1,"unknown":1}`} {
+	for _, params := range []string{"", `null`, `{}`, `[]`, `{"item_id":null}`, `{"item_id":1}`, `{"item_id":"x","quantity":1}`, `{"item_id":"x","character_id":"other"}`, `{"item_id":"x","player_id":"other"}`, `{"item_id":"x","unknown":1}`} {
 		t.Run(params, func(t *testing.T) {
 			f := newSecretShopGatewayFixture(t)
 			status, got := f.request(f.router(timer.NewService(nil)), params)
@@ -244,7 +237,7 @@ func TestSecretShopGatewayInvalidParamsAndOwnership(t *testing.T) {
 		status      int
 	}{{"hero", "", 401}, {"other", "session", 403}, {"missing", "session", 404}} {
 		f := newSecretShopGatewayFixture(t)
-		status, got := gatewayRequest(t, f.router(timer.NewService(nil)), tc.path, tc.token, "application/json", `{"action":"secretshop_purchase","params":{"item_id":"secret_item_herbal_root","quantity":1}}`, nil)
+		status, got := gatewayRequest(t, f.router(timer.NewService(nil)), tc.path, tc.token, "application/json", `{"action":"secretshop_purchase","params":{"item_id":"secret_item_herbal_root"}}`, nil)
 		if status != tc.status || f.executions != 0 || f.queryCalls != 0 {
 			t.Fatalf("status=%d: %s", status, got)
 		}
@@ -297,7 +290,7 @@ func TestSecretShopGatewayGuards(t *testing.T) {
 			if condition == "name read error" {
 				code = "EXECUTION_FAILED"
 			}
-			status, got := f.request(f.router(reader), `{"item_id":"secret_item_herbal_root","quantity":1}`)
+			status, got := f.request(f.router(reader), `{"item_id":"secret_item_herbal_root"}`)
 			if status != want || f.executions != 0 || f.writes != 0 || f.char.Money != 100000 {
 				t.Fatalf("status=%d executions=%d: %s", status, f.executions, got)
 			}
@@ -320,7 +313,7 @@ func TestSecretShopGatewayDependencyErrors(t *testing.T) {
 		t.Run(tc.code+tc.err.Error(), func(t *testing.T) {
 			f := newSecretShopGatewayFixture(t)
 			f.executionErr = fmt.Errorf("wrapped: %w", tc.err)
-			status, got := f.request(f.router(timer.NewService(nil)), `{"item_id":"secret_item_herbal_root","quantity":1}`)
+			status, got := f.request(f.router(timer.NewService(nil)), `{"item_id":"secret_item_herbal_root"}`)
 			if status != tc.status || f.writes != 0 || f.executions != 1 {
 				t.Fatalf("status=%d: %s", status, got)
 			}
@@ -335,7 +328,7 @@ func TestSecretShopGatewayDependencyErrors(t *testing.T) {
 	t.Run("required helper read", func(t *testing.T) {
 		f := newSecretShopGatewayFixture(t)
 		f.helperErr = errors.New("private helper database")
-		status, got := f.request(f.router(timer.NewService(nil)), `{"item_id":"secret_item_herbal_root","quantity":1}`)
+		status, got := f.request(f.router(timer.NewService(nil)), `{"item_id":"secret_item_herbal_root"}`)
 		if status != 500 || f.writes != 0 || f.char.Money != 100000 {
 			t.Fatalf("helper failed open: %d %s", status, got)
 		}
@@ -349,7 +342,7 @@ func TestSecretShopGatewayUnconfigured(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, got := gatewayRequest(t, h.Router(), "hero", "session", "application/json", `{"action":"secretshop_purchase","params":{"item_id":"x","quantity":1}}`, nil)
+	status, got := gatewayRequest(t, h.Router(), "hero", "session", "application/json", `{"action":"secretshop_purchase","params":{"item_id":"x"}}`, nil)
 	if status != 501 || f.queryCalls != 0 {
 		t.Fatalf("status=%d: %s", status, got)
 	}

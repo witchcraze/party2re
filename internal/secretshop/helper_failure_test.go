@@ -49,7 +49,7 @@ func TestHelperReadFailurePreservesRequestAndTransaction(t *testing.T) {
 	if status != nil || !errors.Is(err, filter.err) || filter.ctx != ctx {
 		t.Fatalf("status=%+v err=%v ctx=%v", status, err, filter.ctx)
 	}
-	result, err := svc.PurchaseItem(ctx, "hero", "secret_item_herbal_root", 1)
+	result, err := svc.PurchaseItem(ctx, "hero", "secret_item_herbal_root")
 	if result != nil || !errors.Is(err, filter.err) {
 		t.Fatalf("purchase=%+v err=%v", result, err)
 	}

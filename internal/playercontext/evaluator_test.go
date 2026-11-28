@@ -80,7 +80,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"bank_deposit", "bank_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_send_money", "depot_withdraw", "fleamarket_list", "fleamarket_purchase", "fleamarket_cancel",
 			"house_build", "store_build", "store_list_gold", "store_list_barter", "store_withdraw", "store_buy", "store_trade", "store_rename", "store_wallpaper", "store_interior_add", "store_interior_rename", "store_interior_clean",
 			"shop_purchase", "shop_sell", "shop_batch_purchase", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_buy", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "secretshop_purchase", "park_divinate", "secretshop_puffpuff", "blackmarket_sacrifice", "blackmarket_trade",
-			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "oracle_buy", "oracle_wallpaper", "oracle_blackmarket", "plantation_sow", "plantation_fertilize", "plantation_harvest", "farm_bring_home", "farm_rename", "farm_deposit", "farm_send", "farm_release",
+			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "oracle_buy", "oracle_wallpaper", "oracle_blackmarket", "shop_secretshop", "plantation_sow", "plantation_fertilize", "plantation_harvest", "farm_bring_home", "farm_rename", "farm_deposit", "farm_send", "farm_release",
 			"casino_slot", "lottery_raffle", "takarakuji_buy", "tavern_order", "tavern_delivery_reserve", "tavern_delivery_cancel", "contest_enter", "contest_vote", "contest_photo_delete",
 			"wishingwell_exchange", "altar_pray", "altar_wish", "god_wish", "job_change", "job_recall", "job_restore", "job_future_recall", "medal_claim", "guild_create", "guild_apply", "guild_mark", "guild_wallpaper", "guild_leave", "guild_disband", "guild_callout", "guild_color", "guild_message", "guild_assign",
 			"helper_complete", "player_inspect", "rescue_request", "presence_refresh",
@@ -94,7 +94,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"bank_withdraw", "depot_expand", "depot_sell", "depot_sell_batch", "depot_sort", "depot_deposit", "depot_send_item", "depot_withdraw", "fleamarket_list", "fleamarket_cancel",
 			"store_list_gold", "store_list_barter", "store_withdraw", "store_trade", "store_rename", "store_wallpaper", "store_interior_add", "store_interior_rename", "store_interior_clean",
 			"shop_sell", "shop_synthesize", "gemstore_sell", "gemstore_sort", "gemstore_send", "gemstore_synthesize", "gemstore_appraise", "park_divinate", "secretshop_puffpuff", "blackmarket_sacrifice", "blackmarket_trade",
-			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "oracle_buy", "oracle_wallpaper", "oracle_blackmarket", "plantation_sow", "plantation_fertilize", "plantation_harvest", "farm_bring_home", "farm_rename", "farm_deposit", "farm_send", "farm_release",
+			"blacksmith_seal", "blacksmith_name", "blacksmith_deposit", "blacksmith_withdraw", "alchemy_synthesize", "alchemy_recipes", "custom_skill_set", "oracle_buy", "oracle_wallpaper", "oracle_blackmarket", "shop_secretshop", "plantation_sow", "plantation_fertilize", "plantation_harvest", "farm_bring_home", "farm_rename", "farm_deposit", "farm_send", "farm_release",
 			"casino_slot", "lottery_raffle", "takarakuji_buy", "tavern_order", "tavern_delivery_reserve", "tavern_delivery_cancel", "contest_enter", "contest_vote", "contest_photo_delete",
 			"wishingwell_exchange", "altar_pray", "altar_wish", "god_wish", "job_change", "job_recall", "job_restore", "job_future_recall", "medal_claim", "guild_create", "guild_apply", "guild_mark", "guild_wallpaper", "guild_leave", "guild_disband", "guild_callout", "guild_color", "guild_message", "guild_assign",
 			"helper_complete", "player_inspect", "rescue_request", "presence_refresh",
@@ -128,7 +128,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 124 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 125 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -148,8 +148,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 116 {
-		t.Fatalf("exhausted action count = %d, want 116", len(got))
+	if len(got) != 117 {
+		t.Fatalf("exhausted action count = %d, want 117", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request", "presence_refresh"} {
 		if !slices.Contains(got, action) {

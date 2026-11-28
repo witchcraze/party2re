@@ -83,7 +83,7 @@ func TestPurchaseItem_HelperExclusionAndConcurrentRouting_Integration(t *testing
 		}
 	}
 	result := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(_, _ int) error {
-		_, err := svc.PurchaseItem(ctx, char.ID, "secret_item_herbal_root", 1)
+		_, err := svc.PurchaseItem(ctx, char.ID, "secret_item_herbal_root")
 		if !errors.Is(err, secretshop.ErrItemUnavailableInHelperQuest) {
 			return fmt.Errorf("excluded purchase: %v", err)
 		}
@@ -95,8 +95,8 @@ func TestPurchaseItem_HelperExclusionAndConcurrentRouting_Integration(t *testing
 	assertAssets(50000, 0, 0)
 	filter.activeHelperItemIDs = nil
 	for _, err := range testutil.RunRace(
-		func() error { _, err := svc.PurchaseItem(ctx, char.ID, "secret_item_herbal_root", 1); return err },
-		func() error { _, err := svc.PurchaseItem(ctx, char.ID, "secret_item_herbal_root", 1); return err },
+		func() error { _, err := svc.PurchaseItem(ctx, char.ID, "secret_item_herbal_root"); return err },
+		func() error { _, err := svc.PurchaseItem(ctx, char.ID, "secret_item_herbal_root"); return err },
 	) {
 		if err != nil {
 			t.Fatal(err)

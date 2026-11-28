@@ -321,12 +321,10 @@ func (s *Service) GetSaleOffer(ctx context.Context, shopType ShopType, character
 }
 
 // Sell buys back an item from the shop's hand only (legacy uru).
-func (s *Service) Sell(ctx context.Context, characterID string, shopType ShopType, itemInstanceID string, quantity int) (SaleResult, error) {
+// One unit sells per call; legacy hand fields hold a single item.
+func (s *Service) Sell(ctx context.Context, characterID string, shopType ShopType, itemInstanceID string) (SaleResult, error) {
 	if !ValidateShopType(shopType) {
 		return SaleResult{}, ErrInvalidShopType
-	}
-	if quantity <= 0 || quantity > MaxTransactionQuantity {
-		return SaleResult{}, ErrInvalidQuantity
 	}
 	if characterID == "" {
 		return SaleResult{}, corecharacter.ErrNotFound
@@ -353,20 +351,12 @@ func (s *Service) Sell(ctx context.Context, characterID string, shopType ShopTyp
 		if item.LegacyHandKindByID(instance.DefinitionID) != handKind(shopType) {
 			return ErrNotInShopHand
 		}
-		if instance.Quantity < quantity {
-			return ErrInvalidQuantity
-		}
-
 		definition, err := s.catalog.FindByID(instance.DefinitionID)
 		if err != nil {
 			return ErrItemNotFound
 		}
 
-		sellUnitPrice := s.CalculateSellPrice(definition.Price)
-		totalPayout, err := safeMultiply(sellUnitPrice, quantity)
-		if err != nil {
-			return err
-		}
+		totalPayout := s.CalculateSellPrice(definition.Price)
 
 		if s.equipment != nil {
 			eq, err := s.equipment.FindByCharacterIDForUpdate(txCtx, characterID)
@@ -391,7 +381,7 @@ func (s *Service) Sell(ctx context.Context, characterID string, shopType ShopTyp
 			CharacterID:        characterID,
 			AddGold:            totalPayout,
 			ConsumeInstanceID:  itemInstanceID,
-			ConsumeInstanceQty: quantity,
+			ConsumeInstanceQty: 1,
 		})
 		if err != nil {
 			if errors.Is(err, economy.ErrGoldOverflow) {
@@ -410,7 +400,7 @@ func (s *Service) Sell(ctx context.Context, characterID string, shopType ShopTyp
 		}
 
 		soldInstance := instance
-		soldInstance.Quantity = quantity
+		soldInstance.Quantity = 1
 
 		result = SaleResult{
 			Character:    res.Character,

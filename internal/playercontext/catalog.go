@@ -296,7 +296,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	// =========================================================================
 	// Category: shop (Commerce & Specialty Stores)
 	// =========================================================================
-	{ID: "shop_purchase", Label: "店でアイテム購入", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_definition_id", "quantity"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck, LegacyVerb: "かう"},
+	{ID: "shop_purchase", Label: "店でアイテム購入", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_definition_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck, LegacyVerb: "かう"},
 	{ID: "shop_sell", Label: "店にアイテム売却", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "item_instance_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "うる"},
 	{ID: "shop_batch_purchase", Label: "まとめてかう", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"shop_type", "items"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck, LegacyVerb: "まとめてかう"},
 	{ID: "shop_synthesize", Label: "装飾品合成", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"recipe_target"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck, LegacyVerb: "ごうせい"},
@@ -327,7 +327,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 		Label:          "ヒミツの店で購入",
 		Category:       "shop",
 		OperationID:    "executeCharacterAction",
-		RequiredParams: []string{"item_id", "quantity"},
+		RequiredParams: []string{"item_id"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 		LegacyVerb:     "かう",
 	},
@@ -388,6 +388,7 @@ var DefaultCatalog = append(append(append([]ActionDefinition{
 	{ID: "oracle_buy", Label: "衣装を買う", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"item_no"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "oracle_wallpaper", Label: "壁紙を張り替える", Category: "shop", OperationID: "executeCharacterAction", RequiredParams: []string{"wallpaper"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "oracle_blackmarket", Label: "やみいちば", Category: "shop", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "shop_secretshop", Label: "ひみつのみせ", Category: "shop", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "plantation_sow", Label: "種をまく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"seed_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "plantation_fertilize", Label: "肥料をまく", Category: "growth", OperationID: "executeCharacterAction", RequiredParams: []string{"fertilizer_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "plantation_harvest", Label: "収穫する", Category: "growth", OperationID: "executeCharacterAction", RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},

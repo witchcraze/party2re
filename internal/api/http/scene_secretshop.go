@@ -21,11 +21,10 @@ type SecretShopProduct struct {
 }
 
 type SecretShopSceneInfo struct {
-	Parent     string             `json:"parent"`
-	Title      string             `json:"title"`
-	NPCName    string             `json:"npc_name"`
-	IsEligible bool               `json:"is_eligible"`
-	Quantity   ShopQuantityBounds `json:"quantity"`
+	Parent     string `json:"parent"`
+	Title      string `json:"title"`
+	NPCName    string `json:"npc_name"`
+	IsEligible bool   `json:"is_eligible"`
 }
 
 type SecretShopCatalogSceneData struct {
@@ -51,8 +50,7 @@ func (h *Handler) secretShopSceneData(ctx context.Context, r playercontext.Resul
 	if err != nil {
 		return nil, err
 	}
-	info := SecretShopSceneInfo{Parent: "town", Title: status.LocationName, NPCName: status.NPCName, IsEligible: status.IsEligible,
-		Quantity: ShopQuantityBounds{Minimum: 1, Maximum: secretshop.MaxPurchaseQuantity}}
+	info := SecretShopSceneInfo{Parent: "shop_item", Title: status.LocationName, NPCName: status.NPCName, IsEligible: status.IsEligible}
 	products := make([]SecretShopProduct, 0, len(status.Items))
 	for _, p := range status.Items {
 		product := SecretShopProduct{Item: p, SelectParams: playercontext.Subject{Kind: "item", ID: p.ID}, PurchaseParams: SecretShopPurchaseParams{ItemID: p.ID}}

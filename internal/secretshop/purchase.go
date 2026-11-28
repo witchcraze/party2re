@@ -16,27 +16,17 @@ import (
 type PurchaseResult struct {
 	CharacterID         string `json:"character_id"`
 	Item                Item   `json:"item"`
-	Quantity            int    `json:"quantity"`
 	TotalPrice          int    `json:"total_price"`
 	RemainingGold       int    `json:"remaining_gold"`
 	InventoryInstanceID string `json:"inventory_instance_id"`
 	TransferredToDepot  bool   `json:"transferred_to_depot"`
 }
 
-// PurchaseItem purchases rare items from the secret shop with transactional protection.
-// If inventory consumable slot is empty and quantity == 1, it is placed in character inventory.
-// If inventory is occupied or quantity > 1, it is automatically transferred to depot.
-func (s *Service) PurchaseItem(
-	ctx context.Context,
-	characterID string,
-	itemID string,
-	quantity int,
-) (*PurchaseResult, error) {
+// PurchaseItem buys one unit, as legacy ＠かう does (secret.cgi kau): into the
+// empty tool hand, otherwise to the Depot.
+func (s *Service) PurchaseItem(ctx context.Context, characterID string, itemID string) (*PurchaseResult, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return nil, ErrCharacterNotFound
-	}
-	if quantity <= 0 || quantity > MaxPurchaseQuantity {
-		return nil, ErrInvalidQuantity
 	}
 
 	var result *PurchaseResult
@@ -70,11 +60,7 @@ func (s *Service) PurchaseItem(
 			}
 		}
 
-		totalPrice, err := safeMultiply(shopItem.Price, quantity)
-		if err != nil {
-			return err
-		}
-
+		totalPrice := shopItem.Price
 		if char.Money < totalPrice {
 			return ErrInsufficientFunds
 		}
@@ -86,7 +72,7 @@ func (s *Service) PurchaseItem(
 
 		occupied := inv.IsFull(shopItem.ItemDefinitionID)
 
-		if !occupied && quantity == 1 {
+		if !occupied {
 			res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
 				CharacterID:       characterID,
 				DeductGold:        totalPrice,
@@ -118,7 +104,6 @@ func (s *Service) PurchaseItem(
 			result = &PurchaseResult{
 				CharacterID:         char.ID,
 				Item:                shopItem,
-				Quantity:            1,
 				TotalPrice:          totalPrice,
 				RemainingGold:       res.Character.Money,
 				InventoryInstanceID: res.GrantedItem.ID,
@@ -127,7 +112,7 @@ func (s *Service) PurchaseItem(
 			return nil
 		}
 
-		// Consumable slot is occupied or quantity > 1: route to depot
+		// Tool hand occupied: route to depot
 		if s.depotRepo == nil {
 			return ErrDepotNotConfigured
 		}
@@ -137,7 +122,7 @@ func (s *Service) PurchaseItem(
 			return err
 		}
 
-		inst, err := coreitem.NewInstance(shopItem.ItemDefinitionID, quantity)
+		inst, err := coreitem.NewInstance(shopItem.ItemDefinitionID, 1)
 		if err != nil {
 			return err
 		}
@@ -164,7 +149,6 @@ func (s *Service) PurchaseItem(
 		result = &PurchaseResult{
 			CharacterID:         char.ID,
 			Item:                shopItem,
-			Quantity:            quantity,
 			TotalPrice:          totalPrice,
 			RemainingGold:       res.Character.Money,
 			InventoryInstanceID: inst.ID,
@@ -184,11 +168,4 @@ func (s *Service) PurchaseItem(
 	}
 
 	return result, nil
-}
-
-func safeMultiply(price, qty int) (int, error) {
-	if price < 0 || qty < 0 {
-		return 0, ErrInvalidQuantity
-	}
-	return economy.SafeMultiply(price, qty)
 }

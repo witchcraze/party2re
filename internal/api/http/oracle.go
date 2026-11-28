@@ -44,8 +44,9 @@ type OracleWallpaperResult struct {
 	Message   string `json:"message"`
 }
 
-// OracleBlackMarketResult is the ＠やみいちば move into the black market.
-type OracleBlackMarketResult struct {
+// HiddenEntryResult is the move into a place reached only through a hidden
+// facility action (＠やみいちば, ＠ひみつのみせ).
+type HiddenEntryResult struct {
 	Selection playercontext.Selection `json:"selection"`
 	Message   string                  `json:"message"`
 }
@@ -110,20 +111,26 @@ func (h *Handler) actorName(ctx context.Context, actor string) (string, error) {
 	return char.Name, nil
 }
 
-// registerOracleBlackMarket connects ＠やみいちば: the hidden goods.cgi action
-// that moves a qualified character into the black market.
-func (h *Handler) registerOracleBlackMarket(service *playercontext.Service) {
+// registerHiddenEntries connects the actions legacy registers in %actions but
+// not @actions, each moving a qualified character into a place reached only
+// from that facility.
+func (h *Handler) registerHiddenEntries(service *playercontext.Service) {
 	if service == nil || !service.NavigationConfigured() {
 		return
 	}
-	navigationCommand(h, "oracle_blackmarket", func(ctx context.Context, owner, actor string, _ struct{}, _ playercontext.Result) (OracleBlackMarketResult, error) {
-		selection, err := service.Enter(ctx, owner, actor, "blackmarket")
-		if err != nil {
-			return OracleBlackMarketResult{}, err
-		}
-		h.leavePlace(ctx, actor)
-		return OracleBlackMarketResult{Selection: selection, Message: "闇市場を見つけました！"}, nil
-	})
+	for _, e := range []struct{ action, destination, message string }{
+		{"oracle_blackmarket", "blackmarket", "闇市場を見つけました！"}, // goods.cgi yamiichiba
+		{"shop_secretshop", "secretshop", "秘密の店を見つけました！"},    // item.cgi himitsunomise
+	} {
+		navigationCommand(h, e.action, func(ctx context.Context, owner, actor string, _ struct{}, _ playercontext.Result) (HiddenEntryResult, error) {
+			selection, err := service.Enter(ctx, owner, actor, e.destination)
+			if err != nil {
+				return HiddenEntryResult{}, err
+			}
+			h.leavePlace(ctx, actor)
+			return HiddenEntryResult{Selection: selection, Message: e.message}, nil
+		})
+	}
 }
 
 func (h *Handler) oracleSceneData(ctx context.Context, r playercontext.Result) (any, error) {

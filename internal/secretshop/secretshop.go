@@ -15,10 +15,9 @@ import (
 )
 
 const (
-	MinAccessJobLevel   = 7
-	MaxPurchaseQuantity = 99
-	NPCName             = "@ヒミツジ"
-	LocationName        = "秘密の店"
+	MinAccessJobLevel = 7
+	NPCName           = "@ヒミツジ"
+	LocationName      = "秘密の店"
 )
 
 var (
@@ -28,7 +27,6 @@ var (
 	ErrItemNotFound                 = errors.New("item not found in secret shop catalog")
 	ErrItemUnavailableInHelperQuest = errors.New("item is temporarily unavailable due to active helper request")
 	ErrInsufficientFunds            = errors.New("insufficient funds to purchase secret shop item")
-	ErrInvalidQuantity              = errors.New("invalid purchase quantity")
 	ErrPriceOverflow                = economy.ErrGoldOverflow
 	ErrDepotNotConfigured           = errors.New("depot repository not configured")
 )

@@ -95,8 +95,8 @@ type AdventureService interface {
 
 // ShopService defines the shop operations exposed over HTTP.
 type ShopService interface {
-	PurchaseInShop(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
-	Sell(ctx context.Context, characterID string, shopType shop.ShopType, itemInstanceID string, quantity int) (shop.SaleResult, error)
+	PurchaseInShop(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string) (shop.PurchaseResult, error)
+	Sell(ctx context.Context, characterID string, shopType shop.ShopType, itemInstanceID string) (shop.SaleResult, error)
 	GetCatalog(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
 	BatchPurchase(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
 	InspectNPC(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)

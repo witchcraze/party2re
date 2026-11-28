@@ -34,7 +34,7 @@ func TestPurchase_PropagatesCollectionError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01", 1)
+	_, err := svc.PurchaseInShop(ctx, char.ID, shop.ShopTypeWeapon, "weapon-01")
 	if !errors.Is(err, colErr) {
 		t.Fatalf("expected collection error %v, got: %v", colErr, err)
 	}

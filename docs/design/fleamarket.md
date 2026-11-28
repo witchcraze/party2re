@@ -6,7 +6,7 @@ The Flea Market (`party2/lib/free.cgi`) lets players list items from their Depot
 
 ## 1. Legacy `@actions` Reconciliation Table
 
-Legacy source: `party2/lib/free.cgi`. Commands use the [Action Gateway](../architecture/client-agent-api.md) and observation uses the `fleamarket` scene. All former listing REST routes, including the anonymous listing GETs, are retired and return 404. Legacy shows the market only inside the facility, and Flea Market is not an approved public projection.
+Legacy source: `party2/lib/free.cgi`. Commands use the [Action Gateway](../architecture/client-agent-api.md) and observation uses the `fleamarket` scene. Legacy shows the market only inside the facility, so Flea Market has no public projection.
 
 | Legacy action | Lines | Go operation | Transport | Disposition |
 |---|---|---|---|---|
@@ -18,9 +18,7 @@ Legacy source: `party2/lib/free.cgi`. Commands use the [Action Gateway](../archi
 
 ### Known differences
 
-These are recorded, not approved departures:
-
-- **Listing number**: legacy shows the lowest free number. Go uses an opaque listing ID, and order ties use age then ID. The facility log's `＠かう>` and `＠もどす>` rows therefore name the item, not the number (`free.cgi:185,278`).
+- **Listing number** ([#2978](https://github.com/witchcraze/party2re/issues/2978)): legacy shows the lowest free number (`number_select`) and its facility log rows name it (`free.cgi:185,278`). Go uses an opaque listing ID, orders ties by age then ID, and logs the item name.
 
 ## 2. Rules
 

@@ -154,15 +154,11 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 				}},
 				{"consume-definition", func() error { _, err := core.economy.ConsumeItemDefinition(ctx, actor.ID, "item-001", 1); return err }},
 				{"shop", func() error {
-					_, err := econ.shop.PurchaseInShop(ctx, actor.ID, shop.ShopTypeItem, "item-001", 1)
+					_, err := econ.shop.PurchaseInShop(ctx, actor.ID, shop.ShopTypeItem, "item-001")
 					return err
 				}},
 				{"secretshop", func() error {
-					_, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root", 1)
-					return err
-				}},
-				{"secretshop-depot", func() error {
-					_, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root", 2)
+					_, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root")
 					return err
 				}},
 				{"blackmarket-offer", func() error { _, err := misc.blackmarket.SacrificeItem(ctx, actor.ID, inv.Items[0].ID); return err }},
@@ -280,7 +276,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 			if _, err := econ.bank.Deposit(ctx, actor.ID, 1); err != nil {
 				t.Fatal("ownership was not released", err)
 			}
-			if _, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root", 1); err != nil {
+			if _, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root"); err != nil {
 				t.Fatal("purchase remained blocked after exit", err)
 			}
 			// Restore the peer's listed item for the next lock-order case.
@@ -304,7 +300,7 @@ func TestNormalRunAssetMutationProduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root", 1); !errors.Is(err, runhost.ErrBusy) {
+	if _, err := misc.secretshop.PurchaseItem(ctx, actor.ID, "secret_item_herbal_root"); !errors.Is(err, runhost.ErrBusy) {
 		t.Fatal("empty hand purchase bypassed enrollment", err)
 	}
 	var granted depot.DeliveryResult

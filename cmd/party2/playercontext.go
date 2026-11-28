@@ -32,7 +32,8 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		// Reached only by Home reins; the recorded visit, not navigation, admits.
 		{ID: "god", Parent: "town", CanEnter: playercontext.ByCharacter(func(c character.Character) bool { return c.GodVisit == character.GodVisitHeaven })},
 		{ID: "u_god", Parent: "town", CanEnter: playercontext.ByCharacter(func(c character.Character) bool { return c.GodVisit == character.GodVisitUnderworld })},
-		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: playercontext.ByCharacter(secretshop.CheckEligibility),
+		// Reached only through the item shop's ＠ひみつのみせ (item.cgi).
+		{ID: "secretshop", Parent: "shop_item", ParentOnly: true, SubjectKind: "item", Pageable: true, CanEnter: playercontext.ByCharacter(secretshop.CheckEligibility),
 			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
 				status, err := misc.secretshop.GetShopStatus(ctx, actorID)
 				if errors.Is(err, secretshop.ErrAccessDenied) {
