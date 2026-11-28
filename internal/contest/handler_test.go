@@ -26,6 +26,8 @@ type mockScheduler struct {
 	pendingActions        []core_scheduling.ScheduledAction
 	findPendingErr        error
 	findPendingErrByActor map[string]error
+	requeued              []core_scheduling.ScheduledAction
+	requeueErr            error
 }
 
 func (m *mockScheduler) ScheduleWithID(_ context.Context, id, actionType, actorID string, params map[string]string, executeAt time.Time) error {
@@ -67,6 +69,14 @@ func (m *mockScheduler) FindPendingByActorID(_ context.Context, actorID string) 
 		}
 	}
 	return res, nil
+}
+
+func (m *mockScheduler) RequeuePending(_ context.Context, action core_scheduling.ScheduledAction) error {
+	if m.requeueErr != nil {
+		return m.requeueErr
+	}
+	m.requeued = append(m.requeued, action)
+	return nil
 }
 
 func TestSettlementActionID(t *testing.T) {
@@ -753,9 +763,12 @@ func TestContestSettlementHandler_ExistingPendingReservation_NotDuplicated(t *te
 		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
 	}
 
-	// Must NOT add another action
+	// Must NOT add another action, and must attempt queue repair via RequeuePending.
 	if len(sched.scheduledActions) != 0 {
 		t.Errorf("expected 0 new scheduled actions (existing pending preserved), got %d", len(sched.scheduledActions))
+	}
+	if len(sched.requeued) != 1 || sched.requeued[0].ID != sched.pendingActions[0].ID {
+		t.Errorf("expected RequeuePending for %q, got %+v", sched.pendingActions[0].ID, sched.requeued)
 	}
 }
 
@@ -797,9 +810,12 @@ func TestContestSettlementHandler_ProcessingReservation_NotOverwritten(t *testin
 		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
 	}
 
-	// Must NOT overwrite or add a duplicate action
+	// Must NOT overwrite or add a duplicate action or requeue Processing
 	if len(sched.scheduledActions) != 0 {
 		t.Errorf("expected 0 new scheduled actions (processing protected), got %d", len(sched.scheduledActions))
+	}
+	if len(sched.requeued) != 0 {
+		t.Errorf("expected 0 RequeuePending calls for processing action, got %+v", sched.requeued)
 	}
 }
 
@@ -900,6 +916,17 @@ func TestContestSettlementHandler_ReconcileShortCircuitsAndRecovers(t *testing.T
 		t.Fatalf("valkey error path hit SQL: sqlReadCalls = %d, want 1", got)
 	}
 	sched.findPendingErr = nil
+
+	// RequeuePending repair error during steady-state also propagates without hitting SQL.
+	requeueErr := errors.New("valkey zadd failed")
+	sched.requeueErr = requeueErr
+	if err := handler.Reconcile(ctx); !errors.Is(err, requeueErr) {
+		t.Fatalf("expected requeueErr, got %v", err)
+	}
+	if got := repo.sqlReadCalls.Load(); got != 1 {
+		t.Fatalf("requeue error path hit SQL: sqlReadCalls = %d, want 1", got)
+	}
+	sched.requeueErr = nil
 
 	// Mid-run Valkey reservation loss is detected and restored via SQL on next Reconcile.
 	sched.scheduledActions = nil

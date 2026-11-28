@@ -12,8 +12,9 @@ import (
 
 // ReconcileSettlementSchedule ensures the settlement scheduled action exists for the current contest round.
 // It inspects current SQL round state (active round, or preparing round if no active round exists),
-// discovers active reservations via FindPendingByActorID, avoids duplicating Pending or overwriting
-// Processing actions, and registers the deterministic settlement reservation with a safe nonce suffix.
+// discovers active reservations via FindPendingByActorID, repairs missing queue membership for Pending
+// reservations via RequeuePending without duplicating Pending or overwriting Processing actions, and
+// registers the deterministic settlement reservation with a safe nonce suffix when none exists.
 func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
 	return s.reconcileSettlementSchedule(ctx, false)
 }
@@ -87,8 +88,8 @@ func (s *Service) hasSettlementReservation(ctx context.Context, targetRound int,
 	if err != nil {
 		return false, fmt.Errorf("discover contest settlement reservation: %w", err)
 	}
-	if hasMatchingSettlementAction(activeActions, targetRound, targetEndTime) {
-		return true, nil
+	if action, ok := findMatchingSettlementAction(activeActions, targetRound, targetEndTime); ok {
+		return s.ensureQueuedReservation(ctx, action)
 	}
 	// Check legacy actor ID "system" for backward compatibility with pre-upgrade actions
 	if actorID != "system" {
@@ -96,15 +97,27 @@ func (s *Service) hasSettlementReservation(ctx context.Context, targetRound int,
 		if err != nil {
 			return false, fmt.Errorf("discover legacy contest settlement reservation: %w", err)
 		}
-		if hasMatchingSettlementAction(legacyActions, targetRound, targetEndTime) {
-			return true, nil
+		if action, ok := findMatchingSettlementAction(legacyActions, targetRound, targetEndTime); ok {
+			return s.ensureQueuedReservation(ctx, action)
 		}
 	}
 	return false, nil
 }
 
-func hasMatchingSettlementAction(actions []core_scheduling.ScheduledAction, targetRound int, targetEndTime time.Time) bool {
+func (s *Service) ensureQueuedReservation(ctx context.Context, action core_scheduling.ScheduledAction) (bool, error) {
+	if action.State == core_scheduling.StateProcessing {
+		return true, nil
+	}
+	if err := s.scheduler.RequeuePending(ctx, action); err != nil {
+		return false, fmt.Errorf("requeue contest settlement reservation: %w", err)
+	}
+	return true, nil
+}
+
+func findMatchingSettlementAction(actions []core_scheduling.ScheduledAction, targetRound int, targetEndTime time.Time) (core_scheduling.ScheduledAction, bool) {
 	wantSec := targetEndTime.Truncate(time.Second)
+	var pendingMatch core_scheduling.ScheduledAction
+	var hasPending bool
 	for _, action := range actions {
 		if action.ActionType != ActionTypeContestSettlement {
 			continue
@@ -114,10 +127,14 @@ func hasMatchingSettlementAction(actions []core_scheduling.ScheduledAction, targ
 			continue
 		}
 		if round == targetRound && action.ExecuteAt.Truncate(time.Second).Equal(wantSec) && targetTime.Equal(wantSec) {
-			if action.State == core_scheduling.StatePending || action.State == core_scheduling.StateProcessing {
-				return true
+			if action.State == core_scheduling.StateProcessing {
+				return action, true
+			}
+			if action.State == core_scheduling.StatePending && !hasPending {
+				pendingMatch = action
+				hasPending = true
 			}
 		}
 	}
-	return false
+	return pendingMatch, hasPending
 }
