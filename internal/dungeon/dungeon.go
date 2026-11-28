@@ -324,6 +324,7 @@ type Service struct {
 	participantBuilder ParticipantBuilder
 	blessings          BlessingProvider
 	quota              OnceQuota
+	now                func() time.Time
 }
 
 // Option configures optional parameters on Service.
@@ -358,6 +359,13 @@ func WithInventoryProvider(invRepo InventoryProvider) Option {
 func WithRNG(rng RandomSource) Option {
 	return func(s *Service) {
 		s.rng = rng
+	}
+}
+
+// WithClock sets the time a native step reads (map16's weekday) for deterministic testing.
+func WithClock(now func() time.Time) Option {
+	return func(s *Service) {
+		s.now = now
 	}
 }
 
@@ -407,6 +415,9 @@ func NewService(
 	}
 	if s.rng == nil {
 		s.rng = defaultRandomSource{}
+	}
+	if s.now == nil {
+		s.now = time.Now
 	}
 
 	return s, nil

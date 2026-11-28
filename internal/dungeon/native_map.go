@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -137,7 +136,7 @@ func (s *Service) moveNative(ctx context.Context, exp *ActiveExpedition, leader,
 			NewY:                 y,
 			RoundDelta:           1,
 			StockDrain:           actor.ID,
-			Now:                  time.Now().UTC(),
+			Now:                  s.now().UTC(),
 		},
 	}
 	if err := ev.action.apply(&n); err != nil {
